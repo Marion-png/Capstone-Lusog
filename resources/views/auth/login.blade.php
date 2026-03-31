@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+z<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -98,6 +98,7 @@
             width: 100%;
             max-width: 420px;
             text-align: center;
+            isolation: isolate;
             animation: riseIn .7s ease both;
         }
 
@@ -107,7 +108,8 @@
             height: auto;
             display: block;
             margin: 0 auto 14px;
-            filter: drop-shadow(0 16px 26px rgba(9, 28, 22, 0.28));
+            mix-blend-mode: screen;
+            filter: contrast(1.06) saturate(1.05) drop-shadow(0 12px 20px rgba(9, 28, 22, 0.22));
         }
 
         .brand-fallback {
