@@ -54,12 +54,8 @@
                               linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);
             background-size: 28px 28px;
         }
-        .sb-logo { padding: 24px 20px 20px; position: relative; z-index: 2; border-bottom: 1px solid rgba(255,255,255,.08); }
-        .sb-logo-inner { display: flex; align-items: center; gap: 11px; }
-        .sb-logo-icon { width: 38px; height: 38px; border-radius: 10px; background: rgba(34,197,94,.2); display: grid; place-items: center; flex-shrink: 0; overflow: hidden; }
-        .sb-logo-icon img { width: 100%; height: 100%; object-fit: cover; }
-        .sb-logo-name { font-family: 'DM Serif Display', serif; font-size: 1.2rem; color: white; line-height: 1; }
-        .sb-logo-sub { font-size: .6rem; color: var(--g300); letter-spacing: .1em; text-transform: uppercase; font-weight: 500; display: block; margin-top: 3px; }
+        .sb-logo { padding: 20px 20px 18px; position: relative; z-index: 2; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; justify-content: center; }
+        .sb-logo-full { width: 176px; max-width: 100%; height: auto; display: block; }
         .sb-nav { flex: 1; overflow-y: auto; padding: 16px 12px; position: relative; z-index: 2; scrollbar-width: none; }
         .sb-nav::-webkit-scrollbar { display: none; }
         .sb-section-label { font-size: .6rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: rgba(134,239,172,.5); padding: 0 8px; margin: 20px 0 8px; }
@@ -436,15 +432,7 @@
 <aside class="sidebar">
     <div class="sb-grid"></div>
     <div class="sb-logo">
-        <div class="sb-logo-inner">
-            <div class="sb-logo-icon">
-                <img src="{{ asset('images/lusog-logo.png') }}" alt="LUSOG Logo">
-            </div>
-            <div>
-                <div class="sb-logo-name">LUSOG</div>
-                <span class="sb-logo-sub">Clinic Management</span>
-            </div>
-        </div>
+        <img src="{{ asset('images/lusog-logo.png') }}" alt="LUSOG Logo" class="sb-logo-full">
     </div>
     <nav class="sb-nav">
         <div class="sb-section-label">Main</div>
@@ -480,7 +468,7 @@
             Dispensing Log
         </a>
         <div class="sb-section-label">Reports</div>
-        <a href="#" class="sb-link">
+        <a href="{{ route('dashboard.data-visualization') }}" class="sb-link">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             Data Visualization
         </a>

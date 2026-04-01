@@ -17,8 +17,8 @@
 
         :root {
             --bg: #eef1ef;
-            --panel: #27584b;
-            --panel-2: #2f6354;
+            --panel: #4a9c82;
+            --panel-2: #5fb193;
             --ink: #1f2d2a;
             --ink-soft: #61706d;
             --line: #d9e2de;
@@ -75,8 +75,8 @@
             position: absolute;
             inset: 0;
             background:
-                radial-gradient(circle at 12% 14%, rgba(98, 188, 144, 0.25), transparent 38%),
-                radial-gradient(circle at 90% 92%, rgba(26, 59, 49, 0.3), transparent 35%);
+                radial-gradient(circle at 12% 14%, rgba(210, 255, 232, 0.2), transparent 40%),
+                radial-gradient(circle at 90% 92%, rgba(64, 126, 101, 0.14), transparent 38%);
             pointer-events: none;
         }
 
@@ -86,7 +86,7 @@
             width: 220px;
             height: 220px;
             border-radius: 50%;
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.18);
             top: -70px;
             right: -80px;
             pointer-events: none;
@@ -108,10 +108,10 @@
             height: auto;
             display: block;
             margin: 0 auto 14px;
-            border-radius: 18px;
-            mix-blend-mode: lighten;
-            opacity: 0.92;
-            filter: contrast(1.03) saturate(1.04) drop-shadow(0 10px 18px rgba(9, 28, 22, 0.16));
+            border-radius: 0;
+            mix-blend-mode: normal;
+            opacity: 1;
+            filter: drop-shadow(0 8px 14px rgba(9, 28, 22, 0.14));
         }
 
         .brand-fallback {

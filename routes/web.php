@@ -23,6 +23,10 @@ Route::get('/dashboard/consultation-log', function () {
     return view('dashboard.consultation-log');
 })->name('dashboard.consultation-log');
 
+Route::get('/dashboard/data-visualization', function () {
+    return view('dashboard.data-visualization');
+})->name('dashboard.data-visualization');
+
 Route::get('/dashboard/clinic-staff', function () {
     return view('dashboard.clinic-staff');
 })->name('dashboard.clinic-staff');
