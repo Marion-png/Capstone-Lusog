@@ -23,6 +23,45 @@ Route::get('/dashboard/consultation-log', function () {
     return view('dashboard.consultation-log');
 })->name('dashboard.consultation-log');
 
-Route::post('/login', function (Request $request) {
+Route::get('/dashboard/clinic-staff', function () {
+    return view('dashboard.clinic-staff');
+})->name('dashboard.clinic-staff');
+
+Route::get('/dashboard/school-head', function () {
+    return view('dashboard.school-head');
+})->name('dashboard.school-head');
+
+Route::get('/dashboard/system-admin', function () {
+    return view('dashboard.system-admin');
+})->name('dashboard.system-admin');
+
+// Compatibility route names used by dashboard Blade templates.
+Route::get('/dashboard', function () {
     return redirect()->route('dashboard.school-nurse');
+})->name('dashboard');
+
+Route::get('/health-records', function () {
+    return redirect()->route('dashboard.student-health-records');
+})->name('health-records.index');
+
+Route::post('/health-records', function (Request $request) {
+    // Placeholder submit target until records are persisted in the database.
+    return back();
+})->name('health-records.store');
+
+Route::post('/logout', function () {
+    return redirect()->route('login');
+})->name('logout');
+
+Route::post('/login', function (Request $request) {
+    $role = $request->input('role');
+
+    $routeByRole = [
+        'school_nurse' => 'dashboard.school-nurse',
+        'clinic_staff' => 'dashboard.clinic-staff',
+        'school_head' => 'dashboard.school-head',
+        'administrator' => 'dashboard.system-admin',
+    ];
+
+    return redirect()->route($routeByRole[$role] ?? 'dashboard.school-nurse');
 });

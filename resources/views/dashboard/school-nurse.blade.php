@@ -3,491 +3,506 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LUSOG School Nurse Dashboard</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Dashboard - LUSOG</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-            --bg: #f4f7f6;
+            --g950: #052e16; --g900: #14532d; --g800: #166534;
+            --g700: #15803d; --g600: #16a34a; --g500: #22c55e;
+            --g400: #4ade80; --g300: #86efac; --g200: #bbf7d0;
+            --g100: #dcfce7; --g50: #f0fdf4;
+            --sidebar-w: 248px;
+            --topbar-h: 64px;
+            --cream: #f7f8f5;
             --card: #ffffff;
-            --ink: #1f2f2b;
-            --sub: #6b7f79;
-            --line: #dde5e2;
-            --teal-900: #0f6257;
-            --teal-800: #187a69;
-            --teal-600: #2f9a81;
-            --teal-100: #e8f4f0;
-            --blue: #3b8de3;
-            --green: #2ca17d;
-            --amber: #ea9e2f;
-            --red: #d74b4b;
-            --shadow: 0 10px 22px rgba(26, 49, 40, 0.12);
-            --radius: 12px;
+            --border: #e4ece7;
+            --text-1: #0d1f14;
+            --text-2: #3d5c47;
+            --text-3: #7a9e87;
+            --red: #ef4444;
+            --amber: #f59e0b;
+            --blue: #3b82f6;
+            --shadow-card: 0 1px 4px rgba(5,46,22,.06), 0 4px 16px rgba(5,46,22,.06);
+            --radius: 16px;
+            --radius-sm: 10px;
         }
 
-        html, body { width: 100%; min-height: 100%; }
-
-        body {
-            font-family: 'Nunito', sans-serif;
-            color: var(--ink);
-            background: var(--bg);
-        }
-
-        .layout {
-            min-height: 100vh;
-            display: grid;
-            grid-template-columns: 92px 1fr;
-        }
+        html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--text-1); overflow: hidden; }
 
         .sidebar {
-            background: linear-gradient(180deg, var(--teal-900), #13675c 70%, #0f5c52);
-            border-right: 1px solid rgba(255, 255, 255, 0.15);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 18px 12px;
-            gap: 20px;
+            position: fixed; left: 0; top: 0; bottom: 0;
+            width: var(--sidebar-w); background: var(--g900);
+            display: flex; flex-direction: column; z-index: 100; overflow: hidden;
         }
-
-        .logo-mini {
-            width: 54px;
-            height: 54px;
-            border-radius: 14px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.24);
-            display: grid;
-            place-items: center;
-            overflow: hidden;
+        .sidebar::after {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(ellipse 120% 40% at 50% 100%, rgba(34,197,94,.18) 0%, transparent 70%),
+                        radial-gradient(ellipse 80% 30% at 80% 0%, rgba(74,222,128,.1) 0%, transparent 60%);
+            pointer-events: none;
         }
-
-        .logo-mini img {
-            width: 44px;
-            height: 44px;
-            object-fit: contain;
+        .sb-grid {
+            position: absolute; inset: 0;
+            background-image: linear-gradient(rgba(134,239,172,.05) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);
+            background-size: 28px 28px;
         }
+        .sb-logo { padding: 24px 20px 20px; position: relative; z-index: 2; border-bottom: 1px solid rgba(255,255,255,.08); }
+        .sb-logo-inner { display: flex; align-items: center; gap: 11px; }
+        .sb-logo-icon { width: 38px; height: 38px; border-radius: 10px; background: var(--g500); display: grid; place-items: center; flex-shrink: 0; }
+        .sb-logo-icon svg { width: 20px; height: 20px; fill: white; }
+        .sb-logo-name { font-family: 'DM Serif Display', serif; font-size: 1.2rem; color: white; line-height: 1; }
+        .sb-logo-sub { font-size: .6rem; color: var(--g300); letter-spacing: .1em; text-transform: uppercase; font-weight: 500; display: block; margin-top: 3px; }
+        .sb-nav { flex: 1; overflow-y: auto; padding: 16px 12px; position: relative; z-index: 2; scrollbar-width: none; }
+        .sb-nav::-webkit-scrollbar { display: none; }
+        .sb-section-label { font-size: .6rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: rgba(134,239,172,.5); padding: 0 8px; margin: 20px 0 8px; }
+        .sb-section-label:first-child { margin-top: 0; }
+        .sb-link { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); text-decoration: none; color: rgba(255,255,255,.6); font-size: .83rem; font-weight: 500; transition: background .15s, color .15s; margin-bottom: 2px; }
+        .sb-link:hover { background: rgba(255,255,255,.08); color: rgba(255,255,255,.9); }
+        .sb-link.active { background: rgba(34,197,94,.18); color: var(--g300); }
+        .sb-link svg { width: 16px; height: 16px; flex-shrink: 0; }
+        .sb-link .badge { margin-left: auto; background: var(--red); color: white; font-size: .62rem; font-weight: 700; padding: 2px 6px; border-radius: 999px; }
+        .sb-user { padding: 14px 16px; border-top: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 11px; position: relative; z-index: 2; }
+        .sb-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--g600); display: grid; place-items: center; font-size: .8rem; font-weight: 700; color: white; flex-shrink: 0; }
+        .sb-user-name { font-size: .8rem; font-weight: 600; color: white; line-height: 1.2; }
+        .sb-user-role { font-size: .68rem; color: var(--g300); }
+        .sb-logout { margin-left: auto; background: none; border: none; color: rgba(255,255,255,.35); cursor: pointer; padding: 4px; border-radius: 6px; transition: color .15s, background .15s; display: grid; place-items: center; }
+        .sb-logout:hover { color: var(--red); background: rgba(239,68,68,.1); }
+        .sb-logout svg { width: 15px; height: 15px; }
 
-        .dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.55);
+        .main { margin-left: var(--sidebar-w); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        .topbar { height: var(--topbar-h); flex-shrink: 0; background: white; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 28px; gap: 14px; }
+        .topbar-breadcrumb { display: flex; align-items: center; gap: 8px; flex: 1; }
+        .bc-home { font-size: .8rem; color: var(--text-3); text-decoration: none; }
+        .bc-home:hover { color: var(--g600); }
+        .bc-sep { color: var(--border); font-size: .9rem; }
+        .bc-current { font-size: .8rem; font-weight: 700; color: var(--text-1); }
+        .topbar-chip { display: flex; align-items: center; gap: 7px; background: var(--g50); border: 1px solid var(--g200); border-radius: 999px; padding: 6px 14px; font-size: .75rem; font-weight: 600; color: var(--g700); }
+        .topbar-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--g500); }
+
+        .content { flex: 1; overflow-y: auto; padding: 24px 28px 40px; scrollbar-width: thin; scrollbar-color: var(--g200) transparent; }
+        .content::-webkit-scrollbar { width: 5px; }
+        .content::-webkit-scrollbar-thumb { background: var(--g200); border-radius: 99px; }
+
+        .page-header {
+            display: flex; align-items: flex-start; justify-content: space-between;
+            margin-bottom: 24px;
         }
+        .page-eyebrow { font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--g600); margin-bottom: 6px; }
+        .page-title { font-family: 'DM Serif Display', serif; font-size: 1.75rem; color: var(--text-1); line-height: 1.15; }
+        .page-title span { font-style: italic; color: var(--g700); }
+        .page-sub { font-size: .82rem; color: var(--text-3); margin-top: 4px; }
+        .page-header-actions { display: flex; gap: 10px; align-items: center; }
 
-        .content {
-            padding: 20px 18px 30px;
-            max-width: 1200px;
+        .btn {
+            display: inline-flex; align-items: center; gap: 7px;
+            padding: 10px 18px; border-radius: var(--radius-sm);
+            font-family: 'DM Sans', sans-serif; font-size: .82rem; font-weight: 600;
+            cursor: pointer; border: none; transition: all .18s; text-decoration: none;
         }
+        .btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+        .btn-primary { background: var(--g700); color: white; box-shadow: 0 3px 14px rgba(22,101,52,.3); }
+        .btn-primary:hover { background: var(--g800); transform: translateY(-1px); box-shadow: 0 5px 20px rgba(22,101,52,.4); }
+        .btn-ghost { background: white; color: var(--text-2); border: 1.5px solid var(--border); }
+        .btn-ghost:hover { border-color: var(--g300); color: var(--g700); background: var(--g50); }
 
-        .header h1 {
-            font-size: 2rem;
-            font-weight: 800;
-        }
-
-        .header p {
-            color: var(--sub);
-            margin-top: 4px;
-            font-size: 0.9rem;
-        }
-
-        .quick-nav {
-            margin-top: 12px;
-            display: flex;
-            gap: 8px;
+        .mini-stats {
+            display: flex; gap: 12px; margin-bottom: 18px;
             flex-wrap: wrap;
         }
+        .mini-stat {
+            background: white; border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: 12px 18px;
+            display: flex; align-items: center; gap: 10px; flex: 1; min-width: 220px;
+            box-shadow: var(--shadow-card);
+        }
+        .mini-stat-icon { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; flex-shrink: 0; }
+        .mini-stat-icon svg { width: 15px; height: 15px; }
+        .mini-stat-val { font-family: 'DM Serif Display', serif; font-size: 1.4rem; color: var(--text-1); line-height: 1; }
+        .mini-stat-label { font-size: .69rem; color: var(--text-3); font-weight: 500; margin-top: 1px; }
 
-        .quick-btn {
-            text-decoration: none;
-            font-size: 0.78rem;
-            font-weight: 800;
-            color: #2e5a53;
-            background: #ffffff;
-            border: 1px solid #cfded9;
-            border-radius: 9px;
-            padding: 8px 11px;
-            box-shadow: 0 4px 10px rgba(24, 48, 39, 0.08);
+        .filter-bar {
+            display: flex; gap: 10px; margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+        .search-wrap { position: relative; flex: 1; min-width: 220px; }
+        .search-wrap svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--text-3); pointer-events: none; }
+        .search-input {
+            width: 100%; padding: 10px 14px 10px 40px;
+            border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+            background: white; font-family: 'DM Sans', sans-serif;
+            font-size: .83rem; color: var(--text-1); outline: none;
+        }
+        .filter-select {
+            padding: 10px 36px 10px 14px; border: 1.5px solid var(--border);
+            border-radius: var(--radius-sm); background: white;
+            font-family: 'DM Sans', sans-serif; font-size: .83rem;
+            color: var(--text-1); outline: none; cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237a9e87' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 12px center;
         }
 
-        .quick-btn.primary {
-            color: #ffffff;
-            background: linear-gradient(180deg, #2f8f74 0%, #27725d 100%);
-            border-color: #27725d;
+        .table-card {
+            background: white; border: 1px solid var(--border);
+            border-radius: var(--radius); box-shadow: var(--shadow-card);
+            overflow: hidden;
+        }
+        .table-head-bar {
+            padding: 16px 20px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .table-head-label { font-size: .78rem; font-weight: 700; color: var(--text-2); }
+        .table-count { font-size: .72rem; color: var(--text-3); background: var(--g50); border: 1px solid var(--g200); padding: 3px 10px; border-radius: 999px; font-weight: 600; }
+
+        table { width: 100%; border-collapse: collapse; }
+        thead th {
+            padding: 11px 16px; text-align: left;
+            font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+            color: var(--text-3); background: var(--cream);
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
         }
 
-        .stats {
-            margin-top: 16px;
-            display: grid;
-            grid-template-columns: repeat(4, minmax(140px, 1fr));
-            gap: 12px;
+        tbody tr { border-bottom: 1px solid var(--border); transition: background .12s; }
+        tbody tr:last-child { border-bottom: none; }
+        tbody tr:hover { background: var(--g50); }
+
+        td { padding: 13px 16px; font-size: .81rem; color: var(--text-1); vertical-align: middle; }
+
+        .td-person { display: flex; align-items: center; gap: 10px; }
+        .td-avatar {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: var(--g100); display: grid; place-items: center;
+            font-size: .7rem; font-weight: 700; color: var(--g700); flex-shrink: 0;
         }
+        .td-name { font-weight: 600; color: var(--text-1); line-height: 1.2; }
+        .td-id { font-size: .67rem; color: var(--text-3); }
 
-        .stat {
-            background: var(--card);
-            border: 1px solid var(--line);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            padding: 12px 14px;
+        .badge-pill {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 3px 9px; border-radius: 999px; font-size: .68rem; font-weight: 700;
         }
+        .badge-pill .dot { width: 5px; height: 5px; border-radius: 50%; }
+        .bp-green  { background: var(--g100);  color: var(--g700); }
+        .bp-amber  { background: #fef3c7; color: #92400e; }
+        .bp-red    { background: #fee2e2; color: var(--red); }
 
-        .stat .k { color: #7b8d88; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
-        .stat .v { font-size: 2rem; font-weight: 800; margin-top: 5px; line-height: 1; }
-        .stat .s { color: #92a29d; font-size: 0.72rem; margin-top: 5px; }
-
-        .grid-2 {
-            margin-top: 12px;
+        .grid-summary {
+            margin-top: 18px;
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 12px;
         }
-
-        .card {
-            background: var(--card);
-            border: 1px solid var(--line);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            padding: 12px;
+        .panel {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-card);
+            padding: 14px;
         }
+        .panel-title { font-size: .8rem; font-weight: 700; color: var(--text-2); margin-bottom: 10px; }
+        .trend-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .trend-label { font-size: .73rem; color: var(--text-3); min-width: 124px; }
+        .trend-track { flex: 1; height: 10px; border-radius: 999px; background: #edf5ef; overflow: hidden; }
+        .trend-fill { height: 100%; border-radius: 999px; }
+        .trend-value { font-size: .72rem; color: var(--text-3); font-weight: 700; min-width: 34px; text-align: right; }
 
-        .card-head {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
+        .inventory-item { margin-bottom: 10px; }
+        .inventory-meta { display: flex; justify-content: space-between; font-size: .73rem; color: var(--text-3); margin-bottom: 5px; }
+
+        @media (max-width: 1020px) {
+            .grid-summary { grid-template-columns: 1fr; }
         }
-
-        .card-title { font-weight: 800; font-size: 0.95rem; }
-        .tiny { font-size: 0.72rem; color: #7f8f8b; }
-
-        .search {
-            width: 100%;
-            border: 1px solid var(--line);
-            border-radius: 8px;
-            min-height: 34px;
-            padding: 8px 10px;
-            font: inherit;
-            margin-bottom: 8px;
-        }
-
-        .student-list { display: grid; gap: 7px; max-height: 166px; overflow: auto; padding-right: 2px; }
-
-        .row {
-            border: 1px solid var(--line);
-            border-radius: 8px;
-            padding: 8px;
-            display: grid;
-            grid-template-columns: 1fr auto;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .name { font-size: 0.86rem; font-weight: 700; }
-        .meta { font-size: 0.72rem; color: #879692; }
-
-        .pill {
-            padding: 3px 9px;
-            border-radius: 999px;
-            font-size: 0.68rem;
-            font-weight: 700;
-            color: #fff;
-        }
-
-        .pill.normal { background: var(--green); }
-        .pill.monitor { background: var(--amber); }
-        .pill.severe { background: var(--red); }
-
-        .hbars { display: grid; gap: 8px; }
-        .hbar { display: grid; grid-template-columns: 120px 1fr; align-items: center; gap: 8px; }
-        .hbar span { font-size: 0.72rem; color: #748682; }
-
-        .track {
-            width: 100%;
-            background: #ebf0ee;
-            height: 11px;
-            border-radius: 999px;
-            overflow: hidden;
-        }
-
-        .fill { height: 100%; background: var(--blue); border-radius: 999px; }
-
-        .line-svg {
-            width: 100%;
-            height: 180px;
-            border: 1px solid var(--line);
-            border-radius: 10px;
-            background:
-                linear-gradient(#f7faf9 1px, transparent 1px),
-                linear-gradient(90deg, #f7faf9 1px, transparent 1px);
-            background-size: 36px 36px;
-        }
-
-        .med-list { display: grid; gap: 9px; }
-
-        .med {
-            display: grid;
-            grid-template-columns: 115px 1fr 74px;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .med-name { font-size: 0.75rem; font-weight: 700; }
-        .med-val { font-size: 0.7rem; color: #80908c; text-align: right; }
-
-        .stacked {
-            margin-top: 12px;
-            background: var(--card);
-            border: 1px solid var(--line);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            padding: 12px;
-        }
-
-        .stack-wrap {
-            height: 170px;
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 10px;
-            align-items: end;
-            margin-top: 10px;
-            border-bottom: 1px solid var(--line);
-            padding: 10px 8px;
-        }
-
-        .stack {
-            border-radius: 6px 6px 0 0;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            justify-content: end;
-            height: 100%;
-            background: #f3f7f5;
-        }
-
-        .seg-r { background: var(--red); }
-        .seg-a { background: var(--amber); }
-        .seg-g { background: #2f9a81; }
-
-        .months {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 10px;
-            margin-top: 7px;
-            font-size: 0.68rem;
-            color: #80908b;
-            text-align: center;
-        }
-
-        .kpis {
-            margin-top: 12px;
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-        }
-
-        .kpi {
-            border-radius: 10px;
-            padding: 10px;
-            text-align: center;
-            font-size: 0.74rem;
-        }
-
-        .kpi b { font-size: 1.05rem; display: block; margin-bottom: 3px; }
-
-        .k1 { background: #e8f4ef; color: #2f7b60; }
-        .k2 { background: #e8eff7; color: #2f6f9f; }
-        .k3 { background: #faf3e4; color: #b67a1e; }
-        .k4 { background: #f9e9e9; color: #b14242; }
-
-        .bottom {
-            margin-top: 12px;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-
-        .mini-list { display: grid; gap: 8px; }
-
-        .item {
-            border: 1px solid var(--line);
-            border-radius: 8px;
-            padding: 8px;
-            display: grid;
-            grid-template-columns: 24px 1fr auto;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .bullet {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            display: grid;
-            place-items: center;
-            font-size: 0.75rem;
-            font-weight: 800;
-        }
-
-        .b-m { background: #e9f3ef; color: #2f7b60; }
-        .b-a { background: #fff2de; color: #b67a1e; }
-        .b-r { background: #fde9e9; color: #b14242; }
-
-        .item-name { font-size: 0.8rem; font-weight: 700; }
-        .item-sub { font-size: 0.7rem; color: #869793; }
-        .item-link { font-size: 0.7rem; color: #2b8368; font-weight: 700; }
-
-        @media (max-width: 1100px) {
-            .stats { grid-template-columns: repeat(2, 1fr); }
-            .grid-2, .bottom { grid-template-columns: 1fr; }
-            .kpis { grid-template-columns: repeat(2, 1fr); }
-        }
-
-        @media (max-width: 760px) {
-            .layout { grid-template-columns: 1fr; }
+        @media (max-width: 780px) {
+            :root { --sidebar-w: 0px; }
             .sidebar { display: none; }
-            .content { padding: 14px; }
-            .stats { grid-template-columns: 1fr; }
-            .kpis { grid-template-columns: 1fr; }
+            .mini-stat { min-width: 100%; }
         }
     </style>
 </head>
 <body>
-<div class="layout">
-    <aside class="sidebar">
-        <div class="logo-mini">
-            <img src="{{ asset('images/lusog-logo.png') }}" alt="LUSOG" onerror="this.style.opacity='0';">
+<aside class="sidebar">
+    <div class="sb-grid"></div>
+    <div class="sb-logo">
+        <div class="sb-logo-inner">
+            <div class="sb-logo-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            </div>
+            <div>
+                <div class="sb-logo-name">LUSOG</div>
+                <span class="sb-logo-sub">Clinic Management</span>
+            </div>
         </div>
-        <div class="dot"></div>
-        <div class="dot"></div>
-    </aside>
+    </div>
+    <nav class="sb-nav">
+        <div class="sb-section-label">Main</div>
+        <a href="{{ route('dashboard.school-nurse') }}" class="sb-link active">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            Dashboard
+        </a>
+        <a href="{{ route('dashboard.student-health-records') }}" class="sb-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Health Records
+            <span class="badge">3</span>
+        </a>
+        <a href="{{ route('dashboard.consultation-log') }}" class="sb-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
+            Consultation Log
+        </a>
+        <div class="sb-section-label">Health Programs</div>
+        <a href="#" class="sb-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+            Feeding Program
+        </a>
+        <a href="#" class="sb-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 3-7-3"/><path d="M3 9v6l7 3 7-3V9"/><polyline points="3 9 12 6 21 9"/></svg>
+            Deworming Program
+        </a>
+        <div class="sb-section-label">Inventory</div>
+        <a href="#" class="sb-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="2" width="18" height="20" rx="2"/><path d="M9 2v4h6V2"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+            Medicine Inventory
+        </a>
+        <a href="#" class="sb-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Dispensing Log
+        </a>
+        <div class="sb-section-label">Reports</div>
+        <a href="#" class="sb-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            Data Visualization
+        </a>
+        <a href="#" class="sb-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Generate Reports
+        </a>
+    </nav>
+    <div class="sb-user">
+        <div class="sb-avatar">{{ substr(auth()->user()->name ?? 'SN', 0, 2) }}</div>
+        <div>
+            <div class="sb-user-name">{{ auth()->user()->name ?? 'School Nurse' }}</div>
+            <div class="sb-user-role">School Nurse - DCNHS</div>
+        </div>
+        <form method="POST" action="{{ route('logout') }}">
+            @csrf
+            <button type="submit" class="sb-logout" title="Sign out">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </button>
+        </form>
+    </div>
+</aside>
 
-    <main class="content">
-        <header class="header">
-            <h1>Dashboard</h1>
-            <p>Welcome, School Nurse. School health overview and monitoring.</p>
-            <div class="quick-nav">
-                <a class="quick-btn" href="{{ route('dashboard.student-health-records') }}">Student Health Records</a>
-                <a class="quick-btn primary" href="{{ route('dashboard.consultation-log') }}">Consultation Log</a>
+<div class="main">
+    <header class="topbar">
+        <div class="topbar-breadcrumb">
+            <a href="{{ route('dashboard.school-nurse') }}" class="bc-home">Dashboard</a>
+            <span class="bc-sep">></span>
+            <span class="bc-current">Overview</span>
+        </div>
+        <div class="topbar-chip"><div class="dot"></div>DCNHS - SY 2025-2026</div>
+    </header>
+
+    <div class="content">
+        <div class="page-header">
+            <div>
+                <div class="page-eyebrow">School Nurse Dashboard</div>
+                <h1 class="page-title">Daily Clinic <span>Operations Overview</span></h1>
+                <p class="page-sub">Track consultations, at-risk learners, and medicine inventory from one dashboard.</p>
             </div>
-        </header>
+            <div class="page-header-actions">
+                <a href="{{ route('dashboard.consultation-log') }}" class="btn btn-ghost">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Consultation Log
+                </a>
+                <a href="{{ route('dashboard.student-health-records') }}" class="btn btn-primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Open Health Records
+                </a>
+            </div>
+        </div>
 
-        <section class="stats">
-            <article class="stat"><p class="k">Total Students</p><p class="v">389</p><p class="s">Enrollment SY</p></article>
-            <article class="stat"><p class="k">Nutr. Status</p><p class="v">46</p><p class="s">Negative findings</p></article>
-            <article class="stat"><p class="k">Medicine Stock</p><p class="v">24</p><p class="s">Below threshold</p></article>
-            <article class="stat"><p class="k">Consultations Today</p><p class="v">7</p><p class="s">+2 from yesterday</p></article>
-        </section>
+        <div class="mini-stats">
+            <div class="mini-stat">
+                <div class="mini-stat-icon" style="background:var(--g100);color:var(--g700)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                </div>
+                <div>
+                    <div class="mini-stat-val">2,841</div>
+                    <div class="mini-stat-label">Total Records</div>
+                </div>
+            </div>
+            <div class="mini-stat">
+                <div class="mini-stat-icon" style="background:#dbeafe;color:#1d4ed8">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                </div>
+                <div>
+                    <div class="mini-stat-val">47</div>
+                    <div class="mini-stat-label">Consultations Today</div>
+                </div>
+            </div>
+            <div class="mini-stat">
+                <div class="mini-stat-icon" style="background:#fee2e2;color:var(--red)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
+                </div>
+                <div>
+                    <div class="mini-stat-val">8</div>
+                    <div class="mini-stat-label">At-Risk Learners</div>
+                </div>
+            </div>
+            <div class="mini-stat">
+                <div class="mini-stat-icon" style="background:#fef3c7;color:#92400e">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div>
+                    <div class="mini-stat-val">24</div>
+                    <div class="mini-stat-label">Low Stock Medicines</div>
+                </div>
+            </div>
+        </div>
 
-        <section class="grid-2">
-            <article class="card">
-                <div class="card-head">
-                    <h2 class="card-title">Quick Student Lookup</h2>
-                </div>
-                <input class="search" placeholder="Search by name, LRN, or section..." readonly>
-                <div class="student-list">
-                    <div class="row"><div><p class="name">Maria Santos</p><p class="meta">Grade 10 - Sampaguita</p></div><span class="pill normal">Normal</span></div>
-                    <div class="row"><div><p class="name">Carlos Garcia</p><p class="meta">Grade 8 - Orchid</p></div><span class="pill severe">Severely Wasted</span></div>
-                    <div class="row"><div><p class="name">Sofia Lim</p><p class="meta">Grade 9 - Bonifacio</p></div><span class="pill normal">Normal</span></div>
-                    <div class="row"><div><p class="name">Juan Dela Cruz</p><p class="meta">Grade 7 - Mabini</p></div><span class="pill monitor">Monitored</span></div>
-                </div>
-            </article>
+        <div class="filter-bar">
+            <div class="search-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" class="search-input" placeholder="Search learner, complaint, section...">
+            </div>
+            <select class="filter-select">
+                <option>Today</option>
+                <option>This Week</option>
+                <option>This Month</option>
+            </select>
+            <select class="filter-select">
+                <option>All Levels</option>
+                <option>Junior High</option>
+                <option>Senior High</option>
+                <option>Personnel</option>
+            </select>
+        </div>
 
-            <article class="card">
-                <div class="card-head">
-                    <h2 class="card-title">Top Consultation Cases</h2>
-                    <p class="tiny">March 2026</p>
-                </div>
-                <div class="hbars">
-                    <div class="hbar"><span>Headache</span><div class="track"><div class="fill" style="width: 94%"></div></div></div>
-                    <div class="hbar"><span>Stomach Ache</span><div class="track"><div class="fill" style="width: 78%"></div></div></div>
-                    <div class="hbar"><span>Fever/Cold</span><div class="track"><div class="fill" style="width: 66%"></div></div></div>
-                    <div class="hbar"><span>Cough</span><div class="track"><div class="fill" style="width: 54%"></div></div></div>
-                    <div class="hbar"><span>Wound/Injury</span><div class="track"><div class="fill" style="width: 42%"></div></div></div>
-                    <div class="hbar"><span>Allergy</span><div class="track"><div class="fill" style="width: 31%"></div></div></div>
-                </div>
-            </article>
-        </section>
-
-        <section class="grid-2">
-            <article class="card">
-                <div class="card-head">
-                    <h2 class="card-title">Consultation Trend</h2>
-                </div>
-                <svg class="line-svg" viewBox="0 0 620 240" preserveAspectRatio="none" aria-label="Consultation line chart">
-                    <polyline points="40,170 130,120 220,190 310,90 400,135 490,105" fill="none" stroke="#3b8de3" stroke-width="4" />
-                    <circle cx="40" cy="170" r="5" fill="#3b8de3" />
-                    <circle cx="130" cy="120" r="5" fill="#3b8de3" />
-                    <circle cx="220" cy="190" r="5" fill="#3b8de3" />
-                    <circle cx="310" cy="90" r="5" fill="#3b8de3" />
-                    <circle cx="400" cy="135" r="5" fill="#3b8de3" />
-                    <circle cx="490" cy="105" r="5" fill="#3b8de3" />
-                </svg>
-            </article>
-
-            <article class="card">
-                <div class="card-head">
-                    <h2 class="card-title">Medicine Inventory Status</h2>
-                </div>
-                <div class="med-list">
-                    <div class="med"><p class="med-name">Paracetamol 500mg</p><div class="track"><div class="fill" style="width: 16%; background:#d74b4b"></div></div><p class="med-val">15% left</p></div>
-                    <div class="med"><p class="med-name">Amoxicillin</p><div class="track"><div class="fill" style="width: 22%; background:#ea9e2f"></div></div><p class="med-val">22% left</p></div>
-                    <div class="med"><p class="med-name">Antihistamine</p><div class="track"><div class="fill" style="width: 35%; background:#ea9e2f"></div></div><p class="med-val">35% left</p></div>
-                    <div class="med"><p class="med-name">Mefenamic Acid</p><div class="track"><div class="fill" style="width: 30%; background:#ea9e2f"></div></div><p class="med-val">30% left</p></div>
-                    <div class="med"><p class="med-name">Vitamin C</p><div class="track"><div class="fill" style="width: 67%; background:#2ca17d"></div></div><p class="med-val">67% left</p></div>
-                    <div class="med"><p class="med-name">Bandages</p><div class="track"><div class="fill" style="width: 29%; background:#ea9e2f"></div></div><p class="med-val">29% left</p></div>
-                </div>
-            </article>
-        </section>
-
-        <section class="stacked">
-            <div class="card-head">
-                <h2 class="card-title">Feeding Program Progress</h2>
+        <div class="table-card">
+            <div class="table-head-bar">
+                <span class="table-head-label">Recent Consultations</span>
+                <span class="table-count">Showing 8 latest entries</span>
             </div>
 
-            <div class="stack-wrap">
-                <div class="stack"><div class="seg-g" style="height:34%"></div><div class="seg-a" style="height:24%"></div><div class="seg-r" style="height:20%"></div></div>
-                <div class="stack"><div class="seg-g" style="height:30%"></div><div class="seg-a" style="height:30%"></div><div class="seg-r" style="height:16%"></div></div>
-                <div class="stack"><div class="seg-g" style="height:44%"></div><div class="seg-a" style="height:20%"></div><div class="seg-r" style="height:12%"></div></div>
-                <div class="stack"><div class="seg-g" style="height:50%"></div><div class="seg-a" style="height:18%"></div><div class="seg-r" style="height:10%"></div></div>
-                <div class="stack"><div class="seg-g" style="height:56%"></div><div class="seg-a" style="height:12%"></div><div class="seg-r" style="height:8%"></div></div>
-                <div class="stack"><div class="seg-g" style="height:62%"></div><div class="seg-a" style="height:10%"></div><div class="seg-r" style="height:6%"></div></div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Patient</th>
+                        <th>Grade / Dept</th>
+                        <th>Date</th>
+                        <th>Chief Complaint</th>
+                        <th>Assessment</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <div class="td-person">
+                                <div class="td-avatar">AS</div>
+                                <div><div class="td-name">Andrei J. Santos</div><div class="td-id">100234560012</div></div>
+                            </div>
+                        </td>
+                        <td>Grade 10<br><span style="font-size:.7rem;color:var(--text-3)">Rizal Sec 3</span></td>
+                        <td>Apr 1, 2026</td>
+                        <td>Headache, dizziness</td>
+                        <td>Tension headache</td>
+                        <td><span class="badge-pill bp-red"><span class="dot" style="background:var(--red)"></span>At-Risk</span></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div class="td-person">
+                                <div class="td-avatar">ML</div>
+                                <div><div class="td-name">Maria L. Dela Cruz</div><div class="td-id">100234560034</div></div>
+                            </div>
+                        </td>
+                        <td>Grade 8<br><span style="font-size:.7rem;color:var(--text-3)">Bonifacio Sec 1</span></td>
+                        <td>Apr 1, 2026</td>
+                        <td>Fever (38.5 C)</td>
+                        <td>Viral fever</td>
+                        <td><span class="badge-pill bp-red"><span class="dot" style="background:var(--red)"></span>At-Risk</span></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div class="td-person">
+                                <div class="td-avatar">CM</div>
+                                <div><div class="td-name">Carlo R. Mendoza</div><div class="td-id">100234560078</div></div>
+                            </div>
+                        </td>
+                        <td>Grade 9<br><span style="font-size:.7rem;color:var(--text-3)">Mabini Sec 2</span></td>
+                        <td>Apr 1, 2026</td>
+                        <td>Wound, right knee</td>
+                        <td>Minor laceration</td>
+                        <td><span class="badge-pill bp-green"><span class="dot" style="background:var(--g500)"></span>Normal</span></td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <div class="td-person">
+                                <div class="td-avatar">LS</div>
+                                <div><div class="td-name">Lorna G. Santos</div><div class="td-id">EMP-2019-041</div></div>
+                            </div>
+                        </td>
+                        <td>Teaching<br><span style="font-size:.7rem;color:var(--text-3)">English Dept</span></td>
+                        <td>Mar 30, 2026</td>
+                        <td>Hypertension monitoring</td>
+                        <td>Stage 1 hypertension</td>
+                        <td><span class="badge-pill bp-amber"><span class="dot" style="background:var(--amber)"></span>Follow-up</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="grid-summary">
+            <div class="panel">
+                <div class="panel-title">Top Consultation Cases</div>
+                <div class="trend-row">
+                    <div class="trend-label">Headache</div>
+                    <div class="trend-track"><div class="trend-fill" style="width:92%;background:var(--blue)"></div></div>
+                    <div class="trend-value">92</div>
+                </div>
+                <div class="trend-row">
+                    <div class="trend-label">Stomach Ache</div>
+                    <div class="trend-track"><div class="trend-fill" style="width:78%;background:var(--blue)"></div></div>
+                    <div class="trend-value">78</div>
+                </div>
+                <div class="trend-row">
+                    <div class="trend-label">Fever / Colds</div>
+                    <div class="trend-track"><div class="trend-fill" style="width:65%;background:var(--blue)"></div></div>
+                    <div class="trend-value">65</div>
+                </div>
+                <div class="trend-row">
+                    <div class="trend-label">Injury / Wounds</div>
+                    <div class="trend-track"><div class="trend-fill" style="width:42%;background:var(--blue)"></div></div>
+                    <div class="trend-value">42</div>
+                </div>
             </div>
 
-            <div class="months"><span>Baseline</span><span>Month 1</span><span>Month 2</span><span>Month 3</span><span>Month 4</span><span>Endline</span></div>
-
-            <div class="kpis">
-                <article class="kpi k1"><b>72%</b>Students improved</article>
-                <article class="kpi k2"><b>3.2 kg</b>Average weight gain</article>
-                <article class="kpi k3"><b>28%</b>Moved from wasted to normal</article>
-                <article class="kpi k4"><b>14</b>Still need follow-up</article>
+            <div class="panel">
+                <div class="panel-title">Medicine Stock Monitor</div>
+                <div class="inventory-item">
+                    <div class="inventory-meta"><span>Paracetamol 500mg</span><span>15% left</span></div>
+                    <div class="trend-track"><div class="trend-fill" style="width:15%;background:var(--red)"></div></div>
+                </div>
+                <div class="inventory-item">
+                    <div class="inventory-meta"><span>Amoxicillin</span><span>22% left</span></div>
+                    <div class="trend-track"><div class="trend-fill" style="width:22%;background:var(--amber)"></div></div>
+                </div>
+                <div class="inventory-item">
+                    <div class="inventory-meta"><span>Mefenamic Acid</span><span>30% left</span></div>
+                    <div class="trend-track"><div class="trend-fill" style="width:30%;background:var(--amber)"></div></div>
+                </div>
+                <div class="inventory-item">
+                    <div class="inventory-meta"><span>Vitamin C</span><span>67% left</span></div>
+                    <div class="trend-track"><div class="trend-fill" style="width:67%;background:var(--g600)"></div></div>
+                </div>
             </div>
-        </section>
-
-        <section class="bottom">
-            <article class="card">
-                <div class="card-head">
-                    <h2 class="card-title">Recent Consultations</h2>
-                    <p class="tiny">View all consultations -></p>
-                </div>
-                <div class="mini-list">
-                    <div class="item"><div class="bullet b-m">M</div><div><p class="item-name">Maria Santos</p><p class="item-sub">Grade 10 - Mar 17</p></div><p class="item-sub">Headache follow-up</p></div>
-                    <div class="item"><div class="bullet b-m">C</div><div><p class="item-name">Carlos Garcia</p><p class="item-sub">Grade 8 - Mar 18</p></div><p class="item-sub">Stomach ache</p></div>
-                    <div class="item"><div class="bullet b-m">S</div><div><p class="item-name">Sofia Lim</p><p class="item-sub">Grade 9 - Mar 18</p></div><p class="item-sub">Minor wound</p></div>
-                    <div class="item"><div class="bullet b-m">J</div><div><p class="item-name">Juan Dela Cruz</p><p class="item-sub">Grade 7 - Mar 20</p></div><p class="item-sub">Allergic reaction</p></div>
-                </div>
-            </article>
-
-            <article class="card">
-                <div class="card-head"><h2 class="card-title">Action Items</h2></div>
-                <div class="mini-list">
-                    <div class="item"><div class="bullet b-r">!</div><div><p class="item-name">Low Stock Alert</p><p class="item-sub">Paracetamol, Amoxicillin, Bandages</p></div><span class="item-link">Order</span></div>
-                    <div class="item"><div class="bullet b-a">!</div><div><p class="item-name">Expiring Medicines</p><p class="item-sub">2 items will expire in 42 days</p></div><span class="item-link">Review</span></div>
-                    <div class="item"><div class="bullet b-m">i</div><div><p class="item-name">Feeding Program Update</p><p class="item-sub">17% of students improved this quarter</p></div><span class="item-link">View report</span></div>
-                </div>
-            </article>
-        </section>
-    </main>
+        </div>
+    </div>
 </div>
 </body>
 </html>
