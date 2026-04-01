@@ -1,4 +1,4 @@
-z<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -108,8 +108,10 @@ z<!DOCTYPE html>
             height: auto;
             display: block;
             margin: 0 auto 14px;
-            mix-blend-mode: screen;
-            filter: contrast(1.06) saturate(1.05) drop-shadow(0 12px 20px rgba(9, 28, 22, 0.22));
+            border-radius: 18px;
+            mix-blend-mode: lighten;
+            opacity: 0.92;
+            filter: contrast(1.03) saturate(1.04) drop-shadow(0 10px 18px rgba(9, 28, 22, 0.16));
         }
 
         .brand-fallback {
@@ -383,10 +385,6 @@ z<!DOCTYPE html>
                 onerror="this.style.display='none';document.getElementById('logoFallback').style.display='block';"
             >
             <div class="brand-fallback" id="logoFallback">LUSOG</div>
-            <p class="brand-tag">
-                Learner Utilization and Status of Growth<br>
-                School Clinic Management System
-            </p>
         </div>
     </section>
 
