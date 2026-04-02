@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ConsultationController;
+use App\Http\Controllers\CsvUploadController;
 use App\Http\Controllers\MedicineInventoryController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -39,6 +40,13 @@ Route::get('/dashboard/medicine-inventory', [MedicineInventoryController::class,
 
 Route::post('/dashboard/medicine-inventory', [MedicineInventoryController::class, 'store'])
     ->name('medicine-inventory.store');
+
+Route::get('/csv/upload', function () {
+    return view('dashboard.csv-upload');
+})->name('csv.upload.form');
+
+Route::post('/csv/upload', [CsvUploadController::class, 'upload'])
+    ->name('csv.upload');
 
 Route::get('/dashboard/clinic-staff', function () {
     return view('dashboard.clinic-staff');
