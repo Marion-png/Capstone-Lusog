@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ConsultationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -19,9 +20,14 @@ Route::get('/dashboard/student-health-records', function () {
     return view('dashboard.student-health-records');
 })->name('dashboard.student-health-records');
 
-Route::get('/dashboard/consultation-log', function () {
-    return view('dashboard.consultation-log');
-})->name('dashboard.consultation-log');
+Route::get('/dashboard/consultation-log', [ConsultationController::class, 'index'])
+    ->name('dashboard.consultation-log');
+
+Route::get('/dashboard/consultation-log/new', [ConsultationController::class, 'create'])
+    ->name('consultations.create');
+
+Route::post('/dashboard/consultation-log', [ConsultationController::class, 'store'])
+    ->name('consultations.store');
 
 Route::get('/dashboard/data-visualization', function () {
     return view('dashboard.data-visualization');

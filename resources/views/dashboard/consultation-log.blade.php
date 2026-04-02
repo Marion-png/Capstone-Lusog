@@ -94,6 +94,17 @@
         .page-sub { font-size: .82rem; color: var(--text-3); margin-top: 4px; }
         .page-header-actions { display: flex; gap: 10px; align-items: center; }
 
+        .flash-success {
+            margin-bottom: 14px;
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--g200);
+            background: var(--g50);
+            color: var(--g800);
+            font-size: .8rem;
+            font-weight: 600;
+        }
+
         .btn {
             display: inline-flex; align-items: center; gap: 7px;
             padding: 10px 18px; border-radius: var(--radius-sm);
@@ -314,6 +325,10 @@
     </header>
 
     <div class="content">
+        @if (session('success'))
+            <div class="flash-success">{{ session('success') }}</div>
+        @endif
+
         <div class="page-header">
             <div>
                 <div class="page-eyebrow">Consultation Management</div>
@@ -323,10 +338,10 @@
             <div class="page-header-actions">
                 <a href="{{ route('dashboard.school-nurse') }}" class="btn btn-ghost">Dashboard</a>
                 <a href="{{ route('dashboard.student-health-records') }}" class="btn btn-ghost">Health Records</a>
-                <button class="btn btn-primary">
+                <a href="{{ route('consultations.create') }}" class="btn btn-primary">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     New Consultation
-                </button>
+                </a>
             </div>
         </div>
 
@@ -336,7 +351,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
                 </div>
                 <div>
-                    <div class="mini-stat-val">1,247</div>
+                    <div class="mini-stat-val">{{ number_format($stats['total'] ?? 0) }}</div>
                     <div class="mini-stat-label">Total Consultations (SY)</div>
                 </div>
             </div>
@@ -345,7 +360,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                 </div>
                 <div>
-                    <div class="mini-stat-val">215</div>
+                    <div class="mini-stat-val">{{ number_format($stats['month'] ?? 0) }}</div>
                     <div class="mini-stat-label">This Month</div>
                 </div>
             </div>
@@ -354,7 +369,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 </div>
                 <div>
-                    <div class="mini-stat-val">48</div>
+                    <div class="mini-stat-val">{{ number_format($stats['week'] ?? 0) }}</div>
                     <div class="mini-stat-label">This Week</div>
                 </div>
             </div>
@@ -363,7 +378,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
                 </div>
                 <div>
-                    <div class="mini-stat-val">23</div>
+                    <div class="mini-stat-val">{{ number_format($stats['referrals'] ?? 0) }}</div>
                     <div class="mini-stat-label">Referral Cases</div>
                 </div>
             </div>
@@ -406,7 +421,7 @@
         <div class="table-card">
             <div class="table-head-bar">
                 <span class="table-head-label">Consultation Entries</span>
-                <span class="table-count">Showing 1-5 of 5 records</span>
+                <span class="table-count">Showing {{ $consultations->count() }} of {{ $consultations->total() }} records</span>
             </div>
             <table>
                 <thead>
@@ -421,56 +436,32 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>2026-03-29 09:15</td>
-                        <td>Dela Cruz, Juan</td>
-                        <td>Grade 10 - Rizal</td>
-                        <td>Fever, Cough</td>
-                        <td>Paracetamol 500mg, advised rest</td>
-                        <td><span class="badge-pill bp-green"><span class="dot" style="background:var(--g500)"></span>Treated</span></td>
-                        <td>View - Edit</td>
-                    </tr>
-                    <tr>
-                        <td>2026-03-28 08:30</td>
-                        <td>Santos, Maria</td>
-                        <td>Grade 8 - Mabini</td>
-                        <td>Headache</td>
-                        <td>Mefenamic Acid 250mg</td>
-                        <td><span class="badge-pill bp-green"><span class="dot" style="background:var(--g500)"></span>Treated</span></td>
-                        <td>View - Edit</td>
-                    </tr>
-                    <tr>
-                        <td>2026-03-28 09:00</td>
-                        <td>Rizal, Jose</td>
-                        <td>Grade 12 - Dahlia</td>
-                        <td>Abrasion</td>
-                        <td>Cleaned wound, applied bandage</td>
-                        <td><span class="badge-pill bp-green"><span class="dot" style="background:var(--g500)"></span>Treated</span></td>
-                        <td>View - Edit</td>
-                    </tr>
-                    <tr>
-                        <td>2026-03-27 14:00</td>
-                        <td>Gonzales, Ana</td>
-                        <td>Grade 7 - Aquino</td>
-                        <td>Abdominal Pain</td>
-                        <td>Antacid, advised to eat properly</td>
-                        <td><span class="badge-pill bp-green"><span class="dot" style="background:var(--g500)"></span>Treated</span></td>
-                        <td>View - Edit</td>
-                    </tr>
-                    <tr>
-                        <td>2026-03-27 10:45</td>
-                        <td>Mendoza, Carlo</td>
-                        <td>Grade 9 - Bonifacio</td>
-                        <td>Skin Allergy</td>
-                        <td>Antihistamine, Calamine lotion</td>
-                        <td><span class="badge-pill bp-amber"><span class="dot" style="background:var(--amber)"></span>Referred</span></td>
-                        <td>View - Edit</td>
-                    </tr>
+                    @forelse($consultations as $consultation)
+                        <tr>
+                            <td>{{ optional($consultation->consulted_at)->format('Y-m-d H:i') }}</td>
+                            <td>{{ $consultation->student_name }}</td>
+                            <td>{{ $consultation->grade_section }}</td>
+                            <td>{{ $consultation->condition }}</td>
+                            <td>{{ $consultation->treatment_given ?: 'N/A' }}</td>
+                            <td>
+                                @if($consultation->status === 'referred')
+                                    <span class="badge-pill bp-amber"><span class="dot" style="background:var(--amber)"></span>Referred</span>
+                                @else
+                                    <span class="badge-pill bp-green"><span class="dot" style="background:var(--g500)"></span>Treated</span>
+                                @endif
+                            </td>
+                            <td>View - Edit</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7">No consultations yet. Click New Consultation to add the first entry.</td>
+                        </tr>
+                    @endforelse
                 </tbody>
             </table>
             <div class="foot">
-                <span>Showing 1-5 of 5 records</span>
-                <span>Page 1 of 1</span>
+                <span>Showing {{ $consultations->count() }} of {{ $consultations->total() }} records</span>
+                <span>Page {{ $consultations->currentPage() }} of {{ max($consultations->lastPage(), 1) }}</span>
             </div>
         </div>
     </div>
