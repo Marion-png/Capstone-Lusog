@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ConsultationController;
+use App\Http\Controllers\MedicineInventoryController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -32,6 +33,12 @@ Route::post('/dashboard/consultation-log', [ConsultationController::class, 'stor
 Route::get('/dashboard/data-visualization', function () {
     return view('dashboard.data-visualization');
 })->name('dashboard.data-visualization');
+
+Route::get('/dashboard/medicine-inventory', [MedicineInventoryController::class, 'index'])
+    ->name('dashboard.medicine-inventory');
+
+Route::post('/dashboard/medicine-inventory', [MedicineInventoryController::class, 'store'])
+    ->name('medicine-inventory.store');
 
 Route::get('/dashboard/clinic-staff', function () {
     return view('dashboard.clinic-staff');
