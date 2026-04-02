@@ -85,6 +85,126 @@
 
     let parsedRows = [];
 
+    function normalizeKey(value) {
+        return String(value || '')
+            .replace(/^\uFEFF/, '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '');
+    }
+
+    function findValue(row, possibleKeys) {
+        const rowKeys = Object.keys(row || {});
+
+        for (const key of rowKeys) {
+            const normalized = normalizeKey(key);
+
+            if (possibleKeys.includes(normalized)) {
+                return row[key] ?? '';
+            }
+        }
+
+        return '';
+    }
+
+    function isTemplateHeaderRow(row) {
+        const normalized = row.map(normalizeKey);
+        return normalized.includes('names')
+            && normalized.includes('bodymassindex')
+            && normalized.includes('nutritionalstatus');
+    }
+
+    function extractSectionFromTemplate(matrix) {
+        for (const row of matrix) {
+            for (let i = 0; i < row.length; i++) {
+                if (normalizeKey(row[i]) === 'grade') {
+                    return (row[i + 1] || '').trim();
+                }
+            }
+        }
+
+        return '';
+    }
+
+    function parseFromTemplateMatrix(matrix) {
+        const headerIndex = matrix.findIndex(isTemplateHeaderRow);
+
+        if (headerIndex === -1) {
+            return [];
+        }
+
+        const headerRow = matrix[headerIndex];
+        const sectionValue = extractSectionFromTemplate(matrix);
+
+        const indexByKey = {};
+        headerRow.forEach(function (cell, idx) {
+            indexByKey[normalizeKey(cell)] = idx;
+        });
+
+        const nameIndex = indexByKey['names'];
+        const idIndex = indexByKey['studentid'];
+        const sectionIndex = indexByKey['section'];
+        const weightIndex = indexByKey['weightkg'] ?? indexByKey['weight'];
+        const bmiIndex = indexByKey['bodymassindex'] ?? indexByKey['bmivalue'];
+        const statusIndex = indexByKey['nutritionalstatus'];
+        const sexIndex = indexByKey['sex'];
+
+        const rows = [];
+
+        function extractTemplateStudentName(row, startIndex) {
+            const candidates = [
+                row[startIndex] || '',
+                row[startIndex + 1] || '',
+                row[startIndex + 2] || ''
+            ].map(function (value) {
+                return String(value || '').trim();
+            });
+
+            // Prefer a value that contains letters (actual name) over numbering like "1" or punctuation like ".".
+            const withLetters = candidates.find(function (value) {
+                return /[a-z]/i.test(value);
+            });
+
+            if (withLetters) {
+                return withLetters;
+            }
+
+            return candidates.find(function (value) {
+                return value !== '';
+            }) || '';
+        }
+
+        for (let i = headerIndex + 1; i < matrix.length; i++) {
+            const row = matrix[i] || [];
+
+            const studentName = extractTemplateStudentName(row, nameIndex);
+            if (!studentName) {
+                continue;
+            }
+
+            const sexValue = String(row[sexIndex] || '').trim().toUpperCase();
+            const weightValue = String(row[weightIndex] || '').trim();
+            const isValidSex = sexValue === 'M' || sexValue === 'F';
+            const isNumericWeight = weightValue !== '' && !Number.isNaN(Number(weightValue));
+
+            // Keep only actual student rows; this excludes summary/footer labels in the template.
+            if (!isValidSex || !isNumericWeight) {
+                continue;
+            }
+
+            rows.push({
+                'Student Name': studentName,
+                'Student ID': (row[idIndex] || '').trim(),
+                'Section': (row[sectionIndex] || sectionValue || '').trim(),
+                'Weight (kg)': (row[weightIndex] || '').trim(),
+                'BMI Value': (row[bmiIndex] || '').trim(),
+                'Nutritional Status': (row[statusIndex] || '').trim()
+            });
+        }
+
+        return rows;
+    }
+
     parseBtn.addEventListener('click', function () {
         const file = fileInput.files[0];
 
@@ -94,14 +214,48 @@
         }
 
         Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
+            header: false,
+            skipEmptyLines: false,
             complete: function (results) {
-                parsedRows = results.data || [];
+                const matrix = (results.data || []).map(function (row) {
+                    return (row || []).map(function (cell) {
+                        return String(cell || '').replace(/^\uFEFF/, '').trim();
+                    });
+                });
+
+                // Primary: ENDLINE Nutritional Status template.
+                parsedRows = parseFromTemplateMatrix(matrix);
+
+                // Fallback: simple one-line header CSV.
+                if (!parsedRows.length) {
+                    const header = matrix[0] || [];
+                    const keyMap = Object.fromEntries(header.map(function (key, idx) {
+                        return [normalizeKey(key), idx];
+                    }));
+
+                    for (let i = 1; i < matrix.length; i++) {
+                        const row = matrix[i] || [];
+                        parsedRows.push({
+                            'Student Name': row[keyMap['studentname']] || row[keyMap['name']] || '',
+                            'Student ID': row[keyMap['studentid']] || row[keyMap['id']] || row[keyMap['lrn']] || '',
+                            'Section': row[keyMap['section']] || row[keyMap['gradesection']] || '',
+                            'Weight (kg)': row[keyMap['weightkg']] || row[keyMap['weight']] || '',
+                            'BMI Value': row[keyMap['bmivalue']] || row[keyMap['bmi']] || '',
+                            'Nutritional Status': row[keyMap['nutritionalstatus']] || row[keyMap['status']] || ''
+                        });
+                    }
+
+                    parsedRows = parsedRows.filter(function (row) {
+                        return Object.values(row).some(function (value) {
+                            return String(value || '').trim() !== '';
+                        });
+                    });
+                }
+
                 rowsJson.value = JSON.stringify(parsedRows);
 
                 if (!parsedRows.length) {
-                    previewBody.innerHTML = '<tr><td colspan="6" class="empty">No rows found in file.</td></tr>';
+                    previewBody.innerHTML = '<tr><td colspan="6" class="empty">No student rows found in this file yet. Fill student names in the template, then preview again.</td></tr>';
                     return;
                 }
 
