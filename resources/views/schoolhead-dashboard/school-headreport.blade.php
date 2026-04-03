@@ -22,6 +22,7 @@
 			--text-1: #0d1f14;
 			--text-2: #3d5c47;
 			--text-3: #7a9e87;
+			--red: #ef4444;
 			--shadow-card: 0 1px 4px rgba(5,46,22,.06), 0 4px 16px rgba(5,46,22,.06);
 			--radius-sm: 10px;
 		}
@@ -57,6 +58,9 @@
 		.sb-avatar { width: 34px; height: 34px; border-radius: 50%; background: #16a34a; display: grid; place-items: center; font-size: .8rem; font-weight: 700; color: white; }
 		.sb-user-name { font-size: .8rem; font-weight: 600; color: white; }
 		.sb-user-role { font-size: .68rem; color: var(--g300); }
+		.sb-logout { margin-left: auto; background: none; border: none; color: rgba(255,255,255,.35); cursor: pointer; padding: 4px; border-radius: 6px; transition: color .15s, background .15s; display: grid; place-items: center; }
+		.sb-logout:hover { color: var(--red); background: rgba(239,68,68,.1); }
+		.sb-logout svg { width: 15px; height: 15px; }
 
 		.main { margin-left: var(--sidebar-w); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 		.topbar { height: var(--topbar-h); border-bottom: 1px solid var(--border); background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; }
@@ -112,6 +116,12 @@
 			<div class="sb-user-name">{{ auth()->user()->name ?? 'School Head' }}</div>
 			<div class="sb-user-role">School Head - DCNHS</div>
 		</div>
+		<form method="POST" action="{{ route('logout') }}">
+			@csrf
+			<button type="submit" class="sb-logout" title="Sign out">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+			</button>
+		</form>
 	</div>
 </aside>
 

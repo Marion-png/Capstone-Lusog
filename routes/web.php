@@ -53,6 +53,10 @@ Route::get('/dashboard/clinic-staff', function () {
     return view('dashboard.clinic-staff');
 })->name('dashboard.clinic-staff');
 
+Route::get('/dashboard/class-adviser', function () {
+    return view('adviser-dashboard.class-adviser');
+})->name('dashboard.class-adviser');
+
 Route::get('/dashboard/school-head', [SchoolHeadController::class, 'index'])
     ->name('dashboard.school-head');
 
@@ -91,6 +95,7 @@ Route::post('/login', function (Request $request) {
     $routeByRole = [
         'school_nurse' => 'dashboard.school-nurse',
         'clinic_staff' => 'dashboard.clinic-staff',
+        'class_adviser' => 'dashboard.class-adviser',
         'school_head' => 'dashboard.school-head',
         'administrator' => 'dashboard.system-admin',
     ];

@@ -439,39 +439,14 @@
 
             <div class="field">
                 <label>Sign in as</label>
-                <div class="role-grid">
-                    <label class="role-option">
-                        <input type="radio" name="role" value="school_nurse" {{ old('role') == 'school_nurse' ? 'checked' : '' }} required>
-                        <span class="role-card">
-                            <span class="role-title">School nurse</span>
-                            <span class="role-caption">Full clinic access</span>
-                        </span>
-                    </label>
-
-                    <label class="role-option">
-                        <input type="radio" name="role" value="clinic_staff" {{ old('role') == 'clinic_staff' ? 'checked' : '' }} required>
-                        <span class="role-card">
-                            <span class="role-title">Clinic staff</span>
-                            <span class="role-caption">Records and inventory</span>
-                        </span>
-                    </label>
-
-                    <label class="role-option">
-                        <input type="radio" name="role" value="school_head" {{ old('role') == 'school_head' ? 'checked' : '' }} required>
-                        <span class="role-card">
-                            <span class="role-title">School head</span>
-                            <span class="role-caption">View only</span>
-                        </span>
-                    </label>
-
-                    <label class="role-option">
-                        <input type="radio" name="role" value="administrator" {{ old('role') == 'administrator' ? 'checked' : '' }} required>
-                        <span class="role-card">
-                            <span class="role-title">System administrator</span>
-                            <span class="role-caption">User and settings management</span>
-                        </span>
-                    </label>
-                </div>
+                <select name="role" class="control" required>
+                    <option value="" disabled {{ old('role') ? '' : 'selected' }}>Select role</option>
+                    <option value="school_nurse" {{ old('role') == 'school_nurse' ? 'selected' : '' }}>School Nurse - Full Clinic Access</option>
+                    <option value="clinic_staff" {{ old('role') == 'clinic_staff' ? 'selected' : '' }}>Clinic Staff - Records and Inventory</option>
+                    <option value="class_adviser" {{ old('role') == 'class_adviser' ? 'selected' : '' }}>Class Adviser - BMI Monitoring and Student Screening</option>
+                    <option value="school_head" {{ old('role') == 'school_head' ? 'selected' : '' }}>School Head - View Only</option>
+                    <option value="administrator" {{ old('role') == 'administrator' ? 'selected' : '' }}>System Administrator - User and Settings Management</option>
+                </select>
             </div>
 
             <label class="remember">
