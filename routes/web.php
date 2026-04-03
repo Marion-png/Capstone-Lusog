@@ -3,6 +3,7 @@
 use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\CsvUploadController;
 use App\Http\Controllers\MedicineInventoryController;
+use App\Http\Controllers\SchoolHeadController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -52,9 +53,15 @@ Route::get('/dashboard/clinic-staff', function () {
     return view('dashboard.clinic-staff');
 })->name('dashboard.clinic-staff');
 
-Route::get('/dashboard/school-head', function () {
-    return view('dashboard.school-head');
-})->name('dashboard.school-head');
+Route::get('/dashboard/school-head', [SchoolHeadController::class, 'index'])
+    ->name('dashboard.school-head');
+
+Route::get('/dashboard/school-head/reports', [SchoolHeadController::class, 'reports'])
+    ->name('dashboard.school-head.reports');
+
+Route::post('/dashboard/school-head/approvals/{approval}/{decision}', [SchoolHeadController::class, 'decide'])
+    ->whereIn('decision', ['approve', 'decline'])
+    ->name('dashboard.school-head.approvals.decide');
 
 Route::get('/dashboard/system-admin', function () {
     return view('dashboard.system-admin');
