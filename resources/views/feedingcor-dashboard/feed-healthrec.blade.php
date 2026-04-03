@@ -8,6 +8,7 @@
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
 	<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+	<script>document.documentElement.classList.add('js');</script>
 	<style>
 		*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 		:root {
@@ -64,6 +65,9 @@
 		.sb-user-role { font-size: .68rem; color: var(--g300); }
 
 		.main { margin-left: var(--sidebar-w); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+		html.js .main { opacity: 0; transform: translateY(10px); transition: opacity .26s ease, transform .3s ease; }
+		html.js .main.page-ready { opacity: 1; transform: translateY(0); }
+		html.js .main.page-exit { opacity: 0; transform: translateY(10px); }
 		.topbar { height: var(--topbar-h); border-bottom: 1px solid var(--border); background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; }
 		.topbar-bc { font-size: .76rem; color: var(--text-3); display: flex; gap: 6px; align-items: center; }
 		.topbar-chip { font-size: .72rem; border: 1px solid #bbf7d0; color: #15803d; background: #f0fdf4; border-radius: 999px; padding: 5px 11px; display: flex; align-items: center; gap: 7px; }
@@ -372,9 +376,39 @@
 </div>
 <script>
 (() => {
+	const main = document.querySelector('.main');
 	const searchInput = document.querySelector('.search');
 	const filterButtons = Array.from(document.querySelectorAll('.filter-btn'));
 	const rows = Array.from(document.querySelectorAll('tbody tr'));
+
+	if (main) {
+		requestAnimationFrame(() => {
+			main.classList.add('page-ready');
+		});
+
+		window.addEventListener('pageshow', () => {
+			main.classList.add('page-ready');
+		});
+
+		document.querySelectorAll('.sb-link[href]').forEach((link) => {
+			link.addEventListener('click', (event) => {
+				const href = link.getAttribute('href');
+				if (!href || link.classList.contains('active')) {
+					return;
+				}
+				if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+					return;
+				}
+
+				event.preventDefault();
+				main.classList.remove('page-ready');
+				main.classList.add('page-exit');
+				window.setTimeout(() => {
+					window.location.href = href;
+				}, 220);
+			});
+		});
+	}
 
 	if (!searchInput || filterButtons.length === 0 || rows.length === 0) {
 		return;
