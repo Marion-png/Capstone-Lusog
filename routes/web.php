@@ -63,6 +63,15 @@ Route::get('/dashboard/school-head', [SchoolHeadController::class, 'index'])
 Route::get('/dashboard/school-head/reports', [SchoolHeadController::class, 'reports'])
     ->name('dashboard.school-head.reports');
 
+Route::view('/dashboard/feedingcor-dashboard', 'feedingcor-dashboard.feed-dashboard')
+    ->name('dashboard.feedingcor-dashboard');
+
+Route::view('/dashboard/feedingcor-health-records', 'feedingcor-dashboard.feed-healthrec')
+    ->name('dashboard.feedingcor-health-records');
+
+Route::view('/dashboard/feedingcor-program', 'feedingcor-dashboard.feed-program')
+    ->name('dashboard.feedingcor-program');
+
 Route::post('/dashboard/school-head/approvals/{approval}/{decision}', [SchoolHeadController::class, 'decide'])
     ->whereIn('decision', ['approve', 'decline'])
     ->name('dashboard.school-head.approvals.decide');
