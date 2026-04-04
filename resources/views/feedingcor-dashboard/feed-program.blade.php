@@ -101,7 +101,7 @@
 		.stat .num { margin-top: 7px; font-size: 1.55rem; font-family: 'DM Serif Display', serif; line-height: 1; }
 		.stat .hint { margin-top: 6px; font-size: .66rem; color: var(--text-3); }
 
-		.progress-card { margin-top: 14px; padding: 12px 14px; }
+		.progress-card { margin-top: 14px; padding: 14px 16px; }
 		.section-title { font-size: .78rem; color: var(--text-2); font-weight: 700; margin-bottom: 10px; }
 		.prog-track {
 			width: 100%;
@@ -132,7 +132,97 @@
 		.prog-labels { margin-top: 8px; display: flex; justify-content: space-between; font-size: .66rem; color: var(--text-3); }
 		.prog-day { margin-top: 6px; font-size: .66rem; color: #2a5f54; font-weight: 700; }
 
-		.table-section { margin-top: 18px; border-top: 1px solid #dfe7e4; padding-top: 12px; }
+		.forms-hub { margin-top: 8px; }
+		.fp-tabs {
+			margin-top: 18px;
+			margin-bottom: 14px;
+			display: inline-flex;
+			gap: 4px;
+			padding: 4px;
+			border-radius: 12px;
+			background: #e9efec;
+			border: 1px solid #d9e5e0;
+		}
+		.fp-tab {
+			border: none;
+			background: transparent;
+			padding: 8px 14px;
+			font-size: .8rem;
+			font-weight: 700;
+			color: #6d8680;
+			border-radius: 8px;
+		}
+		.fp-tab.active {
+			background: #fff;
+			color: #183830;
+			box-shadow: 0 1px 2px rgba(16, 49, 39, .08);
+		}
+		.fp-tab.disabled {
+			opacity: .55;
+			cursor: not-allowed;
+		}
+		.view-panel { display: none; }
+		.view-panel.active { display: block; }
+		.forms-filter-wrap {
+			margin-top: 8px;
+			margin-bottom: 8px;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.forms-filter-wrap label { font-size: .85rem; color: #5d7c73; font-weight: 700; }
+		.forms-filter {
+			appearance: none;
+			min-width: 170px;
+			padding: 9px 34px 9px 12px;
+			border: 1px solid #cfdfd9;
+			border-radius: 11px;
+			background: #f9fcfb;
+			font-size: .78rem;
+			font-weight: 600;
+			color: #2f4e45;
+			background-image: linear-gradient(45deg, transparent 50%, #7d918c 50%), linear-gradient(135deg, #7d918c 50%, transparent 50%);
+			background-position: calc(100% - 18px) 52%, calc(100% - 12px) 52%;
+			background-size: 6px 6px, 6px 6px;
+			background-repeat: no-repeat;
+		}
+		.forms-grid {
+			margin-top: 14px;
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 14px;
+		}
+		.form-card {
+			background: #fff;
+			border: 1px solid #d7e4df;
+			border-radius: 14px;
+			padding: 16px;
+			box-shadow: var(--shadow-card);
+		}
+		.form-card-head {
+			display: flex;
+			justify-content: space-between;
+			align-items: flex-start;
+			gap: 10px;
+		}
+		.form-code { font-size: .73rem; color: #67847b; }
+		.form-title { margin-top: 2px; font-size: 1.03rem; font-weight: 700; color: #1b3a31; line-height: 1.2; }
+		.form-desc { margin-top: 10px; font-size: .76rem; color: #607d74; min-height: 52px; }
+		.form-actions { margin-top: 14px; display: flex; justify-content: flex-end; gap: 8px; }
+		.form-btn {
+			border: 1px solid #d0e1dc;
+			background: #fff;
+			color: #2f5349;
+			padding: 8px 14px;
+			border-radius: 10px;
+			font-size: .76rem;
+			font-weight: 700;
+			cursor: pointer;
+		}
+		.form-btn.primary { background: #1f8d78; border-color: #1f8d78; color: #fff; }
+		.form-hint { margin-top: 8px; font-size: .73rem; color: #68857c; }
+
+		.table-section { margin-top: 22px; border-top: 1px solid #dfe7e4; padding-top: 14px; }
 		.table-title { font-size: .88rem; color: #29453d; font-weight: 700; margin-bottom: 10px; }
 		.table-card { background: #fff; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow-card); }
 		table { width: 100%; border-collapse: collapse; }
@@ -241,6 +331,7 @@
 			.main { margin-left: 0; }
 			.content { padding: 14px; }
 			.stats { grid-template-columns: 1fr; }
+			.forms-grid { grid-template-columns: 1fr; }
 			.actions { width: 100%; }
 			.btn { flex: 1; }
 			.table-card { overflow-x: auto; }
@@ -299,20 +390,20 @@
 		<section class="stats">
 			<article class="card stat">
 				<div class="label">Enrolled Students</div>
-				<div class="num">{{ $programStats['enrolled_students'] ?? 0 }}</div>
+				<div class="num">48</div>
 			</article>
 			<article class="card stat">
 				<div class="label">Program Day</div>
-				<div class="num">{{ $programStats['program_day'] ?? '67/120' }}</div>
+				<div class="num">67/120</div>
 			</article>
 			<article class="card stat">
 				<div class="label">Avg. Attendance</div>
-				<div class="num">{{ $programStats['avg_attendance'] ?? '0%' }}</div>
+				<div class="num">82%</div>
 			</article>
 			<article class="card stat">
 				<div class="label">Improving</div>
-				<div class="num">{{ $programStats['improving_rate'] ?? '0%' }}</div>
-				<div class="hint">{{ $programStats['improving_hint'] ?? '0 of 0 students' }}</div>
+				<div class="num">72%</div>
+				<div class="hint">33 of 46 students</div>
 			</article>
 		</section>
 
@@ -323,11 +414,31 @@
 			<div class="prog-labels"><span>Baseline (Day 1)</span><span>Endline(Day 120)</span></div>
 		</section>
 
-		<section class="table-section">
-			<h2 class="table-title">Enrolled Students</h2>
+		<div class="fp-tabs" aria-label="Feeding Program views">
+			<button type="button" class="fp-tab disabled" id="overviewTabBtn">Overview</button>
+			<button type="button" class="fp-tab active" id="formsTabBtn">SBFP Forms</button>
+		</div>
+
+		<section class="forms-hub view-panel active" id="formsHub">
+			<div class="forms-filter-wrap">
+				<label for="formsFilter">Filter by:</label>
+				<select id="formsFilter" class="forms-filter">
+					<option value="all">All Forms</option>
+					<option value="beneficiary">Beneficiary Forms</option>
+					<option value="feeding">Feeding Records</option>
+					<option value="milk">Milk Component</option>
+					<option value="report">Reports</option>
+				</select>
+			</div>
+			<div class="forms-grid" id="formsGrid"></div>
+			<p class="form-hint" id="selectedFormHint">Tip: Click View to focus the selected form and Encode to add new entries.</p>
+		</section>
+
+		<section class="table-section view-panel" id="overviewSection">
+			<h2 class="table-title" id="selectedFormTitle">Enrolled Students</h2>
 			<div class="table-card">
-				<table>
-					<thead>
+				<table id="overviewTable">
+					<thead id="overviewTableHead">
 						<tr>
 							<th>Student</th>
 							<th>Baseline Wt</th>
@@ -337,24 +448,39 @@
 							<th>Trend</th>
 						</tr>
 					</thead>
-					<tbody>
-						@forelse (($students ?? collect()) as $student)
-							<tr>
-								<td>
-									<div class="student-name">{{ $student['student_name'] }}</div>
-									<div class="student-grade">{{ $student['section'] }}</div>
-								</td>
-								<td>{{ $student['baseline_weight'] }} kg</td>
-								<td><strong class="current-weight" data-student="{{ $student['student_name'] }}">{{ $student['current_weight'] }} kg</strong></td>
-								<td><span class="{{ $student['bmi_class'] }}">{{ $student['bmi_range'] }}</span></td>
-								<td>{{ $student['attendance'] }}</td>
-								<td><span class="trend {{ $student['trend_class'] }}">{{ $student['trend_label'] }}</span></td>
-							</tr>
-						@empty
-							<tr>
-								<td colspan="6">No enrolled students yet.</td>
-							</tr>
-						@endforelse
+					<tbody id="overviewTableBody">
+						<tr>
+							<td><div class="student-name">Maria Santos</div><div class="student-grade">Grade 3</div></td>
+							<td>18 kg</td>
+							<td><strong class="current-weight" data-student="Maria Santos">19.5 kg</strong></td>
+							<td><span class="bmi-up">12.5 - 13.5</span></td>
+							<td>58/67 days</td>
+							<td><span class="trend t-improving">improving</span></td>
+						</tr>
+						<tr>
+							<td><div class="student-name">Juan Dela Cruz</div><div class="student-grade">Grade 4</div></td>
+							<td>25 kg</td>
+							<td><strong class="current-weight" data-student="Juan Dela Cruz">26.8 kg</strong></td>
+							<td><span class="bmi-up">14.8 - 15.9</span></td>
+							<td>65/67 days</td>
+							<td><span class="trend t-improving">improving</span></td>
+						</tr>
+						<tr>
+							<td><div class="student-name">Ana Reyes</div><div class="student-grade">Grade 2</div></td>
+							<td>22 kg</td>
+							<td><strong class="current-weight" data-student="Ana Reyes">22.3 kg</strong></td>
+							<td><span class="bmi-up">15.8 - 16</span></td>
+							<td>40/67 days</td>
+							<td><span class="trend t-stable">stable</span></td>
+						</tr>
+						<tr>
+							<td><div class="student-name">Pedro Villanueva</div><div class="student-grade">Grade 5</div></td>
+							<td>28 kg</td>
+							<td><strong class="current-weight" data-student="Pedro Villanueva">27.5 kg</strong></td>
+							<td><span class="bmi-down">14.2 - 14</span></td>
+							<td>30/67 days</td>
+							<td><span class="trend t-regressing">regressing</span></td>
+						</tr>
 					</tbody>
 				</table>
 			</div>
@@ -370,19 +496,34 @@
 		</div>
 		<form id="weightsForm">
 			<div class="modal-body">
-				@forelse (($students ?? collect()) as $student)
-					<div class="weight-item">
-						<div class="weight-label">{{ $student['student_name'] }} <span>({{ $student['section'] }})</span></div>
-						<div class="weight-field-wrap">
-							<input type="number" class="weight-input" data-student="{{ $student['student_name'] }}" step="0.1" min="1" value="{{ $student['current_weight'] }}" required>
-							<span class="weight-unit">kg</span>
-						</div>
+				<div class="weight-item">
+					<div class="weight-label">Maria Santos <span>(Grade 3)</span></div>
+					<div class="weight-field-wrap">
+						<input type="number" class="weight-input" data-student="Maria Santos" step="0.1" min="1" value="19.5" required>
+						<span class="weight-unit">kg</span>
 					</div>
-				@empty
-					<div class="weight-item">
-						<div class="weight-label">No students available <span>(Add health records first)</span></div>
+				</div>
+				<div class="weight-item">
+					<div class="weight-label">Juan Dela Cruz <span>(Grade 4)</span></div>
+					<div class="weight-field-wrap">
+						<input type="number" class="weight-input" data-student="Juan Dela Cruz" step="0.1" min="1" value="26.8" required>
+						<span class="weight-unit">kg</span>
 					</div>
-				@endforelse
+				</div>
+				<div class="weight-item">
+					<div class="weight-label">Ana Reyes <span>(Grade 2)</span></div>
+					<div class="weight-field-wrap">
+						<input type="number" class="weight-input" data-student="Ana Reyes" step="0.1" min="1" value="22.3" required>
+						<span class="weight-unit">kg</span>
+					</div>
+				</div>
+				<div class="weight-item">
+					<div class="weight-label">Pedro Villanueva <span>(Grade 5)</span></div>
+					<div class="weight-field-wrap">
+						<input type="number" class="weight-input" data-student="Pedro Villanueva" step="0.1" min="1" value="27.5" required>
+						<span class="weight-unit">kg</span>
+					</div>
+				</div>
 			</div>
 			<div class="modal-foot">
 				<button type="button" class="btn btn-ghost" id="cancelWeightsModal">Cancel</button>
@@ -392,9 +533,69 @@
 	</div>
 </div>
 
+<div class="modal-backdrop" id="encodeFormBackdrop" aria-hidden="true">
+	<div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="encodeFormTitle">
+		<div class="modal-head">
+			<h2 id="encodeFormTitle" class="modal-title">Encode SBFP Form</h2>
+			<button type="button" class="modal-close" id="closeEncodeFormModal" aria-label="Close">&times;</button>
+		</div>
+		<form id="encodeFormForm">
+			<div class="modal-body">
+				<div class="weight-item">
+					<div class="weight-label" id="encodeFormLabel">Form</div>
+				</div>
+				<div class="weight-item">
+					<label class="field-label" for="encodeNotes">Encoded Notes</label>
+					<textarea id="encodeNotes" class="weight-input" rows="4" placeholder="Enter encoded details" required style="height: 96px; resize: vertical;"></textarea>
+				</div>
+				<div class="weight-item">
+					<label class="field-label" for="encodeFile">Upload File</label>
+					<input id="encodeFile" type="file" class="weight-input" accept=".csv,.xls,.xlsx,.pdf,.jpg,.jpeg,.png">
+				</div>
+				<input type="hidden" id="encodeTemplateKey" value="form1">
+			</div>
+			<div class="modal-foot">
+				<button type="button" class="btn btn-ghost" id="cancelEncodeFormModal">Cancel</button>
+				<button type="submit" class="btn btn-primary">Save Entry</button>
+			</div>
+		</form>
+	</div>
+</div>
+
 <script>
 (() => {
+	const formsStorageKey = 'sbfp_forms_entries_v1';
+	const formsData = [
+		{ key: 'form1', code: 'Form 1', title: 'Master List of Beneficiaries', category: 'beneficiary', description: 'Master list of SBFP beneficiaries with nutritional status, BMI, deworming, and 4Ps participation.' },
+		{ key: 'form2', code: 'Form 2', title: 'List of Schools', category: 'beneficiary', description: 'List of participating schools with BEIS ID, address, principal information, and total beneficiaries.' },
+		{ key: 'form3', code: 'Form 3', title: 'Summary of Beneficiaries & Start of Feeding', category: 'beneficiary', description: 'Summary of undernourished learners by grade level with start and end status of feeding.' },
+		{ key: 'form4', code: 'Form 4', title: 'Record of Daily Feeding', category: 'feeding', description: 'Daily feeding attendance record over the feeding days with learner-level tracking.' },
+		{ key: 'form5', code: 'Form 5', title: 'Consolidated Nutrition and Attendance', category: 'report', description: 'Consolidated before/after nutritional status and attendance percentage report.' },
+		{ key: 'milk5', code: 'Milk Form 5', title: 'List of Authorized Consignees', category: 'milk', description: 'Authorized consignee details for milk deliveries including contact and signature.' },
+		{ key: 'form6', code: 'Form 6', title: 'Milk Beneficiaries', category: 'milk', description: 'Milk component beneficiary list and intolerance classification.' },
+		{ key: 'form7', code: 'Form 7 / 7-a', title: 'Milk Deliveries', category: 'milk', description: 'Milk deliveries and school/drop-off allocation records.' },
+		{ key: 'form8', code: 'Form 8', title: 'Monthly / Quarterly Report', category: 'report', description: 'Implementation and financial status summary for SBFP reporting.' },
+	];
+
 	const main = document.querySelector('.main');
+	const formsGrid = document.getElementById('formsGrid');
+	const formsFilter = document.getElementById('formsFilter');
+	const overviewTabBtn = document.getElementById('overviewTabBtn');
+	const formsTabBtn = document.getElementById('formsTabBtn');
+	const formsHub = document.getElementById('formsHub');
+	const overviewSection = document.getElementById('overviewSection');
+	const selectedFormTitle = document.getElementById('selectedFormTitle');
+	const selectedFormHint = document.getElementById('selectedFormHint');
+	const overviewTableHead = document.getElementById('overviewTableHead');
+	const overviewTableBody = document.getElementById('overviewTableBody');
+	const encodeFormBackdrop = document.getElementById('encodeFormBackdrop');
+	const closeEncodeFormModal = document.getElementById('closeEncodeFormModal');
+	const cancelEncodeFormModal = document.getElementById('cancelEncodeFormModal');
+	const encodeFormForm = document.getElementById('encodeFormForm');
+	const encodeFormLabel = document.getElementById('encodeFormLabel');
+	const encodeTemplateKey = document.getElementById('encodeTemplateKey');
+	const encodeNotes = document.getElementById('encodeNotes');
+	const encodeFile = document.getElementById('encodeFile');
 	const openBtn = document.getElementById('openWeightsModal');
 	const backdrop = document.getElementById('weightsModalBackdrop');
 	const closeBtn = document.getElementById('closeWeightsModal');
@@ -402,6 +603,204 @@
 	const form = document.getElementById('weightsForm');
 	const weightCells = Array.from(document.querySelectorAll('.current-weight'));
 	const inputs = Array.from(form ? form.querySelectorAll('.weight-input') : []);
+	let currentViewedForm = '';
+	let activeView = 'forms';
+
+	const baseStudents = [
+		['Maria Santos', 'Grade 3'],
+		['Juan Dela Cruz', 'Grade 4'],
+		['Ana Reyes', 'Grade 2'],
+		['Pedro Villanueva', 'Grade 5'],
+	];
+
+	const overviewSchemas = {
+		form1: {
+			title: 'Form 1 - Master List of Beneficiaries',
+			headers: ['Name', 'Grade/Section', 'Weight (Kg)', 'BMI-A', 'Attendance', 'Trend'],
+			rows: [
+				['Maria Santos', 'Grade 3', '19.5', '12.5 - 13.5', '58/67', 'Improving'],
+				['Juan Dela Cruz', 'Grade 4', '26.8', '14.8 - 15.9', '65/67', 'Improving'],
+				['Ana Reyes', 'Grade 2', '22.3', '15.8 - 16.0', '40/67', 'Stable'],
+				['Pedro Villanueva', 'Grade 5', '27.5', '14.2 - 14.0', '30/67', 'Regressing'],
+			],
+		},
+		form2: {
+			title: 'Form 2 - List of Schools',
+			headers: ['Name of School', 'BEIS ID No.', 'School Address', 'Principal/OIC', 'Total Beneficiaries'],
+			rows: [['DCNHS', '-', '-', '-', '48']],
+		},
+		form3: {
+			title: 'Form 3 - Summary of Beneficiaries & Start of Feeding',
+			headers: ['Category', 'Count', 'Notes'],
+			rows: [
+				['Undernourished Learners', '48', 'Start of Feeding'],
+				['4Ps Beneficiaries', '-', 'For validation'],
+				['Repeaters', '-', 'From previous cycle'],
+			],
+		},
+		form4: {
+			title: 'Form 4 - Record of Daily Feeding',
+			headers: ['Name of Pupil', 'Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Day 7', 'Day 8'],
+			rows: baseStudents.map((item) => [item[0], '/', '/', '/', '/', '/', '/', '/', '/']),
+		},
+		form5: {
+			title: 'Form 5 - Consolidated Nutrition and Attendance',
+			headers: ['Grades & Sections', 'No. Dewormed', 'Before Status', 'After Status', '% Attendance'],
+			rows: [['All Feeding Beneficiaries', '-', '48', '33 improved', '82%']],
+		},
+		milk5: {
+			title: 'Milk Form 5 - Authorized Consignees',
+			headers: ['Name & Designation', 'Tel. No.', 'Mobile No.', 'Email', 'Specimen Signature'],
+			rows: [
+				['School Head', '-', '-', '-', '-'],
+				['Feeding Coordinator', '-', '-', '-', '-'],
+				['Property Custodian', '-', '-', '-', '-'],
+			],
+		},
+		form6: {
+			title: 'Form 6 - Milk Beneficiaries',
+			headers: ['Name', 'Grade & Section', 'Without Intolerance', 'With Intolerance but Willing', 'Not Allowed by Parents'],
+			rows: baseStudents.map((item) => [item[0], item[1], '/', '-', '-']),
+		},
+		form7: {
+			title: 'Form 7 / 7-a - Milk Deliveries',
+			headers: ['Grade Level / School', 'No. of Beneficiaries', 'Date Delivered', 'Packs Received', 'Replacements', 'Remarks'],
+			rows: [['All Sections', '48', 'Apr 04, 2026', '-', '-', 'For encoding']],
+		},
+		form8: {
+			title: 'Form 8 - Monthly / Quarterly Report',
+			headers: ['Division / School', 'Target SBFP Schools', 'Actual SBFP Schools', 'Status of Implementation', 'Amount Allocated', 'Liquidation Status'],
+			rows: [['DCNHS', '1', '1', 'Ongoing (67/120)', '-', 'For submission']],
+		},
+	};
+
+	const getEntries = () => {
+		try {
+			const parsed = JSON.parse(window.localStorage.getItem(formsStorageKey) || '{}');
+			return parsed && typeof parsed === 'object' ? parsed : {};
+		} catch (error) {
+			return {};
+		}
+	};
+
+	const setEntries = (value) => {
+		window.localStorage.setItem(formsStorageKey, JSON.stringify(value));
+	};
+
+	const setModal = (target, open) => {
+		if (!target) {
+			return;
+		}
+		target.classList.toggle('open', open);
+		const hasOpen = document.querySelectorAll('.modal-backdrop.open').length > 0;
+		document.body.style.overflow = hasOpen ? 'hidden' : '';
+	};
+
+	const setActiveView = (view) => {
+		const showOverview = view === 'overview';
+		activeView = showOverview ? 'overview' : 'forms';
+		if (overviewTabBtn) {
+			overviewTabBtn.classList.toggle('active', showOverview);
+			overviewTabBtn.classList.toggle('disabled', !showOverview);
+		}
+		if (formsTabBtn) {
+			formsTabBtn.classList.toggle('active', !showOverview);
+		}
+		if (formsHub) {
+			formsHub.classList.toggle('active', !showOverview);
+		}
+		if (overviewSection) {
+			overviewSection.classList.toggle('active', showOverview);
+		}
+	};
+
+	const renderOverviewTable = (formKey) => {
+		const schema = overviewSchemas[formKey] || overviewSchemas.form1;
+		if (selectedFormTitle) {
+			selectedFormTitle.textContent = schema.title;
+		}
+
+		if (overviewTableHead) {
+			overviewTableHead.innerHTML = `<tr>${schema.headers.map((header) => `<th>${header}</th>`).join('')}</tr>`;
+		}
+
+		if (overviewTableBody) {
+			overviewTableBody.innerHTML = schema.rows
+				.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`)
+				.join('');
+		}
+	};
+
+	const renderForms = () => {
+		if (!formsGrid) {
+			return;
+		}
+
+		const filter = formsFilter ? formsFilter.value : 'all';
+		const filtered = filter === 'all' ? formsData : formsData.filter((item) => item.category === filter);
+
+		if (filtered.length === 0) {
+			formsGrid.innerHTML = '<div class="form-hint">No forms found for the selected filter.</div>';
+			return;
+		}
+
+		formsGrid.innerHTML = filtered.map((item) => {
+			return `
+				<article class="form-card">
+					<div class="form-card-head">
+						<div>
+							<div class="form-code">${item.code}</div>
+							<h3 class="form-title">${item.title}</h3>
+						</div>
+					</div>
+					<p class="form-desc">${item.description}</p>
+					<div class="form-actions">
+						<button type="button" class="form-btn" data-view-form="${item.key}">View</button>
+						<button type="button" class="form-btn primary" data-encode-form="${item.key}">Encode</button>
+					</div>
+				</article>
+			`;
+		}).join('');
+	};
+
+	const viewForm = (formKey) => {
+		const selected = formsData.find((item) => item.key === formKey);
+		if (!selected) {
+			return;
+		}
+
+		currentViewedForm = formKey;
+		renderOverviewTable(formKey);
+		setActiveView('overview');
+		if (selectedFormHint) {
+			selectedFormHint.textContent = `Currently viewing ${selected.code}. Use Encode to add new entries.`;
+		}
+
+		const previewSection = overviewSection;
+		if (previewSection) {
+			previewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		}
+	};
+
+	const openEncodeForm = (formKey) => {
+		const selected = formsData.find((item) => item.key === formKey);
+		if (!selected) {
+			return;
+		}
+		if (encodeTemplateKey) {
+			encodeTemplateKey.value = selected.key;
+		}
+		if (encodeFormLabel) {
+			encodeFormLabel.textContent = `${selected.code} - ${selected.title}`;
+		}
+		if (encodeNotes) {
+			encodeNotes.value = '';
+		}
+		if (encodeFile) {
+			encodeFile.value = '';
+		}
+		setModal(encodeFormBackdrop, true);
+	};
 
 	if (main) {
 		requestAnimationFrame(() => {
@@ -432,6 +831,79 @@
 		});
 	}
 
+	if (formsFilter) {
+		formsFilter.addEventListener('change', renderForms);
+	}
+
+	if (overviewTabBtn) {
+		overviewTabBtn.addEventListener('click', () => {
+			if (activeView === 'forms') {
+				if (selectedFormHint) {
+					selectedFormHint.textContent = 'Select a form first and click View to open it in Overview.';
+				}
+				return;
+			}
+			if (!currentViewedForm) {
+				return;
+			}
+			renderOverviewTable(currentViewedForm);
+			setActiveView('overview');
+		});
+	}
+
+	if (formsTabBtn) {
+		formsTabBtn.addEventListener('click', () => {
+			setActiveView('forms');
+			if (formsHub) {
+				formsHub.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			}
+		});
+	}
+
+	if (formsGrid) {
+		formsGrid.addEventListener('click', (event) => {
+			const viewButton = event.target.closest('[data-view-form]');
+			if (viewButton) {
+				viewForm(viewButton.dataset.viewForm);
+				return;
+			}
+
+			const encodeButton = event.target.closest('[data-encode-form]');
+			if (encodeButton) {
+				openEncodeForm(encodeButton.dataset.encodeForm);
+			}
+		});
+	}
+
+	if (closeEncodeFormModal) {
+		closeEncodeFormModal.addEventListener('click', () => setModal(encodeFormBackdrop, false));
+	}
+
+	if (cancelEncodeFormModal) {
+		cancelEncodeFormModal.addEventListener('click', () => setModal(encodeFormBackdrop, false));
+	}
+
+	if (encodeFormForm) {
+		encodeFormForm.addEventListener('submit', (event) => {
+			event.preventDefault();
+			const key = encodeTemplateKey ? encodeTemplateKey.value : '';
+			if (!key) {
+				return;
+			}
+
+			const entries = getEntries();
+			entries[key] = Number(entries[key] || 0) + 1;
+			setEntries(entries);
+			renderForms();
+			viewForm(key);
+			setModal(encodeFormBackdrop, false);
+			encodeFormForm.reset();
+		});
+	}
+
+	renderForms();
+	setActiveView('forms');
+
 	if (!openBtn || !backdrop || !closeBtn || !cancelBtn || !form) {
 		return;
 	}
@@ -461,14 +933,12 @@
 	};
 
 	const closeModal = () => {
-		backdrop.classList.remove('open');
-		document.body.style.overflow = '';
+		setModal(backdrop, false);
 	};
 
 	openBtn.addEventListener('click', () => {
 		syncInputsFromTable();
-		backdrop.classList.add('open');
-		document.body.style.overflow = 'hidden';
+		setModal(backdrop, true);
 	});
 
 	closeBtn.addEventListener('click', closeModal);
@@ -483,6 +953,9 @@
 	document.addEventListener('keydown', (event) => {
 		if (event.key === 'Escape' && backdrop.classList.contains('open')) {
 			closeModal();
+		}
+		if (event.key === 'Escape' && encodeFormBackdrop && encodeFormBackdrop.classList.contains('open')) {
+			setModal(encodeFormBackdrop, false);
 		}
 	});
 

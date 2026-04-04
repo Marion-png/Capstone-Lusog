@@ -28,33 +28,6 @@ class SchoolHeadController extends Controller
         ],
     ];
 
-    /**
-     * @var array<int, array<string, string>>
-     */
-    private const REPORT_ROWS = [
-        [
-            'name' => 'Nutritional Status Summary',
-            'owner' => 'School Nurse',
-            'period' => 'Q1 2026',
-            'status' => 'Submitted',
-            'status_class' => 'submitted',
-        ],
-        [
-            'name' => 'Feeding Program Progress',
-            'owner' => 'Clinic Staff',
-            'period' => 'March 2026',
-            'status' => 'Reviewed',
-            'status_class' => 'reviewed',
-        ],
-        [
-            'name' => 'Deworming Completion Report',
-            'owner' => 'School Nurse',
-            'period' => 'Q1 2026',
-            'status' => 'Pending Sign-off',
-            'status_class' => 'pending',
-        ],
-    ];
-
     public function index(Request $request): View
     {
         $decisions = $request->session()->get('school_head_approval_decisions', []);
@@ -83,7 +56,6 @@ class SchoolHeadController extends Controller
                 'completed_reports' => 12,
                 'overdue_reports' => 1,
             ],
-            'recentReports' => collect(self::REPORT_ROWS),
         ]);
     }
 

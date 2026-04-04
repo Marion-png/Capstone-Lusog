@@ -202,20 +202,24 @@
 					</tr>
 				</thead>
 				<tbody>
-					@forelse (($recentReports ?? collect()) as $report)
-						<tr>
-							<td>{{ $report['name'] }}</td>
-							<td>{{ $report['owner'] }}</td>
-							<td>{{ $report['period'] }}</td>
-							<td>
-								<span class="status-pill status-{{ $report['status_class'] }}">{{ $report['status'] }}</span>
-							</td>
-						</tr>
-					@empty
-						<tr>
-							<td colspan="4">No report submissions yet.</td>
-						</tr>
-					@endforelse
+					<tr>
+						<td>Nutritional Status Summary</td>
+						<td>School Nurse</td>
+						<td>Q1 2026</td>
+						<td><span class="status-pill status-submitted">Submitted</span></td>
+					</tr>
+					<tr>
+						<td>Feeding Program Progress</td>
+						<td>Clinic Staff</td>
+						<td>March 2026</td>
+						<td><span class="status-pill status-reviewed">Reviewed</span></td>
+					</tr>
+					<tr>
+						<td>Deworming Completion Report</td>
+						<td>School Nurse</td>
+						<td>Q1 2026</td>
+						<td><span class="status-pill status-pending">Pending Sign-off</span></td>
+					</tr>
 				</tbody>
 			</table>
 			</div>
