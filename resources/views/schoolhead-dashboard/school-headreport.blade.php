@@ -86,37 +86,180 @@
 		.page-eyebrow { font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #15803d; margin-bottom: 6px; }
 		.page-title { font-family: 'DM Serif Display', serif; font-size: clamp(1.45rem, 2.3vw, 1.9rem); color: var(--text-1); line-height: 1.15; }
 		.page-title span { font-style: italic; color: #15803d; }
-		.page-sub { margin-top: 6px; font-size: .82rem; color: var(--text-3); max-width: 70ch; }
+		.page-sub { margin-top: 6px; font-size: .8rem; color: var(--text-3); max-width: 70ch; }
 
-		.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+		.viewonly-banner {
+			margin-top: 14px;
+			border: 1px solid #abd2f2;
+			background: #e8f4ff;
+			border-radius: 12px;
+			padding: 9px 12px;
+			font-size: .76rem;
+			color: #2a74b9;
+			display: flex;
+			align-items: center;
+			gap: 8px;
+		}
+		.viewonly-banner svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+		.report-grid {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 12px;
+			margin: 14px 0;
+		}
+
 		.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); }
-		.stat { padding: 14px 15px; position: relative; overflow: hidden; }
-		.stat::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: #16a34a; }
-		.stat .label { font-size: .68rem; color: var(--text-3); font-weight: 600; letter-spacing: .01em; }
-		.stat .num { margin-top: 8px; font-family: 'DM Serif Display', serif; font-size: 1.58rem; line-height: 1; color: #0f2c1c; }
+		.chart-card { padding: 14px; }
+		.chart-title { font-size: .82rem; letter-spacing: .02em; color: var(--text-2); font-weight: 700; margin-bottom: 10px; font-family: 'DM Sans', sans-serif; }
+		.chart-stage {
+			height: 230px;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+		}
 
-		.section { padding: 14px; }
-		.section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; }
-		.section-title { font-size: .84rem; letter-spacing: .02em; color: var(--text-2); font-weight: 700; }
-		.section-meta { font-size: .7rem; color: var(--text-3); }
-		.table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
-		table { width: 100%; border-collapse: collapse; }
-		th, td { font-size: .74rem; text-align: left; padding: 11px 9px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-		tbody tr:hover { background: #f8fbf8; }
-		th { color: var(--text-3); font-weight: 700; font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; background: #f9fdf9; }
-		.status-pill { border-radius: 999px; padding: 3px 8px; font-size: .64rem; font-weight: 700; display: inline-block; }
-		.status-submitted { background: #dcfce7; color: #166534; }
-		.status-reviewed { background: #dbeafe; color: #1d4ed8; }
-		.status-pending { background: #fef3c7; color: #92400e; }
+		.donut {
+			width: 138px;
+			height: 138px;
+			border-radius: 50%;
+			background: conic-gradient(#2faa62 0 72%, #2f89d7 72% 89%, #e13f3f 89% 100%);
+			position: relative;
+			box-shadow: inset 0 0 0 1px rgba(16, 60, 46, .06);
+		}
+		.donut::after {
+			content: '';
+			position: absolute;
+			inset: 30px;
+			border-radius: 50%;
+			background: #fff;
+		}
+		.legend-row {
+			display: flex;
+			justify-content: center;
+			gap: 10px;
+			flex-wrap: wrap;
+			font-size: .66rem;
+			color: var(--text-3);
+			padding-top: 2px;
+		}
+		.legend-item { display: inline-flex; align-items: center; gap: 4px; }
+		.legend-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
 
-		@media (max-width: 1050px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+		.chart-stage.bar-stage {
+			align-items: stretch;
+			padding-top: 0;
+		}
+		.bar-chart-shell {
+			width: 100%;
+			max-width: 430px;
+			height: 100%;
+			display: grid;
+			grid-template-columns: 38px 1fr;
+			grid-template-rows: 1fr 30px;
+			gap: 8px 10px;
+			position: relative;
+		}
+		.y-axis {
+			grid-column: 1;
+			grid-row: 1;
+			display: flex;
+			flex-direction: column;
+			justify-content: space-between;
+			align-items: flex-end;
+			padding: 2px 0;
+		}
+		.y-axis span {
+			font-size: .7rem;
+			color: #59716a;
+			line-height: 1;
+		}
+		.plot-area {
+			grid-column: 2;
+			grid-row: 1;
+			position: relative;
+			display: grid;
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+			align-items: end;
+			gap: 12px;
+			padding: 0 8px 2px 12px;
+			border-left: 1.5px solid #aec0bb;
+			border-bottom: 1.5px solid #aec0bb;
+			background: linear-gradient(180deg, #fcfefd 0%, #f8fbfa 100%);
+			border-radius: 8px 8px 0 0;
+		}
+		.plot-grid-line {
+			position: absolute;
+			left: 12px;
+			right: 0;
+			border-top: 1px dashed #d3dfdb;
+		}
+		.plot-grid-line.g1 { top: 25%; }
+		.plot-grid-line.g2 { top: 50%; }
+		.plot-grid-line.g3 { top: 75%; }
+		.bar-col {
+			display: flex;
+			align-items: flex-end;
+			justify-content: center;
+			gap: 6px;
+			padding-bottom: 2px;
+			position: relative;
+			height: 100%;
+			z-index: 1;
+		}
+		.series { width: 16px; border-radius: 4px 4px 0 0; }
+		.s1 { background: #ef9f29; }
+		.s2 { background: #24947e; }
+		.s3 { background: #2f89d7; }
+		.x-axis {
+			grid-column: 2;
+			grid-row: 2;
+			display: grid;
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+			gap: 12px;
+		}
+		.x-label {
+			font-size: .66rem;
+			color: #5e7770;
+			text-align: center;
+			padding-top: 3px;
+			font-weight: 600;
+		}
+
+		.reports-table-card { margin-top: 10px; }
+		.reports-head { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+		.reports-title { font-family: 'DM Serif Display', serif; font-size: 1.35rem; font-weight: 400; color: var(--text-1); }
+		.table-wrap { overflow-x: auto; }
+		table { width: 100%; border-collapse: collapse; background: #fff; }
+		th, td { font-size: .74rem; text-align: left; padding: 11px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+		th { color: var(--text-3); font-weight: 700; background: #f9fdf9; font-size: .72rem; }
+		td { color: #36534a; }
+		td strong { color: #102b1d; }
+		.download-link {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			color: #0e8f7f;
+			text-decoration: none;
+			font-weight: 600;
+			font-size: .74rem;
+		}
+		.download-link:hover { text-decoration: underline; }
+		.download-link svg { width: 14px; height: 14px; }
+
+		@media (max-width: 1050px) {
+			.report-grid { grid-template-columns: 1fr; }
+			.chart-stage { height: 220px; }
+			.reports-title { font-size: 1.2rem; }
+		}
 		@media (max-width: 780px) {
 			.sidebar { display: none; }
 			.main { margin-left: 0; }
 			.topbar { padding: 0 14px; }
 			.content { padding: 14px; }
-			.page-header { padding: 14px; }
-			.stats { grid-template-columns: 1fr; }
+			.chart-title { font-size: .8rem; }
+			.legend-row { justify-content: flex-start; gap: 10px; font-size: .66rem; }
+			th, td { font-size: .72rem; padding: 10px 9px; }
 		}
 	</style>
 </head>
@@ -163,62 +306,115 @@
 		<div class="content-inner">
 		<div class="page-header">
 		<div class="page-eyebrow">School Head Reports</div>
-		<h1 class="page-title">Executive <span>Reports Overview</span></h1>
-		<p class="page-sub">View-only report summaries for school-level health programs and compliance monitoring.</p>
+		<h1 class="page-title">Reports &amp; Analytics</h1>
+		<p class="page-sub">Data visualization and DepEd-mandated report generation</p>
+		<div class="viewonly-banner">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+			<strong>View Only</strong>
+			<span>- School Head has view-only access to reports and dashboards</span>
+		</div>
 		</div>
 
-		<section class="stats">
-			<article class="card stat">
-				<div class="label">Submission Rate</div>
-				<div class="num">{{ $reportStats['submission_rate'] ?? '0%' }}</div>
+		<section class="report-grid">
+			<article class="card chart-card">
+				<h2 class="chart-title">Feeding Program Outcomes</h2>
+				<div class="chart-stage">
+					<div class="donut" aria-label="Improved 33, Stable 8, Regressed 5"></div>
+				</div>
+				<div class="legend-row">
+					<span class="legend-item"><span class="legend-dot" style="background:#2faa62"></span>Improved (33)</span>
+					<span class="legend-item"><span class="legend-dot" style="background:#2f89d7"></span>Stable (8)</span>
+					<span class="legend-item"><span class="legend-dot" style="background:#e13f3f"></span>Regressed (5)</span>
+				</div>
 			</article>
-			<article class="card stat">
-				<div class="label">Open Findings</div>
-				<div class="num">{{ $reportStats['open_findings'] ?? 0 }}</div>
-			</article>
-			<article class="card stat">
-				<div class="label">Completed Reports</div>
-				<div class="num">{{ $reportStats['completed_reports'] ?? 0 }}</div>
-			</article>
-			<article class="card stat">
-				<div class="label">Overdue Reports</div>
-				<div class="num">{{ $reportStats['overdue_reports'] ?? 0 }}</div>
+
+			<article class="card chart-card">
+				<h2 class="chart-title">Nutritional Status Trend</h2>
+				<div class="chart-stage bar-stage">
+					<div class="bar-chart-shell" role="img" aria-label="Nutritional status trend from Baseline to Current">
+						<div class="y-axis">
+							<span>300</span>
+							<span>225</span>
+							<span>150</span>
+							<span>75</span>
+						</div>
+
+						<div class="plot-area">
+							<div class="plot-grid-line g1"></div>
+							<div class="plot-grid-line g2"></div>
+							<div class="plot-grid-line g3"></div>
+
+							<div class="bar-col">
+							<div class="series s1" style="height:15%;"></div>
+							<div class="series s2" style="height:88%;"></div>
+							<div class="series s3" style="height:21%;"></div>
+						</div>
+						<div class="bar-col">
+							<div class="series s1" style="height:14%;"></div>
+							<div class="series s2" style="height:89%;"></div>
+							<div class="series s3" style="height:21%;"></div>
+						</div>
+						<div class="bar-col">
+							<div class="series s1" style="height:12%;"></div>
+							<div class="series s2" style="height:92%;"></div>
+							<div class="series s3" style="height:20%;"></div>
+						</div>
+						<div class="bar-col">
+							<div class="series s1" style="height:10%;"></div>
+							<div class="series s2" style="height:95%;"></div>
+							<div class="series s3" style="height:20%;"></div>
+						</div>
+						</div>
+
+						<div class="x-axis">
+							<div class="x-label">Baseline</div>
+							<div class="x-label">Month 1</div>
+							<div class="x-label">Month 2</div>
+							<div class="x-label">Current</div>
+						</div>
+					</div>
+				</div>
 			</article>
 		</section>
 
-		<section class="card section">
-			<div class="section-head">
-				<h2 class="section-title">Recent Report Submissions</h2>
-				<div class="section-meta">Monitoring log for visibility only</div>
+		<section class="card reports-table-card">
+			<div class="reports-head">
+				<h2 class="reports-title">Generated Reports</h2>
 			</div>
 			<div class="table-wrap">
 			<table>
 				<thead>
 					<tr>
 						<th>Report Name</th>
-						<th>Owner</th>
-						<th>Period</th>
-						<th>Status</th>
+						<th>Type</th>
+						<th>Date</th>
+						<th>Action</th>
 					</tr>
 				</thead>
 				<tbody>
 					<tr>
-						<td>Nutritional Status Summary</td>
-						<td>School Nurse</td>
-						<td>Q1 2026</td>
-						<td><span class="status-pill status-submitted">Submitted</span></td>
+						<td><strong>Nutritional Status Report (Baseline)</strong></td>
+						<td>DepEd Template</td>
+						<td>2026-01-15</td>
+						<td><a href="#" class="download-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download</a></td>
 					</tr>
 					<tr>
-						<td>Feeding Program Progress</td>
-						<td>Clinic Staff</td>
-						<td>March 2026</td>
-						<td><span class="status-pill status-reviewed">Reviewed</span></td>
+						<td><strong>Feeding Program Midline Report</strong></td>
+						<td>DepEd Template</td>
+						<td>2026-03-01</td>
+						<td><a href="#" class="download-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download</a></td>
 					</tr>
 					<tr>
-						<td>Deworming Completion Report</td>
-						<td>School Nurse</td>
-						<td>Q1 2026</td>
-						<td><span class="status-pill status-pending">Pending Sign-off</span></td>
+						<td><strong>Deworming Completion Report</strong></td>
+						<td>School Report</td>
+						<td>2026-02-20</td>
+						<td><a href="#" class="download-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download</a></td>
+					</tr>
+					<tr>
+						<td><strong>Clinic Inventory Summary</strong></td>
+						<td>Internal</td>
+						<td>2026-03-20</td>
+						<td><a href="#" class="download-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download</a></td>
 					</tr>
 				</tbody>
 			</table>
