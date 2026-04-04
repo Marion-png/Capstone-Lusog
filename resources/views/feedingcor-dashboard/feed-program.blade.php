@@ -299,20 +299,20 @@
 		<section class="stats">
 			<article class="card stat">
 				<div class="label">Enrolled Students</div>
-				<div class="num">48</div>
+				<div class="num">{{ $programStats['enrolled_students'] ?? 0 }}</div>
 			</article>
 			<article class="card stat">
 				<div class="label">Program Day</div>
-				<div class="num">67/120</div>
+				<div class="num">{{ $programStats['program_day'] ?? '67/120' }}</div>
 			</article>
 			<article class="card stat">
 				<div class="label">Avg. Attendance</div>
-				<div class="num">82%</div>
+				<div class="num">{{ $programStats['avg_attendance'] ?? '0%' }}</div>
 			</article>
 			<article class="card stat">
 				<div class="label">Improving</div>
-				<div class="num">72%</div>
-				<div class="hint">33 of 46 students</div>
+				<div class="num">{{ $programStats['improving_rate'] ?? '0%' }}</div>
+				<div class="hint">{{ $programStats['improving_hint'] ?? '0 of 0 students' }}</div>
 			</article>
 		</section>
 
@@ -338,38 +338,23 @@
 						</tr>
 					</thead>
 					<tbody>
-						<tr>
-							<td><div class="student-name">Maria Santos</div><div class="student-grade">Grade 3</div></td>
-							<td>18 kg</td>
-							<td><strong class="current-weight" data-student="Maria Santos">19.5 kg</strong></td>
-							<td><span class="bmi-up">12.5 - 13.5</span></td>
-							<td>58/67 days</td>
-							<td><span class="trend t-improving">improving</span></td>
-						</tr>
-						<tr>
-							<td><div class="student-name">Juan Dela Cruz</div><div class="student-grade">Grade 4</div></td>
-							<td>25 kg</td>
-							<td><strong class="current-weight" data-student="Juan Dela Cruz">26.8 kg</strong></td>
-							<td><span class="bmi-up">14.8 - 15.9</span></td>
-							<td>65/67 days</td>
-							<td><span class="trend t-improving">improving</span></td>
-						</tr>
-						<tr>
-							<td><div class="student-name">Ana Reyes</div><div class="student-grade">Grade 2</div></td>
-							<td>22 kg</td>
-							<td><strong class="current-weight" data-student="Ana Reyes">22.3 kg</strong></td>
-							<td><span class="bmi-up">15.8 - 16</span></td>
-							<td>40/67 days</td>
-							<td><span class="trend t-stable">stable</span></td>
-						</tr>
-						<tr>
-							<td><div class="student-name">Pedro Villanueva</div><div class="student-grade">Grade 5</div></td>
-							<td>28 kg</td>
-							<td><strong class="current-weight" data-student="Pedro Villanueva">27.5 kg</strong></td>
-							<td><span class="bmi-down">14.2 - 14</span></td>
-							<td>30/67 days</td>
-							<td><span class="trend t-regressing">regressing</span></td>
-						</tr>
+						@forelse (($students ?? collect()) as $student)
+							<tr>
+								<td>
+									<div class="student-name">{{ $student['student_name'] }}</div>
+									<div class="student-grade">{{ $student['section'] }}</div>
+								</td>
+								<td>{{ $student['baseline_weight'] }} kg</td>
+								<td><strong class="current-weight" data-student="{{ $student['student_name'] }}">{{ $student['current_weight'] }} kg</strong></td>
+								<td><span class="{{ $student['bmi_class'] }}">{{ $student['bmi_range'] }}</span></td>
+								<td>{{ $student['attendance'] }}</td>
+								<td><span class="trend {{ $student['trend_class'] }}">{{ $student['trend_label'] }}</span></td>
+							</tr>
+						@empty
+							<tr>
+								<td colspan="6">No enrolled students yet.</td>
+							</tr>
+						@endforelse
 					</tbody>
 				</table>
 			</div>
@@ -385,34 +370,19 @@
 		</div>
 		<form id="weightsForm">
 			<div class="modal-body">
-				<div class="weight-item">
-					<div class="weight-label">Maria Santos <span>(Grade 3)</span></div>
-					<div class="weight-field-wrap">
-						<input type="number" class="weight-input" data-student="Maria Santos" step="0.1" min="1" value="19.5" required>
-						<span class="weight-unit">kg</span>
+				@forelse (($students ?? collect()) as $student)
+					<div class="weight-item">
+						<div class="weight-label">{{ $student['student_name'] }} <span>({{ $student['section'] }})</span></div>
+						<div class="weight-field-wrap">
+							<input type="number" class="weight-input" data-student="{{ $student['student_name'] }}" step="0.1" min="1" value="{{ $student['current_weight'] }}" required>
+							<span class="weight-unit">kg</span>
+						</div>
 					</div>
-				</div>
-				<div class="weight-item">
-					<div class="weight-label">Juan Dela Cruz <span>(Grade 4)</span></div>
-					<div class="weight-field-wrap">
-						<input type="number" class="weight-input" data-student="Juan Dela Cruz" step="0.1" min="1" value="26.8" required>
-						<span class="weight-unit">kg</span>
+				@empty
+					<div class="weight-item">
+						<div class="weight-label">No students available <span>(Add health records first)</span></div>
 					</div>
-				</div>
-				<div class="weight-item">
-					<div class="weight-label">Ana Reyes <span>(Grade 2)</span></div>
-					<div class="weight-field-wrap">
-						<input type="number" class="weight-input" data-student="Ana Reyes" step="0.1" min="1" value="22.3" required>
-						<span class="weight-unit">kg</span>
-					</div>
-				</div>
-				<div class="weight-item">
-					<div class="weight-label">Pedro Villanueva <span>(Grade 5)</span></div>
-					<div class="weight-field-wrap">
-						<input type="number" class="weight-input" data-student="Pedro Villanueva" step="0.1" min="1" value="27.5" required>
-						<span class="weight-unit">kg</span>
-					</div>
-				</div>
+				@endforelse
 			</div>
 			<div class="modal-foot">
 				<button type="button" class="btn btn-ghost" id="cancelWeightsModal">Cancel</button>
