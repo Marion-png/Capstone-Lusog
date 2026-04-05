@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Feeding Head - Feeding Program</title>
-	<link rel="preconnect" href="https://fonts.googleapis.com">
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-	<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
-	<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
-	<script>document.documentElement.classList.add('js');</script>
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Feeding Head - Feeding Program</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
+		<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+		<script>document.documentElement.classList.add('js');</script>
 	<style>
 		*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 		:root {
@@ -34,20 +34,29 @@
 		html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--text-1); overflow: hidden; }
 
 		.sidebar {
-			position: fixed; left: 0; top: 0; bottom: 0;
-			width: var(--sidebar-w); background: var(--g900);
-			display: flex; flex-direction: column; z-index: 100; overflow: hidden;
+			position: fixed;
+			left: 0;
+			top: 0;
+			bottom: 0;
+			width: var(--sidebar-w);
+			background: var(--g900);
+			display: flex;
+			flex-direction: column;
+			z-index: 100;
+			overflow: hidden;
 		}
 		.sidebar::after {
-			content: ''; position: absolute; inset: 0;
+			content: '';
+			position: absolute;
+			inset: 0;
 			background: radial-gradient(ellipse 120% 40% at 50% 100%, rgba(34,197,94,.18) 0%, transparent 70%),
-						radial-gradient(ellipse 80% 30% at 80% 0%, rgba(74,222,128,.1) 0%, transparent 60%);
+				radial-gradient(ellipse 80% 30% at 80% 0%, rgba(74,222,128,.1) 0%, transparent 60%);
 			pointer-events: none;
 		}
 		.sb-grid {
-			position: absolute; inset: 0;
-			background-image: linear-gradient(rgba(134,239,172,.05) 1px, transparent 1px),
-							  linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);
+			position: absolute;
+			inset: 0;
+			background-image: linear-gradient(rgba(134,239,172,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);
 			background-size: 28px 28px;
 		}
 		.sb-logo { padding: 20px 20px 18px; position: relative; z-index: 2; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; justify-content: center; }
@@ -74,25 +83,29 @@
 
 		.content { overflow: auto; padding: 18px; }
 		.head-row { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
-		.page-title { font-family: 'DM Serif Display', serif; font-size: 1.45rem; color: var(--text-1); line-height: 1.1; }
+		.page-eyebrow { font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #15803d; margin-bottom: 6px; }
+		.page-title { font-family: 'DM Serif Display', serif; font-size: 1.75rem; color: var(--text-1); line-height: 1.15; }
+		.page-title span { font-style: italic; color: #15803d; }
 		.page-sub { margin-top: 5px; font-size: .76rem; color: var(--text-3); }
 
 		.actions { display: flex; gap: 10px; }
 		.btn {
+			appearance: none;
 			border: 1px solid transparent;
-			border-radius: 10px;
-			padding: 10px 20px;
-			font-size: .75rem;
-			font-weight: 700;
+			border-radius: 8px;
+			padding: 8px 12px;
+			font-size: .74rem;
+			font-weight: 600;
 			cursor: pointer;
-			box-shadow: var(--shadow-card);
 			text-decoration: none;
 			display: inline-flex;
 			align-items: center;
 			justify-content: center;
 		}
 		.btn-ghost { background: #fff; border-color: var(--border); color: var(--text-2); }
-		.btn-primary { background: #1f6f5f; color: #fff; }
+		.btn-ghost:hover { background: #f0fdf4; border-color: #86efac; color: #15803d; }
+		.btn-primary { background: var(--g700); color: #fff; }
+		.btn-primary:hover { background: var(--g800); }
 
 		.stats { margin-top: 16px; display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
 		.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); }
@@ -113,7 +126,7 @@
 			position: relative;
 		}
 		.prog-fill {
-			width: 56%;
+			width: 0;
 			height: 100%;
 			background: linear-gradient(90deg, #37b9a7 0%, #2fa595 100%);
 			border-radius: 999px;
@@ -121,7 +134,7 @@
 		.prog-marker {
 			position: absolute;
 			top: -3px;
-			left: 56%;
+			left: 0;
 			width: 2px;
 			height: 20px;
 			background: #22544a;
@@ -157,19 +170,10 @@
 			color: #183830;
 			box-shadow: 0 1px 2px rgba(16, 49, 39, .08);
 		}
-		.fp-tab.disabled {
-			opacity: .55;
-			cursor: not-allowed;
-		}
+		.fp-tab.disabled { opacity: .55; cursor: not-allowed; }
 		.view-panel { display: none; }
 		.view-panel.active { display: block; }
-		.forms-filter-wrap {
-			margin-top: 8px;
-			margin-bottom: 8px;
-			display: flex;
-			align-items: center;
-			gap: 10px;
-		}
+		.forms-filter-wrap { margin-top: 8px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
 		.forms-filter-wrap label { font-size: .85rem; color: #5d7c73; font-weight: 700; }
 		.forms-filter {
 			appearance: none;
@@ -186,25 +190,9 @@
 			background-size: 6px 6px, 6px 6px;
 			background-repeat: no-repeat;
 		}
-		.forms-grid {
-			margin-top: 14px;
-			display: grid;
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-			gap: 14px;
-		}
-		.form-card {
-			background: #fff;
-			border: 1px solid #d7e4df;
-			border-radius: 14px;
-			padding: 16px;
-			box-shadow: var(--shadow-card);
-		}
-		.form-card-head {
-			display: flex;
-			justify-content: space-between;
-			align-items: flex-start;
-			gap: 10px;
-		}
+		.forms-grid { margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+		.form-card { background: #fff; border: 1px solid #d7e4df; border-radius: 14px; padding: 16px; box-shadow: var(--shadow-card); }
+		.form-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 		.form-code { font-size: .73rem; color: #67847b; }
 		.form-title { margin-top: 2px; font-size: 1.03rem; font-weight: 700; color: #1b3a31; line-height: 1.2; }
 		.form-desc { margin-top: 10px; font-size: .76rem; color: #607d74; min-height: 52px; }
@@ -227,7 +215,7 @@
 		.table-card { background: #fff; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow-card); }
 		table { width: 100%; border-collapse: collapse; }
 		th, td { padding: 11px 10px; border-bottom: 1px solid #edf2f1; font-size: .72rem; }
-		th { text-align: left; color: #7a8f8a; background: linear-gradient(180deg, #fbfdfc 0%, #f4f9f7 100%); font-weight: 700; }
+		th { text-align: left; color: #7a8f8a; background: #f9fbfa; font-weight: 700; }
 		tr:last-child td { border-bottom: none; }
 
 		.student-name { font-weight: 700; color: #2a443d; line-height: 1.2; }
@@ -260,67 +248,82 @@
 			display: flex;
 			flex-direction: column;
 		}
-		.modal-head {
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			padding: 14px 16px;
-			border-bottom: 1px solid var(--border);
-		}
-		.modal-title {
-			font-size: 1.15rem;
-			font-family: 'DM Serif Display', serif;
-			line-height: 1;
-			color: var(--text-1);
-		}
-		.modal-close {
-			border: none;
-			background: none;
-			font-size: 1.5rem;
-			line-height: 1;
-			color: #667a74;
-			cursor: pointer;
-		}
-		.modal-body {
-			padding: 14px 16px 8px;
-			overflow-y: auto;
-		}
+		.modal-panel.encode-modal-panel { width: min(1200px, 96vw); }
+		.modal-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+		.modal-title { font-size: 1.15rem; font-family: 'DM Serif Display', serif; line-height: 1; color: var(--text-1); }
+		.modal-close { border: none; background: none; font-size: 1.5rem; line-height: 1; color: #667a74; cursor: pointer; }
+		.modal-body { padding: 14px 16px 8px; overflow-y: auto; }
 		.weight-item { margin-bottom: 14px; }
-		.weight-label {
-			font-size: .95rem;
-			font-family: 'DM Serif Display', serif;
-			color: #243f38;
-		}
-		.weight-label span {
-			font-size: .78rem;
-			font-family: 'DM Sans', sans-serif;
-			font-weight: 600;
-			color: #7b918b;
-		}
-		.weight-field-wrap {
-			margin-top: 7px;
-			display: grid;
-			grid-template-columns: 1fr auto;
-			gap: 8px;
-			align-items: center;
-		}
-		.weight-input {
-			width: 100%;
-			padding: 10px 12px;
-			border: 1px solid #d8e1de;
-			border-radius: 10px;
-			font-size: .82rem;
-			font-family: 'DM Sans', sans-serif;
-			color: #27423b;
-		}
+		.weight-label { font-size: .95rem; font-family: 'DM Serif Display', serif; color: #243f38; }
+		.weight-label span { font-size: .78rem; font-family: 'DM Sans', sans-serif; font-weight: 600; color: #7b918b; }
+		.weight-field-wrap { margin-top: 7px; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+		.weight-input { width: 100%; padding: 10px 12px; border: 1px solid #d8e1de; border-radius: 10px; font-size: .82rem; font-family: 'DM Sans', sans-serif; color: #27423b; }
 		.weight-unit { font-size: .78rem; color: #5f736d; }
-		.modal-foot {
-			display: flex;
-			justify-content: flex-end;
-			gap: 8px;
-			padding: 12px 16px 16px;
-			border-top: 1px solid var(--border);
+		.modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--border); }
+
+		.encode-help { font-size: .73rem; color: #607a72; margin-bottom: 10px; }
+		.form1-meta {
+			display: none;
+			grid-template-columns: 1fr 1fr;
+			gap: 10px 20px;
+			padding: 10px 12px;
+			margin-bottom: 10px;
+			border: 1px solid #d9e6e1;
+			border-radius: 10px;
+			background: #fbfdfc;
 		}
+		.form1-meta.active { display: grid; }
+		.form1-meta-item {
+			display: grid;
+			grid-template-columns: auto 1fr;
+			align-items: center;
+			gap: 8px;
+			font-size: .74rem;
+			color: #29453d;
+		}
+		.form1-meta-item label {
+			font-weight: 700;
+			white-space: nowrap;
+		}
+		.form1-meta-item input {
+			width: 100%;
+			border: none;
+			border-bottom: 1px solid #86a49b;
+			padding: 6px 2px;
+			background: transparent;
+			font-size: .74rem;
+			color: #1f3b34;
+		}
+		.form1-meta-item input:focus {
+			outline: none;
+			border-bottom-color: #1f8d78;
+		}
+		.encode-grid-wrap { border: 1px solid #d9e6e1; border-radius: 10px; overflow: auto; background: #fff; }
+		.encode-grid { width: 100%; border-collapse: collapse; min-width: 980px; }
+		.encode-grid th, .encode-grid td { border-bottom: 1px solid #edf2f1; border-right: 1px solid #edf2f1; padding: 8px; vertical-align: top; }
+		.encode-grid th:last-child, .encode-grid td:last-child { border-right: none; }
+		.encode-grid th { position: sticky; top: 0; z-index: 1; background: #f3f8f6; font-size: .69rem; color: #4a675f; font-weight: 700; white-space: nowrap; }
+		.encode-grid th.gov-head,
+		.table-card th.gov-head {
+			white-space: normal;
+			text-align: center;
+			line-height: 1.25;
+		}
+		.encode-grid th.gov-subhead,
+		.table-card th.gov-subhead {
+			font-size: .66rem;
+		}
+		.encode-grid td { background: #fff; }
+		.encode-cell-input { width: 100%; min-width: 90px; padding: 8px 10px; border: 1px solid #d6e2dd; border-radius: 8px; font-size: .74rem; color: #1f3b34; font-family: 'DM Sans', sans-serif; }
+		.encode-cell-input[readonly] {
+			background: #f3f8f6;
+			color: #33544b;
+			font-weight: 700;
+		}
+		.encode-row-actions { display: flex; justify-content: center; }
+		.encode-inline-btn { border: 1px solid #d7e1dd; background: #fff; color: #31564d; padding: 6px 10px; border-radius: 8px; font-size: .68rem; font-weight: 700; cursor: pointer; }
+		.encode-inline-btn:hover { background: #f3f8f6; }
+		.encode-add-row { margin-top: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 10px; font-size: .72rem; }
 
 		@media (max-width: 1050px) {
 			.stats { grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -336,6 +339,8 @@
 			.btn { flex: 1; }
 			.table-card { overflow-x: auto; }
 			table { min-width: 760px; }
+			.encode-grid { min-width: 760px; }
+			.form1-meta { grid-template-columns: 1fr; }
 		}
 	</style>
 </head>
@@ -378,7 +383,8 @@
 	<div class="content">
 		<div class="head-row">
 			<div>
-				<h1 class="page-title">Feeding Program</h1>
+				<div class="page-eyebrow">Feeding Program</div>
+				<h1 class="page-title">Feeding <span>Program</span></h1>
 				<p class="page-sub">120-Day Supplementary Feeding Program tracking.</p>
 			</div>
 			<div class="actions">
@@ -390,27 +396,31 @@
 		<section class="stats">
 			<article class="card stat">
 				<div class="label">Enrolled Students</div>
-				<div class="num">48</div>
+				<div class="num">{{ $programStats['enrolled_students'] ?? 0 }}</div>
 			</article>
 			<article class="card stat">
 				<div class="label">Program Day</div>
-				<div class="num">67/120</div>
+				<div class="num">{{ $programStats['program_day'] ?? '0/120' }}</div>
 			</article>
 			<article class="card stat">
 				<div class="label">Avg. Attendance</div>
-				<div class="num">82%</div>
+				<div class="num">{{ $programStats['avg_attendance'] ?? '0%' }}</div>
 			</article>
 			<article class="card stat">
 				<div class="label">Improving</div>
-				<div class="num">72%</div>
-				<div class="hint">33 of 46 students</div>
+				<div class="num">{{ $programStats['improving_rate'] ?? '0%' }}</div>
+				<div class="hint">{{ $programStats['improving_hint'] ?? '0 of 0 students' }}</div>
 			</article>
 		</section>
 
 		<section class="card progress-card">
+			@php
+				$programDayValue = (int) explode('/', $programStats['program_day'] ?? '0/120')[0];
+				$progressPercent = max(0, min(100, ($programDayValue / 120) * 100));
+			@endphp
 			<h2 class="section-title">Program Progress</h2>
-			<div class="prog-track"><div class="prog-fill"></div><div class="prog-marker"></div></div>
-			<div class="prog-day">Day 67 of 120</div>
+			<div class="prog-track"><div class="prog-fill" style="width: {{ $progressPercent }}%;"></div><div class="prog-marker" style="left: {{ $progressPercent }}%;"></div></div>
+			<div class="prog-day">Day {{ $programDayValue }} of 120</div>
 			<div class="prog-labels"><span>Baseline (Day 1)</span><span>Endline(Day 120)</span></div>
 		</section>
 
@@ -449,38 +459,18 @@
 						</tr>
 					</thead>
 					<tbody id="overviewTableBody">
-						<tr>
-							<td><div class="student-name">Maria Santos</div><div class="student-grade">Grade 3</div></td>
-							<td>18 kg</td>
-							<td><strong class="current-weight" data-student="Maria Santos">19.5 kg</strong></td>
-							<td><span class="bmi-up">12.5 - 13.5</span></td>
-							<td>58/67 days</td>
-							<td><span class="trend t-improving">improving</span></td>
-						</tr>
-						<tr>
-							<td><div class="student-name">Juan Dela Cruz</div><div class="student-grade">Grade 4</div></td>
-							<td>25 kg</td>
-							<td><strong class="current-weight" data-student="Juan Dela Cruz">26.8 kg</strong></td>
-							<td><span class="bmi-up">14.8 - 15.9</span></td>
-							<td>65/67 days</td>
-							<td><span class="trend t-improving">improving</span></td>
-						</tr>
-						<tr>
-							<td><div class="student-name">Ana Reyes</div><div class="student-grade">Grade 2</div></td>
-							<td>22 kg</td>
-							<td><strong class="current-weight" data-student="Ana Reyes">22.3 kg</strong></td>
-							<td><span class="bmi-up">15.8 - 16</span></td>
-							<td>40/67 days</td>
-							<td><span class="trend t-stable">stable</span></td>
-						</tr>
-						<tr>
-							<td><div class="student-name">Pedro Villanueva</div><div class="student-grade">Grade 5</div></td>
-							<td>28 kg</td>
-							<td><strong class="current-weight" data-student="Pedro Villanueva">27.5 kg</strong></td>
-							<td><span class="bmi-down">14.2 - 14</span></td>
-							<td>30/67 days</td>
-							<td><span class="trend t-regressing">regressing</span></td>
-						</tr>
+						@forelse (($students ?? collect()) as $student)
+							<tr>
+								<td><div class="student-name">{{ $student['student_name'] }}</div><div class="student-grade">{{ $student['section'] }}</div></td>
+								<td>{{ $student['baseline_weight'] }} kg</td>
+								<td><strong class="current-weight" data-student="{{ $student['student_name'] }}">{{ $student['current_weight'] }} kg</strong></td>
+								<td><span class="{{ $student['bmi_class'] }}">{{ $student['bmi_range'] }}</span></td>
+								<td>{{ $student['attendance'] }}</td>
+								<td><span class="trend {{ $student['trend_class'] }}">{{ strtolower($student['trend_label']) }}</span></td>
+							</tr>
+						@empty
+							<tr><td colspan="6">No master list beneficiaries available.</td></tr>
+						@endforelse
 					</tbody>
 				</table>
 			</div>
@@ -496,34 +486,17 @@
 		</div>
 		<form id="weightsForm">
 			<div class="modal-body">
-				<div class="weight-item">
-					<div class="weight-label">Maria Santos <span>(Grade 3)</span></div>
-					<div class="weight-field-wrap">
-						<input type="number" class="weight-input" data-student="Maria Santos" step="0.1" min="1" value="19.5" required>
-						<span class="weight-unit">kg</span>
+				@forelse (($students ?? collect()) as $student)
+					<div class="weight-item">
+						<div class="weight-label">{{ $student['student_name'] }} <span>({{ $student['section'] }})</span></div>
+						<div class="weight-field-wrap">
+							<input type="number" class="weight-input" data-student="{{ $student['student_name'] }}" step="0.1" min="1" value="{{ $student['current_weight'] }}" required>
+							<span class="weight-unit">kg</span>
+						</div>
 					</div>
-				</div>
-				<div class="weight-item">
-					<div class="weight-label">Juan Dela Cruz <span>(Grade 4)</span></div>
-					<div class="weight-field-wrap">
-						<input type="number" class="weight-input" data-student="Juan Dela Cruz" step="0.1" min="1" value="26.8" required>
-						<span class="weight-unit">kg</span>
-					</div>
-				</div>
-				<div class="weight-item">
-					<div class="weight-label">Ana Reyes <span>(Grade 2)</span></div>
-					<div class="weight-field-wrap">
-						<input type="number" class="weight-input" data-student="Ana Reyes" step="0.1" min="1" value="22.3" required>
-						<span class="weight-unit">kg</span>
-					</div>
-				</div>
-				<div class="weight-item">
-					<div class="weight-label">Pedro Villanueva <span>(Grade 5)</span></div>
-					<div class="weight-field-wrap">
-						<input type="number" class="weight-input" data-student="Pedro Villanueva" step="0.1" min="1" value="27.5" required>
-						<span class="weight-unit">kg</span>
-					</div>
-				</div>
+				@empty
+					<div class="weight-item"><div class="weight-label">No beneficiaries from master list.</div></div>
+				@endforelse
 			</div>
 			<div class="modal-foot">
 				<button type="button" class="btn btn-ghost" id="cancelWeightsModal">Cancel</button>
@@ -534,7 +507,7 @@
 </div>
 
 <div class="modal-backdrop" id="encodeFormBackdrop" aria-hidden="true">
-	<div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="encodeFormTitle">
+	<div class="modal-panel encode-modal-panel" role="dialog" aria-modal="true" aria-labelledby="encodeFormTitle">
 		<div class="modal-head">
 			<h2 id="encodeFormTitle" class="modal-title">Encode SBFP Form</h2>
 			<button type="button" class="modal-close" id="closeEncodeFormModal" aria-label="Close">&times;</button>
@@ -544,27 +517,61 @@
 				<div class="weight-item">
 					<div class="weight-label" id="encodeFormLabel">Form</div>
 				</div>
-				<div class="weight-item">
-					<label class="field-label" for="encodeNotes">Encoded Notes</label>
-					<textarea id="encodeNotes" class="weight-input" rows="4" placeholder="Enter encoded details" required style="height: 96px; resize: vertical;"></textarea>
+				<p class="encode-help">Encode data directly using the official form columns below. Rows saved here are shown in Overview.</p>
+				<div class="form1-meta" id="form1MetaSection">
+					<div class="form1-meta-item"><label for="metaDivision">Division/Province:</label><input id="metaDivision" data-meta-field="division" type="text"></div>
+					<div class="form1-meta-item"><label for="metaPrincipal">Name of Principal:</label><input id="metaPrincipal" data-meta-field="principal" type="text"></div>
+					<div class="form1-meta-item"><label for="metaCity">City/Municipality/Barangay:</label><input id="metaCity" data-meta-field="city" type="text"></div>
+					<div class="form1-meta-item"><label for="metaFocal">Name of Feeding Focal Person:</label><input id="metaFocal" data-meta-field="focal_person" type="text"></div>
+					<div class="form1-meta-item"><label for="metaSchoolName">Name of School / School District:</label><input id="metaSchoolName" data-meta-field="school_name" type="text"></div>
+					<div class="form1-meta-item"><label for="metaSchoolId">School ID Number:</label><input id="metaSchoolId" data-meta-field="school_id" type="text"></div>
 				</div>
-				<div class="weight-item">
-					<label class="field-label" for="encodeFile">Upload File</label>
-					<input id="encodeFile" type="file" class="weight-input" accept=".csv,.xls,.xlsx,.pdf,.jpg,.jpeg,.png">
+				<div class="encode-grid-wrap">
+					<table class="encode-grid" aria-label="Encode SBFP rows">
+						<thead id="encodeGridHead"></thead>
+						<tbody id="encodeGridBody"></tbody>
+					</table>
 				</div>
+				<button type="button" class="btn btn-ghost encode-add-row" id="addEncodeRowBtn">+ Add Row</button>
 				<input type="hidden" id="encodeTemplateKey" value="form1">
 			</div>
 			<div class="modal-foot">
 				<button type="button" class="btn btn-ghost" id="cancelEncodeFormModal">Cancel</button>
-				<button type="submit" class="btn btn-primary">Save Entry</button>
+				<button type="submit" class="btn btn-primary">Save Encoded Rows</button>
 			</div>
 		</form>
 	</div>
 </div>
 
+@php
+	$improvingHintValue = $programStats['improving_hint'] ?? '0 of 0 students';
+	$avgAttendanceValue = $programStats['avg_attendance'] ?? '0%';
+	$todayLabelValue = now()->format('M d, Y');
+	$programDayLabelValue = $programStats['program_day'] ?? '0/120';
+	$liveStudentsPayload = ($students ?? collect())->map(function ($student) {
+		return [
+			'name' => $student['student_name'] ?? '',
+			'section' => $student['section'] ?? '',
+			'baseline' => $student['baseline_weight'] ?? '',
+			'current' => $student['current_weight'] ?? '',
+			'bmi' => $student['bmi_range'] ?? '',
+			'attendance' => $student['attendance'] ?? '',
+			'trend' => $student['trend_label'] ?? '',
+		];
+	})->values();
+@endphp
+
 <script>
 (() => {
 	const formsStorageKey = 'sbfp_forms_entries_v1';
+	const formsRowsStorageKey = 'sbfp_forms_encoded_rows_v1';
+	const formsMetaStorageKey = 'sbfp_forms_meta_v1';
+	const form1AgeIndex = 6;
+	const form1WeightIndex = 7;
+	const form1HeightIndex = 8;
+	const form1BmiIndex = 9;
+	const form1BmiAStatusIndex = 10;
+	const form1HfaStatusIndex = 11;
 	const formsData = [
 		{ key: 'form1', code: 'Form 1', title: 'Master List of Beneficiaries', category: 'beneficiary', description: 'Master list of SBFP beneficiaries with nutritional status, BMI, deworming, and 4Ps participation.' },
 		{ key: 'form2', code: 'Form 2', title: 'List of Schools', category: 'beneficiary', description: 'List of participating schools with BEIS ID, address, principal information, and total beneficiaries.' },
@@ -594,8 +601,11 @@
 	const encodeFormForm = document.getElementById('encodeFormForm');
 	const encodeFormLabel = document.getElementById('encodeFormLabel');
 	const encodeTemplateKey = document.getElementById('encodeTemplateKey');
-	const encodeNotes = document.getElementById('encodeNotes');
-	const encodeFile = document.getElementById('encodeFile');
+	const encodeGridHead = document.getElementById('encodeGridHead');
+	const encodeGridBody = document.getElementById('encodeGridBody');
+	const addEncodeRowBtn = document.getElementById('addEncodeRowBtn');
+	const form1MetaSection = document.getElementById('form1MetaSection');
+	const form1MetaInputs = Array.from(document.querySelectorAll('[data-meta-field]'));
 	const openBtn = document.getElementById('openWeightsModal');
 	const backdrop = document.getElementById('weightsModalBackdrop');
 	const closeBtn = document.getElementById('closeWeightsModal');
@@ -605,35 +615,76 @@
 	const inputs = Array.from(form ? form.querySelectorAll('.weight-input') : []);
 	let currentViewedForm = '';
 	let activeView = 'forms';
+	const improvingHint = @json($improvingHintValue);
+	const avgAttendance = @json($avgAttendanceValue);
+	const todayLabel = @json($todayLabelValue);
+	const programDayLabel = @json($programDayLabelValue);
+	const liveStudents = @json($liveStudentsPayload);
 
-	const baseStudents = [
-		['Maria Santos', 'Grade 3'],
-		['Juan Dela Cruz', 'Grade 4'],
-		['Ana Reyes', 'Grade 2'],
-		['Pedro Villanueva', 'Grade 5'],
-	];
+	const baseStudents = liveStudents.map((student) => [student.name, student.section]);
 
 	const overviewSchemas = {
 		form1: {
 			title: 'Form 1 - Master List of Beneficiaries',
-			headers: ['Name', 'Grade/Section', 'Weight (Kg)', 'BMI-A', 'Attendance', 'Trend'],
-			rows: [
-				['Maria Santos', 'Grade 3', '19.5', '12.5 - 13.5', '58/67', 'Improving'],
-				['Juan Dela Cruz', 'Grade 4', '26.8', '14.8 - 15.9', '65/67', 'Improving'],
-				['Ana Reyes', 'Grade 2', '22.3', '15.8 - 16.0', '40/67', 'Stable'],
-				['Pedro Villanueva', 'Grade 5', '27.5', '14.2 - 14.0', '30/67', 'Regressing'],
+			headers: [
+				'No.',
+				'Name',
+				'Sex',
+				'Grade/Section',
+				'Date of Birth (MM/DD/YYYY)',
+				'Date of Weighing / Measuring (MM/DD/YYYY)',
+				'Age in Years / Months',
+				'Weight (kg)',
+				'Height (cm)',
+				'BMI for 6 y.o. and above',
+				'BMI-A',
+				'HFA',
+				'Dewormed? (yes or no)',
+				"Parent's consent for milk? (yes or no)",
+				'Participation in 4Ps (yes or no)',
+				'Beneficiary of SBFP in Previous Years (yes or no)',
 			],
+			rows: liveStudents.map((student, index) => {
+				const normalizedStatus = String(student.bmi || '').toLowerCase();
+				let nutritionStatus = 'N';
+				if (normalizedStatus.includes('severe')) {
+					nutritionStatus = 'Severely Wasted';
+				} else if (normalizedStatus.includes('wasted')) {
+					nutritionStatus = 'Wasted';
+				} else if (normalizedStatus.includes('normal')) {
+					nutritionStatus = 'Normal';
+				}
+
+				return [
+					String(index + 1),
+					student.name,
+					'',
+					student.section,
+					'',
+					todayLabel,
+					'',
+					student.current,
+					'',
+					student.bmi,
+					nutritionStatus,
+					'',
+					'',
+					'',
+					'',
+					'',
+				];
+			}),
 		},
 		form2: {
 			title: 'Form 2 - List of Schools',
 			headers: ['Name of School', 'BEIS ID No.', 'School Address', 'Principal/OIC', 'Total Beneficiaries'],
-			rows: [['DCNHS', '-', '-', '-', '48']],
+			rows: [['DCNHS', '-', '-', '-', String(liveStudents.length)]],
 		},
 		form3: {
 			title: 'Form 3 - Summary of Beneficiaries & Start of Feeding',
 			headers: ['Category', 'Count', 'Notes'],
 			rows: [
-				['Undernourished Learners', '48', 'Start of Feeding'],
+				['Undernourished Learners', String(liveStudents.length), 'Start of Feeding'],
 				['4Ps Beneficiaries', '-', 'For validation'],
 				['Repeaters', '-', 'From previous cycle'],
 			],
@@ -646,7 +697,7 @@
 		form5: {
 			title: 'Form 5 - Consolidated Nutrition and Attendance',
 			headers: ['Grades & Sections', 'No. Dewormed', 'Before Status', 'After Status', '% Attendance'],
-			rows: [['All Feeding Beneficiaries', '-', '48', '33 improved', '82%']],
+			rows: [['All Feeding Beneficiaries', '-', String(liveStudents.length), improvingHint, avgAttendance]],
 		},
 		milk5: {
 			title: 'Milk Form 5 - Authorized Consignees',
@@ -665,12 +716,12 @@
 		form7: {
 			title: 'Form 7 / 7-a - Milk Deliveries',
 			headers: ['Grade Level / School', 'No. of Beneficiaries', 'Date Delivered', 'Packs Received', 'Replacements', 'Remarks'],
-			rows: [['All Sections', '48', 'Apr 04, 2026', '-', '-', 'For encoding']],
+			rows: [['All Sections', String(liveStudents.length), todayLabel, '-', '-', 'For encoding']],
 		},
 		form8: {
 			title: 'Form 8 - Monthly / Quarterly Report',
 			headers: ['Division / School', 'Target SBFP Schools', 'Actual SBFP Schools', 'Status of Implementation', 'Amount Allocated', 'Liquidation Status'],
-			rows: [['DCNHS', '1', '1', 'Ongoing (67/120)', '-', 'For submission']],
+			rows: [['DCNHS', '1', '1', `Ongoing (${programDayLabel})`, '-', 'For submission']],
 		},
 	};
 
@@ -685,6 +736,284 @@
 
 	const setEntries = (value) => {
 		window.localStorage.setItem(formsStorageKey, JSON.stringify(value));
+	};
+
+	const getRowsByForm = () => {
+		try {
+			const parsed = JSON.parse(window.localStorage.getItem(formsRowsStorageKey) || '{}');
+			return parsed && typeof parsed === 'object' ? parsed : {};
+		} catch (error) {
+			return {};
+		}
+	};
+
+	const setRowsByForm = (value) => {
+		window.localStorage.setItem(formsRowsStorageKey, JSON.stringify(value));
+	};
+
+	const getMetaByForm = () => {
+		try {
+			const parsed = JSON.parse(window.localStorage.getItem(formsMetaStorageKey) || '{}');
+			return parsed && typeof parsed === 'object' ? parsed : {};
+		} catch (error) {
+			return {};
+		}
+	};
+
+	const setMetaByForm = (value) => {
+		window.localStorage.setItem(formsMetaStorageKey, JSON.stringify(value));
+	};
+
+	const setForm1MetaVisibility = (visible) => {
+		if (!form1MetaSection) {
+			return;
+		}
+		form1MetaSection.classList.toggle('active', visible);
+	};
+
+	const loadFormMetaToInputs = (formKey) => {
+		if (!form1MetaInputs.length) {
+			return;
+		}
+		const metaByForm = getMetaByForm();
+		const formMeta = metaByForm[formKey] && typeof metaByForm[formKey] === 'object' ? metaByForm[formKey] : {};
+		form1MetaInputs.forEach((input) => {
+			const key = input.dataset.metaField;
+			input.value = key && formMeta[key] ? String(formMeta[key]) : '';
+		});
+	};
+
+	const saveFormMetaFromInputs = (formKey) => {
+		if (!form1MetaInputs.length) {
+			return;
+		}
+		const metaByForm = getMetaByForm();
+		const payload = {};
+		form1MetaInputs.forEach((input) => {
+			const key = input.dataset.metaField;
+			if (!key) {
+				return;
+			}
+			payload[key] = String(input.value || '').trim();
+		});
+		metaByForm[formKey] = payload;
+		setMetaByForm(metaByForm);
+	};
+
+	const escapeHtml = (value) => String(value ?? '')
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;');
+
+	const getTemplateHeaders = (formKey) => {
+		const schema = overviewSchemas[formKey] || overviewSchemas.form1;
+		return Array.isArray(schema.headers) ? schema.headers : [];
+	};
+
+	const buildForm1HeaderRows = (includeAction = false) => {
+		const actionCell = includeAction ? '<th class="gov-head" rowspan="2">Action</th>' : '';
+		return `
+			<tr>
+				<th class="gov-head" rowspan="2">No.</th>
+				<th class="gov-head" rowspan="2">Name</th>
+				<th class="gov-head" rowspan="2">Sex</th>
+				<th class="gov-head" rowspan="2">Grade/ Section</th>
+				<th class="gov-head" rowspan="2">Date of Birth<br>(MM/DD/YYYY)</th>
+				<th class="gov-head" rowspan="2">Date of Weighing / Measuring<br>(MM/DD/YYYY)</th>
+				<th class="gov-head" rowspan="2">Age in Years / Months</th>
+				<th class="gov-head" rowspan="2">Weight<br>(Kg)</th>
+				<th class="gov-head" rowspan="2">Height<br>(cm)</th>
+				<th class="gov-head" rowspan="2">BMI for 6 y.o.<br>and above</th>
+				<th class="gov-head" colspan="2">Nutritional Status (NS)</th>
+				<th class="gov-head" rowspan="2">Dewormed?<br>(yes or no)</th>
+				<th class="gov-head" rowspan="2">Parent's consent for milk?<br>(yes or no)</th>
+				<th class="gov-head" rowspan="2">Participation in 4Ps<br>(yes or no)</th>
+				<th class="gov-head" rowspan="2">Beneficiary of SBFP in Previous Years<br>(yes or no)</th>
+				${actionCell}
+			</tr>
+			<tr>
+				<th class="gov-head gov-subhead">BMI-A</th>
+				<th class="gov-head gov-subhead">HFA</th>
+			</tr>
+		`;
+	};
+
+	const buildEncodeHeader = (formKey, headers) => {
+		if (!encodeGridHead) {
+			return;
+		}
+		if (formKey === 'form1') {
+			encodeGridHead.innerHTML = buildForm1HeaderRows(true);
+			return;
+		}
+		encodeGridHead.innerHTML = `<tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')}<th>Action</th></tr>`;
+	};
+
+	const buildEncodeRow = (formKey, headers, rowValues = []) => {
+		const cells = headers.map((_, index) => {
+			const value = escapeHtml(rowValues[index] || '');
+			const isComputedBmi = formKey === 'form1' && index === form1BmiIndex;
+			const isComputedStatus = formKey === 'form1' && index === form1BmiAStatusIndex;
+			const isComputedHfa = formKey === 'form1' && index === form1HfaStatusIndex;
+			const readonly = (isComputedBmi || isComputedStatus || isComputedHfa) ? ' readonly' : '';
+			return `<td><input type="text" class="encode-cell-input" data-col-index="${index}" value="${value}"${readonly} /></td>`;
+		});
+		return `<tr>${cells.join('')}<td><div class="encode-row-actions"><button type="button" class="encode-inline-btn" data-remove-row="1">Remove</button></div></td></tr>`;
+	};
+
+	const computeBmi = (weightKg, heightCm) => {
+		const weight = Number(weightKg);
+		const height = Number(heightCm);
+		if (Number.isNaN(weight) || Number.isNaN(height) || weight <= 0 || height <= 0) {
+			return '';
+		}
+		const meters = height / 100;
+		if (meters <= 0) {
+			return '';
+		}
+		const bmi = weight / (meters * meters);
+		return Number.isFinite(bmi) ? bmi.toFixed(2) : '';
+	};
+
+	const detectBmiAStatus = (bmiValue) => {
+		const bmi = Number(bmiValue);
+		if (Number.isNaN(bmi) || bmi <= 0) {
+			return '';
+		}
+		if (bmi < 16) {
+			return 'Severely Wasted';
+		}
+		if (bmi < 18.5) {
+			return 'Wasted';
+		}
+		if (bmi < 25) {
+			return 'Normal';
+		}
+		return 'Obese';
+	};
+
+	const parseAgeToYears = (ageRaw) => {
+		const text = String(ageRaw || '').trim();
+		if (!text) {
+			return null;
+		}
+		const values = (text.match(/\d+(?:\.\d+)?/g) || []).map((value) => Number(value));
+		if (!values.length || values.some((value) => Number.isNaN(value))) {
+			return null;
+		}
+		if (values.length >= 2) {
+			return values[0] + (values[1] / 12);
+		}
+		const single = values[0];
+		if (single <= 30) {
+			return single;
+		}
+		return single / 12;
+	};
+
+	const expectedHeightForAge = (ageYears) => {
+		if (!Number.isFinite(ageYears) || ageYears <= 0) {
+			return null;
+		}
+		if (ageYears <= 12) {
+			return 77 + (6 * ageYears);
+		}
+		return 149 + (5 * (ageYears - 12));
+	};
+
+	const detectHfaStatus = (heightCm, ageRaw) => {
+		const height = Number(heightCm);
+		if (!Number.isFinite(height) || height <= 0) {
+			return '';
+		}
+		const ageYears = parseAgeToYears(ageRaw);
+		const expectedHeight = expectedHeightForAge(ageYears);
+		if (!Number.isFinite(expectedHeight) || expectedHeight <= 0) {
+			return '';
+		}
+		const ratio = height / expectedHeight;
+		if (ratio < 0.90) {
+			return 'Severe Stunting';
+		}
+		if (ratio < 0.95) {
+			return 'Moderate Stunting';
+		}
+		return 'Normal';
+	};
+
+	const recalcForm1BmiInRow = (row) => {
+		if (!row) {
+			return;
+		}
+		const ageInput = row.querySelector(`.encode-cell-input[data-col-index="${form1AgeIndex}"]`);
+		const weightInput = row.querySelector(`.encode-cell-input[data-col-index="${form1WeightIndex}"]`);
+		const heightInput = row.querySelector(`.encode-cell-input[data-col-index="${form1HeightIndex}"]`);
+		const bmiInput = row.querySelector(`.encode-cell-input[data-col-index="${form1BmiIndex}"]`);
+		const statusInput = row.querySelector(`.encode-cell-input[data-col-index="${form1BmiAStatusIndex}"]`);
+		const hfaInput = row.querySelector(`.encode-cell-input[data-col-index="${form1HfaStatusIndex}"]`);
+		if (!ageInput || !weightInput || !heightInput || !bmiInput || !statusInput || !hfaInput) {
+			return;
+		}
+		const bmi = computeBmi(weightInput.value, heightInput.value);
+		bmiInput.value = bmi;
+		statusInput.value = detectBmiAStatus(bmi);
+		hfaInput.value = detectHfaStatus(heightInput.value, ageInput.value);
+	};
+
+	const recalcAllForm1Bmi = () => {
+		if (!encodeGridBody) {
+			return;
+		}
+		Array.from(encodeGridBody.querySelectorAll('tr')).forEach((row) => recalcForm1BmiInRow(row));
+	};
+
+	const renderEncodeRows = (formKey) => {
+		if (!encodeGridBody) {
+			return;
+		}
+		setForm1MetaVisibility(formKey === 'form1');
+		if (formKey === 'form1') {
+			loadFormMetaToInputs(formKey);
+		}
+		const headers = getTemplateHeaders(formKey);
+		buildEncodeHeader(formKey, headers);
+		const existingRowsByForm = getRowsByForm();
+		const existingRows = Array.isArray(existingRowsByForm[formKey]) ? existingRowsByForm[formKey] : [];
+		if (existingRows.length > 0) {
+			encodeGridBody.innerHTML = existingRows.map((row) => buildEncodeRow(formKey, headers, row)).join('');
+			if (formKey === 'form1') {
+				recalcAllForm1Bmi();
+			}
+			return;
+		}
+		encodeGridBody.innerHTML = buildEncodeRow(formKey, headers);
+		if (formKey === 'form1') {
+			recalcAllForm1Bmi();
+		}
+	};
+
+	const appendEncodeRow = () => {
+		if (!encodeGridBody || !encodeTemplateKey) {
+			return;
+		}
+		const key = encodeTemplateKey.value || 'form1';
+		const headers = getTemplateHeaders(key);
+		encodeGridBody.insertAdjacentHTML('beforeend', buildEncodeRow(key, headers));
+		if (key === 'form1') {
+			recalcAllForm1Bmi();
+		}
+	};
+
+	const collectEncodedRows = (formKey) => {
+		if (!encodeGridBody) {
+			return [];
+		}
+		const headerCount = getTemplateHeaders(formKey).length;
+		return Array.from(encodeGridBody.querySelectorAll('tr'))
+			.map((row) => Array.from(row.querySelectorAll('.encode-cell-input')).slice(0, headerCount).map((input) => String(input.value || '').trim()))
+			.filter((rowValues) => rowValues.some((value) => value !== ''));
 	};
 
 	const setModal = (target, open) => {
@@ -716,17 +1045,25 @@
 
 	const renderOverviewTable = (formKey) => {
 		const schema = overviewSchemas[formKey] || overviewSchemas.form1;
+		const encodedRowsByForm = getRowsByForm();
+		const encodedRows = Array.isArray(encodedRowsByForm[formKey]) ? encodedRowsByForm[formKey] : null;
+		const rowsToRender = encodedRows && encodedRows.length > 0 ? encodedRows : schema.rows;
 		if (selectedFormTitle) {
 			selectedFormTitle.textContent = schema.title;
 		}
 
 		if (overviewTableHead) {
-			overviewTableHead.innerHTML = `<tr>${schema.headers.map((header) => `<th>${header}</th>`).join('')}</tr>`;
+			overviewTableHead.innerHTML = formKey === 'form1'
+				? buildForm1HeaderRows(false)
+				: `<tr>${schema.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')}</tr>`;
 		}
 
 		if (overviewTableBody) {
-			overviewTableBody.innerHTML = schema.rows
-				.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`)
+			overviewTableBody.innerHTML = rowsToRender
+				.map((row) => {
+					const normalizedRow = schema.headers.map((_, index) => (Array.isArray(row) && index < row.length ? row[index] : ''));
+					return `<tr>${normalizedRow.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`;
+				})
 				.join('');
 		}
 	};
@@ -793,12 +1130,7 @@
 		if (encodeFormLabel) {
 			encodeFormLabel.textContent = `${selected.code} - ${selected.title}`;
 		}
-		if (encodeNotes) {
-			encodeNotes.value = '';
-		}
-		if (encodeFile) {
-			encodeFile.value = '';
-		}
+		renderEncodeRows(selected.key);
 		setModal(encodeFormBackdrop, true);
 	};
 
@@ -890,14 +1222,68 @@
 			if (!key) {
 				return;
 			}
+			if (key === 'form1') {
+				saveFormMetaFromInputs(key);
+			}
+
+			const encodedRows = collectEncodedRows(key);
+			if (encodedRows.length === 0) {
+				window.alert('Please encode at least one row before saving.');
+				return;
+			}
 
 			const entries = getEntries();
-			entries[key] = Number(entries[key] || 0) + 1;
+			entries[key] = Number(entries[key] || 0) + encodedRows.length;
 			setEntries(entries);
+
+			const rowsByForm = getRowsByForm();
+			rowsByForm[key] = encodedRows;
+			setRowsByForm(rowsByForm);
+
 			renderForms();
 			viewForm(key);
 			setModal(encodeFormBackdrop, false);
 			encodeFormForm.reset();
+		});
+	}
+
+	if (addEncodeRowBtn) {
+		addEncodeRowBtn.addEventListener('click', appendEncodeRow);
+	}
+
+	if (encodeGridBody) {
+		encodeGridBody.addEventListener('input', (event) => {
+			if (!encodeTemplateKey || encodeTemplateKey.value !== 'form1') {
+				return;
+			}
+			const target = event.target.closest('.encode-cell-input');
+			if (!target) {
+				return;
+			}
+			const index = Number(target.dataset.colIndex);
+			if (index !== form1AgeIndex && index !== form1WeightIndex && index !== form1HeightIndex) {
+				return;
+			}
+			recalcForm1BmiInRow(target.closest('tr'));
+		});
+
+		encodeGridBody.addEventListener('click', (event) => {
+			const removeButton = event.target.closest('[data-remove-row]');
+			if (!removeButton) {
+				return;
+			}
+			const row = removeButton.closest('tr');
+			if (!row) {
+				return;
+			}
+			const rowCount = encodeGridBody.querySelectorAll('tr').length;
+			if (rowCount <= 1) {
+				Array.from(row.querySelectorAll('.encode-cell-input')).forEach((input) => {
+					input.value = '';
+				});
+				return;
+			}
+			row.remove();
 		});
 	}
 

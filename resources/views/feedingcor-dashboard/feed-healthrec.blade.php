@@ -249,7 +249,7 @@
 	<div class="content" id="student-health-records">
 		<div class="page-eyebrow">Feeding Program</div>
 		<h1 class="page-title">Student <span>Health Records</span></h1>
-		<p class="page-sub">8 students · 3 flagged as wasted</p>
+		<p class="page-sub">8 learners (JHS/SHS) · 3 flagged as wasted</p>
 
 		<div class="notice">
 			View Only - You can view flagged students for feeding enrollment.
@@ -285,7 +285,7 @@
 				<thead>
 					<tr>
 						<th>Student</th>
-						<th>Grade &amp; Section</th>
+						<th>Level &amp; Section</th>
 						<th>Age</th>
 						<th>Height (cm)</th>
 						<th>Weight (kg)</th>
@@ -296,7 +296,7 @@
 				<tbody>
 					<tr>
 						<td><span class="warn">&#9888;</span><strong>Maria Santos</strong></td>
-						<td>Grade 3 - Sampaguita</td>
+						<td>JHS 7 - Sampaguita</td>
 						<td>9</td>
 						<td>120</td>
 						<td>18</td>
@@ -305,7 +305,7 @@
 					</tr>
 					<tr>
 						<td><span class="warn">&#9888;</span><strong>Juan Dela Cruz</strong></td>
-						<td>Grade 4 - Narra</td>
+						<td>JHS 8 - Narra</td>
 						<td>10</td>
 						<td>130</td>
 						<td>25</td>
@@ -314,7 +314,7 @@
 					</tr>
 					<tr>
 						<td><span class="warn">&#9888;</span><strong>Ana Reyes</strong></td>
-						<td>Grade 2 - Rosal</td>
+						<td>JHS 7 - Rosal</td>
 						<td>8</td>
 						<td>118</td>
 						<td>22</td>
@@ -323,7 +323,7 @@
 					</tr>
 					<tr>
 						<td><strong>Carlos Garcia</strong></td>
-						<td>Grade 5 - Mahogany</td>
+						<td>JHS 9 - Mahogany</td>
 						<td>11</td>
 						<td>140</td>
 						<td>35</td>
@@ -332,7 +332,7 @@
 					</tr>
 					<tr>
 						<td><strong>Sofia Lim</strong></td>
-						<td>Grade 1 - Dahlia</td>
+						<td>JHS 7 - Dahlia</td>
 						<td>7</td>
 						<td>110</td>
 						<td>20</td>
@@ -341,7 +341,7 @@
 					</tr>
 					<tr>
 						<td><strong>Miguel Torres</strong></td>
-						<td>Grade 6 - Acacia</td>
+						<td>SHS 11 - Acacia</td>
 						<td>12</td>
 						<td>148</td>
 						<td>42</td>
@@ -350,7 +350,7 @@
 					</tr>
 					<tr>
 						<td><strong>Isabella Cruz</strong></td>
-						<td>Grade 3 - Sampaguita</td>
+						<td>SHS 11 - Sampaguita</td>
 						<td>9</td>
 						<td>122</td>
 						<td>30</td>
@@ -359,7 +359,7 @@
 					</tr>
 					<tr>
 						<td><strong>Diego Mendoza</strong></td>
-						<td>Grade 4 - Narra</td>
+						<td>SHS 12 - Narra</td>
 						<td>10</td>
 						<td>132</td>
 						<td>40</td>

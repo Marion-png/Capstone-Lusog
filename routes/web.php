@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\CsvUploadController;
+use App\Http\Controllers\FeedingCoordinatorController;
+use App\Http\Controllers\FeedingProgramController;
 use App\Http\Controllers\MedicineInventoryController;
 use App\Http\Controllers\SchoolHeadController;
 use Illuminate\Http\Request;
@@ -63,13 +65,13 @@ Route::get('/dashboard/school-head', [SchoolHeadController::class, 'index'])
 Route::get('/dashboard/school-head/reports', [SchoolHeadController::class, 'reports'])
     ->name('dashboard.school-head.reports');
 
-Route::view('/dashboard/feedingcor-dashboard', 'feedingcor-dashboard.feed-dashboard')
+Route::get('/dashboard/feedingcor-dashboard', [FeedingCoordinatorController::class, 'dashboard'])
     ->name('dashboard.feedingcor-dashboard');
 
 Route::view('/dashboard/feedingcor-health-records', 'feedingcor-dashboard.feed-healthrec')
     ->name('dashboard.feedingcor-health-records');
 
-Route::view('/dashboard/feedingcor-program', 'feedingcor-dashboard.feed-program')
+Route::get('/dashboard/feedingcor-program', [FeedingProgramController::class, 'index'])
     ->name('dashboard.feedingcor-program');
 
 Route::post('/dashboard/school-head/approvals/{approval}/{decision}', [SchoolHeadController::class, 'decide'])

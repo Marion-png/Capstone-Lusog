@@ -311,29 +311,29 @@
 		<div class="page-header" id="dashboard">
 			<div class="page-eyebrow">Feeding Program</div>
 			<h1 class="page-title">Dashboard <span>Feeding Program</span></h1>
-			<p class="page-sub">Monitor participation, outcomes, and weekly attendance at a glance.</p>
+			<p class="page-sub">Monitor JHS/SHS participation, nutritional outcomes, and weekly check-ins at a glance.</p>
 		</div>
 
 		<section class="stats">
 			<article class="card stat">
 				<div class="label">Enrolled Students</div>
-				<div class="num">46</div>
-				<div class="hint">In feeding program</div>
+				<div class="num">{{ $dashboardStats['total_students'] ?? 0 }}</div>
+				<div class="hint">JHS: {{ $dashboardStats['jhs_count'] ?? 0 }} | SHS: {{ $dashboardStats['shs_count'] ?? 0 }}</div>
 			</article>
 			<article class="card stat">
 				<div class="label">Program Day</div>
-				<div class="num">67</div>
+				<div class="num">{{ $dashboardStats['program_day'] ?? 0 }}</div>
 				<div class="hint">of 120 day cycle</div>
 			</article>
 			<article class="card stat">
 				<div class="label">Improving</div>
-				<div class="num">72%</div>
-				<div class="hint">33 of 46 students</div>
+				<div class="num">{{ $dashboardStats['improving_rate'] ?? 0 }}%</div>
+				<div class="hint">{{ $dashboardStats['improving_count'] ?? 0 }} of {{ $dashboardStats['total_students'] ?? 0 }} students</div>
 			</article>
 			<article class="card stat">
-				<div class="label">Avg Attendance</div>
-				<div class="num">91%</div>
-				<div class="hint">This week</div>
+				<div class="label">Avg Check-ins</div>
+				<div class="num">{{ $dashboardStats['avg_attendance'] ?? 0 }}%</div>
+				<div class="hint">Last 5 weeks</div>
 			</article>
 		</section>
 
@@ -360,23 +360,25 @@
 					<line class="grid-line" x1="408" y1="20" x2="408" y2="210"></line>
 					<line class="grid-line" x1="500" y1="20" x2="500" y2="210"></line>
 
-					<polygon class="area-fill" points="48,210 48,175 138,150 228,132 318,108 408,82 500,62 500,210"></polygon>
-					<polyline class="line-main" points="48,175 138,150 228,132 318,108 408,82 500,62"></polyline>
-					<circle class="line-dot" cx="48" cy="175" r="3.5"></circle>
-					<circle class="line-dot" cx="138" cy="150" r="3.5"></circle>
-					<circle class="line-dot" cx="228" cy="132" r="3.5"></circle>
-					<circle class="line-dot" cx="318" cy="108" r="3.5"></circle>
-					<circle class="line-dot" cx="408" cy="82" r="3.5"></circle>
-					<circle class="line-dot" cx="500" cy="62" r="3.5"></circle>
+					@php
+						$chartPoints = collect($bmiChart['points'] ?? []);
+						$linePoints = $chartPoints->map(fn ($point) => $point['x'] . ',' . $point['y'])->implode(' ');
+						$areaPoints = '48,210 ' . $linePoints . ' 500,210';
+						$months = $bmiChart['month_labels'] ?? [];
+						$yTicks = $bmiChart['y_ticks'] ?? [0, 0, 0];
+					@endphp
+					<polygon class="area-fill" points="{{ $areaPoints }}"></polygon>
+					<polyline class="line-main" points="{{ $linePoints }}"></polyline>
+					@foreach ($chartPoints as $point)
+						<circle class="line-dot" cx="{{ $point['x'] }}" cy="{{ $point['y'] }}" r="3.5"></circle>
+					@endforeach
 
-					<text class="axis-txt" x="28" y="56">19</text>
-					<text class="axis-txt" x="28" y="126">16</text>
-					<text class="axis-txt" x="28" y="182">14</text>
-					<text class="axis-txt" x="40" y="228">Jan</text>
-					<text class="axis-txt" x="130" y="228">Feb</text>
-					<text class="axis-txt" x="220" y="228">Mar</text>
-					<text class="axis-txt" x="310" y="228">Apr</text>
-					<text class="axis-txt" x="402" y="228">May</text>
+					<text class="axis-txt" x="24" y="56">{{ $yTicks[0] ?? 0 }}</text>
+					<text class="axis-txt" x="24" y="126">{{ $yTicks[1] ?? 0 }}</text>
+					<text class="axis-txt" x="24" y="182">{{ $yTicks[2] ?? 0 }}</text>
+					@foreach ($months as $index => $month)
+						<text class="axis-txt" x="{{ 40 + ($index * 90) }}" y="228">{{ $month }}</text>
+					@endforeach
 				</svg>
 				</div>
 			</article>
@@ -384,26 +386,33 @@
 			<article class="card chart-card">
 				<h2 class="chart-title">Student Progress Breakdown</h2>
 				<div class="donut-wrap">
-					<div class="donut">
-						<div class="donut-center"><div><strong>46</strong>Students</div></div>
+					<div class="donut" style="background: {{ $progressCounts['donut_style'] ?? 'conic-gradient(var(--teal) 0 100%)' }};">
+						<div class="donut-center"><div><strong>{{ $dashboardStats['total_students'] ?? 0 }}</strong>Students</div></div>
 					</div>
 				</div>
 				<div class="legend-row">
-					<span class="legend-item"><span class="legend-dot" style="background: var(--teal);"></span>Improving (33)</span>
-					<span class="legend-item"><span class="legend-dot" style="background: var(--blue);"></span>Stable (8)</span>
-					<span class="legend-item"><span class="legend-dot" style="background: var(--red);"></span>Regressing (5)</span>
+					<span class="legend-item"><span class="legend-dot" style="background: var(--teal);"></span>Improving ({{ $progressCounts['improving'] ?? 0 }})</span>
+					<span class="legend-item"><span class="legend-dot" style="background: var(--blue);"></span>Stable ({{ $progressCounts['stable'] ?? 0 }})</span>
+					<span class="legend-item"><span class="legend-dot" style="background: var(--red);"></span>Regressing ({{ $progressCounts['regressing'] ?? 0 }})</span>
 				</div>
 			</article>
 		</section>
 
 		<section class="card chart-card full-chart">
-			<h2 class="chart-title">Weekly Attendance</h2>
+			<h2 class="chart-title">Weekly Check-ins (JHS/SHS)</h2>
 			<div class="bars-area">
-				<div class="bar-col"><div class="bar-value">46</div><div class="bar-stack"><div class="bar-good" style="height: 126px;"></div><div class="bar-risk" style="height: 14px;"></div></div><div class="bar-label">Week 1</div></div>
-				<div class="bar-col"><div class="bar-value">44</div><div class="bar-stack"><div class="bar-good" style="height: 122px;"></div><div class="bar-risk" style="height: 16px;"></div></div><div class="bar-label">Week 2</div></div>
-				<div class="bar-col"><div class="bar-value">45</div><div class="bar-stack"><div class="bar-good" style="height: 128px;"></div><div class="bar-risk" style="height: 12px;"></div></div><div class="bar-label">Week 3</div></div>
-				<div class="bar-col"><div class="bar-value">43</div><div class="bar-stack"><div class="bar-good" style="height: 118px;"></div><div class="bar-risk" style="height: 20px;"></div></div><div class="bar-label">Week 4</div></div>
-				<div class="bar-col"><div class="bar-value">45</div><div class="bar-stack"><div class="bar-good" style="height: 126px;"></div><div class="bar-risk" style="height: 14px;"></div></div><div class="bar-label">Week 5</div></div>
+				@forelse (($weeklyBars ?? []) as $bar)
+					<div class="bar-col">
+						<div class="bar-value">{{ $bar['present'] }}</div>
+						<div class="bar-stack">
+							<div class="bar-good" style="height: {{ $bar['present_height'] }}px;"></div>
+							<div class="bar-risk" style="height: {{ $bar['missed_height'] }}px;"></div>
+						</div>
+						<div class="bar-label">{{ $bar['label'] }}</div>
+					</div>
+				@empty
+					<div class="bar-col"><div class="bar-value">0</div><div class="bar-stack"><div class="bar-good" style="height: 0;"></div><div class="bar-risk" style="height: 0;"></div></div><div class="bar-label">No Data</div></div>
+				@endforelse
 			</div>
 		</section>
 
