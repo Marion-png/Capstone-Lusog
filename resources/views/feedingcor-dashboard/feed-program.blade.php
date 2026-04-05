@@ -29,10 +29,12 @@
 			--sidebar-collapsed-w: 76px;
 			--topbar-h: 64px;
 			--radius-sm: 10px;
+			--surface-soft: #f5faf7;
+			--focus-ring: rgba(34, 197, 94, 0.25);
 			--shadow-card: 0 1px 4px rgba(5,46,22,.06), 0 4px 16px rgba(5,46,22,.06);
 		}
 
-		html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--text-1); overflow: hidden; }
+		html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--text-1); overflow: hidden; -webkit-font-smoothing: antialiased; }
 
 		.sidebar {
 			position: fixed;
@@ -104,7 +106,7 @@
 		html.js .main { opacity: 0; transform: translateY(10px); transition: opacity .26s ease, transform .3s ease; }
 		html.js .main.page-ready { opacity: 1; transform: translateY(0); }
 		html.js .main.page-exit { opacity: 0; transform: translateY(10px); }
-		.topbar { height: var(--topbar-h); border-bottom: 1px solid var(--border); background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; }
+		.topbar { height: var(--topbar-h); border-bottom: 1px solid var(--border); background: rgba(255,255,255,.9); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: space-between; padding: 0 22px; position: sticky; top: 0; z-index: 20; }
 		.topbar-bc { font-size: .76rem; color: var(--text-3); display: flex; gap: 6px; align-items: center; }
 		.topbar-chip { font-size: .72rem; border: 1px solid #bbf7d0; color: #15803d; background: #f0fdf4; border-radius: 999px; padding: 5px 11px; display: flex; align-items: center; gap: 7px; }
 		.topbar-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
@@ -129,14 +131,17 @@
 			display: inline-flex;
 			align-items: center;
 			justify-content: center;
+			transition: transform .15s ease, box-shadow .18s ease, background .18s ease, color .18s ease, border-color .18s ease;
 		}
+		.btn:focus-visible, .forms-filter:focus-visible, .encode-cell-input:focus-visible, .weight-input:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
 		.btn-ghost { background: #fff; border-color: var(--border); color: var(--text-2); }
 		.btn-ghost:hover { background: #f0fdf4; border-color: #86efac; color: #15803d; }
 		.btn-primary { background: var(--g700); color: #fff; }
 		.btn-primary:hover { background: var(--g800); }
 
 		.stats { margin-top: 16px; display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
-		.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); }
+		.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); transition: transform .18s ease, box-shadow .2s ease, border-color .18s ease; }
+		.card:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(5,46,22,.08), 0 10px 24px rgba(5,46,22,.07); border-color: #d2e5db; }
 		.stat { padding: 12px 14px; }
 		.stat .label { font-size: .7rem; color: var(--text-3); }
 		.stat .num { margin-top: 7px; font-size: 1.55rem; font-family: 'DM Serif Display', serif; line-height: 1; }
@@ -232,7 +237,8 @@
 			background-repeat: no-repeat;
 		}
 		.forms-grid { margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-		.form-card { background: #fff; border: 1px solid #d7e4df; border-radius: 14px; padding: 16px; box-shadow: var(--shadow-card); }
+		.form-card { background: #fff; border: 1px solid #d7e4df; border-radius: 14px; padding: 16px; box-shadow: var(--shadow-card); transition: transform .18s ease, box-shadow .2s ease, border-color .18s ease; }
+		.form-card:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(5,46,22,.08), 0 10px 24px rgba(5,46,22,.07); border-color: #cce2d8; }
 		.form-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 		.form-code { font-size: .73rem; color: #67847b; }
 		.form-title { margin-top: 2px; font-size: 1.03rem; font-weight: 700; color: #1b3a31; line-height: 1.2; }
@@ -257,6 +263,7 @@
 		table { width: 100%; border-collapse: collapse; }
 		th, td { padding: 11px 10px; border-bottom: 1px solid #edf2f1; font-size: .72rem; }
 		th { text-align: left; color: #7a8f8a; background: #f9fbfa; font-weight: 700; }
+		tbody tr:hover td { background: var(--surface-soft); }
 		tr:last-child td { border-bottom: none; }
 
 		.student-name { font-weight: 700; color: #2a443d; line-height: 1.2; }
@@ -273,27 +280,37 @@
 			inset: 0;
 			background: rgba(8, 25, 20, .45);
 			display: none;
-			align-items: center;
+			align-items: flex-start;
 			justify-content: center;
 			z-index: 250;
 			padding: 14px;
+			overflow-y: auto;
 		}
 		.modal-backdrop.open { display: flex; }
 		.modal-panel {
 			width: min(440px, 100%);
-			max-height: 92vh;
+			max-height: calc(100vh - 28px);
 			background: #fff;
 			border-radius: 12px;
 			box-shadow: 0 20px 60px rgba(5,46,22,.22);
 			overflow: hidden;
 			display: flex;
 			flex-direction: column;
+			margin-top: auto;
+			margin-bottom: auto;
 		}
 		.modal-panel.encode-modal-panel { width: min(1200px, 96vw); }
+		#encodeFormForm {
+			display: flex;
+			flex-direction: column;
+			flex: 1 1 auto;
+			min-height: 0;
+			overflow: hidden;
+		}
 		.modal-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); }
 		.modal-title { font-size: 1.15rem; font-family: 'DM Serif Display', serif; line-height: 1; color: var(--text-1); }
 		.modal-close { border: none; background: none; font-size: 1.5rem; line-height: 1; color: #667a74; cursor: pointer; }
-		.modal-body { padding: 14px 16px 8px; overflow-y: auto; }
+		.modal-body { padding: 14px 16px 8px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 		.weight-item { margin-bottom: 14px; }
 		.weight-label { font-size: .95rem; font-family: 'DM Serif Display', serif; color: #243f38; }
 		.weight-label span { font-size: .78rem; font-family: 'DM Sans', sans-serif; font-weight: 600; color: #7b918b; }
@@ -301,6 +318,12 @@
 		.weight-input { width: 100%; padding: 10px 12px; border: 1px solid #d8e1de; border-radius: 10px; font-size: .82rem; font-family: 'DM Sans', sans-serif; color: #27423b; }
 		.weight-unit { font-size: .78rem; color: #5f736d; }
 		.modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--border); }
+		#encodeFormForm .modal-foot {
+			background: #fff;
+			position: sticky;
+			bottom: 0;
+			z-index: 2;
+		}
 
 		.encode-help { font-size: .73rem; color: #607a72; margin-bottom: 10px; }
 		.form1-meta {
@@ -339,7 +362,7 @@
 			outline: none;
 			border-bottom-color: #1f8d78;
 		}
-		.encode-grid-wrap { border: 1px solid #d9e6e1; border-radius: 10px; overflow: auto; background: #fff; }
+		.encode-grid-wrap { border: 1px solid #d9e6e1; border-radius: 10px; overflow: auto; background: #fff; max-height: 48vh; }
 		.encode-grid { width: 100%; border-collapse: collapse; min-width: 980px; }
 		.encode-grid th, .encode-grid td { border-bottom: 1px solid #edf2f1; border-right: 1px solid #edf2f1; padding: 8px; vertical-align: top; }
 		.encode-grid th:last-child, .encode-grid td:last-child { border-right: none; }
@@ -429,7 +452,7 @@
 				<p class="page-sub">120-Day Supplementary Feeding Program tracking.</p>
 			</div>
 			<div class="actions">
-				<button type="button" class="btn btn-ghost">Record Attendance</button>
+				<button type="button" class="btn btn-ghost" id="recordAttendanceBtn">Record Attendance</button>
 				<button type="button" class="btn btn-primary" id="openWeightsModal">Update Weights</button>
 			</div>
 		</div>
@@ -437,7 +460,7 @@
 		<section class="stats">
 			<article class="card stat">
 				<div class="label">Enrolled Students</div>
-				<div class="num">{{ $programStats['enrolled_students'] ?? 0 }}</div>
+				<div class="num" id="enrolledStudentsValue">{{ $programStats['enrolled_students'] ?? 0 }}</div>
 			</article>
 			<article class="card stat">
 				<div class="label">Program Day</div>
@@ -445,7 +468,7 @@
 			</article>
 			<article class="card stat">
 				<div class="label">Avg. Attendance</div>
-				<div class="num">{{ $programStats['avg_attendance'] ?? '0%' }}</div>
+				<div class="num" id="avgAttendanceValue">{{ $programStats['avg_attendance'] ?? '0%' }}</div>
 			</article>
 			<article class="card stat">
 				<div class="label">Improving</div>
@@ -648,6 +671,7 @@
 	const form1MetaSection = document.getElementById('form1MetaSection');
 	const form1MetaInputs = Array.from(document.querySelectorAll('[data-meta-field]'));
 	const openBtn = document.getElementById('openWeightsModal');
+	const recordAttendanceBtn = document.getElementById('recordAttendanceBtn');
 	const backdrop = document.getElementById('weightsModalBackdrop');
 	const closeBtn = document.getElementById('closeWeightsModal');
 	const cancelBtn = document.getElementById('cancelWeightsModal');
@@ -661,6 +685,8 @@
 	const todayLabel = @json($todayLabelValue);
 	const programDayLabel = @json($programDayLabelValue);
 	const liveStudents = @json($liveStudentsPayload);
+	const enrolledStudentsValue = document.getElementById('enrolledStudentsValue');
+	const avgAttendanceValue = document.getElementById('avgAttendanceValue');
 
 	const baseStudents = liveStudents.map((student) => [student.name, student.section]);
 
@@ -764,6 +790,111 @@
 			headers: ['Division / School', 'Target SBFP Schools', 'Actual SBFP Schools', 'Status of Implementation', 'Amount Allocated', 'Liquidation Status'],
 			rows: [['DCNHS', '1', '1', `Ongoing (${programDayLabel})`, '-', 'For submission']],
 		},
+	};
+
+	const getEffectiveForm1Rows = () => {
+		const rowsByForm = getRowsByForm();
+		const encodedRows = Array.isArray(rowsByForm.form1)
+			? rowsByForm.form1.filter((row) => Array.isArray(row) && row.some((cell) => String(cell || '').trim() !== ''))
+			: [];
+		if (encodedRows.length > 0) {
+			return encodedRows;
+		}
+		const defaultRows = overviewSchemas.form1 && Array.isArray(overviewSchemas.form1.rows)
+			? overviewSchemas.form1.rows
+			: [];
+		return defaultRows;
+	};
+
+	const getBeneficiaryRowsFromForm1 = () => {
+		return getEffectiveForm1Rows()
+			.map((row) => ({
+				name: String((Array.isArray(row) ? row[1] : '') || '').trim(),
+				section: String((Array.isArray(row) ? row[3] : '') || '').trim(),
+			}))
+			.filter((student) => student.name !== '');
+	};
+
+	const getEnrolledStudentsCount = () => getBeneficiaryRowsFromForm1().length;
+
+	const normalizeStudentKey = (value) => String(value || '').trim().toLowerCase();
+
+	const buildLiveForm4Rows = (rowsByForm = getRowsByForm()) => {
+		const headers = getTemplateHeaders('form4');
+		const defaultRow = ['', '/', '/', '/', '/', '/', '/', '/', '/'];
+		const existingRows = Array.isArray(rowsByForm.form4)
+			? rowsByForm.form4.filter((row) => Array.isArray(row) && row.some((cell) => String(cell || '').trim() !== ''))
+			: [];
+
+		const existingByStudent = new Map();
+		existingRows.forEach((row) => {
+			const nameKey = normalizeStudentKey(Array.isArray(row) ? row[0] : '');
+			if (!nameKey) {
+				return;
+			}
+			existingByStudent.set(nameKey, row);
+		});
+
+		const beneficiaries = getBeneficiaryRowsFromForm1();
+		if (beneficiaries.length === 0) {
+			return existingRows;
+		}
+
+		return beneficiaries.map((student) => {
+			const existing = existingByStudent.get(normalizeStudentKey(student.name));
+			const row = Array.isArray(existing) ? [...existing] : [...defaultRow];
+			row[0] = student.name;
+			return headers.map((_, index) => (index < row.length ? row[index] : ''));
+		});
+	};
+
+	const syncEnrolledStudentsValue = () => {
+		if (!enrolledStudentsValue) {
+			return;
+		}
+		enrolledStudentsValue.textContent = String(getEnrolledStudentsCount());
+	};
+
+	const toAttendanceToken = (value) => String(value || '').trim().toLowerCase();
+
+	const calculateAttendancePercent = (form4Rows) => {
+		const rows = Array.isArray(form4Rows) ? form4Rows : [];
+		let presentCount = 0;
+		let encodedCount = 0;
+
+		rows.forEach((row) => {
+			if (!Array.isArray(row)) {
+				return;
+			}
+			for (let index = 1; index < row.length; index++) {
+				const token = toAttendanceToken(row[index]);
+				if (!token || token === '/' || token === '-') {
+					continue;
+				}
+				encodedCount++;
+				if (token === 'present' || token === 'p') {
+					presentCount++;
+				}
+			}
+		});
+
+		if (encodedCount === 0) {
+			return avgAttendance;
+		}
+
+		return `${Math.round((presentCount / encodedCount) * 100)}%`;
+	};
+
+	const getLiveAttendancePercent = (rowsByForm = getRowsByForm()) => {
+		const form4Rows = buildLiveForm4Rows(rowsByForm);
+		return calculateAttendancePercent(form4Rows);
+	};
+
+	const syncAvgAttendanceValue = (rowsByForm = getRowsByForm()) => {
+		if (!avgAttendanceValue) {
+			return;
+		}
+		avgAttendanceValue.textContent = getLiveAttendancePercent(rowsByForm);
 	};
 
 	const getEntries = () => {
@@ -1022,6 +1153,13 @@
 		buildEncodeHeader(formKey, headers);
 		const existingRowsByForm = getRowsByForm();
 		const existingRows = Array.isArray(existingRowsByForm[formKey]) ? existingRowsByForm[formKey] : [];
+		if (formKey === 'form4') {
+			const liveRows = buildLiveForm4Rows(existingRowsByForm);
+			if (liveRows.length > 0) {
+				encodeGridBody.innerHTML = liveRows.map((row) => buildEncodeRow(formKey, headers, row)).join('');
+				return;
+			}
+		}
 		if (existingRows.length > 0) {
 			encodeGridBody.innerHTML = existingRows.map((row) => buildEncodeRow(formKey, headers, row)).join('');
 			if (formKey === 'form1') {
@@ -1115,7 +1253,38 @@
 		const schema = overviewSchemas[formKey] || overviewSchemas.form1;
 		const encodedRowsByForm = getRowsByForm();
 		const encodedRows = Array.isArray(encodedRowsByForm[formKey]) ? encodedRowsByForm[formKey] : null;
-		const rowsToRender = encodedRows && encodedRows.length > 0 ? encodedRows : schema.rows;
+		const beneficiaryRows = getBeneficiaryRowsFromForm1();
+		const enrolledCount = beneficiaryRows.length;
+		let rowsToRender = encodedRows && encodedRows.length > 0 ? encodedRows : schema.rows;
+
+		if ((!encodedRows || encodedRows.length === 0) && formKey === 'form2') {
+			rowsToRender = [['DCNHS', '-', '-', '-', String(enrolledCount)]];
+		}
+
+		if ((!encodedRows || encodedRows.length === 0) && formKey === 'form3') {
+			rowsToRender = [
+				['Undernourished Learners', String(enrolledCount), 'Start of Feeding'],
+				['4Ps Beneficiaries', '-', 'For validation'],
+				['Repeaters', '-', 'From previous cycle'],
+			];
+		}
+
+		if (formKey === 'form4') {
+			rowsToRender = buildLiveForm4Rows(encodedRowsByForm);
+		}
+
+		if ((!encodedRows || encodedRows.length === 0) && formKey === 'form5') {
+			rowsToRender = [['All Feeding Beneficiaries', '-', String(enrolledCount), improvingHint, getLiveAttendancePercent(encodedRowsByForm)]];
+		}
+
+		if ((!encodedRows || encodedRows.length === 0) && formKey === 'form6') {
+			rowsToRender = beneficiaryRows.map((item) => [item.name, item.section, '/', '-', '-']);
+		}
+
+		if ((!encodedRows || encodedRows.length === 0) && formKey === 'form7') {
+			rowsToRender = [['All Sections', String(enrolledCount), todayLabel, '-', '-', 'For encoding']];
+		}
+
 		if (selectedFormTitle) {
 			selectedFormTitle.textContent = schema.title;
 		}
@@ -1275,6 +1444,12 @@
 		});
 	}
 
+	if (recordAttendanceBtn) {
+		recordAttendanceBtn.addEventListener('click', () => {
+			openEncodeForm('form4');
+		});
+	}
+
 	if (closeEncodeFormModal) {
 		closeEncodeFormModal.addEventListener('click', () => setModal(encodeFormBackdrop, false));
 	}
@@ -1306,7 +1481,12 @@
 
 			const rowsByForm = getRowsByForm();
 			rowsByForm[key] = encodedRows;
+			if (key === 'form1') {
+				rowsByForm.form4 = buildLiveForm4Rows(rowsByForm);
+			}
 			setRowsByForm(rowsByForm);
+			syncEnrolledStudentsValue();
+			syncAvgAttendanceValue(rowsByForm);
 
 			renderForms();
 			viewForm(key);
@@ -1321,11 +1501,21 @@
 
 	if (encodeGridBody) {
 		encodeGridBody.addEventListener('input', (event) => {
-			if (!encodeTemplateKey || encodeTemplateKey.value !== 'form1') {
+			if (!encodeTemplateKey) {
 				return;
 			}
 			const target = event.target.closest('.encode-cell-input');
 			if (!target) {
+				return;
+			}
+
+			if (encodeTemplateKey.value === 'form4') {
+				const liveDraftRows = collectEncodedRows('form4');
+				syncAvgAttendanceValue({ ...getRowsByForm(), form4: liveDraftRows });
+				return;
+			}
+
+			if (encodeTemplateKey.value !== 'form1') {
 				return;
 			}
 			const index = Number(target.dataset.colIndex);
@@ -1349,14 +1539,24 @@
 				Array.from(row.querySelectorAll('.encode-cell-input')).forEach((input) => {
 					input.value = '';
 				});
+				if (encodeTemplateKey && encodeTemplateKey.value === 'form4') {
+					const liveDraftRows = collectEncodedRows('form4');
+					syncAvgAttendanceValue({ ...getRowsByForm(), form4: liveDraftRows });
+				}
 				return;
 			}
 			row.remove();
+			if (encodeTemplateKey && encodeTemplateKey.value === 'form4') {
+				const liveDraftRows = collectEncodedRows('form4');
+				syncAvgAttendanceValue({ ...getRowsByForm(), form4: liveDraftRows });
+			}
 		});
 	}
 
 	renderForms();
 	setActiveView('forms');
+	syncEnrolledStudentsValue();
+	syncAvgAttendanceValue();
 
 	if (!openBtn || !backdrop || !closeBtn || !cancelBtn || !form) {
 		return;
