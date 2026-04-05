@@ -26,6 +26,7 @@
 			--text-2: #3d5c47;
 			--text-3: #7a9e87;
 			--sidebar-w: 248px;
+			--sidebar-collapsed-w: 76px;
 			--topbar-h: 64px;
 			--radius-sm: 10px;
 			--shadow-card: 0 1px 4px rgba(5,46,22,.06), 0 4px 16px rgba(5,46,22,.06);
@@ -38,12 +39,16 @@
 			left: 0;
 			top: 0;
 			bottom: 0;
-			width: var(--sidebar-w);
+			width: var(--sidebar-collapsed-w);
 			background: var(--g900);
 			display: flex;
 			flex-direction: column;
 			z-index: 100;
 			overflow: hidden;
+			transition: width .24s ease;
+		}
+		.sidebar:hover {
+			width: var(--sidebar-w);
 		}
 		.sidebar::after {
 			content: '';
@@ -59,20 +64,43 @@
 			background-image: linear-gradient(rgba(134,239,172,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);
 			background-size: 28px 28px;
 		}
-		.sb-logo { padding: 20px 20px 18px; position: relative; z-index: 2; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; justify-content: center; }
-		.sb-logo-full { width: 176px; max-width: 100%; height: auto; display: block; }
+		.sb-logo { padding: 20px 20px 18px; position: relative; z-index: 2; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; justify-content: center; transition: padding .24s ease; }
+		.sb-logo-full { width: 176px; max-width: 100%; height: auto; display: block; transition: width .24s ease; }
+		.sidebar:not(:hover) .sb-logo { padding: 14px 10px; }
+		.sidebar:not(:hover) .sb-logo-full { width: 48px; }
 		.sb-nav { flex: 1; overflow-y: auto; padding: 16px 12px; position: relative; z-index: 2; }
+		.sidebar:not(:hover) .sb-nav { padding: 12px 8px; }
 		.sb-section-label { font-size: .6rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: rgba(134,239,172,.5); padding: 0 8px; margin: 8px 0; }
+		.sb-section-label { max-height: 20px; opacity: 1; transform: translateX(0); transition: max-height .24s ease, opacity .18s ease, transform .24s ease, margin .24s ease; overflow: hidden; }
+		.sidebar:not(:hover) .sb-section-label { max-height: 0; opacity: 0; transform: translateX(-6px); margin: 0; }
 		.sb-link { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); text-decoration: none; color: rgba(255,255,255,.62); font-size: .83rem; font-weight: 500; transition: background .15s, color .15s; margin-bottom: 2px; }
 		.sb-link:hover { background: rgba(255,255,255,.08); color: rgba(255,255,255,.9); }
 		.sb-link.active { background: rgba(34,197,94,.18); color: var(--g300); }
 		.sb-link svg { width: 16px; height: 16px; flex-shrink: 0; }
+		.sb-link { white-space: nowrap; overflow: hidden; transition: background .15s, color .15s, padding .24s ease, gap .24s ease, font-size .24s ease; }
+		.sidebar:not(:hover) .sb-link {
+			justify-content: center;
+			font-size: 0;
+			padding: 10px;
+			gap: 0;
+		}
+		.sidebar:not(:hover) .sb-link svg {
+			width: 18px;
+			height: 18px;
+		}
 		.sb-user { padding: 14px 16px; border-top: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 11px; position: relative; z-index: 2; }
 		.sb-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--g600); display: grid; place-items: center; font-size: .8rem; font-weight: 700; color: white; flex-shrink: 0; }
 		.sb-user-name { font-size: .8rem; font-weight: 600; color: white; line-height: 1.2; }
 		.sb-user-role { font-size: .68rem; color: var(--g300); }
+		.sidebar:not(:hover) .sb-user {
+			justify-content: center;
+			padding: 10px;
+		}
+		.sb-user > div:last-child { max-width: 180px; opacity: 1; transform: translateX(0); overflow: hidden; transition: max-width .24s ease, opacity .18s ease, transform .24s ease; }
+		.sidebar:not(:hover) .sb-user > div:last-child { max-width: 0; opacity: 0; transform: translateX(-6px); }
 
-		.main { margin-left: var(--sidebar-w); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+		.main { margin-left: var(--sidebar-collapsed-w); height: 100vh; display: flex; flex-direction: column; overflow: hidden; transition: margin-left .24s ease; }
+		.sidebar:hover ~ .main { margin-left: var(--sidebar-w); }
 		html.js .main { opacity: 0; transform: translateY(10px); transition: opacity .26s ease, transform .3s ease; }
 		html.js .main.page-ready { opacity: 1; transform: translateY(0); }
 		html.js .main.page-exit { opacity: 0; transform: translateY(10px); }
@@ -173,6 +201,19 @@
 		.fp-tab.disabled { opacity: .55; cursor: not-allowed; }
 		.view-panel { display: none; }
 		.view-panel.active { display: block; }
+		.view-panel.active {
+			opacity: 1;
+			transform: translateY(0);
+			transition: opacity .22s ease, transform .22s ease;
+		}
+		.view-panel.panel-enter {
+			opacity: 0;
+			transform: translateY(8px);
+		}
+		.view-panel.panel-leave {
+			opacity: 0;
+			transform: translateY(8px);
+		}
 		.forms-filter-wrap { margin-top: 8px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
 		.forms-filter-wrap label { font-size: .85rem; color: #5d7c73; font-weight: 700; }
 		.forms-filter {
@@ -1043,6 +1084,33 @@
 		}
 	};
 
+	const switchViewSmooth = (targetView) => {
+		if (targetView !== 'overview' && targetView !== 'forms') {
+			return;
+		}
+		if (activeView === targetView) {
+			return;
+		}
+
+		const currentPanel = activeView === 'overview' ? overviewSection : formsHub;
+		const nextPanel = targetView === 'overview' ? overviewSection : formsHub;
+
+		if (!currentPanel || !nextPanel) {
+			setActiveView(targetView);
+			return;
+		}
+
+		currentPanel.classList.add('panel-leave');
+		window.setTimeout(() => {
+			currentPanel.classList.remove('panel-leave');
+			setActiveView(targetView);
+			nextPanel.classList.add('panel-enter');
+			requestAnimationFrame(() => {
+				nextPanel.classList.remove('panel-enter');
+			});
+		}, 200);
+	};
+
 	const renderOverviewTable = (formKey) => {
 		const schema = overviewSchemas[formKey] || overviewSchemas.form1;
 		const encodedRowsByForm = getRowsByForm();
@@ -1108,7 +1176,7 @@
 
 		currentViewedForm = formKey;
 		renderOverviewTable(formKey);
-		setActiveView('overview');
+		switchViewSmooth('overview');
 		if (selectedFormHint) {
 			selectedFormHint.textContent = `Currently viewing ${selected.code}. Use Encode to add new entries.`;
 		}
@@ -1179,13 +1247,13 @@
 				return;
 			}
 			renderOverviewTable(currentViewedForm);
-			setActiveView('overview');
+			switchViewSmooth('overview');
 		});
 	}
 
 	if (formsTabBtn) {
 		formsTabBtn.addEventListener('click', () => {
-			setActiveView('forms');
+			switchViewSmooth('forms');
 			if (formsHub) {
 				formsHub.scrollIntoView({ behavior: 'smooth', block: 'start' });
 			}
