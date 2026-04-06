@@ -245,43 +245,52 @@
             <form method="POST" action="{{ route('adviser.store') }}" autocomplete="off">
                 @csrf
                 <div class="form-grid">
-                    <div class="field"><label for="proto_last_name">Last Name</label><input id="proto_last_name" name="last_name" type="text"></div>
-                    <div class="field"><label for="proto_first_name">First Name</label><input id="proto_first_name" name="first_name" type="text"></div>
-                    <div class="field"><label for="proto_middle_name">Middle Name</label><input id="proto_middle_name" name="middle_name" type="text"></div>
+                    <div class="field"><label for="proto_last_name">Last Name</label><input id="proto_last_name" name="last_name" type="text" placeholder="e.g., Dela Cruz" value="{{ old('last_name') }}" required></div>
+                    <div class="field"><label for="proto_first_name">First Name</label><input id="proto_first_name" name="first_name" type="text" placeholder="e.g., Maria" value="{{ old('first_name') }}" required></div>
+                    <div class="field"><label for="proto_middle_name">Middle Name</label><input id="proto_middle_name" name="middle_name" type="text" placeholder="e.g., Santos (optional)" value="{{ old('middle_name') }}"></div>
 
-                    <div class="field"><label for="proto_lrn">LRN</label><input id="proto_lrn" name="lrn" type="text"></div>
-                    <div class="field"><label for="proto_birth_month">Birth Month</label><input id="proto_birth_month" name="birth_month" type="text" placeholder="MM"></div>
-                    <div class="field"><label for="proto_birth_day">Birth Day</label><input id="proto_birth_day" name="birth_day" type="text" placeholder="DD"></div>
-                    <div class="field"><label for="proto_birth_year">Birth Year</label><input id="proto_birth_year" name="birth_year" type="text" placeholder="YYYY"></div>
+                    <div class="field"><label for="proto_lrn">LRN</label><input id="proto_lrn" name="lrn" type="text" placeholder="12-digit Learner Reference Number" value="{{ old('lrn') }}" inputmode="numeric" required></div>
+                    <div class="field full">
+                        <label for="proto_birth_date">Birth Date</label>
+                        <input
+                            id="proto_birth_date"
+                            type="date"
+                            value="{{ old('birth_year') && old('birth_month') && old('birth_day') ? old('birth_year') . '-' . str_pad(old('birth_month'), 2, '0', STR_PAD_LEFT) . '-' . str_pad(old('birth_day'), 2, '0', STR_PAD_LEFT) : '' }}"
+                            required
+                        >
+                        <input id="proto_birth_month" name="birth_month" type="hidden" value="{{ old('birth_month') }}">
+                        <input id="proto_birth_day" name="birth_day" type="hidden" value="{{ old('birth_day') }}">
+                        <input id="proto_birth_year" name="birth_year" type="hidden" value="{{ old('birth_year') }}">
+                    </div>
 
-                    <div class="field full"><label for="proto_birthplace">Birthplace</label><input id="proto_birthplace" name="birthplace" type="text"></div>
-                    <div class="field full"><label for="proto_parent_guardian">Parent/Guardian</label><input id="proto_parent_guardian" name="parent_guardian" type="text"></div>
-                    <div class="field full"><label for="proto_address">Address</label><input id="proto_address" name="address" type="text"></div>
+                    <div class="field full"><label for="proto_birthplace">Birthplace</label><input id="proto_birthplace" name="birthplace" type="text" placeholder="City/Municipality of birth" value="{{ old('birthplace') }}" required></div>
+                    <div class="field full"><label for="proto_parent_guardian">Parent/Guardian</label><input id="proto_parent_guardian" name="parent_guardian" type="text" placeholder="Full name of parent or guardian" value="{{ old('parent_guardian') }}" required></div>
+                    <div class="field full"><label for="proto_address">Address</label><input id="proto_address" name="address" type="text" placeholder="House No., Street, Barangay, City" value="{{ old('address') }}" required></div>
 
-                    <div class="field"><label for="proto_school_id">School ID</label><input id="proto_school_id" name="school_id" type="text"></div>
-                    <div class="field"><label for="proto_region">Region</label><input id="proto_region" name="region" type="text"></div>
-                    <div class="field"><label for="proto_division">Division</label><input id="proto_division" name="division" type="text"></div>
-                    <div class="field"><label for="proto_telephone_no">Telephone No.</label><input id="proto_telephone_no" name="telephone_no" type="text"></div>
+                    <div class="field"><label for="proto_school_id">School ID</label><input id="proto_school_id" name="school_id" type="text" placeholder="e.g., 123456" value="{{ old('school_id') }}" required></div>
+                    <div class="field"><label for="proto_region">Region</label><input id="proto_region" name="region" type="text" placeholder="e.g., NCR" value="{{ old('region') }}" required></div>
+                    <div class="field"><label for="proto_division">Division</label><input id="proto_division" name="division" type="text" placeholder="e.g., Quezon City" value="{{ old('division') }}" required></div>
+                    <div class="field"><label for="proto_telephone_no">Telephone No.</label><input id="proto_telephone_no" name="telephone_no" type="text" placeholder="e.g., 09171234567" value="{{ old('telephone_no') }}" inputmode="tel" required></div>
 
-                    <div class="field"><label for="proto_height_cm">Height (cm)</label><input id="proto_height_cm" name="height_cm" type="text"></div>
-                    <div class="field"><label for="proto_weight_kg">Weight (kg)</label><input id="proto_weight_kg" name="weight_kg" type="text"></div>
+                    <div class="field"><label for="proto_height_cm">Height (cm)</label><input id="proto_height_cm" name="height_cm" type="number" placeholder="e.g., 128" value="{{ old('height_cm') }}" min="30" max="250" step="0.1" required></div>
+                    <div class="field"><label for="proto_weight_kg">Weight (kg)</label><input id="proto_weight_kg" name="weight_kg" type="number" placeholder="e.g., 27.5" value="{{ old('weight_kg') }}" min="1" max="250" step="0.1" required></div>
                     <div class="field full">
                         <label for="proto_grade_level">Grade Level</label>
-                        <select id="proto_grade_level" name="grade_level">
+                        <select id="proto_grade_level" name="grade_level" required>
                             <option value="">Select Grade Level</option>
-                            <option>Kinder/SPED</option>
-                            <option>Grade 1/SPED</option>
-                            <option>Grade 2/SPED</option>
-                            <option>Grade 3/SPED</option>
-                            <option>Grade 4/SPED</option>
-                            <option>Grade 5/SPED</option>
-                            <option>Grade 6/SPED</option>
-                            <option>Grade 7/SPED</option>
-                            <option>Grade 8/SPED</option>
-                            <option>Grade 9/SPED</option>
-                            <option>Grade 10/SPED</option>
-                            <option>Grade 11/SPED</option>
-                            <option>Grade 12/SPED</option>
+                            <option {{ old('grade_level') === 'Kinder/SPED' ? 'selected' : '' }}>Kinder/SPED</option>
+                            <option {{ old('grade_level') === 'Grade 1/SPED' ? 'selected' : '' }}>Grade 1/SPED</option>
+                            <option {{ old('grade_level') === 'Grade 2/SPED' ? 'selected' : '' }}>Grade 2/SPED</option>
+                            <option {{ old('grade_level') === 'Grade 3/SPED' ? 'selected' : '' }}>Grade 3/SPED</option>
+                            <option {{ old('grade_level') === 'Grade 4/SPED' ? 'selected' : '' }}>Grade 4/SPED</option>
+                            <option {{ old('grade_level') === 'Grade 5/SPED' ? 'selected' : '' }}>Grade 5/SPED</option>
+                            <option {{ old('grade_level') === 'Grade 6/SPED' ? 'selected' : '' }}>Grade 6/SPED</option>
+                            <option {{ old('grade_level') === 'Grade 7/SPED' ? 'selected' : '' }}>Grade 7/SPED</option>
+                            <option {{ old('grade_level') === 'Grade 8/SPED' ? 'selected' : '' }}>Grade 8/SPED</option>
+                            <option {{ old('grade_level') === 'Grade 9/SPED' ? 'selected' : '' }}>Grade 9/SPED</option>
+                            <option {{ old('grade_level') === 'Grade 10/SPED' ? 'selected' : '' }}>Grade 10/SPED</option>
+                            <option {{ old('grade_level') === 'Grade 11/SPED' ? 'selected' : '' }}>Grade 11/SPED</option>
+                            <option {{ old('grade_level') === 'Grade 12/SPED' ? 'selected' : '' }}>Grade 12/SPED</option>
                         </select>
                     </div>
 
@@ -350,6 +359,35 @@
     }
 
     window.setTimeout(dismiss, 3200);
+})();
+
+(() => {
+    const birthDate = document.getElementById('proto_birth_date');
+    const birthMonth = document.getElementById('proto_birth_month');
+    const birthDay = document.getElementById('proto_birth_day');
+    const birthYear = document.getElementById('proto_birth_year');
+
+    if (!birthDate || !birthMonth || !birthDay || !birthYear) {
+        return;
+    }
+
+    const syncBirthParts = () => {
+        if (!birthDate.value) {
+            birthMonth.value = '';
+            birthDay.value = '';
+            birthYear.value = '';
+            return;
+        }
+
+        const parts = birthDate.value.split('-');
+        birthYear.value = parts[0] || '';
+        birthMonth.value = parts[1] || '';
+        birthDay.value = parts[2] || '';
+    };
+
+    birthDate.addEventListener('change', syncBirthParts);
+    birthDate.addEventListener('input', syncBirthParts);
+    syncBirthParts();
 })();
 
 (() => {
