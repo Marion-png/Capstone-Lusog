@@ -40,7 +40,9 @@ class AdviserController extends Controller
 
         $request->session()->put('school_health_card_records', $records);
 
-        return redirect()->route('adviser.success');
+        return redirect()
+            ->route('dashboard.class-adviser')
+            ->with('success', 'Record submitted to School Nurse.');
     }
 
     public function success(): View

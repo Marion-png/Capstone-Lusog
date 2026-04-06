@@ -2,7 +2,6 @@
 
 use App\Http\Controllers\AdviserController;
 use App\Http\Controllers\ConsultationController;
-use App\Http\Controllers\CsvUploadController;
 use App\Http\Controllers\FeedingCoordinatorController;
 use App\Http\Controllers\FeedingProgramController;
 use App\Http\Controllers\MedicineInventoryController;
@@ -69,13 +68,6 @@ Route::get('/dashboard/medicine-inventory', [MedicineInventoryController::class,
 
 Route::post('/dashboard/medicine-inventory', [MedicineInventoryController::class, 'store'])
     ->name('medicine-inventory.store');
-
-Route::get('/csv/upload', function () {
-    return view('dashboard.csv-upload');
-})->name('csv.upload.form');
-
-Route::post('/csv/upload', [CsvUploadController::class, 'upload'])
-    ->name('csv.upload');
 
 Route::get('/dashboard/clinic-staff', function () {
     $atRiskStudents = collect();
@@ -155,7 +147,7 @@ Route::post('/login', function (Request $request) {
         'clinic_staff' => 'dashboard.clinic-staff',
         'class_adviser' => 'dashboard.class-adviser',
         'school_head' => 'dashboard.school-head',
-        'administrator' => 'dashboard.system-admin',
+        'feeding_coor' => 'dashboard.feedingcor-dashboard',
     ];
 
     return redirect()->route($routeByRole[$role] ?? 'dashboard.school-nurse');

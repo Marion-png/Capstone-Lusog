@@ -447,7 +447,7 @@
                     <option value="clinic_staff" {{ old('role') == 'clinic_staff' ? 'selected' : '' }}>Clinic Staff - Records and Inventory</option>
                     <option value="class_adviser" {{ old('role') == 'class_adviser' ? 'selected' : '' }}>Class Adviser - BMI Monitoring and Student Screening</option>
                     <option value="school_head" {{ old('role') == 'school_head' ? 'selected' : '' }}>School Head - View Only</option>
-                    <option value="administrator" {{ old('role') == 'administrator' ? 'selected' : '' }}>System Administrator - User and Settings Management</option>
+                    <option value="feeding_coor" {{ old('role') == 'feeding_coor' ? 'selected' : '' }}>Feeding Coordinator - Program Monitoring and Health Records</option>
                 </select>
             </div>
 

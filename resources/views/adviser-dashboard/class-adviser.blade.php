@@ -50,6 +50,11 @@
         .flash{margin:14px 0;padding:10px 12px;border-radius:10px;font-size:.82rem}
         .flash-ok{background:#dcfce7;color:#166534;border:1px solid #86efac}
         .flash-err{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
+        .toast-success{position:fixed;top:20px;right:20px;z-index:1200;background:#166534;color:#fff;border-radius:10px;padding:12px 14px;box-shadow:0 10px 28px rgba(22,101,52,.35);font-size:.82rem;font-weight:600;min-width:260px;max-width:340px;display:flex;align-items:flex-start;gap:8px;animation:toastIn .22s ease}
+        .toast-close{margin-left:auto;background:none;border:none;color:#d1fae5;cursor:pointer;font-weight:700;line-height:1;padding:0}
+        @keyframes toastIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+        .section-panel{display:none}
+        .section-panel.active{display:block}
 
         .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}
         .card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);transition:transform .16s ease,box-shadow .2s ease,border-color .2s ease}
@@ -81,6 +86,25 @@
         .risk{background:#fee2e2;color:#991b1b}
         .over{background:#dbeafe;color:#1e40af}
         .muted{color:var(--muted)}
+        .preview-details{display:inline-block}
+        .preview-summary{cursor:pointer;color:#166534;font-weight:700;font-size:.72rem;list-style:none}
+        .preview-summary::-webkit-details-marker{display:none}
+        .preview-card{margin-top:8px;padding:10px;border:1px solid var(--border);border-radius:8px;background:#f7fbf8;min-width:320px}
+        .preview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px}
+        .preview-item{font-size:.72rem;color:#375948}
+        .preview-item b{color:#1f3d2b}
+        .preview-open-btn{border:1px solid #15803d;background:#fff;color:#166534;font-weight:700;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:.72rem}
+        .preview-open-btn:hover{background:#f0fdf4}
+        .preview-modal-backdrop{position:fixed;inset:0;background:rgba(13,31,20,.48);display:none;align-items:center;justify-content:center;z-index:1300}
+        .preview-modal-backdrop.open{display:flex}
+        .preview-modal-card{width:min(920px,94vw);max-height:88vh;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 20px 40px rgba(13,31,20,.25);padding:16px}
+        .preview-modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+        .preview-modal-title{font-family:'DM Serif Display',serif;font-size:1.2rem;color:#14532d}
+        .preview-modal-close{border:none;background:#fee2e2;color:#991b1b;border-radius:8px;width:30px;height:30px;cursor:pointer;font-weight:700}
+        .preview-card-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+        .preview-card-item{border:1px solid var(--border);border-radius:9px;padding:8px 10px;background:#fafdfb}
+        .preview-card-label{font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;color:#6f8c7a;font-weight:700}
+        .preview-card-value{font-size:.8rem;color:#143021;margin-top:2px}
 
         @media (max-width:980px){.stats{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}}
         @media (max-width:780px){.sidebar{display:none}.main{margin-left:0}}
@@ -90,14 +114,25 @@
 <aside class="sidebar">
     <div class="sb-logo"><img src="{{ asset('images/lusog-logo.png') }}" alt="LUSOG Logo"></div>
     <nav class="sb-nav">
-        <a href="#" class="sb-link active">
+        <a href="#" class="sb-link active js-proto-nav" data-target="prototype-form-panel">
             <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
                 <circle cx="9" cy="7" r="4"/>
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
                 <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
-            <span class="sb-link-label">Baseline and Endline Encoding</span>
+            <span class="sb-link-label">School Health Card Form</span>
+        </a>
+        <a href="#" class="sb-link js-proto-nav" data-target="prototype-saved-panel">
+            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <line x1="8" y1="6" x2="21" y2="6"/>
+                <line x1="8" y1="12" x2="21" y2="12"/>
+                <line x1="8" y1="18" x2="21" y2="18"/>
+                <line x1="3" y1="6" x2="3.01" y2="6"/>
+                <line x1="3" y1="12" x2="3.01" y2="12"/>
+                <line x1="3" y1="18" x2="3.01" y2="18"/>
+            </svg>
+            <span class="sb-link-label">Saved Submissions</span>
         </a>
     </nav>
     <div class="sb-user">
@@ -120,145 +155,247 @@
     <header class="top"><div class="crumb">Dashboard > Class Adviser</div></header>
     <div class="content">
         <h1 class="title">Class Adviser <i>Encoding Workspace</i></h1>
-        <p class="sub">Encode baseline and endline anthropometric data. BMI and nutritional status are computed automatically.</p>
+        <p class="sub">School Health Card prototype workflow for adviser submission and nurse follow-up.</p>
 
         @if (session('success'))
-            <div class="flash flash-ok">{{ session('success') }}</div>
+            <div class="toast-success" id="successToast" role="status" aria-live="polite">
+                <span>{{ session('success') }}</span>
+                <button type="button" class="toast-close" id="toastClose" aria-label="Close">x</button>
+            </div>
         @endif
         @if ($errors->any())
             <div class="flash flash-err">Incomplete fields detected. Please complete all required entries before submitting.</div>
         @endif
 
-        <section class="stats">
-            <article class="card stat"><b>{{ $stats['encoded_today'] ?? 0 }}</b><span>Students encoded today</span></article>
-            <article class="card stat"><b>{{ $stats['avg_bmi'] ?? '0.0' }}</b><span>Average BMI from records</span></article>
-            <article class="card stat"><b>{{ $stats['flagged'] ?? 0 }}</b><span>Wasted or severely wasted</span></article>
-        </section>
+        @php
+            $prototypeRecords = session('school_health_card_records', []);
+        @endphp
 
-        <section class="grid">
-            <article class="card section">
-                <h3>Baseline Encoding (Day 1)</h3>
-                <form method="POST" action="{{ route('class-adviser.health-records.baseline.store') }}" autocomplete="off">
-                    @csrf
-                    <div class="form-grid">
-                        <div class="field full"><label for="student_name">Student Name</label><input id="student_name" name="student_name" type="text" required value="{{ old('student_name') }}"></div>
-                        <div class="field"><label for="student_id">Student ID</label><input id="student_id" name="student_id" type="text" required value="{{ old('student_id') }}"></div>
-                        <div class="field"><label for="section">Grade and Section</label><input id="section" name="section" type="text" required value="{{ old('section') }}"></div>
-                        <div class="field"><label for="age">Age</label><input id="age" name="age" type="number" min="2" max="25" required value="{{ old('age') }}"></div>
-                        <div class="field"><label for="height_cm">Height (cm)</label><input id="height_cm" name="height_cm" type="number" step="0.01" min="50" max="250" required value="{{ old('height_cm') }}"></div>
-                        <div class="field"><label for="weight_kg">Weight (kg)</label><input id="weight_kg" name="weight_kg" type="number" step="0.01" min="5" max="300" required value="{{ old('weight_kg') }}"></div>
-                        <div class="field"><label for="recorded_at">Date Measured</label><input id="recorded_at" name="recorded_at" type="date" value="{{ old('recorded_at', now()->toDateString()) }}"></div>
-                        <div class="field full"><button type="submit" class="btn">Save Baseline and Compute BMI</button></div>
-                    </div>
-                </form>
-            </article>
-
-            <article class="card section">
-                <h3>Endline Encoding (After 120 Days)</h3>
-                <form method="POST" action="#" id="endlineForm" autocomplete="off">
-                    @csrf
-                    <div class="form-grid">
-                        <div class="field full">
-                            <label for="record_id">Beneficiary</label>
-                            <select id="record_id" name="record_id" required>
-                                <option value="">Select beneficiary</option>
-                                @foreach (($records ?? collect()) as $record)
-                                    <option value="{{ $record->id }}" data-route="{{ route('class-adviser.health-records.endline.store', $record) }}" {{ old('record_id') == $record->id ? 'selected' : '' }}>
-                                        {{ $record->student_name }} - {{ $record->section }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="field"><label for="endline_age">Age</label><input id="endline_age" name="age" type="number" min="2" max="25" required value="{{ old('age') }}"></div>
-                        <div class="field"><label for="endline_height_cm">Height (cm)</label><input id="endline_height_cm" name="height_cm" type="number" step="0.01" min="50" max="250" required value="{{ old('height_cm') }}"></div>
-                        <div class="field"><label for="endline_weight_kg">Weight (kg)</label><input id="endline_weight_kg" name="weight_kg" type="number" step="0.01" min="5" max="300" required value="{{ old('weight_kg') }}"></div>
-                        <div class="field"><label for="endline_recorded_at">Date Measured</label><input id="endline_recorded_at" name="recorded_at" type="date" value="{{ old('recorded_at', now()->toDateString()) }}"></div>
-                        <div class="field full"><button type="submit" class="btn">Save Endline and Compare</button></div>
-                    </div>
-                </form>
-                <p class="sub" style="margin-top:10px;">System compares baseline versus endline BMI and updates nutritional status automatically.</p>
-            </article>
-        </section>
-
-        <section class="card section" style="margin-top:12px;">
-            <h3>Saved Records</h3>
+        <section id="prototype-saved-panel" class="card section section-panel" style="margin-top:12px;">
+            <h3>Saved School Health Card Submissions</h3>
             <table>
                 <thead>
                     <tr>
                         <th>Student</th>
-                        <th>Section</th>
-                        <th>Baseline BMI</th>
-                        <th>Baseline Status</th>
-                        <th>Endline BMI</th>
-                        <th>Endline Status</th>
-                        <th>BMI Change</th>
+                        <th>LRN</th>
+                        <th>Grade Level</th>
+                        <th>Height</th>
+                        <th>Weight</th>
+                        <th>Status</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse (($records ?? collect()) as $record)
+                    @forelse ($prototypeRecords as $prototypeRecord)
                         @php
-                            $baselineBmi = $record->baseline_bmi_value;
-                            $endlineBmi = $record->endline_bmi_value;
-                            $change = null;
-                            if ($baselineBmi !== null && $endlineBmi !== null) {
-                                $change = round((float) $endlineBmi - (float) $baselineBmi, 2);
-                            }
-
-                            $statusClass = 'ok';
-                            $statusText = strtolower((string) ($record->nutritional_status ?? 'normal'));
-                            if (str_contains($statusText, 'severe')) {
-                                $statusClass = 'risk';
-                            } elseif (str_contains($statusText, 'wast')) {
-                                $statusClass = 'warn';
-                            } elseif (str_contains($statusText, 'over')) {
-                                $statusClass = 'over';
-                            }
+                            $middle = trim((string) ($prototypeRecord['middle_name'] ?? ''));
+                            $middleInitial = $middle !== '' ? (' ' . strtoupper(substr($middle, 0, 1)) . '.') : '';
+                            $fullName = trim(($prototypeRecord['last_name'] ?? '') . ', ' . ($prototypeRecord['first_name'] ?? '') . $middleInitial);
+                            $isExamined = !empty($prototypeRecord['examination']);
                         @endphp
                         <tr>
-                            <td>{{ $record->student_name }}</td>
-                            <td>{{ $record->section }}</td>
-                            <td>{{ $baselineBmi !== null ? number_format((float) $baselineBmi, 2) : '-' }}</td>
-                            <td><span class="badge {{ $statusClass }}">{{ $record->baseline_nutritional_status ?? '-' }}</span></td>
-                            <td>{{ $endlineBmi !== null ? number_format((float) $endlineBmi, 2) : '-' }}</td>
-                            <td><span class="badge {{ $statusClass }}">{{ $record->endline_nutritional_status ?? '-' }}</span></td>
+                            <td>{{ $fullName }}</td>
+                            <td>{{ $prototypeRecord['lrn'] ?? '-' }}</td>
+                            <td>{{ $prototypeRecord['grade_level'] ?? '-' }}</td>
+                            <td>{{ $prototypeRecord['height_cm'] ?? '-' }}</td>
+                            <td>{{ $prototypeRecord['weight_kg'] ?? '-' }}</td>
                             <td>
-                                @if ($change === null)
-                                    <span class="muted">Pending endline</span>
-                                @elseif ($change > 0)
-                                    +{{ number_format($change, 2) }}
+                                @if ($isExamined)
+                                    <span class="badge ok">Examined by Nurse</span>
                                 @else
-                                    {{ number_format($change, 2) }}
+                                    <span class="badge warn">Pending Nurse Examination</span>
                                 @endif
+                            </td>
+                            <td>
+                                @php
+                                    $formPayload = [
+                                        'Student Name' => $fullName,
+                                        'Last Name' => $prototypeRecord['last_name'] ?? '-',
+                                        'First Name' => $prototypeRecord['first_name'] ?? '-',
+                                        'Middle Name' => $prototypeRecord['middle_name'] ?? '-',
+                                        'LRN' => $prototypeRecord['lrn'] ?? '-',
+                                        'Birth Month' => $prototypeRecord['birth_month'] ?? '-',
+                                        'Birth Day' => $prototypeRecord['birth_day'] ?? '-',
+                                        'Birth Year' => $prototypeRecord['birth_year'] ?? '-',
+                                        'Birthplace' => $prototypeRecord['birthplace'] ?? '-',
+                                        'Parent/Guardian' => $prototypeRecord['parent_guardian'] ?? '-',
+                                        'Address' => $prototypeRecord['address'] ?? '-',
+                                        'School ID' => $prototypeRecord['school_id'] ?? '-',
+                                        'Region' => $prototypeRecord['region'] ?? '-',
+                                        'Division' => $prototypeRecord['division'] ?? '-',
+                                        'Telephone No.' => $prototypeRecord['telephone_no'] ?? '-',
+                                        'Height (cm)' => $prototypeRecord['height_cm'] ?? '-',
+                                        'Weight (kg)' => $prototypeRecord['weight_kg'] ?? '-',
+                                        'Grade Level' => $prototypeRecord['grade_level'] ?? '-',
+                                    ];
+                                @endphp
+                                <button type="button" class="preview-open-btn js-preview-open" data-form='@json($formPayload)'>View Form</button>
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="muted">No encoded records yet.</td></tr>
+                        <tr><td colspan="7" class="muted">No School Health Card prototype submissions yet.</td></tr>
                     @endforelse
                 </tbody>
             </table>
         </section>
+
+        <section id="prototype-form-panel" class="card section section-panel active" style="margin-top:12px;">
+            <h3>School Health Card Prototype (Session-Based)</h3>
+            <p class="sub" style="margin-top:0;margin-bottom:10px;">This prototype sends adviser entries to the School Nurse workflow using Laravel Session only.</p>
+            <form method="POST" action="{{ route('adviser.store') }}" autocomplete="off">
+                @csrf
+                <div class="form-grid">
+                    <div class="field"><label for="proto_last_name">Last Name</label><input id="proto_last_name" name="last_name" type="text"></div>
+                    <div class="field"><label for="proto_first_name">First Name</label><input id="proto_first_name" name="first_name" type="text"></div>
+                    <div class="field"><label for="proto_middle_name">Middle Name</label><input id="proto_middle_name" name="middle_name" type="text"></div>
+
+                    <div class="field"><label for="proto_lrn">LRN</label><input id="proto_lrn" name="lrn" type="text"></div>
+                    <div class="field"><label for="proto_birth_month">Birth Month</label><input id="proto_birth_month" name="birth_month" type="text" placeholder="MM"></div>
+                    <div class="field"><label for="proto_birth_day">Birth Day</label><input id="proto_birth_day" name="birth_day" type="text" placeholder="DD"></div>
+                    <div class="field"><label for="proto_birth_year">Birth Year</label><input id="proto_birth_year" name="birth_year" type="text" placeholder="YYYY"></div>
+
+                    <div class="field full"><label for="proto_birthplace">Birthplace</label><input id="proto_birthplace" name="birthplace" type="text"></div>
+                    <div class="field full"><label for="proto_parent_guardian">Parent/Guardian</label><input id="proto_parent_guardian" name="parent_guardian" type="text"></div>
+                    <div class="field full"><label for="proto_address">Address</label><input id="proto_address" name="address" type="text"></div>
+
+                    <div class="field"><label for="proto_school_id">School ID</label><input id="proto_school_id" name="school_id" type="text"></div>
+                    <div class="field"><label for="proto_region">Region</label><input id="proto_region" name="region" type="text"></div>
+                    <div class="field"><label for="proto_division">Division</label><input id="proto_division" name="division" type="text"></div>
+                    <div class="field"><label for="proto_telephone_no">Telephone No.</label><input id="proto_telephone_no" name="telephone_no" type="text"></div>
+
+                    <div class="field"><label for="proto_height_cm">Height (cm)</label><input id="proto_height_cm" name="height_cm" type="text"></div>
+                    <div class="field"><label for="proto_weight_kg">Weight (kg)</label><input id="proto_weight_kg" name="weight_kg" type="text"></div>
+                    <div class="field full">
+                        <label for="proto_grade_level">Grade Level</label>
+                        <select id="proto_grade_level" name="grade_level">
+                            <option value="">Select Grade Level</option>
+                            <option>Kinder/SPED</option>
+                            <option>Grade 1/SPED</option>
+                            <option>Grade 2/SPED</option>
+                            <option>Grade 3/SPED</option>
+                            <option>Grade 4/SPED</option>
+                            <option>Grade 5/SPED</option>
+                            <option>Grade 6/SPED</option>
+                            <option>Grade 7/SPED</option>
+                            <option>Grade 8/SPED</option>
+                            <option>Grade 9/SPED</option>
+                            <option>Grade 10/SPED</option>
+                            <option>Grade 11/SPED</option>
+                            <option>Grade 12/SPED</option>
+                        </select>
+                    </div>
+
+                    <div class="field full" style="display:flex;flex-direction:row;justify-content:flex-end;align-items:center;">
+                        <button type="submit" class="btn">Submit</button>
+                    </div>
+                </div>
+            </form>
+        </section>
     </div>
 </div>
-
+<div class="preview-modal-backdrop" id="previewModalBackdrop" aria-hidden="true">
+    <div class="preview-modal-card" role="dialog" aria-modal="true" aria-label="Submitted Form Preview">
+        <div class="preview-modal-head">
+            <div class="preview-modal-title">Submitted School Health Card</div>
+            <button type="button" class="preview-modal-close" id="previewModalClose" aria-label="Close">x</button>
+        </div>
+        <div class="preview-card-grid" id="previewCardGrid"></div>
+    </div>
+</div>
 <script>
 (() => {
-    const endlineForm = document.getElementById('endlineForm');
-    const recordSelect = document.getElementById('record_id');
+    const navLinks = Array.from(document.querySelectorAll('.js-proto-nav'));
+    const tabPanels = Array.from(document.querySelectorAll('.section-panel'));
 
-    if (!endlineForm || !recordSelect) {
+    if (!navLinks.length || !tabPanels.length) {
         return;
     }
 
-    endlineForm.addEventListener('submit', (event) => {
-        const selectedOption = recordSelect.options[recordSelect.selectedIndex];
-        const action = selectedOption ? selectedOption.getAttribute('data-route') : '';
-
-        if (!action) {
+    navLinks.forEach((link) => {
+        link.addEventListener('click', (event) => {
             event.preventDefault();
-            return;
-        }
+            const targetId = link.getAttribute('data-target');
 
-        endlineForm.setAttribute('action', action);
+            navLinks.forEach((navLink) => {
+                navLink.classList.remove('active');
+            });
+
+            tabPanels.forEach((panel) => {
+                panel.classList.remove('active');
+            });
+
+            link.classList.add('active');
+
+            const targetPanel = document.getElementById(targetId);
+            if (targetPanel) {
+                targetPanel.classList.add('active');
+            }
+        });
+    });
+})();
+
+(() => {
+    const toast = document.getElementById('successToast');
+    if (!toast) {
+        return;
+    }
+
+    const closeBtn = document.getElementById('toastClose');
+    const dismiss = () => {
+        toast.style.display = 'none';
+    };
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', dismiss);
+    }
+
+    window.setTimeout(dismiss, 3200);
+})();
+
+(() => {
+    const openButtons = Array.from(document.querySelectorAll('.js-preview-open'));
+    const modal = document.getElementById('previewModalBackdrop');
+    const closeBtn = document.getElementById('previewModalClose');
+    const grid = document.getElementById('previewCardGrid');
+
+    if (!openButtons.length || !modal || !closeBtn || !grid) {
+        return;
+    }
+
+    const closeModal = () => {
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden', 'true');
+    };
+
+    openButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+            let data = {};
+            try {
+                data = JSON.parse(btn.getAttribute('data-form') || '{}');
+            } catch (_err) {
+                data = {};
+            }
+
+            grid.innerHTML = '';
+            Object.entries(data).forEach(([label, value]) => {
+                const item = document.createElement('div');
+                item.className = 'preview-card-item';
+                item.innerHTML = '<div class="preview-card-label"></div><div class="preview-card-value"></div>';
+                item.querySelector('.preview-card-label').textContent = label;
+                item.querySelector('.preview-card-value').textContent = String(value ?? '-');
+                grid.appendChild(item);
+            });
+
+            modal.classList.add('open');
+            modal.setAttribute('aria-hidden', 'false');
+        });
+    });
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            closeModal();
+        }
     });
 })();
 </script>
