@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nurse Examination</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+@php
+    $exam = $record['examination'] ?? [];
+    $middle = trim((string) ($record['middle_name'] ?? ''));
+    $middleInitial = $middle !== '' ? (' ' . strtoupper(substr($middle, 0, 1)) . '.') : '';
+    $studentName = trim(($record['last_name'] ?? '') . ', ' . ($record['first_name'] ?? '') . $middleInitial);
+@endphp
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h4 mb-0">Medical Examination Form</h1>
+        <a href="{{ route('nurse.index') }}" class="btn btn-outline-secondary btn-sm">Back to Dashboard</a>
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-body">
+            <h2 class="h6 text-secondary mb-3">Student Basic Info (Read-only)</h2>
+            <div class="row g-3">
+                <div class="col-md-4"><label class="form-label">Student Name</label><input class="form-control" value="{{ $studentName }}" readonly></div>
+                <div class="col-md-4"><label class="form-label">LRN</label><input class="form-control" value="{{ $record['lrn'] ?? '' }}" readonly></div>
+                <div class="col-md-4"><label class="form-label">Grade Level</label><input class="form-control" value="{{ $record['grade_level'] ?? '' }}" readonly></div>
+                <div class="col-md-6"><label class="form-label">Parent/Guardian</label><input class="form-control" value="{{ $record['parent_guardian'] ?? '' }}" readonly></div>
+                <div class="col-md-6"><label class="form-label">Address</label><input class="form-control" value="{{ $record['address'] ?? '' }}" readonly></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h2 class="h6 text-secondary mb-3">Medical Findings</h2>
+            <form method="POST" action="{{ route('nurse.examine.save', $index) }}">
+                @csrf
+                <div class="row g-3">
+                    <div class="col-md-4"><label class="form-label">Date of Examination</label><input type="date" name="date_of_examination" class="form-control" value="{{ $exam['date_of_examination'] ?? '' }}"></div>
+                    <div class="col-md-4"><label class="form-label">Temperature / BP</label><input type="text" name="temperature_bp" class="form-control" value="{{ $exam['temperature_bp'] ?? '' }}"></div>
+                    <div class="col-md-4"><label class="form-label">Heart Rate</label><input type="text" name="heart_rate" class="form-control" value="{{ $exam['heart_rate'] ?? '' }}"></div>
+
+                    <div class="col-md-4"><label class="form-label">Pulse Rate</label><input type="text" name="pulse_rate" class="form-control" value="{{ $exam['pulse_rate'] ?? '' }}"></div>
+                    <div class="col-md-4"><label class="form-label">Respiratory Rate</label><input type="text" name="respiratory_rate" class="form-control" value="{{ $exam['respiratory_rate'] ?? '' }}"></div>
+                    <div class="col-md-2"><label class="form-label">Height (cm)</label><input type="text" name="height_cm" class="form-control" value="{{ $exam['height_cm'] ?? ($record['height_cm'] ?? '') }}"></div>
+                    <div class="col-md-2"><label class="form-label">Weight (kg)</label><input type="text" name="weight_kg" class="form-control" value="{{ $exam['weight_kg'] ?? ($record['weight_kg'] ?? '') }}"></div>
+
+                    <div class="col-md-6"><label class="form-label">Nutritional Status (BMI/Wt-for-Age)</label><input type="text" name="nutritional_status_bmi" class="form-control" value="{{ $exam['nutritional_status_bmi'] ?? '' }}"></div>
+                    <div class="col-md-6"><label class="form-label">Nutritional Status (Height-for-Age)</label><input type="text" name="nutritional_status_height_age" class="form-control" value="{{ $exam['nutritional_status_height_age'] ?? '' }}"></div>
+
+                    <div class="col-md-6"><label class="form-label">Vision Screening</label><input type="text" name="vision_screening" class="form-control" value="{{ $exam['vision_screening'] ?? '' }}"></div>
+                    <div class="col-md-6"><label class="form-label">Auditory Screening</label><input type="text" name="auditory_screening" class="form-control" value="{{ $exam['auditory_screening'] ?? '' }}"></div>
+
+                    <div class="col-md-4"><label class="form-label">Skin/Scalp</label><input type="text" name="skin_scalp" class="form-control" value="{{ $exam['skin_scalp'] ?? '' }}"></div>
+                    <div class="col-md-4"><label class="form-label">Eyes/Ears/Nose</label><input type="text" name="eyes_ears_nose" class="form-control" value="{{ $exam['eyes_ears_nose'] ?? '' }}"></div>
+                    <div class="col-md-4"><label class="form-label">Mouth/Throat/Neck</label><input type="text" name="mouth_throat_neck" class="form-control" value="{{ $exam['mouth_throat_neck'] ?? '' }}"></div>
+
+                    <div class="col-md-4"><label class="form-label">Lungs/Heart</label><input type="text" name="lungs_heart" class="form-control" value="{{ $exam['lungs_heart'] ?? '' }}"></div>
+                    <div class="col-md-4"><label class="form-label">Abdomen</label><input type="text" name="abdomen" class="form-control" value="{{ $exam['abdomen'] ?? '' }}"></div>
+                    <div class="col-md-4"><label class="form-label">Deformities</label><input type="text" name="deformities" class="form-control" value="{{ $exam['deformities'] ?? '' }}"></div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Iron Supplementation</label>
+                        <select name="iron_supplementation" class="form-select">
+                            <option value="">Select</option>
+                            <option value="V" @selected(($exam['iron_supplementation'] ?? '') === 'V')>V</option>
+                            <option value="X" @selected(($exam['iron_supplementation'] ?? '') === 'X')>X</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Deworming</label>
+                        <select name="deworming" class="form-select">
+                            <option value="">Select</option>
+                            <option value="V" @selected(($exam['deworming'] ?? '') === 'V')>V</option>
+                            <option value="X" @selected(($exam['deworming'] ?? '') === 'X')>X</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6"><label class="form-label">Immunization (specify kind)</label><input type="text" name="immunization" class="form-control" value="{{ $exam['immunization'] ?? '' }}"></div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">SBFP Beneficiary</label>
+                        <select name="sbfp_beneficiary" class="form-select">
+                            <option value="">Select</option>
+                            <option value="V" @selected(($exam['sbfp_beneficiary'] ?? '') === 'V')>V</option>
+                            <option value="X" @selected(($exam['sbfp_beneficiary'] ?? '') === 'X')>X</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">4Ps Beneficiary</label>
+                        <select name="four_ps_beneficiary" class="form-select">
+                            <option value="">Select</option>
+                            <option value="V" @selected(($exam['four_ps_beneficiary'] ?? '') === 'V')>V</option>
+                            <option value="X" @selected(($exam['four_ps_beneficiary'] ?? '') === 'X')>X</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Menarche (V the Start)</label>
+                        <select name="menarche" class="form-select">
+                            <option value="">Select</option>
+                            <option value="V" @selected(($exam['menarche'] ?? '') === 'V')>V</option>
+                            <option value="X" @selected(($exam['menarche'] ?? '') === 'X')>X</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3"><label class="form-label">Others (specify)</label><input type="text" name="others" class="form-control" value="{{ $exam['others'] ?? '' }}"></div>
+
+                    <div class="col-md-6"><label class="form-label">Examined By</label><input type="text" name="examined_by" class="form-control" value="{{ $exam['examined_by'] ?? '' }}"></div>
+                </div>
+
+                <div class="mt-4 d-flex gap-2">
+                    <button type="submit" class="btn btn-success">Save Examination</button>
+                    <a href="{{ route('nurse.index') }}" class="btn btn-outline-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+</body>
+</html>

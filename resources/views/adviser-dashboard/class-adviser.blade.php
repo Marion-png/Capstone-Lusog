@@ -15,25 +15,28 @@
         .sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-collapsed);background:var(--g900);display:flex;flex-direction:column;overflow:hidden;transition:width .26s ease;box-shadow:inset -1px 0 0 rgba(255,255,255,.04)}
         .sidebar:hover{width:var(--sidebar)}
         .sb-logo{padding:16px 12px;border-bottom:1px solid rgba(255,255,255,.1);display:flex;justify-content:center;transition:padding .26s ease}
-        .sb-logo img{width:46px;max-width:100%;transition:width .26s ease}
+        .sb-logo img{width:48px;max-width:100%;height:auto;display:block;transition:width .26s ease}
         .sidebar:hover .sb-logo{padding:20px}
         .sidebar:hover .sb-logo img{width:170px}
         .sb-nav{padding:16px 8px;flex:1;transition:padding .26s ease}
         .sidebar:hover .sb-nav{padding:16px 12px}
-        .sb-link{display:flex;align-items:center;color:rgba(255,255,255,.7);text-decoration:none;font-size:.83rem;font-weight:600;padding:10px;border-radius:var(--radius-sm);transition:background .2s ease,color .2s ease,padding .26s ease}
+        .sb-link{display:flex;align-items:center;gap:10px;color:rgba(255,255,255,.7);text-decoration:none;font-size:.83rem;font-weight:600;padding:10px;border-radius:var(--radius-sm);transition:background .2s ease,color .2s ease,padding .26s ease}
         .sidebar:hover .sb-link{padding:10px 12px}
+        .sb-link-icon{width:16px;height:16px;flex-shrink:0}
+        .sidebar:not(:hover) .sb-link{justify-content:center;gap:0;padding:10px}
         .sb-link-label{white-space:nowrap;opacity:0;max-width:0;overflow:hidden;transform:translateX(-6px);transition:opacity .16s ease,max-width .26s ease,transform .26s ease}
         .sidebar:hover .sb-link-label{opacity:1;max-width:220px;transform:translateX(0)}
         .sb-link.active{background:rgba(34,197,94,.18);color:var(--g300)}
         .sb-link:hover{background:rgba(255,255,255,.08);color:#fff}
         .sb-user{padding:12px 10px;border-top:1px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:10px;color:#fff;transition:padding .26s ease}
+        .sb-user form{margin-left:auto;display:flex;align-items:center}
         .sidebar:hover .sb-user{padding:14px 16px}
         .sb-avatar{width:34px;height:34px;border-radius:50%;background:#16a34a;display:grid;place-items:center;font-weight:700;font-size:.76rem;letter-spacing:.08em;line-height:1;padding-left:1px}
         .sb-user-name{white-space:nowrap;opacity:0;max-width:0;overflow:hidden;transform:translateX(-6px);transition:opacity .16s ease,max-width .26s ease,transform .26s ease}
         .sidebar:hover .sb-user-name{opacity:1;max-width:170px;transform:translateX(0)}
-        .sb-logout{margin-left:auto;background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;border-radius:8px;padding:5px 7px;transition:background .2s ease,color .2s ease;opacity:0;max-width:0;overflow:hidden}
-        .sidebar:hover .sb-logout{opacity:1;max-width:80px}
-        .sb-logout:hover{background:rgba(239,68,68,.12);color:#fecaca}
+        .sb-logout{background:none;border:none;color:rgba(255,255,255,.62);cursor:pointer;border-radius:8px;width:30px;height:30px;display:grid;place-items:center;transition:background .2s ease,color .2s ease}
+        .sb-logout svg{width:16px;height:16px}
+        .sb-logout:hover{background:rgba(239,68,68,.14);color:#fecaca}
 
         .main{margin-left:var(--sidebar-collapsed);height:100vh;display:flex;flex-direction:column;transition:margin-left .26s ease}
         .sidebar:hover ~ .main{margin-left:var(--sidebar)}
@@ -88,6 +91,12 @@
     <div class="sb-logo"><img src="{{ asset('images/lusog-logo.png') }}" alt="LUSOG Logo"></div>
     <nav class="sb-nav">
         <a href="#" class="sb-link active">
+            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
             <span class="sb-link-label">Baseline and Endline Encoding</span>
         </a>
     </nav>
@@ -96,7 +105,13 @@
         <div class="sb-user-name">{{ auth()->user()->name ?? 'Class Adviser' }}</div>
         <form method="POST" action="{{ route('logout') }}">
             @csrf
-            <button type="submit" class="sb-logout" title="Sign out">Logout</button>
+            <button type="submit" class="sb-logout" title="Sign out" aria-label="Sign out">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <path d="M16 17l5-5-5-5"/>
+                    <path d="M21 12H9"/>
+                </svg>
+            </button>
         </form>
     </div>
 </aside>

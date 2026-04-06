@@ -1,10 +1,12 @@
 <?php
 
+use App\Http\Controllers\AdviserController;
 use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\CsvUploadController;
 use App\Http\Controllers\FeedingCoordinatorController;
 use App\Http\Controllers\FeedingProgramController;
 use App\Http\Controllers\MedicineInventoryController;
+use App\Http\Controllers\NurseController;
 use App\Http\Controllers\SchoolHeadController;
 use App\Http\Controllers\StudentHealthRecordController;
 use App\Models\StudentHealthRecord;
@@ -19,6 +21,27 @@ Route::get('/', function () {
 Route::get('/login', function () {
     return view('auth.login');
 })->name('login');
+
+// Prototype flow: Class Adviser -> School Nurse (Session-based, no database)
+Route::get('/adviser/create', [AdviserController::class, 'create'])
+    ->name('adviser.create');
+
+Route::post('/adviser/store', [AdviserController::class, 'store'])
+    ->name('adviser.store');
+
+Route::get('/adviser/success', [AdviserController::class, 'success'])
+    ->name('adviser.success');
+
+Route::get('/nurse', [NurseController::class, 'index'])
+    ->name('nurse.index');
+
+Route::get('/nurse/{index}/examine', [NurseController::class, 'examine'])
+    ->whereNumber('index')
+    ->name('nurse.examine');
+
+Route::post('/nurse/{index}/examine', [NurseController::class, 'saveExamination'])
+    ->whereNumber('index')
+    ->name('nurse.examine.save');
 
 Route::get('/dashboard/school-nurse', function () {
     return view('dashboard.school-nurse');

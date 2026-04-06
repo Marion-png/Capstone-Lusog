@@ -16,6 +16,7 @@
             --g400: #4ade80; --g300: #86efac; --g200: #bbf7d0;
             --g100: #dcfce7; --g50: #f0fdf4;
             --sidebar-w: 248px;
+            --sidebar-collapsed-w: 76px;
             --topbar-h: 64px;
             --cream: #f7f8f5;
             --card: #ffffff;
@@ -35,9 +36,11 @@
 
         .sidebar {
             position: fixed; left: 0; top: 0; bottom: 0;
-            width: var(--sidebar-w); background: var(--g900);
+            width: var(--sidebar-collapsed-w); background: var(--g900);
             display: flex; flex-direction: column; z-index: 100; overflow: hidden;
+            transition: width .24s ease;
         }
+        .sidebar:hover { width: var(--sidebar-w); }
         .sidebar::after {
             content: ''; position: absolute; inset: 0;
             background: radial-gradient(ellipse 120% 40% at 50% 100%, rgba(34,197,94,.18) 0%, transparent 70%),
@@ -50,26 +53,36 @@
                               linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);
             background-size: 28px 28px;
         }
-        .sb-logo { padding: 20px 20px 18px; position: relative; z-index: 2; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; justify-content: center; }
-        .sb-logo-full { width: 176px; max-width: 100%; height: auto; display: block; }
-        .sb-nav { flex: 1; overflow-y: auto; padding: 16px 12px; position: relative; z-index: 2; scrollbar-width: none; }
+        .sb-logo { padding: 14px 10px; position: relative; z-index: 2; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; justify-content: center; transition: padding .24s ease; }
+        .sb-logo-full { width: 48px; max-width: 100%; height: auto; display: block; transition: width .24s ease; }
+        .sidebar:hover .sb-logo { padding: 20px 20px 18px; }
+        .sidebar:hover .sb-logo-full { width: 176px; }
+        .sb-nav { flex: 1; overflow-y: auto; padding: 16px 8px; position: relative; z-index: 2; scrollbar-width: none; transition: padding .24s ease; }
+        .sidebar:hover .sb-nav { padding: 16px 12px; }
         .sb-nav::-webkit-scrollbar { display: none; }
         .sb-section-label { font-size: .6rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: rgba(134,239,172,.5); padding: 0 8px; margin: 20px 0 8px; }
         .sb-section-label:first-child { margin-top: 0; }
-        .sb-link { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); text-decoration: none; color: rgba(255,255,255,.6); font-size: .83rem; font-weight: 500; transition: background .15s, color .15s; margin-bottom: 2px; }
+        .sb-link { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); text-decoration: none; color: rgba(255,255,255,.6); font-size: .83rem; font-weight: 500; transition: background .15s, color .15s, padding .24s ease; margin-bottom: 2px; white-space: nowrap; overflow: hidden; }
         .sb-link:hover { background: rgba(255,255,255,.08); color: rgba(255,255,255,.9); }
         .sb-link.active { background: rgba(34,197,94,.18); color: var(--g300); }
         .sb-link svg { width: 16px; height: 16px; flex-shrink: 0; }
         .sb-link .badge { margin-left: auto; background: var(--red); color: white; font-size: .62rem; font-weight: 700; padding: 2px 6px; border-radius: 999px; }
+        .sidebar:not(:hover) .sb-section-label { display: none; }
+        .sidebar:not(:hover) .sb-link { justify-content: center; font-size: 0; padding: 10px; gap: 0; }
+        .sidebar:not(:hover) .sb-link .badge { display: none; }
         .sb-user { padding: 14px 16px; border-top: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 11px; position: relative; z-index: 2; }
         .sb-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--g600); display: grid; place-items: center; font-size: .8rem; font-weight: 700; color: white; flex-shrink: 0; }
+        .sb-user-meta { min-width: 0; }
         .sb-user-name { font-size: .8rem; font-weight: 600; color: white; line-height: 1.2; }
         .sb-user-role { font-size: .68rem; color: var(--g300); }
         .sb-logout { margin-left: auto; background: none; border: none; color: rgba(255,255,255,.35); cursor: pointer; padding: 4px; border-radius: 6px; transition: color .15s, background .15s; display: grid; place-items: center; }
         .sb-logout:hover { color: var(--red); background: rgba(239,68,68,.1); }
         .sb-logout svg { width: 15px; height: 15px; }
+        .sidebar:not(:hover) .sb-user { padding: 14px 10px; }
+        .sidebar:not(:hover) .sb-user-meta { display: none; }
 
-        .main { margin-left: var(--sidebar-w); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        .main { margin-left: var(--sidebar-collapsed-w); height: 100vh; display: flex; flex-direction: column; overflow: hidden; transition: margin-left .24s ease; }
+        .sidebar:hover ~ .main { margin-left: var(--sidebar-w); }
 
         .topbar { height: var(--topbar-h); flex-shrink: 0; background: white; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 28px; gap: 14px; }
         .topbar-breadcrumb { display: flex; align-items: center; gap: 8px; flex: 1; }
@@ -215,7 +228,7 @@
             .grid-summary { grid-template-columns: 1fr; }
         }
         @media (max-width: 780px) {
-            :root { --sidebar-w: 0px; }
+            :root { --sidebar-w: 0px; --sidebar-collapsed-w: 0px; }
             .sidebar { display: none; }
             .mini-stat { min-width: 100%; }
         }
@@ -272,7 +285,7 @@
     </nav>
     <div class="sb-user">
         <div class="sb-avatar">{{ substr(auth()->user()->name ?? 'SN', 0, 2) }}</div>
-        <div>
+        <div class="sb-user-meta">
             <div class="sb-user-name">{{ auth()->user()->name ?? 'School Nurse' }}</div>
             <div class="sb-user-role">School Nurse - DCNHS</div>
         </div>
