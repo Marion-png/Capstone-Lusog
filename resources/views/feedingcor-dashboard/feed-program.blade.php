@@ -94,12 +94,16 @@
 		.sb-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--g600); display: grid; place-items: center; font-size: .8rem; font-weight: 700; color: white; flex-shrink: 0; }
 		.sb-user-name { font-size: .8rem; font-weight: 600; color: white; line-height: 1.2; }
 		.sb-user-role { font-size: .68rem; color: var(--g300); }
+		.sb-logout { margin-left: auto; background: none; border: none; color: rgba(255,255,255,.35); cursor: pointer; padding: 4px; border-radius: 6px; transition: color .15s, background .15s; display: grid; place-items: center; }
+		.sb-logout:hover { color: var(--red); background: rgba(239,68,68,.1); }
+		.sb-logout svg { width: 15px; height: 15px; }
 		.sidebar:not(:hover) .sb-user {
 			justify-content: center;
 			padding: 10px;
 		}
-		.sb-user > div:last-child { max-width: 180px; opacity: 1; transform: translateX(0); overflow: hidden; transition: max-width .24s ease, opacity .18s ease, transform .24s ease; }
-		.sidebar:not(:hover) .sb-user > div:last-child { max-width: 0; opacity: 0; transform: translateX(-6px); }
+		.sb-user-meta { max-width: 180px; opacity: 1; transform: translateX(0); overflow: hidden; transition: max-width .24s ease, opacity .18s ease, transform .24s ease; }
+		.sidebar:not(:hover) .sb-user-meta { max-width: 0; opacity: 0; transform: translateX(-6px); }
+		.sidebar:not(:hover) .sb-user form { display: none; }
 
 		.main { margin-left: var(--sidebar-collapsed-w); height: 100vh; display: flex; flex-direction: column; overflow: hidden; transition: margin-left .24s ease; }
 		.sidebar:hover ~ .main { margin-left: var(--sidebar-w); }
@@ -430,11 +434,24 @@
 		</a>
 	</nav>
 	<div class="sb-user">
-		<div class="sb-avatar">{{ substr(auth()->user()->name ?? 'FC', 0, 2) }}</div>
-		<div>
+		@php
+			$displayName = trim(auth()->user()->name ?? 'Feeding Coordinator');
+			$initials = collect(preg_split('/\s+/', $displayName))
+				->filter()
+				->map(fn ($part) => strtoupper(substr($part, 0, 1)))
+				->take(2)
+				->implode('');
+		@endphp
+		<div class="sb-avatar">{{ $initials ?: 'FC' }}</div>
+		<div class="sb-user-meta">
 			<div class="sb-user-name">{{ auth()->user()->name ?? 'Feeding Coordinator' }}</div>
-			<div class="sb-user-role">Feeding Program Coordinator - DCNHS</div>
 		</div>
+		<form method="POST" action="{{ route('logout') }}">
+			@csrf
+			<button type="submit" class="sb-logout" title="Sign out">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+			</button>
+		</form>
 	</div>
 </aside>
 
