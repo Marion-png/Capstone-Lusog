@@ -52,8 +52,12 @@
         .sb-user-meta { min-width: 0; }
         .sb-user-name { font-size: .8rem; font-weight: 600; color: white; line-height: 1.2; }
         .sb-user-role { font-size: .68rem; color: var(--g300); }
+        .sb-logout { margin-left: auto; background: none; border: none; color: rgba(255,255,255,.35); cursor: pointer; padding: 4px; border-radius: 6px; transition: color .15s, background .15s; display: grid; place-items: center; }
+        .sb-logout:hover { color: var(--red); background: rgba(239,68,68,.1); }
+        .sb-logout svg { width: 15px; height: 15px; }
         .sidebar:not(:hover) .sb-user { padding: 14px 10px; }
         .sidebar:not(:hover) .sb-user-meta { display: none; }
+        .sidebar:not(:hover) .sb-logout { display: none; }
 
         .main { margin-left: var(--sidebar-collapsed-w); height: 100vh; display: flex; flex-direction: column; overflow: hidden; transition: margin-left .24s ease; }
         .sidebar:hover ~ .main { margin-left: var(--sidebar-w); }
@@ -134,6 +138,12 @@
     <div class="sb-user">
         <div class="sb-avatar">{{ substr(auth()->user()->name ?? 'SN', 0, 2) }}</div>
         <div class="sb-user-meta"><div class="sb-user-name">{{ auth()->user()->name ?? 'School Nurse' }}</div><div class="sb-user-role">School Nurse - DCNHS</div></div>
+        <form method="POST" action="{{ route('logout') }}">
+            @csrf
+            <button type="submit" class="sb-logout" title="Sign out">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            </button>
+        </form>
     </div>
 </aside>
 

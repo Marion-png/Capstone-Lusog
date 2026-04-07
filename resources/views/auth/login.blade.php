@@ -412,12 +412,12 @@
             <div class="field">
                 <label for="email">Username / Employee ID</label>
                 <input
-                    type="email"
+                    type="text"
                     id="email"
                     name="email"
                     value="{{ old('email') }}"
                     placeholder="nurse.maria"
-                    autocomplete="email"
+                    autocomplete="username"
                     required
                     class="control {{ $errors->has('email') ? 'is-error' : '' }}"
                 >
@@ -460,6 +460,7 @@
 
             <p class="footer">
                 Forgot your password? Contact your system administrator.<br>
+                <a href="{{ route('account.request') }}" style="color:#6e7b78;text-decoration:underline;">Create Account</a><br>
                 LUSOG v1.0 | Department of Education - School Health Division
             </p>
         </form>

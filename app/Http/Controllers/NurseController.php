@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -39,10 +40,44 @@ class NurseController extends Controller
             abort(404);
         }
 
+        $existingHeight = $records[$index]['height_cm'] ?? null;
+        $existingWeight = $records[$index]['weight_kg'] ?? null;
+
+        if (empty($records[$index]['baseline_snapshot'])) {
+            $records[$index]['baseline_snapshot'] = [
+                'height_cm' => $existingHeight,
+                'weight_kg' => $existingWeight,
+            ];
+        }
+
+        $examDateInput = (string) $request->input('date_of_examination', '');
+        $examDate = now()->toDateString();
+        if ($examDateInput !== '') {
+            try {
+                $examDate = Carbon::parse($examDateInput)->toDateString();
+            } catch (\Throwable $_) {
+                $examDate = now()->toDateString();
+            }
+        }
+
+        $attendanceByMonth = $records[$index]['attendance_by_month'] ?? [];
+        if (!is_array($attendanceByMonth)) {
+            $attendanceByMonth = [];
+        }
+        $monthKey = Carbon::parse($examDate)->format('Y-m');
+        $attendanceByMonth[$monthKey] = ((int) ($attendanceByMonth[$monthKey] ?? 0)) + 1;
+        ksort($attendanceByMonth);
+        $records[$index]['attendance_by_month'] = $attendanceByMonth;
+
         $records[$index]['height_cm'] = $request->input('height_cm', $records[$index]['height_cm'] ?? null);
         $records[$index]['weight_kg'] = $request->input('weight_kg', $records[$index]['weight_kg'] ?? null);
+        $records[$index]['endline_snapshot'] = [
+            'height_cm' => $request->input('height_cm'),
+            'weight_kg' => $request->input('weight_kg'),
+            'nutritional_status_bmi' => $request->input('nutritional_status_bmi'),
+        ];
         $records[$index]['examination'] = [
-            'date_of_examination' => $request->input('date_of_examination'),
+            'date_of_examination' => $examDate,
             'temperature_bp' => $request->input('temperature_bp'),
             'heart_rate' => $request->input('heart_rate'),
             'pulse_rate' => $request->input('pulse_rate'),

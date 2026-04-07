@@ -38,6 +38,7 @@
         .sb-logout svg{width:15px;height:15px}
         .sidebar:not(:hover) .sb-user{padding:14px 10px}
         .sidebar:not(:hover) .sb-user-meta{display:none}
+        .sidebar:not(:hover) .sb-logout{display:none}
 
         .main{margin-left:var(--sidebar-collapsed-w);height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:margin-left .24s ease}
         .sidebar:hover ~ .main{margin-left:var(--sidebar-w)}

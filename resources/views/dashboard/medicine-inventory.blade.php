@@ -65,6 +65,29 @@
         .stat-label { font-size: .72rem; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; }
         .stat-value { margin-top: 4px; font-family: 'DM Serif Display', serif; font-size: 1.5rem; }
 
+        .forecast-card { margin-top: 14px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); overflow: hidden; }
+        .forecast-grid { display: grid; grid-template-columns: 1.05fr 1fr; }
+        .forecast-main { padding: 16px 16px 14px; border-right: 1px solid var(--border); }
+        .forecast-eyebrow { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--g700); font-weight: 700; }
+        .forecast-title { margin-top: 6px; font-size: 1.05rem; font-weight: 700; color: var(--text-1); }
+        .forecast-sub { margin-top: 6px; color: var(--text-3); font-size: .8rem; line-height: 1.45; }
+        .forecast-kpis { margin-top: 12px; display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 8px; }
+        .kpi { border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; background: #fcfefd; }
+        .kpi-label { font-size: .67rem; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; }
+        .kpi-value { margin-top: 2px; font-size: .97rem; font-weight: 700; color: var(--text-1); }
+        .kpi-value.danger { color: #b91c1c; }
+        .forecast-graph { padding: 14px 14px 12px; }
+        .graph-title { font-size: .76rem; font-weight: 700; color: var(--text-2); margin-bottom: 8px; }
+        .line-chart { height: 190px; border: 1px solid var(--border); border-radius: 10px; background: linear-gradient(180deg, #fcfffd, #f4faf6); }
+        .line-chart svg { width: 100%; height: 100%; display: block; }
+        .grid-line { stroke: #dbe9df; stroke-width: 1; }
+        .axis-text { fill: #7a9e87; font-size: 10px; font-weight: 600; }
+        .usage-line { fill: none; stroke: #1f7a3d; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+        .usage-area { fill: rgba(34, 197, 94, 0.14); }
+        .usage-point { fill: #1f7a3d; stroke: #ffffff; stroke-width: 2; }
+        .usage-point.peak { fill: #d97706; }
+        .graph-note { margin-top: 8px; font-size: .72rem; color: var(--text-3); }
+
         .grid { margin-top: 16px; display: grid; grid-template-columns: 1fr 1.25fr; gap: 12px; }
         .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); }
         .card-head { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: .8rem; font-weight: 700; color: var(--text-2); }
@@ -91,6 +114,9 @@
             :root { --sidebar-w: 0px; --sidebar-collapsed-w: 0px; }
             .sidebar { display: none; }
             .stats { grid-template-columns: 1fr; }
+            .forecast-grid { grid-template-columns: 1fr; }
+            .forecast-main { border-right: none; border-bottom: 1px solid var(--border); }
+            .forecast-kpis { grid-template-columns: 1fr; }
             .row { grid-template-columns: 1fr; }
         }
     </style>
@@ -140,6 +166,82 @@
             <article class="stat"><div class="stat-label">Total Medicines</div><div class="stat-value">{{ $stats['total'] }}</div></article>
             <article class="stat"><div class="stat-label">Above Threshold</div><div class="stat-value">{{ $stats['good'] }}</div></article>
             <article class="stat"><div class="stat-label">Low Stock</div><div class="stat-value">{{ $stats['low'] }}</div></article>
+        </section>
+
+        <section class="forecast-card">
+            <div class="forecast-grid">
+                <div class="forecast-main">
+                    <div class="forecast-eyebrow">Predictive Reorder Module</div>
+                    <h2 class="forecast-title">{{ $prediction['medicine_name'] }} stock tends to spike in January.</h2>
+                    <p class="forecast-sub">Based on the latest monthly dispensing pattern, January usage is the highest. The system applies a 20% safety buffer and recommends the next month stock target to reduce stockout risk.</p>
+                    <div class="forecast-kpis">
+                        <div class="kpi">
+                            <div class="kpi-label">Current Stock</div>
+                            <div class="kpi-value">{{ $prediction['current_stock'] }} {{ $prediction['unit'] }}</div>
+                        </div>
+                        <div class="kpi">
+                            <div class="kpi-label">Target For {{ $prediction['next_month'] }}</div>
+                            <div class="kpi-value">{{ $prediction['recommended_doses'] }} {{ $prediction['unit'] }}</div>
+                        </div>
+                        <div class="kpi">
+                            <div class="kpi-label">Recommended Order</div>
+                            <div class="kpi-value {{ $prediction['recommended_order'] > 0 ? 'danger' : '' }}">{{ $prediction['recommended_order'] }} {{ $prediction['unit'] }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="forecast-graph">
+                    <div class="graph-title">Monthly Usage Report ({{ $prediction['medicine_name'] }})</div>
+                    @php
+                        $usageSeries = collect($prediction['monthly_usage'])->values();
+                        $chartWidth = 560;
+                        $chartHeight = 190;
+                        $padX = 36;
+                        $padY = 16;
+                        $plotWidth = $chartWidth - ($padX * 2);
+                        $plotHeight = $chartHeight - ($padY * 2);
+                        $maxUsage = max(1, (int) $prediction['max_usage']);
+                        $axisStep = max(10, (int) ceil(($maxUsage / 4) / 10) * 10);
+                        $axisMax = $axisStep * 4;
+                        $pointCount = max(1, $usageSeries->count());
+
+                        $plotPoints = $usageSeries->map(function ($point, $index) use ($pointCount, $padX, $plotWidth, $padY, $plotHeight, $axisMax) {
+                            $x = $padX + ($pointCount === 1 ? $plotWidth / 2 : ($index / ($pointCount - 1)) * $plotWidth);
+                            $y = $padY + $plotHeight - (((int) $point['used'] / $axisMax) * $plotHeight);
+
+                            return [
+                                'month' => $point['month'],
+                                'used' => (int) $point['used'],
+                                'x' => round($x, 2),
+                                'y' => round($y, 2),
+                            ];
+                        });
+
+                        $linePoints = $plotPoints->map(fn ($p) => $p['x'] . ',' . $p['y'])->implode(' ');
+                        $areaPoints = $linePoints . ' ' . ($padX + $plotWidth) . ',' . ($padY + $plotHeight) . ' ' . $padX . ',' . ($padY + $plotHeight);
+                    @endphp
+                    <div class="line-chart" role="img" aria-label="Monthly usage line graph for {{ $prediction['medicine_name'] }}">
+                        <svg viewBox="0 0 {{ $chartWidth }} {{ $chartHeight }}" aria-hidden="true" focusable="false">
+                            @for ($i = 0; $i <= 4; $i++)
+                                @php
+                                    $y = $padY + (($plotHeight / 4) * $i);
+                                    $label = $axisMax - ($axisStep * $i);
+                                @endphp
+                                <line x1="{{ $padX }}" y1="{{ $y }}" x2="{{ $padX + $plotWidth }}" y2="{{ $y }}" class="grid-line" />
+                                <text x="8" y="{{ $y + 3 }}" class="axis-text">{{ $label }}</text>
+                            @endfor
+
+                            <polygon points="{{ $areaPoints }}" class="usage-area"></polygon>
+                            <polyline points="{{ $linePoints }}" class="usage-line"></polyline>
+
+                            @foreach($plotPoints as $point)
+                                <circle cx="{{ $point['x'] }}" cy="{{ $point['y'] }}" r="5" class="usage-point {{ $point['month'] === 'Jan' ? 'peak' : '' }}"></circle>
+                                <text x="{{ $point['x'] }}" y="{{ $chartHeight - 6 }}" text-anchor="middle" class="axis-text">{{ $point['month'] }}</text>
+                            @endforeach
+                        </svg>
+                    </div>
+                    <div class="graph-note">January is highlighted because it had the highest consumption and triggered repeated low-stock events.</div>
+                </div>
+            </div>
         </section>
 
         <section class="grid">

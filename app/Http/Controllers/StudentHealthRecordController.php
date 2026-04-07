@@ -10,8 +10,10 @@ use Illuminate\View\View;
 
 class StudentHealthRecordController extends Controller
 {
-    public function classAdviserDashboard(): View
+    public function classAdviserDashboard(Request $request): View
     {
+        $this->ensureClassAdviserDemoData($request);
+
         $records = collect();
 
         if (Schema::hasTable('student_health_records')) {
@@ -41,6 +43,164 @@ class StudentHealthRecordController extends Controller
                 'flagged' => $flaggedCount,
             ],
         ]);
+    }
+
+    private function ensureClassAdviserDemoData(Request $request): void
+    {
+        $assignedGradeLevel = (string) $request->session()->get('assigned_grade_level', '');
+        $assignedSection = (string) $request->session()->get('assigned_section', '');
+
+        if ($assignedGradeLevel === '' || $assignedSection === '') {
+            $assignedGradeLevel = 'Grade 10';
+            $assignedSection = 'Rizal';
+
+            $request->session()->put('assigned_grade_level', $assignedGradeLevel);
+            $request->session()->put('assigned_section', $assignedSection);
+        }
+
+        $records = $request->session()->get('school_health_card_records', []);
+        $hasAssignedClassRows = collect($records)->contains(function (array $record) use ($assignedGradeLevel, $assignedSection): bool {
+            return (string) ($record['grade_level'] ?? '') === $assignedGradeLevel
+                && (string) ($record['section'] ?? '') === $assignedSection;
+        });
+
+        if ($hasAssignedClassRows) {
+            return;
+        }
+
+        $demoRows = [
+            [
+                'last_name' => 'Santos',
+                'first_name' => 'Andrea',
+                'middle_name' => 'Lopez',
+                'lrn' => '100234560201',
+                'birth_month' => 3,
+                'birth_day' => 12,
+                'birth_year' => 2010,
+                'birthplace' => 'Quezon City',
+                'parent_guardian' => 'Maria Santos',
+                'address' => 'Blk 10 Lot 2, Brgy. Rizal',
+                'school_id' => 'DCNHS-001',
+                'region' => 'NCR',
+                'division' => 'Quezon City',
+                'telephone_no' => '09171230001',
+                'height_cm' => 151.2,
+                'weight_kg' => 43.1,
+                'age' => 16,
+                'bmi_value' => 18.85,
+                'nutritional_status_bmi_for_age' => 'Normal',
+                'nutritional_status_height_for_age' => 'Normal Height-for-Age',
+                'grade_level' => $assignedGradeLevel,
+                'section' => $assignedSection,
+                'attendance_by_month' => [
+                    '2026-01' => 17,
+                    '2026-02' => 18,
+                    '2026-03' => 19,
+                ],
+                'baseline_snapshot' => [
+                    'height_cm' => 149.7,
+                    'weight_kg' => 41.8,
+                ],
+                'endline_snapshot' => [
+                    'height_cm' => 151.2,
+                    'weight_kg' => 43.1,
+                    'nutritional_status_bmi' => 'Normal',
+                ],
+                'examination' => [
+                    'date_of_examination' => '2026-03-12',
+                    'height_cm' => 151.2,
+                    'weight_kg' => 43.1,
+                    'nutritional_status_bmi' => 'Normal',
+                    'examined_by' => 'Nurse M. Lopez',
+                ],
+            ],
+            [
+                'last_name' => 'Dela Cruz',
+                'first_name' => 'Joshua',
+                'middle_name' => 'Reyes',
+                'lrn' => '100234560202',
+                'birth_month' => 8,
+                'birth_day' => 5,
+                'birth_year' => 2010,
+                'birthplace' => 'Pasig City',
+                'parent_guardian' => 'Liza Dela Cruz',
+                'address' => 'Purok 3, Brgy. Commonwealth',
+                'school_id' => 'DCNHS-001',
+                'region' => 'NCR',
+                'division' => 'Quezon City',
+                'telephone_no' => '09171230002',
+                'height_cm' => 147.5,
+                'weight_kg' => 36.9,
+                'age' => 15,
+                'bmi_value' => 16.96,
+                'nutritional_status_bmi_for_age' => 'Normal',
+                'nutritional_status_height_for_age' => 'Stunted',
+                'grade_level' => $assignedGradeLevel,
+                'section' => $assignedSection,
+                'attendance_by_month' => [
+                    '2026-01' => 15,
+                    '2026-02' => 16,
+                    '2026-03' => 14,
+                ],
+                'baseline_snapshot' => [
+                    'height_cm' => 146.8,
+                    'weight_kg' => 35.7,
+                ],
+                'endline_snapshot' => [
+                    'height_cm' => 147.5,
+                    'weight_kg' => 36.9,
+                    'nutritional_status_bmi' => 'Normal',
+                ],
+                'examination' => [],
+            ],
+            [
+                'last_name' => 'Fernandez',
+                'first_name' => 'Kim',
+                'middle_name' => 'A.',
+                'lrn' => '100234560203',
+                'birth_month' => 11,
+                'birth_day' => 21,
+                'birth_year' => 2010,
+                'birthplace' => 'Manila',
+                'parent_guardian' => 'Nora Fernandez',
+                'address' => 'Sitio Maligaya, Brgy. Holy Spirit',
+                'school_id' => 'DCNHS-001',
+                'region' => 'NCR',
+                'division' => 'Quezon City',
+                'telephone_no' => '09171230003',
+                'height_cm' => 153.4,
+                'weight_kg' => 49.8,
+                'age' => 15,
+                'bmi_value' => 21.16,
+                'nutritional_status_bmi_for_age' => 'Normal',
+                'nutritional_status_height_for_age' => 'Normal Height-for-Age',
+                'grade_level' => $assignedGradeLevel,
+                'section' => $assignedSection,
+                'attendance_by_month' => [
+                    '2026-01' => 18,
+                    '2026-02' => 17,
+                    '2026-03' => 18,
+                ],
+                'baseline_snapshot' => [
+                    'height_cm' => 152.1,
+                    'weight_kg' => 47.6,
+                ],
+                'endline_snapshot' => [
+                    'height_cm' => 153.4,
+                    'weight_kg' => 49.8,
+                    'nutritional_status_bmi' => 'Normal',
+                ],
+                'examination' => [
+                    'date_of_examination' => '2026-03-05',
+                    'height_cm' => 153.4,
+                    'weight_kg' => 49.8,
+                    'nutritional_status_bmi' => 'Normal',
+                    'examined_by' => 'Nurse M. Lopez',
+                ],
+            ],
+        ];
+
+        $request->session()->put('school_health_card_records', array_merge($records, $demoRows));
     }
 
     public function storeBaseline(Request $request): RedirectResponse
