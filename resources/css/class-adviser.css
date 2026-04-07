@@ -159,5 +159,50 @@ tbody tr:hover td{background:#f7fbf8}
 .summary-v{color:#1c3429;font-weight:600}
 .confirm-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
 
+.my-students-card{padding:0;overflow:hidden}
+.my-students-head{display:flex;justify-content:space-between;align-items:flex-start;padding:14px 16px;border-bottom:1px solid var(--border)}
+.my-students-title{font-size:1.9rem;font-family:'DM Serif Display',serif;color:#1f3f32}
+.my-students-sub{font-size:.88rem;color:#6f8c7a;margin-top:2px}
+.my-students-right{display:flex;align-items:center;gap:10px;color:#6f8c7a;font-size:.88rem}
+.my-students-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:12px 16px;border-bottom:1px solid var(--border)}
+.my-stat-box{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow)}
+.my-stat-box span{display:block;font-size:.8rem;color:#6f8c7a}
+.my-stat-box b{display:block;font-size:2rem;line-height:1.1;margin-top:2px;color:#1b3b2f}
+.box-total{border-left:4px solid #115e59}
+.box-pending{border-left:4px solid #d97706}
+.box-complete{border-left:4px solid #22c55e}
+.box-wasted{border-left:4px solid #ef4444}
+.my-students-tools{display:grid;grid-template-columns:1fr 210px auto;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border)}
+.my-students-tools input,.my-students-tools select{height:40px;border:1px solid var(--border);border-radius:10px;padding:0 12px;font:inherit;color:#28463a;background:#fff}
+.my-students-table-wrap{padding:10px 16px 16px}
+.my-students-table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid var(--border);border-radius:12px}
+.my-students-table th{background:#f7faf8;color:#6f8c7a;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;padding:12px 14px;border-bottom:1px solid var(--border)}
+.my-students-table td{padding:12px 14px;border-bottom:1px solid var(--border);font-size:.86rem}
+.my-students-table tr:last-child td{border-bottom:none}
+.my-status-badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:.74rem;font-weight:700}
+.status-pending{background:#fef3c7;color:#b45309}
+.status-complete{background:#dcfce7;color:#166534}
+
+.student-profile-modal{max-height:94vh;display:flex;flex-direction:column}
+.student-profile-topline{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border)}
+.student-profile-back{border:none;background:none;color:#6f8c7a;font-size:1.3rem;line-height:1;cursor:pointer;padding:0;margin-top:1px}
+.student-profile-titleline{font-size:2rem;font-family:'DM Serif Display',serif;color:#243342;line-height:1.1}
+.student-profile-subline{font-size:.9rem;color:#6f8c7a;margin-top:2px}
+.student-profile-hero{background:linear-gradient(120deg,#1f6a54,#114b3e);margin:14px 16px 0;border-radius:14px 14px 0 0;padding:18px 20px;color:#fff;display:flex;justify-content:space-between;align-items:flex-start}
+.student-profile-name{font-size:2rem;font-family:'DM Serif Display',serif;line-height:1.1}
+.student-profile-lrn{font-size:1rem;color:#cff5e7;margin-top:3px}
+.student-profile-body{padding:0 16px 16px;overflow:auto}
+.student-profile-section{background:#fff;border:1px solid var(--border);border-top:none;padding:14px 16px}
+.student-profile-section h4{font-size:1.25rem;font-family:'DM Serif Display',serif;color:#1d3c31;margin-bottom:10px}
+.student-profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 20px}
+.student-profile-grid.metrics{grid-template-columns:repeat(3,1fr)}
+.student-profile-grid .full{grid-column:1 / -1}
+.student-profile-grid span{color:#6f8c7a;font-size:.88rem}
+.student-profile-grid b{display:block;color:#1a3328;font-size:1.03rem;margin-top:2px}
+.pending-note-box{margin-top:12px;background:#fff9e8;border:1px solid #f8df97;border-radius:12px;padding:12px 14px;color:#915f03}
+.pending-note-box h5{font-size:1rem;margin-bottom:4px}
+
+#profileClose{position:sticky;left:12px;bottom:12px;width:max-content}
+
 @media (max-width:980px){.stats{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.profile-grid{grid-template-columns:1fr}.student-grid{grid-template-columns:1fr}.calc-grid{grid-template-columns:1fr 1fr}.add-head{flex-direction:column;align-items:flex-start}}
 @media (max-width:780px){.sidebar{display:none}.main{margin-left:0}}

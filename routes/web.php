@@ -34,7 +34,7 @@ Route::post('/account-request', function (Request $request) {
         'name' => ['required', 'string', 'max:255'],
         'username' => ['required', 'string', 'max:255'],
         'role' => ['required', 'in:school_nurse,clinic_staff,class_adviser,school_head,feeding_coor'],
-        'school_name' => ['required_if:role,school_nurse,clinic_staff,school_head', 'nullable', 'string', 'max:255'],
+        'school_name' => ['required_if:role,school_nurse,clinic_staff,school_head,class_adviser', 'nullable', 'string', 'max:255'],
         'assigned_grade_level' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:50'],
         'assigned_section' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:100'],
     ]);
@@ -66,7 +66,7 @@ Route::post('/account-request', function (Request $request) {
         'name' => $validated['name'],
         'username' => $validated['username'],
         'role' => $role,
-        'school_name' => in_array($role, ['school_nurse', 'clinic_staff', 'school_head'], true) ? ($validated['school_name'] ?? null) : null,
+        'school_name' => in_array($role, ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser'], true) ? ($validated['school_name'] ?? null) : null,
         'assigned_grade_level' => $role === 'class_adviser' ? ($validated['assigned_grade_level'] ?? null) : null,
         'assigned_section' => $role === 'class_adviser' ? ($validated['assigned_section'] ?? null) : null,
         'created_at' => now()->toIso8601String(),
@@ -146,6 +146,66 @@ Route::get('/dashboard/clinic-staff', function () {
 
 Route::get('/dashboard/class-adviser', [StudentHealthRecordController::class, 'classAdviserDashboard'])
     ->name('dashboard.class-adviser');
+
+Route::get('/dashboard/class-adviser/deworming', function (Request $request) {
+    $assignedGradeLevel = (string) $request->session()->get('assigned_grade_level', '');
+    $assignedSection = (string) $request->session()->get('assigned_section', '');
+
+    $requests = collect($request->session()->get('deworming_requests', []))
+        ->filter(function (array $item) use ($assignedGradeLevel, $assignedSection): bool {
+            if ($assignedGradeLevel === '' || $assignedSection === '') {
+                return true;
+            }
+
+            return (string) ($item['grade_level'] ?? '') === $assignedGradeLevel
+                && (string) ($item['section'] ?? '') === $assignedSection;
+        })
+        ->sortByDesc('submitted_at')
+        ->values()
+        ->all();
+
+    return view('adviser-dashboard.deworming', [
+        'dewormingRequests' => $requests,
+        'assignedGradeLevel' => $assignedGradeLevel,
+        'assignedSection' => $assignedSection,
+    ]);
+})->name('dashboard.class-adviser.deworming');
+
+Route::post('/dashboard/class-adviser/deworming', function (Request $request) {
+    if ($request->session()->get('active_role') !== 'class_adviser') {
+        return redirect()->route('login')->with('error', 'Only Class Adviser can submit deworming requests.');
+    }
+
+    $validated = $request->validate([
+        'campaign' => ['required', 'in:start,end'],
+        'total_students' => ['required', 'integer', 'min:1'],
+        'consenting_students' => ['required', 'integer', 'min:1'],
+    ]);
+
+    if ((int) $validated['consenting_students'] > (int) $validated['total_students']) {
+        return back()->withErrors(['consenting_students' => 'Consenting students cannot exceed total students.'])->withInput();
+    }
+
+    $requests = $request->session()->get('deworming_requests', []);
+    $requests[] = [
+        'id' => (string) str()->uuid(),
+        'submitted_at' => now()->toIso8601String(),
+        'campaign' => $validated['campaign'],
+        'total_students' => (int) $validated['total_students'],
+        'consenting_students' => (int) $validated['consenting_students'],
+        'tablets_requested' => (int) $validated['consenting_students'],
+        'status' => 'pending',
+        'released_date' => null,
+        'grade_level' => (string) $request->session()->get('assigned_grade_level', ''),
+        'section' => (string) $request->session()->get('assigned_section', ''),
+    ];
+
+    $request->session()->put('deworming_requests', $requests);
+
+    return redirect()
+        ->route('dashboard.class-adviser.deworming')
+        ->with('success', 'Deworming request submitted successfully.');
+})->name('dashboard.class-adviser.deworming.store');
 
 Route::get('/dashboard/school-head', [SchoolHeadController::class, 'index'])
     ->name('dashboard.school-head');
@@ -295,7 +355,7 @@ Route::post('/dashboard/system-admin/requests/{requestId}/approve', function (Re
             'name' => $target['name'] ?? '-',
             'username' => $target['username'] ?? '-',
             'role' => $role,
-            'school_name' => in_array($role, ['school_nurse', 'clinic_staff', 'school_head'], true) ? ($target['school_name'] ?? null) : null,
+            'school_name' => in_array($role, ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser'], true) ? ($target['school_name'] ?? null) : null,
             'assigned_grade_level' => $role === 'class_adviser' ? ($target['assigned_grade_level'] ?? null) : null,
             'assigned_section' => $role === 'class_adviser' ? ($target['assigned_section'] ?? null) : null,
             'created_at' => now()->toIso8601String(),
@@ -388,7 +448,7 @@ Route::post('/health-records', function (Request $request) {
 })->name('health-records.store');
 
 Route::post('/logout', function () {
-    session()->forget(['assigned_grade_level', 'assigned_section', 'active_role']);
+    session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name', 'active_role']);
     return redirect()->route('login');
 })->name('logout');
 
@@ -423,8 +483,9 @@ Route::post('/login', function (Request $request) {
     if ($role === 'class_adviser') {
         $request->session()->put('assigned_grade_level', $account['assigned_grade_level'] ?? null);
         $request->session()->put('assigned_section', $account['assigned_section'] ?? null);
+        $request->session()->put('assigned_school_name', $account['school_name'] ?? null);
     } else {
-        $request->session()->forget(['assigned_grade_level', 'assigned_section']);
+        $request->session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name']);
     }
 
     $request->session()->put('active_role', $role);

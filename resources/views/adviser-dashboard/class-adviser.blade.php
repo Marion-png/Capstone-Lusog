@@ -8,7 +8,10 @@
     <title>Class Adviser Dashboard - LUSOG</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    @vite('resources/css/class-adviser.css')
+    @php $classAdviserCssPath = resource_path('css/class-adviser.css'); @endphp
+    @if (file_exists($classAdviserCssPath))
+        <style>{!! file_get_contents($classAdviserCssPath) !!}</style>
+    @endif
 </head>
 <body>
 <aside class="sidebar">
@@ -34,6 +37,13 @@
             </svg>
             <span class="sb-link-label">Saved Submissions</span>
         </a>
+        <a href="{{ route('dashboard.class-adviser.deworming') }}" class="sb-link">
+            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M10.5 6.5l7 7a2.12 2.12 0 1 1-3 3l-7-7a2.12 2.12 0 0 1 3-3z"></path>
+                <path d="M8.5 8.5l-3 3"></path>
+            </svg>
+            <span class="sb-link-label">Deworming Request</span>
+        </a>
     </nav>
     <div class="sb-user">
         <div class="sb-avatar">{{ substr(auth()->user()->name ?? 'CA',0,2) }}</div>
@@ -57,6 +67,7 @@
         @php
             $assignedGradeLevel = session('assigned_grade_level');
             $assignedSection = session('assigned_section');
+            $assignedSchoolName = session('assigned_school_name');
             $assignedClassLabel = ($assignedGradeLevel && $assignedSection)
                 ? ($assignedGradeLevel . ' / ' . $assignedSection)
                 : 'Not Assigned';
@@ -65,6 +76,8 @@
         <p class="sub">School Health Card prototype workflow for adviser submission and nurse follow-up.</p>
         <div class="assigned-class-banner">
             <div>
+                <div class="assigned-class-label">Assigned School</div>
+                <div class="assigned-class-value">{{ $assignedSchoolName ?: 'Not Assigned' }}</div>
                 <div class="assigned-class-label">Assigned Class</div>
                 <div class="assigned-class-value">{{ $assignedClassLabel }}</div>
             </div>
@@ -93,52 +106,93 @@
             });
         @endphp
 
-        <section id="prototype-saved-panel" class="card section section-panel" style="margin-top:12px;">
-            <h3>Saved School Health Card Submissions</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Student</th>
-                        <th>LRN</th>
-                        <th>Grade Level</th>
-                        <th>Section</th>
-                        <th>Height</th>
-                        <th>Weight</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($prototypeRecords as $index => $prototypeRecord)
-                        @php
-                            $middle = trim((string) ($prototypeRecord['middle_name'] ?? ''));
-                            $middleInitial = $middle !== '' ? (' ' . strtoupper(substr($middle, 0, 1)) . '.') : '';
-                            $fullName = trim(($prototypeRecord['last_name'] ?? '') . ', ' . ($prototypeRecord['first_name'] ?? '') . $middleInitial);
-                            $isExamined = !empty($prototypeRecord['examination']);
-                        @endphp
-                        <tr>
-                            <td>{{ $fullName }}</td>
-                            <td>{{ $prototypeRecord['lrn'] ?? '-' }}</td>
-                            <td>{{ $prototypeRecord['grade_level'] ?? '-' }}</td>
-                            <td>{{ $prototypeRecord['section'] ?? '-' }}</td>
-                            <td>{{ $prototypeRecord['height_cm'] ?? '-' }}</td>
-                            <td>{{ $prototypeRecord['weight_kg'] ?? '-' }}</td>
-                            <td>
-                                @if ($isExamined)
-                                    <span class="badge ok">Examined by Nurse</span>
-                                @else
-                                    <span class="badge warn">Pending Nurse Examination</span>
-                                @endif
-                            </td>
-                            <td>
-                                <button type="button" class="profile-open-btn js-profile-open" data-route="{{ route('nurse.examine', $index) }}" data-record='@json($prototypeRecord)'>Student Profile</button>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="8" class="muted">No School Health Card prototype submissions yet for your assigned class.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
+        <section id="prototype-saved-panel" class="section-panel" style="margin-top:12px;">
+            @php
+                $studentsTotal = $prototypeRecords->count();
+                $pendingReviewTotal = $prototypeRecords->filter(fn ($row) => empty($row['examination']))->count();
+                $completeRecordsTotal = $prototypeRecords->filter(fn ($row) => !empty($row['examination']))->count();
+                $wastedStudentsTotal = $prototypeRecords->filter(function ($row) {
+                    $status = strtolower((string) ($row['nutritional_status_bmi_for_age'] ?? ''));
+                    return str_contains($status, 'wasted');
+                })->count();
+            @endphp
+
+            <article class="card my-students-card">
+                <div class="my-students-head">
+                    <div>
+                        <h3 class="my-students-title">My Students</h3>
+                        <p class="my-students-sub">View all students in your class</p>
+                    </div>
+                    <div class="my-students-right">
+                        <span id="myStudentsDate">-</span>
+                        <button type="button" class="btn" data-target="prototype-form-panel" id="openAddStudentBtn">+ Add Student</button>
+                    </div>
+                </div>
+
+                <div class="my-students-stats">
+                    <div class="my-stat-box box-total"><span>Total Students</span><b>{{ $studentsTotal }}</b></div>
+                    <div class="my-stat-box box-pending"><span>Pending Nurse Review</span><b>{{ $pendingReviewTotal }}</b></div>
+                    <div class="my-stat-box box-complete"><span>Complete Records</span><b>{{ $completeRecordsTotal }}</b></div>
+                    <div class="my-stat-box box-wasted"><span>Wasted Students</span><b>{{ $wastedStudentsTotal }}</b></div>
+                </div>
+
+                <div class="my-students-tools">
+                    <input id="studentsSearch" type="text" placeholder="Search by name or LRN...">
+                    <select id="studentsStatusFilter">
+                        <option value="all">All Status</option>
+                        <option value="pending">Pending Nurse Review</option>
+                        <option value="complete">Complete Record</option>
+                    </select>
+                    <button type="button" class="btn btn-secondary" id="studentsClearBtn">Clear</button>
+                </div>
+
+                <div class="my-students-table-wrap">
+                    <table class="my-students-table">
+                        <thead>
+                            <tr>
+                                <th>Student Name</th>
+                                <th>LRN</th>
+                                <th>Gender</th>
+                                <th>BMI</th>
+                                <th>Nutritional Status</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentsTableBody">
+                            @forelse ($prototypeRecords as $index => $prototypeRecord)
+                                @php
+                                    $middle = trim((string) ($prototypeRecord['middle_name'] ?? ''));
+                                    $middleInitial = $middle !== '' ? (' ' . strtoupper(substr($middle, 0, 1)) . '.') : '';
+                                    $fullName = trim(($prototypeRecord['last_name'] ?? '') . ', ' . ($prototypeRecord['first_name'] ?? '') . $middleInitial);
+                                    $isExamined = !empty($prototypeRecord['examination']);
+                                    $statusKey = $isExamined ? 'complete' : 'pending';
+                                    $genderValue = $prototypeRecord['gender'] ?? '-';
+                                @endphp
+                                <tr class="js-student-row" data-name="{{ strtolower($fullName) }}" data-lrn="{{ strtolower((string) ($prototypeRecord['lrn'] ?? '')) }}" data-status="{{ $statusKey }}">
+                                    <td>{{ $fullName }}</td>
+                                    <td>{{ $prototypeRecord['lrn'] ?? '-' }}</td>
+                                    <td>{{ $genderValue }}</td>
+                                    <td>{{ $prototypeRecord['bmi_value'] ?? '-' }}</td>
+                                    <td>{{ $prototypeRecord['nutritional_status_bmi_for_age'] ?? '-' }}</td>
+                                    <td>
+                                        @if ($isExamined)
+                                            <span class="my-status-badge status-complete">Complete Record</span>
+                                        @else
+                                            <span class="my-status-badge status-pending">Pending Nurse Review</span>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        <button type="button" class="profile-open-btn js-profile-open" data-route="{{ route('nurse.examine', $index) }}" data-record='@json($prototypeRecord)'>View Profile</button>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="7" class="muted">No School Health Card prototype submissions yet for your assigned class.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </article>
         </section>
 
         <section id="prototype-form-panel" class="card section section-panel active" style="margin-top:12px;">
@@ -249,103 +303,59 @@
 </div>
 
 <div class="profile-backdrop" id="profileBackdrop" aria-hidden="true">
-    <div class="profile-modal" role="dialog" aria-modal="true" aria-label="Student Health Record Preview">
-        <div class="profile-head">
+    <div class="profile-modal student-profile-modal" role="dialog" aria-modal="true" aria-label="Student Profile">
+        <div class="student-profile-topline">
+            <button type="button" class="student-profile-back" id="profileClose">&larr;</button>
             <div>
-                <div class="profile-title" id="pName">-</div>
-                <div class="profile-meta" id="pLrn">LRN: -</div>
+                <div class="student-profile-titleline">Student Profile</div>
+                <div class="student-profile-subline">Health Record (Adviser Entry)</div>
             </div>
-            <div class="profile-right">Grade &amp; Section<b id="pGrade">-</b></div>
         </div>
-        <div class="profile-tabs">
-            <button type="button" class="profile-tab active" data-panel="p-demographics">Demographics</button>
-            <button type="button" class="profile-tab" data-panel="p-shd">SHD Form 2</button>
-            <button type="button" class="profile-tab" data-panel="p-growth">Growth &amp; Nutrition</button>
-            <button type="button" class="profile-tab" data-panel="p-alerts">Medical Alerts</button>
-            <button type="button" class="profile-tab" data-panel="p-timeline">Health Timeline</button>
+
+        <div class="student-profile-hero">
+            <div>
+                <div class="student-profile-name" id="vpName">-</div>
+                <div class="student-profile-lrn" id="vpLrn">LRN: -</div>
+            </div>
+            <span class="my-status-badge status-pending" id="vpStatusBadge">Pending Nurse Review</span>
         </div>
-        <div class="profile-body">
-            <section id="p-demographics" class="profile-panel active">
-                <div class="profile-grid">
-                    <div class="profile-block">
-                        <h4>Personal Information</h4>
-                        <div class="kv"><div class="k">Full Name:</div><div class="v" id="pdName">-</div></div>
-                        <div class="kv"><div class="k">LRN:</div><div class="v" id="pdLrn">-</div></div>
-                        <div class="kv"><div class="k">Date of Birth:</div><div class="v" id="pdDob">-</div></div>
-                        <div class="kv"><div class="k">Birthplace:</div><div class="v" id="pdBirthplace">-</div></div>
-                        <div class="kv"><div class="k">Address:</div><div class="v" id="pdAddress">-</div></div>
-                    </div>
-                    <div class="profile-block">
-                        <h4>Parent/Guardian Information</h4>
-                        <div class="kv"><div class="k">Parent/Guardian:</div><div class="v" id="pdGuardian">-</div></div>
-                        <div class="kv"><div class="k">Contact Number:</div><div class="v" id="pdContact">-</div></div>
-                        <div class="kv"><div class="k">School ID:</div><div class="v" id="pdSchoolId">-</div></div>
-                        <div class="kv"><div class="k">Region/Division:</div><div class="v" id="pdRegionDivision">-</div></div>
-                    </div>
+
+        <div class="student-profile-body">
+            <section class="student-profile-section">
+                <h4>Student Information</h4>
+                <div class="student-profile-grid">
+                    <div><span>Date of Birth:</span><b id="vpDob">-</b></div>
+                    <div><span>Birthplace:</span><b id="vpBirthplace">-</b></div>
+                    <div><span>Gender:</span><b id="vpGender">-</b></div>
+                    <div><span>Grade &amp; Section:</span><b id="vpGradeSection">-</b></div>
                 </div>
             </section>
-            <section id="p-shd" class="profile-panel">
-                <div class="profile-block">
-                    <h4>SHD Form 2 Snapshot</h4>
-                    <div class="kv"><div class="k">Grade Level:</div><div class="v" id="psGrade">-</div></div>
-                    <div class="kv"><div class="k">Status:</div><div class="v" id="psStatus">-</div></div>
-                    <div class="kv"><div class="k">BMI:</div><div class="v" id="psBmi">-</div></div>
-                    <div class="kv"><div class="k">BMI for Age:</div><div class="v" id="psBmiForAge">-</div></div>
-                    <div class="kv"><div class="k">Height for Age:</div><div class="v" id="psHeightForAge">-</div></div>
+
+            <section class="student-profile-section">
+                <h4>Parent/Guardian</h4>
+                <div class="student-profile-grid">
+                    <div><span>Name:</span><b id="vpGuardian">-</b></div>
+                    <div><span>Contact Number:</span><b id="vpContact">-</b></div>
+                    <div class="full"><span>Address:</span><b id="vpAddress">-</b></div>
                 </div>
             </section>
-            <section id="p-growth" class="profile-panel">
-                <div class="profile-block">
-                    <h4>Growth &amp; Nutrition</h4>
-                    <div class="growth-wrap">
-                        <div class="growth-card">
-                            <h5>BMI Trend: Baseline to Endline</h5>
-                            <svg class="growth-chart" viewBox="0 0 380 170" preserveAspectRatio="none" aria-label="Baseline to endline BMI chart">
-                                <line class="growth-chart-axis" x1="40" y1="140" x2="350" y2="140"></line>
-                                <line class="growth-chart-axis" x1="40" y1="20" x2="40" y2="140"></line>
-                                <polyline id="pgTrendLine" class="growth-chart-line" points="80,120 300,100"></polyline>
-                                <circle id="pgBaseDot" class="growth-chart-dot" cx="80" cy="120" r="5"></circle>
-                                <circle id="pgEndDot" class="growth-chart-dot end" cx="300" cy="100" r="5"></circle>
-                                <text id="pgBasePointText" class="growth-point-label" x="54" y="112">Baseline</text>
-                                <text id="pgEndPointText" class="growth-point-label" x="276" y="92">Endline</text>
-                            </svg>
-                            <div class="growth-metrics">
-                                <div class="growth-metric">
-                                    <div class="lbl">Baseline BMI</div>
-                                    <div class="val" id="pgBaseBmi">-</div>
-                                </div>
-                                <div class="growth-metric">
-                                    <div class="lbl">Endline BMI</div>
-                                    <div class="val" id="pgEndBmi">-</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="growth-card">
-                            <h5>Monthly Attendance</h5>
-                            <div class="attendance-bars" id="pgAttendanceBars" aria-label="Monthly attendance chart"></div>
-                            <div class="kv" style="margin-top:8px"><div class="k">Latest Attendance Month:</div><div class="v" id="pgAttendanceLatest">-</div></div>
-                            <div class="kv"><div class="k">Total Recorded Sessions:</div><div class="v" id="pgAttendanceTotal">-</div></div>
-                        </div>
-                    </div>
+
+            <section class="student-profile-section">
+                <h4>Health Data (Baseline) - Adviser Entry</h4>
+                <div class="student-profile-grid metrics">
+                    <div><span>Weight:</span><b id="vpWeight">-</b></div>
+                    <div><span>Height:</span><b id="vpHeight">-</b></div>
+                    <div><span>(Height)<sup>2</sup>:</span><b id="vpHeightSquared">-</b></div>
+                    <div><span>BMI:</span><b id="vpBmi">-</b></div>
+                    <div><span>Nutritional Status:</span><b id="vpNutri">-</b></div>
+                    <div><span>Height-for-Age:</span><b id="vpHfa">-</b></div>
                 </div>
             </section>
-            <section id="p-alerts" class="profile-panel">
-                <div class="profile-block">
-                    <h4>Medical Alerts</h4>
-                    <div class="kv"><div class="k">Current Note:</div><div class="v" id="paStatus">Pending nurse review.</div></div>
-                </div>
+
+            <section class="pending-note-box" id="vpPendingBox">
+                <h5>Pending Nurse Review</h5>
+                <p>This student's health record is pending completion by the school nurse.</p>
             </section>
-            <section id="p-timeline" class="profile-panel">
-                <div class="profile-block">
-                    <h4>Health Timeline</h4>
-                    <div class="kv"><div class="k">Submission:</div><div class="v">Class Adviser submitted this form.</div></div>
-                    <div class="kv"><div class="k">Next Step:</div><div class="v" id="ptNext">Nurse examination pending.</div></div>
-                </div>
-            </section>
-        </div>
-        <div class="profile-actions">
-            <button type="button" class="btn btn-secondary" id="profileClose">Close</button>
-            <a href="#" class="btn" id="profileFillLink">Fill Medical Record</a>
         </div>
     </div>
 </div>
@@ -379,6 +389,12 @@
             }
         });
     });
+
+    const tabParam = new URLSearchParams(window.location.search).get('tab');
+    if (tabParam === 'saved') {
+        const savedLink = document.querySelector('.js-proto-nav[data-target="prototype-saved-panel"]');
+        savedLink?.click();
+    }
 })();
 
 (() => {
@@ -643,12 +659,71 @@
 })();
 
 (() => {
+    const dateNode = document.getElementById('myStudentsDate');
+    if (!dateNode) {
+        return;
+    }
+
+    dateNode.textContent = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+    });
+})();
+
+(() => {
+    const searchInput = document.getElementById('studentsSearch');
+    const statusSelect = document.getElementById('studentsStatusFilter');
+    const clearBtn = document.getElementById('studentsClearBtn');
+    const rows = Array.from(document.querySelectorAll('.js-student-row'));
+
+    if (!searchInput || !statusSelect || !clearBtn || !rows.length) {
+        return;
+    }
+
+    const applyFilters = () => {
+        const keyword = searchInput.value.trim().toLowerCase();
+        const status = statusSelect.value;
+
+        rows.forEach((row) => {
+            const name = row.getAttribute('data-name') || '';
+            const lrn = row.getAttribute('data-lrn') || '';
+            const rowStatus = row.getAttribute('data-status') || '';
+            const keywordMatch = !keyword || name.includes(keyword) || lrn.includes(keyword);
+            const statusMatch = status === 'all' || rowStatus === status;
+
+            row.style.display = keywordMatch && statusMatch ? '' : 'none';
+        });
+    };
+
+    searchInput.addEventListener('input', applyFilters);
+    statusSelect.addEventListener('change', applyFilters);
+    clearBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        statusSelect.value = 'all';
+        applyFilters();
+    });
+})();
+
+(() => {
+    const addBtn = document.getElementById('openAddStudentBtn');
+    const target = document.querySelector('.js-proto-nav[data-target="prototype-form-panel"]');
+
+    if (!addBtn || !target) {
+        return;
+    }
+
+    addBtn.addEventListener('click', () => {
+        target.click();
+    });
+})();
+
+(() => {
     const openButtons = Array.from(document.querySelectorAll('.js-profile-open'));
     const backdrop = document.getElementById('profileBackdrop');
     const closeBtn = document.getElementById('profileClose');
-    const fillLink = document.getElementById('profileFillLink');
 
-    if (!openButtons.length || !backdrop || !closeBtn || !fillLink) {
+    if (!openButtons.length || !backdrop || !closeBtn) {
         return;
     }
 
@@ -675,72 +750,6 @@
         return weight / (meters * meters);
     };
 
-    const renderTrendGraph = (baselineBmi, endlineBmi) => {
-        const line = document.getElementById('pgTrendLine');
-        const baseDot = document.getElementById('pgBaseDot');
-        const endDot = document.getElementById('pgEndDot');
-        const baseText = document.getElementById('pgBasePointText');
-        const endText = document.getElementById('pgEndPointText');
-
-        if (!line || !baseDot || !endDot || !baseText || !endText) {
-            return;
-        }
-
-        const safeBase = baselineBmi ?? 0;
-        const safeEnd = endlineBmi ?? safeBase;
-        const maxBmi = Math.max(30, safeBase + 2, safeEnd + 2);
-        const toY = (value) => {
-            const ratio = Math.max(0, Math.min(1, value / maxBmi));
-            return 140 - (ratio * 110);
-        };
-
-        const baseY = toY(safeBase);
-        const endY = toY(safeEnd);
-
-        line.setAttribute('points', `80,${baseY} 300,${endY}`);
-        baseDot.setAttribute('cy', String(baseY));
-        endDot.setAttribute('cy', String(endY));
-        baseText.setAttribute('y', String(baseY - 10));
-        endText.setAttribute('y', String(endY - 10));
-        baseText.textContent = `Baseline ${baselineBmi ? baselineBmi.toFixed(1) : '-'}`;
-        endText.textContent = `Endline ${endlineBmi ? endlineBmi.toFixed(1) : '-'}`;
-    };
-
-    const renderAttendanceBars = (attendanceByMonth) => {
-        const barsWrap = document.getElementById('pgAttendanceBars');
-        const latestNode = document.getElementById('pgAttendanceLatest');
-        const totalNode = document.getElementById('pgAttendanceTotal');
-
-        if (!barsWrap || !latestNode || !totalNode) {
-            return;
-        }
-
-        const entries = Object.entries(attendanceByMonth || {})
-            .filter(([, count]) => Number(count) >= 0)
-            .sort(([a], [b]) => a.localeCompare(b));
-
-        barsWrap.innerHTML = '';
-
-        const chartEntries = entries.length ? entries.slice(-6) : [[new Date().toISOString().slice(0, 7), 0]];
-        const maxCount = Math.max(1, ...chartEntries.map(([, count]) => Number(count) || 0));
-        const total = chartEntries.reduce((sum, [, count]) => sum + (Number(count) || 0), 0);
-
-        chartEntries.forEach(([month, count]) => {
-            const value = Number(count) || 0;
-            const monthLabel = month.slice(2);
-            const height = Math.max(6, Math.round((value / maxCount) * 90));
-
-            const col = document.createElement('div');
-            col.className = 'attendance-col';
-            col.innerHTML = `<div class="attendance-bar" style="height:${height}px"></div><div class="attendance-month">${monthLabel}</div><div class="attendance-val">${value}</div>`;
-            barsWrap.appendChild(col);
-        });
-
-        const latest = chartEntries[chartEntries.length - 1];
-        setText('pgAttendanceLatest', `${latest[0]} (${latest[1]} session${Number(latest[1]) === 1 ? '' : 's'})`);
-        setText('pgAttendanceTotal', `${total}`);
-    };
-
     const openProfile = (record, route) => {
         const fullName = [record.last_name, ',', record.first_name, record.middle_name ? (' ' + String(record.middle_name).charAt(0).toUpperCase() + '.') : '']
             .join(' ')
@@ -749,48 +758,46 @@
             .trim();
         const dob = [record.birth_year, record.birth_month, record.birth_day].filter(Boolean).join('-');
         const examined = record.examination && Object.keys(record.examination).length > 0;
+        const heightCm = toNumber(record.height_cm);
+        const weightKg = toNumber(record.weight_kg);
+        const bmi = record.bmi_value ? Number(record.bmi_value) : computeBmi(heightCm, weightKg);
+        const heightM = heightCm ? (heightCm / 100) : null;
+        const heightSquared = heightM ? (heightM * heightM) : null;
+        const statusBadge = document.getElementById('vpStatusBadge');
+        const pendingBox = document.getElementById('vpPendingBox');
 
-        setText('pName', fullName || '-');
-        setText('pLrn', 'LRN: ' + (record.lrn || '-'));
-        setText('pGrade', [record.grade_level, record.section].filter(Boolean).join(' / ') || '-');
+        setText('vpName', fullName || '-');
+        setText('vpLrn', 'LRN: ' + (record.lrn || '-'));
+        setText('vpDob', dob || '-');
+        setText('vpBirthplace', record.birthplace || '-');
+        setText('vpGender', record.gender || '-');
+        setText('vpGradeSection', [record.grade_level, record.section].filter(Boolean).join(' - ') || '-');
 
-        setText('pdName', fullName || '-');
-        setText('pdLrn', record.lrn || '-');
-        setText('pdDob', dob || '-');
-        setText('pdBirthplace', record.birthplace || '-');
-        setText('pdAddress', record.address || '-');
-        setText('pdGuardian', record.parent_guardian || '-');
-        setText('pdContact', record.telephone_no || '-');
-        setText('pdSchoolId', record.school_id || '-');
-        setText('pdRegionDivision', [record.region, record.division].filter(Boolean).join(' / ') || '-');
+        setText('vpGuardian', record.parent_guardian || '-');
+        setText('vpContact', record.telephone_no || '-');
+        setText('vpAddress', record.address || '-');
 
-        setText('psGrade', record.grade_level || '-');
-        setText('psStatus', examined ? 'Examined by Nurse' : 'Pending');
-        setText('psBmi', record.bmi_value || '-');
-        setText('psBmiForAge', record.nutritional_status_bmi_for_age || '-');
-        setText('psHeightForAge', record.nutritional_status_height_for_age || '-');
+        setText('vpWeight', weightKg ? `${weightKg} kg` : '-');
+        setText('vpHeight', heightM ? `${heightM.toFixed(2)} m` : '-');
+        setText('vpHeightSquared', heightSquared ? heightSquared.toFixed(4) : '-');
+        setText('vpBmi', bmi ? bmi.toFixed(1) : '-');
+        setText('vpNutri', record.nutritional_status_bmi_for_age || '-');
+        setText('vpHfa', record.nutritional_status_height_for_age || '-');
 
-        const baselineSnapshot = record.baseline_snapshot || {};
-        const endlineSnapshot = record.endline_snapshot || {};
-        const examData = record.examination || {};
+        if (statusBadge) {
+            if (examined) {
+                statusBadge.textContent = 'Complete Record';
+                statusBadge.className = 'my-status-badge status-complete';
+            } else {
+                statusBadge.textContent = 'Pending Nurse Review';
+                statusBadge.className = 'my-status-badge status-pending';
+            }
+        }
 
-        const baselineHeight = baselineSnapshot.height_cm ?? record.height_cm;
-        const baselineWeight = baselineSnapshot.weight_kg ?? record.weight_kg;
-        const endlineHeight = endlineSnapshot.height_cm ?? examData.height_cm ?? record.height_cm;
-        const endlineWeight = endlineSnapshot.weight_kg ?? examData.weight_kg ?? record.weight_kg;
+        if (pendingBox) {
+            pendingBox.style.display = examined ? 'none' : 'block';
+        }
 
-        const baselineBmi = computeBmi(baselineHeight, baselineWeight);
-        const endlineBmi = computeBmi(endlineHeight, endlineWeight);
-
-        setText('pgBaseBmi', baselineBmi ? baselineBmi.toFixed(1) : '-');
-        setText('pgEndBmi', endlineBmi ? endlineBmi.toFixed(1) : '-');
-        renderTrendGraph(baselineBmi, endlineBmi);
-        renderAttendanceBars(record.attendance_by_month || {});
-
-        setText('paStatus', examined ? 'Nurse examination details are available.' : 'Pending nurse review.');
-        setText('ptNext', examined ? 'Record completed by nurse.' : 'Nurse examination pending.');
-
-        fillLink.setAttribute('href', route || '#');
         backdrop.classList.add('open');
         backdrop.setAttribute('aria-hidden', 'false');
     };
@@ -817,21 +824,6 @@
         if (event.target === backdrop) {
             closeProfile();
         }
-    });
-
-    const tabs = Array.from(document.querySelectorAll('.profile-tab'));
-    const panels = Array.from(document.querySelectorAll('.profile-panel'));
-    tabs.forEach((tab) => {
-        tab.addEventListener('click', () => {
-            const target = tab.getAttribute('data-panel');
-            tabs.forEach((t) => t.classList.remove('active'));
-            panels.forEach((p) => p.classList.remove('active'));
-            tab.classList.add('active');
-            const panel = document.getElementById(target || '');
-            if (panel) {
-                panel.classList.add('active');
-            }
-        });
     });
 })();
 </script>

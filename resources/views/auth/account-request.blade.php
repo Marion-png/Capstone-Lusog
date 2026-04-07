@@ -162,8 +162,78 @@
                         </select>
                     </div>
                     <div class="field full" id="schoolField">
-                        <label for="school_name">School (School Nurse, Clinic Staff, School Head)</label>
-                        <input id="school_name" name="school_name" type="text" value="{{ old('school_name') }}" placeholder="e.g. Del Carmen National High School">
+                        <label for="school_name">School (School Nurse, Clinic Staff, School Head, Class Adviser)</label>
+                        @php
+                            $davaoSchools = [
+                                'Aurora Quebral Elementary School',
+                                'New Tawas Elementary School',
+                                'Kiopao Elementary School',
+                                'Paraiso Elementary School',
+                                'Makatao Elementary School',
+                                'Datas Elementary School',
+                                'Datu Timawa Elementary School',
+                                'Datu Ansayod Elementary School',
+                                'Balah Licosan Elementary School',
+                                'Maluan Elementary School',
+                                'Kidali ES',
+                                'Dumalogdog E/S',
+                                'Congressman Manuel M. Garcia Elementary School',
+                                'Baguio Central Elementary School',
+                                'Bala ES',
+                                'Dominga ES',
+                                'Darila ES',
+                                'Cabagtukan ES',
+                                'Cabagbahangan Elementary School',
+                                'Wireless ES',
+                                'T. Palma Elementary School',
+                                'Vicenta C. Nograles National High School',
+                                'Lorenzo Latawan National High School',
+                                'Tungkalan National High School',
+                                'Tacunan National High School',
+                                'Salaysay National High School',
+                                'Magtuod National High School',
+                                'Catigan National High School',
+                                'A. L. Navarro National High School',
+                                'Ma. Cristina P. Belcar Agricultural High School',
+                                'Baguio National School of Arts and Trades',
+                                'Elias P. Dacudao Gumalang School of Home Industries',
+                                'Bernardo D. Carpio National High School',
+                                'Cabantian National High School',
+                                'Biao National High School',
+                                'Porferio L. Antipala National High School',
+                                'Binowang National High School',
+                                'Binugao National High School',
+                                'Baracatan National High School',
+                                'Buda National High School',
+                                'Calinan National High School',
+                                'Wangan National High School',
+                                'Crossing Bayabas National High School',
+                                'Elias B. Lopez Memorial National High School',
+                                'Dacudao National High School',
+                                'Daniel R. Aguinaldo National High School',
+                                'Davao City National High School',
+                                'Doña Carmen Denia National High School',
+                                'J. V. Ferriols National High School',
+                                'Davao City Special National High School',
+                                'E. Ramos National High School',
+                                'Erico T. Nograres National High School',
+                                'F. Bangoy National High School',
+                                'Dr. Santiago Dakudao Sr. National High School',
+                                'F. Bustamante National High School',
+                                'Gorgonio Tajo, Sr. National High School',
+                                'Teofilo V. Fernandez National High School',
+                                'Lamanan National High School',
+                                'Saloy National High School',
+                            ];
+                            $sortedSchools = $davaoSchools;
+                            sort($sortedSchools, SORT_NATURAL | SORT_FLAG_CASE);
+                        @endphp
+                        <select id="school_name" name="school_name">
+                            <option value="" disabled {{ old('school_name') ? '' : 'selected' }}>Select school</option>
+                            @foreach ($sortedSchools as $school)
+                                <option value="{{ $school }}" {{ old('school_name') === $school ? 'selected' : '' }}>{{ $school }}</option>
+                            @endforeach
+                        </select>
                     </div>
                     <div class="field" id="gradeField">
                         <label for="assigned_grade_level">Assigned Grade Level</label>
@@ -212,7 +282,7 @@
 
         const syncRoleFields = function () {
             const isClassAdviser = roleSelect.value === 'class_adviser';
-            const requiresSchool = ['school_nurse', 'clinic_staff', 'school_head'].includes(roleSelect.value);
+            const requiresSchool = ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser'].includes(roleSelect.value);
 
             schoolField.style.display = requiresSchool ? '' : 'none';
             gradeField.style.display = isClassAdviser ? '' : 'none';
@@ -242,7 +312,7 @@
             gradeSelect.setCustomValidity('');
             sectionInput.setCustomValidity('');
         });
-        schoolInput.addEventListener('input', function () {
+        schoolInput.addEventListener('change', function () {
             schoolInput.setCustomValidity('');
         });
         sectionInput.addEventListener('input', function () {
@@ -251,7 +321,7 @@
 
         requestForm.addEventListener('submit', function (event) {
             const isClassAdviser = roleSelect.value === 'class_adviser';
-            const requiresSchool = ['school_nurse', 'clinic_staff', 'school_head'].includes(roleSelect.value);
+            const requiresSchool = ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser'].includes(roleSelect.value);
 
             if (requiresSchool) {
                 if (!schoolInput.value.trim()) {
