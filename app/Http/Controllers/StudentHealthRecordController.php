@@ -271,7 +271,7 @@ class StudentHealthRecordController extends Controller
         return back()->with('success', 'Endline record saved. BMI comparison is now available.');
     }
 
-    public function feedingHealthRecords(): View
+    public function feedingHealthRecords(Request $request): View
     {
         $records = collect();
 
@@ -281,6 +281,42 @@ class StudentHealthRecordController extends Controller
                 ->orderBy('student_name')
                 ->get();
         }
+
+        $sessionAtRiskRecords = collect($request->session()->get('school_health_card_records', []))
+            ->filter(function (array $row): bool {
+                $status = strtolower((string) ($row['nutritional_status_bmi_for_age'] ?? ''));
+                return str_contains($status, 'wasted') || str_contains($status, 'underweight');
+            })
+            ->map(function (array $row): object {
+                $middle = trim((string) ($row['middle_name'] ?? ''));
+                $middleInitial = $middle !== '' ? (' ' . strtoupper(substr($middle, 0, 1)) . '.') : '';
+                $fullName = trim((string) ($row['last_name'] ?? '') . ', ' . (string) ($row['first_name'] ?? '') . $middleInitial);
+
+                $baselineStatus = (string) ($row['nutritional_status_bmi_for_age'] ?? '');
+                $baselineBmi = is_numeric($row['bmi_value'] ?? null) ? (float) $row['bmi_value'] : null;
+
+                $endlineBmiRaw = data_get($row, 'endline_snapshot.bmi_value');
+                if (!is_numeric($endlineBmiRaw)) {
+                    $endlineWeight = data_get($row, 'endline_snapshot.weight_kg');
+                    $heightCm = $row['height_cm'] ?? null;
+                    if (is_numeric($endlineWeight) && is_numeric($heightCm) && (float) $heightCm > 0) {
+                        $heightMeters = ((float) $heightCm) / 100;
+                        $endlineBmiRaw = round(((float) $endlineWeight) / ($heightMeters * $heightMeters), 2);
+                    }
+                }
+
+                return (object) [
+                    'student_name' => $fullName !== '' ? $fullName : ((string) ($row['first_name'] ?? 'Unknown Student')),
+                    'section' => trim((string) ($row['grade_level'] ?? '') . ' / ' . (string) ($row['section'] ?? '')),
+                    'baseline_bmi_value' => $baselineBmi,
+                    'baseline_nutritional_status' => $baselineStatus,
+                    'endline_bmi_value' => is_numeric($endlineBmiRaw) ? (float) $endlineBmiRaw : null,
+                    'endline_nutritional_status' => data_get($row, 'endline_snapshot.nutritional_status_bmi'),
+                    'nutritional_status' => $baselineStatus,
+                ];
+            });
+
+        $records = $records->concat($sessionAtRiskRecords)->values();
 
         $statusCounts = [
             'severely_wasted' => 0,
@@ -295,7 +331,7 @@ class StudentHealthRecordController extends Controller
         }
 
         $sectionSummary = $records
-            ->groupBy(fn (StudentHealthRecord $record) => $record->section ?: 'Unassigned')
+            ->groupBy(fn ($record) => (string) ($record->section ?: 'Unassigned'))
             ->map(function ($sectionRows, string $section): array {
                 $counts = [
                     'severely_wasted' => 0,
@@ -369,7 +405,7 @@ class StudentHealthRecordController extends Controller
         if (str_contains($normalized, 'severe')) {
             return 'severely_wasted';
         }
-        if (str_contains($normalized, 'wast')) {
+        if (str_contains($normalized, 'wast') || str_contains($normalized, 'underweight')) {
             return 'wasted';
         }
         if (str_contains($normalized, 'over')) {
