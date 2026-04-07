@@ -22,6 +22,7 @@ class CsvUploadController extends Controller
             StudentHealthRecord::create([
                 'student_name' => $row['Student Name'] ?? $row['student_name'] ?? '',
                 'student_id' => $row['Student ID'] ?? $row['student_id'] ?? '',
+                'school_name' => $row['School Name'] ?? $row['School'] ?? $row['school_name'] ?? $row['school'] ?? null,
                 'section' => $row['Section'] ?? $row['section'] ?? '',
                 'weight' => (float) ($row['Weight (kg)'] ?? $row['weight'] ?? 0),
                 'bmi_value' => (float) ($row['BMI Value'] ?? $row['bmi_value'] ?? 0),

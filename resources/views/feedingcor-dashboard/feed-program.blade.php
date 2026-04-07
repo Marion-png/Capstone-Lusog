@@ -123,6 +123,32 @@
 		.page-sub { margin-top: 5px; font-size: .76rem; color: var(--text-3); }
 
 		.actions { display: flex; gap: 10px; }
+		.school-filter-form {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			margin-top: 10px;
+		}
+		.school-filter-label {
+			font-size: .76rem;
+			font-weight: 700;
+			color: var(--text-2);
+		}
+		.school-filter-select {
+			appearance: none;
+			min-width: 220px;
+			padding: 8px 32px 8px 10px;
+			border: 1px solid #cfdfd9;
+			border-radius: 10px;
+			background: #fff;
+			font-size: .76rem;
+			font-weight: 600;
+			color: #2f4e45;
+			background-image: linear-gradient(45deg, transparent 50%, #7d918c 50%), linear-gradient(135deg, #7d918c 50%, transparent 50%);
+			background-position: calc(100% - 16px) 52%, calc(100% - 11px) 52%;
+			background-size: 5px 5px, 5px 5px;
+			background-repeat: no-repeat;
+		}
 		.btn {
 			appearance: none;
 			border: 1px solid transparent;
@@ -387,6 +413,30 @@
 		}
 
 		.encode-help { font-size: .73rem; color: #607a72; margin-bottom: 10px; }
+		.encode-toolbar,
+		.overview-toolbar {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 10px;
+			margin-bottom: 10px;
+		}
+		.encode-toolbar-note,
+		.overview-toolbar-note {
+			font-size: .72rem;
+			color: #5d7a71;
+		}
+		.mode-toggle {
+			border: 1px solid #c8ddd4;
+			background: #eff8f3;
+			color: #1f4f42;
+			padding: 7px 10px;
+			border-radius: 10px;
+			font-size: .71rem;
+			font-weight: 700;
+			cursor: pointer;
+		}
+		.mode-toggle:hover { background: #e1f3ea; }
 		.form1-meta {
 			display: none;
 			grid-template-columns: 1fr 1fr;
@@ -449,6 +499,7 @@
 		.encode-inline-btn { border: 1px solid #d7e1dd; background: #fff; color: #31564d; padding: 6px 10px; border-radius: 8px; font-size: .68rem; font-weight: 700; cursor: pointer; }
 		.encode-inline-btn:hover { background: #f3f8f6; }
 		.encode-add-row { margin-top: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 10px; font-size: .72rem; }
+		.column-hidden { display: none; }
 
 		@media (max-width: 1050px) {
 			.stats { grid-template-columns: repeat(2, minmax(0,1fr)); }
@@ -462,6 +513,8 @@
 			.forms-grid { grid-template-columns: 1fr; }
 			.actions { width: 100%; }
 			.btn { flex: 1; }
+			.school-filter-form { flex-direction: column; align-items: stretch; }
+			.school-filter-select { width: 100%; min-width: 0; }
 			.table-card { overflow-x: auto; }
 			table { min-width: 760px; }
 			.encode-grid { min-width: 760px; }
@@ -515,7 +568,6 @@
 <div class="main">
 	<header class="topbar">
 		<div class="topbar-bc"><span>Dashboard</span><span>&gt;</span><span>Feeding Program</span></div>
-		<div class="topbar-chip"><div class="dot"></div>Monitoring Active</div>
 	</header>
 
 	<div class="content">
@@ -531,6 +583,17 @@
 				<div class="page-eyebrow">Feeding Program</div>
 				<h1 class="page-title">Feeding <span>Program</span></h1>
 				<p class="page-sub">120-Day Supplementary Feeding Program tracking.</p>
+				@if ($hasSchoolColumn)
+					<form method="GET" action="{{ route('dashboard.feedingcor-program') }}" class="school-filter-form">
+						<label for="schoolFilterSelect" class="school-filter-label">School:</label>
+						<select id="schoolFilterSelect" name="school" class="school-filter-select" onchange="this.form.submit()">
+							<option value="all" {{ ($selectedSchool ?? 'all') === 'all' ? 'selected' : '' }}>All Schools</option>
+							@foreach (($schoolOptions ?? collect()) as $schoolOption)
+								<option value="{{ $schoolOption }}" {{ ($selectedSchool ?? 'all') === $schoolOption ? 'selected' : '' }}>{{ $schoolOption }}</option>
+							@endforeach
+						</select>
+					</form>
+				@endif
 			</div>
 			<div class="actions">
 				<button type="button" class="btn btn-ghost" id="recordAttendanceBtn">Record Attendance</button>
@@ -646,6 +709,10 @@
 		<section class="table-section view-panel" id="overviewSection">
 			<h2 class="table-title" id="selectedFormTitle">Enrolled Students</h2>
 			<div class="table-card">
+				<div class="overview-toolbar">
+					<div class="overview-toolbar-note" id="overviewToolbarNote">Simple View is on. Only key columns are shown.</div>
+					<button type="button" class="mode-toggle" id="toggleOverviewModeBtn" aria-pressed="false">Show Full Template</button>
+				</div>
 				<table id="overviewTable">
 					<thead id="overviewTableHead">
 						<tr>
@@ -713,6 +780,7 @@
 		</div>
 		<form method="POST" action="{{ route('feedingcor-program.attendance.store') }}" id="attendanceForm">
 			@csrf
+			<input type="hidden" name="school" value="{{ $selectedSchool ?? 'all' }}">
 			<div class="modal-body">
 				<div class="weight-item">
 					<div class="weight-label">Session Date</div>
@@ -756,6 +824,10 @@
 					<div class="weight-label" id="encodeFormLabel">Form</div>
 				</div>
 				<p class="encode-help">Encode data directly using the official form columns below. Rows saved here are shown in Overview.</p>
+				<div class="encode-toolbar">
+					<div class="encode-toolbar-note" id="encodeToolbarNote">Simple View is on. Fill only key fields first.</div>
+					<button type="button" class="mode-toggle" id="toggleEncodeModeBtn" aria-pressed="false">Show Full Template</button>
+				</div>
 				<div class="form1-meta" id="form1MetaSection">
 					<div class="form1-meta-item"><label for="metaDivision">Division/Province:</label><input id="metaDivision" data-meta-field="division" type="text"></div>
 					<div class="form1-meta-item"><label for="metaPrincipal">Name of Principal:</label><input id="metaPrincipal" data-meta-field="principal" type="text"></div>
@@ -842,6 +914,10 @@
 	const encodeGridHead = document.getElementById('encodeGridHead');
 	const encodeGridBody = document.getElementById('encodeGridBody');
 	const addEncodeRowBtn = document.getElementById('addEncodeRowBtn');
+	const toggleEncodeModeBtn = document.getElementById('toggleEncodeModeBtn');
+	const toggleOverviewModeBtn = document.getElementById('toggleOverviewModeBtn');
+	const encodeToolbarNote = document.getElementById('encodeToolbarNote');
+	const overviewToolbarNote = document.getElementById('overviewToolbarNote');
 	const form1MetaSection = document.getElementById('form1MetaSection');
 	const form1MetaInputs = Array.from(document.querySelectorAll('[data-meta-field]'));
 	const openBtn = document.getElementById('openWeightsModal');
@@ -868,6 +944,20 @@
 	const liveStudents = @json($liveStudentsPayload);
 	const enrolledStudentsValue = document.getElementById('enrolledStudentsValue');
 	const avgAttendanceValue = document.getElementById('avgAttendanceValue');
+	let simpleEncodeMode = true;
+	let simpleOverviewMode = true;
+
+	const simpleColumnMap = {
+		form1: [0, 1, 2, 3, 6, 7, 8, 9, 10, 11],
+		form2: [0, 1, 4],
+		form3: [0, 1, 2],
+		form4: [0, 1, 2, 3],
+		form5: [0, 2, 4],
+		milk5: [0, 1, 2],
+		form6: [0, 1, 2],
+		form7: [0, 1, 2, 5],
+		form8: [0, 3, 5],
+	};
 
 	const baseStudents = liveStudents.map((student) => [student.name, student.section]);
 
@@ -1169,28 +1259,72 @@
 		const actionCell = includeAction ? '<th class="gov-head" rowspan="2">Action</th>' : '';
 		return `
 			<tr>
-				<th class="gov-head" rowspan="2">No.</th>
-				<th class="gov-head" rowspan="2">Name</th>
-				<th class="gov-head" rowspan="2">Sex</th>
-				<th class="gov-head" rowspan="2">Grade/ Section</th>
-				<th class="gov-head" rowspan="2">Date of Birth<br>(MM/DD/YYYY)</th>
-				<th class="gov-head" rowspan="2">Date of Weighing / Measuring<br>(MM/DD/YYYY)</th>
-				<th class="gov-head" rowspan="2">Age in Years / Months</th>
-				<th class="gov-head" rowspan="2">Weight<br>(Kg)</th>
-				<th class="gov-head" rowspan="2">Height<br>(cm)</th>
-				<th class="gov-head" rowspan="2">BMI for 6 y.o.<br>and above</th>
+				<th class="gov-head" data-col-index="0" rowspan="2">No.</th>
+				<th class="gov-head" data-col-index="1" rowspan="2">Name</th>
+				<th class="gov-head" data-col-index="2" rowspan="2">Sex</th>
+				<th class="gov-head" data-col-index="3" rowspan="2">Grade/ Section</th>
+				<th class="gov-head" data-col-index="4" rowspan="2">Date of Birth<br>(MM/DD/YYYY)</th>
+				<th class="gov-head" data-col-index="5" rowspan="2">Date of Weighing / Measuring<br>(MM/DD/YYYY)</th>
+				<th class="gov-head" data-col-index="6" rowspan="2">Age in Years / Months</th>
+				<th class="gov-head" data-col-index="7" rowspan="2">Weight<br>(Kg)</th>
+				<th class="gov-head" data-col-index="8" rowspan="2">Height<br>(cm)</th>
+				<th class="gov-head" data-col-index="9" rowspan="2">BMI for 6 y.o.<br>and above</th>
 				<th class="gov-head" colspan="2">Nutritional Status (NS)</th>
-				<th class="gov-head" rowspan="2">Dewormed?<br>(yes or no)</th>
-				<th class="gov-head" rowspan="2">Parent's consent for milk?<br>(yes or no)</th>
-				<th class="gov-head" rowspan="2">Participation in 4Ps<br>(yes or no)</th>
-				<th class="gov-head" rowspan="2">Beneficiary of SBFP in Previous Years<br>(yes or no)</th>
+				<th class="gov-head" data-col-index="12" rowspan="2">Dewormed?<br>(yes or no)</th>
+				<th class="gov-head" data-col-index="13" rowspan="2">Parent's consent for milk?<br>(yes or no)</th>
+				<th class="gov-head" data-col-index="14" rowspan="2">Participation in 4Ps<br>(yes or no)</th>
+				<th class="gov-head" data-col-index="15" rowspan="2">Beneficiary of SBFP in Previous Years<br>(yes or no)</th>
 				${actionCell}
 			</tr>
 			<tr>
-				<th class="gov-head gov-subhead">BMI-A</th>
-				<th class="gov-head gov-subhead">HFA</th>
+				<th class="gov-head gov-subhead" data-col-index="10">BMI-A</th>
+				<th class="gov-head gov-subhead" data-col-index="11">HFA</th>
 			</tr>
 		`;
+	};
+
+	const getVisibleColumns = (formKey, isSimpleMode) => {
+		if (!isSimpleMode) {
+			return null;
+		}
+		return simpleColumnMap[formKey] || null;
+	};
+
+	const applyTableColumnVisibility = (tableElement, formKey, isSimpleMode) => {
+		if (!tableElement) {
+			return;
+		}
+
+		const visibleColumns = getVisibleColumns(formKey, isSimpleMode);
+		const visibleLookup = visibleColumns ? new Set(visibleColumns) : null;
+		const nodes = Array.from(tableElement.querySelectorAll('[data-col-index]'));
+
+		nodes.forEach((node) => {
+			const index = Number(node.getAttribute('data-col-index'));
+			const isVisible = !visibleLookup || visibleLookup.has(index);
+			node.classList.toggle('column-hidden', !isVisible);
+		});
+	};
+
+	const updateModeToggleLabels = () => {
+		if (toggleEncodeModeBtn) {
+			toggleEncodeModeBtn.textContent = simpleEncodeMode ? 'Show Full Template' : 'Show Simple View';
+			toggleEncodeModeBtn.setAttribute('aria-pressed', String(!simpleEncodeMode));
+		}
+		if (toggleOverviewModeBtn) {
+			toggleOverviewModeBtn.textContent = simpleOverviewMode ? 'Show Full Template' : 'Show Simple View';
+			toggleOverviewModeBtn.setAttribute('aria-pressed', String(!simpleOverviewMode));
+		}
+		if (encodeToolbarNote) {
+			encodeToolbarNote.textContent = simpleEncodeMode
+				? 'Simple View is on. Fill only key fields first.'
+				: 'Full template is visible. All official columns are available.';
+		}
+		if (overviewToolbarNote) {
+			overviewToolbarNote.textContent = simpleOverviewMode
+				? 'Simple View is on. Only key columns are shown.'
+				: 'Full template is visible. All official columns are shown.';
+		}
 	};
 
 	const buildEncodeHeader = (formKey, headers) => {
@@ -1201,7 +1335,7 @@
 			encodeGridHead.innerHTML = buildForm1HeaderRows(true);
 			return;
 		}
-		encodeGridHead.innerHTML = `<tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')}<th>Action</th></tr>`;
+		encodeGridHead.innerHTML = `<tr>${headers.map((header, index) => `<th data-col-index="${index}">${escapeHtml(header)}</th>`).join('')}<th>Action</th></tr>`;
 	};
 
 	const buildEncodeRow = (formKey, headers, rowValues = []) => {
@@ -1211,7 +1345,7 @@
 			const isComputedStatus = formKey === 'form1' && index === form1BmiAStatusIndex;
 			const isComputedHfa = formKey === 'form1' && index === form1HfaStatusIndex;
 			const readonly = (isComputedBmi || isComputedStatus || isComputedHfa) ? ' readonly' : '';
-			return `<td><input type="text" class="encode-cell-input" data-col-index="${index}" value="${value}"${readonly} /></td>`;
+			return `<td data-col-index="${index}"><input type="text" class="encode-cell-input" data-col-index="${index}" value="${value}"${readonly} /></td>`;
 		});
 		return `<tr>${cells.join('')}<td><div class="encode-row-actions"><button type="button" class="encode-inline-btn" data-remove-row="1">Remove</button></div></td></tr>`;
 	};
@@ -1338,6 +1472,7 @@
 			const liveRows = buildLiveForm4Rows(existingRowsByForm);
 			if (liveRows.length > 0) {
 				encodeGridBody.innerHTML = liveRows.map((row) => buildEncodeRow(formKey, headers, row)).join('');
+				applyTableColumnVisibility(document.querySelector('.encode-grid'), formKey, simpleEncodeMode);
 				return;
 			}
 		}
@@ -1346,12 +1481,14 @@
 			if (formKey === 'form1') {
 				recalcAllForm1Bmi();
 			}
+			applyTableColumnVisibility(document.querySelector('.encode-grid'), formKey, simpleEncodeMode);
 			return;
 		}
 		encodeGridBody.innerHTML = buildEncodeRow(formKey, headers);
 		if (formKey === 'form1') {
 			recalcAllForm1Bmi();
 		}
+		applyTableColumnVisibility(document.querySelector('.encode-grid'), formKey, simpleEncodeMode);
 	};
 
 	const appendEncodeRow = () => {
@@ -1364,6 +1501,7 @@
 		if (key === 'form1') {
 			recalcAllForm1Bmi();
 		}
+		applyTableColumnVisibility(document.querySelector('.encode-grid'), key, simpleEncodeMode);
 	};
 
 	const collectEncodedRows = (formKey) => {
@@ -1473,17 +1611,19 @@
 		if (overviewTableHead) {
 			overviewTableHead.innerHTML = formKey === 'form1'
 				? buildForm1HeaderRows(false)
-				: `<tr>${schema.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')}</tr>`;
+				: `<tr>${schema.headers.map((header, index) => `<th data-col-index="${index}">${escapeHtml(header)}</th>`).join('')}</tr>`;
 		}
 
 		if (overviewTableBody) {
 			overviewTableBody.innerHTML = rowsToRender
 				.map((row) => {
 					const normalizedRow = schema.headers.map((_, index) => (Array.isArray(row) && index < row.length ? row[index] : ''));
-					return `<tr>${normalizedRow.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`;
+					return `<tr>${normalizedRow.map((cell, index) => `<td data-col-index="${index}">${escapeHtml(cell)}</td>`).join('')}</tr>`;
 				})
 				.join('');
 		}
+
+		applyTableColumnVisibility(document.getElementById('overviewTable'), formKey, simpleOverviewMode);
 	};
 
 	const renderForms = () => {
@@ -1549,6 +1689,7 @@
 			encodeFormLabel.textContent = `${selected.code} - ${selected.title}`;
 		}
 		renderEncodeRows(selected.key);
+		updateModeToggleLabels();
 		setModal(encodeFormBackdrop, true);
 	};
 
@@ -1622,6 +1763,24 @@
 			if (encodeButton) {
 				openEncodeForm(encodeButton.dataset.encodeForm);
 			}
+		});
+	}
+
+	if (toggleEncodeModeBtn) {
+		toggleEncodeModeBtn.addEventListener('click', () => {
+			simpleEncodeMode = !simpleEncodeMode;
+			updateModeToggleLabels();
+			const key = encodeTemplateKey ? encodeTemplateKey.value : 'form1';
+			applyTableColumnVisibility(document.querySelector('.encode-grid'), key, simpleEncodeMode);
+		});
+	}
+
+	if (toggleOverviewModeBtn) {
+		toggleOverviewModeBtn.addEventListener('click', () => {
+			simpleOverviewMode = !simpleOverviewMode;
+			updateModeToggleLabels();
+			const key = currentViewedForm || 'form1';
+			applyTableColumnVisibility(document.getElementById('overviewTable'), key, simpleOverviewMode);
 		});
 	}
 
@@ -1773,6 +1932,7 @@
 	setActiveView('forms');
 	syncEnrolledStudentsValue();
 	syncAvgAttendanceValue();
+	updateModeToggleLabels();
 
 	if (!openBtn || !backdrop || !closeBtn || !cancelBtn || !form) {
 		return;

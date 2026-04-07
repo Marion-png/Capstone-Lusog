@@ -12,6 +12,7 @@ class StudentHealthRecord extends Model
     protected $fillable = [
         'student_name',
         'student_id',
+        'school_name',
         'section',
         'weight',
         'bmi_value',

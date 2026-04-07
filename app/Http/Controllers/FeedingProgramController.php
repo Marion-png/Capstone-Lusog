@@ -17,11 +17,39 @@ class FeedingProgramController extends Controller
 	private const PROGRAM_DURATION_DAYS = 120;
 	private const AT_RISK_THRESHOLD_PERCENT = 75;
 
-	public function index(): View
+	public function index(Request $request): View
 	{
+		$hasSchoolColumn = Schema::hasTable('student_health_records')
+			&& Schema::hasColumn('student_health_records', 'school_name');
+		$selectedSchool = trim((string) $request->query('school', 'all'));
+		if ($selectedSchool === '') {
+			$selectedSchool = 'all';
+		}
+
+		$schoolOptions = collect();
+		if ($hasSchoolColumn) {
+			$schoolOptions = StudentHealthRecord::query()
+				->select('school_name')
+				->whereNotNull('school_name')
+				->where('school_name', '!=', '')
+				->distinct()
+				->orderBy('school_name')
+				->pluck('school_name')
+				->values();
+
+			if ($selectedSchool !== 'all' && !$schoolOptions->contains($selectedSchool)) {
+				$selectedSchool = 'all';
+			}
+		}
+
 		$students = collect();
 		if (Schema::hasTable('student_health_records')) {
-			$students = StudentHealthRecord::query()
+			$studentsQuery = StudentHealthRecord::query();
+			if ($hasSchoolColumn && $selectedSchool !== 'all') {
+				$studentsQuery->where('school_name', $selectedSchool);
+			}
+
+			$students = $studentsQuery
 				->orderBy('student_name')
 				->get();
 		}
@@ -105,6 +133,9 @@ class FeedingProgramController extends Controller
 			],
 			'students' => $studentRows,
 			'atRiskStudents' => $atRiskStudents,
+			'schoolOptions' => $schoolOptions,
+			'selectedSchool' => $selectedSchool,
+			'hasSchoolColumn' => $hasSchoolColumn,
 		]);
 	}
 
@@ -114,6 +145,7 @@ class FeedingProgramController extends Controller
 			'session_date' => ['required', 'date', 'before_or_equal:today'],
 			'present_student_ids' => ['nullable', 'array'],
 			'present_student_ids.*' => ['integer', 'exists:student_health_records,id'],
+			'school' => ['nullable', 'string', 'max:255'],
 		]);
 
 		$sessionDate = Carbon::parse((string) $request->input('session_date'))->toDateString();
@@ -126,10 +158,26 @@ class FeedingProgramController extends Controller
 			return back()->with('error', 'Attendance tracking tables are not ready. Run migrations first.');
 		}
 
-		$students = StudentHealthRecord::query()->get(['id']);
+		$hasSchoolColumn = Schema::hasColumn('student_health_records', 'school_name');
+		$selectedSchool = trim((string) $request->input('school', 'all'));
+		if ($selectedSchool === '') {
+			$selectedSchool = 'all';
+		}
+
+		$studentsQuery = StudentHealthRecord::query();
+		if ($hasSchoolColumn && $selectedSchool !== 'all') {
+			$studentsQuery->where('school_name', $selectedSchool);
+		}
+
+		$students = $studentsQuery->get(['id']);
 		if ($students->isEmpty()) {
 			return back()->with('error', 'No beneficiaries available to record attendance.');
 		}
+
+		$allowedStudentIds = $students->pluck('id')->all();
+		$presentIds = $presentIds
+			->filter(fn (int $id): bool => in_array($id, $allowedStudentIds, true))
+			->values();
 
 		DB::transaction(function () use ($students, $presentIds, $sessionDate): void {
 			$presentLookup = $presentIds->flip();
@@ -155,7 +203,13 @@ class FeedingProgramController extends Controller
 			$this->refreshAttendanceRiskFlags();
 		});
 
-		return back()->with('success', 'Attendance for ' . Carbon::parse($sessionDate)->format('M d, Y') . ' was recorded successfully.');
+		$schoolSuffix = $hasSchoolColumn && $selectedSchool !== 'all'
+			? ' for ' . $selectedSchool
+			: '';
+
+		return redirect()
+			->route('dashboard.feedingcor-program', ['school' => $selectedSchool])
+			->with('success', 'Attendance for ' . Carbon::parse($sessionDate)->format('M d, Y') . $schoolSuffix . ' was recorded successfully.');
 	}
 
 	private function resolveProgramDay(): int

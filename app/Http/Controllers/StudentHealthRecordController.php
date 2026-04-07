@@ -48,6 +48,7 @@ class StudentHealthRecordController extends Controller
         $validated = $request->validate([
             'student_name' => ['required', 'string', 'max:255'],
             'student_id' => ['required', 'string', 'max:100'],
+            'school_name' => ['nullable', 'string', 'max:255'],
             'section' => ['required', 'string', 'max:255'],
             'age' => ['required', 'integer', 'min:2', 'max:25'],
             'height_cm' => ['required', 'numeric', 'min:50', 'max:250'],
@@ -65,6 +66,7 @@ class StudentHealthRecordController extends Controller
             ],
             [
                 'student_name' => $validated['student_name'],
+                'school_name' => $validated['school_name'] ?? null,
                 'section' => $validated['section'],
                 'weight' => (float) $validated['weight_kg'],
                 'bmi_value' => $bmi,
