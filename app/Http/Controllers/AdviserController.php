@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\StudentHealthRecord;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class AdviserController extends Controller
@@ -16,18 +18,19 @@ class AdviserController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $birthMonth = $request->input('birth_month');
-        $birthDay = $request->input('birth_day');
-        $birthYear = $request->input('birth_year');
-        $birthDate = $request->input('birth_date');
+        $birthDate = trim((string) $request->input('birth_date', ''));
 
-        if ((!$birthMonth || !$birthDay || !$birthYear) && is_string($birthDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $birthDate)) {
-            [$yearPart, $monthPart, $dayPart] = explode('-', $birthDate);
-            $request->merge([
-                'birth_year' => (int) $yearPart,
-                'birth_month' => (int) $monthPart,
-                'birth_day' => (int) $dayPart,
-            ]);
+        if ($birthDate !== '') {
+            try {
+                $parsedBirthDate = Carbon::createFromFormat('Y-m-d', $birthDate);
+                $request->merge([
+                    'birth_year' => (int) $parsedBirthDate->format('Y'),
+                    'birth_month' => (int) $parsedBirthDate->format('n'),
+                    'birth_day' => (int) $parsedBirthDate->format('j'),
+                ]);
+            } catch (\Throwable $_) {
+                // Keep existing month/day/year inputs when date parsing fails.
+            }
         }
 
         $heightCm = $request->input('height_cm');
@@ -112,6 +115,37 @@ class AdviserController extends Controller
 
         $request->session()->put('school_health_card_records', $records);
 
+        // Mirror adviser submissions to DB so Feeding Coordinator modules can load them immediately.
+        if (Schema::hasTable('student_health_records')) {
+            $middleName = trim((string) ($validated['middle_name'] ?? ''));
+            $middleInitial = $middleName !== '' ? (' ' . strtoupper(substr($middleName, 0, 1)) . '.') : '';
+            $studentName = trim($validated['last_name'] . ', ' . $validated['first_name'] . $middleInitial);
+            $schoolName = (string) $request->session()->get('assigned_school_name', '');
+
+            $recordPayload = [
+                'student_name' => $studentName,
+                'section' => trim((string) $validated['grade_level'] . ' / ' . (string) $validated['section']),
+                'weight' => (float) $validated['weight_kg'],
+                'bmi_value' => $bmi,
+                'nutritional_status' => $nutritionalStatusBmiForAge,
+                'baseline_age' => $age,
+                'baseline_height_cm' => (float) $validated['height_cm'],
+                'baseline_weight_kg' => (float) $validated['weight_kg'],
+                'baseline_bmi_value' => $bmi,
+                'baseline_nutritional_status' => $nutritionalStatusBmiForAge,
+                'baseline_recorded_at' => now()->toDateString(),
+            ];
+
+            if (Schema::hasColumn('student_health_records', 'school_name')) {
+                $recordPayload['school_name'] = $schoolName !== '' ? $schoolName : null;
+            }
+
+            StudentHealthRecord::query()->updateOrCreate(
+                ['student_id' => (string) $validated['lrn']],
+                $recordPayload
+            );
+        }
+
         return redirect()
             ->route('dashboard.class-adviser')
             ->with('success', 'Record submitted to School Nurse.');
@@ -153,27 +187,16 @@ class AdviserController extends Controller
             return 'Not enough data';
         }
 
-        $severeThreshold = 13.0;
-        $wastedThreshold = 14.5;
-        $overweightThreshold = 21.0;
-
-        if ($age <= 10) {
-            $severeThreshold = 12.8;
-            $wastedThreshold = 14.2;
-            $overweightThreshold = 20.5;
-        } elseif ($age >= 15) {
-            $severeThreshold = 13.5;
-            $wastedThreshold = 15.2;
-            $overweightThreshold = 22.5;
-        }
-
-        if ($bmi < $severeThreshold) {
+        if ($bmi < 16.0) {
             return 'Severely Wasted';
         }
-        if ($bmi < $wastedThreshold) {
+        if ($bmi < 17.0) {
             return 'Wasted';
         }
-        if ($bmi > $overweightThreshold) {
+        if ($bmi < 18.5) {
+            return 'Underweight';
+        }
+        if ($bmi >= 25.0) {
             return 'Overweight';
         }
 

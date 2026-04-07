@@ -371,27 +371,16 @@ class StudentHealthRecordController extends Controller
 
     private function classifyStatus(float $bmi, int $age): string
     {
-        $severeThreshold = 13.0;
-        $wastedThreshold = 14.5;
-        $overweightThreshold = 21.0;
-
-        if ($age <= 10) {
-            $severeThreshold = 12.8;
-            $wastedThreshold = 14.2;
-            $overweightThreshold = 20.5;
-        } elseif ($age >= 15) {
-            $severeThreshold = 13.5;
-            $wastedThreshold = 15.2;
-            $overweightThreshold = 22.5;
-        }
-
-        if ($bmi < $severeThreshold) {
+        if ($bmi < 16.0) {
             return 'Severely Wasted';
         }
-        if ($bmi < $wastedThreshold) {
+        if ($bmi < 17.0) {
             return 'Wasted';
         }
-        if ($bmi > $overweightThreshold) {
+        if ($bmi < 18.5) {
+            return 'Underweight';
+        }
+        if ($bmi >= 25.0) {
             return 'Overweight';
         }
 

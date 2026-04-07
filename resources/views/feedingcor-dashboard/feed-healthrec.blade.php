@@ -144,7 +144,7 @@
                             $statusClass = function ($status) {
                                 $normalized = strtolower((string) $status);
                                 if (str_contains($normalized, 'severe')) return 's-severe';
-                                if (str_contains($normalized, 'wast')) return 's-wasted';
+                                if (str_contains($normalized, 'wast') || str_contains($normalized, 'underweight')) return 's-wasted';
                                 if (str_contains($normalized, 'over')) return 's-over';
                                 return 's-normal';
                             };

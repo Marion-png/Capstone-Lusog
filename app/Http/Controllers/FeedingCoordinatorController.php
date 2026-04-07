@@ -96,7 +96,7 @@ class FeedingCoordinatorController extends Controller
         if (str_contains($normalized, 'severe')) {
             return 'severe';
         }
-        if (str_contains($normalized, 'wast')) {
+        if (str_contains($normalized, 'wast') || str_contains($normalized, 'underweight')) {
             return 'wasted';
         }
         if (str_contains($normalized, 'over')) {

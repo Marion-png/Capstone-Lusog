@@ -68,17 +68,18 @@ class FeedingProgramController extends Controller
 			$bmiBaseline = $record->baseline_bmi_value !== null
 				? (float) $record->baseline_bmi_value
 				: max(0, $bmiCurrent - 0.5);
+			$resolvedStatus = $this->normalizeNutritionalStatus($record->nutritional_status, $bmiCurrent);
 
 			$trendClass = 't-stable';
 			$trendLabel = 'Stable';
 			$bmiClass = 'bmi-up';
 
-			$status = strtolower((string) $record->nutritional_status);
-			$isAttendanceEligible = $this->isAttendanceEligible($record->nutritional_status);
+			$status = strtolower((string) $resolvedStatus);
+			$isAttendanceEligible = $this->isAttendanceEligible($resolvedStatus);
 			if (str_contains($status, 'normal')) {
 				$trendClass = 't-improving';
 				$trendLabel = 'Improving';
-			} elseif (str_contains($status, 'severe') || str_contains($status, 'wasted')) {
+			} elseif (str_contains($status, 'severe') || str_contains($status, 'wasted') || str_contains($status, 'underweight')) {
 				$trendClass = 't-regressing';
 				$trendLabel = 'Regressing';
 				$bmiClass = 'bmi-down';
@@ -102,7 +103,7 @@ class FeedingProgramController extends Controller
 				'attendance' => $attendanceCount . '/' . self::PROGRAM_DURATION_DAYS . ' days',
 				'attendance_count' => $attendanceCount,
 				'attendance_percent' => $attendancePercent,
-				'nutritional_status' => $record->nutritional_status,
+				'nutritional_status' => $resolvedStatus,
 				'is_attendance_eligible' => $isAttendanceEligible,
 				'is_at_risk' => (bool) $record->is_at_risk,
 				'trend_label' => $trendLabel,
@@ -171,9 +172,9 @@ class FeedingProgramController extends Controller
 			$studentsQuery->where('school_name', $selectedSchool);
 		}
 
-		$students = $studentsQuery->get(['id', 'nutritional_status']);
+		$students = $studentsQuery->get(['id', 'nutritional_status', 'bmi_value']);
 		$students = $students
-			->filter(fn (StudentHealthRecord $student): bool => $this->isAttendanceEligible($student->nutritional_status))
+			->filter(fn (StudentHealthRecord $student): bool => $this->isAttendanceEligible($this->normalizeNutritionalStatus($student->nutritional_status, $student->bmi_value)))
 			->values();
 
 		if ($students->isEmpty()) {
@@ -222,7 +223,44 @@ class FeedingProgramController extends Controller
 	{
 		$status = strtolower(trim((string) $nutritionalStatus));
 
-		return $status === 'wasted' || $status === 'severely wasted';
+		return $status === 'wasted' || $status === 'severely wasted' || $status === 'underweight';
+	}
+
+	private function normalizeNutritionalStatus(?string $nutritionalStatus, ?float $bmi): string
+	{
+		$status = trim((string) $nutritionalStatus);
+		$normalized = strtolower($status);
+
+		if (str_contains($normalized, 'severe')) {
+			return 'Severely Wasted';
+		}
+		if (str_contains($normalized, 'wast')) {
+			return 'Wasted';
+		}
+		if (str_contains($normalized, 'underweight')) {
+			return 'Underweight';
+		}
+		if (str_contains($normalized, 'over')) {
+			return 'Overweight';
+		}
+
+		if ($bmi !== null) {
+			$bmiValue = (float) $bmi;
+			if ($bmiValue < 16.0) {
+				return 'Severely Wasted';
+			}
+			if ($bmiValue < 17.0) {
+				return 'Wasted';
+			}
+			if ($bmiValue < 18.5) {
+				return 'Underweight';
+			}
+			if ($bmiValue >= 25.0) {
+				return 'Overweight';
+			}
+		}
+
+		return $status !== '' ? $status : 'Normal';
 	}
 
 	private function resolveProgramDay(): int

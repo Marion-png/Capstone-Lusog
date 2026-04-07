@@ -975,7 +975,7 @@
 				</div>
 				<div class="weight-item">
 					<div class="weight-label">Mark Present Beneficiaries</div>
-					<p class="attendance-rule-note">Only learners tagged as <strong>Wasted</strong> or <strong>Severely Wasted</strong> from Class Adviser BMI results are included in this attendance update.</p>
+					<p class="attendance-rule-note">Only learners tagged as <strong>Wasted</strong>, <strong>Severely Wasted</strong>, or <strong>Underweight</strong> from Class Adviser BMI results are included in this attendance update.</p>
 					@if ($attendanceStudents->isNotEmpty())
 						<div class="attendance-tools">
 							<button type="button" class="attendance-mini-btn present" id="markAllPresentBtn">Mark All Present</button>
@@ -1015,7 +1015,7 @@
 								</div>
 							</div>
 					@empty
-						<div class="weight-label" style="font-size:.86rem;">No eligible learners found for this school. Only Wasted/Severely Wasted BMI results can be recorded here.</div>
+						<div class="weight-label" style="font-size:.86rem;">No eligible learners found for this school. Only Wasted/Severely Wasted/Underweight BMI results can be recorded here.</div>
 						@endforelse
 					</div>
 				</div>
