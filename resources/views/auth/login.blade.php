@@ -19,8 +19,8 @@
 
         :root {
             --bg: #eef1ef;
-            --panel: #4a9c82;
-            --panel-2: #5fb193;
+            --panel: #156f38;
+            --panel-2: #0f5e2f;
             --ink: #1f2d2a;
             --ink-soft: #61706d;
             --line: #d9e2de;

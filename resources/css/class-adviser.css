@@ -46,6 +46,29 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 .section-panel.active{display:block}
 
 .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}
+.adviser-dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.dashboard-stat-card{padding:14px;border-left:4px solid #14532d}
+.dashboard-stat-card span{font-size:.74rem;color:#6f8c7a;display:block}
+.dashboard-stat-card b{font-family:'DM Serif Display',serif;font-size:1.7rem;line-height:1.1;color:#183a2b;display:block;margin-top:2px}
+.dashboard-stat-card small{font-size:.72rem;color:#6f8c7a}
+.dashboard-total{border-left-color:#14532d}
+.dashboard-wasted{border-left-color:#dc2626}
+.dashboard-complete{border-left-color:#16a34a}
+.dashboard-pending{border-left-color:#d97706}
+.dashboard-panels-two{display:grid;grid-template-columns:1.2fr 1fr;gap:12px;margin-top:12px}
+.chart-wrap{height:280px;position:relative}
+.chart-note{margin-top:8px;font-size:.74rem;color:#6f8c7a}
+.health-meter-list{display:grid;gap:10px}
+.health-meter-item{display:grid;gap:5px}
+.health-meter-top{display:flex;justify-content:space-between;align-items:center;font-size:.79rem;color:#335746}
+.health-meter-top b{font-size:.85rem;color:#1b3f2f}
+.health-meter-bar{height:9px;border-radius:999px;background:#e2efe8;overflow:hidden}
+.health-meter-bar span{display:block;height:100%;background:linear-gradient(90deg,#1e7a4f,#14532d)}
+.health-meter-bar.is-alert span{background:linear-gradient(90deg,#f59e0b,#d97706)}
+.health-meter-bar.is-warn span{background:linear-gradient(90deg,#fbbf24,#f59e0b)}
+.health-meter-bar.is-info span{background:linear-gradient(90deg,#60a5fa,#2563eb)}
+.dashboard-quick-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.dashboard-quick-actions .btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);transition:transform .16s ease,box-shadow .2s ease,border-color .2s ease}
 .card:hover{transform:translateY(-1px);box-shadow:0 2px 8px rgba(5,46,22,.08),0 10px 24px rgba(5,46,22,.07);border-color:#d9e8e0}
 .stat{padding:14px}
@@ -205,4 +228,6 @@ tbody tr:hover td{background:#f7fbf8}
 #profileClose{position:sticky;left:12px;bottom:12px;width:max-content}
 
 @media (max-width:980px){.stats{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.profile-grid{grid-template-columns:1fr}.student-grid{grid-template-columns:1fr}.calc-grid{grid-template-columns:1fr 1fr}.add-head{flex-direction:column;align-items:flex-start}}
+@media (max-width:980px){.adviser-dashboard-grid{grid-template-columns:1fr 1fr}.dashboard-panels-two{grid-template-columns:1fr}}
+@media (max-width:620px){.adviser-dashboard-grid{grid-template-columns:1fr}}
 @media (max-width:780px){.sidebar{display:none}.main{margin-left:0}}

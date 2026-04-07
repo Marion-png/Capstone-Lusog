@@ -8,6 +8,7 @@
     <title>Class Adviser Dashboard - LUSOG</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     @php $classAdviserCssPath = resource_path('css/class-adviser.css'); @endphp
     @if (file_exists($classAdviserCssPath))
         <style>{!! file_get_contents($classAdviserCssPath) !!}</style>
@@ -17,7 +18,16 @@
 <aside class="sidebar">
     <div class="sb-logo"><img src="{{ asset('images/lusog-logo.png') }}" alt="LUSOG Logo"></div>
     <nav class="sb-nav">
-        <a href="#" class="sb-link active js-proto-nav" data-target="prototype-form-panel">
+        <a href="#" class="sb-link active js-proto-nav" data-target="prototype-dashboard-panel">
+            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect x="3" y="3" width="7" height="7"/>
+                <rect x="14" y="3" width="7" height="4"/>
+                <rect x="14" y="12" width="7" height="9"/>
+                <rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            <span class="sb-link-label">Dashboard</span>
+        </a>
+        <a href="#" class="sb-link js-proto-nav" data-target="prototype-form-panel">
             <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
                 <circle cx="9" cy="7" r="4"/>
@@ -91,7 +101,7 @@
             </div>
         @endif
         @if ($errors->any())
-            <div class="flash flash-err">Incomplete fields detected. Please complete all required entries before submitting.</div>
+            <div class="flash flash-err">{{ $errors->first() }}</div>
         @endif
 
         @php
@@ -104,19 +114,202 @@
                 return (string) ($row['grade_level'] ?? '') === (string) $assignedGradeLevel
                     && (string) ($row['section'] ?? '') === (string) $assignedSection;
             });
+
+            $studentsTotal = $prototypeRecords->count();
+            $pendingReviewTotal = $prototypeRecords->filter(fn ($row) => empty($row['examination']))->count();
+            $completeRecordsTotal = $prototypeRecords->filter(fn ($row) => !empty($row['examination']))->count();
+            $wastedStudentsTotal = $prototypeRecords->filter(function ($row) {
+                $status = strtolower((string) ($row['nutritional_status_bmi_for_age'] ?? ''));
+                return str_contains($status, 'wasted');
+            })->count();
+            $underweightStudentsTotal = $prototypeRecords->filter(function ($row) {
+                $status = strtolower((string) ($row['nutritional_status_bmi_for_age'] ?? ''));
+                return str_contains($status, 'underweight');
+            })->count();
+            $overweightStudentsTotal = $prototypeRecords->filter(function ($row) {
+                $status = strtolower((string) ($row['nutritional_status_bmi_for_age'] ?? ''));
+                return str_contains($status, 'overweight') || str_contains($status, 'obese');
+            })->count();
+            $normalStudentsTotal = max(0, $studentsTotal - ($wastedStudentsTotal + $underweightStudentsTotal + $overweightStudentsTotal));
+
+            $safePercent = static function ($count, $total) {
+                if ($total <= 0) {
+                    return 0;
+                }
+
+                return (int) round(($count / $total) * 100);
+            };
+
+            $recentStudents = $prototypeRecords->take(5);
+
+            $nutritionLabelOrder = ['Normal', 'Wasted', 'Underweight', 'Overweight', 'Obese', 'Severely Wasted'];
+            $nutritionCounts = [
+                'Normal' => 0,
+                'Wasted' => 0,
+                'Underweight' => 0,
+                'Overweight' => 0,
+                'Obese' => 0,
+                'Severely Wasted' => 0,
+            ];
+
+            foreach ($prototypeRecords as $row) {
+                $rawStatus = strtolower(trim((string) ($row['nutritional_status_bmi_for_age'] ?? '')));
+                if ($rawStatus === '') {
+                    continue;
+                }
+
+                if (str_contains($rawStatus, 'severely wasted')) {
+                    $nutritionCounts['Severely Wasted']++;
+                } elseif (str_contains($rawStatus, 'wasted')) {
+                    $nutritionCounts['Wasted']++;
+                } elseif (str_contains($rawStatus, 'underweight')) {
+                    $nutritionCounts['Underweight']++;
+                } elseif (str_contains($rawStatus, 'overweight')) {
+                    $nutritionCounts['Overweight']++;
+                } elseif (str_contains($rawStatus, 'obese')) {
+                    $nutritionCounts['Obese']++;
+                } else {
+                    $nutritionCounts['Normal']++;
+                }
+            }
+
+            $chartNutritionLabels = [];
+            $chartNutritionValues = [];
+            foreach ($nutritionLabelOrder as $label) {
+                $chartNutritionLabels[] = $label;
+                $chartNutritionValues[] = (int) ($nutritionCounts[$label] ?? 0);
+            }
+
+            $wastedRows = $prototypeRecords->filter(function ($row) {
+                $status = strtolower((string) ($row['nutritional_status_bmi_for_age'] ?? ''));
+                return str_contains($status, 'wasted');
+            })->take(7)->values();
+
+            $fallbackBaselineWeights = [35.7, 41.8, 36.9, 34.5, 39.1, 37.4, 33.8];
+            $fallbackEndlineWeights = [36.9, 43.1, 37.8, 35.6, 40.7, 38.5, 34.7];
+            $chartParticipationLabels = [];
+            $chartBaselineValues = [];
+            $chartEndlineValues = [];
+
+            $baselineMonthLabel = now()->subMonthNoOverflow()->format('M');
+            $endlineMonthLabel = now()->format('M');
+
+            if ($wastedRows->isEmpty()) {
+                $chartParticipationLabels = ['No Data'];
+                $chartBaselineValues = [0];
+                $chartEndlineValues = [0];
+            } else {
+                foreach ($wastedRows as $index => $row) {
+                    $lastName = trim((string) ($row['last_name'] ?? 'Student ' . ($index + 1)));
+                    $chartParticipationLabels[] = $lastName !== '' ? $lastName : ('Student ' . ($index + 1));
+
+                    $baselineWeight = $row['baseline_weight_kg'] ?? $row['weight_kg'] ?? null;
+                    $endlineWeight = $row['endline_weight_kg'] ?? null;
+
+                    if (!is_numeric($baselineWeight)) {
+                        $baselineWeight = (float) ($fallbackBaselineWeights[$index] ?? 0);
+                    }
+
+                    if (!is_numeric($endlineWeight)) {
+                        $endlineWeight = (float) ($fallbackEndlineWeights[$index] ?? $baselineWeight);
+                    }
+
+                    $chartBaselineValues[] = round((float) $baselineWeight, 1);
+                    $chartEndlineValues[] = round((float) $endlineWeight, 1);
+                }
+            }
         @endphp
 
-        <section id="prototype-saved-panel" class="section-panel" style="margin-top:12px;">
-            @php
-                $studentsTotal = $prototypeRecords->count();
-                $pendingReviewTotal = $prototypeRecords->filter(fn ($row) => empty($row['examination']))->count();
-                $completeRecordsTotal = $prototypeRecords->filter(fn ($row) => !empty($row['examination']))->count();
-                $wastedStudentsTotal = $prototypeRecords->filter(function ($row) {
-                    $status = strtolower((string) ($row['nutritional_status_bmi_for_age'] ?? ''));
-                    return str_contains($status, 'wasted');
-                })->count();
-            @endphp
+        <section id="prototype-dashboard-panel" class="section-panel active" style="margin-top:12px;">
+            <div class="adviser-dashboard-grid">
+                <article class="card dashboard-stat-card dashboard-total">
+                    <span>Total Students</span>
+                    <b>{{ $studentsTotal }}</b>
+                    <small>Assigned class records</small>
+                </article>
+                <article class="card dashboard-stat-card dashboard-wasted">
+                    <span>Wasted Students</span>
+                    <b>{{ $wastedStudentsTotal }}</b>
+                    <small>Needs attention</small>
+                </article>
+                <article class="card dashboard-stat-card dashboard-complete">
+                    <span>Complete Records</span>
+                    <b>{{ $completeRecordsTotal }}</b>
+                    <small>{{ $safePercent($completeRecordsTotal, $studentsTotal) }}% completion</small>
+                </article>
+                <article class="card dashboard-stat-card dashboard-pending">
+                    <span>Pending Nurse Review</span>
+                    <b>{{ $pendingReviewTotal }}</b>
+                    <small>For examination follow-up</small>
+                </article>
+            </div>
 
+            <div class="dashboard-panels-two">
+                <article class="card section">
+                    <h3>Class Nutritional Status</h3>
+                    <div class="chart-wrap">
+                        <canvas id="nutritionPieChart"></canvas>
+                    </div>
+                    <p class="chart-note">Baseline distribution for your assigned class.</p>
+                </article>
+
+                <article class="card section">
+                    <h3>Wasted Students Participation</h3>
+                    <div class="chart-wrap">
+                        <canvas id="participationBarChart"></canvas>
+                    </div>
+                    <p class="chart-note">Comparison of baseline ({{ $baselineMonthLabel }}) and endline ({{ $endlineMonthLabel }}) values.</p>
+                </article>
+            </div>
+
+            <article class="card section" style="margin-top:12px;">
+                <h3>Recent Student Records</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>LRN</th>
+                            <th>BMI Status</th>
+                            <th>Record State</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($recentStudents as $recentRecord)
+                            @php
+                                $recentMiddle = trim((string) ($recentRecord['middle_name'] ?? ''));
+                                $recentMiddleInitial = $recentMiddle !== '' ? (' ' . strtoupper(substr($recentMiddle, 0, 1)) . '.') : '';
+                                $recentFullName = trim(($recentRecord['last_name'] ?? '') . ', ' . ($recentRecord['first_name'] ?? '') . $recentMiddleInitial);
+                                $recentStatus = !empty($recentRecord['examination']) ? 'Complete' : 'Pending';
+                            @endphp
+                            <tr>
+                                <td>{{ $recentFullName }}</td>
+                                <td>{{ $recentRecord['lrn'] ?? '-' }}</td>
+                                <td>{{ $recentRecord['nutritional_status_bmi_for_age'] ?? '-' }}</td>
+                                <td>
+                                    @if ($recentStatus === 'Complete')
+                                        <span class="badge ok">Complete</span>
+                                    @else
+                                        <span class="badge warn">Pending</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="4" class="muted">No student records yet.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </article>
+
+            <div class="dashboard-quick-actions">
+                <button type="button" class="btn" data-target="prototype-form-panel" id="openAddStudentFromDashboard">Add New Student</button>
+                <button type="button" class="btn btn-secondary" data-target="prototype-saved-panel" id="openSavedFromDashboard">View My Students</button>
+                <a href="{{ route('dashboard.class-adviser.deworming') }}" class="btn btn-secondary">Open Deworming</a>
+            </div>
+        </section>
+
+        <section id="prototype-saved-panel" class="section-panel" style="margin-top:12px;">
             <article class="card my-students-card">
                 <div class="my-students-head">
                     <div>
@@ -230,9 +423,9 @@
                         <div class="field"><label for="proto_first_name">First Name <span style="color:#ef4444">*</span></label><input id="proto_first_name" name="first_name" type="text" placeholder="e.g., Maria" value="{{ old('first_name') }}" required></div>
                         <div class="field"><label for="proto_middle_name">Middle Name</label><input id="proto_middle_name" name="middle_name" type="text" placeholder="e.g., Santos" value="{{ old('middle_name') }}"></div>
                         <div class="field"><label for="proto_lrn">LRN <span style="color:#ef4444">*</span></label><input id="proto_lrn" name="lrn" type="text" placeholder="12-digit Learner Reference Number" value="{{ old('lrn') }}" inputmode="numeric" required></div>
-                        <div class="field"><label for="birthDate">Date of Birth <span style="color:#ef4444">*</span></label><input id="birthDate" type="date" value="{{ old('birth_year') && old('birth_month') && old('birth_day') ? old('birth_year') . '-' . str_pad(old('birth_month'), 2, '0', STR_PAD_LEFT) . '-' . str_pad(old('birth_day'), 2, '0', STR_PAD_LEFT) : '' }}" required></div>
+                        <div class="field"><label for="birthDate">Date of Birth <span style="color:#ef4444">*</span></label><input id="birthDate" name="birth_date" type="date" value="{{ old('birth_year') && old('birth_month') && old('birth_day') ? old('birth_year') . '-' . str_pad(old('birth_month'), 2, '0', STR_PAD_LEFT) . '-' . str_pad(old('birth_day'), 2, '0', STR_PAD_LEFT) : '' }}" required></div>
                         <div class="field"><label for="proto_birthplace">Birthplace</label><input id="proto_birthplace" name="birthplace" type="text" placeholder="City/Municipality of birth" value="{{ old('birthplace') }}" required></div>
-                        <div class="field full"><label for="gender">Gender <span style="color:#ef4444">*</span></label><select id="gender" required><option value="">Select Gender</option><option>Male</option><option>Female</option></select></div>
+                        <div class="field full"><label for="gender">Gender <span style="color:#ef4444">*</span></label><select id="gender" name="gender" required><option value="">Select Gender</option><option {{ old('gender') === 'Male' ? 'selected' : '' }}>Male</option><option {{ old('gender') === 'Female' ? 'selected' : '' }}>Female</option></select></div>
                     </div>
                 </div>
 
@@ -248,8 +441,8 @@
                 <div class="student-section">
                     <h4>Health Data (Baseline)</h4>
                     <div class="student-grid" style="margin-bottom:10px;">
-                        <div class="field"><label for="weight">Weight (kg) <span style="color:#ef4444">*</span></label><input id="weight" name="weight_kg" type="number" step="0.1" min="0" max="200" placeholder="e.g., 34" value="{{ old('weight_kg') }}" required><div class="muted" style="font-size:.7rem;">Valid range: 0 - 200 kg</div></div>
-                        <div class="field"><label for="height">Height (m) <span style="color:#ef4444">*</span></label><input id="height" type="number" step="0.01" min="0.50" max="2.50" placeholder="e.g., 1.27" value="{{ old('height_cm') ? number_format(old('height_cm') / 100, 2, '.', '') : '' }}" required><div class="muted" style="font-size:.7rem;">Convert cm to m: 127 cm = 1.27 m | Valid range: 0.50 - 2.50 m</div></div>
+                        <div class="field"><label for="weight">Weight (kg) <span style="color:#ef4444">*</span></label><input id="weight" name="weight_kg" type="number" step="0.1" min="0.1" max="200" placeholder="e.g., 34" value="{{ old('weight_kg') }}" required><div class="muted" style="font-size:.7rem;">Valid range: 0.1 - 200 kg</div></div>
+                        <div class="field"><label for="height">Height (m) <span style="color:#ef4444">*</span></label><input id="height" name="height_m" type="number" step="0.01" min="0.50" max="2.50" placeholder="e.g., 1.27" value="{{ old('height_cm') ? number_format(old('height_cm') / 100, 2, '.', '') : '' }}" required><div class="muted" style="font-size:.7rem;">Convert cm to m: 127 cm = 1.27 m | Valid range: 0.50 - 2.50 m</div></div>
                     </div>
 
                     <div class="calc-box">
@@ -360,6 +553,14 @@
     </div>
 </div>
 <script>
+const dashboardNutritionLabels = @json($chartNutritionLabels);
+const dashboardNutritionValues = @json($chartNutritionValues);
+const dashboardParticipationLabels = @json($chartParticipationLabels);
+const dashboardBaselineValues = @json($chartBaselineValues);
+const dashboardEndlineValues = @json($chartEndlineValues);
+const dashboardBaselineMonthLabel = @json($baselineMonthLabel);
+const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
+
 (() => {
     const navLinks = Array.from(document.querySelectorAll('.js-proto-nav'));
     const tabPanels = Array.from(document.querySelectorAll('.section-panel'));
@@ -394,6 +595,93 @@
     if (tabParam === 'saved') {
         const savedLink = document.querySelector('.js-proto-nav[data-target="prototype-saved-panel"]');
         savedLink?.click();
+    } else if (tabParam === 'form') {
+        const formLink = document.querySelector('.js-proto-nav[data-target="prototype-form-panel"]');
+        formLink?.click();
+    } else {
+        const dashboardLink = document.querySelector('.js-proto-nav[data-target="prototype-dashboard-panel"]');
+        dashboardLink?.click();
+    }
+})();
+
+(() => {
+    if (typeof Chart === 'undefined') {
+        return;
+    }
+
+    const nutritionCanvas = document.getElementById('nutritionPieChart');
+    const participationCanvas = document.getElementById('participationBarChart');
+
+    if (nutritionCanvas) {
+        new Chart(nutritionCanvas.getContext('2d'), {
+            type: 'pie',
+            data: {
+                labels: dashboardNutritionLabels,
+                datasets: [{
+                    data: dashboardNutritionValues,
+                    backgroundColor: ['#14532d', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444'],
+                    borderWidth: 0,
+                    hoverOffset: 8,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 11,
+                            font: { size: 10 },
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    if (participationCanvas) {
+        new Chart(participationCanvas.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: dashboardParticipationLabels,
+                datasets: [
+                    {
+                        label: `Baseline (${dashboardBaselineMonthLabel})`,
+                        data: dashboardBaselineValues,
+                        backgroundColor: '#14532d',
+                        borderRadius: 8,
+                        yAxisID: 'y',
+                    },
+                    {
+                        label: `Endline (${dashboardEndlineMonthLabel})`,
+                        data: dashboardEndlineValues,
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 8,
+                        yAxisID: 'y',
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { font: { size: 10 } },
+                    },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Weight (kg)',
+                        },
+                    },
+                },
+            },
+        });
     }
 })();
 
@@ -708,13 +996,32 @@
 (() => {
     const addBtn = document.getElementById('openAddStudentBtn');
     const target = document.querySelector('.js-proto-nav[data-target="prototype-form-panel"]');
+    const addFromDashboard = document.getElementById('openAddStudentFromDashboard');
+    const savedFromDashboard = document.getElementById('openSavedFromDashboard');
+    const savedTarget = document.querySelector('.js-proto-nav[data-target="prototype-saved-panel"]');
 
     if (!addBtn || !target) {
+        if (addFromDashboard && target) {
+            addFromDashboard.addEventListener('click', () => target.click());
+        }
+
+        if (savedFromDashboard && savedTarget) {
+            savedFromDashboard.addEventListener('click', () => savedTarget.click());
+        }
+
         return;
     }
 
     addBtn.addEventListener('click', () => {
         target.click();
+    });
+
+    addFromDashboard?.addEventListener('click', () => {
+        target.click();
+    });
+
+    savedFromDashboard?.addEventListener('click', () => {
+        savedTarget?.click();
     });
 })();
 

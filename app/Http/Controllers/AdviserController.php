@@ -16,6 +16,28 @@ class AdviserController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $birthMonth = $request->input('birth_month');
+        $birthDay = $request->input('birth_day');
+        $birthYear = $request->input('birth_year');
+        $birthDate = $request->input('birth_date');
+
+        if ((!$birthMonth || !$birthDay || !$birthYear) && is_string($birthDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $birthDate)) {
+            [$yearPart, $monthPart, $dayPart] = explode('-', $birthDate);
+            $request->merge([
+                'birth_year' => (int) $yearPart,
+                'birth_month' => (int) $monthPart,
+                'birth_day' => (int) $dayPart,
+            ]);
+        }
+
+        $heightCm = $request->input('height_cm');
+        $heightMeters = $request->input('height_m');
+        if ((!is_numeric($heightCm) || (float) $heightCm <= 0) && is_numeric($heightMeters)) {
+            $request->merge([
+                'height_cm' => round(((float) $heightMeters) * 100, 2),
+            ]);
+        }
+
         $validated = $request->validate([
             'last_name' => ['required', 'string', 'max:255'],
             'first_name' => ['required', 'string', 'max:255'],
@@ -31,8 +53,9 @@ class AdviserController extends Controller
             'region' => ['required', 'string', 'max:255'],
             'division' => ['required', 'string', 'max:255'],
             'telephone_no' => ['required', 'string', 'max:50'],
+            'gender' => ['nullable', 'string', 'max:20'],
             'height_cm' => ['required', 'numeric', 'min:30', 'max:250'],
-            'weight_kg' => ['required', 'numeric', 'min:1', 'max:250'],
+            'weight_kg' => ['required', 'numeric', 'min:0.1', 'max:250'],
             'grade_level' => ['required', 'string', 'max:50'],
             'section' => ['required', 'string', 'max:100'],
         ]);
@@ -75,6 +98,7 @@ class AdviserController extends Controller
             'region' => $validated['region'],
             'division' => $validated['division'],
             'telephone_no' => $validated['telephone_no'],
+            'gender' => $validated['gender'] ?? null,
             'height_cm' => $validated['height_cm'],
             'weight_kg' => $validated['weight_kg'],
             'age' => $age,

@@ -25,6 +25,15 @@
     <nav class="sb-nav">
         <a href="{{ route('dashboard.class-adviser') }}" class="sb-link">
             <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect x="3" y="3" width="7" height="7"/>
+                <rect x="14" y="3" width="7" height="4"/>
+                <rect x="14" y="12" width="7" height="9"/>
+                <rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            <span class="sb-link-label">Dashboard</span>
+        </a>
+        <a href="{{ route('dashboard.class-adviser', ['tab' => 'form']) }}" class="sb-link">
+            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
                 <circle cx="9" cy="7" r="4"/>
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
@@ -41,7 +50,7 @@
                 <line x1="3" y1="12" x2="3.01" y2="12"/>
                 <line x1="3" y1="18" x2="3.01" y2="18"/>
             </svg>
-            <span class="sb-link-label">Saved Submissions</span>
+            <span class="sb-link-label">My Students</span>
         </a>
         <a href="{{ route('dashboard.class-adviser.deworming') }}" class="sb-link active">
             <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
