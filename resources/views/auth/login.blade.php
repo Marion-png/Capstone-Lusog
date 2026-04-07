@@ -396,7 +396,6 @@
             <p>Enter your credentials to access your assigned modules.</p>
         </div>
 
-        <div class="info-bar">School intranet access only - accessible within campus network</div>
 
         @if ($errors->any())
             <div class="alert-error">{{ $errors->first() }}</div>
@@ -437,18 +436,6 @@
                     >
                     <button type="button" class="toggle-pw" onclick="togglePassword()" id="togglePw">SHOW</button>
                 </div>
-            </div>
-
-            <div class="field">
-                <label>Sign in as</label>
-                <select name="role" class="control" required>
-                    <option value="" disabled {{ old('role') ? '' : 'selected' }}>Select role</option>
-                    <option value="school_nurse" {{ old('role') == 'school_nurse' ? 'selected' : '' }}>School Nurse - Full Clinic Access</option>
-                    <option value="clinic_staff" {{ old('role') == 'clinic_staff' ? 'selected' : '' }}>Clinic Staff - Records and Inventory</option>
-                    <option value="class_adviser" {{ old('role') == 'class_adviser' ? 'selected' : '' }}>Class Adviser - BMI Monitoring and Student Screening</option>
-                    <option value="school_head" {{ old('role') == 'school_head' ? 'selected' : '' }}>School Head - View Only</option>
-                    <option value="feeding_coor" {{ old('role') == 'feeding_coor' ? 'selected' : '' }}>Feeding Coordinator - Program Monitoring and Health Records</option>
-                </select>
             </div>
 
             <label class="remember">

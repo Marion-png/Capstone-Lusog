@@ -34,8 +34,9 @@ Route::post('/account-request', function (Request $request) {
         'name' => ['required', 'string', 'max:255'],
         'username' => ['required', 'string', 'max:255'],
         'role' => ['required', 'in:school_nurse,clinic_staff,class_adviser,school_head,feeding_coor'],
-        'assigned_grade_level' => ['required', 'string', 'max:50'],
-        'assigned_section' => ['required', 'string', 'max:100'],
+        'school_name' => ['required_if:role,school_nurse,clinic_staff,school_head', 'nullable', 'string', 'max:255'],
+        'assigned_grade_level' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:50'],
+        'assigned_section' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:100'],
     ]);
 
     $pendingRequests = $request->session()->get('pending_account_requests', []);
@@ -65,6 +66,7 @@ Route::post('/account-request', function (Request $request) {
         'name' => $validated['name'],
         'username' => $validated['username'],
         'role' => $role,
+        'school_name' => in_array($role, ['school_nurse', 'clinic_staff', 'school_head'], true) ? ($validated['school_name'] ?? null) : null,
         'assigned_grade_level' => $role === 'class_adviser' ? ($validated['assigned_grade_level'] ?? null) : null,
         'assigned_section' => $role === 'class_adviser' ? ($validated['assigned_section'] ?? null) : null,
         'created_at' => now()->toIso8601String(),
@@ -293,6 +295,7 @@ Route::post('/dashboard/system-admin/requests/{requestId}/approve', function (Re
             'name' => $target['name'] ?? '-',
             'username' => $target['username'] ?? '-',
             'role' => $role,
+            'school_name' => in_array($role, ['school_nurse', 'clinic_staff', 'school_head'], true) ? ($target['school_name'] ?? null) : null,
             'assigned_grade_level' => $role === 'class_adviser' ? ($target['assigned_grade_level'] ?? null) : null,
             'assigned_section' => $role === 'class_adviser' ? ($target['assigned_section'] ?? null) : null,
             'created_at' => now()->toIso8601String(),
@@ -313,6 +316,7 @@ Route::post('/dashboard/system-admin/requests/{requestId}/approve', function (Re
         'name' => $target['name'] ?? '-',
         'username' => $target['username'] ?? '-',
         'role' => $target['role'] ?? '-',
+        'school_name' => $target['school_name'] ?? null,
         'assigned_grade_level' => $target['assigned_grade_level'] ?? null,
         'assigned_section' => $target['assigned_section'] ?? null,
         'submitted_at' => $target['created_at'] ?? null,
@@ -355,6 +359,7 @@ Route::post('/dashboard/system-admin/requests/{requestId}/decline', function (Re
         'name' => $target['name'] ?? '-',
         'username' => $target['username'] ?? '-',
         'role' => $target['role'] ?? '-',
+        'school_name' => $target['school_name'] ?? null,
         'assigned_grade_level' => $target['assigned_grade_level'] ?? null,
         'assigned_section' => $target['assigned_section'] ?? null,
         'submitted_at' => $target['created_at'] ?? null,
@@ -391,25 +396,31 @@ Route::post('/login', function (Request $request) {
     $request->validate([
         'email' => ['required', 'string'],
         'password' => ['required', 'string'],
-        'role' => ['required', 'string'],
     ]);
 
     $username = strtolower(trim((string) $request->input('email')));
-    $role = $request->input('role');
     $accounts = collect($request->session()->get('user_accounts', []));
+    $matchingAccounts = $accounts->filter(function (array $item) use ($username): bool {
+        $itemUsername = strtolower(trim((string) ($item['username'] ?? '')));
+        return $itemUsername === $username;
+    })->values();
+
+    if ($matchingAccounts->isEmpty()) {
+        return back()
+            ->withInput()
+            ->with('error', 'Account was not found. Please submit a Create Account request first.');
+    }
+
+    if ($matchingAccounts->count() > 1) {
+        return back()
+            ->withInput()
+            ->with('error', 'Multiple roles are linked to this username. Contact System Admin to keep one unique role per username.');
+    }
+
+    $account = $matchingAccounts->first();
+    $role = (string) ($account['role'] ?? '');
 
     if ($role === 'class_adviser') {
-        $account = $accounts->first(function (array $item) use ($username): bool {
-            $itemUsername = strtolower(trim((string) ($item['username'] ?? '')));
-            return $itemUsername === $username && ($item['role'] ?? null) === 'class_adviser';
-        });
-
-        if (!$account) {
-            return back()
-                ->withInput()
-                ->with('error', 'Class Adviser account was not found. Ask System Admin to create your account and assign your grade/section first.');
-        }
-
         $request->session()->put('assigned_grade_level', $account['assigned_grade_level'] ?? null);
         $request->session()->put('assigned_section', $account['assigned_section'] ?? null);
     } else {

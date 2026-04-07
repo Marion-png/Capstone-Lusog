@@ -161,9 +161,13 @@
                             <option value="feeding_coor" {{ old('role') === 'feeding_coor' ? 'selected' : '' }}>Feeding Coordinator</option>
                         </select>
                     </div>
-                    <div class="field">
+                    <div class="field full" id="schoolField">
+                        <label for="school_name">School (School Nurse, Clinic Staff, School Head)</label>
+                        <input id="school_name" name="school_name" type="text" value="{{ old('school_name') }}" placeholder="e.g. Del Carmen National High School">
+                    </div>
+                    <div class="field" id="gradeField">
                         <label for="assigned_grade_level">Assigned Grade Level</label>
-                        <select id="assigned_grade_level" name="assigned_grade_level" required>
+                        <select id="assigned_grade_level" name="assigned_grade_level">
                             <option value="" selected disabled>Select grade level</option>
                             <option {{ old('assigned_grade_level') === 'Kinder/SPED' ? 'selected' : '' }}>Kinder/SPED</option>
                             <option {{ old('assigned_grade_level') === 'Grade 1/SPED' ? 'selected' : '' }}>Grade 1/SPED</option>
@@ -180,11 +184,11 @@
                             <option {{ old('assigned_grade_level') === 'Grade 12/SPED' ? 'selected' : '' }}>Grade 12/SPED</option>
                         </select>
                     </div>
-                    <div class="field">
+                    <div class="field" id="sectionField">
                         <label for="assigned_section">Assigned Section</label>
-                        <input id="assigned_section" name="assigned_section" type="text" value="{{ old('assigned_section') }}" placeholder="e.g. SPED-A" required>
+                        <input id="assigned_section" name="assigned_section" type="text" value="{{ old('assigned_section') }}" placeholder="e.g. SPED-A">
                     </div>
-                    <p class="hint">Grade level and section are required before submitting your account request.</p>
+                    <p class="hint" id="classAdviserHint">Grade level and section are required for Class Adviser requests only.</p>
                 </div>
 
                 <div class="actions">
@@ -198,28 +202,77 @@
     <script>
         const requestForm = document.getElementById('accountRequestForm');
         const roleSelect = document.getElementById('role');
+        const schoolInput = document.getElementById('school_name');
+        const schoolField = document.getElementById('schoolField');
         const gradeSelect = document.getElementById('assigned_grade_level');
         const sectionInput = document.getElementById('assigned_section');
+        const gradeField = document.getElementById('gradeField');
+        const sectionField = document.getElementById('sectionField');
+        const classAdviserHint = document.getElementById('classAdviserHint');
+
+        const syncRoleFields = function () {
+            const isClassAdviser = roleSelect.value === 'class_adviser';
+            const requiresSchool = ['school_nurse', 'clinic_staff', 'school_head'].includes(roleSelect.value);
+
+            schoolField.style.display = requiresSchool ? '' : 'none';
+            gradeField.style.display = isClassAdviser ? '' : 'none';
+            sectionField.style.display = isClassAdviser ? '' : 'none';
+            classAdviserHint.style.display = isClassAdviser ? '' : 'none';
+
+            schoolInput.required = requiresSchool;
+            gradeSelect.required = isClassAdviser;
+            sectionInput.required = isClassAdviser;
+
+            if (!requiresSchool) {
+                schoolInput.setCustomValidity('');
+                schoolInput.value = '';
+            }
+
+            if (!isClassAdviser) {
+                gradeSelect.setCustomValidity('');
+                sectionInput.setCustomValidity('');
+                gradeSelect.selectedIndex = 0;
+                sectionInput.value = '';
+            }
+        };
 
         roleSelect.addEventListener('change', function () {
+            syncRoleFields();
+            schoolInput.setCustomValidity('');
             gradeSelect.setCustomValidity('');
             sectionInput.setCustomValidity('');
+        });
+        schoolInput.addEventListener('input', function () {
+            schoolInput.setCustomValidity('');
         });
         sectionInput.addEventListener('input', function () {
             sectionInput.setCustomValidity('');
         });
 
         requestForm.addEventListener('submit', function (event) {
-            if (!gradeSelect.value) {
-                gradeSelect.setCustomValidity('Please select assigned grade level.');
-            } else {
-                gradeSelect.setCustomValidity('');
+            const isClassAdviser = roleSelect.value === 'class_adviser';
+            const requiresSchool = ['school_nurse', 'clinic_staff', 'school_head'].includes(roleSelect.value);
+
+            if (requiresSchool) {
+                if (!schoolInput.value.trim()) {
+                    schoolInput.setCustomValidity('Please enter school for the selected role.');
+                } else {
+                    schoolInput.setCustomValidity('');
+                }
             }
 
-            if (!sectionInput.value.trim()) {
-                sectionInput.setCustomValidity('Please enter assigned section.');
-            } else {
-                sectionInput.setCustomValidity('');
+            if (isClassAdviser) {
+                if (!gradeSelect.value) {
+                    gradeSelect.setCustomValidity('Please select assigned grade level.');
+                } else {
+                    gradeSelect.setCustomValidity('');
+                }
+
+                if (!sectionInput.value.trim()) {
+                    sectionInput.setCustomValidity('Please enter assigned section.');
+                } else {
+                    sectionInput.setCustomValidity('');
+                }
             }
 
             if (!requestForm.checkValidity()) {
@@ -227,6 +280,8 @@
                 requestForm.reportValidity();
             }
         });
+
+        syncRoleFields();
     </script>
 </body>
 </html>

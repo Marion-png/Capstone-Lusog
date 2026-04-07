@@ -124,7 +124,7 @@
             <article class="card section" id="create-account">
                 <h3 id="user-management">User and Role Management</h3>
                 <table>
-                    <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Assigned Class</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Assignment</th><th>Status</th></tr></thead>
                     <tbody>
                         @php
                             $roleLabel = [
@@ -143,6 +143,8 @@
                                 <td>
                                     @if (($account['role'] ?? '') === 'class_adviser')
                                         {{ $account['assigned_grade_level'] ?? '-' }} / {{ $account['assigned_section'] ?? '-' }}
+                                    @elseif (in_array(($account['role'] ?? ''), ['school_nurse', 'clinic_staff', 'school_head'], true))
+                                        {{ $account['school_name'] ?? '-' }}
                                     @else
                                         -
                                     @endif
@@ -157,7 +159,7 @@
 
                 <h3 id="incoming-requests" style="margin-top:16px">Incoming Account Requests</h3>
                 <table>
-                    <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Assigned Class</th><th>Submitted</th><th>Action</th></tr></thead>
+                    <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Assignment</th><th>Submitted</th><th>Action</th></tr></thead>
                     <tbody>
                         @forelse($pendingRequests as $request)
                             <tr>
@@ -167,6 +169,8 @@
                                 <td>
                                     @if (($request['role'] ?? '') === 'class_adviser')
                                         {{ $request['assigned_grade_level'] ?? '-' }} / {{ $request['assigned_section'] ?? '-' }}
+                                    @elseif (in_array(($request['role'] ?? ''), ['school_nurse', 'clinic_staff', 'school_head'], true))
+                                        {{ $request['school_name'] ?? '-' }}
                                     @else
                                         -
                                     @endif
@@ -195,7 +199,7 @@
             <article class="card section" id="account-history">
                 <h3>Account Request History</h3>
                 <table>
-                    <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Assigned Class</th><th>Decision</th><th>Submitted</th><th>Processed</th></tr></thead>
+                    <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Assignment</th><th>Decision</th><th>Submitted</th><th>Processed</th></tr></thead>
                     <tbody>
                         @forelse($requestHistoryCollection as $history)
                             <tr>
@@ -205,6 +209,8 @@
                                 <td>
                                     @if (($history['role'] ?? '') === 'class_adviser')
                                         {{ $history['assigned_grade_level'] ?? '-' }} / {{ $history['assigned_section'] ?? '-' }}
+                                    @elseif (in_array(($history['role'] ?? ''), ['school_nurse', 'clinic_staff', 'school_head'], true))
+                                        {{ $history['school_name'] ?? '-' }}
                                     @else
                                         -
                                     @endif
