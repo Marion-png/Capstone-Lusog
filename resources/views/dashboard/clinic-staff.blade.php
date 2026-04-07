@@ -43,6 +43,11 @@
         .row{display:flex;justify-content:space-between;align-items:center;margin:8px 0;font-size:.8rem}
         .bar{height:8px;background:#edf5ef;border-radius:999px;overflow:hidden}
         .fill{height:100%}
+        .alert-list{margin-top:8px}
+        .alert-item{padding:9px 10px;border:1px solid #fed7aa;background:#fff7ed;border-radius:10px;margin-bottom:8px}
+        .alert-item strong{font-size:.78rem;color:#7c2d12}
+        .alert-item div{font-size:.72rem;color:#9a3412;margin-top:2px}
+        .alert-empty{font-size:.76rem;color:var(--muted)}
         @media (max-width:980px){.stats{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}
         @media (max-width:780px){.sidebar{display:none}.main{margin-left:0}}
     </style>
@@ -98,6 +103,22 @@
                 <div class="row"><span>ORS</span><span>35 sachets left</span></div>
                 <div class="bar"><div class="fill" style="width:33%;background:#3b82f6"></div></div>
             </article>
+        </section>
+
+        <section class="card section" style="margin-top:12px;">
+            <h3>Feeding Program At-Risk Alerts</h3>
+            @if (($atRiskStudents ?? collect())->isNotEmpty())
+                <div class="alert-list">
+                    @foreach ($atRiskStudents as $student)
+                        <div class="alert-item">
+                            <strong>{{ $student->student_name }} ({{ $student->section }})</strong>
+                            <div>Attendance: {{ $student->attendance_sessions_count }}/120 days · Nutritional Status: {{ $student->nutritional_status }}</div>
+                        </div>
+                    @endforeach
+                </div>
+            @else
+                <div class="alert-empty">No at-risk beneficiaries flagged at this time.</div>
+            @endif
         </section>
     </div>
 </div>

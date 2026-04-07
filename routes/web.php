@@ -6,7 +6,10 @@ use App\Http\Controllers\FeedingCoordinatorController;
 use App\Http\Controllers\FeedingProgramController;
 use App\Http\Controllers\MedicineInventoryController;
 use App\Http\Controllers\SchoolHeadController;
+use App\Http\Controllers\StudentHealthRecordController;
+use App\Models\StudentHealthRecord;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -52,12 +55,24 @@ Route::post('/csv/upload', [CsvUploadController::class, 'upload'])
     ->name('csv.upload');
 
 Route::get('/dashboard/clinic-staff', function () {
-    return view('dashboard.clinic-staff');
+    $atRiskStudents = collect();
+
+    if (Schema::hasTable('student_health_records')) {
+        $atRiskStudents = StudentHealthRecord::query()
+            ->where('is_at_risk', true)
+            ->orderByDesc('attendance_sessions_count')
+            ->orderBy('student_name')
+            ->take(8)
+            ->get();
+    }
+
+    return view('dashboard.clinic-staff', [
+        'atRiskStudents' => $atRiskStudents,
+    ]);
 })->name('dashboard.clinic-staff');
 
-Route::get('/dashboard/class-adviser', function () {
-    return view('adviser-dashboard.class-adviser');
-})->name('dashboard.class-adviser');
+Route::get('/dashboard/class-adviser', [StudentHealthRecordController::class, 'classAdviserDashboard'])
+    ->name('dashboard.class-adviser');
 
 Route::get('/dashboard/school-head', [SchoolHeadController::class, 'index'])
     ->name('dashboard.school-head');
@@ -68,11 +83,20 @@ Route::get('/dashboard/school-head/reports', [SchoolHeadController::class, 'repo
 Route::get('/dashboard/feedingcor-dashboard', [FeedingCoordinatorController::class, 'dashboard'])
     ->name('dashboard.feedingcor-dashboard');
 
-Route::view('/dashboard/feedingcor-health-records', 'feedingcor-dashboard.feed-healthrec')
+Route::get('/dashboard/feedingcor-health-records', [StudentHealthRecordController::class, 'feedingHealthRecords'])
     ->name('dashboard.feedingcor-health-records');
+
+Route::post('/dashboard/class-adviser/health-records/baseline', [StudentHealthRecordController::class, 'storeBaseline'])
+    ->name('class-adviser.health-records.baseline.store');
+
+Route::post('/dashboard/class-adviser/health-records/{record}/endline', [StudentHealthRecordController::class, 'storeEndline'])
+    ->name('class-adviser.health-records.endline.store');
 
 Route::get('/dashboard/feedingcor-program', [FeedingProgramController::class, 'index'])
     ->name('dashboard.feedingcor-program');
+
+Route::post('/dashboard/feedingcor-program/attendance', [FeedingProgramController::class, 'storeAttendance'])
+    ->name('feedingcor-program.attendance.store');
 
 Route::post('/dashboard/school-head/approvals/{approval}/{decision}', [SchoolHeadController::class, 'decide'])
     ->whereIn('decision', ['approve', 'decline'])

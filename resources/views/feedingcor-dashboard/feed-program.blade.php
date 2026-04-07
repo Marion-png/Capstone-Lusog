@@ -279,6 +279,63 @@
 		.t-stable { background: #e5e7eb; color: #475569; }
 		.t-regressing { background: #fee2e2; color: #c81e1e; }
 
+		.flash {
+			margin-top: 12px;
+			padding: 10px 12px;
+			border-radius: 10px;
+			font-size: .76rem;
+			font-weight: 600;
+		}
+		.flash.ok { background: #dcfce7; border: 1px solid #86efac; color: #166534; }
+		.flash.err { background: #fee2e2; border: 1px solid #fecaca; color: #991b1b; }
+
+		.risk-alert {
+			margin-top: 12px;
+			background: #fff7ed;
+			border: 1px solid #fed7aa;
+			border-left: 4px solid #f59e0b;
+			border-radius: 12px;
+			padding: 10px 12px;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 10px;
+		}
+		.risk-alert strong { color: #7c2d12; font-size: .78rem; }
+		.risk-alert span { color: #9a3412; font-size: .72rem; }
+
+		.risk-section { margin-top: 14px; }
+		.risk-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+		.risk-filter {
+			appearance: none;
+			padding: 8px 30px 8px 10px;
+			border: 1px solid #d6e5de;
+			border-radius: 10px;
+			background: #fff;
+			font-size: .74rem;
+			font-weight: 600;
+			color: #2b4c43;
+			background-image: linear-gradient(45deg, transparent 50%, #7d918c 50%), linear-gradient(135deg, #7d918c 50%, transparent 50%);
+			background-position: calc(100% - 16px) 52%, calc(100% - 11px) 52%;
+			background-size: 5px 5px, 5px 5px;
+			background-repeat: no-repeat;
+		}
+		.risk-pill { font-size: .62rem; font-weight: 700; border-radius: 999px; padding: 3px 8px; display: inline-block; }
+		.risk-high { background: #fee2e2; color: #b91c1c; }
+		.risk-mid { background: #fef3c7; color: #92400e; }
+
+		.attendance-row {
+			display: grid;
+			grid-template-columns: auto 1fr auto;
+			gap: 10px;
+			align-items: center;
+			padding: 10px 0;
+			border-bottom: 1px solid #edf2f1;
+		}
+		.attendance-row:last-child { border-bottom: none; }
+		.attendance-meta { font-size: .72rem; color: #5f736d; }
+		.attendance-status { font-size: .66rem; color: #47645d; font-weight: 700; }
+
 		.modal-backdrop {
 			position: fixed;
 			inset: 0;
@@ -462,6 +519,13 @@
 	</header>
 
 	<div class="content">
+		@if (session('success'))
+			<div class="flash ok">{{ session('success') }}</div>
+		@endif
+		@if (session('error'))
+			<div class="flash err">{{ session('error') }}</div>
+		@endif
+
 		<div class="head-row">
 			<div>
 				<div class="page-eyebrow">Feeding Program</div>
@@ -473,6 +537,16 @@
 				<button type="button" class="btn btn-primary" id="openWeightsModal">Update Weights</button>
 			</div>
 		</div>
+
+		@if (($programStats['at_risk_count'] ?? 0) > 0)
+			<div class="risk-alert">
+				<div>
+					<strong>{{ $programStats['at_risk_count'] }} at-risk beneficiaries detected</strong><br>
+					<span>Attendance below {{ $programStats['at_risk_threshold'] ?? 75 }}% of expected sessions ({{ $programStats['at_risk_threshold_count'] ?? 0 }} required by current program day).</span>
+				</div>
+				<button type="button" class="btn btn-ghost" id="focusAtRiskBtn">Review List</button>
+			</div>
+		@endif
 
 		<section class="stats">
 			<article class="card stat">
@@ -503,6 +577,50 @@
 			<div class="prog-track"><div class="prog-fill" style="width: {{ $progressPercent }}%;"></div><div class="prog-marker" style="left: {{ $progressPercent }}%;"></div></div>
 			<div class="prog-day">Day {{ $programDayValue }} of 120</div>
 			<div class="prog-labels"><span>Baseline (Day 1)</span><span>Endline(Day 120)</span></div>
+		</section>
+
+		<section class="risk-section" id="atRiskSection">
+			<div class="risk-head">
+				<h2 class="section-title">At-Risk Beneficiaries</h2>
+				<select class="risk-filter" id="riskFilter" aria-label="Filter at-risk list by nutritional status">
+					<option value="all">All Nutritional Status</option>
+					<option value="severe">Severely Wasted</option>
+					<option value="wasted">Wasted</option>
+					<option value="normal">Normal</option>
+					<option value="over">Overweight</option>
+				</select>
+			</div>
+			<div class="table-card">
+				<table id="riskTable">
+					<thead>
+						<tr>
+							<th>Student</th>
+							<th>Section</th>
+							<th>Attendance</th>
+							<th>Nutritional Status</th>
+							<th>Risk Level</th>
+						</tr>
+					</thead>
+					<tbody>
+						@forelse (($atRiskStudents ?? collect()) as $student)
+							@php
+								$status = strtolower((string) ($student['nutritional_status'] ?? ''));
+								$riskClass = ($student['attendance_percent'] ?? 0) < 50 ? 'risk-high' : 'risk-mid';
+								$riskLabel = ($student['attendance_percent'] ?? 0) < 50 ? 'High' : 'Moderate';
+							@endphp
+							<tr data-risk-status="{{ $status }}">
+								<td><strong>{{ $student['student_name'] }}</strong></td>
+								<td>{{ $student['section'] }}</td>
+								<td>{{ $student['attendance'] }} ({{ $student['attendance_percent'] }}%)</td>
+								<td>{{ $student['nutritional_status'] }}</td>
+								<td><span class="risk-pill {{ $riskClass }}">{{ $riskLabel }}</span></td>
+							</tr>
+						@empty
+							<tr><td colspan="5">No at-risk beneficiaries right now.</td></tr>
+						@endforelse
+					</tbody>
+				</table>
+			</div>
 		</section>
 
 		<div class="fp-tabs" aria-label="Feeding Program views">
@@ -582,6 +700,45 @@
 			<div class="modal-foot">
 				<button type="button" class="btn btn-ghost" id="cancelWeightsModal">Cancel</button>
 				<button type="submit" class="btn btn-primary">Save Weights</button>
+			</div>
+		</form>
+	</div>
+</div>
+
+<div class="modal-backdrop" id="attendanceModalBackdrop" aria-hidden="true">
+	<div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="attendanceModalTitle">
+		<div class="modal-head">
+			<h2 id="attendanceModalTitle" class="modal-title">Record Attendance Session</h2>
+			<button type="button" class="modal-close" id="closeAttendanceModal" aria-label="Close">&times;</button>
+		</div>
+		<form method="POST" action="{{ route('feedingcor-program.attendance.store') }}" id="attendanceForm">
+			@csrf
+			<div class="modal-body">
+				<div class="weight-item">
+					<div class="weight-label">Session Date</div>
+					<div class="weight-field-wrap">
+						<input type="date" name="session_date" class="weight-input" value="{{ now()->toDateString() }}" required>
+					</div>
+				</div>
+				<div class="weight-item">
+					<div class="weight-label">Mark Present Beneficiaries</div>
+					@forelse (($students ?? collect()) as $student)
+						<div class="attendance-row">
+							<input type="checkbox" name="present_student_ids[]" value="{{ $student['id'] }}" id="present_{{ $student['id'] }}">
+							<label for="present_{{ $student['id'] }}">
+								<div class="weight-label" style="font-size:.9rem;">{{ $student['student_name'] }}</div>
+								<div class="attendance-meta">{{ $student['section'] }} · {{ $student['attendance'] }} ({{ $student['attendance_percent'] }}%)</div>
+							</label>
+							<div class="attendance-status">{{ $student['nutritional_status'] }}</div>
+						</div>
+					@empty
+						<div class="weight-label">No beneficiaries available.</div>
+					@endforelse
+				</div>
+			</div>
+			<div class="modal-foot">
+				<button type="button" class="btn btn-ghost" id="cancelAttendanceModal">Cancel</button>
+				<button type="submit" class="btn btn-primary">Save Attendance</button>
 			</div>
 		</form>
 	</div>
@@ -689,6 +846,13 @@
 	const form1MetaInputs = Array.from(document.querySelectorAll('[data-meta-field]'));
 	const openBtn = document.getElementById('openWeightsModal');
 	const recordAttendanceBtn = document.getElementById('recordAttendanceBtn');
+	const attendanceBackdrop = document.getElementById('attendanceModalBackdrop');
+	const closeAttendanceModal = document.getElementById('closeAttendanceModal');
+	const cancelAttendanceModal = document.getElementById('cancelAttendanceModal');
+	const focusAtRiskBtn = document.getElementById('focusAtRiskBtn');
+	const atRiskSection = document.getElementById('atRiskSection');
+	const riskFilter = document.getElementById('riskFilter');
+	const riskRows = Array.from(document.querySelectorAll('#riskTable tbody tr[data-risk-status]'));
 	const backdrop = document.getElementById('weightsModalBackdrop');
 	const closeBtn = document.getElementById('closeWeightsModal');
 	const cancelBtn = document.getElementById('cancelWeightsModal');
@@ -1463,7 +1627,42 @@
 
 	if (recordAttendanceBtn) {
 		recordAttendanceBtn.addEventListener('click', () => {
-			openEncodeForm('form4');
+			if (attendanceBackdrop) {
+				setModal(attendanceBackdrop, true);
+			}
+		});
+	}
+
+	if (closeAttendanceModal) {
+		closeAttendanceModal.addEventListener('click', () => setModal(attendanceBackdrop, false));
+	}
+
+	if (cancelAttendanceModal) {
+		cancelAttendanceModal.addEventListener('click', () => setModal(attendanceBackdrop, false));
+	}
+
+	if (attendanceBackdrop) {
+		attendanceBackdrop.addEventListener('click', (event) => {
+			if (event.target === attendanceBackdrop) {
+				setModal(attendanceBackdrop, false);
+			}
+		});
+	}
+
+	if (focusAtRiskBtn && atRiskSection) {
+		focusAtRiskBtn.addEventListener('click', () => {
+			atRiskSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		});
+	}
+
+	if (riskFilter && riskRows.length > 0) {
+		riskFilter.addEventListener('change', () => {
+			const selected = String(riskFilter.value || 'all').toLowerCase();
+			riskRows.forEach((row) => {
+				const rowStatus = String(row.getAttribute('data-risk-status') || '').toLowerCase();
+				const visible = selected === 'all' || rowStatus.includes(selected);
+				row.style.display = visible ? '' : 'none';
+			});
 		});
 	}
 
@@ -1624,6 +1823,9 @@
 	document.addEventListener('keydown', (event) => {
 		if (event.key === 'Escape' && backdrop.classList.contains('open')) {
 			closeModal();
+		}
+		if (event.key === 'Escape' && attendanceBackdrop && attendanceBackdrop.classList.contains('open')) {
+			setModal(attendanceBackdrop, false);
 		}
 		if (event.key === 'Escape' && encodeFormBackdrop && encodeFormBackdrop.classList.contains('open')) {
 			setModal(encodeFormBackdrop, false);
