@@ -6,110 +6,10 @@
     <title>Health Records - LUSOG</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
-    <style>
-        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-        :root{--g900:#14532d;--g700:#15803d;--g300:#86efac;--cream:#f7f8f5;--card:#fff;--border:#e4ece7;--text-1:#0d1f14;--text-2:#3d5c47;--text-3:#7a9e87;--red:#ef4444;--amber:#f59e0b;--sidebar-w:248px;--sidebar-collapsed-w:76px;--topbar-h:64px;--radius-sm:10px;--shadow-card:0 1px 4px rgba(5,46,22,.06),0 4px 16px rgba(5,46,22,.06)}
-        html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--text-1);overflow:hidden}
-
-        .sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-collapsed-w);background:var(--g900);display:flex;flex-direction:column;z-index:100;overflow:hidden;transition:width .24s ease}
-        .sidebar:hover{width:var(--sidebar-w)}
-        .sb-logo{padding:14px 10px;position:relative;z-index:2;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:center;transition:padding .24s ease}
-        .sb-logo img{width:48px;max-width:100%;height:auto;display:block;transition:width .24s ease}
-        .sidebar:hover .sb-logo{padding:20px 20px 18px}
-        .sidebar:hover .sb-logo img{width:176px}
-        .sb-nav{flex:1;overflow-y:auto;padding:16px 8px;position:relative;z-index:2;scrollbar-width:none;transition:padding .24s ease}
-        .sidebar:hover .sb-nav{padding:16px 12px}
-        .sb-nav::-webkit-scrollbar{display:none}
-        .sb-section-label{font-size:.6rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(134,239,172,.5);padding:0 8px;margin:20px 0 8px}
-        .sb-section-label:first-child{margin-top:0}
-        .sb-link{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;color:rgba(255,255,255,.62);font-size:.83rem;font-weight:500;transition:background .15s,color .15s,padding .24s ease;margin-bottom:2px;white-space:nowrap;overflow:hidden}
-        .sb-link:hover{background:rgba(255,255,255,.08);color:rgba(255,255,255,.9)}
-        .sb-link.active{background:rgba(34,197,94,.18);color:var(--g300)}
-        .sb-link svg{width:16px;height:16px;flex-shrink:0}
-        .sidebar:not(:hover) .sb-section-label{display:none}
-        .sidebar:not(:hover) .sb-link{justify-content:center;font-size:0;padding:10px;gap:0}
-        .sb-user{padding:14px 16px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:11px;position:relative;z-index:2}
-        .sb-avatar{width:34px;height:34px;border-radius:50%;background:#16a34a;display:grid;place-items:center;font-size:.8rem;font-weight:700;color:#fff;flex-shrink:0}
-        .sb-user-meta{min-width:0}
-        .sb-user-name{font-size:.8rem;font-weight:600;color:#fff;line-height:1.2}
-        .sb-user-role{font-size:.68rem;color:var(--g300)}
-        .sb-logout{margin-left:auto;background:none;border:none;color:rgba(255,255,255,.35);cursor:pointer;padding:4px;border-radius:6px;transition:color .15s,background .15s;display:grid;place-items:center}
-        .sb-logout:hover{color:var(--red);background:rgba(239,68,68,.1)}
-        .sb-logout svg{width:15px;height:15px}
-        .sidebar:not(:hover) .sb-user{padding:14px 10px}
-        .sidebar:not(:hover) .sb-user-meta{display:none}
-        .sidebar:not(:hover) .sb-logout{display:none}
-
-        .main{margin-left:var(--sidebar-collapsed-w);height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:margin-left .24s ease}
-        .sidebar:hover ~ .main{margin-left:var(--sidebar-w)}
-        .topbar{height:var(--topbar-h);border-bottom:1px solid var(--border);background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 24px}
-        .topbar-bc{font-size:.78rem;color:var(--text-3);display:flex;gap:6px;align-items:center}
-        .topbar-chip{font-size:.72rem;border:1px solid #bbf7d0;color:#15803d;background:#f0fdf4;border-radius:999px;padding:5px 11px}
-
-        .content{overflow:auto;padding:20px}
-        .page-eyebrow{font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#15803d;margin-bottom:6px}
-        .page-title{font-family:'DM Serif Display',serif;font-size:1.75rem;line-height:1.15}
-        .page-title span{font-style:italic;color:#15803d}
-        .page-sub{margin-top:5px;font-size:.8rem;color:var(--text-3)}
-
-        .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
-        .mini-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px;box-shadow:var(--shadow-card)}
-        .mini-card .val{font-family:'DM Serif Display',serif;font-size:1.4rem}
-        .mini-card .lbl{font-size:.72rem;color:var(--text-3)}
-
-        .table-card{margin-top:14px;background:#fff;border:1px solid var(--border);border-radius:10px;overflow:auto;box-shadow:var(--shadow-card)}
-        table{width:100%;border-collapse:collapse}
-        th,td{padding:10px;border-bottom:1px solid #edf2f1;font-size:.74rem;text-align:left}
-        th{color:#7a8f8a;background:#f9fbfa;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
-        tr:last-child td{border-bottom:none}
-        .status{font-size:.66rem;font-weight:700;border-radius:999px;padding:3px 8px;display:inline-block}
-        .s-pending{background:#fef3c7;color:#92400e}
-        .s-done{background:#dcfce7;color:#15803d}
-        .btn{border:none;background:#15803d;color:#fff;font-weight:700;border-radius:8px;padding:7px 10px;cursor:pointer;text-decoration:none;display:inline-block}
-        .btn:hover{background:#166534}
-
-        .record-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:14px}
-        .record-card{background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-card);padding:14px;cursor:pointer;transition:transform .15s ease,box-shadow .2s ease,border-color .2s ease;display:flex;flex-direction:column;gap:8px;border-left:5px solid #16a34a}
-        .record-card.pending{border-left-color:#f59e0b}
-        .record-card.done{border-left-color:#16a34a}
-        .record-card:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(5,46,22,.12);border-color:#d5e8de}
-        .record-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
-        .record-name{font-size:1.05rem;font-weight:700;color:#173726}
-        .record-status{font-size:.8rem;font-weight:700}
-        .record-status.pending{color:#b45309}
-        .record-status.done{color:#15803d}
-        .record-sub{font-size:.76rem;color:#6f8c7a;line-height:1.4}
-        .record-chips{display:flex;flex-wrap:wrap;gap:6px}
-        .chip{background:#f5f8f6;border:1px solid #e6efea;border-radius:8px;padding:4px 8px;font-size:.76rem;color:#355a47}
-
-        .profile-backdrop{position:fixed;inset:0;background:rgba(6,26,14,.42);display:none;align-items:center;justify-content:center;z-index:1400}
-        .profile-backdrop.open{display:flex}
-        .profile-modal{width:min(1000px,95vw);max-height:90vh;overflow:auto;background:#fff;border-radius:14px;border:1px solid var(--border);box-shadow:0 24px 50px rgba(6,26,14,.28)}
-        .profile-head{background:linear-gradient(90deg,#1f4c3a,#214f40);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:flex-start}
-        .profile-title{font-size:1.5rem;font-weight:700;line-height:1.1}
-        .profile-meta{font-size:.82rem;opacity:.9;margin-top:4px}
-        .profile-right{text-align:right;font-size:.78rem;opacity:.95}
-        .profile-right b{display:block;font-size:1.2rem;margin-top:3px}
-        .profile-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);background:#fff}
-        .profile-tab{border:none;background:none;padding:12px 18px;font-size:.85rem;font-weight:700;color:#6c7f76;cursor:pointer;border-bottom:2px solid transparent}
-        .profile-tab.active{color:#215443;border-bottom-color:#2f7d65}
-        .profile-body{padding:16px 18px}
-        .profile-panel{display:none}
-        .profile-panel.active{display:block}
-        .profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-        .profile-block{border-top:1px solid #e8efeb;padding-top:10px}
-        .profile-block h4{font-size:1rem;color:#2e3d36;margin-bottom:8px}
-        .kv{display:grid;grid-template-columns:140px 1fr;gap:8px;font-size:.92rem;margin-bottom:6px}
-        .kv .k{color:#7a8f86}
-        .kv .v{color:#1d3327;font-weight:600}
-        .profile-actions{display:flex;justify-content:flex-end;padding:0 18px 16px;gap:8px}
-        .btn-secondary{background:#fff;border:1px solid #c7d8cf;color:#285640}
-
-        @media (max-width:980px){.cards{grid-template-columns:1fr}.record-grid{grid-template-columns:1fr}.profile-grid{grid-template-columns:1fr}}
-
-        @media (max-width:980px){.cards{grid-template-columns:1fr}}
-        @media (max-width:780px){:root{--sidebar-w:0px;--sidebar-collapsed-w:0px}.sidebar{display:none}.main{margin-left:0}}
-    </style>
+        @php $pageCssPath = resource_path('css/school-nurse-student-health-records.css'); @endphp
+    @if (file_exists($pageCssPath))
+        <style>{!! file_get_contents($pageCssPath) !!}</style>
+    @endif
 </head>
 <body>
 <aside class="sidebar">
@@ -130,11 +30,11 @@
             Consultation Log
         </a>
         <div class="sb-section-label">Health Programs</div>
-        <a href="#" class="sb-link">
+        <a href="{{ route('dashboard.school-nurse.feeding-program') }}" class="sb-link">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
             Feeding Program
         </a>
-        <a href="#" class="sb-link">
+        <a href="{{ route('dashboard.school-nurse.deworming') }}" class="sb-link">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 3-7-3"/><path d="M3 9v6l7 3 7-3V9"/><polyline points="3 9 12 6 21 9"/></svg>
             Deworming Program
         </a>
@@ -158,9 +58,9 @@
         </a>
     </nav>
     <div class="sb-user">
-        <div class="sb-avatar">{{ substr(auth()->user()->name ?? 'SN', 0, 2) }}</div>
+        <div class="sb-avatar">{{ substr(session('active_name', 'School Nurse'), 0, 2) }}</div>
         <div class="sb-user-meta">
-            <div class="sb-user-name">{{ auth()->user()->name ?? 'School Nurse' }}</div>
+            <div class="sb-user-name">{{ session('active_name', 'School Nurse') }}</div>
             <div class="sb-user-role">School Nurse - DCNHS</div>
         </div>
         <form method="POST" action="{{ route('logout') }}">

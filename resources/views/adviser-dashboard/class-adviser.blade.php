@@ -545,6 +545,35 @@
                 </div>
             </section>
 
+            <section class="student-profile-section" id="vpNurseSection" style="display:none;">
+                <h4>Nurse Examination Record (Read-only)</h4>
+                <div class="student-profile-grid">
+                    <div><span>Date of Examination:</span><b id="vpExamDate">-</b></div>
+                    <div><span>Examined By:</span><b id="vpExaminedBy">-</b></div>
+                    <div><span>Temperature / BP:</span><b id="vpTempBp">-</b></div>
+                    <div><span>Heart Rate:</span><b id="vpHeartRate">-</b></div>
+                    <div><span>Pulse Rate:</span><b id="vpPulseRate">-</b></div>
+                    <div><span>Respiratory Rate:</span><b id="vpRespRate">-</b></div>
+                    <div><span>Nutritional Status (BMI/Wt-for-Age):</span><b id="vpExamNutriBmi">-</b></div>
+                    <div><span>Nutritional Status (Height-for-Age):</span><b id="vpExamNutriHfa">-</b></div>
+                    <div><span>Vision Screening:</span><b id="vpVision">-</b></div>
+                    <div><span>Auditory Screening:</span><b id="vpAuditory">-</b></div>
+                    <div><span>Skin/Scalp:</span><b id="vpSkin">-</b></div>
+                    <div><span>Eyes/Ears/Nose:</span><b id="vpEyesEarsNose">-</b></div>
+                    <div><span>Mouth/Throat/Neck:</span><b id="vpMouthThroatNeck">-</b></div>
+                    <div><span>Lungs/Heart:</span><b id="vpLungsHeart">-</b></div>
+                    <div><span>Abdomen:</span><b id="vpAbdomen">-</b></div>
+                    <div><span>Deformities:</span><b id="vpDeformities">-</b></div>
+                    <div><span>Iron Supplementation:</span><b id="vpIron">-</b></div>
+                    <div><span>Deworming:</span><b id="vpDeworming">-</b></div>
+                    <div><span>Immunization:</span><b id="vpImmunization">-</b></div>
+                    <div><span>SBFP Beneficiary:</span><b id="vpSbfp">-</b></div>
+                    <div><span>4Ps Beneficiary:</span><b id="vp4ps">-</b></div>
+                    <div><span>Menarche:</span><b id="vpMenarche">-</b></div>
+                    <div class="full"><span>Others:</span><b id="vpOthers">-</b></div>
+                </div>
+            </section>
+
             <section class="pending-note-box" id="vpPendingBox">
                 <h5>Pending Nurse Review</h5>
                 <p>This student's health record is pending completion by the school nurse.</p>
@@ -1072,6 +1101,8 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
         const heightSquared = heightM ? (heightM * heightM) : null;
         const statusBadge = document.getElementById('vpStatusBadge');
         const pendingBox = document.getElementById('vpPendingBox');
+        const nurseSection = document.getElementById('vpNurseSection');
+        const exam = record.examination && typeof record.examination === 'object' ? record.examination : {};
 
         setText('vpName', fullName || '-');
         setText('vpLrn', 'LRN: ' + (record.lrn || '-'));
@@ -1091,6 +1122,30 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
         setText('vpNutri', record.nutritional_status_bmi_for_age || '-');
         setText('vpHfa', record.nutritional_status_height_for_age || '-');
 
+        setText('vpExamDate', exam.date_of_examination || '-');
+        setText('vpExaminedBy', exam.examined_by || '-');
+        setText('vpTempBp', exam.temperature_bp || '-');
+        setText('vpHeartRate', exam.heart_rate || '-');
+        setText('vpPulseRate', exam.pulse_rate || '-');
+        setText('vpRespRate', exam.respiratory_rate || '-');
+        setText('vpExamNutriBmi', exam.nutritional_status_bmi || '-');
+        setText('vpExamNutriHfa', exam.nutritional_status_height_age || '-');
+        setText('vpVision', exam.vision_screening || '-');
+        setText('vpAuditory', exam.auditory_screening || '-');
+        setText('vpSkin', exam.skin_scalp || '-');
+        setText('vpEyesEarsNose', exam.eyes_ears_nose || '-');
+        setText('vpMouthThroatNeck', exam.mouth_throat_neck || '-');
+        setText('vpLungsHeart', exam.lungs_heart || '-');
+        setText('vpAbdomen', exam.abdomen || '-');
+        setText('vpDeformities', exam.deformities || '-');
+        setText('vpIron', exam.iron_supplementation || '-');
+        setText('vpDeworming', exam.deworming || '-');
+        setText('vpImmunization', exam.immunization || '-');
+        setText('vpSbfp', exam.sbfp_beneficiary || '-');
+        setText('vp4ps', exam.four_ps_beneficiary || '-');
+        setText('vpMenarche', exam.menarche || '-');
+        setText('vpOthers', exam.others || '-');
+
         if (statusBadge) {
             if (examined) {
                 statusBadge.textContent = 'Complete Record';
@@ -1103,6 +1158,10 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
 
         if (pendingBox) {
             pendingBox.style.display = examined ? 'none' : 'block';
+        }
+
+        if (nurseSection) {
+            nurseSection.style.display = examined ? 'block' : 'none';
         }
 
         backdrop.classList.add('open');

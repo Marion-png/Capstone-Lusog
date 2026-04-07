@@ -17,7 +17,7 @@
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h1 class="h4 mb-0">Medical Examination Form</h1>
-        <a href="{{ route('nurse.index') }}" class="btn btn-outline-secondary btn-sm">Back to Dashboard</a>
+        <a href="{{ route('dashboard.student-health-records') }}" class="btn btn-outline-secondary btn-sm">Back to Dashboard</a>
     </div>
 
     <div class="card shadow-sm mb-3">
@@ -45,11 +45,11 @@
 
                     <div class="col-md-4"><label class="form-label">Pulse Rate</label><input type="text" name="pulse_rate" class="form-control" value="{{ $exam['pulse_rate'] ?? '' }}"></div>
                     <div class="col-md-4"><label class="form-label">Respiratory Rate</label><input type="text" name="respiratory_rate" class="form-control" value="{{ $exam['respiratory_rate'] ?? '' }}"></div>
-                    <div class="col-md-2"><label class="form-label">Height (cm)</label><input type="text" name="height_cm" class="form-control" value="{{ $exam['height_cm'] ?? ($record['height_cm'] ?? '') }}"></div>
-                    <div class="col-md-2"><label class="form-label">Weight (kg)</label><input type="text" name="weight_kg" class="form-control" value="{{ $exam['weight_kg'] ?? ($record['weight_kg'] ?? '') }}"></div>
+                    <div class="col-md-2"><label class="form-label">Height (cm)</label><input type="text" id="examHeightCm" name="height_cm" class="form-control" value="{{ $exam['height_cm'] ?? ($record['height_cm'] ?? '') }}" readonly></div>
+                    <div class="col-md-2"><label class="form-label">Weight (kg)</label><input type="text" id="examWeightKg" name="weight_kg" class="form-control" value="{{ $exam['weight_kg'] ?? ($record['weight_kg'] ?? '') }}" readonly></div>
 
-                    <div class="col-md-6"><label class="form-label">Nutritional Status (BMI/Wt-for-Age)</label><input type="text" name="nutritional_status_bmi" class="form-control" value="{{ $exam['nutritional_status_bmi'] ?? '' }}"></div>
-                    <div class="col-md-6"><label class="form-label">Nutritional Status (Height-for-Age)</label><input type="text" name="nutritional_status_height_age" class="form-control" value="{{ $exam['nutritional_status_height_age'] ?? '' }}"></div>
+                    <div class="col-md-6"><label class="form-label">Nutritional Status (BMI/Wt-for-Age)</label><input type="text" id="examNutritionalStatusBmi" name="nutritional_status_bmi" class="form-control" value="{{ $exam['nutritional_status_bmi'] ?? ($record['nutritional_status_bmi_for_age'] ?? '') }}"></div>
+                    <div class="col-md-6"><label class="form-label">Nutritional Status (Height-for-Age)</label><input type="text" id="examNutritionalStatusHeightAge" name="nutritional_status_height_age" class="form-control" value="{{ $exam['nutritional_status_height_age'] ?? ($record['nutritional_status_height_for_age'] ?? '') }}"></div>
 
                     <div class="col-md-6"><label class="form-label">Vision Screening</label><input type="text" name="vision_screening" class="form-control" value="{{ $exam['vision_screening'] ?? '' }}"></div>
                     <div class="col-md-6"><label class="form-label">Auditory Screening</label><input type="text" name="auditory_screening" class="form-control" value="{{ $exam['auditory_screening'] ?? '' }}"></div>
@@ -111,11 +111,99 @@
 
                 <div class="mt-4 d-flex gap-2">
                     <button type="submit" class="btn btn-success">Save Examination</button>
-                    <a href="{{ route('nurse.index') }}" class="btn btn-outline-secondary">Cancel</a>
+                    <a href="{{ route('dashboard.student-health-records') }}" class="btn btn-outline-secondary">Cancel</a>
                 </div>
             </form>
         </div>
     </div>
 </div>
+<script>
+(() => {
+    const heightInput = document.getElementById('examHeightCm');
+    const weightInput = document.getElementById('examWeightKg');
+    const bmiStatusInput = document.getElementById('examNutritionalStatusBmi');
+    const hfaStatusInput = document.getElementById('examNutritionalStatusHeightAge');
+
+    if (!heightInput || !weightInput || !bmiStatusInput || !hfaStatusInput) {
+        return;
+    }
+
+    const existingBmiStatus = bmiStatusInput.value.trim();
+    const existingHfaStatus = hfaStatusInput.value.trim();
+
+    const birthYear = Number(@json($record['birth_year'] ?? null));
+    const birthMonth = Number(@json($record['birth_month'] ?? null));
+    const birthDay = Number(@json($record['birth_day'] ?? null));
+
+    const resolveAge = () => {
+        if (!Number.isFinite(birthYear) || !Number.isFinite(birthMonth) || !Number.isFinite(birthDay)) {
+            return null;
+        }
+
+        const dob = new Date(birthYear, birthMonth - 1, birthDay);
+        if (Number.isNaN(dob.getTime())) {
+            return null;
+        }
+
+        const today = new Date();
+        let age = today.getFullYear() - dob.getFullYear();
+        const monthDiff = today.getMonth() - dob.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+            age -= 1;
+        }
+
+        return age >= 0 ? age : null;
+    };
+
+    const classifyBmiForAge = (bmi, age) => {
+        if (!Number.isFinite(bmi) || age === null) {
+            return 'Not enough data';
+        }
+
+        if (bmi < 16.0) return 'Severely Wasted';
+        if (bmi < 17.0) return 'Wasted';
+        if (bmi < 18.5) return 'Underweight';
+        if (bmi >= 25.0) return 'Overweight';
+        return 'Normal';
+    };
+
+    const classifyHeightForAge = (heightCm, age) => {
+        if (!Number.isFinite(heightCm) || age === null || heightCm <= 0) {
+            return 'Not enough data';
+        }
+
+        const heightM = heightCm / 100;
+        if (heightM < 1.20) return 'Severely Stunted';
+        if (heightM < 1.30) return 'Stunted';
+        if (heightM > 1.70) return 'Tall';
+        return 'Normal Height-for-Age';
+    };
+
+    const updateStatuses = (force = false) => {
+        const heightCm = Number(heightInput.value);
+        const weightKg = Number(weightInput.value);
+        const age = resolveAge();
+
+        if (!Number.isFinite(heightCm) || !Number.isFinite(weightKg) || heightCm <= 0 || weightKg <= 0) {
+            return;
+        }
+
+        const heightM = heightCm / 100;
+        const bmi = weightKg / (heightM * heightM);
+
+        if (force || bmiStatusInput.value.trim() === '' || bmiStatusInput.value.trim() === existingBmiStatus) {
+            bmiStatusInput.value = classifyBmiForAge(bmi, age);
+        }
+
+        if (force || hfaStatusInput.value.trim() === '' || hfaStatusInput.value.trim() === existingHfaStatus) {
+            hfaStatusInput.value = classifyHeightForAge(heightCm, age);
+        }
+    };
+
+    heightInput.addEventListener('input', () => updateStatuses(true));
+    weightInput.addEventListener('input', () => updateStatuses(true));
+    updateStatuses(false);
+})();
+</script>
 </body>
 </html>

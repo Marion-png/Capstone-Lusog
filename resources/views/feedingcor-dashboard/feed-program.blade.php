@@ -9,647 +9,21 @@
 		<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
 		<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
 		<script>document.documentElement.classList.add('js');</script>
-	<style>
-		*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-		:root {
-			--g900: #14532d;
-			--g800: #166534;
-			--g700: #15803d;
-			--g600: #16a34a;
-			--teal: #2a9d8f;
-			--red: #e34848;
-			--g300: #86efac;
-			--cream: #f7f8f5;
-			--card: #ffffff;
-			--border: #e4ece7;
-			--text-1: #0d1f14;
-			--text-2: #3d5c47;
-			--text-3: #7a9e87;
-			--sidebar-w: 248px;
-			--sidebar-collapsed-w: 76px;
-			--topbar-h: 64px;
-			--radius-sm: 10px;
-			--surface-soft: #f5faf7;
-			--focus-ring: rgba(34, 197, 94, 0.25);
-			--shadow-card: 0 1px 4px rgba(5,46,22,.06), 0 4px 16px rgba(5,46,22,.06);
-		}
-
-		html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--text-1); overflow: hidden; -webkit-font-smoothing: antialiased; }
-
-		.sidebar {
-			position: fixed;
-			left: 0;
-			top: 0;
-			bottom: 0;
-			width: var(--sidebar-collapsed-w);
-			background: var(--g900);
-			display: flex;
-			flex-direction: column;
-			z-index: 100;
-			overflow: hidden;
-			transition: width .24s ease;
-		}
-		.sidebar:hover {
-			width: var(--sidebar-w);
-		}
-		.sidebar::after {
-			content: '';
-			position: absolute;
-			inset: 0;
-			background: radial-gradient(ellipse 120% 40% at 50% 100%, rgba(34,197,94,.18) 0%, transparent 70%),
-				radial-gradient(ellipse 80% 30% at 80% 0%, rgba(74,222,128,.1) 0%, transparent 60%);
-			pointer-events: none;
-		}
-		.sb-grid {
-			position: absolute;
-			inset: 0;
-			background-image: linear-gradient(rgba(134,239,172,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);
-			background-size: 28px 28px;
-		}
-		.sb-logo { padding: 20px 20px 18px; position: relative; z-index: 2; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; justify-content: center; transition: padding .24s ease; }
-		.sb-logo-full { width: 176px; max-width: 100%; height: auto; display: block; transition: width .24s ease; }
-		.sidebar:not(:hover) .sb-logo { padding: 14px 10px; }
-		.sidebar:not(:hover) .sb-logo-full { width: 48px; }
-		.sb-nav { flex: 1; overflow-y: auto; padding: 16px 12px; position: relative; z-index: 2; }
-		.sidebar:not(:hover) .sb-nav { padding: 12px 8px; }
-		.sb-section-label { font-size: .6rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: rgba(134,239,172,.5); padding: 0 8px; margin: 8px 0; }
-		.sb-section-label { max-height: 20px; opacity: 1; transform: translateX(0); transition: max-height .24s ease, opacity .18s ease, transform .24s ease, margin .24s ease; overflow: hidden; }
-		.sidebar:not(:hover) .sb-section-label { max-height: 0; opacity: 0; transform: translateX(-6px); margin: 0; }
-		.sb-link { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); text-decoration: none; color: rgba(255,255,255,.62); font-size: .83rem; font-weight: 500; transition: background .15s, color .15s; margin-bottom: 2px; }
-		.sb-link:hover { background: rgba(255,255,255,.08); color: rgba(255,255,255,.9); }
-		.sb-link.active { background: rgba(34,197,94,.18); color: var(--g300); }
-		.sb-link svg { width: 16px; height: 16px; flex-shrink: 0; }
-		.sb-link { white-space: nowrap; overflow: hidden; transition: background .15s, color .15s, padding .24s ease, gap .24s ease, font-size .24s ease; }
-		.sidebar:not(:hover) .sb-link {
-			justify-content: center;
-			font-size: 0;
-			padding: 10px;
-			gap: 0;
-		}
-		.sidebar:not(:hover) .sb-link svg {
-			width: 18px;
-			height: 18px;
-		}
-		.sb-user { padding: 14px 16px; border-top: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 11px; position: relative; z-index: 2; }
-		.sb-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--g600); display: grid; place-items: center; font-size: .8rem; font-weight: 700; color: white; flex-shrink: 0; }
-		.sb-user-name { font-size: .8rem; font-weight: 600; color: white; line-height: 1.2; }
-		.sb-user-role { font-size: .68rem; color: var(--g300); }
-		.sb-logout { margin-left: auto; background: none; border: none; color: rgba(255,255,255,.35); cursor: pointer; padding: 4px; border-radius: 6px; transition: color .15s, background .15s; display: grid; place-items: center; }
-		.sb-logout:hover { color: var(--red); background: rgba(239,68,68,.1); }
-		.sb-logout svg { width: 15px; height: 15px; }
-		.sidebar:not(:hover) .sb-user {
-			justify-content: center;
-			padding: 10px;
-		}
-		.sb-user-meta { max-width: 180px; opacity: 1; transform: translateX(0); overflow: hidden; transition: max-width .24s ease, opacity .18s ease, transform .24s ease; }
-		.sidebar:not(:hover) .sb-user-meta { max-width: 0; opacity: 0; transform: translateX(-6px); }
-		.sidebar:not(:hover) .sb-user form { display: none; }
-
-		.main { margin-left: var(--sidebar-collapsed-w); height: 100vh; display: flex; flex-direction: column; overflow: hidden; transition: margin-left .24s ease; }
-		.sidebar:hover ~ .main { margin-left: var(--sidebar-w); }
-		html.js .main { opacity: 0; transform: translateY(10px); transition: opacity .26s ease, transform .3s ease; }
-		html.js .main.page-ready { opacity: 1; transform: translateY(0); }
-		html.js .main.page-exit { opacity: 0; transform: translateY(10px); }
-		.topbar { height: var(--topbar-h); border-bottom: 1px solid var(--border); background: rgba(255,255,255,.9); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: space-between; padding: 0 22px; position: sticky; top: 0; z-index: 20; }
-		.topbar-bc { font-size: .76rem; color: var(--text-3); display: flex; gap: 6px; align-items: center; }
-		.topbar-chip { font-size: .72rem; border: 1px solid #bbf7d0; color: #15803d; background: #f0fdf4; border-radius: 999px; padding: 5px 11px; display: flex; align-items: center; gap: 7px; }
-		.topbar-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
-
-		.content { overflow: auto; padding: 18px; }
-		.head-row { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
-		.page-eyebrow { font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #15803d; margin-bottom: 6px; }
-		.page-title { font-family: 'DM Serif Display', serif; font-size: 1.75rem; color: var(--text-1); line-height: 1.15; }
-		.page-title span { font-style: italic; color: #15803d; }
-		.page-sub { margin-top: 5px; font-size: .76rem; color: var(--text-3); }
-
-		.actions { display: flex; gap: 10px; }
-		.school-filter-form {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-			margin-top: 10px;
-		}
-		.school-filter-label {
-			font-size: .76rem;
-			font-weight: 700;
-			color: var(--text-2);
-		}
-		.school-filter-select {
-			appearance: none;
-			min-width: 220px;
-			padding: 8px 32px 8px 10px;
-			border: 1px solid #cfdfd9;
-			border-radius: 10px;
-			background: #fff;
-			font-size: .76rem;
-			font-weight: 600;
-			color: #2f4e45;
-			background-image: linear-gradient(45deg, transparent 50%, #7d918c 50%), linear-gradient(135deg, #7d918c 50%, transparent 50%);
-			background-position: calc(100% - 16px) 52%, calc(100% - 11px) 52%;
-			background-size: 5px 5px, 5px 5px;
-			background-repeat: no-repeat;
-		}
-		.btn {
-			appearance: none;
-			border: 1px solid transparent;
-			border-radius: 8px;
-			padding: 8px 12px;
-			font-size: .74rem;
-			font-weight: 600;
-			cursor: pointer;
-			text-decoration: none;
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
-			transition: transform .15s ease, box-shadow .18s ease, background .18s ease, color .18s ease, border-color .18s ease;
-		}
-		.btn:focus-visible, .forms-filter:focus-visible, .encode-cell-input:focus-visible, .weight-input:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
-		.btn-ghost { background: #fff; border-color: var(--border); color: var(--text-2); }
-		.btn-ghost:hover { background: #f0fdf4; border-color: #86efac; color: #15803d; }
-		.btn-primary { background: var(--g700); color: #fff; }
-		.btn-primary:hover { background: var(--g800); }
-
-		.stats { margin-top: 16px; display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
-		.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); transition: transform .18s ease, box-shadow .2s ease, border-color .18s ease; }
-		.card:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(5,46,22,.08), 0 10px 24px rgba(5,46,22,.07); border-color: #d2e5db; }
-		.stat { padding: 12px 14px; }
-		.stat .label { font-size: .7rem; color: var(--text-3); }
-		.stat .num { margin-top: 7px; font-size: 1.55rem; font-family: 'DM Serif Display', serif; line-height: 1; }
-		.stat .hint { margin-top: 6px; font-size: .66rem; color: var(--text-3); }
-
-		.progress-card { margin-top: 14px; padding: 14px 16px; }
-		.section-title { font-size: .78rem; color: var(--text-2); font-weight: 700; margin-bottom: 10px; }
-		.prog-track {
-			width: 100%;
-			height: 14px;
-			border-radius: 999px;
-			background: linear-gradient(90deg, #d8dadd 0%, #cfd4d3 100%);
-			overflow: hidden;
-			box-shadow: inset 0 0 0 1px rgba(27, 58, 49, .08);
-			position: relative;
-		}
-		.prog-fill {
-			width: 0;
-			height: 100%;
-			background: linear-gradient(90deg, #37b9a7 0%, #2fa595 100%);
-			border-radius: 999px;
-		}
-		.prog-marker {
-			position: absolute;
-			top: -3px;
-			left: 0;
-			width: 2px;
-			height: 20px;
-			background: #22544a;
-			transform: translateX(-1px);
-			border-radius: 1px;
-			opacity: .7;
-		}
-		.prog-labels { margin-top: 8px; display: flex; justify-content: space-between; font-size: .66rem; color: var(--text-3); }
-		.prog-day { margin-top: 6px; font-size: .66rem; color: #2a5f54; font-weight: 700; }
-
-		.forms-hub { margin-top: 8px; }
-		.fp-tabs {
-			margin-top: 18px;
-			margin-bottom: 14px;
-			display: inline-flex;
-			gap: 4px;
-			padding: 4px;
-			border-radius: 12px;
-			background: #e9efec;
-			border: 1px solid #d9e5e0;
-		}
-		.fp-tab {
-			border: none;
-			background: transparent;
-			padding: 8px 14px;
-			font-size: .8rem;
-			font-weight: 700;
-			color: #6d8680;
-			border-radius: 8px;
-		}
-		.fp-tab.active {
-			background: #fff;
-			color: #183830;
-			box-shadow: 0 1px 2px rgba(16, 49, 39, .08);
-		}
-		.fp-tab.disabled { opacity: .55; cursor: not-allowed; }
-		.view-panel { display: none; }
-		.view-panel.active { display: block; }
-		.view-panel.active {
-			opacity: 1;
-			transform: translateY(0);
-			transition: opacity .22s ease, transform .22s ease;
-		}
-		.view-panel.panel-enter {
-			opacity: 0;
-			transform: translateY(8px);
-		}
-		.view-panel.panel-leave {
-			opacity: 0;
-			transform: translateY(8px);
-		}
-		.forms-filter-wrap { margin-top: 8px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
-		.forms-filter-wrap label { font-size: .85rem; color: #5d7c73; font-weight: 700; }
-		.forms-filter {
-			appearance: none;
-			min-width: 170px;
-			padding: 9px 34px 9px 12px;
-			border: 1px solid #cfdfd9;
-			border-radius: 11px;
-			background: #f9fcfb;
-			font-size: .78rem;
-			font-weight: 600;
-			color: #2f4e45;
-			background-image: linear-gradient(45deg, transparent 50%, #7d918c 50%), linear-gradient(135deg, #7d918c 50%, transparent 50%);
-			background-position: calc(100% - 18px) 52%, calc(100% - 12px) 52%;
-			background-size: 6px 6px, 6px 6px;
-			background-repeat: no-repeat;
-		}
-		.forms-grid { margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-		.form-card { background: #fff; border: 1px solid #d7e4df; border-radius: 14px; padding: 16px; box-shadow: var(--shadow-card); transition: transform .18s ease, box-shadow .2s ease, border-color .18s ease; }
-		.form-card:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(5,46,22,.08), 0 10px 24px rgba(5,46,22,.07); border-color: #cce2d8; }
-		.form-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
-		.form-code { font-size: .73rem; color: #67847b; }
-		.form-title { margin-top: 2px; font-size: 1.03rem; font-weight: 700; color: #1b3a31; line-height: 1.2; }
-		.form-desc { margin-top: 10px; font-size: .76rem; color: #607d74; min-height: 52px; }
-		.form-actions { margin-top: 14px; display: flex; justify-content: flex-end; gap: 8px; }
-		.form-btn {
-			border: 1px solid #d0e1dc;
-			background: #fff;
-			color: #2f5349;
-			padding: 8px 14px;
-			border-radius: 10px;
-			font-size: .76rem;
-			font-weight: 700;
-			cursor: pointer;
-		}
-		.form-btn.primary { background: #1f8d78; border-color: #1f8d78; color: #fff; }
-		.form-hint { margin-top: 8px; font-size: .73rem; color: #68857c; }
-
-		.table-section { margin-top: 22px; border-top: 1px solid #dfe7e4; padding-top: 14px; }
-		.table-title { font-size: .88rem; color: #29453d; font-weight: 700; margin-bottom: 10px; }
-		.table-card { background: #fff; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow-card); }
-		table { width: 100%; border-collapse: collapse; }
-		th, td { padding: 11px 10px; border-bottom: 1px solid #edf2f1; font-size: .72rem; }
-		th { text-align: left; color: #7a8f8a; background: #f9fbfa; font-weight: 700; }
-		tbody tr:hover td { background: var(--surface-soft); }
-		tr:last-child td { border-bottom: none; }
-
-		.student-name { font-weight: 700; color: #2a443d; line-height: 1.2; }
-		.student-grade { font-size: .65rem; color: var(--text-3); margin-top: 2px; }
-		.bmi-up { color: #22a65f; font-weight: 700; }
-		.bmi-down { color: #e34848; font-weight: 700; }
-		.trend { font-size: .62rem; font-weight: 700; border-radius: 999px; padding: 3px 8px; display: inline-block; }
-		.t-improving { background: #dcfce7; color: #15803d; }
-		.t-stable { background: #e5e7eb; color: #475569; }
-		.t-regressing { background: #fee2e2; color: #c81e1e; }
-
-		.flash {
-			margin-top: 12px;
-			padding: 10px 12px;
-			border-radius: 10px;
-			font-size: .76rem;
-			font-weight: 600;
-		}
-		.flash.ok { background: #dcfce7; border: 1px solid #86efac; color: #166534; }
-		.flash.err { background: #fee2e2; border: 1px solid #fecaca; color: #991b1b; }
-
-		.risk-alert {
-			margin-top: 12px;
-			background: #fff7ed;
-			border: 1px solid #fed7aa;
-			border-left: 4px solid #f59e0b;
-			border-radius: 12px;
-			padding: 10px 12px;
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			gap: 10px;
-		}
-		.risk-alert strong { color: #7c2d12; font-size: .78rem; }
-		.risk-alert span { color: #9a3412; font-size: .72rem; }
-
-		.risk-section { margin-top: 14px; }
-		.risk-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
-		.risk-filter {
-			appearance: none;
-			padding: 8px 30px 8px 10px;
-			border: 1px solid #d6e5de;
-			border-radius: 10px;
-			background: #fff;
-			font-size: .74rem;
-			font-weight: 600;
-			color: #2b4c43;
-			background-image: linear-gradient(45deg, transparent 50%, #7d918c 50%), linear-gradient(135deg, #7d918c 50%, transparent 50%);
-			background-position: calc(100% - 16px) 52%, calc(100% - 11px) 52%;
-			background-size: 5px 5px, 5px 5px;
-			background-repeat: no-repeat;
-		}
-		.risk-pill { font-size: .62rem; font-weight: 700; border-radius: 999px; padding: 3px 8px; display: inline-block; }
-		.risk-high { background: #fee2e2; color: #b91c1c; }
-		.risk-mid { background: #fef3c7; color: #92400e; }
-		.session-chip {
-			display: inline-flex;
-			align-items: center;
-			padding: 7px 12px;
-			border-radius: 999px;
-			font-size: .9rem;
-			font-weight: 500;
-			font-family: 'DM Sans', sans-serif;
-			line-height: 1;
-		}
-		.session-chip.present { background: #dcfce7; color: #15803d; }
-		.session-chip.absent { background: #fee2e2; color: #b91c1c; }
-		.session-action { font-size: .9rem; font-weight: 600; }
-
-		.attendance-row {
-			display: grid;
-			grid-template-columns: 1fr auto auto auto;
-			gap: 14px;
-			align-items: center;
-			padding: 12px 2px;
-			border-bottom: 1px solid #edf2f1;
-		}
-		.attendance-row:last-child { border-bottom: none; }
-		.attendance-meta { font-size: .74rem; color: #5f736d; margin-top: 3px; }
-		.attendance-status { font-size: .66rem; color: #47645d; font-weight: 700; }
-		.attendance-choice-group { display: flex; gap: 12px; align-items: center; }
-		.attendance-choice-label { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: #29453d; }
-		.attendance-inline-select {
-			min-width: 78px;
-			padding: 6px 8px;
-			border: 1px solid #cfdcd6;
-			border-radius: 7px;
-			font-size: .74rem;
-			font-family: 'DM Sans', sans-serif;
-			color: #29453d;
-			background: #fff;
-		}
-		.attendance-rule-note {
-			font-size: .74rem;
-			color: #48655d;
-			margin-bottom: 10px;
-		}
-		.attendance-tools { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
-		.attendance-mini-btn {
-			border: 1px solid transparent;
-			border-radius: 999px;
-			padding: 7px 14px;
-			font-size: .76rem;
-			font-weight: 700;
-			cursor: pointer;
-		}
-		.attendance-mini-btn.present { background: #dcfce7; color: #166534; }
-		.attendance-mini-btn.absent { background: #fee2e2; color: #b91c1c; }
-		.attendance-dummy-wrap {
-			margin-top: 10px;
-			border: 1px solid #1f2937;
-			background: #fff;
-			overflow: auto;
-		}
-		.attendance-list-wrap {
-			overflow: visible;
-			padding-right: 0;
-			margin-top: 6px;
-		}
-		.attendance-list-wrap::-webkit-scrollbar {
-			width: 10px;
-		}
-		.attendance-list-wrap::-webkit-scrollbar-thumb {
-			background: #b9c9c2;
-			border-radius: 999px;
-		}
-		.attendance-list-wrap::-webkit-scrollbar-track {
-			background: #ecf2ef;
-		}
-		.attendance-dummy-table {
-			width: 100%;
-			min-width: 420px;
-			border-collapse: collapse;
-		}
-		.attendance-dummy-table th,
-		.attendance-dummy-table td {
-			border: 1px solid #1f2937;
-			font-size: .7rem;
-			padding: 7px 8px;
-			line-height: 1.3;
-		}
-		.attendance-dummy-table thead th {
-			text-transform: uppercase;
-			font-weight: 700;
-			background: #f3f4f6;
-			text-align: center;
-		}
-		.attendance-dummy-table tbody td {
-			border-top-style: dotted;
-			border-bottom-style: dotted;
-		}
-		.attendance-dummy-table .row-num { width: 42px; text-align: center; }
-		.attendance-dummy-table .pupil-name { width: 65%; }
-		.attendance-dummy-table .mark-cell { width: 90px; text-align: center; }
-		.attendance-dummy-input,
-		.attendance-dummy-select {
-			width: 100%;
-			border: 1px solid #cfdcd6;
-			border-radius: 6px;
-			padding: 6px 8px;
-			font-size: .72rem;
-			font-family: 'DM Sans', sans-serif;
-			color: #1f3b34;
-			background: #fff;
-		}
-		.attendance-legend {
-			margin-bottom: 14px;
-			border: 1px solid #dbe7e2;
-			border-radius: 10px;
-			overflow: hidden;
-			background: #fbfdfc;
-		}
-		.attendance-legend table { width: 100%; border-collapse: collapse; }
-		.attendance-legend th,
-		.attendance-legend td {
-			padding: 8px 10px;
-			font-size: .72rem;
-			line-height: 1.35;
-			border: 1px solid #d7e5df;
-			vertical-align: top;
-		}
-		.attendance-legend th {
-			background: #f1f6f3;
-			font-weight: 700;
-			color: #27453d;
-			text-align: center;
-		}
-
-		.modal-backdrop {
-			position: fixed;
-			inset: 0;
-			background: rgba(8, 25, 20, .45);
-			display: none;
-			align-items: flex-start;
-			justify-content: center;
-			z-index: 250;
-			padding: 14px;
-			overflow-y: auto;
-		}
-		.modal-backdrop.open { display: flex; }
-		.modal-panel {
-			width: min(440px, 100%);
-			max-height: calc(100vh - 28px);
-			background: #fff;
-			border-radius: 12px;
-			box-shadow: 0 20px 60px rgba(5,46,22,.22);
-			overflow: hidden;
-			display: flex;
-			flex-direction: column;
-			margin-top: auto;
-			margin-bottom: auto;
-		}
-		.modal-panel.attendance-modal-panel { width: min(980px, 96vw); }
-		.modal-panel.encode-modal-panel { width: min(1200px, 96vw); }
-		#encodeFormForm {
-			display: flex;
-			flex-direction: column;
-			flex: 1 1 auto;
-			min-height: 0;
-			overflow: hidden;
-		}
-		.modal-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); }
-		.modal-title { font-size: 1.15rem; font-family: 'DM Serif Display', serif; line-height: 1; color: var(--text-1); }
-		.modal-close { border: none; background: none; font-size: 1.5rem; line-height: 1; color: #667a74; cursor: pointer; }
-		.modal-body { padding: 16px 18px 12px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
-		.weight-item { margin-bottom: 14px; }
-		.weight-label { font-size: .95rem; font-family: 'DM Serif Display', serif; color: #243f38; }
-		.weight-label span { font-size: .78rem; font-family: 'DM Sans', sans-serif; font-weight: 600; color: #7b918b; }
-		.weight-field-wrap { margin-top: 7px; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
-		.weight-input { width: 100%; padding: 10px 12px; border: 1px solid #d8e1de; border-radius: 10px; font-size: .82rem; font-family: 'DM Sans', sans-serif; color: #27423b; }
-		.weight-unit { font-size: .78rem; color: #5f736d; }
-		.modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--border); }
-		#encodeFormForm .modal-foot {
-			background: #fff;
-			position: sticky;
-			bottom: 0;
-			z-index: 2;
-		}
-		#attendanceForm .modal-foot {
-			background: #fff;
-			position: sticky;
-			bottom: 0;
-			z-index: 2;
-		}
-
-		.encode-help { font-size: .73rem; color: #607a72; margin-bottom: 10px; }
-		.encode-toolbar,
-		.overview-toolbar {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			gap: 10px;
-			margin-bottom: 10px;
-		}
-		.encode-toolbar-note,
-		.overview-toolbar-note {
-			font-size: .72rem;
-			color: #5d7a71;
-		}
-		.mode-toggle {
-			border: 1px solid #c8ddd4;
-			background: #eff8f3;
-			color: #1f4f42;
-			padding: 7px 10px;
-			border-radius: 10px;
-			font-size: .71rem;
-			font-weight: 700;
-			cursor: pointer;
-		}
-		.mode-toggle:hover { background: #e1f3ea; }
-		.form1-meta {
-			display: none;
-			grid-template-columns: 1fr 1fr;
-			gap: 10px 20px;
-			padding: 10px 12px;
-			margin-bottom: 10px;
-			border: 1px solid #d9e6e1;
-			border-radius: 10px;
-			background: #fbfdfc;
-		}
-		.form1-meta.active { display: grid; }
-		.form1-meta-item {
-			display: grid;
-			grid-template-columns: auto 1fr;
-			align-items: center;
-			gap: 8px;
-			font-size: .74rem;
-			color: #29453d;
-		}
-		.form1-meta-item label {
-			font-weight: 700;
-			white-space: nowrap;
-		}
-		.form1-meta-item input {
-			width: 100%;
-			border: none;
-			border-bottom: 1px solid #86a49b;
-			padding: 6px 2px;
-			background: transparent;
-			font-size: .74rem;
-			color: #1f3b34;
-		}
-		.form1-meta-item input:focus {
-			outline: none;
-			border-bottom-color: #1f8d78;
-		}
-		.encode-grid-wrap { border: 1px solid #d9e6e1; border-radius: 10px; overflow: auto; background: #fff; max-height: 48vh; }
-		.encode-grid { width: 100%; border-collapse: collapse; min-width: 980px; }
-		.encode-grid th, .encode-grid td { border-bottom: 1px solid #edf2f1; border-right: 1px solid #edf2f1; padding: 8px; vertical-align: top; }
-		.encode-grid th:last-child, .encode-grid td:last-child { border-right: none; }
-		.encode-grid th { position: sticky; top: 0; z-index: 1; background: #f3f8f6; font-size: .69rem; color: #4a675f; font-weight: 700; white-space: nowrap; }
-		.encode-grid th.gov-head,
-		.table-card th.gov-head {
-			white-space: normal;
-			text-align: center;
-			line-height: 1.25;
-		}
-		.encode-grid th.gov-subhead,
-		.table-card th.gov-subhead {
-			font-size: .66rem;
-		}
-		.encode-grid td { background: #fff; }
-		.encode-cell-input { width: 100%; min-width: 90px; padding: 8px 10px; border: 1px solid #d6e2dd; border-radius: 8px; font-size: .74rem; color: #1f3b34; font-family: 'DM Sans', sans-serif; }
-		.encode-cell-input[readonly] {
-			background: #f3f8f6;
-			color: #33544b;
-			font-weight: 700;
-		}
-		.encode-row-actions { display: flex; justify-content: center; }
-		.encode-inline-btn { border: 1px solid #d7e1dd; background: #fff; color: #31564d; padding: 6px 10px; border-radius: 8px; font-size: .68rem; font-weight: 700; cursor: pointer; }
-		.encode-inline-btn:hover { background: #f3f8f6; }
-		.encode-add-row { margin-top: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 10px; font-size: .72rem; }
-		.column-hidden { display: none; }
-
-		@media (max-width: 1050px) {
-			.stats { grid-template-columns: repeat(2, minmax(0,1fr)); }
-			.head-row { flex-direction: column; }
-		}
-		@media (max-width: 780px) {
-			.sidebar { display: none; }
-			.main { margin-left: 0; }
-			.content { padding: 14px; }
-			.stats { grid-template-columns: 1fr; }
-			.forms-grid { grid-template-columns: 1fr; }
-			.actions { width: 100%; }
-			.btn { flex: 1; }
-			.school-filter-form { flex-direction: column; align-items: stretch; }
-			.school-filter-select { width: 100%; min-width: 0; }
-			.table-card { overflow-x: auto; }
-			table { min-width: 760px; }
-			.encode-grid { min-width: 760px; }
-			.form1-meta { grid-template-columns: 1fr; }
-		}
-	</style>
+	@php $pageCssPath = resource_path('css/feeding-feed-program.css'); @endphp
+    @if (file_exists($pageCssPath))
+        <style>{!! file_get_contents($pageCssPath) !!}</style>
+    @endif
 </head>
 <body>
+@php
+	$activeRole = (string) session('active_role', '');
+	$isReadOnly = (bool) ($isReadOnly ?? ($activeRole === 'school_nurse'));
+	$programRouteName = $isReadOnly ? 'dashboard.school-nurse.feeding-program' : 'dashboard.feedingcor-program';
+	$dashboardRouteName = $isReadOnly ? 'dashboard.school-nurse' : 'dashboard.feedingcor-dashboard';
+	$healthRecordsRouteName = $isReadOnly ? 'dashboard.student-health-records' : 'dashboard.feedingcor-health-records';
+	$displayName = trim((string) session('active_name', $isReadOnly ? 'School Nurse' : 'Feeding Coordinator'));
+	$roleLabel = $isReadOnly ? 'School Nurse' : 'Feeding Coordinator';
+@endphp
 <aside class="sidebar">
 	<div class="sb-grid"></div>
 	<div class="sb-logo">
@@ -657,26 +31,57 @@
 	</div>
 	<nav class="sb-nav">
 		<div class="sb-section-label">Main</div>
-		<a href="{{ route('dashboard.feedingcor-dashboard') }}" class="sb-link">
+		<a href="{{ route($dashboardRouteName) }}" class="sb-link">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
 			Dashboard
 		</a>
-		<a href="{{ route('dashboard.feedingcor-health-records') }}" class="sb-link">
+		<a href="{{ route($healthRecordsRouteName) }}" class="sb-link">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-			Student Health Records
+			{{ $isReadOnly ? 'Health Records' : 'Student Health Records' }}
 		</a>
-		<a href="{{ route('dashboard.feedingcor-program') }}" class="sb-link active">
+		@if ($isReadOnly)
+		<a href="{{ route('dashboard.consultation-log') }}" class="sb-link">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
+			Consultation Log
+		</a>
+		<div class="sb-section-label">Health Programs</div>
+		@endif
+		<a href="{{ route($programRouteName) }}" class="sb-link active">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
 			Feeding Program
 		</a>
+		@if ($isReadOnly)
+		<a href="{{ route('dashboard.school-nurse.deworming') }}" class="sb-link">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 3-7-3"/><path d="M3 9v6l7 3 7-3V9"/><polyline points="3 9 12 6 21 9"/></svg>
+			Deworming Program
+		</a>
+		<div class="sb-section-label">Inventory</div>
+		<a href="{{ route('dashboard.medicine-inventory') }}" class="sb-link">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="2" width="18" height="20" rx="2"/><path d="M9 2v4h6V2"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+			Medicine Inventory
+		</a>
+		<a href="#" class="sb-link">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+			Dispensing Log
+		</a>
+		<div class="sb-section-label">Reports</div>
+		<a href="{{ route('dashboard.data-visualization') }}" class="sb-link">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+			Data Visualization
+		</a>
+		<a href="#" class="sb-link">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+			Generate Reports
+		</a>
+		@else
 		<a href="{{ route('dashboard.feedingcor-sbfp-forms') }}" class="sb-link">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="8" y1="9" x2="10" y2="9"/></svg>
 			SBFP Forms
 		</a>
+		@endif
 	</nav>
 	<div class="sb-user">
 		@php
-			$displayName = trim(auth()->user()->name ?? 'Feeding Coordinator');
 			$initials = collect(preg_split('/\s+/', $displayName))
 				->filter()
 				->map(fn ($part) => strtoupper(substr($part, 0, 1)))
@@ -685,7 +90,8 @@
 		@endphp
 		<div class="sb-avatar">{{ $initials ?: 'FC' }}</div>
 		<div class="sb-user-meta">
-			<div class="sb-user-name">{{ auth()->user()->name ?? 'Feeding Coordinator' }}</div>
+			<div class="sb-user-name">{{ $displayName }}</div>
+			<div class="sb-user-role">{{ $roleLabel }}</div>
 		</div>
 		<form method="POST" action="{{ route('logout') }}">
 			@csrf
@@ -698,7 +104,7 @@
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>Dashboard</span><span>&gt;</span><span>Feeding Program</span></div>
+		<div class="topbar-bc"><span>{{ $isReadOnly ? 'School Nurse' : 'Dashboard' }}</span><span>&gt;</span><span>Feeding Program</span></div>
 	</header>
 
 	<div class="content">
@@ -708,6 +114,9 @@
 		@if (session('error'))
 			<div class="flash err">{{ session('error') }}</div>
 		@endif
+		@if ($isReadOnly)
+			<div class="flash">View-only mode: School Nurse can review feeding data but cannot submit attendance.</div>
+		@endif
 
 		<div class="head-row">
 			<div>
@@ -715,7 +124,7 @@
 				<h1 class="page-title">Feeding <span>Program</span></h1>
 				<p class="page-sub">120-Day Supplementary Feeding Program tracking.</p>
 				@if ($hasSchoolColumn)
-					<form method="GET" action="{{ route('dashboard.feedingcor-program') }}" class="school-filter-form">
+					<form method="GET" action="{{ route($programRouteName) }}" class="school-filter-form">
 						<label for="schoolFilterSelect" class="school-filter-label">School:</label>
 						<select id="schoolFilterSelect" name="school" class="school-filter-select" onchange="this.form.submit()">
 							<option value="all" {{ ($selectedSchool ?? 'all') === 'all' ? 'selected' : '' }}>All Schools</option>
@@ -835,10 +244,12 @@
 				<div style="display:flex;gap:8px;align-items:center;">
 					<span class="session-chip present">{{ $presentEstimate }} Present</span>
 					<span class="session-chip absent">{{ $absentEstimate }} Absent</span>
+					@if (!$isReadOnly)
 					<button type="button" class="btn btn-primary session-action" id="recordAttendanceBtn" style="padding:7px 12px;">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;margin-right:6px;"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
 						Mark Attendance
 					</button>
+					@endif
 				</div>
 			</div>
 		</section>

@@ -8,6 +8,7 @@
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
 	<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<<<<<<< Updated upstream
 	<style>
 		*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 		:root{--g900:#14532d;--g300:#86efac;--cream:#f7f8f5;--card:#fff;--border:#e4ece7;--text-1:#0d1f14;--text-2:#3d5c47;--text-3:#7a9e87;--sidebar-w:248px;--sidebar-collapsed-w:76px;--topbar-h:64px;--radius-sm:10px;--shadow-card:0 1px 4px rgba(5,46,22,.06),0 4px 16px rgba(5,46,22,.06)}
@@ -96,6 +97,12 @@
 		@media print{.sidebar,.topbar,.sheet-tools,.page-sub,.page-eyebrow,.page-title{display:none!important}.main{margin:0!important}.content{padding:0!important}.sheet-wrap{border:none;box-shadow:none;padding:0}}
 		@media (max-width:780px){.sidebar{display:none}.main{margin-left:0}}
 	</style>
+=======
+	@php $pageCssPath = resource_path('css/feeding-sbfp-forms.css'); @endphp
+    @if (file_exists($pageCssPath))
+        <style>{!! file_get_contents($pageCssPath) !!}</style>
+    @endif
+>>>>>>> Stashed changes
 </head>
 <body>
 <aside class="sidebar">

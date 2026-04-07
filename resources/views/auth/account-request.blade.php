@@ -150,6 +150,14 @@
                         <label for="username">Username / Employee ID</label>
                         <input id="username" name="username" type="text" value="{{ old('username') }}" required>
                     </div>
+                    <div class="field">
+                        <label for="password">Password</label>
+                        <input id="password" name="password" type="password" minlength="6" required>
+                    </div>
+                    <div class="field">
+                        <label for="password_confirmation">Confirm Password</label>
+                        <input id="password_confirmation" name="password_confirmation" type="password" minlength="6" required>
+                    </div>
                     <div class="field full">
                         <label for="role">Role</label>
                         <select id="role" name="role" required>

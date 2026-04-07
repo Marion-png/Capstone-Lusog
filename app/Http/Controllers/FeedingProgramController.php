@@ -19,6 +19,9 @@ class FeedingProgramController extends Controller
 
 	public function index(Request $request): View
 	{
+		$activeRole = (string) $request->session()->get('active_role', '');
+		$isReadOnly = $activeRole === 'school_nurse';
+
 		$hasSchoolColumn = Schema::hasTable('student_health_records')
 			&& Schema::hasColumn('student_health_records', 'school_name');
 		$selectedSchool = trim((string) $request->query('school', 'all'));
@@ -126,6 +129,7 @@ class FeedingProgramController extends Controller
 			->values();
 
 		return view('feedingcor-dashboard.feed-program', [
+			'isReadOnly' => $isReadOnly,
 			'programStats' => [
 				'enrolled_students' => $studentCount,
 				'program_day' => $programDay . '/' . self::PROGRAM_DURATION_DAYS,
@@ -146,6 +150,17 @@ class FeedingProgramController extends Controller
 
 	public function storeAttendance(Request $request): RedirectResponse
 	{
+		$activeRole = (string) $request->session()->get('active_role', '');
+		if ($activeRole !== 'feeding_coor') {
+			$redirectRoute = $activeRole === 'school_nurse'
+				? 'dashboard.school-nurse.feeding-program'
+				: 'login';
+
+			return redirect()
+				->route($redirectRoute)
+				->with('error', 'You have view-only access to Feeding Program attendance.');
+		}
+
 		$request->validate([
 			'session_date' => ['required', 'date', 'before_or_equal:today'],
 			'present_student_ids' => ['nullable', 'array'],
@@ -180,7 +195,7 @@ class FeedingProgramController extends Controller
 			->values();
 
 		if ($students->isEmpty()) {
-			return back()->with('error', 'No eligible beneficiaries (Wasted/Severely Wasted) available to record attendance.');
+			return back()->with('error', 'No eligible beneficiaries (Wasted/Severely Wasted/Underweight) available to record attendance.');
 		}
 
 		$allowedStudentIds = $students->pluck('id')->all();
@@ -228,7 +243,12 @@ class FeedingProgramController extends Controller
 
 		return $status === 'wasted'
 			|| $status === 'severely wasted'
+<<<<<<< Updated upstream
 			|| $status === 'severly wasted';
+=======
+			|| $status === 'severly wasted'
+			|| $status === 'underweight';
+>>>>>>> Stashed changes
 	}
 
 	private function normalizeNutritionalStatus(?string $nutritionalStatus, ?float $bmi): string
@@ -307,7 +327,8 @@ class FeedingProgramController extends Controller
 			->pluck('present_count', 'student_health_record_id');
 
 		StudentHealthRecord::query()->each(function (StudentHealthRecord $record) use ($presentCounts, $thresholdCount, $programDay): void {
-			if (!$this->isAttendanceEligible($record->nutritional_status)) {
+			$normalizedStatus = $this->normalizeNutritionalStatus($record->nutritional_status, $record->bmi_value);
+			if (!$this->isAttendanceEligible($normalizedStatus)) {
 				$record->update([
 					'is_at_risk' => false,
 				]);

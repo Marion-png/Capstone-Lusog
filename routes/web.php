@@ -10,6 +10,7 @@ use App\Http\Controllers\SchoolHeadController;
 use App\Http\Controllers\StudentHealthRecordController;
 use App\Models\StudentHealthRecord;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Route;
 
@@ -33,6 +34,7 @@ Route::post('/account-request', function (Request $request) {
     $validated = $request->validate([
         'name' => ['required', 'string', 'max:255'],
         'username' => ['required', 'string', 'max:255'],
+        'password' => ['required', 'string', 'min:6', 'confirmed'],
         'role' => ['required', 'in:school_nurse,clinic_staff,class_adviser,school_head,feeding_coor'],
         'school_name' => ['required_if:role,school_nurse,clinic_staff,school_head,class_adviser', 'nullable', 'string', 'max:255'],
         'assigned_grade_level' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:50'],
@@ -43,21 +45,19 @@ Route::post('/account-request', function (Request $request) {
     $username = strtolower(trim($validated['username']));
     $role = $validated['role'];
 
-    $alreadyPending = collect($pendingRequests)->contains(function (array $item) use ($username, $role): bool {
+    $alreadyPending = collect($pendingRequests)->contains(function (array $item) use ($username): bool {
         $existingUsername = strtolower(trim((string) ($item['username'] ?? '')));
-        $existingRole = (string) ($item['role'] ?? '');
-        return $existingUsername === $username && $existingRole === $role;
+        return $existingUsername === $username;
     });
 
-    $alreadyApproved = collect($request->session()->get('user_accounts', []))->contains(function (array $item) use ($username, $role): bool {
+    $alreadyApproved = collect($request->session()->get('user_accounts', []))->contains(function (array $item) use ($username): bool {
         $existingUsername = strtolower(trim((string) ($item['username'] ?? '')));
-        $existingRole = (string) ($item['role'] ?? '');
-        return $existingUsername === $username && $existingRole === $role;
+        return $existingUsername === $username;
     });
 
     if ($alreadyPending || $alreadyApproved) {
         return back()
-            ->withErrors(['username' => 'A request or account with this username and role already exists.'])
+            ->withErrors(['username' => 'A request or account with this username already exists.'])
             ->withInput();
     }
 
@@ -65,6 +65,7 @@ Route::post('/account-request', function (Request $request) {
         'id' => (string) str()->uuid(),
         'name' => $validated['name'],
         'username' => $validated['username'],
+        'password_hash' => Hash::make((string) $validated['password']),
         'role' => $role,
         'school_name' => in_array($role, ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser'], true) ? ($validated['school_name'] ?? null) : null,
         'assigned_grade_level' => $role === 'class_adviser' ? ($validated['assigned_grade_level'] ?? null) : null,
@@ -107,6 +108,39 @@ Route::get('/dashboard/school-nurse', function () {
 Route::get('/dashboard/student-health-records', function () {
     return view('dashboard.student-health-records');
 })->name('dashboard.student-health-records');
+
+Route::get('/dashboard/school-nurse/deworming', function (Request $request) {
+    $requests = collect($request->session()->get('deworming_requests', []))
+        ->sortByDesc('submitted_at')
+        ->values();
+
+    return view('dashboard.school-nurse-deworming', [
+        'dewormingRequests' => $requests,
+    ]);
+})->name('dashboard.school-nurse.deworming');
+
+Route::post('/dashboard/school-nurse/deworming/{requestId}/{decision}', function (Request $request, string $requestId, string $decision) {
+    if ($request->session()->get('active_role') !== 'school_nurse') {
+        return redirect()->route('login')->with('error', 'Only School Nurse can review deworming requests.');
+    }
+
+    $requests = collect($request->session()->get('deworming_requests', []));
+    $index = $requests->search(fn (array $item): bool => (string) ($item['id'] ?? '') === $requestId);
+
+    if ($index === false) {
+        return back()->with('error', 'Deworming request not found.');
+    }
+
+    $status = $decision === 'accept' ? 'approved' : 'declined';
+    $requests[$index]['status'] = $status;
+    $requests[$index]['reviewed_at'] = now()->toIso8601String();
+    $requests[$index]['reviewed_by'] = (string) $request->session()->get('active_name', 'School Nurse');
+    $requests[$index]['released_date'] = $decision === 'accept' ? now()->toDateString() : null;
+
+    $request->session()->put('deworming_requests', $requests->values()->all());
+
+    return back()->with('success', 'Deworming request ' . ($decision === 'accept' ? 'accepted' : 'declined') . ' successfully.');
+})->whereIn('decision', ['accept', 'decline'])->name('dashboard.school-nurse.deworming.decide');
 
 Route::get('/dashboard/consultation-log', [ConsultationController::class, 'index'])
     ->name('dashboard.consultation-log');
@@ -172,9 +206,9 @@ Route::get('/dashboard/class-adviser/deworming', function (Request $request) {
 })->name('dashboard.class-adviser.deworming');
 
 Route::post('/dashboard/class-adviser/deworming', function (Request $request) {
-    if ($request->session()->get('active_role') !== 'class_adviser') {
-        return redirect()->route('login')->with('error', 'Only Class Adviser can submit deworming requests.');
-    }
+    // Keep submission working even if the active role changed in another tab.
+    // This avoids losing adviser input and still forwards requests to School Nurse view.
+    $submittedByRole = (string) $request->session()->get('active_role', 'class_adviser');
 
     $validated = $request->validate([
         'campaign' => ['required', 'in:start,end'],
@@ -190,6 +224,8 @@ Route::post('/dashboard/class-adviser/deworming', function (Request $request) {
     $requests[] = [
         'id' => (string) str()->uuid(),
         'submitted_at' => now()->toIso8601String(),
+        'submitted_by' => (string) $request->session()->get('active_name', 'Class Adviser'),
+        'submitted_by_role' => $submittedByRole,
         'campaign' => $validated['campaign'],
         'total_students' => (int) $validated['total_students'],
         'consenting_students' => (int) $validated['consenting_students'],
@@ -204,7 +240,7 @@ Route::post('/dashboard/class-adviser/deworming', function (Request $request) {
 
     return redirect()
         ->route('dashboard.class-adviser.deworming')
-        ->with('success', 'Deworming request submitted successfully.');
+        ->with('success', 'Deworming request submitted successfully and sent to School Nurse monitoring.');
 })->name('dashboard.class-adviser.deworming.store');
 
 Route::get('/dashboard/school-head', [SchoolHeadController::class, 'index'])
@@ -230,6 +266,9 @@ Route::post('/dashboard/class-adviser/health-records/{record}/endline', [Student
 
 Route::get('/dashboard/feedingcor-program', [FeedingProgramController::class, 'index'])
     ->name('dashboard.feedingcor-program');
+
+Route::get('/dashboard/school-nurse/feeding-program', [FeedingProgramController::class, 'index'])
+    ->name('dashboard.school-nurse.feeding-program');
 
 Route::post('/dashboard/feedingcor-program/attendance', [FeedingProgramController::class, 'storeAttendance'])
     ->name('feedingcor-program.attendance.store');
@@ -301,15 +340,14 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
     $username = strtolower(trim($validated['username']));
     $role = $validated['role'];
 
-    $alreadyExists = collect($accounts)->contains(function (array $account) use ($username, $role): bool {
+    $alreadyExists = collect($accounts)->contains(function (array $account) use ($username): bool {
         $existingUsername = strtolower(trim((string) ($account['username'] ?? '')));
-        $existingRole = (string) ($account['role'] ?? '');
-        return $existingUsername === $username && $existingRole === $role;
+        return $existingUsername === $username;
     });
 
     if ($alreadyExists) {
         return back()
-            ->withErrors(['username' => 'An account with this username and role already exists.'])
+            ->withErrors(['username' => 'An account with this username already exists.'])
             ->withInput();
     }
 
@@ -347,16 +385,16 @@ Route::post('/dashboard/system-admin/requests/{requestId}/approve', function (Re
     $username = strtolower(trim((string) ($target['username'] ?? '')));
     $role = (string) ($target['role'] ?? '');
 
-    $alreadyExists = collect($accounts)->contains(function (array $account) use ($username, $role): bool {
+    $alreadyExists = collect($accounts)->contains(function (array $account) use ($username): bool {
         $existingUsername = strtolower(trim((string) ($account['username'] ?? '')));
-        $existingRole = (string) ($account['role'] ?? '');
-        return $existingUsername === $username && $existingRole === $role;
+        return $existingUsername === $username;
     });
 
     if (!$alreadyExists) {
         $accounts[] = [
             'name' => $target['name'] ?? '-',
             'username' => $target['username'] ?? '-',
+            'password_hash' => $target['password_hash'] ?? null,
             'role' => $role,
             'school_name' => in_array($role, ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser'], true) ? ($target['school_name'] ?? null) : null,
             'assigned_grade_level' => $role === 'class_adviser' ? ($target['assigned_grade_level'] ?? null) : null,
@@ -451,7 +489,7 @@ Route::post('/health-records', function (Request $request) {
 })->name('health-records.store');
 
 Route::post('/logout', function () {
-    session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name', 'active_role']);
+    session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name', 'active_role', 'active_name', 'active_username']);
     return redirect()->route('login');
 })->name('logout');
 
@@ -482,6 +520,13 @@ Route::post('/login', function (Request $request) {
 
     $account = $matchingAccounts->first();
     $role = (string) ($account['role'] ?? '');
+    $passwordHash = (string) ($account['password_hash'] ?? '');
+
+    if ($passwordHash !== '' && !Hash::check((string) $request->input('password'), $passwordHash)) {
+        return back()
+            ->withInput(['email' => $request->input('email')])
+            ->with('error', 'Invalid username or password.');
+    }
 
     if ($role === 'class_adviser') {
         $request->session()->put('assigned_grade_level', $account['assigned_grade_level'] ?? null);
@@ -492,6 +537,8 @@ Route::post('/login', function (Request $request) {
     }
 
     $request->session()->put('active_role', $role);
+    $request->session()->put('active_name', (string) ($account['name'] ?? 'User'));
+    $request->session()->put('active_username', (string) ($account['username'] ?? ''));
 
     $routeByRole = [
         'school_nurse' => 'dashboard.school-nurse',
@@ -521,6 +568,8 @@ Route::post('/admin-login', function (Request $request) {
     }
 
     $request->session()->put('active_role', 'system_admin');
+    $request->session()->put('active_name', 'System Admin');
+    $request->session()->put('active_username', $validated['username']);
     $request->session()->forget(['assigned_grade_level', 'assigned_section']);
 
     return redirect()->route('dashboard.system-admin');

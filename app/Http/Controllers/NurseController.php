@@ -106,6 +106,6 @@ class NurseController extends Controller
 
         $request->session()->put('school_health_card_records', $records);
 
-        return redirect()->route('nurse.index')->with('success', 'Medical record saved.');
+        return redirect()->route('dashboard.student-health-records')->with('success', 'Medical record saved.');
     }
 }
