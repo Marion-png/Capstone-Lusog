@@ -226,8 +226,9 @@ class FeedingProgramController extends Controller
 		$status = strtolower((string) $nutritionalStatus);
 		$status = preg_replace('/\s+/', ' ', trim($status)) ?? '';
 
-<<<<<<< Updated upstream
-		return $status === 'wasted' || $status === 'severely wasted' || $status === 'underweight';
+		return $status === 'wasted'
+			|| $status === 'severely wasted'
+			|| $status === 'severly wasted';
 	}
 
 	private function normalizeNutritionalStatus(?string $nutritionalStatus, ?float $bmi): string
@@ -265,11 +266,6 @@ class FeedingProgramController extends Controller
 		}
 
 		return $status !== '' ? $status : 'Normal';
-=======
-		return $status === 'wasted'
-			|| $status === 'severely wasted'
-			|| $status === 'severly wasted';
->>>>>>> Stashed changes
 	}
 
 	private function resolveProgramDay(): int

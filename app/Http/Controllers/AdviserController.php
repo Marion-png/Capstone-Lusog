@@ -18,21 +18,11 @@ class AdviserController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $birthMonth = $request->input('birth_month');
+        $birthDay = $request->input('birth_day');
+        $birthYear = $request->input('birth_year');
         $birthDate = trim((string) $request->input('birth_date', ''));
 
-<<<<<<< Updated upstream
-        if ($birthDate !== '') {
-            try {
-                $parsedBirthDate = Carbon::createFromFormat('Y-m-d', $birthDate);
-                $request->merge([
-                    'birth_year' => (int) $parsedBirthDate->format('Y'),
-                    'birth_month' => (int) $parsedBirthDate->format('n'),
-                    'birth_day' => (int) $parsedBirthDate->format('j'),
-                ]);
-            } catch (\Throwable $_) {
-                // Keep existing month/day/year inputs when date parsing fails.
-            }
-=======
         if (is_string($birthMonth) && ctype_digit($birthMonth)) {
             $birthMonth = (int) $birthMonth;
             $request->merge(['birth_month' => $birthMonth]);
@@ -48,14 +38,30 @@ class AdviserController extends Controller
             $request->merge(['birth_year' => $birthYear]);
         }
 
-        if ((!$birthMonth || !$birthDay || !$birthYear) && is_string($birthDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $birthDate)) {
+        if ($birthDate !== '') {
+            try {
+                $parsedBirthDate = Carbon::createFromFormat('Y-m-d', $birthDate);
+                $request->merge([
+                    'birth_year' => (int) $parsedBirthDate->format('Y'),
+                    'birth_month' => (int) $parsedBirthDate->format('n'),
+                    'birth_day' => (int) $parsedBirthDate->format('j'),
+                ]);
+            } catch (\Throwable $_) {
+                // Keep existing month/day/year inputs when date parsing fails.
+            }
+        }
+
+        $birthMonth = $request->input('birth_month');
+        $birthDay = $request->input('birth_day');
+        $birthYear = $request->input('birth_year');
+
+        if ((!$birthMonth || !$birthDay || !$birthYear) && $birthDate !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $birthDate)) {
             [$yearPart, $monthPart, $dayPart] = explode('-', $birthDate);
             $request->merge([
                 'birth_year' => (int) $yearPart,
                 'birth_month' => (int) $monthPart,
                 'birth_day' => (int) $dayPart,
             ]);
->>>>>>> Stashed changes
         }
 
         $heightCm = $request->input('height_cm');
@@ -140,36 +146,6 @@ class AdviserController extends Controller
 
         $request->session()->put('school_health_card_records', $records);
 
-<<<<<<< Updated upstream
-        // Mirror adviser submissions to DB so Feeding Coordinator modules can load them immediately.
-        if (Schema::hasTable('student_health_records')) {
-            $middleName = trim((string) ($validated['middle_name'] ?? ''));
-            $middleInitial = $middleName !== '' ? (' ' . strtoupper(substr($middleName, 0, 1)) . '.') : '';
-            $studentName = trim($validated['last_name'] . ', ' . $validated['first_name'] . $middleInitial);
-            $schoolName = (string) $request->session()->get('assigned_school_name', '');
-
-            $recordPayload = [
-                'student_name' => $studentName,
-                'section' => trim((string) $validated['grade_level'] . ' / ' . (string) $validated['section']),
-                'weight' => (float) $validated['weight_kg'],
-                'bmi_value' => $bmi,
-                'nutritional_status' => $nutritionalStatusBmiForAge,
-                'baseline_age' => $age,
-                'baseline_height_cm' => (float) $validated['height_cm'],
-                'baseline_weight_kg' => (float) $validated['weight_kg'],
-                'baseline_bmi_value' => $bmi,
-                'baseline_nutritional_status' => $nutritionalStatusBmiForAge,
-                'baseline_recorded_at' => now()->toDateString(),
-            ];
-
-            if (Schema::hasColumn('student_health_records', 'school_name')) {
-                $recordPayload['school_name'] = $schoolName !== '' ? $schoolName : null;
-            }
-
-            StudentHealthRecord::query()->updateOrCreate(
-                ['student_id' => (string) $validated['lrn']],
-                $recordPayload
-=======
         if (Schema::hasTable('student_health_records')) {
             $studentName = $this->buildStudentName(
                 (string) $validated['last_name'],
@@ -184,25 +160,27 @@ class AdviserController extends Controller
 
             $sectionLabel = trim((string) $validated['grade_level'] . ' / ' . (string) $validated['section']);
 
+            $payload = [
+                'student_name' => $studentName,
+                'section' => $sectionLabel !== '' ? $sectionLabel : (string) $validated['section'],
+                'weight' => (float) $validated['weight_kg'],
+                'bmi_value' => $bmi,
+                'nutritional_status' => $nutritionalStatusBmiForAge,
+                'baseline_age' => $age,
+                'baseline_height_cm' => $heightCm,
+                'baseline_weight_kg' => $weightKg,
+                'baseline_bmi_value' => $bmi,
+                'baseline_nutritional_status' => $nutritionalStatusBmiForAge,
+                'baseline_recorded_at' => now()->toDateString(),
+            ];
+
+            if (Schema::hasColumn('student_health_records', 'school_name')) {
+                $payload['school_name'] = $schoolName !== '' ? $schoolName : null;
+            }
+
             StudentHealthRecord::query()->updateOrCreate(
-                [
-                    'student_id' => (string) $validated['lrn'],
-                ],
-                [
-                    'student_name' => $studentName,
-                    'school_name' => $schoolName !== '' ? $schoolName : null,
-                    'section' => $sectionLabel !== '' ? $sectionLabel : (string) $validated['section'],
-                    'weight' => (float) $validated['weight_kg'],
-                    'bmi_value' => $bmi,
-                    'nutritional_status' => $nutritionalStatusBmiForAge,
-                    'baseline_age' => $age,
-                    'baseline_height_cm' => $heightCm,
-                    'baseline_weight_kg' => $weightKg,
-                    'baseline_bmi_value' => $bmi,
-                    'baseline_nutritional_status' => $nutritionalStatusBmiForAge,
-                    'baseline_recorded_at' => now()->toDateString(),
-                ]
->>>>>>> Stashed changes
+                ['student_id' => (string) $validated['lrn']],
+                $payload
             );
         }
 
@@ -269,7 +247,6 @@ class AdviserController extends Controller
             return 'Not enough data';
         }
 
-        // Simple prototype rule-based classification for dashboard use.
         $minNormalHeight = 70 + ($age * 5);
         if ($heightCm < ($minNormalHeight - 8)) {
             return 'Severely Stunted';
