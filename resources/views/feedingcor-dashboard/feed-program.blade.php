@@ -349,18 +349,138 @@
 		.risk-pill { font-size: .62rem; font-weight: 700; border-radius: 999px; padding: 3px 8px; display: inline-block; }
 		.risk-high { background: #fee2e2; color: #b91c1c; }
 		.risk-mid { background: #fef3c7; color: #92400e; }
+		.session-chip {
+			display: inline-flex;
+			align-items: center;
+			padding: 7px 12px;
+			border-radius: 999px;
+			font-size: .9rem;
+			font-weight: 500;
+			font-family: 'DM Sans', sans-serif;
+			line-height: 1;
+		}
+		.session-chip.present { background: #dcfce7; color: #15803d; }
+		.session-chip.absent { background: #fee2e2; color: #b91c1c; }
+		.session-action { font-size: .9rem; font-weight: 600; }
 
 		.attendance-row {
 			display: grid;
-			grid-template-columns: auto 1fr auto;
-			gap: 10px;
+			grid-template-columns: 1fr auto auto auto;
+			gap: 14px;
 			align-items: center;
-			padding: 10px 0;
+			padding: 12px 2px;
 			border-bottom: 1px solid #edf2f1;
 		}
 		.attendance-row:last-child { border-bottom: none; }
-		.attendance-meta { font-size: .72rem; color: #5f736d; }
+		.attendance-meta { font-size: .74rem; color: #5f736d; margin-top: 3px; }
 		.attendance-status { font-size: .66rem; color: #47645d; font-weight: 700; }
+		.attendance-choice-group { display: flex; gap: 12px; align-items: center; }
+		.attendance-choice-label { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: #29453d; }
+		.attendance-inline-select {
+			min-width: 78px;
+			padding: 6px 8px;
+			border: 1px solid #cfdcd6;
+			border-radius: 7px;
+			font-size: .74rem;
+			font-family: 'DM Sans', sans-serif;
+			color: #29453d;
+			background: #fff;
+		}
+		.attendance-rule-note {
+			font-size: .74rem;
+			color: #48655d;
+			margin-bottom: 10px;
+		}
+		.attendance-tools { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+		.attendance-mini-btn {
+			border: 1px solid transparent;
+			border-radius: 999px;
+			padding: 7px 14px;
+			font-size: .76rem;
+			font-weight: 700;
+			cursor: pointer;
+		}
+		.attendance-mini-btn.present { background: #dcfce7; color: #166534; }
+		.attendance-mini-btn.absent { background: #fee2e2; color: #b91c1c; }
+		.attendance-dummy-wrap {
+			margin-top: 10px;
+			border: 1px solid #1f2937;
+			background: #fff;
+			overflow: auto;
+		}
+		.attendance-list-wrap {
+			overflow: visible;
+			padding-right: 0;
+			margin-top: 6px;
+		}
+		.attendance-list-wrap::-webkit-scrollbar {
+			width: 10px;
+		}
+		.attendance-list-wrap::-webkit-scrollbar-thumb {
+			background: #b9c9c2;
+			border-radius: 999px;
+		}
+		.attendance-list-wrap::-webkit-scrollbar-track {
+			background: #ecf2ef;
+		}
+		.attendance-dummy-table {
+			width: 100%;
+			min-width: 420px;
+			border-collapse: collapse;
+		}
+		.attendance-dummy-table th,
+		.attendance-dummy-table td {
+			border: 1px solid #1f2937;
+			font-size: .7rem;
+			padding: 7px 8px;
+			line-height: 1.3;
+		}
+		.attendance-dummy-table thead th {
+			text-transform: uppercase;
+			font-weight: 700;
+			background: #f3f4f6;
+			text-align: center;
+		}
+		.attendance-dummy-table tbody td {
+			border-top-style: dotted;
+			border-bottom-style: dotted;
+		}
+		.attendance-dummy-table .row-num { width: 42px; text-align: center; }
+		.attendance-dummy-table .pupil-name { width: 65%; }
+		.attendance-dummy-table .mark-cell { width: 90px; text-align: center; }
+		.attendance-dummy-input,
+		.attendance-dummy-select {
+			width: 100%;
+			border: 1px solid #cfdcd6;
+			border-radius: 6px;
+			padding: 6px 8px;
+			font-size: .72rem;
+			font-family: 'DM Sans', sans-serif;
+			color: #1f3b34;
+			background: #fff;
+		}
+		.attendance-legend {
+			margin-bottom: 14px;
+			border: 1px solid #dbe7e2;
+			border-radius: 10px;
+			overflow: hidden;
+			background: #fbfdfc;
+		}
+		.attendance-legend table { width: 100%; border-collapse: collapse; }
+		.attendance-legend th,
+		.attendance-legend td {
+			padding: 8px 10px;
+			font-size: .72rem;
+			line-height: 1.35;
+			border: 1px solid #d7e5df;
+			vertical-align: top;
+		}
+		.attendance-legend th {
+			background: #f1f6f3;
+			font-weight: 700;
+			color: #27453d;
+			text-align: center;
+		}
 
 		.modal-backdrop {
 			position: fixed;
@@ -386,6 +506,7 @@
 			margin-top: auto;
 			margin-bottom: auto;
 		}
+		.modal-panel.attendance-modal-panel { width: min(980px, 96vw); }
 		.modal-panel.encode-modal-panel { width: min(1200px, 96vw); }
 		#encodeFormForm {
 			display: flex;
@@ -397,7 +518,7 @@
 		.modal-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); }
 		.modal-title { font-size: 1.15rem; font-family: 'DM Serif Display', serif; line-height: 1; color: var(--text-1); }
 		.modal-close { border: none; background: none; font-size: 1.5rem; line-height: 1; color: #667a74; cursor: pointer; }
-		.modal-body { padding: 14px 16px 8px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+		.modal-body { padding: 16px 18px 12px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 		.weight-item { margin-bottom: 14px; }
 		.weight-label { font-size: .95rem; font-family: 'DM Serif Display', serif; color: #243f38; }
 		.weight-label span { font-size: .78rem; font-family: 'DM Sans', sans-serif; font-weight: 600; color: #7b918b; }
@@ -406,6 +527,12 @@
 		.weight-unit { font-size: .78rem; color: #5f736d; }
 		.modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--border); }
 		#encodeFormForm .modal-foot {
+			background: #fff;
+			position: sticky;
+			bottom: 0;
+			z-index: 2;
+		}
+		#attendanceForm .modal-foot {
 			background: #fff;
 			position: sticky;
 			bottom: 0;
@@ -595,10 +722,6 @@
 					</form>
 				@endif
 			</div>
-			<div class="actions">
-				<button type="button" class="btn btn-ghost" id="recordAttendanceBtn">Record Attendance</button>
-				<button type="button" class="btn btn-primary" id="openWeightsModal">Update Weights</button>
-			</div>
 		</div>
 
 		@if (($programStats['at_risk_count'] ?? 0) > 0)
@@ -686,61 +809,86 @@
 			</div>
 		</section>
 
-		<div class="fp-tabs" aria-label="Feeding Program views">
-			<button type="button" class="fp-tab disabled" id="overviewTabBtn">Overview</button>
-			<button type="button" class="fp-tab active" id="formsTabBtn">SBFP Forms</button>
-		</div>
+		@php
+			$studentCollection = ($students ?? collect());
+			$totalStudents = $studentCollection->count();
+			$avgAttendanceNumeric = (float) preg_replace('/[^\d.]/', '', (string) ($programStats['avg_attendance'] ?? '0'));
+			$presentEstimate = (int) round(($avgAttendanceNumeric / 100) * $totalStudents);
+			$absentEstimate = max(0, $totalStudents - $presentEstimate);
+			$lowAttendanceCount = $studentCollection->filter(fn ($student) => (float) ($student['attendance_percent'] ?? 0) < 70)->count();
+		@endphp
 
-		<section class="forms-hub view-panel active" id="formsHub">
-			<div class="forms-filter-wrap">
-				<label for="formsFilter">Filter by:</label>
-				<select id="formsFilter" class="forms-filter">
-					<option value="all">All Forms</option>
-					<option value="beneficiary">Beneficiary Forms</option>
-					<option value="feeding">Feeding Records</option>
-					<option value="milk">Milk Component</option>
-					<option value="report">Reports</option>
-				</select>
+		<section class="card section" style="margin-top: 14px;">
+			<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;">
+				<h2 class="section-title" style="margin-bottom:0;">Today's Feeding Session</h2>
+				<span class="muted">{{ now()->format('F d, Y') }}</span>
 			</div>
-			<div class="forms-grid" id="formsGrid"></div>
-			<p class="form-hint" id="selectedFormHint">Tip: Click View to focus the selected form and Encode to add new entries.</p>
+			<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;background:#f0fdf4;border:1px solid #dcfce7;border-radius:10px;">
+				<div>
+					<div class="student-name" style="font-size:.86rem;">Meal: Nutribun + Fortified Milk</div>
+					<div class="muted" style="font-size:.7rem;">Served at 10:00 AM - Recess Time</div>
+				</div>
+				<div style="display:flex;gap:8px;align-items:center;">
+					<span class="session-chip present">{{ $presentEstimate }} Present</span>
+					<span class="session-chip absent">{{ $absentEstimate }} Absent</span>
+					<button type="button" class="btn btn-primary session-action" id="recordAttendanceBtn" style="padding:7px 12px;">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;margin-right:6px;"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+						Mark Attendance
+					</button>
+				</div>
+			</div>
 		</section>
 
-		<section class="table-section view-panel" id="overviewSection">
-			<h2 class="table-title" id="selectedFormTitle">Enrolled Students</h2>
+		<section class="table-section" style="margin-top:16px;">
+			<h2 class="table-title">Feeding Program Beneficiaries</h2>
 			<div class="table-card">
-				<div class="overview-toolbar">
-					<div class="overview-toolbar-note" id="overviewToolbarNote">Simple View is on. Only key columns are shown.</div>
-					<button type="button" class="mode-toggle" id="toggleOverviewModeBtn" aria-pressed="false">Show Full Template</button>
-				</div>
-				<table id="overviewTable">
-					<thead id="overviewTableHead">
+				<table>
+					<thead>
 						<tr>
-							<th>Student</th>
-							<th>Baseline Wt</th>
-							<th>Current Wt</th>
-							<th>BMI Change</th>
+							<th>Student Name</th>
+							<th>Grade &amp; Section</th>
+							<th>Baseline</th>
+							<th>Current</th>
+							<th>Weight Change</th>
 							<th>Attendance</th>
-							<th>Trend</th>
+							<th>Status</th>
 						</tr>
 					</thead>
-					<tbody id="overviewTableBody">
-						@forelse (($students ?? collect()) as $student)
+					<tbody>
+						@forelse ($studentCollection as $student)
+							@php
+								$baselineWeight = (float) ($student['baseline_weight'] ?? 0);
+								$currentWeight = (float) ($student['current_weight'] ?? 0);
+								$weightChange = round($currentWeight - $baselineWeight, 1);
+								$attendancePercent = (float) ($student['attendance_percent'] ?? 0);
+								$statusClass = $weightChange > 1 ? 't-improving' : ($weightChange < 0 ? 't-regressing' : 't-stable');
+								$statusLabel = $weightChange > 1 ? 'improved' : ($weightChange < 0 ? 'declined' : 'no change');
+							@endphp
 							<tr>
-								<td><div class="student-name">{{ $student['student_name'] }}</div><div class="student-grade">{{ $student['section'] }}</div></td>
-								<td>{{ $student['baseline_weight'] }} kg</td>
-								<td><strong class="current-weight" data-student="{{ $student['student_name'] }}">{{ $student['current_weight'] }} kg</strong></td>
-								<td><span class="{{ $student['bmi_class'] }}">{{ $student['bmi_range'] }}</span></td>
-								<td>{{ $student['attendance'] }}</td>
-								<td><span class="trend {{ $student['trend_class'] }}">{{ strtolower($student['trend_label']) }}</span></td>
+								<td><div class="student-name">{{ $student['student_name'] ?? '-' }}</div></td>
+								<td>{{ $student['section'] ?? '-' }}</td>
+								<td>{{ number_format($baselineWeight, 1) }} kg</td>
+								<td><strong>{{ number_format($currentWeight, 1) }} kg</strong></td>
+								<td class="{{ $weightChange > 0 ? 'bmi-up' : ($weightChange < 0 ? 'bmi-down' : 'muted') }}">{{ $weightChange > 0 ? '+' : '' }}{{ number_format($weightChange, 1) }} kg</td>
+								<td>{{ number_format($attendancePercent, 0) }}%</td>
+								<td><span class="trend {{ $statusClass }}">{{ $statusLabel }}</span></td>
 							</tr>
 						@empty
-							<tr><td colspan="6">No master list beneficiaries available.</td></tr>
+							<tr><td colspan="7">No beneficiaries available.</td></tr>
 						@endforelse
 					</tbody>
 				</table>
 			</div>
 		</section>
+
+		@if ($lowAttendanceCount > 0)
+			<div class="risk-alert" style="margin-top:16px;">
+				<div>
+					<strong>Follow-up Required</strong><br>
+					<span>{{ $lowAttendanceCount }} students have attendance below 70%. Please coordinate with advisers and parents.</span>
+				</div>
+			</div>
+		@endif
 	</div>
 </div>
 
@@ -773,7 +921,7 @@
 </div>
 
 <div class="modal-backdrop" id="attendanceModalBackdrop" aria-hidden="true">
-	<div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="attendanceModalTitle">
+	<div class="modal-panel attendance-modal-panel" role="dialog" aria-modal="true" aria-labelledby="attendanceModalTitle">
 		<div class="modal-head">
 			<h2 id="attendanceModalTitle" class="modal-title">Record Attendance Session</h2>
 			<button type="button" class="modal-close" id="closeAttendanceModal" aria-label="Close">&times;</button>
@@ -781,7 +929,44 @@
 		<form method="POST" action="{{ route('feedingcor-program.attendance.store') }}" id="attendanceForm">
 			@csrf
 			<input type="hidden" name="school" value="{{ $selectedSchool ?? 'all' }}">
+			@php
+				$attendanceStudents = ($students ?? collect())
+					->filter(fn ($student) => (bool) ($student['is_attendance_eligible'] ?? false))
+					->values();
+			@endphp
 			<div class="modal-body">
+				<div class="attendance-legend" aria-label="Feeding attendance coding legend">
+					<table>
+						<thead>
+							<tr>
+								<th>B. Deworming</th>
+								<th>D. Actual Feeding</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>(x) - not dewormed</td>
+								<td>(H) - Present, served with Hot meals</td>
+							</tr>
+							<tr>
+								<td>(/) - dewormed</td>
+								<td>(M) - Present, served with Milk</td>
+							</tr>
+							<tr>
+								<td>&nbsp;</td>
+								<td>(H/M) - Present, served with Hot meals &amp; Milk</td>
+							</tr>
+							<tr>
+								<td>&nbsp;</td>
+								<td>(A) - Absent, not served</td>
+							</tr>
+							<tr>
+								<td>&nbsp;</td>
+								<td>(H2/M2)(H/M2) - Present, served twice</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
 				<div class="weight-item">
 					<div class="weight-label">Session Date</div>
 					<div class="weight-field-wrap">
@@ -790,18 +975,49 @@
 				</div>
 				<div class="weight-item">
 					<div class="weight-label">Mark Present Beneficiaries</div>
-					@forelse (($students ?? collect()) as $student)
-						<div class="attendance-row">
-							<input type="checkbox" name="present_student_ids[]" value="{{ $student['id'] }}" id="present_{{ $student['id'] }}">
-							<label for="present_{{ $student['id'] }}">
-								<div class="weight-label" style="font-size:.9rem;">{{ $student['student_name'] }}</div>
-								<div class="attendance-meta">{{ $student['section'] }} · {{ $student['attendance'] }} ({{ $student['attendance_percent'] }}%)</div>
-							</label>
-							<div class="attendance-status">{{ $student['nutritional_status'] }}</div>
+					<p class="attendance-rule-note">Only learners tagged as <strong>Wasted</strong> or <strong>Severely Wasted</strong> from Class Adviser BMI results are included in this attendance update.</p>
+					@if ($attendanceStudents->isNotEmpty())
+						<div class="attendance-tools">
+							<button type="button" class="attendance-mini-btn present" id="markAllPresentBtn">Mark All Present</button>
+							<button type="button" class="attendance-mini-btn absent" id="markAllAbsentBtn">Mark All Absent</button>
 						</div>
+					@endif
+					@php
+						$oldPresentIds = collect(old('present_student_ids', []))->map(fn ($value) => (string) $value)->all();
+					@endphp
+					<div class="attendance-list-wrap">
+						@forelse ($attendanceStudents as $student)
+							@php
+								$isPresent = empty($oldPresentIds) ? true : in_array((string) $student['id'], $oldPresentIds, true);
+								$oldDeworming = old('deworming_codes.' . $student['id'], '/');
+								$oldFeeding = old('feeding_codes.' . $student['id'], $isPresent ? 'H' : 'A');
+							@endphp
+							<div class="attendance-row">
+								<input type="checkbox" class="attendance-present-input" name="present_student_ids[]" value="{{ $student['id'] }}" id="present_{{ $student['id'] }}" {{ $isPresent ? 'checked' : '' }} hidden>
+								<div>
+									<div class="weight-label" style="font-size:.9rem;">{{ $student['student_name'] }}</div>
+									<div class="attendance-meta">{{ $student['section'] }} · {{ $student['attendance'] }} ({{ $student['attendance_percent'] }}%) · BMI: {{ $student['nutritional_status'] }}</div>
+								</div>
+								<select name="deworming_codes[{{ $student['id'] }}]" class="attendance-inline-select" aria-label="Deworming status for {{ $student['student_name'] }}">
+									<option value="/" {{ $oldDeworming === '/' ? 'selected' : '' }}>/</option>
+									<option value="x" {{ $oldDeworming === 'x' ? 'selected' : '' }}>x</option>
+								</select>
+								<select name="feeding_codes[{{ $student['id'] }}]" class="attendance-inline-select" aria-label="Actual feeding code for {{ $student['student_name'] }}">
+									<option value="H" {{ $oldFeeding === 'H' ? 'selected' : '' }}>H</option>
+									<option value="M" {{ $oldFeeding === 'M' ? 'selected' : '' }}>M</option>
+									<option value="H/M" {{ $oldFeeding === 'H/M' ? 'selected' : '' }}>H/M</option>
+									<option value="A" {{ $oldFeeding === 'A' ? 'selected' : '' }}>A</option>
+									<option value="H2/M2" {{ $oldFeeding === 'H2/M2' ? 'selected' : '' }}>H2/M2</option>
+								</select>
+								<div class="attendance-choice-group" aria-label="Attendance choice for {{ $student['student_name'] }}">
+									<label class="attendance-choice-label"><input type="radio" class="attendance-choice" name="attendance_choice_{{ $student['id'] }}" value="present" {{ $isPresent ? 'checked' : '' }}> Present</label>
+									<label class="attendance-choice-label"><input type="radio" class="attendance-choice" name="attendance_choice_{{ $student['id'] }}" value="absent" {{ $isPresent ? '' : 'checked' }}> Absent</label>
+								</div>
+							</div>
 					@empty
-						<div class="weight-label">No beneficiaries available.</div>
-					@endforelse
+						<div class="weight-label" style="font-size:.86rem;">No eligible learners found for this school. Only Wasted/Severely Wasted BMI results can be recorded here.</div>
+						@endforelse
+					</div>
 				</div>
 			</div>
 			<div class="modal-foot">
@@ -922,6 +1138,9 @@
 	const form1MetaInputs = Array.from(document.querySelectorAll('[data-meta-field]'));
 	const openBtn = document.getElementById('openWeightsModal');
 	const recordAttendanceBtn = document.getElementById('recordAttendanceBtn');
+	const attendanceForm = document.getElementById('attendanceForm');
+	const markAllPresentBtn = document.getElementById('markAllPresentBtn');
+	const markAllAbsentBtn = document.getElementById('markAllAbsentBtn');
 	const attendanceBackdrop = document.getElementById('attendanceModalBackdrop');
 	const closeAttendanceModal = document.getElementById('closeAttendanceModal');
 	const cancelAttendanceModal = document.getElementById('cancelAttendanceModal');
@@ -1790,6 +2009,59 @@
 				setModal(attendanceBackdrop, true);
 			}
 		});
+	}
+
+	const syncAttendanceHiddenInputs = () => {
+		if (!attendanceForm) {
+			return;
+		}
+		const rows = Array.from(attendanceForm.querySelectorAll('.attendance-row'));
+		rows.forEach((row) => {
+			const hiddenInput = row.querySelector('.attendance-present-input');
+			const selectedChoice = row.querySelector('.attendance-choice:checked');
+			if (!hiddenInput || !selectedChoice) {
+				return;
+			}
+			hiddenInput.checked = selectedChoice.value === 'present';
+		});
+	};
+
+	if (markAllPresentBtn) {
+		markAllPresentBtn.addEventListener('click', () => {
+			if (!attendanceForm) {
+				return;
+			}
+			Array.from(attendanceForm.querySelectorAll('.attendance-choice[value="present"]')).forEach((radio) => {
+				radio.checked = true;
+			});
+			syncAttendanceHiddenInputs();
+		});
+	}
+
+	if (markAllAbsentBtn) {
+		markAllAbsentBtn.addEventListener('click', () => {
+			if (!attendanceForm) {
+				return;
+			}
+			Array.from(attendanceForm.querySelectorAll('.attendance-choice[value="absent"]')).forEach((radio) => {
+				radio.checked = true;
+			});
+			syncAttendanceHiddenInputs();
+		});
+	}
+
+	if (attendanceForm) {
+		attendanceForm.addEventListener('change', (event) => {
+			if (event.target && event.target.classList && event.target.classList.contains('attendance-choice')) {
+				syncAttendanceHiddenInputs();
+			}
+		});
+
+		attendanceForm.addEventListener('submit', () => {
+			syncAttendanceHiddenInputs();
+		});
+
+		syncAttendanceHiddenInputs();
 	}
 
 	if (closeAttendanceModal) {

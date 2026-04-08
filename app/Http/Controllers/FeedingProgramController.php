@@ -74,6 +74,7 @@ class FeedingProgramController extends Controller
 			$bmiClass = 'bmi-up';
 
 			$status = strtolower((string) $record->nutritional_status);
+			$isAttendanceEligible = $this->isAttendanceEligible($record->nutritional_status);
 			if (str_contains($status, 'normal')) {
 				$trendClass = 't-improving';
 				$trendLabel = 'Improving';
@@ -102,6 +103,7 @@ class FeedingProgramController extends Controller
 				'attendance_count' => $attendanceCount,
 				'attendance_percent' => $attendancePercent,
 				'nutritional_status' => $record->nutritional_status,
+				'is_attendance_eligible' => $isAttendanceEligible,
 				'is_at_risk' => (bool) $record->is_at_risk,
 				'trend_label' => $trendLabel,
 				'trend_class' => $trendClass,
@@ -169,9 +171,13 @@ class FeedingProgramController extends Controller
 			$studentsQuery->where('school_name', $selectedSchool);
 		}
 
-		$students = $studentsQuery->get(['id']);
+		$students = $studentsQuery->get(['id', 'nutritional_status']);
+		$students = $students
+			->filter(fn (StudentHealthRecord $student): bool => $this->isAttendanceEligible($student->nutritional_status))
+			->values();
+
 		if ($students->isEmpty()) {
-			return back()->with('error', 'No beneficiaries available to record attendance.');
+			return back()->with('error', 'No eligible beneficiaries (Wasted/Severely Wasted) available to record attendance.');
 		}
 
 		$allowedStudentIds = $students->pluck('id')->all();
@@ -210,6 +216,13 @@ class FeedingProgramController extends Controller
 		return redirect()
 			->route('dashboard.feedingcor-program', ['school' => $selectedSchool])
 			->with('success', 'Attendance for ' . Carbon::parse($sessionDate)->format('M d, Y') . $schoolSuffix . ' was recorded successfully.');
+	}
+
+	private function isAttendanceEligible(?string $nutritionalStatus): bool
+	{
+		$status = strtolower(trim((string) $nutritionalStatus));
+
+		return $status === 'wasted' || $status === 'severely wasted';
 	}
 
 	private function resolveProgramDay(): int
