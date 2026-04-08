@@ -51,7 +51,9 @@ class FeedingProgramController extends Controller
 
 			$students = $studentsQuery
 				->orderBy('student_name')
-				->get();
+				->get()
+				->filter(fn (StudentHealthRecord $record): bool => $this->isAttendanceEligible($record->nutritional_status))
+				->values();
 		}
 
 		$programDay = $this->resolveProgramDay();
@@ -221,8 +223,10 @@ class FeedingProgramController extends Controller
 
 	private function isAttendanceEligible(?string $nutritionalStatus): bool
 	{
-		$status = strtolower(trim((string) $nutritionalStatus));
+		$status = strtolower((string) $nutritionalStatus);
+		$status = preg_replace('/\s+/', ' ', trim($status)) ?? '';
 
+<<<<<<< Updated upstream
 		return $status === 'wasted' || $status === 'severely wasted' || $status === 'underweight';
 	}
 
@@ -261,6 +265,11 @@ class FeedingProgramController extends Controller
 		}
 
 		return $status !== '' ? $status : 'Normal';
+=======
+		return $status === 'wasted'
+			|| $status === 'severely wasted'
+			|| $status === 'severly wasted';
+>>>>>>> Stashed changes
 	}
 
 	private function resolveProgramDay(): int
@@ -302,6 +311,14 @@ class FeedingProgramController extends Controller
 			->pluck('present_count', 'student_health_record_id');
 
 		StudentHealthRecord::query()->each(function (StudentHealthRecord $record) use ($presentCounts, $thresholdCount, $programDay): void {
+			if (!$this->isAttendanceEligible($record->nutritional_status)) {
+				$record->update([
+					'is_at_risk' => false,
+				]);
+
+				return;
+			}
+
 			$attendanceCount = (int) ($presentCounts[$record->id] ?? 0);
 			$isAtRisk = $programDay > 0 && $attendanceCount < $thresholdCount;
 

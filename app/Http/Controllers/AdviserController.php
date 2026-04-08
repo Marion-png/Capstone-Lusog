@@ -20,6 +20,7 @@ class AdviserController extends Controller
     {
         $birthDate = trim((string) $request->input('birth_date', ''));
 
+<<<<<<< Updated upstream
         if ($birthDate !== '') {
             try {
                 $parsedBirthDate = Carbon::createFromFormat('Y-m-d', $birthDate);
@@ -31,6 +32,30 @@ class AdviserController extends Controller
             } catch (\Throwable $_) {
                 // Keep existing month/day/year inputs when date parsing fails.
             }
+=======
+        if (is_string($birthMonth) && ctype_digit($birthMonth)) {
+            $birthMonth = (int) $birthMonth;
+            $request->merge(['birth_month' => $birthMonth]);
+        }
+
+        if (is_string($birthDay) && ctype_digit($birthDay)) {
+            $birthDay = (int) $birthDay;
+            $request->merge(['birth_day' => $birthDay]);
+        }
+
+        if (is_string($birthYear) && ctype_digit($birthYear)) {
+            $birthYear = (int) $birthYear;
+            $request->merge(['birth_year' => $birthYear]);
+        }
+
+        if ((!$birthMonth || !$birthDay || !$birthYear) && is_string($birthDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $birthDate)) {
+            [$yearPart, $monthPart, $dayPart] = explode('-', $birthDate);
+            $request->merge([
+                'birth_year' => (int) $yearPart,
+                'birth_month' => (int) $monthPart,
+                'birth_day' => (int) $dayPart,
+            ]);
+>>>>>>> Stashed changes
         }
 
         $heightCm = $request->input('height_cm');
@@ -115,6 +140,7 @@ class AdviserController extends Controller
 
         $request->session()->put('school_health_card_records', $records);
 
+<<<<<<< Updated upstream
         // Mirror adviser submissions to DB so Feeding Coordinator modules can load them immediately.
         if (Schema::hasTable('student_health_records')) {
             $middleName = trim((string) ($validated['middle_name'] ?? ''));
@@ -143,6 +169,40 @@ class AdviserController extends Controller
             StudentHealthRecord::query()->updateOrCreate(
                 ['student_id' => (string) $validated['lrn']],
                 $recordPayload
+=======
+        if (Schema::hasTable('student_health_records')) {
+            $studentName = $this->buildStudentName(
+                (string) $validated['last_name'],
+                (string) $validated['first_name'],
+                (string) ($validated['middle_name'] ?? '')
+            );
+
+            $schoolName = (string) $request->session()->get('assigned_school_name', '');
+            if ($schoolName === '') {
+                $schoolName = (string) ($validated['division'] ?? '');
+            }
+
+            $sectionLabel = trim((string) $validated['grade_level'] . ' / ' . (string) $validated['section']);
+
+            StudentHealthRecord::query()->updateOrCreate(
+                [
+                    'student_id' => (string) $validated['lrn'],
+                ],
+                [
+                    'student_name' => $studentName,
+                    'school_name' => $schoolName !== '' ? $schoolName : null,
+                    'section' => $sectionLabel !== '' ? $sectionLabel : (string) $validated['section'],
+                    'weight' => (float) $validated['weight_kg'],
+                    'bmi_value' => $bmi,
+                    'nutritional_status' => $nutritionalStatusBmiForAge,
+                    'baseline_age' => $age,
+                    'baseline_height_cm' => $heightCm,
+                    'baseline_weight_kg' => $weightKg,
+                    'baseline_bmi_value' => $bmi,
+                    'baseline_nutritional_status' => $nutritionalStatusBmiForAge,
+                    'baseline_recorded_at' => now()->toDateString(),
+                ]
+>>>>>>> Stashed changes
             );
         }
 
@@ -219,5 +279,13 @@ class AdviserController extends Controller
         }
 
         return 'Normal Height-for-Age';
+    }
+
+    private function buildStudentName(string $lastName, string $firstName, string $middleName): string
+    {
+        $middleName = trim($middleName);
+        $middleInitial = $middleName !== '' ? (' ' . strtoupper(substr($middleName, 0, 1)) . '.') : '';
+
+        return trim(trim($lastName) . ', ' . trim($firstName) . $middleInitial);
     }
 }

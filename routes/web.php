@@ -216,6 +216,9 @@ Route::get('/dashboard/school-head/reports', [SchoolHeadController::class, 'repo
 Route::get('/dashboard/feedingcor-dashboard', [FeedingCoordinatorController::class, 'dashboard'])
     ->name('dashboard.feedingcor-dashboard');
 
+Route::get('/dashboard/feedingcor-sbfp-forms', [FeedingCoordinatorController::class, 'sbfpForms'])
+    ->name('dashboard.feedingcor-sbfp-forms');
+
 Route::get('/dashboard/feedingcor-health-records', [StudentHealthRecordController::class, 'feedingHealthRecords'])
     ->name('dashboard.feedingcor-health-records');
 

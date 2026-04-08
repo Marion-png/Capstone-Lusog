@@ -73,6 +73,7 @@
         <a href="{{ route('dashboard.feedingcor-dashboard') }}" class="sb-link">Dashboard</a>
         <a href="{{ route('dashboard.feedingcor-health-records') }}" class="sb-link active">Student Health Records</a>
         <a href="{{ route('dashboard.feedingcor-program') }}" class="sb-link">Feeding Program</a>
+        <a href="{{ route('dashboard.feedingcor-sbfp-forms') }}" class="sb-link">SBFP Forms</a>
     </nav>
     <div class="sb-user">
         <div class="sb-avatar">{{ substr(auth()->user()->name ?? 'FC',0,2) }}</div>

@@ -11,6 +11,11 @@ use Illuminate\View\View;
 
 class FeedingCoordinatorController extends Controller
 {
+    public function sbfpForms(): View
+    {
+        return view('feedingcor-dashboard.sbfp-forms');
+    }
+
     public function dashboard(): View
     {
         $students = collect();
