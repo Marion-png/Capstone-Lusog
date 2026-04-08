@@ -76,7 +76,10 @@ tr:last-child td { border-bottom: none; }
 .actions { display: flex; gap: 6px; align-items: center; }
 .action-btn { border: 1px solid transparent; border-radius: 8px; padding: 5px 9px; font-size: .68rem; font-weight: 700; cursor: pointer; }
 .action-btn.accept { background: #dcfce7; color: #166534; border-color: #86efac; }
-.action-btn.decline { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+.action-btn.comment { background: #e0f2fe; color: #0c4a6e; border-color: #bae6fd; }
+.comment-form { display: flex; align-items: center; gap: 6px; }
+.comment-form input { width: 180px; border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; font-size: .68rem; }
+.comment-text { max-width: 220px; white-space: normal; color: var(--text-2); }
 .muted { color: var(--text-3); font-size: .72rem; }
 
 @media (max-width: 980px) { .stats { grid-template-columns: 1fr 1fr; } }

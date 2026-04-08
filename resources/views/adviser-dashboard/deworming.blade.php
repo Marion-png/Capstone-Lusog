@@ -153,6 +153,7 @@
                         <th>Tablets</th>
                         <th>Status</th>
                         <th>Release Date</th>
+                        <th>Nurse Comment</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -170,9 +171,10 @@
                             <td>{{ $item['tablets_requested'] ?? '-' }}</td>
                             <td><span class="badge {{ $statusClass }}">{{ $statusLabel }}</span></td>
                             <td>{{ $item['released_date'] ?? '-' }}</td>
+                            <td>{{ $item['nurse_comment'] ?? '-' }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="muted">No requests submitted yet.</td></tr>
+                        <tr><td colspan="8" class="muted">No requests submitted yet.</td></tr>
                     @endforelse
                 </tbody>
             </table>

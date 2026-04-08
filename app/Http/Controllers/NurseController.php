@@ -71,10 +71,12 @@ class NurseController extends Controller
 
         $records[$index]['height_cm'] = $request->input('height_cm', $records[$index]['height_cm'] ?? null);
         $records[$index]['weight_kg'] = $request->input('weight_kg', $records[$index]['weight_kg'] ?? null);
+        $lockedBmiStatus = (string) ($records[$index]['nutritional_status_bmi_for_age'] ?? '');
+        $lockedHeightAgeStatus = (string) ($records[$index]['nutritional_status_height_for_age'] ?? '');
         $records[$index]['endline_snapshot'] = [
             'height_cm' => $request->input('height_cm'),
             'weight_kg' => $request->input('weight_kg'),
-            'nutritional_status_bmi' => $request->input('nutritional_status_bmi'),
+            'nutritional_status_bmi' => $lockedBmiStatus,
         ];
         $records[$index]['examination'] = [
             'date_of_examination' => $examDate,
@@ -84,8 +86,8 @@ class NurseController extends Controller
             'respiratory_rate' => $request->input('respiratory_rate'),
             'height_cm' => $request->input('height_cm'),
             'weight_kg' => $request->input('weight_kg'),
-            'nutritional_status_bmi' => $request->input('nutritional_status_bmi'),
-            'nutritional_status_height_age' => $request->input('nutritional_status_height_age'),
+            'nutritional_status_bmi' => $lockedBmiStatus,
+            'nutritional_status_height_age' => $lockedHeightAgeStatus,
             'vision_screening' => $request->input('vision_screening'),
             'auditory_screening' => $request->input('auditory_screening'),
             'skin_scalp' => $request->input('skin_scalp'),

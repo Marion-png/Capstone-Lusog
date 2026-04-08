@@ -48,7 +48,7 @@
 @php
     $requests = collect($dewormingRequests ?? collect());
     $pendingCount = $requests->where('status', 'pending')->count();
-    $approvedCount = $requests->whereIn('status', ['approved', 'prepared', 'released', 'declined'])->count();
+    $approvedCount = $requests->whereIn('status', ['approved', 'prepared', 'released', 'commented'])->count();
     $totalTablets = (int) $requests->sum(fn ($item) => (int) ($item['tablets_requested'] ?? 0));
 @endphp
 
@@ -106,6 +106,7 @@
                         <th>Tablets Requested</th>
                         <th>Status</th>
                         <th>Release Date</th>
+                        <th>Nurse Comment</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -130,15 +131,23 @@
                             <td><span class="{{ $statusClass }}">{{ ucfirst($status) }}</span></td>
                             <td>{{ $item['released_date'] ?? '-' }}</td>
                             <td>
+                                @if (!empty($item['nurse_comment']))
+                                    <div class="comment-text">{{ $item['nurse_comment'] }}</div>
+                                @else
+                                    <span class="muted">-</span>
+                                @endif
+                            </td>
+                            <td>
                                 @if ($status === 'pending')
                                     <div class="actions">
                                         <form method="POST" action="{{ route('dashboard.school-nurse.deworming.decide', ['requestId' => (string) ($item['id'] ?? ''), 'decision' => 'accept']) }}">
                                             @csrf
                                             <button type="submit" class="action-btn accept">Accept</button>
                                         </form>
-                                        <form method="POST" action="{{ route('dashboard.school-nurse.deworming.decide', ['requestId' => (string) ($item['id'] ?? ''), 'decision' => 'decline']) }}">
+                                        <form method="POST" action="{{ route('dashboard.school-nurse.deworming.comment', ['requestId' => (string) ($item['id'] ?? '')]) }}" class="comment-form">
                                             @csrf
-                                            <button type="submit" class="action-btn decline">Decline</button>
+                                            <input type="text" name="nurse_comment" placeholder="Add comment..." maxlength="500" required>
+                                            <button type="submit" class="action-btn comment">Comment</button>
                                         </form>
                                     </div>
                                 @else
@@ -148,7 +157,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" class="empty">No deworming requests submitted yet.</td>
+                            <td colspan="10" class="empty">No deworming requests submitted yet.</td>
                         </tr>
                     @endforelse
                 </tbody>

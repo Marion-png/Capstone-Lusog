@@ -48,6 +48,9 @@
         .page-title { font-family: 'DM Serif Display', serif; font-size: 1.75rem; line-height: 1.1; }
         .page-title span { color: var(--g700); font-style: italic; }
         .page-sub { font-size: .84rem; color: var(--text-3); margin-top: 6px; }
+        .page-actions { margin-top: 12px; display: flex; justify-content: flex-end; }
+        .btn-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border-radius: 10px; padding: 10px 14px; text-decoration: none; background: var(--g700); color: white; font-size: .82rem; font-weight: 700; }
+        .btn-action svg { width: 15px; height: 15px; flex-shrink: 0; }
         .flash { margin-top: 12px; border: 1px solid var(--g200); background: var(--g50); color: var(--g800); padding: 10px 12px; border-radius: var(--radius-sm); font-size: .8rem; font-weight: 600; }
 
         .stats { margin-top: 16px; display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 12px; }
@@ -79,6 +82,7 @@
         .graph-note { margin-top: 8px; font-size: .72rem; color: var(--text-3); }
 
         .grid { margin-top: 16px; display: grid; grid-template-columns: 1fr 1.25fr; gap: 12px; }
+        .grid-single { margin-top: 16px; display: grid; grid-template-columns: 1fr; gap: 12px; }
         .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); }
         .card-head { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: .8rem; font-weight: 700; color: var(--text-2); }
         .card-body { padding: 14px; }

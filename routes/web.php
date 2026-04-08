@@ -131,16 +131,42 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/{decision}', function
         return back()->with('error', 'Deworming request not found.');
     }
 
-    $status = $decision === 'accept' ? 'approved' : 'declined';
-    $requests[$index]['status'] = $status;
+    $requests[$index]['status'] = 'approved';
     $requests[$index]['reviewed_at'] = now()->toIso8601String();
     $requests[$index]['reviewed_by'] = (string) $request->session()->get('active_name', 'School Nurse');
-    $requests[$index]['released_date'] = $decision === 'accept' ? now()->toDateString() : null;
+    $requests[$index]['released_date'] = now()->toDateString();
 
     $request->session()->put('deworming_requests', $requests->values()->all());
 
-    return back()->with('success', 'Deworming request ' . ($decision === 'accept' ? 'accepted' : 'declined') . ' successfully.');
-})->whereIn('decision', ['accept', 'decline'])->name('dashboard.school-nurse.deworming.decide');
+    return back()->with('success', 'Deworming request accepted successfully.');
+})->whereIn('decision', ['accept'])->name('dashboard.school-nurse.deworming.decide');
+
+Route::post('/dashboard/school-nurse/deworming/{requestId}/comment', function (Request $request, string $requestId) {
+    if ($request->session()->get('active_role') !== 'school_nurse') {
+        return redirect()->route('login')->with('error', 'Only School Nurse can add comments to deworming requests.');
+    }
+
+    $validated = $request->validate([
+        'nurse_comment' => ['required', 'string', 'max:500'],
+    ]);
+
+    $requests = collect($request->session()->get('deworming_requests', []));
+    $index = $requests->search(fn (array $item): bool => (string) ($item['id'] ?? '') === $requestId);
+
+    if ($index === false) {
+        return back()->with('error', 'Deworming request not found.');
+    }
+
+    $requests[$index]['status'] = 'commented';
+    $requests[$index]['nurse_comment'] = trim((string) $validated['nurse_comment']);
+    $requests[$index]['commented_at'] = now()->toIso8601String();
+    $requests[$index]['reviewed_by'] = (string) $request->session()->get('active_name', 'School Nurse');
+    $requests[$index]['released_date'] = null;
+
+    $request->session()->put('deworming_requests', $requests->values()->all());
+
+    return back()->with('success', 'Comment added to deworming request.');
+})->name('dashboard.school-nurse.deworming.comment');
 
 Route::get('/dashboard/consultation-log', [ConsultationController::class, 'index'])
     ->name('dashboard.consultation-log');
@@ -157,6 +183,9 @@ Route::get('/dashboard/data-visualization', function () {
 
 Route::get('/dashboard/medicine-inventory', [MedicineInventoryController::class, 'index'])
     ->name('dashboard.medicine-inventory');
+
+Route::get('/dashboard/medicine-inventory/new', [MedicineInventoryController::class, 'create'])
+    ->name('medicine-inventory.create');
 
 Route::post('/dashboard/medicine-inventory', [MedicineInventoryController::class, 'store'])
     ->name('medicine-inventory.store');
@@ -288,8 +317,17 @@ Route::post('/dashboard/class-adviser/health-records/baseline', [StudentHealthRe
 Route::post('/dashboard/class-adviser/health-records/{record}/endline', [StudentHealthRecordController::class, 'storeEndline'])
     ->name('class-adviser.health-records.endline.store');
 
-Route::get('/dashboard/feedingcor-program', [FeedingProgramController::class, 'index'])
-    ->name('dashboard.feedingcor-program');
+Route::get('/dashboard/feedingcor-program', function (Request $request) {
+    $activeRole = strtolower(trim((string) $request->session()->get('active_role', '')));
+
+    if ($activeRole === 'school_nurse') {
+        return redirect()
+            ->route('dashboard.school-nurse.feeding-program')
+            ->with('error', 'School Nurse has view-only access to Feeding Program.');
+    }
+
+    return app(FeedingProgramController::class)->index($request);
+})->name('dashboard.feedingcor-program');
 
 Route::get('/dashboard/school-nurse/feeding-program', [FeedingProgramController::class, 'index'])
     ->name('dashboard.school-nurse.feeding-program');

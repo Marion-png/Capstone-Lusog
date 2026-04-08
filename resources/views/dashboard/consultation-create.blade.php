@@ -43,7 +43,42 @@
                     </div>
                     <div class="field">
                         <label for="condition">Condition</label>
-                        <input id="condition" type="text" name="condition" value="{{ old('condition') }}" placeholder="e.g. Fever, Cough" required>
+                        <select id="condition" name="condition" required>
+                            <option value="" @selected(old('condition') === null || old('condition') === '')>Select condition</option>
+                            <option value="Inflamed eye/stye" @selected(old('condition') === 'Inflamed eye/stye')>Inflamed eye/stye</option>
+                            <option value="Eye irritation" @selected(old('condition') === 'Eye irritation')>Eye irritation</option>
+                            <option value="Conjunctivitis" @selected(old('condition') === 'Conjunctivitis')>Conjunctivitis</option>
+                            <option value="Ear Problem" @selected(old('condition') === 'Ear Problem')>Ear Problem</option>
+                            <option value="Nose Bleeding" @selected(old('condition') === 'Nose Bleeding')>Nose Bleeding</option>
+                            <option value="Sinusistis/Acute Rhinitis" @selected(old('condition') === 'Sinusistis/Acute Rhinitis')>Sinusistis/Acute Rhinitis</option>
+                            <option value="Sore throat" @selected(old('condition') === 'Sore throat')>Sore throat</option>
+                            <option value="Tonsilitis" @selected(old('condition') === 'Tonsilitis')>Tonsilitis</option>
+                            <option value="Inflamed Gum" @selected(old('condition') === 'Inflamed Gum')>Inflamed Gum</option>
+                            <option value="Toothache" @selected(old('condition') === 'Toothache')>Toothache</option>
+                            <option value="Cough" @selected(old('condition') === 'Cough')>Cough</option>
+                            <option value="Fever" @selected(old('condition') === 'Fever')>Fever</option>
+                            <option value="Cold" @selected(old('condition') === 'Cold')>Cold</option>
+                            <option value="Headache" @selected(old('condition') === 'Headache')>Headache</option>
+                            <option value="Hyperacidity" @selected(old('condition') === 'Hyperacidity')>Hyperacidity</option>
+                            <option value="Dysmenorrhea" @selected(old('condition') === 'Dysmenorrhea')>Dysmenorrhea</option>
+                            <option value="Diarrhea/LBM" @selected(old('condition') === 'Diarrhea/LBM')>Diarrhea/LBM</option>
+                            <option value="Abdominal Pain" @selected(old('condition') === 'Abdominal Pain')>Abdominal Pain</option>
+                            <option value="Nausea/ Vomitting" @selected(old('condition') === 'Nausea/ Vomitting')>Nausea/ Vomitting</option>
+                            <option value="Fainting" @selected(old('condition') === 'Fainting')>Fainting</option>
+                            <option value="Dizziness" @selected(old('condition') === 'Dizziness')>Dizziness</option>
+                            <option value="Lacerated Wound" @selected(old('condition') === 'Lacerated Wound')>Lacerated Wound</option>
+                            <option value="Punctured Wound" @selected(old('condition') === 'Punctured Wound')>Punctured Wound</option>
+                            <option value="Incised Wound" @selected(old('condition') === 'Incised Wound')>Incised Wound</option>
+                            <option value="Abrasion" @selected(old('condition') === 'Abrasion')>Abrasion</option>
+                            <option value="Contusion" @selected(old('condition') === 'Contusion')>Contusion</option>
+                            <option value="Ulcer (Skin)" @selected(old('condition') === 'Ulcer (Skin)')>Ulcer (Skin)</option>
+                            <option value="Burn" @selected(old('condition') === 'Burn')>Burn</option>
+                            <option value="Thea Flava" @selected(old('condition') === 'Thea Flava')>Thea Flava</option>
+                            <option value="Ringworm" @selected(old('condition') === 'Ringworm')>Ringworm</option>
+                            <option value="Boil" @selected(old('condition') === 'Boil')>Boil</option>
+                            <option value="Skin allergy" @selected(old('condition') === 'Skin allergy')>Skin allergy</option>
+                            <option value="Others" @selected(old('condition') === 'Others')>Others</option>
+                        </select>
                         @error('condition') <div class="err">{{ $message }}</div> @enderror
                     </div>
                     <div class="field full">

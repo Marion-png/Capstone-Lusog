@@ -49,6 +49,13 @@
         <h1 class="page-title">Medicine <span>Inventory</span></h1>
         <p class="page-sub">Track current stock against reorder thresholds and add medicines quickly.</p>
 
+        <div class="page-actions">
+            <a href="{{ route('medicine-inventory.create') }}" class="btn-action">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Add Medicine
+            </a>
+        </div>
+
         @if (session('success'))
             <div class="flash">{{ session('success') }}</div>
         @endif
@@ -135,46 +142,7 @@
             </div>
         </section>
 
-        <section class="grid">
-            <article class="card">
-                <div class="card-head">Add Medicine</div>
-                <div class="card-body">
-                    <form method="POST" action="{{ route('medicine-inventory.store') }}">
-                        @csrf
-                        <div class="field">
-                            <label for="name">Medicine Name</label>
-                            <input id="name" name="name" type="text" value="{{ old('name') }}" placeholder="e.g. Paracetamol" required>
-                            @error('name')<div class="err">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="row">
-                            <div class="field">
-                                <label for="stock_quantity">Current Stock</label>
-                                <input id="stock_quantity" name="stock_quantity" type="number" min="0" value="{{ old('stock_quantity', 0) }}" required>
-                                @error('stock_quantity')<div class="err">{{ $message }}</div>@enderror
-                            </div>
-                            <div class="field">
-                                <label for="minimum_threshold">Minimum Threshold</label>
-                                <input id="minimum_threshold" name="minimum_threshold" type="number" min="0" value="{{ old('minimum_threshold', 20) }}" required>
-                                @error('minimum_threshold')<div class="err">{{ $message }}</div>@enderror
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="field">
-                                <label for="unit">Unit</label>
-                                <input id="unit" name="unit" type="text" value="{{ old('unit', 'pcs') }}" required>
-                                @error('unit')<div class="err">{{ $message }}</div>@enderror
-                            </div>
-                            <div class="field">
-                                <label for="notes">Notes</label>
-                                <input id="notes" name="notes" type="text" value="{{ old('notes') }}" placeholder="Optional">
-                                @error('notes')<div class="err">{{ $message }}</div>@enderror
-                            </div>
-                        </div>
-                        <button type="submit" class="btn">Save Medicine</button>
-                    </form>
-                </div>
-            </article>
-
+        <section class="grid-single">
             <article class="card">
                 <div class="card-head">Current Inventory</div>
                 <div class="card-body" style="padding:0;">
@@ -211,7 +179,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5">No medicine records yet. Add your first item from the form.</td>
+                                <td colspan="5">No medicine records yet. Click Add Medicine to create your first item.</td>
                             </tr>
                         @endforelse
                         </tbody>

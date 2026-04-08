@@ -20,7 +20,9 @@ class FeedingProgramController extends Controller
 	public function index(Request $request): View
 	{
 		$activeRole = (string) $request->session()->get('active_role', '');
-		$isReadOnly = $activeRole === 'school_nurse';
+		$currentRouteName = (string) optional($request->route())->getName();
+		$isNurseFeedingRoute = $currentRouteName === 'dashboard.school-nurse.feeding-program';
+		$isReadOnly = $isNurseFeedingRoute || $activeRole === 'school_nurse';
 
 		$hasSchoolColumn = Schema::hasTable('student_health_records')
 			&& Schema::hasColumn('student_health_records', 'school_name');
@@ -150,8 +152,9 @@ class FeedingProgramController extends Controller
 
 	public function storeAttendance(Request $request): RedirectResponse
 	{
-		$activeRole = (string) $request->session()->get('active_role', '');
-		if ($activeRole !== 'feeding_coor') {
+		$activeRole = strtolower(trim((string) $request->session()->get('active_role', '')));
+		$allowedCoordinatorRoles = ['feeding_coor', 'feedingcoor', 'feeding_coordinator', 'feeding coordinator'];
+		if (!in_array($activeRole, $allowedCoordinatorRoles, true)) {
 			$redirectRoute = $activeRole === 'school_nurse'
 				? 'dashboard.school-nurse.feeding-program'
 				: 'login';

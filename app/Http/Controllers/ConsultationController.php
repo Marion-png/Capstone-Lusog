@@ -16,6 +16,27 @@ class ConsultationController extends Controller
             ->latest('id')
             ->paginate(10);
 
+        $topConditionStats = Consultation::query()
+            ->selectRaw('LOWER(condition) as condition_name, COUNT(*) as total')
+            ->whereMonth('consulted_at', now()->month)
+            ->whereYear('consulted_at', now()->year)
+            ->groupBy('condition_name')
+            ->orderByDesc('total')
+            ->limit(7)
+            ->get();
+
+        $weekStart = now()->startOfWeek();
+        $dailyTrend = collect(range(0, 6))->map(function (int $offset) use ($weekStart): array {
+            $day = $weekStart->copy()->addDays($offset);
+
+            return [
+                'label' => $day->format('D'),
+                'count' => Consultation::query()
+                    ->whereDate('consulted_at', $day->toDateString())
+                    ->count(),
+            ];
+        });
+
         return view('dashboard.consultation-log', [
             'consultations' => $consultations,
             'stats' => [
@@ -24,8 +45,11 @@ class ConsultationController extends Controller
                     ->whereYear('consulted_at', now()->year)
                     ->count(),
                 'week' => Consultation::whereBetween('consulted_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
+                'today' => Consultation::whereDate('consulted_at', now()->toDateString())->count(),
                 'referrals' => Consultation::where('status', 'referred')->count(),
             ],
+            'topConditionStats' => $topConditionStats,
+            'dailyTrend' => $dailyTrend,
         ]);
     }
 

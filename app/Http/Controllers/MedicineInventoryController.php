@@ -9,6 +9,11 @@ use Illuminate\View\View;
 
 class MedicineInventoryController extends Controller
 {
+    public function create(): View
+    {
+        return view('dashboard.medicine-create');
+    }
+
     public function index(): View
     {
         $medicines = Medicine::query()->orderBy('name')->get();
@@ -16,27 +21,27 @@ class MedicineInventoryController extends Controller
             ->filter(fn (Medicine $medicine) => $medicine->stock_quantity < $medicine->minimum_threshold)
             ->count();
 
-        $paracetamol = $medicines->first(fn (Medicine $medicine) => strcasecmp($medicine->name, 'Paracetamol') === 0);
-        $paracetamolUnit = $paracetamol?->unit ?? 'doses';
-        $paracetamolStock = $paracetamol?->stock_quantity ?? 0;
-        $minimumThreshold = $paracetamol?->minimum_threshold ?? 20;
+        $forecastMedicine = $this->resolveForecastMedicine($medicines);
+        $forecastUnit = $forecastMedicine?->unit ?? 'doses';
+        $forecastStock = (int) ($forecastMedicine?->stock_quantity ?? 0);
+        $minimumThreshold = (int) ($forecastMedicine?->minimum_threshold ?? 20);
 
-        // Prototype dataset until dispensing transactions are persisted.
-        $monthlyUsage = [
-            ['month' => 'Aug', 'used' => 205],
-            ['month' => 'Sep', 'used' => 218],
-            ['month' => 'Oct', 'used' => 224],
-            ['month' => 'Nov', 'used' => 237],
-            ['month' => 'Dec', 'used' => 256],
-            ['month' => 'Jan', 'used' => 372],
-        ];
+        // Functional dummy forecast until dispensing transactions are persisted.
+        $monthlyUsage = $this->buildDummyMonthlyUsage(
+            (string) ($forecastMedicine?->name ?? 'Paracetamol'),
+            $minimumThreshold
+        );
 
-        $januaryUsage = collect($monthlyUsage)->firstWhere('month', 'Jan')['used'];
+        $lastThreeAverage = (float) collect($monthlyUsage)
+            ->slice(-3)
+            ->avg(fn (array $item): int => (int) ($item['used'] ?? 0));
+        $januaryUsage = (int) (collect($monthlyUsage)->firstWhere('month', 'Jan')['used'] ?? 0);
+
         $recommendedForNextMonth = max(
             $minimumThreshold,
-            (int) ceil($januaryUsage * 1.2)
+            (int) ceil(max($lastThreeAverage * 1.15, $januaryUsage * 1.1))
         );
-        $recommendedOrder = max(0, $recommendedForNextMonth - $paracetamolStock);
+        $recommendedOrder = max(0, $recommendedForNextMonth - $forecastStock);
         $maxUsage = max(array_column($monthlyUsage, 'used'));
 
         return view('dashboard.medicine-inventory', [
@@ -47,9 +52,9 @@ class MedicineInventoryController extends Controller
                 'good' => $medicines->count() - $lowStockCount,
             ],
             'prediction' => [
-                'medicine_name' => $paracetamol?->name ?? 'Paracetamol',
-                'unit' => $paracetamolUnit,
-                'current_stock' => $paracetamolStock,
+                'medicine_name' => $forecastMedicine?->name ?? 'Paracetamol',
+                'unit' => $forecastUnit,
+                'current_stock' => $forecastStock,
                 'next_month' => 'February',
                 'recommended_doses' => $recommendedForNextMonth,
                 'recommended_order' => $recommendedOrder,
@@ -57,6 +62,42 @@ class MedicineInventoryController extends Controller
                 'max_usage' => $maxUsage,
             ],
         ]);
+    }
+
+    private function resolveForecastMedicine($medicines): ?Medicine
+    {
+        if ($medicines->isEmpty()) {
+            return null;
+        }
+
+        return $medicines
+            ->sortBy(function (Medicine $medicine): float {
+                $minimum = max(1, (int) $medicine->minimum_threshold);
+
+                return (float) $medicine->stock_quantity / $minimum;
+            })
+            ->first();
+    }
+
+    private function buildDummyMonthlyUsage(string $medicineName, int $minimumThreshold): array
+    {
+        $months = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'];
+        $seasonalFactors = [0.84, 0.90, 0.95, 1.00, 1.08, 1.30];
+        $seed = abs((int) crc32(strtolower(trim($medicineName))));
+        $baseline = max(18, (int) round(max(1, $minimumThreshold) * 1.4));
+
+        $usage = [];
+        foreach ($months as $index => $month) {
+            $jitter = (($seed >> ($index * 3)) & 7) - 3;
+            $value = (int) round(($baseline * $seasonalFactors[$index]) + ($jitter * 2));
+
+            $usage[] = [
+                'month' => $month,
+                'used' => max(8, $value),
+            ];
+        }
+
+        return $usage;
     }
 
     public function store(Request $request): RedirectResponse

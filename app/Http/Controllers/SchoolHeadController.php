@@ -12,20 +12,6 @@ class SchoolHeadController extends Controller
      * @var array<int, array<string, string|int>>
      */
     private const APPROVALS = [
-        [
-            'id' => 1,
-            'type' => 'Deworming Tablets',
-            'requested_by' => 'Ms. Rodriguez',
-            'details' => '25 tablets',
-            'date' => '2026-03-25',
-        ],
-        [
-            'id' => 2,
-            'type' => 'Medicine Restock',
-            'requested_by' => 'Nurse Garcia',
-            'details' => 'Paracetamol x200',
-            'date' => '2026-03-24',
-        ],
     ];
 
     public function index(Request $request): View

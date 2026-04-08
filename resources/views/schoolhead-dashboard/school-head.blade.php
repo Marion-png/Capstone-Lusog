@@ -109,7 +109,7 @@
         .flash-success { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
         .flash-error { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
 
-        .stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 16px; }
+        .stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin-bottom: 16px; }
         .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-card); }
         .stat { padding: 14px 15px; position: relative; overflow: hidden; }
         .stat::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: #16a34a; }
@@ -284,11 +284,6 @@
                 <div class="hint">Enrolled this AY</div>
             </article>
             <article class="card stat">
-                <div class="label">Pending Approvals</div>
-                <div class="num">{{ $stats['pending_approvals'] ?? 0 }}</div>
-                <div class="hint">Requests awaiting review</div>
-            </article>
-            <article class="card stat">
                 <div class="label">Active Programs</div>
                 <div class="num">{{ $stats['active_programs'] ?? 0 }}</div>
                 <div class="hint">Feeding & Deworming</div>
@@ -298,50 +293,6 @@
                 <div class="num">{{ $stats['wasted_rate'] ?? '0%' }}</div>
                 <div class="hint">46 of 389 students</div>
             </article>
-        </section>
-
-        <section class="card section">
-            <div class="section-head">
-                <h2 class="section-title">Pending Approvals</h2>
-                <div class="section-meta">Operational requests requiring your decision</div>
-            </div>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                    <tr>
-                        <th>Request Type</th>
-                        <th>Requested By</th>
-                        <th>Details</th>
-                        <th>Date</th>
-                        <th>Action</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    @forelse ($approvals as $approval)
-                        <tr>
-                            <td><span class="request-type">{{ $approval['type'] }}</span></td>
-                            <td>{{ $approval['requested_by'] }}</td>
-                            <td>{{ $approval['details'] }}</td>
-                            <td>{{ $approval['date'] }}</td>
-                            <td class="action-cell">
-                                <form method="POST" action="{{ route('dashboard.school-head.approvals.decide', ['approval' => $approval['id'], 'decision' => 'approve']) }}" class="action-form">
-                                    @csrf
-                                    <button type="submit" class="btn btn-approve">Approve</button>
-                                </form>
-                                <form method="POST" action="{{ route('dashboard.school-head.approvals.decide', ['approval' => $approval['id'], 'decision' => 'decline']) }}" class="action-form">
-                                    @csrf
-                                    <button type="submit" class="btn btn-decline">Decline</button>
-                                </form>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="5" class="empty-state">No pending approvals at the moment.</td>
-                        </tr>
-                    @endforelse
-                    </tbody>
-                </table>
-            </div>
         </section>
 
         <section class="grid-2">

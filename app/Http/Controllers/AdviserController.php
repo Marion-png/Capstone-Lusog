@@ -178,6 +178,10 @@ class AdviserController extends Controller
                 $payload['school_name'] = $schoolName !== '' ? $schoolName : null;
             }
 
+            // Keep compatibility with databases that have not run newer migrations yet.
+            $existingColumns = array_flip(Schema::getColumnListing('student_health_records'));
+            $payload = array_intersect_key($payload, $existingColumns);
+
             StudentHealthRecord::query()->updateOrCreate(
                 ['student_id' => (string) $validated['lrn']],
                 $payload
