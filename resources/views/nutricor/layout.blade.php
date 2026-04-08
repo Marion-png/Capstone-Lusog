@@ -371,7 +371,6 @@
 <div class="main">
     <header class="topbar">
         <div class="topbar-bc"><span>Nutritional Coordinator</span><span>&gt;</span><span>@yield('crumb', 'Dashboard')</span></div>
-        <div class="topbar-chip"><span class="dot"></span>{{ now()->format('M d, Y') }}</div>
     </header>
 
     <div class="content">

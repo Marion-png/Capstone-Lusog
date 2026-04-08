@@ -8,101 +8,10 @@
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
 	<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
-<<<<<<< Updated upstream
-	<style>
-		*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-		:root{--g900:#14532d;--g300:#86efac;--cream:#f7f8f5;--card:#fff;--border:#e4ece7;--text-1:#0d1f14;--text-2:#3d5c47;--text-3:#7a9e87;--sidebar-w:248px;--sidebar-collapsed-w:76px;--topbar-h:64px;--radius-sm:10px;--shadow-card:0 1px 4px rgba(5,46,22,.06),0 4px 16px rgba(5,46,22,.06)}
-		html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--text-1);overflow:hidden}
-		.sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-collapsed-w);background:var(--g900);display:flex;flex-direction:column;z-index:100;overflow:hidden;transition:width .24s ease}
-		.sidebar:hover{width:var(--sidebar-w)}
-		.sb-logo{padding:20px 20px 18px;position:relative;z-index:2;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:center;transition:padding .24s ease}
-		.sb-logo img{width:176px;max-width:100%;height:auto;display:block;transition:width .24s ease}
-		.sidebar:not(:hover) .sb-logo{padding:14px 10px}
-		.sidebar:not(:hover) .sb-logo img{width:48px}
-		.sb-nav{flex:1;overflow-y:auto;padding:16px 12px}
-		.sb-link{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;color:rgba(255,255,255,.62);font-size:.83rem;font-weight:500;margin-bottom:2px;white-space:nowrap;overflow:hidden}
-		.sb-link.active{background:rgba(34,197,94,.18);color:var(--g300)}
-		.sidebar:not(:hover) .sb-link{justify-content:center;font-size:0;padding:10px;gap:0}
-		.sb-user{padding:14px 16px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:11px}
-		.sb-avatar{width:34px;height:34px;border-radius:50%;background:#16a34a;display:grid;place-items:center;font-size:.8rem;font-weight:700;color:#fff}
-		.sb-user-name{font-size:.8rem;font-weight:600;color:#fff}
-		.sidebar:not(:hover) .sb-user-name{display:none}
-		.main{margin-left:var(--sidebar-collapsed-w);height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:margin-left .24s ease}
-		.sidebar:hover ~ .main{margin-left:var(--sidebar-w)}
-		.topbar{height:var(--topbar-h);border-bottom:1px solid var(--border);background:#fff;display:flex;align-items:center;padding:0 22px}
-		.topbar-bc{font-size:.76rem;color:var(--text-3);display:flex;gap:6px;align-items:center}
-		.content{overflow:auto;padding:18px}
-		.page-eyebrow{font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#15803d;margin-bottom:6px}
-		.page-title{font-family:'DM Serif Display',serif;font-size:1.75rem;line-height:1.15}
-		.page-title span{font-style:italic;color:#15803d}
-		.page-sub{margin-top:5px;font-size:.8rem;color:var(--text-3)}
-		.selector-wrap{margin-top:14px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;box-shadow:var(--shadow-card)}
-		.selector-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-		.selector-label{font-size:.76rem;font-weight:700;color:#29453d}
-		.selector-input{appearance:none;min-width:320px;max-width:100%;border:1px solid #cfdfd9;border-radius:10px;background:#fff;padding:9px 34px 9px 12px;font-size:.78rem;font-weight:600;color:#2f4e45;background-image:linear-gradient(45deg, transparent 50%, #7d918c 50%),linear-gradient(135deg, #7d918c 50%, transparent 50%);background-position:calc(100% - 16px) 52%, calc(100% - 10px) 52%;background-size:6px 6px, 6px 6px;background-repeat:no-repeat}
-		.selector-note{margin-top:8px;font-size:.74rem;color:#607d74}
-		.form-panel{display:none}
-		.form-panel.active{display:block}
-		.placeholder-panel{margin-top:14px;background:#fff;border:1px dashed #c8d8d2;border-radius:12px;padding:16px;color:#5d7b72;font-size:.82rem}
-		.sheet-wrap{margin-top:14px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:var(--shadow-card)}
-		.sheet-tools{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:10px}
-		.sheet-status{font-size:.74rem;color:#557065;font-weight:600}
-		.sheet-btns{display:flex;gap:8px;align-items:center}
-		.btn{appearance:none;border:1px solid transparent;border-radius:8px;padding:8px 12px;font-size:.72rem;font-weight:700;cursor:pointer}
-		.btn-primary{background:#166534;border-color:#166534;color:#fff}
-		.btn-ghost{background:#fff;border-color:#d3e2dc;color:#35584e}
-		.btn-warn{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
-
-		.form-sheet{border:1px solid #374151;background:#fff;overflow:auto}
-		.form-sheet-inner{min-width:920px}
-		.sheet-meta{border-bottom:1px solid #111827;padding:8px 10px}
-		.meta-row{display:grid;grid-template-columns:220px 1fr;align-items:center;gap:10px;margin-bottom:6px}
-		.meta-row:last-child{margin-bottom:0}
-		.meta-label{font-size:.74rem;font-weight:700;letter-spacing:.01em;color:#0f172a;text-transform:uppercase}
-		.meta-input{width:100%;border:none;border-bottom:1px solid #111827;padding:4px 2px;font-size:.78rem;color:#0f172a;background:transparent}
-		.meta-input:focus{outline:none;border-bottom:2px solid #166534}
-
-		.sheet-head{padding:6px 8px;border-bottom:1px solid #111827;text-align:center}
-		.sheet-head .line1{font-size:1rem;font-weight:700;letter-spacing:.01em;color:#0f172a;text-transform:uppercase}
-		.sheet-head .line2{margin-top:4px;font-size:.92rem;font-weight:700;color:#0f172a;text-transform:uppercase}
-
-		.template-table{width:100%;border-collapse:collapse}
-		.template-table th,.template-table td{border:1px solid #111827;padding:8px 8px;font-size:.74rem;color:#111827;vertical-align:middle}
-		.template-table thead th{background:#f3f4f6;text-align:center;font-weight:700;text-transform:uppercase}
-		.template-table thead th.subhead{font-size:.7rem;line-height:1.25;text-transform:none}
-		.template-table .num-col{width:40px;text-align:center;font-weight:700}
-		.template-table .name-col{width:36%}
-		.template-table .tel-col,.template-table .mobile-col,.template-table .email-col,.template-table .sign-col{width:16%}
-		.template-table .grade-col{width:14%}
-		.template-table .tol-col{width:17%}
-		.template-table .packs-col{width:11%}
-		.template-table .remarks-col{width:15%}
-		.designation-cell{display:flex;align-items:center;gap:8px}
-		.designation-input,.cell-input{width:100%;border:1px solid #cfd8d4;border-radius:6px;padding:7px 8px;font-size:.74rem;color:#0f172a;background:#fff}
-		.designation-tag{font-size:.72rem;font-weight:700;color:#334155;white-space:nowrap}
-		.designation-input:focus,.cell-input:focus{outline:none;border-color:#166534;box-shadow:0 0 0 2px rgba(22,101,52,.12)}
-		.cell-input[readonly]{background:#f3f4f6;color:#334155;font-weight:700}
-		.form7a-block{margin-bottom:14px}
-		.form7a-block:last-child{margin-bottom:0}
-		.form7a-block-title{font-size:.8rem;font-weight:700;color:#1f3b34;margin-bottom:8px}
-		.btn-secondary{background:#eff8f3;border-color:#c8ddd4;color:#1f4f42}
-		.btn-secondary:hover{background:#e1f3ea}
-		.foot-grid{display:grid;grid-template-columns:1fr 1fr;border-left:1px solid #111827;border-right:1px solid #111827;border-bottom:1px solid #111827}
-		.foot-block{padding:8px 10px;min-height:82px;border-right:1px solid #111827}
-		.foot-block:last-child{border-right:none}
-		.foot-label{font-size:.76rem;font-weight:700;color:#0f172a;text-transform:uppercase}
-		.foot-line{margin-top:28px;border-bottom:1px solid #111827;height:1px}
-		.foot-role{margin-top:6px;font-size:.82rem;font-weight:700;color:#0f172a}
-
-		@media print{.sidebar,.topbar,.sheet-tools,.page-sub,.page-eyebrow,.page-title{display:none!important}.main{margin:0!important}.content{padding:0!important}.sheet-wrap{border:none;box-shadow:none;padding:0}}
-		@media (max-width:780px){.sidebar{display:none}.main{margin-left:0}}
-	</style>
-=======
 	@php $pageCssPath = resource_path('css/feeding-sbfp-forms.css'); @endphp
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
->>>>>>> Stashed changes
 </head>
 <body>
 <aside class="sidebar">
@@ -120,9 +29,6 @@
 </aside>
 
 <div class="main">
-	<header class="topbar">
-		<div class="topbar-bc"><span>Dashboard</span><span>&gt;</span><span>SBFP Forms</span></div>
-	</header>
 	<div class="content">
 		<div class="page-eyebrow">Feeding Program</div>
 		<h1 class="page-title">SBFP <span>Forms</span></h1>

@@ -243,12 +243,8 @@ class FeedingProgramController extends Controller
 
 		return $status === 'wasted'
 			|| $status === 'severely wasted'
-<<<<<<< Updated upstream
-			|| $status === 'severly wasted';
-=======
 			|| $status === 'severly wasted'
 			|| $status === 'underweight';
->>>>>>> Stashed changes
 	}
 
 	private function normalizeNutritionalStatus(?string $nutritionalStatus, ?float $bmi): string
