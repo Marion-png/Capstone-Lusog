@@ -69,6 +69,9 @@
         @if (session('error'))
             <div class="flash err">{{ session('error') }}</div>
         @endif
+        @error('nurse_comment')
+            <div class="flash err">{{ $message }}</div>
+        @enderror
 
         <div class="page-eyebrow">Health Programs</div>
         <h1 class="page-title">Deworming <span>Requests</span></h1>

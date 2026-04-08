@@ -171,6 +171,35 @@
                     <h4>Growth &amp; Nutrition</h4>
                     <div class="kv"><div class="k">Height:</div><div class="v" id="pgHeight">-</div></div>
                     <div class="kv"><div class="k">Weight:</div><div class="v" id="pgWeight">-</div></div>
+                    <div class="growth-chart-wrap">
+                        <div class="growth-chart-title">Over Time: Height (Line) and Weight (Bar)</div>
+                        <svg id="pgTrendChart" class="growth-chart" viewBox="0 0 520 180" preserveAspectRatio="none" aria-label="Growth and nutrition line chart">
+                            <line x1="48" y1="20" x2="48" y2="150" class="growth-grid-line" />
+                            <line x1="48" y1="150" x2="500" y2="150" class="growth-grid-line" />
+                            <line x1="48" y1="52" x2="500" y2="52" class="growth-grid-line" />
+                            <line x1="48" y1="84" x2="500" y2="84" class="growth-grid-line" />
+                            <line x1="48" y1="116" x2="500" y2="116" class="growth-grid-line" />
+
+                            <polyline id="pgHeightLine" class="growth-line-height" points="" />
+                            <rect id="pgWeightBarStart" class="growth-bar-weight" x="113" y="130" width="34" height="20" rx="6" />
+                            <rect id="pgWeightBarEnd" class="growth-bar-weight" x="373" y="124" width="34" height="26" rx="6" />
+
+                            <circle id="pgHeightStart" class="growth-dot-height" r="4" cx="130" cy="120" />
+                            <circle id="pgHeightEnd" class="growth-dot-height" r="4" cx="390" cy="96" />
+
+                            <text x="118" y="168" class="growth-axis-label">Baseline</text>
+                            <text x="380" y="168" class="growth-axis-label">Current</text>
+
+                            <text id="pgHeightStartLabel" x="130" y="114" class="growth-value-label">-</text>
+                            <text id="pgHeightEndLabel" x="390" y="90" class="growth-value-label">-</text>
+                            <text id="pgWeightStartLabel" x="130" y="126" class="growth-value-label">-</text>
+                            <text id="pgWeightEndLabel" x="390" y="120" class="growth-value-label">-</text>
+                        </svg>
+                        <div class="growth-legend">
+                            <span><i class="legend-dot height"></i>Height (cm)</span>
+                            <span><i class="legend-dot weight"></i>Weight (kg)</span>
+                        </div>
+                    </div>
                 </div>
             </section>
             <section id="p-alerts" class="profile-panel">
@@ -212,6 +241,79 @@
         }
     };
 
+    const drawGrowthTrend = (record) => {
+        const toNum = (value) => {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : null;
+        };
+
+        const baselineHeight = toNum(record?.baseline_snapshot?.height_cm ?? record?.height_cm);
+        const currentHeight = toNum(record?.examination?.height_cm ?? record?.endline_snapshot?.height_cm ?? record?.height_cm);
+        const baselineWeight = toNum(record?.baseline_snapshot?.weight_kg ?? record?.weight_kg);
+        const currentWeight = toNum(record?.examination?.weight_kg ?? record?.endline_snapshot?.weight_kg ?? record?.weight_kg);
+
+        const yForMetric = (value, minVal, maxVal) => {
+            if (value === null) {
+                return 150;
+            }
+            const span = Math.max(1, maxVal - minVal);
+            const ratio = (value - minVal) / span;
+            return 150 - (ratio * 100);
+        };
+
+        const bx = 130;
+        const cx = 390;
+        const barWidth = 34;
+
+        const heightValues = [baselineHeight, currentHeight].filter((value) => value !== null);
+        const weightValues = [baselineWeight, currentWeight].filter((value) => value !== null);
+
+        const minHeight = heightValues.length ? Math.min(...heightValues) * 0.95 : 0;
+        const maxHeight = heightValues.length ? Math.max(...heightValues) * 1.05 : 1;
+        const minWeight = 0;
+        const maxWeight = weightValues.length ? Math.max(...weightValues) * 1.15 : 1;
+
+        const byH = yForMetric(baselineHeight, minHeight, maxHeight);
+        const cyH = yForMetric(currentHeight, minHeight, maxHeight);
+        const byW = yForMetric(baselineWeight, minWeight, maxWeight);
+        const cyW = yForMetric(currentWeight, minWeight, maxWeight);
+
+        const setAttr = (id, attr, value) => {
+            const node = document.getElementById(id);
+            if (node) {
+                node.setAttribute(attr, String(value));
+            }
+        };
+
+        setAttr('pgHeightLine', 'points', `${bx},${byH} ${cx},${cyH}`);
+
+        setAttr('pgHeightStart', 'cx', bx); setAttr('pgHeightStart', 'cy', byH);
+        setAttr('pgHeightEnd', 'cx', cx); setAttr('pgHeightEnd', 'cy', cyH);
+        setAttr('pgWeightBarStart', 'x', bx - (barWidth / 2));
+        setAttr('pgWeightBarStart', 'y', byW);
+        setAttr('pgWeightBarStart', 'width', barWidth);
+        setAttr('pgWeightBarStart', 'height', Math.max(2, 150 - byW));
+        setAttr('pgWeightBarEnd', 'x', cx - (barWidth / 2));
+        setAttr('pgWeightBarEnd', 'y', cyW);
+        setAttr('pgWeightBarEnd', 'width', barWidth);
+        setAttr('pgWeightBarEnd', 'height', Math.max(2, 150 - cyW));
+
+        const setLabel = (id, x, y, text) => {
+            const node = document.getElementById(id);
+            if (!node) {
+                return;
+            }
+            node.setAttribute('x', String(x));
+            node.setAttribute('y', String(y));
+            node.textContent = text;
+        };
+
+        setLabel('pgHeightStartLabel', bx, byH - 8, baselineHeight !== null ? `${baselineHeight.toFixed(1)}` : '-');
+        setLabel('pgHeightEndLabel', cx, cyH - 8, currentHeight !== null ? `${currentHeight.toFixed(1)}` : '-');
+        setLabel('pgWeightStartLabel', bx, byW - 8, baselineWeight !== null ? `${baselineWeight.toFixed(1)}` : '-');
+        setLabel('pgWeightEndLabel', cx, cyW - 8, currentWeight !== null ? `${currentWeight.toFixed(1)}` : '-');
+    };
+
     const openProfile = (record, route) => {
         const fullName = [record.last_name, ',', record.first_name, record.middle_name ? (' ' + String(record.middle_name).charAt(0).toUpperCase() + '.') : '']
             .join(' ')
@@ -240,6 +342,7 @@
 
         setText('pgHeight', (record.height_cm || '-') + ' cm');
         setText('pgWeight', (record.weight_kg || '-') + ' kg');
+        drawGrowthTrend(record);
         setText('paStatus', examined ? 'Nurse examination details are available.' : 'Pending nurse review.');
         setText('ptNext', examined ? 'Record completed by nurse.' : 'Nurse examination pending.');
 

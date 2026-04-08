@@ -93,6 +93,20 @@
         .kv{display:grid;grid-template-columns:140px 1fr;gap:8px;font-size:.92rem;margin-bottom:6px}
         .kv .k{color:#7a8f86}
         .kv .v{color:#1d3327;font-weight:600}
+        .growth-chart-wrap{margin-top:10px;border:1px solid #dce9e3;border-radius:10px;background:#fbfdfc;padding:10px}
+        .growth-chart-title{font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#4a6a5c;margin-bottom:6px}
+        .growth-chart{width:100%;height:175px;display:block}
+        .growth-grid-line{stroke:#dce9e3;stroke-width:1}
+        .growth-line-height{fill:none;stroke:#15803d;stroke-width:3;stroke-linecap:round}
+        .growth-bar-weight{fill:#2563eb;opacity:.88}
+        .growth-dot-height{fill:#15803d}
+        .growth-axis-label{fill:#6f8c7a;font-size:10px;font-weight:700}
+        .growth-value-label{fill:#1f3f32;font-size:10px;font-weight:700;text-anchor:middle}
+        .growth-legend{display:flex;gap:12px;align-items:center;margin-top:4px;color:#4a6a5c;font-size:.7rem;font-weight:600}
+        .growth-legend span{display:inline-flex;align-items:center;gap:6px}
+        .legend-dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+        .legend-dot.height{background:#15803d}
+        .legend-dot.weight{background:#2563eb}
         .profile-actions{display:flex;justify-content:flex-end;padding:0 18px 16px;gap:8px}
         .btn-secondary{background:#fff;border:1px solid #c7d8cf;color:#285640}
 

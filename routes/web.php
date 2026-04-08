@@ -10,6 +10,7 @@ use App\Http\Controllers\SchoolHeadController;
 use App\Http\Controllers\StudentHealthRecordController;
 use App\Models\StudentHealthRecord;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Route;
@@ -110,9 +111,17 @@ Route::get('/dashboard/student-health-records', function () {
 })->name('dashboard.student-health-records');
 
 Route::get('/dashboard/school-nurse/deworming', function (Request $request) {
-    $requests = collect($request->session()->get('deworming_requests', []))
-        ->sortByDesc('submitted_at')
-        ->values();
+    if (Schema::hasTable('deworming_requests')) {
+        $requests = DB::table('deworming_requests')
+            ->orderByDesc('submitted_at')
+            ->get()
+            ->map(fn ($row) => (array) $row)
+            ->values();
+    } else {
+        $requests = collect($request->session()->get('deworming_requests', []))
+            ->sortByDesc('submitted_at')
+            ->values();
+    }
 
     return view('dashboard.school-nurse-deworming', [
         'dewormingRequests' => $requests,
@@ -120,50 +129,97 @@ Route::get('/dashboard/school-nurse/deworming', function (Request $request) {
 })->name('dashboard.school-nurse.deworming');
 
 Route::post('/dashboard/school-nurse/deworming/{requestId}/{decision}', function (Request $request, string $requestId, string $decision) {
-    if ($request->session()->get('active_role') !== 'school_nurse') {
-        return redirect()->route('login')->with('error', 'Only School Nurse can review deworming requests.');
+    $activeRole = strtolower(trim((string) $request->session()->get('active_role', '')));
+    $allowedReviewerRoles = ['school_nurse', 'school nurse', 'clinic_staff', 'clinic staff', 'nurse'];
+
+    if (!in_array($activeRole, $allowedReviewerRoles, true)) {
+        return redirect()->route('dashboard.school-nurse')->with('error', 'Only School Nurse can review deworming requests.');
     }
 
-    $requests = collect($request->session()->get('deworming_requests', []));
-    $index = $requests->search(fn (array $item): bool => (string) ($item['id'] ?? '') === $requestId);
+    if (Schema::hasTable('deworming_requests')) {
+        $exists = DB::table('deworming_requests')
+            ->where('id', $requestId)
+            ->exists();
 
-    if ($index === false) {
-        return back()->with('error', 'Deworming request not found.');
+        if (!$exists) {
+            return back()->with('error', 'Deworming request not found.');
+        }
+
+        DB::table('deworming_requests')
+            ->where('id', $requestId)
+            ->update([
+                'status' => 'approved',
+                'reviewed_at' => now(),
+                'reviewed_by' => (string) $request->session()->get('active_name', 'School Nurse'),
+                'released_date' => now()->toDateString(),
+                'updated_at' => now(),
+            ]);
+    } else {
+        $requests = collect($request->session()->get('deworming_requests', []));
+        $index = $requests->search(fn (array $item): bool => (string) ($item['id'] ?? '') === $requestId);
+
+        if ($index === false) {
+            return back()->with('error', 'Deworming request not found.');
+        }
+
+        $requests[$index]['status'] = 'approved';
+        $requests[$index]['reviewed_at'] = now()->toIso8601String();
+        $requests[$index]['reviewed_by'] = (string) $request->session()->get('active_name', 'School Nurse');
+        $requests[$index]['released_date'] = now()->toDateString();
+
+        $request->session()->put('deworming_requests', $requests->values()->all());
     }
-
-    $requests[$index]['status'] = 'approved';
-    $requests[$index]['reviewed_at'] = now()->toIso8601String();
-    $requests[$index]['reviewed_by'] = (string) $request->session()->get('active_name', 'School Nurse');
-    $requests[$index]['released_date'] = now()->toDateString();
-
-    $request->session()->put('deworming_requests', $requests->values()->all());
 
     return back()->with('success', 'Deworming request accepted successfully.');
 })->whereIn('decision', ['accept'])->name('dashboard.school-nurse.deworming.decide');
 
 Route::post('/dashboard/school-nurse/deworming/{requestId}/comment', function (Request $request, string $requestId) {
-    if ($request->session()->get('active_role') !== 'school_nurse') {
-        return redirect()->route('login')->with('error', 'Only School Nurse can add comments to deworming requests.');
+    $activeRole = strtolower(trim((string) $request->session()->get('active_role', '')));
+    $allowedReviewerRoles = ['school_nurse', 'school nurse', 'clinic_staff', 'clinic staff', 'nurse'];
+
+    if (!in_array($activeRole, $allowedReviewerRoles, true)) {
+        return redirect()->route('dashboard.school-nurse')->with('error', 'Only School Nurse can add comments to deworming requests.');
     }
 
     $validated = $request->validate([
         'nurse_comment' => ['required', 'string', 'max:500'],
     ]);
 
-    $requests = collect($request->session()->get('deworming_requests', []));
-    $index = $requests->search(fn (array $item): bool => (string) ($item['id'] ?? '') === $requestId);
+    if (Schema::hasTable('deworming_requests')) {
+        $exists = DB::table('deworming_requests')
+            ->where('id', $requestId)
+            ->exists();
 
-    if ($index === false) {
-        return back()->with('error', 'Deworming request not found.');
+        if (!$exists) {
+            return back()->with('error', 'Deworming request not found.');
+        }
+
+        DB::table('deworming_requests')
+            ->where('id', $requestId)
+            ->update([
+                'status' => 'commented',
+                'nurse_comment' => trim((string) $validated['nurse_comment']),
+                'commented_at' => now(),
+                'reviewed_by' => (string) $request->session()->get('active_name', 'School Nurse'),
+                'released_date' => null,
+                'updated_at' => now(),
+            ]);
+    } else {
+        $requests = collect($request->session()->get('deworming_requests', []));
+        $index = $requests->search(fn (array $item): bool => (string) ($item['id'] ?? '') === $requestId);
+
+        if ($index === false) {
+            return back()->with('error', 'Deworming request not found.');
+        }
+
+        $requests[$index]['status'] = 'commented';
+        $requests[$index]['nurse_comment'] = trim((string) $validated['nurse_comment']);
+        $requests[$index]['commented_at'] = now()->toIso8601String();
+        $requests[$index]['reviewed_by'] = (string) $request->session()->get('active_name', 'School Nurse');
+        $requests[$index]['released_date'] = null;
+
+        $request->session()->put('deworming_requests', $requests->values()->all());
     }
-
-    $requests[$index]['status'] = 'commented';
-    $requests[$index]['nurse_comment'] = trim((string) $validated['nurse_comment']);
-    $requests[$index]['commented_at'] = now()->toIso8601String();
-    $requests[$index]['reviewed_by'] = (string) $request->session()->get('active_name', 'School Nurse');
-    $requests[$index]['released_date'] = null;
-
-    $request->session()->put('deworming_requests', $requests->values()->all());
 
     return back()->with('success', 'Comment added to deworming request.');
 })->name('dashboard.school-nurse.deworming.comment');
@@ -214,18 +270,34 @@ Route::get('/dashboard/class-adviser/deworming', function (Request $request) {
     $assignedGradeLevel = (string) $request->session()->get('assigned_grade_level', '');
     $assignedSection = (string) $request->session()->get('assigned_section', '');
 
-    $requests = collect($request->session()->get('deworming_requests', []))
-        ->filter(function (array $item) use ($assignedGradeLevel, $assignedSection): bool {
-            if ($assignedGradeLevel === '' || $assignedSection === '') {
-                return true;
-            }
+    if (Schema::hasTable('deworming_requests')) {
+        $query = DB::table('deworming_requests');
+        if ($assignedGradeLevel !== '' && $assignedSection !== '') {
+            $query
+                ->where('grade_level', $assignedGradeLevel)
+                ->where('section', $assignedSection);
+        }
 
-            return (string) ($item['grade_level'] ?? '') === $assignedGradeLevel
-                && (string) ($item['section'] ?? '') === $assignedSection;
-        })
-        ->sortByDesc('submitted_at')
-        ->values()
-        ->all();
+        $requests = $query
+            ->orderByDesc('submitted_at')
+            ->get()
+            ->map(fn ($row) => (array) $row)
+            ->values()
+            ->all();
+    } else {
+        $requests = collect($request->session()->get('deworming_requests', []))
+            ->filter(function (array $item) use ($assignedGradeLevel, $assignedSection): bool {
+                if ($assignedGradeLevel === '' || $assignedSection === '') {
+                    return true;
+                }
+
+                return (string) ($item['grade_level'] ?? '') === $assignedGradeLevel
+                    && (string) ($item['section'] ?? '') === $assignedSection;
+            })
+            ->sortByDesc('submitted_at')
+            ->values()
+            ->all();
+    }
 
     return view('adviser-dashboard.deworming', [
         'dewormingRequests' => $requests,
@@ -249,10 +321,9 @@ Route::post('/dashboard/class-adviser/deworming', function (Request $request) {
         return back()->withErrors(['consenting_students' => 'Consenting students cannot exceed total students.'])->withInput();
     }
 
-    $requests = $request->session()->get('deworming_requests', []);
-    $requests[] = [
+    $newRequest = [
         'id' => (string) str()->uuid(),
-        'submitted_at' => now()->toIso8601String(),
+        'submitted_at' => now(),
         'submitted_by' => (string) $request->session()->get('active_name', 'Class Adviser'),
         'submitted_by_role' => $submittedByRole,
         'campaign' => $validated['campaign'],
@@ -263,9 +334,24 @@ Route::post('/dashboard/class-adviser/deworming', function (Request $request) {
         'released_date' => null,
         'grade_level' => (string) $request->session()->get('assigned_grade_level', ''),
         'section' => (string) $request->session()->get('assigned_section', ''),
+        'nurse_comment' => null,
+        'commented_at' => null,
+        'reviewed_at' => null,
+        'reviewed_by' => null,
     ];
 
-    $request->session()->put('deworming_requests', $requests);
+    if (Schema::hasTable('deworming_requests')) {
+        DB::table('deworming_requests')->insert([
+            ...$newRequest,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    } else {
+        $requests = $request->session()->get('deworming_requests', []);
+        $newRequest['submitted_at'] = now()->toIso8601String();
+        $requests[] = $newRequest;
+        $request->session()->put('deworming_requests', $requests);
+    }
 
     return redirect()
         ->route('dashboard.class-adviser.deworming')
