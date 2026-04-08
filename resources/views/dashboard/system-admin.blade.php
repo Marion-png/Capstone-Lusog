@@ -133,6 +133,7 @@
                                 'class_adviser' => 'Class Adviser',
                                 'school_head' => 'School Head',
                                 'feeding_coor' => 'Feeding Coordinator',
+                                'nutricor' => 'Nutritional Coordinator',
                             ];
                         @endphp
                         @forelse($accounts as $account)
@@ -143,7 +144,7 @@
                                 <td>
                                     @if (($account['role'] ?? '') === 'class_adviser')
                                         {{ $account['school_name'] ?? '-' }}<br>{{ $account['assigned_grade_level'] ?? '-' }} / {{ $account['assigned_section'] ?? '-' }}
-                                    @elseif (in_array(($account['role'] ?? ''), ['school_nurse', 'clinic_staff', 'school_head'], true))
+                                    @elseif (in_array(($account['role'] ?? ''), ['school_nurse', 'clinic_staff', 'school_head', 'nutricor'], true))
                                         {{ $account['school_name'] ?? '-' }}
                                     @else
                                         -
@@ -169,7 +170,7 @@
                                 <td>
                                     @if (($request['role'] ?? '') === 'class_adviser')
                                         {{ $request['school_name'] ?? '-' }}<br>{{ $request['assigned_grade_level'] ?? '-' }} / {{ $request['assigned_section'] ?? '-' }}
-                                    @elseif (in_array(($request['role'] ?? ''), ['school_nurse', 'clinic_staff', 'school_head'], true))
+                                    @elseif (in_array(($request['role'] ?? ''), ['school_nurse', 'clinic_staff', 'school_head', 'nutricor'], true))
                                         {{ $request['school_name'] ?? '-' }}
                                     @else
                                         -
@@ -209,7 +210,7 @@
                                 <td>
                                     @if (($history['role'] ?? '') === 'class_adviser')
                                         {{ $history['school_name'] ?? '-' }}<br>{{ $history['assigned_grade_level'] ?? '-' }} / {{ $history['assigned_section'] ?? '-' }}
-                                    @elseif (in_array(($history['role'] ?? ''), ['school_nurse', 'clinic_staff', 'school_head'], true))
+                                    @elseif (in_array(($history['role'] ?? ''), ['school_nurse', 'clinic_staff', 'school_head', 'nutricor'], true))
                                         {{ $history['school_name'] ?? '-' }}
                                     @else
                                         -

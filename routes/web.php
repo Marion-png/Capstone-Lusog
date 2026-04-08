@@ -35,8 +35,8 @@ Route::post('/account-request', function (Request $request) {
         'name' => ['required', 'string', 'max:255'],
         'username' => ['required', 'string', 'max:255'],
         'password' => ['required', 'string', 'min:6', 'confirmed'],
-        'role' => ['required', 'in:school_nurse,clinic_staff,class_adviser,school_head,feeding_coor'],
-        'school_name' => ['required_if:role,school_nurse,clinic_staff,school_head,class_adviser', 'nullable', 'string', 'max:255'],
+        'role' => ['required', 'in:school_nurse,clinic_staff,class_adviser,school_head,feeding_coor,nutricor'],
+        'school_name' => ['required_if:role,school_nurse,clinic_staff,school_head,class_adviser,nutricor', 'nullable', 'string', 'max:255'],
         'assigned_grade_level' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:50'],
         'assigned_section' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:100'],
     ]);
@@ -67,7 +67,7 @@ Route::post('/account-request', function (Request $request) {
         'username' => $validated['username'],
         'password_hash' => Hash::make((string) $validated['password']),
         'role' => $role,
-        'school_name' => in_array($role, ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser'], true) ? ($validated['school_name'] ?? null) : null,
+        'school_name' => in_array($role, ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser', 'nutricor'], true) ? ($validated['school_name'] ?? null) : null,
         'assigned_grade_level' => $role === 'class_adviser' ? ($validated['assigned_grade_level'] ?? null) : null,
         'assigned_section' => $role === 'class_adviser' ? ($validated['assigned_section'] ?? null) : null,
         'created_at' => now()->toIso8601String(),
@@ -252,6 +252,30 @@ Route::get('/dashboard/school-head/reports', [SchoolHeadController::class, 'repo
 Route::get('/dashboard/feedingcor-dashboard', [FeedingCoordinatorController::class, 'dashboard'])
     ->name('dashboard.feedingcor-dashboard');
 
+Route::get('/dashboard/nutricor-dashboard', function () {
+    return view('nutricor.nutricor-dashboard');
+})->name('dashboard.nutricor-dashboard');
+
+Route::get('/dashboard/nutricor-beneficiaries', function () {
+    return view('nutricor.beneficiaries');
+})->name('dashboard.nutricor-beneficiaries');
+
+Route::get('/dashboard/nutricor-analytics', function () {
+    return view('nutricor.analytics');
+})->name('dashboard.nutricor-analytics');
+
+Route::get('/dashboard/nutricor-atrisk', function () {
+    return view('nutricor.atrisk');
+})->name('dashboard.nutricor-atrisk');
+
+Route::get('/dashboard/nutricor-reports', function () {
+    return view('nutricor.reports');
+})->name('dashboard.nutricor-reports');
+
+Route::get('/dashboard/nutricor-comparison', function () {
+    return view('nutricor.comparison');
+})->name('dashboard.nutricor-comparison');
+
 Route::get('/dashboard/feedingcor-sbfp-forms', [FeedingCoordinatorController::class, 'sbfpForms'])
     ->name('dashboard.feedingcor-sbfp-forms');
 
@@ -292,6 +316,7 @@ Route::get('/dashboard/system-admin', function () {
             'class_adviser' => 'dashboard.class-adviser',
             'school_head' => 'dashboard.school-head',
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
+            'nutricor' => 'dashboard.nutricor-dashboard',
         ];
 
         return redirect()
@@ -331,7 +356,7 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
     $validated = $request->validate([
         'name' => ['required', 'string', 'max:255'],
         'username' => ['required', 'string', 'max:255'],
-        'role' => ['required', 'in:school_nurse,clinic_staff,class_adviser,school_head,feeding_coor'],
+        'role' => ['required', 'in:school_nurse,clinic_staff,class_adviser,school_head,feeding_coor,nutricor'],
         'assigned_grade_level' => ['required', 'string', 'max:50'],
         'assigned_section' => ['required', 'string', 'max:100'],
     ]);
@@ -396,7 +421,7 @@ Route::post('/dashboard/system-admin/requests/{requestId}/approve', function (Re
             'username' => $target['username'] ?? '-',
             'password_hash' => $target['password_hash'] ?? null,
             'role' => $role,
-            'school_name' => in_array($role, ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser'], true) ? ($target['school_name'] ?? null) : null,
+            'school_name' => in_array($role, ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser', 'nutricor'], true) ? ($target['school_name'] ?? null) : null,
             'assigned_grade_level' => $role === 'class_adviser' ? ($target['assigned_grade_level'] ?? null) : null,
             'assigned_section' => $role === 'class_adviser' ? ($target['assigned_section'] ?? null) : null,
             'created_at' => now()->toIso8601String(),
@@ -546,6 +571,7 @@ Route::post('/login', function (Request $request) {
         'class_adviser' => 'dashboard.class-adviser',
         'school_head' => 'dashboard.school-head',
         'feeding_coor' => 'dashboard.feedingcor-dashboard',
+        'nutricor' => 'dashboard.nutricor-dashboard',
         'system_admin' => 'dashboard.system-admin',
     ];
 

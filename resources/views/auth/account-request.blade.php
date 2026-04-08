@@ -167,6 +167,7 @@
                             <option value="class_adviser" {{ old('role') === 'class_adviser' ? 'selected' : '' }}>Class Adviser</option>
                             <option value="school_head" {{ old('role') === 'school_head' ? 'selected' : '' }}>School Head</option>
                             <option value="feeding_coor" {{ old('role') === 'feeding_coor' ? 'selected' : '' }}>Feeding Coordinator</option>
+                            <option value="nutricor" {{ old('role') === 'nutricor' ? 'selected' : '' }}>Nutritional Coordinator</option>
                         </select>
                     </div>
                     <div class="field full" id="schoolField">
@@ -290,7 +291,7 @@
 
         const syncRoleFields = function () {
             const isClassAdviser = roleSelect.value === 'class_adviser';
-            const requiresSchool = ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser'].includes(roleSelect.value);
+            const requiresSchool = ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser', 'nutricor'].includes(roleSelect.value);
 
             schoolField.style.display = requiresSchool ? '' : 'none';
             gradeField.style.display = isClassAdviser ? '' : 'none';
@@ -329,7 +330,7 @@
 
         requestForm.addEventListener('submit', function (event) {
             const isClassAdviser = roleSelect.value === 'class_adviser';
-            const requiresSchool = ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser'].includes(roleSelect.value);
+            const requiresSchool = ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser', 'nutricor'].includes(roleSelect.value);
 
             if (requiresSchool) {
                 if (!schoolInput.value.trim()) {
