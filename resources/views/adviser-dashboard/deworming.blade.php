@@ -21,6 +21,7 @@
 @endphp
 
 <aside class="sidebar">
+    <div class="sb-grid"></div>
     <div class="sb-logo"><img src="{{ asset('images/lusog-logo.png') }}" alt="LUSOG Logo"></div>
     <nav class="sb-nav">
         <a href="{{ route('dashboard.class-adviser') }}" class="sb-link">
@@ -77,7 +78,14 @@
 </aside>
 
 <div class="main">
-    <header class="top"><div class="crumb">Dashboard > Class Adviser > Deworming Request</div></header>
+    <header class="top">
+        <div class="topbar-breadcrumb crumb">
+            <a href="{{ route('dashboard.class-adviser') }}" class="bc-home">Dashboard</a>
+            <span class="bc-sep">></span>
+            <span class="bc-current">Class Adviser &middot; Deworming</span>
+        </div>
+        <div class="topbar-chip chip"><div class="dot"></div>Class Adviser</div>
+    </header>
     <div class="content">
         <h1 class="title">Deworming <i>Request</i></h1>
         <p class="sub">Submit and track deworming tablet requests for your assigned class.</p>

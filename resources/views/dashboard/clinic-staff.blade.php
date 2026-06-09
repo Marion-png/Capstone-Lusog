@@ -66,7 +66,14 @@
     <div class="user"><div class="avatar">{{ substr(auth()->user()->name ?? 'CS',0,2) }}</div><div style="font-size:.78rem">Clinic Staff</div></div>
 </aside>
 <div class="main">
-    <header class="top"><div class="crumb">Dashboard > Clinic Staff</div><div class="chip">Operations Workspace</div></header>
+    <header class="top">
+        <div class="topbar-breadcrumb crumb">
+            <a href="{{ route('dashboard.clinic-staff') }}" class="bc-home">Dashboard</a>
+            <span class="bc-sep">></span>
+            <span class="bc-current">Clinic Staff</span>
+        </div>
+        <div class="topbar-chip chip"><div class="dot"></div>Operations Workspace</div>
+    </header>
     <div class="content">
         <h1 class="title">Clinic Staff <i>Operations Hub</i></h1>
         <p class="sub">Focused tools for daily encoding, triage updates, inventory issuance, and follow-up tracking.</p>
