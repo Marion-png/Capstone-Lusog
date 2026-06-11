@@ -19,6 +19,10 @@
         .nav a.active,.nav a:hover{background:rgba(34,197,94,.18);color:#dcfce7}
         .user{padding:12px 8px;border-top:1px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:8px;color:#fff}
         .avatar{width:32px;height:32px;border-radius:50%;background:#16a34a;display:grid;place-items:center;font-weight:700;font-size:.75rem}
+        .logout-form{margin-left:auto;display:flex;align-items:center}
+        .logout-btn{background:none;border:none;color:rgba(255,255,255,.62);cursor:pointer;border-radius:8px;width:30px;height:30px;display:grid;place-items:center;transition:background .15s,color .15s}
+        .logout-btn:hover{background:rgba(239,68,68,.14);color:#fecaca}
+        .logout-btn svg{width:16px;height:16px}
         .main{margin-left:var(--sidebar);height:100vh;display:flex;flex-direction:column}
         .top{height:64px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px}
         .crumb{font-size:.82rem;color:var(--muted)}
@@ -63,7 +67,20 @@
         <a href="{{ route('dashboard.school-head') }}">School Head</a>
         <a href="{{ route('dashboard.system-admin') }}">System Admin</a>
     </nav>
-    <div class="user"><div class="avatar">{{ substr(auth()->user()->name ?? 'CS',0,2) }}</div><div style="font-size:.78rem">Clinic Staff</div></div>
+    <div class="user">
+        <div class="avatar">{{ substr(auth()->user()->name ?? 'CS',0,2) }}</div>
+        <div style="font-size:.78rem">Clinic Staff</div>
+        <form method="POST" action="{{ route('logout') }}" class="logout-form">
+            @csrf
+            <button type="submit" class="logout-btn" title="Sign out" aria-label="Sign out">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <path d="M16 17l5-5-5-5"/>
+                    <path d="M21 12H9"/>
+                </svg>
+            </button>
+        </form>
+    </div>
 </aside>
 <div class="main">
     <header class="top">

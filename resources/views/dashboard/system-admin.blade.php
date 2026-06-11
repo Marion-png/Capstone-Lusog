@@ -13,7 +13,7 @@
         .sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-collapsed-w);background:var(--g900);display:flex;flex-direction:column;z-index:100;overflow:hidden;transition:width .24s ease}
         .sidebar:hover{width:var(--sidebar-w)}
         .sidebar::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 120% 40% at 50% 100%, rgba(34,197,94,.18) 0%, transparent 70%),radial-gradient(ellipse 80% 30% at 80% 0%, rgba(74,222,128,.1) 0%, transparent 60%);pointer-events:none}
-        .sb-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(134,239,172,.05) 1px, transparent 1px),linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);background-size:28px 28px}
+        .sb-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(134,239,172,.05) 1px, transparent 1px),linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);background-size:28px 28px;pointer-events:none}
         .sb-logo{padding:14px 10px;position:relative;z-index:2;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:center;transition:padding .24s ease}
         .sb-logo-full{width:48px;max-width:100%;height:auto;display:block;transition:width .24s ease}
         .sidebar:hover .sb-logo{padding:20px 20px 18px}

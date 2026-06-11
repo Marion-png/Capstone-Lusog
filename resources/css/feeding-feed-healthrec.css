@@ -15,7 +15,12 @@
         .sb-user{padding:14px 16px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:11px}
         .sb-avatar{width:34px;height:34px;border-radius:50%;background:#16a34a;display:grid;place-items:center;font-size:.8rem;font-weight:700;color:#fff}
         .sb-user-name{font-size:.8rem;font-weight:600;color:#fff}
+        .sb-user form{margin-left:auto;display:flex;align-items:center}
+        .sb-logout{background:none;border:none;color:rgba(255,255,255,.62);cursor:pointer;border-radius:8px;width:30px;height:30px;display:grid;place-items:center;transition:background .15s,color .15s}
+        .sb-logout:hover{background:rgba(239,68,68,.14);color:#fecaca}
+        .sb-logout svg{width:16px;height:16px}
         .sidebar:not(:hover) .sb-user-name{display:none}
+        .sidebar:not(:hover) .sb-user form{display:none}
 
         .main{margin-left:var(--sidebar-collapsed-w);height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:margin-left .24s ease}
         .sidebar:hover ~ .main{margin-left:var(--sidebar-w)}

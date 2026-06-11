@@ -42,6 +42,7 @@
             background-image: linear-gradient(rgba(134,239,172,.05) 1px, transparent 1px),
                               linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);
             background-size: 28px 28px;
+            pointer-events: none;
         }
         .sb-logo { padding: 14px 10px; position: relative; z-index: 2; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; justify-content: center; transition: padding .24s ease; }
         .sb-logo-full { width: 48px; max-width: 100%; height: auto; display: block; transition: width .24s ease; }

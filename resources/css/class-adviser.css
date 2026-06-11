@@ -3,7 +3,7 @@
 html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
 .sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-collapsed);background:var(--g900);display:flex;flex-direction:column;overflow:hidden;transition:width .26s ease;box-shadow:inset -1px 0 0 rgba(255,255,255,.04)}
 .sidebar:hover{width:var(--sidebar)}
-.sb-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(134,239,172,.05) 1px, transparent 1px),linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);background-size:28px 28px}
+.sb-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(134,239,172,.05) 1px, transparent 1px),linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);background-size:28px 28px;pointer-events:none}
 .sb-logo{padding:16px 12px;border-bottom:1px solid rgba(255,255,255,.1);display:flex;justify-content:center;transition:padding .26s ease}
 .sb-logo img{width:48px;max-width:100%;height:auto;display:block;transition:width .26s ease}
 .sidebar:hover .sb-logo{padding:20px}

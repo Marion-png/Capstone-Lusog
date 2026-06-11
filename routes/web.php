@@ -12,6 +12,7 @@ use App\Http\Controllers\StudentHealthRecordController;
 use App\Models\StudentHealthRecord;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Route;
@@ -645,8 +646,12 @@ Route::post('/health-records', function (Request $request) {
     return back();
 })->name('health-records.store');
 
-Route::post('/logout', function () {
-    session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name', 'active_role', 'active_name', 'active_username']);
+Route::post('/logout', function (Request $request) {
+    Auth::logout();
+
+    $request->session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name', 'active_role', 'active_name', 'active_username']);
+    $request->session()->regenerateToken();
+
     return redirect()->route('login');
 })->name('logout');
 

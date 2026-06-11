@@ -45,6 +45,7 @@
             background-image: linear-gradient(rgba(134,239,172,.05) 1px, transparent 1px),
                               linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);
             background-size: 28px 28px;
+            pointer-events: none;
         }
         .sb-logo { padding: 20px 20px 18px; position: relative; z-index: 2; border-bottom: 1px solid rgba(255,255,255,.08); display: flex; justify-content: center; }
         .sb-logo-full { width: 176px; max-width: 100%; height: auto; display: block; }
@@ -58,6 +59,10 @@
         .sb-avatar { width: 34px; height: 34px; border-radius: 50%; background: #16a34a; display: grid; place-items: center; font-size: .8rem; font-weight: 700; color: white; flex-shrink: 0; }
         .sb-user-name { font-size: .8rem; font-weight: 600; color: white; line-height: 1.2; }
         .sb-user-role { font-size: .68rem; color: var(--g300); }
+        .sb-user form { margin-left: auto; display: flex; align-items: center; }
+        .sb-logout { background: none; border: none; color: rgba(255,255,255,.62); cursor: pointer; border-radius: 8px; width: 30px; height: 30px; display: grid; place-items: center; transition: background .15s, color .15s; }
+        .sb-logout:hover { background: rgba(239,68,68,.14); color: #fecaca; }
+        .sb-logout svg { width: 16px; height: 16px; }
 
         .main { margin-left: var(--sidebar-w); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         .topbar { height: var(--topbar-h); border-bottom: 1px solid var(--border); background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; }
@@ -153,6 +158,16 @@
             <div class="sb-user-name">{{ auth()->user()->name ?? 'School Head' }}</div>
             <div class="sb-user-role">School Head - DCNHS</div>
         </div>
+        <form method="POST" action="{{ route('logout') }}">
+            @csrf
+            <button type="submit" class="sb-logout" title="Sign out" aria-label="Sign out">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <path d="M16 17l5-5-5-5"/>
+                    <path d="M21 12H9"/>
+                </svg>
+            </button>
+        </form>
     </div>
 </aside>
 <div class="main">

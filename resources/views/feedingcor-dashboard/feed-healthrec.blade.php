@@ -25,6 +25,16 @@
     <div class="sb-user">
         <div class="sb-avatar">{{ substr(auth()->user()->name ?? 'FC',0,2) }}</div>
         <div class="sb-user-name">{{ auth()->user()->name ?? 'Feeding Coordinator' }}</div>
+        <form method="POST" action="{{ route('logout') }}">
+            @csrf
+            <button type="submit" class="sb-logout" title="Sign out" aria-label="Sign out">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <path d="M16 17l5-5-5-5"/>
+                    <path d="M21 12H9"/>
+                </svg>
+            </button>
+        </form>
     </div>
 </aside>
 
