@@ -171,7 +171,6 @@
                         </select>
                     </div>
                     <div class="field full" id="schoolField">
-                        <label for="school_name">School (School Nurse, Clinic Staff, School Head, Class Adviser)</label>
                         @php
                             $davaoSchools = [
                                 'Aurora Quebral Elementary School',
@@ -237,12 +236,12 @@
                             $sortedSchools = $davaoSchools;
                             sort($sortedSchools, SORT_NATURAL | SORT_FLAG_CASE);
                         @endphp
-                        <select id="school_name" name="school_name">
-                            <option value="" disabled {{ old('school_name') ? '' : 'selected' }}>Select school</option>
-                            @foreach ($sortedSchools as $school)
-                                <option value="{{ $school }}" {{ old('school_name') === $school ? 'selected' : '' }}>{{ $school }}</option>
-                            @endforeach
-                        </select>
+                        <x-school-search
+                            name="school_name"
+                            label="School (School Nurse, Clinic Staff, School Head, Class Adviser)"
+                            placeholder="Search or type school name..."
+                            :schools="$sortedSchools"
+                        />
                     </div>
                     <div class="field" id="gradeField">
                         <label for="assigned_grade_level">Assigned Grade Level</label>
@@ -281,7 +280,7 @@
     <script>
         const requestForm = document.getElementById('accountRequestForm');
         const roleSelect = document.getElementById('role');
-        const schoolInput = document.getElementById('school_name');
+        const schoolHiddenInput = document.querySelector('input[name="school_name"]');
         const schoolField = document.getElementById('schoolField');
         const gradeSelect = document.getElementById('assigned_grade_level');
         const sectionInput = document.getElementById('assigned_section');
@@ -298,13 +297,13 @@
             sectionField.style.display = isClassAdviser ? '' : 'none';
             classAdviserHint.style.display = isClassAdviser ? '' : 'none';
 
-            schoolInput.required = requiresSchool;
+            schoolHiddenInput.required = requiresSchool;
             gradeSelect.required = isClassAdviser;
             sectionInput.required = isClassAdviser;
 
             if (!requiresSchool) {
-                schoolInput.setCustomValidity('');
-                schoolInput.value = '';
+                schoolHiddenInput.setCustomValidity('');
+                schoolHiddenInput.value = '';
             }
 
             if (!isClassAdviser) {
@@ -317,13 +316,15 @@
 
         roleSelect.addEventListener('change', function () {
             syncRoleFields();
-            schoolInput.setCustomValidity('');
+            schoolHiddenInput.setCustomValidity('');
             gradeSelect.setCustomValidity('');
             sectionInput.setCustomValidity('');
         });
-        schoolInput.addEventListener('change', function () {
-            schoolInput.setCustomValidity('');
+        
+        schoolHiddenInput.addEventListener('change', function () {
+            schoolHiddenInput.setCustomValidity('');
         });
+        
         sectionInput.addEventListener('input', function () {
             sectionInput.setCustomValidity('');
         });
@@ -333,10 +334,10 @@
             const requiresSchool = ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser', 'nutricor'].includes(roleSelect.value);
 
             if (requiresSchool) {
-                if (!schoolInput.value.trim()) {
-                    schoolInput.setCustomValidity('Please enter school for the selected role.');
+                if (!schoolHiddenInput.value.trim()) {
+                    schoolHiddenInput.setCustomValidity('Please enter school for the selected role.');
                 } else {
-                    schoolInput.setCustomValidity('');
+                    schoolHiddenInput.setCustomValidity('');
                 }
             }
 

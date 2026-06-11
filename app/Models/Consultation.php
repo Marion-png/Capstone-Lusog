@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Consultation extends Model
 {
@@ -14,6 +15,7 @@ class Consultation extends Model
         'student_name',
         'grade_section',
         'condition',
+        'condition_id',
         'treatment_given',
         'status',
     ];
@@ -24,4 +26,13 @@ class Consultation extends Model
             'consulted_at' => 'datetime',
         ];
     }
+
+    /**
+     * Get the condition associated with this consultation.
+     */
+    public function conditionRecord(): BelongsTo
+    {
+        return $this->belongsTo(Condition::class, 'condition_id');
+    }
 }
+

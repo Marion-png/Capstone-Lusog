@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdviserController;
+use App\Http\Controllers\ConditionController;
 use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\FeedingCoordinatorController;
 use App\Http\Controllers\FeedingProgramController;
@@ -232,6 +233,13 @@ Route::get('/dashboard/consultation-log/new', [ConsultationController::class, 'c
 
 Route::post('/dashboard/consultation-log', [ConsultationController::class, 'store'])
     ->name('consultations.store');
+
+// API routes for condition search and creation
+Route::get('/api/conditions', [ConditionController::class, 'index'])
+    ->name('api.conditions.index');
+
+Route::post('/api/conditions', [ConditionController::class, 'store'])
+    ->name('api.conditions.store');
 
 Route::get('/dashboard/data-visualization', function () {
     return view('dashboard.data-visualization');

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Condition;
 use App\Models\Consultation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -64,12 +65,40 @@ class ConsultationController extends Controller
             'consulted_at' => ['required', 'date'],
             'student_name' => ['required', 'string', 'max:255'],
             'grade_section' => ['required', 'string', 'max:255'],
-            'condition' => ['required', 'string', 'max:255'],
+            'condition_id' => ['nullable', 'integer', 'exists:conditions,id'],
+            'condition' => ['nullable', 'string', 'max:255'],
             'treatment_given' => ['nullable', 'string', 'max:1000'],
             'status' => ['required', 'in:treated,referred'],
         ]);
 
-        Consultation::create($validated);
+        // Ensure at least one condition source is provided
+        $conditionId = $validated['condition_id'] ?? null;
+        $conditionText = $validated['condition'] ?? null;
+
+        if (! $conditionId && ! $conditionText) {
+            return back()
+                ->withErrors(['condition' => 'Please select or enter a condition.'])
+                ->withInput();
+        }
+
+        // If condition_id is provided, fetch the condition name
+        $conditionName = $conditionText;
+        if ($conditionId) {
+            $condition = Condition::find($conditionId);
+            if ($condition) {
+                $conditionName = $condition->name;
+            }
+        }
+
+        Consultation::create([
+            'consulted_at' => $validated['consulted_at'],
+            'student_name' => $validated['student_name'],
+            'grade_section' => $validated['grade_section'],
+            'condition' => $conditionName,
+            'condition_id' => $conditionId,
+            'treatment_given' => $validated['treatment_given'],
+            'status' => $validated['status'],
+        ]);
 
         return redirect()
             ->route('dashboard.consultation-log')
