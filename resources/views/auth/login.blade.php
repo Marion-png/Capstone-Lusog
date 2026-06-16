@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -6,7 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}?v=2">
     <link rel="shortcut icon" href="{{ asset('images/lusog-logo.png') }}?v=2">
-    <title>LUSOG - School Clinic Management System</title>
+    <title>SIGLA : School-Based Information Governance for Life Care Administration</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -471,11 +471,11 @@
         <div class="brand-wrap">
             <img
                 src="{{ asset('images/lusog-logo.png') }}"
-                alt="LUSOG Logo"
+                alt="SIGLA Logo"
                 class="brand-logo"
                 onerror="this.style.display='none';document.getElementById('logoFallback').style.display='block';"
             >
-            <div class="brand-fallback" id="logoFallback">LUSOG</div>
+            <div class="brand-fallback" id="logoFallback">SIGLA</div>
         </div>
     </section>
 
@@ -586,7 +586,7 @@
             <p class="footer">
                 Forgot your password? Contact your system administrator.<br>
                 <a href="{{ route('account.request') }}" style="color:#6e7b78;text-decoration:underline;">Create Account</a><br>
-                LUSOG v1.0 | Department of Education - School Health Division
+                SIGLA v1.0 | School-Based Information Governance for Life Care Administration
             </p>
         </form>
     </section>

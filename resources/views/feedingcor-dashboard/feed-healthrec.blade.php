@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -15,7 +15,7 @@
 </head>
 <body>
 <aside class="sidebar">
-    <div class="sb-logo"><img src="{{ asset('images/lusog-logo.png') }}" alt="LUSOG Logo"></div>
+    <div class="sb-logo"><img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA Logo"></div>
     <nav class="sb-nav">
         <a href="{{ route('dashboard.feedingcor-dashboard') }}" class="sb-link">Dashboard</a>
         <a href="{{ route('dashboard.feedingcor-health-records') }}" class="sb-link active">Student Health Records</a>

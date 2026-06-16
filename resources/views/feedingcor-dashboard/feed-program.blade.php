@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 	<head>
 		<meta charset="UTF-8">
@@ -27,7 +27,7 @@
 <aside class="sidebar">
 	<div class="sb-grid"></div>
 	<div class="sb-logo">
-		<img src="{{ asset('images/lusog-logo.png') }}" alt="LUSOG Logo" class="sb-logo-full">
+		<img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA Logo" class="sb-logo-full">
 	</div>
 	<nav class="sb-nav">
 		<div class="sb-section-label">Main</div>

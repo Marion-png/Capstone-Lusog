@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdviserController;
 use App\Http\Controllers\ConditionController;
+use App\Http\Controllers\NutricorController;
 use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\FeedingCoordinatorController;
 use App\Http\Controllers\FeedingProgramController;
@@ -453,6 +454,9 @@ Route::get('/dashboard/nutricor-comparison', function () {
     return view('nutricor.comparison');
 })->name('dashboard.nutricor-comparison');
 
+Route::get('/dashboard/nutricor-consolidated', [NutricorController::class, 'consolidatedReport'])
+    ->name('dashboard.nutricor-consolidated');
+
 Route::get('/dashboard/feedingcor-sbfp-forms', [FeedingCoordinatorController::class, 'sbfpForms'])
     ->name('dashboard.feedingcor-sbfp-forms');
 
@@ -702,7 +706,7 @@ Route::post('/health-records', function (Request $request) {
 Route::post('/logout', function (Request $request) {
     Auth::logout();
 
-    $request->session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name', 'active_role', 'active_name', 'active_username']);
+    $request->session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name', 'active_role', 'active_name', 'active_username', 'active_school_name']);
     $request->session()->regenerateToken();
 
     return redirect()->route('login');
@@ -754,6 +758,7 @@ Route::post('/login', function (Request $request) {
     $request->session()->put('active_role', $role);
     $request->session()->put('active_name', (string) ($account['name'] ?? 'User'));
     $request->session()->put('active_username', (string) ($account['username'] ?? ''));
+    $request->session()->put('active_school_name', $account['school_name'] ?? null);
 
     $routeByRole = [
         'school_nurse' => 'dashboard.school-nurse',

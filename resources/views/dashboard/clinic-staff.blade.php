@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clinic Staff Dashboard - LUSOG</title>
+    <title>Clinic Staff Dashboard - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -58,7 +58,7 @@
 </head>
 <body>
 <aside class="sidebar">
-    <div class="logo"><div class="avatar">LU</div><div><b>LUSOG</b><span>Clinic Management</span></div></div>
+    <div class="logo"><div class="avatar">LU</div><div><b>SIGLA</b><span>Clinic Management</span></div></div>
     <nav class="nav">
         <a href="{{ route('dashboard.school-nurse') }}">School Nurse</a>
         <a href="{{ route('dashboard.clinic-staff') }}" class="active">Clinic Staff</a>

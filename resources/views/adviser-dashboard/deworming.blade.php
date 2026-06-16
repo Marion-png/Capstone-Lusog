@@ -1,11 +1,11 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
     <link rel="shortcut icon" href="{{ asset('images/lusog-logo.png') }}">
-    <title>Deworming Request - LUSOG</title>
+    <title>Deworming Request - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     @php $classAdviserCssPath = resource_path('css/class-adviser.css'); @endphp
@@ -22,7 +22,7 @@
 
 <aside class="sidebar">
     <div class="sb-grid"></div>
-    <div class="sb-logo"><img src="{{ asset('images/lusog-logo.png') }}" alt="LUSOG Logo"></div>
+    <div class="sb-logo"><img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA Logo"></div>
     <nav class="sb-nav">
         <a href="{{ route('dashboard.class-adviser') }}" class="sb-link">
             <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">

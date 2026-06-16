@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -337,7 +337,7 @@
 <aside class="sidebar">
     <div class="sb-grid"></div>
     <div class="sb-logo">
-        <img src="{{ asset('images/lusog-logo.png') }}" alt="LUSOG Logo">
+        <img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA Logo">
     </div>
     <nav class="sb-nav">
         <div class="sb-section-label">Main</div>
@@ -347,10 +347,11 @@
         <a href="{{ route('dashboard.nutricor-atrisk') }}" class="sb-link {{ request()->routeIs('dashboard.nutricor-atrisk') ? 'active' : '' }}"><i class="fas fa-exclamation-triangle"></i>At-Risk Learners</a>
         <a href="{{ route('dashboard.nutricor-reports') }}" class="sb-link {{ request()->routeIs('dashboard.nutricor-reports') ? 'active' : '' }}"><i class="fas fa-file-alt"></i>Reports</a>
         <a href="{{ route('dashboard.nutricor-comparison') }}" class="sb-link {{ request()->routeIs('dashboard.nutricor-comparison') ? 'active' : '' }}"><i class="fas fa-code-branch"></i>Baseline/Endline</a>
+        <a href="{{ route('dashboard.nutricor-consolidated') }}" class="sb-link {{ request()->routeIs('dashboard.nutricor-consolidated') ? 'active' : '' }}"><i class="fas fa-table"></i>Consolidated Report</a>
     </nav>
     <div class="sb-user">
         @php
-            $displayName = trim(auth()->user()->name ?? 'Nutritional Coordinator');
+            $displayName = trim(session('active_name', 'Nutritional Coordinator'));
             $initials = collect(preg_split('/\s+/', $displayName))
                 ->filter()
                 ->map(fn ($part) => strtoupper(substr($part, 0, 1)))
@@ -359,8 +360,8 @@
         @endphp
         <div class="sb-avatar">{{ $initials ?: 'NC' }}</div>
         <div class="sb-user-meta">
-            <div class="sb-user-name">{{ auth()->user()->name ?? 'Nutritional Coordinator' }}</div>
-            <div class="sb-user-role">SBFP Manager</div>
+            <div class="sb-user-name">{{ $displayName }}</div>
+            <div class="sb-user-role">Nutritional Coordinator</div>
         </div>
         <form method="POST" action="{{ route('logout') }}">
             @csrf

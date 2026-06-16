@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Health Records - LUSOG</title>
+    <title>Health Records - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
         @php $pageCssPath = resource_path('css/school-nurse-student-health-records.css'); @endphp
@@ -13,7 +13,7 @@
 </head>
 <body>
 <aside class="sidebar">
-    <div class="sb-logo"><img src="{{ asset('images/lusog-logo.png') }}" alt="LUSOG Logo"></div>
+    <div class="sb-logo"><img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA Logo"></div>
     <nav class="sb-nav">
         <div class="sb-section-label">Main</div>
         <a href="{{ route('dashboard.school-nurse') }}" class="sb-link">
