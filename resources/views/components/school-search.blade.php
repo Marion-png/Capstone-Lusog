@@ -1,353 +1,398 @@
 @props([
-    'name' => 'school_name',
-    'label' => 'School',
-    'placeholder' => 'Search schools...',
-    'schools' => [],
-    'readonly' => false,
+    'name'        => 'school_name',
+    'label'       => 'School',
+    'placeholder' => 'Search or scroll to select a school…',
+    'schools'     => [],
+    'readonly'    => false,
 ])
 
-<div class="school-dropdown-field">
-    <label @if($readonly) style="opacity: 0.6;" @endif>
-        {{ $label }}
-    </label>
+<div class="sdd-field">
+    <label @if($readonly) style="opacity:.6;" @endif>{{ $label }}</label>
 
-    <div class="school-dropdown-container">
-        <!-- Selected Value Display -->
-        <div class="school-display">
-            <span class="school-display-name">Select school</span>
-            <button type="button" class="school-display-toggle">▼</button>
+    {{-- Single quotes on the attribute + {!! !!} avoids double-escaping the JSON --}}
+    <div class="sdd-wrap" data-schools='{!! json_encode(array_values($schools)) !!}'>
+        <div class="sdd-combo">
+            <input
+                type="text"
+                class="sdd-input"
+                placeholder="{{ $placeholder }}"
+                autocomplete="off"
+                spellcheck="false"
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+                aria-autocomplete="list"
+                @if($readonly) readonly @endif
+            >
+            <button type="button" class="sdd-chevron" tabindex="-1" aria-hidden="true">
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.8"
+                          stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
         </div>
 
-        <!-- Search Input (visible when dropdown open) -->
-        <input
-            type="text"
-            class="school-search-input"
-            placeholder="{{ $placeholder }}"
-            @if($readonly) disabled @endif
-            style="display: none;"
-        />
-
-        <!-- Dropdown -->
-        <div class="school-dropdown-list" style="display: none;">
-            <!-- Options will be populated here -->
+        <div class="sdd-panel" role="listbox">
+            <div class="sdd-count"></div>
+            <div class="sdd-options"></div>
         </div>
     </div>
 
-    <!-- Hidden Input -->
-    <input type="hidden" name="{{ $name }}" class="school-hidden-input" value="{{ old($name, '') }}" />
+    <input type="hidden" name="{{ $name }}" class="sdd-value" value="{{ old($name, '') }}">
 
-    <!-- Error Message -->
     @error($name)
-        <div class="err">{{ $message }}</div>
+        <div class="sdd-err">{{ $message }}</div>
     @enderror
 </div>
 
 <style>
-    .school-dropdown-field {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
+.sdd-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
 
-    .school-dropdown-field label {
-        font-size: 0.7rem;
-        color: #5b7b68;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        font-weight: 700;
-    }
+.sdd-field label {
+    font-size: .7rem;
+    color: #5b7b68;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    font-weight: 700;
+}
 
-    .school-dropdown-container {
-        position: relative;
-        width: 100%;
-    }
+.sdd-wrap {
+    position: relative;
+}
 
-    .school-display {
-        height: 42px;
-        border: 1px solid #dbe9df;
-        border-radius: 10px;
-        padding: 0 12px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        background: #fff;
-        cursor: pointer;
-        transition: border-color 0.2s;
-        font-size: 0.86rem;
-    }
+.sdd-combo {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
 
-    .school-display:hover {
-        border-color: #22c55e;
-    }
+.sdd-input {
+    width: 100%;
+    height: 42px;
+    border: 1px solid #dbe9df;
+    border-radius: 10px;
+    padding: 0 36px 0 12px;
+    font: inherit;
+    font-size: .86rem;
+    color: #0f2f1b;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color .18s, box-shadow .18s;
+}
 
-    .school-display-name {
-        color: #0f2f1b;
-        flex: 1;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
+.sdd-input:focus {
+    outline: none;
+    cursor: text;
+    border-color: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34,197,94,.15);
+}
 
-    .school-display-toggle {
-        background: none;
-        border: none;
-        color: #5b7b68;
-        cursor: pointer;
-        font-size: 0.7rem;
-        padding: 0 0 0 8px;
-        transition: transform 0.2s;
-    }
+.sdd-input[readonly] {
+    background: #f5f5f5;
+    color: #999;
+    cursor: not-allowed;
+}
 
-    .school-display.open .school-display-toggle {
-        transform: rotate(180deg);
-    }
+.sdd-input::placeholder {
+    color: #aac4b4;
+}
 
-    .school-search-input {
-        width: 100%;
-        height: 42px;
-        border: 1px solid #dbe9df;
-        border-radius: 10px;
-        padding: 0 12px;
-        font: inherit;
-        color: #0f2f1b;
-        background: #fff;
-        font-size: 0.86rem;
-    }
+.sdd-chevron {
+    position: absolute;
+    right: 10px;
+    background: none;
+    border: none;
+    color: #6b9e82;
+    cursor: pointer;
+    padding: 4px;
+    line-height: 0;
+    transition: transform .2s;
+    pointer-events: none;
+}
 
-    .school-search-input:focus {
-        outline: 2px solid #bbf7d0;
-        border-color: #22c55e;
-    }
+.sdd-combo.open .sdd-chevron {
+    transform: rotate(180deg);
+}
 
-    .school-search-input:disabled {
-        background-color: #f5f5f5;
-        color: #999;
-        cursor: not-allowed;
-    }
+/* ── dropdown panel ─────────────────── */
+.sdd-panel {
+    position: absolute;
+    top: calc(100% + 5px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid #c9e0d3;
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(20,83,45,.12);
+    z-index: 200;
+    display: none;
+    flex-direction: column;
+    max-height: 280px;
+}
 
-    .school-dropdown-list {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        margin-top: 4px;
-        background: white;
-        border: 1px solid #dbe9df;
-        border-radius: 10px;
-        box-shadow: 0 4px 12px rgba(20, 83, 45, 0.1);
-        z-index: 10;
-        max-height: 300px;
-        overflow-y: auto;
-    }
+.sdd-panel.open {
+    display: flex;
+}
 
-    .school-option {
-        padding: 10px 12px;
-        cursor: pointer;
-        font-size: 0.86rem;
-        transition: background-color 0.2s;
-        border-bottom: 1px solid #f0f0f0;
-    }
+.sdd-count {
+    flex-shrink: 0;
+    padding: 6px 12px 5px;
+    font-size: .68rem;
+    font-weight: 700;
+    color: #7ba890;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    border-bottom: 1px solid #eaf2ec;
+}
 
-    .school-option:last-child {
-        border-bottom: none;
-    }
+.sdd-options {
+    overflow-y: auto;
+    flex: 1;
+    padding: 4px 0;
+}
 
-    .school-option:hover,
-    .school-option.focused {
-        background-color: #f0f5f2;
-    }
+/* Scrollbar */
+.sdd-options::-webkit-scrollbar { width: 5px; }
+.sdd-options::-webkit-scrollbar-track { background: transparent; }
+.sdd-options::-webkit-scrollbar-thumb { background: #b8d8c6; border-radius: 3px; }
 
-    .school-option.selected {
-        background-color: #dcfce7;
-        color: #15803d;
-        font-weight: 500;
-    }
+.sdd-opt {
+    padding: 9px 13px;
+    font-size: .85rem;
+    color: #1a3828;
+    cursor: pointer;
+    border-bottom: 1px solid #f2f8f4;
+    transition: background .1s;
+    line-height: 1.35;
+}
 
-    .school-option-empty {
-        color: #5b7b68;
-        text-align: center;
-        padding: 16px 12px;
-        font-style: italic;
-    }
+.sdd-opt:last-child { border-bottom: none; }
 
-    .err {
-        margin-top: 4px;
-        font-size: 0.74rem;
-        color: #b91c1c;
-    }
+.sdd-opt:hover,
+.sdd-opt.focused {
+    background: #f0f7f3;
+}
 
-    @media (max-width: 720px) {
-        .school-dropdown-list {
-            max-height: 250px;
-        }
-    }
+.sdd-opt.selected {
+    background: #dcfce7;
+    color: #14532d;
+    font-weight: 600;
+}
+
+.sdd-opt mark {
+    background: #fef08a;
+    color: inherit;
+    border-radius: 2px;
+    font-weight: 700;
+    padding: 0 1px;
+}
+
+.sdd-empty {
+    padding: 18px 13px;
+    text-align: center;
+    font-size: .84rem;
+    color: #7ba890;
+    font-style: italic;
+}
+
+.sdd-err {
+    font-size: .74rem;
+    color: #b91c1c;
+    margin-top: 2px;
+}
+
+@media (max-width: 720px) {
+    .sdd-panel { max-height: 210px; }
+}
 </style>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.school-dropdown-field').forEach(function(field) {
-        const display = field.querySelector('.school-display');
-        const displayName = field.querySelector('.school-display-name');
-        const displayToggle = field.querySelector('.school-display-toggle');
-        const searchInput = field.querySelector('.school-search-input');
-        const dropdown = field.querySelector('.school-dropdown-list');
-        const hiddenInput = field.querySelector('.school-hidden-input');
-        const readonly = searchInput.disabled;
-        
-        const schools = @json($schools);
-        let isOpen = false;
-        let focusedIndex = -1;
+(function () {
+    function initDropdown(field) {
+        const wrap      = field.querySelector('.sdd-wrap');
+        const combo     = field.querySelector('.sdd-combo');
+        const input     = field.querySelector('.sdd-input');
+        const panel     = field.querySelector('.sdd-panel');
+        const countEl   = field.querySelector('.sdd-count');
+        const optionsEl = field.querySelector('.sdd-options');
+        const hidden    = field.querySelector('.sdd-value');
 
-        // Load pre-selected value
-        if (hiddenInput.value) {
-            const found = schools.find(s => s === hiddenInput.value);
-            if (found) {
-                displayName.textContent = found;
-                display.style.display = 'flex';
-            }
+        if (input.readOnly) return;
+
+        let schools;
+        try {
+            schools = JSON.parse(wrap.dataset.schools || '[]');
+        } catch (e) {
+            schools = [];
         }
 
-        // Toggle dropdown on display click
-        display.addEventListener('click', function() {
-            if (!readonly) {
-                toggleDropdown();
-            }
-        });
+        let isOpen     = false;
+        let focusedIdx = -1;
+        let committed  = hidden.value; // last confirmed value
 
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function(e) {
-            if (!field.contains(e.target)) {
-                closeDropdown();
-            }
-        });
+        // Restore pre-selected value on page load
+        if (committed) input.value = committed;
 
-        // Search filtering
-        searchInput.addEventListener('input', function() {
-            filterAndRender();
-        });
-
-        // Keyboard navigation
-        searchInput.addEventListener('keydown', function(e) {
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                focusedIndex++;
-                const options = dropdown.querySelectorAll('.school-option');
-                if (focusedIndex >= options.length) {
-                    focusedIndex = 0;
-                }
-                updateFocusedOption();
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                focusedIndex--;
-                const options = dropdown.querySelectorAll('.school-option');
-                if (focusedIndex < 0) {
-                    focusedIndex = options.length - 1;
-                }
-                updateFocusedOption();
-            } else if (e.key === 'Enter') {
-                e.preventDefault();
-                const options = dropdown.querySelectorAll('.school-option');
-                if (focusedIndex >= 0 && options[focusedIndex]) {
-                    selectSchool(options[focusedIndex].textContent);
-                }
-            } else if (e.key === 'Escape') {
-                closeDropdown();
-            }
-        });
-
-        function toggleDropdown() {
-            if (isOpen) {
-                closeDropdown();
-            } else {
-                openDropdown();
-            }
-        }
-
-        function openDropdown() {
+        /* ── open/close ── */
+        function open() {
+            if (isOpen) return;
             isOpen = true;
-            display.classList.add('open');
-            searchInput.style.display = 'block';
-            dropdown.style.display = 'block';
-            filterAndRender();
-            setTimeout(() => {
-                searchInput.focus();
-            }, 0);
+            combo.classList.add('open');
+            panel.classList.add('open');
+            input.setAttribute('aria-expanded', 'true');
+            render('');                         // show ALL schools immediately
+            requestAnimationFrame(() => {
+                const sel = optionsEl.querySelector('.sdd-opt.selected');
+                if (sel) sel.scrollIntoView({ block: 'nearest' });
+            });
         }
 
-        function closeDropdown() {
-            isOpen = false;
-            display.classList.remove('open');
-            searchInput.style.display = 'none';
-            dropdown.style.display = 'none';
-            searchInput.value = '';
-            focusedIndex = -1;
+        function close(restorePrev) {
+            if (!isOpen) return;
+            isOpen     = false;
+            focusedIdx = -1;
+            combo.classList.remove('open');
+            panel.classList.remove('open');
+            input.setAttribute('aria-expanded', 'false');
+            if (restorePrev) input.value = committed;
         }
 
-        function filterAndRender() {
-            const search = searchInput.value.toLowerCase();
-            const filtered = schools.filter(school =>
-                school.toLowerCase().includes(search)
-            );
+        function pick(school) {
+            committed    = school;
+            hidden.value = school;
+            input.value  = school;
+            hidden.dispatchEvent(new Event('change', { bubbles: true }));
+            close(false);
+        }
 
-            dropdown.innerHTML = '';
-            focusedIndex = -1;
+        /* ── render list ── */
+        function render(query) {
+            const q    = query.trim().toLowerCase();
+            const list = q ? schools.filter(s => s.toLowerCase().includes(q)) : schools;
 
-            if (filtered.length === 0) {
-                const empty = document.createElement('div');
-                empty.className = 'school-option school-option-empty';
-                empty.textContent = 'No schools found';
-                dropdown.appendChild(empty);
+            focusedIdx         = -1;
+            optionsEl.innerHTML = '';
+            countEl.textContent = q
+                ? `${list.length} result${list.length !== 1 ? 's' : ''} for "${query.trim()}"`
+                : `${list.length} schools — scroll or type to search`;
+
+            if (list.length === 0) {
+                const el = document.createElement('div');
+                el.className = 'sdd-empty';
+                el.textContent = 'No schools match your search.';
+                optionsEl.appendChild(el);
                 return;
             }
 
-            filtered.forEach((school, index) => {
-                const option = document.createElement('div');
-                option.className = 'school-option';
-                if (hiddenInput.value === school) {
-                    option.classList.add('selected');
-                }
-                option.textContent = school;
-                
-                option.addEventListener('click', () => {
-                    selectSchool(school);
-                });
-                
-                option.addEventListener('mouseover', () => {
-                    focusedIndex = index;
-                    updateFocusedOption();
-                });
+            list.forEach((school, idx) => {
+                const opt = document.createElement('div');
+                opt.className = 'sdd-opt';
+                opt.setAttribute('role', 'option');
+                if (school === committed) opt.classList.add('selected');
 
-                dropdown.appendChild(option);
-            });
-        }
-
-        function updateFocusedOption() {
-            const options = dropdown.querySelectorAll('.school-option');
-            options.forEach((option, index) => {
-                if (index === focusedIndex) {
-                    option.classList.add('focused');
-                    option.scrollIntoView({ block: 'nearest' });
+                if (q) {
+                    const lo = school.toLowerCase();
+                    let html = '', cursor = 0, pos;
+                    while ((pos = lo.indexOf(q, cursor)) !== -1) {
+                        html  += esc(school.slice(cursor, pos));
+                        html  += `<mark>${esc(school.slice(pos, pos + q.length))}</mark>`;
+                        cursor = pos + q.length;
+                    }
+                    opt.innerHTML = html + esc(school.slice(cursor));
                 } else {
-                    option.classList.remove('focused');
+                    opt.textContent = school;
                 }
+
+                opt.addEventListener('mousedown', e => {
+                    e.preventDefault(); // keep input focused
+                    pick(school);
+                });
+                opt.addEventListener('mousemove', () => setFocus(idx));
+
+                optionsEl.appendChild(opt);
             });
         }
 
-        function selectSchool(school) {
-            hiddenInput.value = school;
-            displayName.textContent = school;
-            display.style.display = 'flex';
-            closeDropdown();
-        }
-
-        // Show display initially if a value is set
-        if (hiddenInput.value) {
-            const found = schools.find(s => s === hiddenInput.value);
-            if (found) {
-                displayName.textContent = found;
+        function setFocus(idx) {
+            const opts = optionsEl.querySelectorAll('.sdd-opt');
+            if (opts[focusedIdx]) opts[focusedIdx].classList.remove('focused');
+            focusedIdx = idx;
+            if (opts[focusedIdx]) {
+                opts[focusedIdx].classList.add('focused');
+                opts[focusedIdx].scrollIntoView({ block: 'nearest' });
             }
         }
-    });
-});
-</script>
 
+        function esc(str) {
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        /* ── event wiring ── */
+        // Open on click or focus
+        input.addEventListener('mousedown', e => {
+            if (!isOpen) {
+                e.preventDefault();
+                input.focus();
+                open();
+            }
+        });
+
+        input.addEventListener('focus', () => {
+            if (!isOpen) open();
+        });
+
+        // Filter as user types
+        input.addEventListener('input', () => {
+            if (!isOpen) open();
+            render(input.value);
+        });
+
+        // Keyboard nav
+        input.addEventListener('keydown', e => {
+            const opts = optionsEl.querySelectorAll('.sdd-opt');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (!isOpen) open();
+                setFocus(Math.min(focusedIdx + 1, opts.length - 1));
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setFocus(Math.max(focusedIdx - 1, 0));
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (isOpen && focusedIdx >= 0 && opts[focusedIdx]) {
+                    const txt = opts[focusedIdx].textContent;
+                    pick(schools.find(s => s === txt) || txt);
+                }
+            } else if (e.key === 'Escape' || e.key === 'Tab') {
+                close(true);
+            }
+        });
+
+        // Close when focus leaves the whole field
+        field.addEventListener('focusout', e => {
+            if (!field.contains(e.relatedTarget)) {
+                setTimeout(() => { if (!field.contains(document.activeElement)) close(true); }, 100);
+            }
+        });
+
+        // Close on outside click
+        document.addEventListener('mousedown', e => {
+            if (isOpen && !field.contains(e.target)) close(true);
+        });
+    }
+
+    function init() {
+        document.querySelectorAll('.sdd-field').forEach(initDropdown);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+</script>

@@ -17,12 +17,65 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('auth.login');
+$demoAccounts = [
+    ['role' => 'school_nurse',  'label' => 'School Nurse',            'username' => 'nurse.demo',   'password' => 'Demo@123', 'name' => 'Demo Nurse',        'school_name' => 'Demo Elementary School'],
+    ['role' => 'clinic_staff',  'label' => 'Clinic Staff',            'username' => 'staff.demo',   'password' => 'Demo@123', 'name' => 'Demo Staff',        'school_name' => 'Demo Elementary School'],
+    ['role' => 'class_adviser', 'label' => 'Class Adviser',           'username' => 'adviser.demo', 'password' => 'Demo@123', 'name' => 'Demo Adviser',      'school_name' => 'Demo Elementary School', 'assigned_grade_level' => 'Grade 1', 'assigned_section' => 'Sampaguita'],
+    ['role' => 'school_head',   'label' => 'School Head',             'username' => 'head.demo',    'password' => 'Demo@123', 'name' => 'Demo School Head',  'school_name' => 'Demo Elementary School'],
+    ['role' => 'feeding_coor',  'label' => 'Feeding Coordinator',     'username' => 'feeding.demo', 'password' => 'Demo@123', 'name' => 'Demo Feeding Coor', 'school_name' => 'Demo Elementary School'],
+    ['role' => 'nutricor',      'label' => 'Nutritional Coordinator', 'username' => 'nutricor.demo','password' => 'Demo@123', 'name' => 'Demo Nutri-Cor',   'school_name' => 'Demo Elementary School'],
+];
+
+Route::get('/', function () use ($demoAccounts) {
+    $existing = collect(session('user_accounts', []))->pluck('username')->toArray();
+    $toAdd = [];
+    foreach ($demoAccounts as $demo) {
+        if (!in_array($demo['username'], $existing)) {
+            $entry = [
+                'name'          => $demo['name'],
+                'username'      => $demo['username'],
+                'password_hash' => Hash::make($demo['password']),
+                'role'          => $demo['role'],
+                'school_name'   => $demo['school_name'] ?? null,
+                'created_at'    => now()->toISOString(),
+            ];
+            if ($demo['role'] === 'class_adviser') {
+                $entry['assigned_grade_level'] = $demo['assigned_grade_level'] ?? null;
+                $entry['assigned_section']     = $demo['assigned_section'] ?? null;
+            }
+            $toAdd[] = $entry;
+        }
+    }
+    if ($toAdd) {
+        session(['user_accounts' => array_merge(session('user_accounts', []), $toAdd)]);
+    }
+    return view('auth.login', ['demoAccounts' => $demoAccounts]);
 });
 
-Route::get('/login', function () {
-    return view('auth.login');
+Route::get('/login', function () use ($demoAccounts) {
+    $existing = collect(session('user_accounts', []))->pluck('username')->toArray();
+    $toAdd = [];
+    foreach ($demoAccounts as $demo) {
+        if (!in_array($demo['username'], $existing)) {
+            $entry = [
+                'name'          => $demo['name'],
+                'username'      => $demo['username'],
+                'password_hash' => Hash::make($demo['password']),
+                'role'          => $demo['role'],
+                'school_name'   => $demo['school_name'] ?? null,
+                'created_at'    => now()->toISOString(),
+            ];
+            if ($demo['role'] === 'class_adviser') {
+                $entry['assigned_grade_level'] = $demo['assigned_grade_level'] ?? null;
+                $entry['assigned_section']     = $demo['assigned_section'] ?? null;
+            }
+            $toAdd[] = $entry;
+        }
+    }
+    if ($toAdd) {
+        session(['user_accounts' => array_merge(session('user_accounts', []), $toAdd)]);
+    }
+    return view('auth.login', ['demoAccounts' => $demoAccounts]);
 })->name('login');
 
 Route::get('/admin-login', function () {

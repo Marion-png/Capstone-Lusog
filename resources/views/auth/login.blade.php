@@ -331,6 +331,95 @@
             line-height: 1.5;
         }
 
+        .demo-panel {
+            border: 1px dashed #b5d4c5;
+            border-radius: var(--radius-sm);
+            background: #f4fbf7;
+            margin-bottom: 14px;
+            overflow: hidden;
+        }
+
+        .demo-toggle {
+            width: 100%;
+            background: none;
+            border: none;
+            padding: 9px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            font: inherit;
+            font-size: 0.76rem;
+            font-weight: 700;
+            color: #2e6e50;
+            text-align: left;
+        }
+
+        .demo-toggle:hover { background: #ebf7f1; }
+
+        .demo-toggle-icon {
+            font-size: 0.7rem;
+            transition: transform .2s ease;
+        }
+
+        .demo-toggle.open .demo-toggle-icon { transform: rotate(180deg); }
+
+        .demo-body {
+            display: none;
+            padding: 0 12px 10px;
+        }
+
+        .demo-body.open { display: block; }
+
+        .demo-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.72rem;
+        }
+
+        .demo-table th {
+            text-align: left;
+            color: #7b9489;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            padding: 4px 6px 4px 0;
+            border-bottom: 1px solid #d3e9de;
+        }
+
+        .demo-table td {
+            padding: 5px 6px 5px 0;
+            color: #2a3d38;
+            border-bottom: 1px solid #ecf4f0;
+            vertical-align: middle;
+        }
+
+        .demo-table tr:last-child td { border-bottom: none; }
+
+        .demo-role-badge {
+            display: inline-block;
+            background: #ddf0e8;
+            color: #2a6649;
+            border-radius: 4px;
+            padding: 1px 6px;
+            font-size: 0.65rem;
+            font-weight: 700;
+        }
+
+        .demo-copy-btn {
+            background: none;
+            border: 1px solid #b5d4c5;
+            border-radius: 4px;
+            color: #3a7e62;
+            cursor: pointer;
+            font-size: 0.62rem;
+            font-weight: 700;
+            padding: 2px 6px;
+            white-space: nowrap;
+        }
+
+        .demo-copy-btn:hover { background: #ddf0e8; }
+
         @keyframes riseIn {
             from {
                 opacity: 0;
@@ -397,6 +486,55 @@
         </div>
 
 
+        @if (!empty($demoAccounts))
+        <div class="demo-panel">
+            <button type="button" class="demo-toggle" id="demoToggle" onclick="toggleDemo()">
+                <span>&#128274; Demo Accounts (for testing)</span>
+                <span class="demo-toggle-icon" id="demoIcon">&#9660;</span>
+            </button>
+            <div class="demo-body" id="demoBody">
+                <table class="demo-table">
+                    <thead>
+                        <tr>
+                            <th>Role</th>
+                            <th>Username</th>
+                            <th>Password</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($demoAccounts as $demo)
+                        <tr>
+                            <td><span class="demo-role-badge">{{ $demo['label'] }}</span></td>
+                            <td><code style="font-size:0.72rem;">{{ $demo['username'] }}</code></td>
+                            <td><code style="font-size:0.72rem;">{{ $demo['password'] }}</code></td>
+                            <td>
+                                <button type="button" class="demo-copy-btn"
+                                    onclick="fillLogin('{{ $demo['username'] }}', '{{ $demo['password'] }}')">
+                                    Use
+                                </button>
+                            </td>
+                        </tr>
+                        @endforeach
+                        <tr>
+                            <td><span class="demo-role-badge">System Admin</span></td>
+                            <td><code style="font-size:0.72rem;">systemadmin</code></td>
+                            <td><code style="font-size:0.72rem;">admin123</code></td>
+                            <td>
+                                <a href="{{ route('admin.login') }}" class="demo-copy-btn" style="text-decoration:none;display:inline-block;">
+                                    Go
+                                </a>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p style="font-size:0.64rem;color:#7b9489;margin-top:6px;">
+                    Click <strong>Use</strong> to auto-fill the login form, or copy credentials manually. System Admin uses a separate login page.
+                </p>
+            </div>
+        </div>
+        @endif
+
         @if ($errors->any())
             <div class="alert-error">{{ $errors->first() }}</div>
         @endif
@@ -461,6 +599,25 @@
         const show = input.type === 'password';
         input.type = show ? 'text' : 'password';
         btn.textContent = show ? 'HIDE' : 'SHOW';
+    }
+
+    function toggleDemo() {
+        const body = document.getElementById('demoBody');
+        const toggle = document.getElementById('demoToggle');
+        const icon = document.getElementById('demoIcon');
+        const open = body.classList.toggle('open');
+        toggle.classList.toggle('open', open);
+    }
+
+    function fillLogin(username, password) {
+        document.getElementById('email').value = username;
+        document.getElementById('password').value = password;
+        if (document.getElementById('password').type === 'text') {
+            // keep visible
+        } else {
+            document.getElementById('password').type = 'text';
+            document.getElementById('togglePw').textContent = 'HIDE';
+        }
     }
 
     document.getElementById('loginForm').addEventListener('submit', function () {
