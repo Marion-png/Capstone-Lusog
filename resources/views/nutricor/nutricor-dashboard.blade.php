@@ -8,37 +8,45 @@ Nutritional Coordinator <span>Dashboard</span>
 @section('page_subtitle', 'Clear, readable overview of enrollment priorities, risk trends, and program progress.')
 
 @section('content')
+@php
+    $statusClass = function ($status) {
+        $status = strtolower((string) $status);
+        if (str_contains($status, 'severe')) return 'bad';
+        if (str_contains($status, 'wast') || str_contains($status, 'underweight') || str_contains($status, 'over')) return 'warn';
+        return 'ok';
+    };
+@endphp
 <section class="grid-5">
     <article class="card stat">
-        <div class="label">Total Enrolled</div>
-        <div class="num">17</div>
-        <div class="hint">SBFP beneficiaries</div>
+        <div class="label">Total Students</div>
+        <div class="num">{{ number_format($summary['total_population']) }}</div>
+        <div class="hint">Consolidated population</div>
     </article>
     <article class="card stat" style="border-left-color:#dc2626;">
         <div class="label">Priority 1</div>
-        <div class="num">9</div>
-        <div class="hint">Kinder and severely wasted</div>
+        <div class="num">{{ number_format($summary['priority_1']) }}</div>
+        <div class="hint">Severely wasted learners</div>
     </article>
     <article class="card stat" style="border-left-color:#f59e0b;">
         <div class="label">Priority 2</div>
-        <div class="num">8</div>
-        <div class="hint">Wasted learners</div>
+        <div class="num">{{ number_format($summary['priority_2']) }}</div>
+        <div class="hint">Wasted or underweight</div>
     </article>
     <article class="card stat" style="border-left-color:#b91c1c;">
         <div class="label">At-Risk</div>
-        <div class="num">7</div>
+        <div class="num">{{ number_format($summary['at_risk']) }}</div>
         <div class="hint">Needs intervention</div>
     </article>
     <article class="card stat" style="border-left-color:#7c3aed;">
-        <div class="label">Feeding Days</div>
-        <div class="num">45</div>
-        <div class="hint">Days completed</div>
+        <div class="label">With Endline</div>
+        <div class="num">{{ number_format($summary['endline_total']) }}</div>
+        <div class="hint">Completed final assessment</div>
     </article>
 </section>
 
 <section class="summary">
-    <h3>SBFP Automatic Enrollment</h3>
-    <p>Enrollment follows DepEd priority guidelines and keeps high-risk learners visible for quick action.</p>
+    <h3>Division Submission Snapshot</h3>
+    <p>Baseline records: {{ number_format($summary['baseline_total']) }} | Endline records: {{ number_format($summary['endline_total']) }} | Improvement rate: {{ number_format($summary['improvement_rate'], 1) }}%</p>
 </section>
 
 <section class="grid-2">
@@ -55,18 +63,16 @@ Nutritional Coordinator <span>Dashboard</span>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>Bacos, Ujan Lungayao</td>
-                        <td>Grade 2</td>
-                        <td>15.50</td>
-                        <td><span class="pill bad">Severely Wasted</span></td>
-                    </tr>
-                    <tr>
-                        <td>Gonzales, Ana</td>
-                        <td>Kinder</td>
-                        <td>15.20</td>
-                        <td><span class="pill bad">Severely Wasted</span></td>
-                    </tr>
+                    @forelse($priorityOne as $record)
+                        <tr>
+                            <td>{{ $record->student_name }}</td>
+                            <td>{{ $record->section ?: '-' }}</td>
+                            <td>{{ $record->baseline_bmi_value ? number_format((float) $record->baseline_bmi_value, 2) : '-' }}</td>
+                            <td><span class="pill {{ $statusClass($record->baseline_nutritional_status) }}">{{ $record->baseline_nutritional_status ?: '-' }}</span></td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="4" class="muted">No Priority 1 learners submitted.</td></tr>
+                    @endforelse
                 </tbody>
             </table>
         </div>
@@ -85,18 +91,16 @@ Nutritional Coordinator <span>Dashboard</span>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>Santos, Maria</td>
-                        <td>Grade 4</td>
-                        <td>17.30</td>
-                        <td><span class="pill warn">Wasted</span></td>
-                    </tr>
-                    <tr>
-                        <td>Reyes, Jose</td>
-                        <td>Grade 6</td>
-                        <td>16.50</td>
-                        <td><span class="pill warn">Wasted</span></td>
-                    </tr>
+                    @forelse($priorityTwo as $record)
+                        <tr>
+                            <td>{{ $record->student_name }}</td>
+                            <td>{{ $record->section ?: '-' }}</td>
+                            <td>{{ $record->baseline_bmi_value ? number_format((float) $record->baseline_bmi_value, 2) : '-' }}</td>
+                            <td><span class="pill {{ $statusClass($record->baseline_nutritional_status) }}">{{ $record->baseline_nutritional_status ?: '-' }}</span></td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="4" class="muted">No Priority 2 learners submitted.</td></tr>
+                    @endforelse
                 </tbody>
             </table>
         </div>

@@ -8,6 +8,20 @@ Master List <span>Beneficiaries</span>
 @section('page_subtitle', 'Clear and searchable listing of SBFP beneficiaries and their nutritional classification.')
 
 @section('content')
+@php
+    $statusClass = function ($status) {
+        $status = strtolower((string) $status);
+        if (str_contains($status, 'severe')) return 'bad';
+        if (str_contains($status, 'wast') || str_contains($status, 'underweight') || str_contains($status, 'over')) return 'warn';
+        return 'ok';
+    };
+    $priority = function ($status) {
+        $status = strtolower((string) $status);
+        if (str_contains($status, 'severe')) return ['Priority 1', 'bad'];
+        if (str_contains($status, 'wast') || str_contains($status, 'underweight')) return ['Priority 2', 'warn'];
+        return ['General', 'ok'];
+    };
+@endphp
 <input type="text" class="search" placeholder="Search student name...">
 
 <article class="card">
@@ -18,8 +32,8 @@ Master List <span>Beneficiaries</span>
                 <tr>
                     <th>No.</th>
                     <th>Name</th>
-                    <th>Sex</th>
-                    <th>Grade</th>
+                    <th>School</th>
+                    <th>Section</th>
                     <th>Weight</th>
                     <th>Height</th>
                     <th>BMI</th>
@@ -28,39 +42,25 @@ Master List <span>Beneficiaries</span>
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td>1</td>
-                    <td>Abella, Zyrain Kurt D.</td>
-                    <td>M</td>
-                    <td>Kinder</td>
-                    <td>34</td>
-                    <td>127</td>
-                    <td>21.08</td>
-                    <td><span class="pill ok">Normal</span></td>
-                    <td><span class="pill bad">Priority 1</span></td>
-                </tr>
-                <tr>
-                    <td>2</td>
-                    <td>Bacos, Ujan Lungayao</td>
-                    <td>M</td>
-                    <td>Grade 2</td>
-                    <td>32</td>
-                    <td>127</td>
-                    <td>15.50</td>
-                    <td><span class="pill bad">Severely Wasted</span></td>
-                    <td><span class="pill bad">Priority 1</span></td>
-                </tr>
-                <tr>
-                    <td>3</td>
-                    <td>Santos, Maria</td>
-                    <td>F</td>
-                    <td>Grade 4</td>
-                    <td>38</td>
-                    <td>148</td>
-                    <td>17.30</td>
-                    <td><span class="pill warn">Wasted</span></td>
-                    <td><span class="pill warn">Priority 2</span></td>
-                </tr>
+                @forelse($records as $record)
+                    @php
+                        $status = $record->baseline_nutritional_status ?: $record->nutritional_status;
+                        [$priorityLabel, $priorityClass] = $priority($status);
+                    @endphp
+                    <tr>
+                        <td>{{ $loop->iteration }}</td>
+                        <td>{{ $record->student_name }}</td>
+                        <td>{{ $record->school_name ?: '-' }}</td>
+                        <td>{{ $record->section ?: '-' }}</td>
+                        <td>{{ $record->baseline_weight_kg ? number_format((float) $record->baseline_weight_kg, 1) : '-' }}</td>
+                        <td>{{ $record->baseline_height_cm ? number_format((float) $record->baseline_height_cm, 1) : '-' }}</td>
+                        <td>{{ $record->baseline_bmi_value ? number_format((float) $record->baseline_bmi_value, 2) : '-' }}</td>
+                        <td><span class="pill {{ $statusClass($status) }}">{{ $status ?: '-' }}</span></td>
+                        <td><span class="pill {{ $priorityClass }}">{{ $priorityLabel }}</span></td>
+                    </tr>
+                @empty
+                    <tr><td colspan="9" class="muted">No adviser-submitted records available.</td></tr>
+                @endforelse
             </tbody>
         </table>
     </div>

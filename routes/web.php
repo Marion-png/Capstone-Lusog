@@ -9,6 +9,7 @@ use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\FeedingCoordinatorController;
 use App\Http\Controllers\FeedingProgramController;
 use App\Http\Controllers\MedicineInventoryController;
+use App\Http\Controllers\NutritionCoordinatorController;
 use App\Http\Controllers\NurseController;
 use App\Http\Controllers\SchoolHeadController;
 use App\Http\Controllers\StudentHealthRecordController;
@@ -443,29 +444,23 @@ Route::get('/dashboard/school-head/reports', [SchoolHeadController::class, 'repo
 Route::get('/dashboard/feedingcor-dashboard', [FeedingCoordinatorController::class, 'dashboard'])
     ->name('dashboard.feedingcor-dashboard');
 
-Route::get('/dashboard/nutricor-dashboard', function () {
-    return view('nutricor.nutricor-dashboard');
-})->name('dashboard.nutricor-dashboard');
+Route::get('/dashboard/nutricor-dashboard', [NutritionCoordinatorController::class, 'dashboard'])
+    ->name('dashboard.nutricor-dashboard');
 
-Route::get('/dashboard/nutricor-beneficiaries', function () {
-    return view('nutricor.beneficiaries');
-})->name('dashboard.nutricor-beneficiaries');
+Route::get('/dashboard/nutricor-beneficiaries', [NutritionCoordinatorController::class, 'beneficiaries'])
+    ->name('dashboard.nutricor-beneficiaries');
 
-Route::get('/dashboard/nutricor-analytics', function () {
-    return view('nutricor.analytics');
-})->name('dashboard.nutricor-analytics');
+Route::get('/dashboard/nutricor-analytics', [NutritionCoordinatorController::class, 'analytics'])
+    ->name('dashboard.nutricor-analytics');
 
-Route::get('/dashboard/nutricor-atrisk', function () {
-    return view('nutricor.atrisk');
-})->name('dashboard.nutricor-atrisk');
+Route::get('/dashboard/nutricor-atrisk', [NutritionCoordinatorController::class, 'atRisk'])
+    ->name('dashboard.nutricor-atrisk');
 
-Route::get('/dashboard/nutricor-reports', function () {
-    return view('nutricor.reports');
-})->name('dashboard.nutricor-reports');
+Route::get('/dashboard/nutricor-reports', [NutritionCoordinatorController::class, 'reports'])
+    ->name('dashboard.nutricor-reports');
 
-Route::get('/dashboard/nutricor-comparison', function () {
-    return view('nutricor.comparison');
-})->name('dashboard.nutricor-comparison');
+Route::get('/dashboard/nutricor-comparison', [NutritionCoordinatorController::class, 'comparison'])
+    ->name('dashboard.nutricor-comparison');
 
 Route::get('/dashboard/nutricor-consolidated', [NutricorController::class, 'consolidatedReport'])
     ->name('dashboard.nutricor-consolidated');
