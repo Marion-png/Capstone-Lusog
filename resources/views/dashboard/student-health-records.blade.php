@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
     <title>Health Records - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
@@ -80,7 +82,7 @@
 
 <div class="main">
     <header class="topbar">
-        <div class="topbar-bc"><span>Dashboard</span><span>></span><span>Student Health Records</span></div>
+        <div class="topbar-bc"><span>Dashboard</span><span>&rsaquo;</span><span>Student Health Records</span></div>
         <div class="topbar-chip">Consultation records are now in Consultation Log</div>
     </header>
 

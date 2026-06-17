@@ -3,7 +3,8 @@
 	<head>
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>Feeding Head - Feeding Program</title>
+		<meta name="csrf-token" content="{{ csrf_token() }}">
+		<title>Feeding Program - SIGLA</title>
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
@@ -104,7 +105,7 @@
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>{{ $isReadOnly ? 'School Nurse' : 'Dashboard' }}</span><span>&gt;</span><span>Feeding Program</span></div>
+		<div class="topbar-bc"><span>{{ $isReadOnly ? 'School Nurse' : 'Dashboard' }}</span><span>&rsaquo;</span><span>Feeding Program</span></div>
 	</header>
 
 	<div class="content">

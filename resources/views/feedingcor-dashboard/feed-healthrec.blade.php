@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Feeding Head - Student Health Records</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Health Records - Feeding Coordinator - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
@@ -46,7 +47,7 @@
 
 <div class="main">
     <header class="topbar">
-        <div class="topbar-bc"><span>Dashboard</span><span>&gt;</span><span>Student Health Records</span></div>
+        <div class="topbar-bc"><span>Dashboard</span><span>&rsaquo;</span><span>Student Health Records</span></div>
         <div class="topbar-chip">Auto-computed BMI and status</div>
     </header>
 

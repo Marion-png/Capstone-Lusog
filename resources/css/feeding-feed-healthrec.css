@@ -24,25 +24,25 @@
 
         .main{margin-left:var(--sidebar-collapsed-w);height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:margin-left .24s ease}
         .sidebar:hover ~ .main{margin-left:var(--sidebar-w)}
-        .topbar{height:var(--topbar-h);border-bottom:1px solid var(--border);background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 22px}
+        .topbar{height:var(--topbar-h);border-bottom:1px solid var(--border);background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 28px}
         .topbar-bc{font-size:.76rem;color:var(--text-3);display:flex;gap:6px;align-items:center}
         .topbar-chip{font-size:.72rem;border:1px solid #bbf7d0;color:#15803d;background:#f0fdf4;border-radius:999px;padding:5px 11px}
 
-        .content{overflow:auto;padding:18px}
+        .content{overflow:auto;padding:24px 28px 40px}
         .page-eyebrow{font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#15803d;margin-bottom:6px}
         .page-title{font-family:'DM Serif Display',serif;font-size:1.75rem;line-height:1.15}
         .page-title span{font-style:italic;color:#15803d}
         .page-sub{margin-top:5px;font-size:.8rem;color:var(--text-3)}
 
-        .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}
-        .mini-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px;box-shadow:var(--shadow-card)}
+        .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
+        .mini-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow-card)}
         .mini-card .val{font-family:'DM Serif Display',serif;font-size:1.4rem}
         .mini-card .lbl{font-size:.72rem;color:var(--text-3)}
 
         .table-card{margin-top:14px;background:#fff;border:1px solid var(--border);border-radius:10px;overflow:auto;box-shadow:var(--shadow-card)}
         table{width:100%;border-collapse:collapse}
-        th,td{padding:10px;border-bottom:1px solid #edf2f1;font-size:.72rem;text-align:left}
-        th{color:#7a8f8a;background:#f9fbfa;font-weight:700}
+        th{padding:11px 14px;border-bottom:1px solid #edf2f1;font-size:.72rem;text-align:left;color:#7a8f8a;background:#f9fbfa;font-weight:700}
+        td{padding:13px 14px;border-bottom:1px solid #edf2f1;font-size:.72rem;text-align:left}
         tr:last-child td{border-bottom:none}
 
         .status{font-size:.62rem;font-weight:700;border-radius:999px;padding:3px 8px;display:inline-block}

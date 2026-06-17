@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
     <link rel="shortcut icon" href="{{ asset('images/lusog-logo.png') }}">
     <title>Deworming Request - SIGLA</title>
@@ -81,7 +82,7 @@
     <header class="top">
         <div class="topbar-breadcrumb crumb">
             <a href="{{ route('dashboard.class-adviser') }}" class="bc-home">Dashboard</a>
-            <span class="bc-sep">></span>
+            <span class="bc-sep">&rsaquo;</span>
             <span class="bc-current">Class Adviser &middot; Deworming</span>
         </div>
         <div class="topbar-chip chip"><div class="dot"></div>Class Adviser</div>

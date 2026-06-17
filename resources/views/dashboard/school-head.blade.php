@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
     <title>School Head Dashboard - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -172,7 +174,7 @@
 </aside>
 <div class="main">
     <header class="topbar">
-        <div class="topbar-bc"><span>Dashboard</span><span>&gt;</span><span>School Head</span></div>
+        <div class="topbar-bc"><span>Dashboard</span><span>&rsaquo;</span><span>School Head</span></div>
         <div class="topbar-chip"><div class="dot"></div>Strategic Oversight</div>
     </header>
 

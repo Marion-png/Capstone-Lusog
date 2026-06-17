@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
     <title>Clinic Staff Dashboard - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -25,8 +27,12 @@
         .logout-btn svg{width:16px;height:16px}
         .main{margin-left:var(--sidebar);height:100vh;display:flex;flex-direction:column}
         .top{height:64px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px}
-        .crumb{font-size:.82rem;color:var(--muted)}
-        .chip{font-size:.75rem;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;padding:6px 12px;border-radius:999px}
+        .crumb{display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--muted)}
+        .bc-home{color:var(--muted);text-decoration:none}.bc-home:hover{color:var(--g700)}
+        .bc-sep{color:var(--muted);font-size:.9rem}
+        .bc-current{color:var(--text);font-weight:500}
+        .chip{display:flex;align-items:center;gap:7px;font-size:.75rem;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;padding:6px 12px;border-radius:999px}
+        .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0}
         .content{padding:24px;overflow:auto}
         .title{font-family:'DM Serif Display',serif;font-size:1.7rem}
         .title i{color:#15803d}
@@ -60,12 +66,10 @@
 <aside class="sidebar">
     <div class="logo"><div class="avatar">LU</div><div><b>SIGLA</b><span>Clinic Management</span></div></div>
     <nav class="nav">
-        <a href="{{ route('dashboard.school-nurse') }}">School Nurse</a>
-        <a href="{{ route('dashboard.clinic-staff') }}" class="active">Clinic Staff</a>
+        <a href="{{ route('dashboard.clinic-staff') }}" class="active">Dashboard</a>
         <a href="{{ route('dashboard.student-health-records') }}">Health Records</a>
         <a href="{{ route('dashboard.consultation-log') }}">Consultation Log</a>
-        <a href="{{ route('dashboard.school-head') }}">School Head</a>
-        <a href="{{ route('dashboard.system-admin') }}">System Admin</a>
+        <a href="{{ route('dashboard.medicine-inventory') }}">Medicine Inventory</a>
     </nav>
     <div class="user">
         <div class="avatar">{{ substr(auth()->user()->name ?? 'CS',0,2) }}</div>
@@ -86,7 +90,7 @@
     <header class="top">
         <div class="topbar-breadcrumb crumb">
             <a href="{{ route('dashboard.clinic-staff') }}" class="bc-home">Dashboard</a>
-            <span class="bc-sep">></span>
+            <span class="bc-sep">&rsaquo;</span>
             <span class="bc-current">Clinic Staff</span>
         </div>
         <div class="topbar-chip chip"><div class="dot"></div>Operations Workspace</div>

@@ -258,7 +258,7 @@
 </aside>
 <div class="main">
     <header class="topbar">
-        <div class="topbar-bc"><span>Dashboard</span><span>&gt;</span><span>School Head</span></div>
+        <div class="topbar-bc"><span>Dashboard</span><span>&rsaquo;</span><span>School Head</span></div>
         <div class="topbar-chip"><div class="dot"></div>Strategic Oversight</div>
     </header>
 

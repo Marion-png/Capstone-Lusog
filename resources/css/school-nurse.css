@@ -204,9 +204,9 @@
             border: 1px solid var(--border);
             border-radius: var(--radius-sm);
             box-shadow: var(--shadow-card);
-            padding: 14px;
+            padding: 16px 18px;
         }
-        .panel-title { font-size: .8rem; font-weight: 700; color: var(--text-2); margin-bottom: 10px; }
+        .panel-title { font-size: .8rem; font-weight: 700; color: var(--text-2); margin-bottom: 12px; }
         .trend-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
         .trend-label { font-size: .73rem; color: var(--text-3); min-width: 124px; }
         .trend-track { flex: 1; height: 10px; border-radius: 999px; background: #edf5ef; overflow: hidden; }

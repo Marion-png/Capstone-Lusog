@@ -174,13 +174,13 @@
             overflow: hidden;
         }
         .chart-head {
-            padding: 12px 14px;
+            padding: 14px 18px;
             border-bottom: 1px solid var(--border);
             font-size: .78rem;
             font-weight: 700;
             color: var(--text-2);
         }
-        .chart-body { padding: 10px; }
+        .chart-body { padding: 14px 16px; }
         .bars {
             height: 170px;
             display: grid;
@@ -258,7 +258,7 @@
             justify-content: space-between;
             align-items: flex-start;
             gap: 12px;
-            padding: 12px 14px;
+            padding: 14px 18px;
             border-bottom: 1px solid var(--border);
         }
 
@@ -303,7 +303,7 @@
         .template-table th,
         .template-table td {
             border: 1px solid #d7e4de;
-            padding: 6px 7px;
+            padding: 8px 10px;
             font-size: .7rem;
             color: #1f362f;
             text-align: center;

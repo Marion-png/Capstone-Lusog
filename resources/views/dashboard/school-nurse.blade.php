@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
     <title>Dashboard - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
@@ -24,10 +25,13 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
             Dashboard
         </a>
+        @php
+            $pendingHealthCards = collect(session('school_health_card_records', []))->filter(fn($r) => empty($r['examination']))->count();
+        @endphp
         <a href="{{ route('dashboard.student-health-records') }}" class="sb-link">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Health Records
-            <span class="badge">3</span>
+            @if($pendingHealthCards > 0)<span class="badge">{{ $pendingHealthCards }}</span>@endif
         </a>
         <a href="{{ route('dashboard.consultation-log') }}" class="sb-link">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
@@ -80,7 +84,7 @@
     <header class="topbar">
         <div class="topbar-breadcrumb">
             <a href="{{ route('dashboard.school-nurse') }}" class="bc-home">Dashboard</a>
-            <span class="bc-sep">></span>
+            <span class="bc-sep">&rsaquo;</span>
             <span class="bc-current">Overview</span>
         </div>
         <div class="topbar-chip"><div class="dot"></div>DCNHS - SY 2025-2026</div>
