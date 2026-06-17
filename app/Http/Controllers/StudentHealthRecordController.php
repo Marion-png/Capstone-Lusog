@@ -35,6 +35,15 @@ class StudentHealthRecordController extends Controller
             })
             ->count();
 
+        $lrnsWithCertificates = [];
+        if (Schema::hasTable('student_health_conditions') && Schema::hasTable('medical_certificates')) {
+            $lrnsWithCertificates = array_flip(
+                StudentHealthRecord::whereHas('healthConditions.certificates')
+                    ->pluck('student_id')
+                    ->toArray()
+            );
+        }
+
         return view('adviser-dashboard.class-adviser', [
             'records' => $records,
             'stats' => [
@@ -42,6 +51,7 @@ class StudentHealthRecordController extends Controller
                 'avg_bmi' => number_format((float) $avgBmi, 1),
                 'flagged' => $flaggedCount,
             ],
+            'lrnsWithCertificates' => $lrnsWithCertificates,
         ]);
     }
 

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class StudentHealthRecord extends Model
 {
@@ -38,4 +39,9 @@ class StudentHealthRecord extends Model
         'endline_recorded_at' => 'date',
         'is_at_risk' => 'boolean',
     ];
+
+    public function healthConditions(): HasMany
+    {
+        return $this->hasMany(StudentHealthCondition::class);
+    }
 }

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdviserController;
 use App\Http\Controllers\ConditionController;
+use App\Http\Controllers\MedicalCertificateController;
 use App\Http\Controllers\NutricorController;
 use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\FeedingCoordinatorController;
@@ -163,6 +164,17 @@ Route::get('/dashboard/school-nurse', function () {
 })->name('dashboard.school-nurse');
 
 Route::get('/dashboard/student-health-records', function () {
+    $role = (string) session('active_role', '');
+    if (!in_array($role, ['school_nurse', 'clinic_staff'], true)) {
+        $redirectByRole = [
+            'class_adviser' => 'dashboard.class-adviser',
+            'school_head'   => 'dashboard.school-head',
+            'feeding_coor'  => 'dashboard.feedingcor-dashboard',
+            'nutricor'      => 'dashboard.nutricor-dashboard',
+            'system_admin'  => 'dashboard.system-admin',
+        ];
+        return redirect()->route($redirectByRole[$role] ?? 'login');
+    }
     return view('dashboard.student-health-records');
 })->name('dashboard.student-health-records');
 
@@ -468,6 +480,19 @@ Route::post('/dashboard/class-adviser/health-records/baseline', [StudentHealthRe
 
 Route::post('/dashboard/class-adviser/health-records/{record}/endline', [StudentHealthRecordController::class, 'storeEndline'])
     ->name('class-adviser.health-records.endline.store');
+
+// Medical certificate upload (class_adviser only, own class enforced in controller)
+Route::post('/adviser/medical-certificate', [MedicalCertificateController::class, 'store'])
+    ->name('medical-certificate.store');
+
+// Medical certificate download (clinic_staff only, enforced in controller)
+Route::get('/medical-certificate/{id}/download', [MedicalCertificateController::class, 'download'])
+    ->whereNumber('id')
+    ->name('medical-certificate.download');
+
+// API: fetch health conditions for a student by LRN (class_adviser or clinic_staff)
+Route::get('/api/student-conditions', [MedicalCertificateController::class, 'getConditions'])
+    ->name('api.student-conditions');
 
 Route::get('/dashboard/feedingcor-program', function (Request $request) {
     $activeRole = strtolower(trim((string) $request->session()->get('active_role', '')));

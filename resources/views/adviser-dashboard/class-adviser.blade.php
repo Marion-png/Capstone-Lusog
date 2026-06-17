@@ -126,7 +126,7 @@
 
             $studentsTotal = $prototypeRecords->count();
             $pendingReviewTotal = $prototypeRecords->filter(fn ($row) => empty($row['examination']))->count();
-            $completeRecordsTotal = $prototypeRecords->filter(fn ($row) => !empty($row['examination']))->count();
+            $completeRecordsTotal = $prototypeRecords->filter(fn ($row) => !empty($row['examination']) && isset($lrnsWithCertificates[$row['lrn'] ?? '']))->count();
             $wastedStudentsTotal = $prototypeRecords->filter(function ($row) {
                 $status = strtolower((string) ($row['nutritional_status_bmi_for_age'] ?? ''));
                 return str_contains($status, 'wasted');
@@ -288,7 +288,8 @@
                                 $recentMiddle = trim((string) ($recentRecord['middle_name'] ?? ''));
                                 $recentMiddleInitial = $recentMiddle !== '' ? (' ' . strtoupper(substr($recentMiddle, 0, 1)) . '.') : '';
                                 $recentFullName = trim(($recentRecord['last_name'] ?? '') . ', ' . ($recentRecord['first_name'] ?? '') . $recentMiddleInitial);
-                                $recentStatus = !empty($recentRecord['examination']) ? 'Complete' : 'Pending';
+                                $recentLrn = $recentRecord['lrn'] ?? '';
+                                $recentStatus = (!empty($recentRecord['examination']) && isset($lrnsWithCertificates[$recentLrn])) ? 'Complete' : 'Pending';
                             @endphp
                             <tr>
                                 <td>{{ $recentFullName }}</td>
@@ -343,6 +344,7 @@
                     <select id="studentsStatusFilter">
                         <option value="all">All Status</option>
                         <option value="pending">Pending Nurse Review</option>
+                        <option value="cert">Pending Certificate</option>
                         <option value="complete">Complete Record</option>
                     </select>
                     <button type="button" class="btn btn-secondary" id="studentsClearBtn">Clear</button>
@@ -368,7 +370,10 @@
                                     $middleInitial = $middle !== '' ? (' ' . strtoupper(substr($middle, 0, 1)) . '.') : '';
                                     $fullName = trim(($prototypeRecord['last_name'] ?? '') . ', ' . ($prototypeRecord['first_name'] ?? '') . $middleInitial);
                                     $isExamined = !empty($prototypeRecord['examination']);
-                                    $statusKey = $isExamined ? 'complete' : 'pending';
+                                    $rowLrn = $prototypeRecord['lrn'] ?? '';
+                                    $hasCert = isset($lrnsWithCertificates[$rowLrn]);
+                                    $isComplete = $isExamined && $hasCert;
+                                    $statusKey = $isComplete ? 'complete' : ($isExamined ? 'cert' : 'pending');
                                     $genderValue = $prototypeRecord['gender'] ?? '-';
                                 @endphp
                                 <tr class="js-student-row" data-name="{{ strtolower($fullName) }}" data-lrn="{{ strtolower((string) ($prototypeRecord['lrn'] ?? '')) }}" data-status="{{ $statusKey }}">
@@ -378,8 +383,10 @@
                                     <td>{{ $prototypeRecord['bmi_value'] ?? '-' }}</td>
                                     <td>{{ $prototypeRecord['nutritional_status_bmi_for_age'] ?? '-' }}</td>
                                     <td>
-                                        @if ($isExamined)
+                                        @if ($isComplete)
                                             <span class="my-status-badge status-complete">Complete Record</span>
+                                        @elseif ($isExamined)
+                                            <span class="my-status-badge status-cert">Pending Certificate</span>
                                         @else
                                             <span class="my-status-badge status-pending">Pending Nurse Review</span>
                                         @endif
@@ -580,6 +587,56 @@
                     <div><span>4Ps Beneficiary:</span><b id="vp4ps">-</b></div>
                     <div><span>Menarche:</span><b id="vpMenarche">-</b></div>
                     <div class="full"><span>Others:</span><b id="vpOthers">-</b></div>
+                </div>
+            </section>
+
+            <section class="student-profile-section" id="vpConditionsSection">
+                <h4>Health Conditions &amp; Medical Certificates</h4>
+                <div id="vpConditionsList" style="margin-bottom:14px;min-height:24px;">
+                    <div style="font-size:.78rem;color:#7a9e87;">Loading conditions&hellip;</div>
+                </div>
+
+                @if(session('cert_success'))
+                    <div style="background:#dcfce7;border:1px solid #86efac;color:#166534;border-radius:10px;padding:8px 12px;font-size:.78rem;font-weight:600;margin-bottom:10px;">
+                        {{ session('cert_success') }}
+                    </div>
+                @endif
+
+                <div style="border-top:1px solid #e4ece7;padding-top:12px;margin-top:4px;">
+                    <div style="font-size:.76rem;font-weight:700;color:#1d3c31;margin-bottom:10px;">Upload Medical Certificate</div>
+                    <form id="certUploadForm" method="POST" action="{{ route('medical-certificate.store') }}" enctype="multipart/form-data">
+                        @csrf
+                        <input type="hidden" id="certLrn" name="lrn">
+                        <input type="hidden" id="certStudentName" name="student_name">
+                        <input type="hidden" id="certWeightKg" name="weight">
+                        <input type="hidden" id="certBmiValue" name="bmi_value">
+                        <input type="hidden" id="certNutriStatus" name="nutritional_status">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+                            <div class="field">
+                                <label for="certConditionName">Condition / Diagnosis *</label>
+                                <input type="text" id="certConditionName" name="condition_name" placeholder="e.g. Asthma, Diabetes" required>
+                            </div>
+                            <div class="field">
+                                <label for="certDoctorClinic">Doctor / Clinic</label>
+                                <input type="text" id="certDoctorClinic" name="doctor_clinic" placeholder="Optional">
+                            </div>
+                            <div class="field">
+                                <label for="certDiagDate">Date of Diagnosis</label>
+                                <input type="date" id="certDiagDate" name="diagnosis_date" max="{{ date('Y-m-d') }}">
+                            </div>
+                            <div class="field">
+                                <label for="certFile">Certificate File (PDF/JPG/PNG, max 5 MB) *</label>
+                                <input type="file" id="certFile" name="certificate" accept=".pdf,.jpg,.jpeg,.png" required>
+                            </div>
+                        </div>
+                        @error('certificate')
+                            <div style="font-size:.74rem;color:#b91c1c;margin-bottom:8px;">{{ $message }}</div>
+                        @enderror
+                        @error('condition_name')
+                            <div style="font-size:.74rem;color:#b91c1c;margin-bottom:8px;">{{ $message }}</div>
+                        @enderror
+                        <button type="submit" class="btn" style="background:#15803d;color:#fff;font-size:.78rem;">Upload Certificate</button>
+                    </form>
                 </div>
             </section>
 
@@ -1157,8 +1214,8 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
 
         if (statusBadge) {
             if (examined) {
-                statusBadge.textContent = 'Complete Record';
-                statusBadge.className = 'my-status-badge status-complete';
+                statusBadge.textContent = 'Pending Certificate';
+                statusBadge.className = 'my-status-badge status-cert';
             } else {
                 statusBadge.textContent = 'Pending Nurse Review';
                 statusBadge.className = 'my-status-badge status-pending';
@@ -1173,8 +1230,79 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
             nurseSection.style.display = examined ? 'block' : 'none';
         }
 
+        const lrnInput = document.getElementById('certLrn');
+        if (lrnInput) lrnInput.value = record.lrn || '';
+
+        const certNameInput = document.getElementById('certStudentName');
+        if (certNameInput) certNameInput.value = fullName || 'Unknown Student';
+
+        const certWeightInput = document.getElementById('certWeightKg');
+        if (certWeightInput) certWeightInput.value = weightKg || '';
+
+        const certBmiInput = document.getElementById('certBmiValue');
+        if (certBmiInput) certBmiInput.value = bmi ? bmi.toFixed(2) : '';
+
+        const certNutriInput = document.getElementById('certNutriStatus');
+        if (certNutriInput) certNutriInput.value = record.nutritional_status_bmi_for_age || '';
+
+        loadConditions(record.lrn || '', examined);
+
         backdrop.classList.add('open');
         backdrop.setAttribute('aria-hidden', 'false');
+    };
+
+    const loadConditions = async (lrn, isExamined = false) => {
+        const listEl = document.getElementById('vpConditionsList');
+        if (!listEl || !lrn) {
+            if (listEl) listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">No LRN available.</div>';
+            return;
+        }
+
+        listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">Loading conditions&hellip;</div>';
+
+        try {
+            const resp = await fetch('/api/student-conditions?lrn=' + encodeURIComponent(lrn), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+
+            if (!resp.ok) {
+                listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">No conditions on file yet.</div>';
+                return;
+            }
+
+            const data = await resp.json();
+            const conditions = data.conditions || [];
+
+            // Upgrade badge to "Complete Record" only when nurse has examined AND a cert is on file
+            if (isExamined) {
+                const hasAnyCert = conditions.some(c => c.certificate_count > 0);
+                const statusBadge = document.getElementById('vpStatusBadge');
+                if (statusBadge && hasAnyCert) {
+                    statusBadge.textContent = 'Complete Record';
+                    statusBadge.className = 'my-status-badge status-complete';
+                }
+            }
+
+            if (!conditions.length) {
+                listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">No health conditions recorded yet. Use the form below to add one.</div>';
+                return;
+            }
+
+            listEl.innerHTML = conditions.map(c => {
+                const badge = c.is_verified
+                    ? '<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#dcfce7;color:#15803d;">Verified</span>'
+                    : '<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#fef3c7;color:#92400e;">Self-reported</span>';
+                const certNote = c.certificate_count > 0
+                    ? `<span style="font-size:.72rem;color:#7a9e87;margin-left:6px;">${c.certificate_count} cert(s) on file</span>`
+                    : '';
+                return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #edf5ef;">
+                    <span style="font-size:.84rem;font-weight:600;color:#1d3c31;flex:1;">${c.condition_name}</span>
+                    ${badge}${certNote}
+                </div>`;
+            }).join('');
+        } catch (_err) {
+            listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">Could not load conditions.</div>';
+        }
     };
 
     openButtons.forEach((btn) => {

@@ -140,6 +140,9 @@
             <button type="button" class="profile-tab" data-panel="p-growth">Growth &amp; Nutrition</button>
             <button type="button" class="profile-tab" data-panel="p-alerts">Medical Alerts</button>
             <button type="button" class="profile-tab" data-panel="p-timeline">Health Timeline</button>
+            @if(session('active_role') === 'clinic_staff')
+            <button type="button" class="profile-tab" data-panel="p-conditions">Health Conditions</button>
+            @endif
         </div>
         <div class="profile-body">
             <section id="p-demographics" class="profile-panel active">
@@ -214,9 +217,25 @@
                 <div class="profile-block">
                     <h4>Health Timeline</h4>
                     <div class="kv"><div class="k">Submission:</div><div class="v">Class Adviser submitted this form.</div></div>
-                    <div class="kv"><div class="k">Next Step:</div><div class="v" id="ptNext">Nurse examination pending.</div></div>
+                    <div class="kv"><div class="k">Examination:</div><div class="v" id="ptNext">Nurse examination pending.</div></div>
+                    <div id="ptConditionsWrap" style="margin-top:14px;border-top:1px solid #e4ece7;padding-top:12px;">
+                        <div style="font-size:.74rem;font-weight:700;color:#1d3c31;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;">Medical Conditions &amp; Certificates</div>
+                        <div id="ptConditionsList">
+                            <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>
+                        </div>
+                    </div>
                 </div>
             </section>
+            @if(session('active_role') === 'clinic_staff')
+            <section id="p-conditions" class="profile-panel">
+                <div class="profile-block">
+                    <h4>Health Conditions</h4>
+                    <div id="shcConditionsList">
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>
+                    </div>
+                </div>
+            </section>
+            @endif
         </div>
         <div class="profile-actions">
             <button type="button" class="btn btn-secondary" id="profileClose">Close</button>
@@ -349,8 +368,139 @@
         setText('ptNext', examined ? 'Record completed by nurse.' : 'Nurse examination pending.');
 
         fillLink.setAttribute('href', route || '#');
+
+        @if(session('active_role') === 'clinic_staff')
+        loadConditionsForClinicStaff(record.lrn || '');
+        @endif
+
+        loadConditionsForTimeline(record.lrn || '');
+
         backdrop.classList.add('open');
         backdrop.setAttribute('aria-hidden', 'false');
+    };
+
+    @if(session('active_role') === 'clinic_staff')
+    const loadConditionsForClinicStaff = async (lrn) => {
+        const listEl = document.getElementById('shcConditionsList');
+        if (!listEl) return;
+
+        if (!lrn) {
+            listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">No LRN available for this record.</div>';
+            return;
+        }
+
+        listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">Loading&hellip;</div>';
+
+        try {
+            const resp = await fetch('/api/student-conditions?lrn=' + encodeURIComponent(lrn), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+
+            if (!resp.ok) {
+                listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">No conditions recorded.</div>';
+                return;
+            }
+
+            const data = await resp.json();
+            const conditions = data.conditions || [];
+
+            if (!conditions.length) {
+                listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">No health conditions on file for this student.</div>';
+                return;
+            }
+
+            listEl.innerHTML = conditions.map(c => {
+                const badge = c.is_verified
+                    ? '<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#dcfce7;color:#15803d;margin-left:6px;">Verified / Diagnosed</span>'
+                    : '<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#fef3c7;color:#92400e;margin-left:6px;">Self-reported</span>';
+
+                const certRows = (c.certificates || []).map(cert => {
+                    const dl = cert.download_url
+                        ? `<a href="${cert.download_url}" target="_blank" style="font-size:.72rem;font-weight:700;color:#15803d;text-decoration:none;border:1px solid #86efac;background:#f0fdf4;border-radius:6px;padding:3px 8px;margin-left:8px;">View</a>`
+                        : '';
+                    const doctor = cert.doctor_clinic ? ` &mdash; ${cert.doctor_clinic}` : '';
+                    const date = cert.diagnosis_date ? ` (${cert.diagnosis_date})` : '';
+                    return `<div style="display:flex;align-items:center;gap:4px;padding:4px 0 4px 12px;font-size:.76rem;color:#3d5c47;">
+                        <span style="color:#7a9e87;">&#8226;</span>
+                        <span>${cert.original_name}${doctor}${date}</span>
+                        <span style="font-size:.7rem;color:#7a9e87;">&mdash; uploaded by ${cert.uploaded_by} on ${cert.uploaded_at}</span>
+                        ${dl}
+                    </div>`;
+                }).join('');
+
+                return `<div style="border-bottom:1px solid #edf5ef;padding:8px 0;">
+                    <div style="display:flex;align-items:center;gap:4px;">
+                        <span style="font-size:.88rem;font-weight:700;color:#1d3c31;">${c.condition_name}</span>
+                        ${badge}
+                    </div>
+                    ${certRows || '<div style="font-size:.72rem;color:#7a9e87;padding:4px 0 0 12px;">No certificates on file.</div>'}
+                </div>`;
+            }).join('');
+        } catch (_err) {
+            listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">Could not load conditions.</div>';
+        }
+    };
+    @endif
+
+    const loadConditionsForTimeline = async (lrn) => {
+        const listEl = document.getElementById('ptConditionsList');
+        if (!listEl) return;
+
+        if (!lrn) {
+            listEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No LRN available.</div></div>';
+            return;
+        }
+
+        listEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>';
+
+        try {
+            const resp = await fetch('/api/student-conditions?lrn=' + encodeURIComponent(lrn), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+
+            if (!resp.ok) {
+                listEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No conditions on file.</div></div>';
+                return;
+            }
+
+            const data = await resp.json();
+            const conditions = data.conditions || [];
+
+            if (!conditions.length) {
+                listEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No medical conditions recorded for this student.</div></div>';
+                return;
+            }
+
+            listEl.innerHTML = conditions.map(c => {
+                const badge = c.is_verified
+                    ? '<span style="font-size:.67rem;font-weight:700;padding:2px 7px;border-radius:999px;background:#dcfce7;color:#15803d;margin-left:6px;">Verified / Diagnosed</span>'
+                    : '<span style="font-size:.67rem;font-weight:700;padding:2px 7px;border-radius:999px;background:#fef3c7;color:#92400e;margin-left:6px;">Self-reported</span>';
+                const certDetails = (c.certificates || []).map(cert => {
+                    const doctor = cert.doctor_clinic ? ` — ${cert.doctor_clinic}` : '';
+                    const date = cert.diagnosis_date ? ` (${cert.diagnosis_date})` : '';
+                    const dl = cert.download_url
+                        ? `<a href="${cert.download_url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;font-size:.72rem;font-weight:700;color:#15803d;text-decoration:none;border:1px solid #86efac;background:#f0fdf4;border-radius:6px;padding:3px 9px;margin-left:6px;white-space:nowrap;">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            View
+                           </a>`
+                        : '';
+                    return `<div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:4px 0 4px 12px;font-size:.76rem;color:#3d5c47;">
+                        <span style="color:#7a9e87;">•</span>
+                        <span>${cert.original_name}${doctor}${date}</span>
+                        <span style="color:#7a9e87;">— uploaded by ${cert.uploaded_by} on ${cert.uploaded_at}</span>
+                        ${dl}
+                    </div>`;
+                }).join('');
+                return `<div style="border-bottom:1px solid #edf5ef;padding:7px 0;">
+                    <div style="display:flex;align-items:center;gap:4px;">
+                        <span style="font-size:.88rem;font-weight:700;color:#1d3c31;">${c.condition_name}</span>${badge}
+                    </div>
+                    ${certDetails || '<div style="font-size:.72rem;color:#7a9e87;padding:3px 0 0 12px;">No certificates on file.</div>'}
+                </div>`;
+            }).join('');
+        } catch (_err) {
+            listEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load conditions.</div></div>';
+        }
     };
 
     const closeProfile = () => {
