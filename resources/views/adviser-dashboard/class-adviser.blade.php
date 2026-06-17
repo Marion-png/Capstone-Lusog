@@ -404,7 +404,7 @@
             </article>
         </section>
 
-        <section id="prototype-form-panel" class="card section section-panel active" style="margin-top:12px;">
+        <section id="prototype-form-panel" class="card section section-panel" style="margin-top:12px;">
             <div class="add-head">
                 <div class="add-head-left">
                     <a href="{{ route('dashboard.class-adviser') }}" class="add-back" aria-label="Back to class adviser dashboard">
@@ -603,8 +603,9 @@
                 @endif
 
                 <div style="border-top:1px solid #e4ece7;padding-top:12px;margin-top:4px;">
-                    <div style="font-size:.76rem;font-weight:700;color:#1d3c31;margin-bottom:10px;">Upload Medical Certificate</div>
-                    <form id="certUploadForm" method="POST" action="{{ route('medical-certificate.store') }}" enctype="multipart/form-data">
+                    <div class="upload-subsection-title">Upload Medical Certificate</div>
+                    <div id="certFileError" class="upload-error-msg" style="display:none;"></div>
+                    <form id="certUploadForm" method="POST" action="{{ route('medical-certificate.store') }}" enctype="multipart/form-data" novalidate>
                         @csrf
                         <input type="hidden" id="certLrn" name="lrn">
                         <input type="hidden" id="certStudentName" name="student_name">
@@ -614,7 +615,7 @@
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
                             <div class="field">
                                 <label for="certConditionName">Condition / Diagnosis *</label>
-                                <input type="text" id="certConditionName" name="condition_name" placeholder="e.g. Asthma, Diabetes" required>
+                                <input type="text" id="certConditionName" name="condition_name" placeholder="e.g. Asthma, Diabetes">
                             </div>
                             <div class="field">
                                 <label for="certDoctorClinic">Doctor / Clinic</label>
@@ -626,7 +627,7 @@
                             </div>
                             <div class="field">
                                 <label for="certFile">Certificate File (PDF/JPG/PNG, max 5 MB) *</label>
-                                <input type="file" id="certFile" name="certificate" accept=".pdf,.jpg,.jpeg,.png" required>
+                                <input type="file" id="certFile" name="certificate" accept=".pdf,.jpg,.jpeg,.png">
                             </div>
                         </div>
                         @error('certificate')
@@ -635,7 +636,36 @@
                         @error('condition_name')
                             <div style="font-size:.74rem;color:#b91c1c;margin-bottom:8px;">{{ $message }}</div>
                         @enderror
-                        <button type="submit" class="btn" style="background:#15803d;color:#fff;font-size:.78rem;">Upload Certificate</button>
+                        <button type="submit" class="btn">Upload Certificate</button>
+                    </form>
+                </div>
+            </section>
+
+            <section class="student-profile-section" id="vpConsentSection">
+                <h4>Parental Consent &mdash; Deworming Program</h4>
+
+                @if(session('consent_success'))
+                    <div style="background:#dcfce7;border:1px solid #86efac;color:#166534;border-radius:10px;padding:8px 12px;font-size:.78rem;font-weight:600;margin-bottom:10px;">
+                        {{ session('consent_success') }}
+                    </div>
+                @endif
+
+                <div id="vpConsentStatus" style="margin-bottom:12px;font-size:.78rem;color:#7a9e87;">Select a student to view consent status.</div>
+
+                <div style="border-top:1px solid #e4ece7;padding-top:12px;margin-top:4px;">
+                    <div class="upload-subsection-title">Upload Signed Consent Form</div>
+                    <div id="consentFileError" class="upload-error-msg" style="display:none;"></div>
+                    <form id="consentUploadForm" method="POST" action="{{ route('parental-consent.store') }}" enctype="multipart/form-data" novalidate>
+                        @csrf
+                        <input type="hidden" id="consentLrn" name="lrn">
+                        <div class="field" style="margin-bottom:10px;">
+                            <label for="consentFile">Consent Form File (PDF/JPG/PNG, max 5 MB) *</label>
+                            <input type="file" id="consentFile" name="consent" accept=".pdf,.jpg,.jpeg,.png">
+                        </div>
+                        @error('consent')
+                            <div style="font-size:.74rem;color:#b91c1c;margin-bottom:8px;">{{ $message }}</div>
+                        @enderror
+                        <button type="submit" class="btn">Upload Consent Form</button>
                     </form>
                 </div>
             </section>
@@ -1025,6 +1055,7 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
         byId('bmiDisplay').textContent = '-';
         byId('nutriStatusDisplay').textContent = '-';
         byId('hfaDisplay').textContent = '-';
+        document.querySelector('.js-proto-nav[data-target="prototype-dashboard-panel"]')?.click();
     });
 
     closeBtn.addEventListener('click', closeModal);
@@ -1233,6 +1264,11 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
         const lrnInput = document.getElementById('certLrn');
         if (lrnInput) lrnInput.value = record.lrn || '';
 
+        const consentLrnInput = document.getElementById('consentLrn');
+        if (consentLrnInput) consentLrnInput.value = record.lrn || '';
+
+        loadConsentStatus(record.lrn || '');
+
         const certNameInput = document.getElementById('certStudentName');
         if (certNameInput) certNameInput.value = fullName || 'Unknown Student';
 
@@ -1305,6 +1341,35 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
         }
     };
 
+    const loadConsentStatus = async (lrn) => {
+        const statusEl = document.getElementById('vpConsentStatus');
+        if (!statusEl) return;
+        if (!lrn) {
+            statusEl.textContent = 'No LRN available.';
+            statusEl.style.color = '#7a9e87';
+            return;
+        }
+        statusEl.textContent = 'Checking consent status…';
+        statusEl.style.color = '#7a9e87';
+        try {
+            const resp = await fetch('/api/student-consent-status?lrn=' + encodeURIComponent(lrn), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!resp.ok) {
+                statusEl.textContent = 'Could not check consent status.';
+                return;
+            }
+            const data = await resp.json();
+            if (data.has_consent) {
+                statusEl.innerHTML = '<span style="color:#15803d;font-weight:700;">&#10003; Consent on file</span> for SY ' + (data.school_year || '') + ' (uploaded by ' + (data.uploaded_by || '—') + ' on ' + (data.uploaded_at || '—') + ')';
+            } else {
+                statusEl.innerHTML = '<span style="color:#b91c1c;font-weight:700;">&#10007; No consent on file</span> for SY ' + (data.school_year || '') + '. Upload a signed form below before deworming can be recorded.';
+            }
+        } catch (_err) {
+            statusEl.textContent = 'Could not check consent status.';
+        }
+    };
+
     openButtons.forEach((btn) => {
         btn.addEventListener('click', () => {
             let record = {};
@@ -1327,6 +1392,67 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
         if (event.target === backdrop) {
             closeProfile();
         }
+    });
+})();
+
+(() => {
+    const certForm = document.getElementById('certUploadForm');
+    const certFile = document.getElementById('certFile');
+    const certConditionName = document.getElementById('certConditionName');
+    const certFileError = document.getElementById('certFileError');
+
+    const showCertError = (msg) => {
+        if (!certFileError) return;
+        certFileError.textContent = msg;
+        certFileError.style.display = 'block';
+        certFileError.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+
+    const hideCertError = () => {
+        if (certFileError) certFileError.style.display = 'none';
+    };
+
+    certFile?.addEventListener('change', hideCertError);
+    certConditionName?.addEventListener('input', hideCertError);
+
+    certForm?.addEventListener('submit', (e) => {
+        if (!certConditionName || !certConditionName.value.trim()) {
+            e.preventDefault();
+            showCertError('Please enter a Condition / Diagnosis name before uploading.');
+            return;
+        }
+        if (!certFile || !certFile.files || certFile.files.length === 0) {
+            e.preventDefault();
+            showCertError('Please select a certificate file (PDF/JPG/PNG) before uploading.');
+            return;
+        }
+        hideCertError();
+    });
+
+    const consentForm = document.getElementById('consentUploadForm');
+    const consentFile = document.getElementById('consentFile');
+    const consentFileError = document.getElementById('consentFileError');
+
+    const showConsentError = (msg) => {
+        if (!consentFileError) return;
+        consentFileError.textContent = msg;
+        consentFileError.style.display = 'block';
+        consentFileError.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+
+    const hideConsentError = () => {
+        if (consentFileError) consentFileError.style.display = 'none';
+    };
+
+    consentFile?.addEventListener('change', hideConsentError);
+
+    consentForm?.addEventListener('submit', (e) => {
+        if (!consentFile || !consentFile.files || consentFile.files.length === 0) {
+            e.preventDefault();
+            showConsentError('Please select a consent form file (PDF/JPG/PNG) before uploading.');
+            return;
+        }
+        hideConsentError();
     });
 })();
 </script>

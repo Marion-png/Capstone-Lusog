@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\ParentalConsentForm;
 
 class StudentHealthRecord extends Model
 {
@@ -43,5 +44,10 @@ class StudentHealthRecord extends Model
     public function healthConditions(): HasMany
     {
         return $this->hasMany(StudentHealthCondition::class);
+    }
+
+    public function consentForms(): HasMany
+    {
+        return $this->hasMany(ParentalConsentForm::class);
     }
 }

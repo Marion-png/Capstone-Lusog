@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ParentalConsentForm;
+use App\Models\StudentHealthRecord;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -11,10 +13,56 @@ class NurseController extends Controller
 {
     public function index(Request $request): View
     {
-        $records = $request->session()->get('school_health_card_records', []);
+        $rawRecords = $request->session()->get('school_health_card_records', []);
+
+        // Deduplicate by LRN — prefer the entry that already has exam data, otherwise keep first.
+        $seen    = [];
+        $records = [];
+        foreach ($rawRecords as $r) {
+            $lrn = (string) ($r['lrn'] ?? '');
+            if ($lrn === '') {
+                $records[] = $r;
+                continue;
+            }
+            if (!isset($seen[$lrn])) {
+                $seen[$lrn]  = count($records);
+                $records[]   = $r;
+            } elseif (!empty($r['examination']) && empty($records[$seen[$lrn]]['examination'])) {
+                $records[$seen[$lrn]] = $r; // replace with the examined copy
+            }
+        }
+        $records = array_values($records);
+
+        $consentByLrn = [];
+
+        if (!empty($records)) {
+            $schoolYear = ParentalConsentForm::currentSchoolYear();
+            $lrns       = array_values(array_filter(array_column($records, 'lrn'), fn($v) => $v !== null && $v !== ''));
+
+            if (!empty($lrns)) {
+                $studentRecords = StudentHealthRecord::whereIn('student_id', $lrns)->get()->keyBy('student_id');
+                $studentIds     = $studentRecords->pluck('id')->toArray();
+
+                if (!empty($studentIds)) {
+                    $consents = ParentalConsentForm::whereIn('student_health_record_id', $studentIds)
+                        ->where('program_type', 'Deworming')
+                        ->where('school_year', $schoolYear)
+                        ->get()
+                        ->keyBy('student_health_record_id');
+
+                    foreach ($lrns as $lrn) {
+                        $sr                  = $studentRecords->get($lrn);
+                        $consentByLrn[$lrn]  = ($sr !== null && $consents->has($sr->id))
+                            ? $consents->get($sr->id)
+                            : null;
+                    }
+                }
+            }
+        }
 
         return view('nurse.index', [
-            'records' => $records,
+            'records'      => $records,
+            'consentByLrn' => $consentByLrn,
         ]);
     }
 
@@ -26,9 +74,26 @@ class NurseController extends Controller
             abort(404);
         }
 
+        $lrn         = (string) ($records[$index]['lrn'] ?? '');
+        $schoolYear  = ParentalConsentForm::currentSchoolYear();
+        $consentForm = null;
+
+        if ($lrn !== '') {
+            $studentRecord = StudentHealthRecord::where('student_id', $lrn)->first();
+            if ($studentRecord !== null) {
+                $consentForm = ParentalConsentForm::where('student_health_record_id', $studentRecord->id)
+                    ->where('program_type', 'Deworming')
+                    ->where('school_year', $schoolYear)
+                    ->latest()
+                    ->first();
+            }
+        }
+
         return view('nurse.examine', [
-            'index' => $index,
-            'record' => $records[$index],
+            'index'             => $index,
+            'record'            => $records[$index],
+            'consentForm'       => $consentForm,
+            'consentSchoolYear' => $schoolYear,
         ]);
     }
 
@@ -38,6 +103,24 @@ class NurseController extends Controller
 
         if (!isset($records[$index])) {
             abort(404);
+        }
+
+        // Gate: block if deworming is being marked "given" but no consent is on file
+        if ($request->input('deworming') === 'V') {
+            $lrn           = (string) ($records[$index]['lrn'] ?? '');
+            $studentRecord = StudentHealthRecord::where('student_id', $lrn)->first();
+            $schoolYear    = ParentalConsentForm::currentSchoolYear();
+            $hasConsent    = $studentRecord !== null
+                && ParentalConsentForm::where('student_health_record_id', $studentRecord->id)
+                    ->where('program_type', 'Deworming')
+                    ->where('school_year', $schoolYear)
+                    ->exists();
+
+            if (!$hasConsent) {
+                return back()
+                    ->withInput()
+                    ->withErrors(['deworming' => "Cannot proceed — no signed parental consent on file for this student for SY {$schoolYear}."]);
+            }
         }
 
         $existingHeight = $records[$index]['height_cm'] ?? null;

@@ -14,76 +14,95 @@
     @endif
 </head>
 <body>
+@php
+    $rawRecords = session('school_health_card_records', []);
+    $seenLrns = [];
+    $records = [];
+    foreach ($rawRecords as $r) {
+        $lrn = (string) ($r['lrn'] ?? '');
+        if ($lrn === '') { $records[] = $r; continue; }
+        if (!isset($seenLrns[$lrn])) { $seenLrns[$lrn] = count($records); $records[] = $r; }
+        elseif (!empty($r['examination']) && empty($records[$seenLrns[$lrn]]['examination'])) { $records[$seenLrns[$lrn]] = $r; }
+    }
+    $records = array_values($records);
+    $pendingCount = collect($records)->filter(fn($row) => empty($row['examination']))->count();
+    $doneCount = collect($records)->filter(fn($row) => !empty($row['examination']))->count();
+@endphp
 <aside class="sidebar">
+    <div class="sb-grid"></div>
     <div class="sb-logo"><img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA Logo"></div>
     <nav class="sb-nav">
         <div class="sb-section-label">Main</div>
         <a href="{{ route('dashboard.school-nurse') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
             Dashboard
         </a>
+        <a href="{{ route('nurse.index') }}" class="sb-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+            Review Queue
+        </a>
         <a href="{{ route('dashboard.student-health-records') }}" class="sb-link active">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Health Records
-            <span class="badge" style="margin-left:auto;background:var(--red);color:#fff;font-size:.62rem;font-weight:700;padding:2px 6px;border-radius:999px;">3</span>
+            @if($pendingCount > 0)
+            <span class="badge">{{ $pendingCount }}</span>
+            @endif
         </a>
         <a href="{{ route('dashboard.consultation-log') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
             Consultation Log
         </a>
         <div class="sb-section-label">Health Programs</div>
         <a href="{{ route('dashboard.school-nurse.feeding-program') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
             Feeding Program
         </a>
         <a href="{{ route('dashboard.school-nurse.deworming') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 3-7-3"/><path d="M3 9v6l7 3 7-3V9"/><polyline points="3 9 12 6 21 9"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 9l-7 3-7-3"/><path d="M3 9v6l7 3 7-3V9"/><polyline points="3 9 12 6 21 9"/></svg>
             Deworming Program
         </a>
         <div class="sb-section-label">Inventory</div>
         <a href="{{ route('dashboard.medicine-inventory') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="2" width="18" height="20" rx="2"/><path d="M9 2v4h6V2"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="2" width="18" height="20" rx="2"/><path d="M9 2v4h6V2"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
             Medicine Inventory
         </a>
         <a href="#" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             Dispensing Log
         </a>
         <div class="sb-section-label">Reports</div>
         <a href="{{ route('dashboard.data-visualization') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             Data Visualization
         </a>
         <a href="#" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Generate Reports
         </a>
     </nav>
     <div class="sb-user">
-        <div class="sb-avatar">{{ substr(session('active_name', 'School Nurse'), 0, 2) }}</div>
+        <div class="sb-avatar">{{ strtoupper(substr(session('active_name', 'SN'), 0, 2)) }}</div>
         <div class="sb-user-meta">
             <div class="sb-user-name">{{ session('active_name', 'School Nurse') }}</div>
-            <div class="sb-user-role">School Nurse - DCNHS</div>
+            <div class="sb-user-role">School Nurse</div>
         </div>
         <form method="POST" action="{{ route('logout') }}">
             @csrf
-            <button type="submit" class="sb-logout" title="Sign out">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <button type="submit" class="sb-logout" title="Sign out" aria-label="Sign out">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             </button>
         </form>
     </div>
 </aside>
 
-@php
-    $records = session('school_health_card_records', []);
-    $pendingCount = collect($records)->filter(fn($row) => empty($row['examination']))->count();
-    $doneCount = collect($records)->filter(fn($row) => !empty($row['examination']))->count();
-@endphp
-
 <div class="main">
     <header class="topbar">
-        <div class="topbar-bc"><span>Dashboard</span><span>&rsaquo;</span><span>Student Health Records</span></div>
-        <div class="topbar-chip">Consultation records are now in Consultation Log</div>
+        <div class="topbar-breadcrumb">
+            <a href="{{ route('dashboard.school-nurse') }}" class="bc-home">Dashboard</a>
+            <span class="bc-sep">&rsaquo;</span>
+            <span class="bc-current">Health Records</span>
+        </div>
+        <div class="topbar-chip"><div class="dot"></div>School Nurse</div>
     </header>
 
     <div class="content">
@@ -140,6 +159,7 @@
             <button type="button" class="profile-tab" data-panel="p-growth">Growth &amp; Nutrition</button>
             <button type="button" class="profile-tab" data-panel="p-alerts">Medical Alerts</button>
             <button type="button" class="profile-tab" data-panel="p-timeline">Health Timeline</button>
+            <button type="button" class="profile-tab" data-panel="p-consent">Parental Consent</button>
             @if(session('active_role') === 'clinic_staff')
             <button type="button" class="profile-tab" data-panel="p-conditions">Health Conditions</button>
             @endif
@@ -216,13 +236,32 @@
             <section id="p-timeline" class="profile-panel">
                 <div class="profile-block">
                     <h4>Health Timeline</h4>
-                    <div class="kv"><div class="k">Submission:</div><div class="v">Class Adviser submitted this form.</div></div>
-                    <div class="kv"><div class="k">Examination:</div><div class="v" id="ptNext">Nurse examination pending.</div></div>
-                    <div id="ptConditionsWrap" style="margin-top:14px;border-top:1px solid #e4ece7;padding-top:12px;">
+                    <div id="ptSubmissionBanner" style="margin-bottom:10px;">
+                        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:.82rem;font-weight:700;color:#92400e;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                            Health card submitted &mdash; no medical certificate on file yet
+                        </div>
+                    </div>
+                    <div id="ptExamBanner" style="margin-bottom:12px;">
+                        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:.82rem;font-weight:700;color:#92400e;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                            Nurse examination pending
+                        </div>
+                    </div>
+
+                    <div id="ptConditionsWrap" style="border-top:1px solid #e4ece7;padding-top:12px;">
                         <div style="font-size:.74rem;font-weight:700;color:#1d3c31;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;">Medical Conditions &amp; Certificates</div>
                         <div id="ptConditionsList">
                             <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>
                         </div>
+                    </div>
+                </div>
+            </section>
+            <section id="p-consent" class="profile-panel">
+                <div class="profile-block">
+                    <h4>Parental Consent &mdash; Deworming Program</h4>
+                    <div id="pcConsentStatus">
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view consent status.</div></div>
                     </div>
                 </div>
             </section>
@@ -238,8 +277,8 @@
             @endif
         </div>
         <div class="profile-actions">
+            <a href="#" id="profileFillLink" class="btn btn-primary" style="display:none;">Fill Medical Record</a>
             <button type="button" class="btn btn-secondary" id="profileClose">Close</button>
-            <a href="#" class="btn" id="profileFillLink">Fill Medical Record</a>
         </div>
     </div>
 </div>
@@ -250,10 +289,15 @@
     const backdrop = document.getElementById('profileBackdrop');
     const closeBtn = document.getElementById('profileClose');
     const fillLink = document.getElementById('profileFillLink');
-
-    if (!cards.length || !backdrop || !closeBtn || !fillLink) {
+    if (!cards.length || !backdrop || !closeBtn) {
         return;
     }
+
+    const FILL_PANELS = new Set(['p-shd', 'p-growth', 'p-alerts']);
+    const updateFillLinkVisibility = (panelId) => {
+        if (!fillLink) return;
+        fillLink.style.display = FILL_PANELS.has(panelId) ? '' : 'none';
+    };
 
     const setText = (id, value) => {
         const node = document.getElementById(id);
@@ -336,6 +380,10 @@
     };
 
     const openProfile = (record, route) => {
+        if (fillLink) {
+            fillLink.setAttribute('href', route || '#');
+            fillLink.style.display = 'none';
+        }
         const fullName = [record.last_name, ',', record.first_name, record.middle_name ? (' ' + String(record.middle_name).charAt(0).toUpperCase() + '.') : '']
             .join(' ')
             .replace(' ,', ',')
@@ -365,18 +413,94 @@
         setText('pgWeight', (record.weight_kg || '-') + ' kg');
         drawGrowthTrend(record);
         setText('paStatus', examined ? 'Nurse examination details are available.' : 'Pending nurse review.');
-        setText('ptNext', examined ? 'Record completed by nurse.' : 'Nurse examination pending.');
 
-        fillLink.setAttribute('href', route || '#');
+        const examBanner = document.getElementById('ptExamBanner');
+        if (examBanner) {
+            if (examined) {
+                examBanner.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#dcfce7;border:1px solid #86efac;border-radius:8px;font-size:.82rem;font-weight:700;color:#166534;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    Medical examination completed by nurse
+                </div>`;
+            } else {
+                examBanner.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:.82rem;font-weight:700;color:#92400e;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    Nurse examination pending
+                </div>`;
+            }
+        }
+
 
         @if(session('active_role') === 'clinic_staff')
         loadConditionsForClinicStaff(record.lrn || '');
         @endif
 
         loadConditionsForTimeline(record.lrn || '');
+        loadConsentStatus(record.lrn || '');
 
         backdrop.classList.add('open');
         backdrop.setAttribute('aria-hidden', 'false');
+    };
+
+
+    const loadConsentStatus = async (lrn) => {
+        const statusEl = document.getElementById('pcConsentStatus');
+        if (!statusEl) return;
+
+        if (!lrn) {
+            statusEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No LRN available.</div></div>';
+            return;
+        }
+
+        statusEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>';
+
+        try {
+            const resp = await fetch('/api/student-consent-status?lrn=' + encodeURIComponent(lrn), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+
+            if (!resp.ok) {
+                statusEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not check consent status.</div></div>';
+                    return;
+            }
+
+            const data = await resp.json();
+
+            if (data.has_consent) {
+                const viewBtn = data.consent_id
+                    ? `<div style="margin-top:14px;">
+                           <a href="/parental-consent/${data.consent_id}/download" target="_blank" rel="noopener noreferrer"
+                              style="display:inline-flex;align-items:center;gap:6px;background:#15803d;color:#fff;border-radius:7px;padding:7px 14px;font-size:.78rem;font-weight:700;text-decoration:none;">
+                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                               View Consent Form
+                           </a>
+                       </div>`
+                    : '';
+
+                statusEl.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#dcfce7;border:1px solid #86efac;border-radius:8px;font-size:.82rem;font-weight:700;color:#166534;margin-bottom:12px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        Parental consent is on file for SY ${data.school_year || '—'}
+                    </div>
+                    <div class="kv"><div class="k">School Year:</div><div class="v">${data.school_year || '—'}</div></div>
+                    <div class="kv"><div class="k">Uploaded By:</div><div class="v">${data.uploaded_by || '—'}</div></div>
+                    <div class="kv"><div class="k">Uploaded On:</div><div class="v">${data.uploaded_at || '—'}</div></div>
+                    ${viewBtn}`;
+
+            } else {
+                statusEl.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;font-size:.82rem;font-weight:700;color:#991b1b;margin-bottom:12px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                        No consent on file for SY ${data.school_year || '—'}
+                    </div>
+                    <div class="kv"><div class="k">School Year:</div><div class="v">${data.school_year || '—'}</div></div>
+                    <div style="margin-top:10px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:.78rem;color:#92400e;line-height:1.5;">
+                        The Class Adviser has not yet uploaded a signed parental consent form for this student. Deworming cannot be recorded until one is on file.
+                    </div>`;
+
+                }
+        } catch (_err) {
+            statusEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load consent status.</div></div>';
+        }
     };
 
     @if(session('active_role') === 'clinic_staff')
@@ -415,9 +539,7 @@
                     : '<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#fef3c7;color:#92400e;margin-left:6px;">Self-reported</span>';
 
                 const certRows = (c.certificates || []).map(cert => {
-                    const dl = cert.download_url
-                        ? `<a href="${cert.download_url}" target="_blank" style="font-size:.72rem;font-weight:700;color:#15803d;text-decoration:none;border:1px solid #86efac;background:#f0fdf4;border-radius:6px;padding:3px 8px;margin-left:8px;">View</a>`
-                        : '';
+                    const dl = '';
                     const doctor = cert.doctor_clinic ? ` &mdash; ${cert.doctor_clinic}` : '';
                     const date = cert.diagnosis_date ? ` (${cert.diagnosis_date})` : '';
                     return `<div style="display:flex;align-items:center;gap:4px;padding:4px 0 4px 12px;font-size:.76rem;color:#3d5c47;">
@@ -442,12 +564,29 @@
     };
     @endif
 
+    const setSubmissionBanner = (hasCert) => {
+        const banner = document.getElementById('ptSubmissionBanner');
+        if (!banner) return;
+        if (hasCert) {
+            banner.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#dcfce7;border:1px solid #86efac;border-radius:8px;font-size:.82rem;font-weight:700;color:#166534;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                Health card submitted &mdash; medical certificate on file
+            </div>`;
+        } else {
+            banner.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:.82rem;font-weight:700;color:#92400e;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Health card submitted &mdash; no medical certificate on file yet
+            </div>`;
+        }
+    };
+
     const loadConditionsForTimeline = async (lrn) => {
         const listEl = document.getElementById('ptConditionsList');
         if (!listEl) return;
 
         if (!lrn) {
             listEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No LRN available.</div></div>';
+            setSubmissionBanner(false);
             return;
         }
 
@@ -460,6 +599,7 @@
 
             if (!resp.ok) {
                 listEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No conditions on file.</div></div>';
+                setSubmissionBanner(false);
                 return;
             }
 
@@ -468,8 +608,11 @@
 
             if (!conditions.length) {
                 listEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No medical conditions recorded for this student.</div></div>';
+                setSubmissionBanner(false);
                 return;
             }
+
+            setSubmissionBanner(conditions.some(c => c.certificate_count > 0));
 
             listEl.innerHTML = conditions.map(c => {
                 const badge = c.is_verified
@@ -481,7 +624,7 @@
                     const dl = cert.download_url
                         ? `<a href="${cert.download_url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;font-size:.72rem;font-weight:700;color:#15803d;text-decoration:none;border:1px solid #86efac;background:#f0fdf4;border-radius:6px;padding:3px 9px;margin-left:6px;white-space:nowrap;">
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                            View
+                            View Medical Certificate
                            </a>`
                         : '';
                     return `<div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:4px 0 4px 12px;font-size:.76rem;color:#3d5c47;">
@@ -539,6 +682,7 @@
             if (panel) {
                 panel.classList.add('active');
             }
+            updateFillLinkVisibility(target || '');
         });
     });
 })();

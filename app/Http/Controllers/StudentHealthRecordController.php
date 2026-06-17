@@ -57,24 +57,55 @@ class StudentHealthRecordController extends Controller
 
     private function ensureClassAdviserDemoData(Request $request): void
     {
+        // Prototype URL-based role assumption: visiting this dashboard always assumes
+        // the class_adviser role, matching how assigned_grade_level/section are also
+        // auto-set here. This supports single-session multi-role demo workflows.
+        $request->session()->put('active_role', 'class_adviser');
+        if ((string) $request->session()->get('active_name', '') === '') {
+            $request->session()->put('active_name', 'Demo Adviser');
+        }
+
         $assignedGradeLevel = (string) $request->session()->get('assigned_grade_level', '');
         $assignedSection = (string) $request->session()->get('assigned_section', '');
 
         if ($assignedGradeLevel === '' || $assignedSection === '') {
-            $assignedGradeLevel = 'Grade 10';
-            $assignedSection = 'Rizal';
+            $assignedGradeLevel = 'Grade 1';
+            $assignedSection = 'Sampaguita';
 
             $request->session()->put('assigned_grade_level', $assignedGradeLevel);
             $request->session()->put('assigned_section', $assignedSection);
         }
 
         $records = $request->session()->get('school_health_card_records', []);
-        $hasAssignedClassRows = collect($records)->contains(function (array $record) use ($assignedGradeLevel, $assignedSection): bool {
-            return (string) ($record['grade_level'] ?? '') === $assignedGradeLevel
-                && (string) ($record['section'] ?? '') === $assignedSection;
-        });
 
-        if ($hasAssignedClassRows) {
+        // Deduplicate by LRN — if demo rows are already present (regardless of grade/section),
+        // do not re-seed. Prevents duplicate entries when assigned class changes between visits.
+        $demoLrns = ['100234560201', '100234560202', '100234560203'];
+        $hasDemoLrns = collect($records)->contains(
+            fn (array $record) => in_array((string) ($record['lrn'] ?? ''), $demoLrns, true)
+        );
+
+        if ($hasDemoLrns) {
+            // Deduplicate session records by LRN — prefer the copy that has exam data.
+            // This cleans up any duplicate demo rows left by prior role-switch sessions.
+            $seen = [];
+            $cleaned = [];
+            foreach ($records as $record) {
+                $lrn = (string) ($record['lrn'] ?? '');
+                if ($lrn === '') {
+                    $cleaned[] = $record;
+                    continue;
+                }
+                if (!isset($seen[$lrn])) {
+                    $seen[$lrn] = count($cleaned);
+                    $cleaned[] = $record;
+                } elseif (!empty($record['examination']) && empty($cleaned[$seen[$lrn]]['examination'])) {
+                    $cleaned[$seen[$lrn]] = $record;
+                }
+            }
+            if (count($cleaned) !== count($records)) {
+                $request->session()->put('school_health_card_records', array_values($cleaned));
+            }
             return;
         }
 

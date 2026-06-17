@@ -247,6 +247,31 @@
             </div>
 
             <div class="section-divider" style="margin-top:24px;">Supplementation &amp; Programs</div>
+
+            @error('deworming')
+                <div style="background:#fee2e2;border:1px solid #fca5a5;color:#b91c1c;border-radius:8px;padding:10px 14px;font-size:.8rem;font-weight:600;margin-bottom:12px;">
+                    {{ $message }}
+                </div>
+            @enderror
+
+            @if($consentForm === null)
+                <div style="background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;">
+                    No signed parental consent on file for this student for SY {{ $consentSchoolYear }}.
+                    Deworming cannot be marked as given until the Class Adviser uploads a consent form.
+                </div>
+            @else
+                <div style="display:flex;align-items:center;justify-content:space-between;background:#dcfce7;border:1px solid #86efac;color:#15803d;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;">
+                    <span>Parental consent on file for SY {{ $consentSchoolYear }}. Deworming may be recorded.</span>
+                    <a href="{{ route('parental-consent.download', $consentForm->id) }}"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       style="display:inline-flex;align-items:center;gap:5px;background:#15803d;color:#fff;border-radius:6px;padding:5px 11px;font-size:.74rem;font-weight:700;text-decoration:none;flex-shrink:0;margin-left:12px;">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        View Consent Form
+                    </a>
+                </div>
+            @endif
+
             <div class="form-grid-4">
                 <div class="field">
                     <label>Iron Supplementation</label>

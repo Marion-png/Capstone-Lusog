@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdviserController;
 use App\Http\Controllers\ConditionController;
 use App\Http\Controllers\MedicalCertificateController;
+use App\Http\Controllers\ParentalConsentFormController;
 use App\Http\Controllers\NutricorController;
 use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\FeedingCoordinatorController;
@@ -493,6 +494,19 @@ Route::get('/medical-certificate/{id}/download', [MedicalCertificateController::
 // API: fetch health conditions for a student by LRN (class_adviser or clinic_staff)
 Route::get('/api/student-conditions', [MedicalCertificateController::class, 'getConditions'])
     ->name('api.student-conditions');
+
+// Parental consent form upload (class_adviser only, own class enforced in controller)
+Route::post('/adviser/parental-consent', [ParentalConsentFormController::class, 'store'])
+    ->name('parental-consent.store');
+
+// Parental consent form download (school_nurse / clinic_staff only, enforced in controller)
+Route::get('/parental-consent/{id}/download', [ParentalConsentFormController::class, 'download'])
+    ->whereNumber('id')
+    ->name('parental-consent.download');
+
+// API: check deworming consent status for a student by LRN (class_adviser, clinic_staff, school_nurse)
+Route::get('/api/student-consent-status', [ParentalConsentFormController::class, 'consentStatus'])
+    ->name('api.student-consent-status');
 
 Route::get('/dashboard/feedingcor-program', function (Request $request) {
     $activeRole = strtolower(trim((string) $request->session()->get('active_role', '')));

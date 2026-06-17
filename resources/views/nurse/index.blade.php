@@ -24,6 +24,10 @@
         .td-lrn { font-family: monospace; font-size: .78rem; color: var(--text-2); }
         .badge-done { display: inline-flex; align-items: center; gap: 5px; background: #dcfce7; color: #166534; font-size: .68rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
         .badge-pend { display: inline-flex; align-items: center; gap: 5px; background: #f3f4f6; color: #6b7280; font-size: .68rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+        .badge-consent { display: inline-flex; align-items: center; gap: 5px; background: #dcfce7; color: #166534; font-size: .68rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+        .badge-no-consent { display: inline-flex; align-items: center; gap: 5px; background: #fef3c7; color: #92400e; font-size: .68rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+        .btn-view-consent { display: inline-flex; align-items: center; gap: 4px; background: none; color: #15803d; font-size: .7rem; font-weight: 700; padding: 2px 6px; border-radius: 5px; text-decoration: none; border: 1.5px solid #86efac; margin-left: 5px; transition: background .15s; }
+        .btn-view-consent:hover { background: #dcfce7; }
         .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
         .btn-examine { display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(160deg, var(--g700, #15803d), var(--g900, #14532d)); color: white; border: none; border-radius: 8px; padding: 7px 14px; font-size: .78rem; font-weight: 600; cursor: pointer; text-decoration: none; transition: opacity .15s; }
         .btn-examine:hover { opacity: .88; }
@@ -60,9 +64,9 @@
         </a>
     </nav>
     <div class="sb-user">
-        <div class="sb-avatar">{{ substr(auth()->user()->name ?? 'SN', 0, 2) }}</div>
+        <div class="sb-avatar">{{ strtoupper(substr(session('active_name', 'SN'), 0, 2)) }}</div>
         <div class="sb-user-meta">
-            <div class="sb-user-name">{{ auth()->user()->name ?? 'School Nurse' }}</div>
+            <div class="sb-user-name">{{ session('active_name', 'School Nurse') }}</div>
             <div class="sb-user-role">School Nurse</div>
         </div>
         <form method="POST" action="{{ route('logout') }}">
@@ -85,7 +89,7 @@
             <span class="bc-sep">&rsaquo;</span>
             <span class="bc-current">Adviser Submissions</span>
         </div>
-        <div class="topbar-chip chip"><div class="dot"></div>School Nurse</div>
+        <div class="topbar-chip"><div class="dot"></div>School Nurse</div>
     </header>
 
     <div class="content">
@@ -105,6 +109,7 @@
                         <th>Grade Level</th>
                         <th>Height (cm)</th>
                         <th>Weight (kg)</th>
+                        <th>Consent</th>
                         <th>Status</th>
                         <th>Action</th>
                     </tr>
@@ -117,12 +122,28 @@
                         $fullName = trim(($record['last_name'] ?? '') . ', ' . ($record['first_name'] ?? '') . $middleInitial);
                         $examined = !empty($record['examination']);
                     @endphp
+                    @php $rowConsent = $consentByLrn[$record['lrn'] ?? ''] ?? null; @endphp
                     <tr>
                         <td class="td-name">{{ $fullName }}</td>
                         <td class="td-lrn">{{ $record['lrn'] ?? '—' }}</td>
                         <td>{{ $record['grade_level'] ?? '—' }}</td>
                         <td>{{ $record['height_cm'] ?? '—' }}</td>
                         <td>{{ $record['weight_kg'] ?? '—' }}</td>
+                        <td>
+                            @if ($rowConsent !== null)
+                                <span class="badge-consent"><span class="badge-dot"></span>On file</span>
+                                <a href="{{ route('parental-consent.download', $rowConsent->id) }}"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="btn-view-consent"
+                                   title="View consent form in new tab">
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                    View
+                                </a>
+                            @else
+                                <span class="badge-no-consent"><span class="badge-dot"></span>Missing</span>
+                            @endif
+                        </td>
                         <td>
                             @if ($examined)
                                 <span class="badge-done"><span class="badge-dot"></span>Completed</span>
@@ -139,7 +160,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="7">
+                        <td colspan="8">
                             <div class="empty-state">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
                                 <p>No adviser submissions yet. Records will appear here once class advisers submit health cards.</p>

@@ -146,7 +146,9 @@ class MedicalCertificateTest extends TestCase
     {
         $this->makeRecord('LRN001');
 
-        $response = $this->post(route('medical-certificate.store'), $this->validUploadPayload('LRN001'));
+        // Explicitly clear role to guard against session bleeding from prior test methods
+        $response = $this->withSession(['active_role' => ''])
+            ->post(route('medical-certificate.store'), $this->validUploadPayload('LRN001'));
 
         $response->assertStatus(403);
     }

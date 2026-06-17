@@ -226,6 +226,8 @@ tbody tr:hover td{background:#f7fbf8}
 .student-profile-grid b{display:block;color:#1a3328;font-size:1.03rem;margin-top:2px}
 .pending-note-box{margin-top:12px;background:#fff9e8;border:1px solid #f8df97;border-radius:12px;padding:12px 14px;color:#915f03}
 .pending-note-box h5{font-size:1rem;margin-bottom:4px}
+.upload-subsection-title{font-size:.78rem;font-weight:700;color:#1d3c31;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #e8f0eb;letter-spacing:.02em;text-transform:uppercase}
+.upload-error-msg{background:#fee2e2;border:1px solid #fca5a5;color:#b91c1c;border-radius:8px;padding:8px 10px;font-size:.74rem;font-weight:600;margin-bottom:8px}
 
 #profileClose{position:sticky;left:12px;bottom:12px;width:max-content}
 
