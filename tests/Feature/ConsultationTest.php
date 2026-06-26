@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Condition;
 use App\Models\Consultation;
+use App\Models\Institution;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -11,13 +12,25 @@ class ConsultationTest extends TestCase
 {
     use RefreshDatabase;
 
+    private Institution $institution;
+
     protected function setUp(): void
     {
         parent::setUp();
 
+        $this->institution = Institution::create(['name' => 'Test School', 'status' => 'active']);
+
         // Seed some conditions
         Condition::create(['name' => 'Fever', 'category' => 'General']);
         Condition::create(['name' => 'Cough', 'category' => 'Respiratory']);
+    }
+
+    private function clinicSession(): array
+    {
+        return [
+            'active_role'           => 'clinic_staff',
+            'active_institution_id' => $this->institution->id,
+        ];
     }
 
     /** @test */
@@ -25,7 +38,8 @@ class ConsultationTest extends TestCase
     {
         $condition = Condition::where('name', 'Fever')->first();
 
-        $response = $this->post('/dashboard/consultation-log', [
+        $response = $this->withSession($this->clinicSession())
+            ->post('/dashboard/consultation-log', [
             'consulted_at' => now()->format('Y-m-d'),
             'student_name' => 'John Doe',
             'grade_section' => 'Grade 10 - A',
@@ -46,7 +60,8 @@ class ConsultationTest extends TestCase
     /** @test */
     public function can_store_consultation_with_manual_condition_text(): void
     {
-        $response = $this->post('/dashboard/consultation-log', [
+        $response = $this->withSession($this->clinicSession())
+            ->post('/dashboard/consultation-log', [
             'consulted_at' => now()->format('Y-m-d'),
             'student_name' => 'Jane Doe',
             'grade_section' => 'Grade 10 - B',
@@ -66,7 +81,8 @@ class ConsultationTest extends TestCase
     /** @test */
     public function requires_either_condition_id_or_condition_text(): void
     {
-        $response = $this->post('/dashboard/consultation-log', [
+        $response = $this->withSession($this->clinicSession())
+            ->post('/dashboard/consultation-log', [
             'consulted_at' => now()->format('Y-m-d'),
             'student_name' => 'Test Student',
             'grade_section' => 'Grade 10 - C',
@@ -83,6 +99,7 @@ class ConsultationTest extends TestCase
         $condition = Condition::where('name', 'Fever')->first();
 
         Consultation::create([
+            'institution_id' => $this->institution->id,
             'consulted_at' => now(),
             'student_name' => 'Test Student',
             'grade_section' => 'Grade 10',
@@ -92,7 +109,8 @@ class ConsultationTest extends TestCase
             'status' => 'treated',
         ]);
 
-        $response = $this->get('/dashboard/consultation-log');
+        $response = $this->withSession($this->clinicSession())
+            ->get('/dashboard/consultation-log');
 
         $response->assertStatus(200);
 
@@ -104,7 +122,8 @@ class ConsultationTest extends TestCase
     /** @test */
     public function validates_condition_id_exists(): void
     {
-        $response = $this->post('/dashboard/consultation-log', [
+        $response = $this->withSession($this->clinicSession())
+            ->post('/dashboard/consultation-log', [
             'consulted_at' => now()->format('Y-m-d'),
             'student_name' => 'Test Student',
             'grade_section' => 'Grade 10',
@@ -122,7 +141,8 @@ class ConsultationTest extends TestCase
         $condition = Condition::where('name', 'Fever')->first();
 
         foreach (['treated', 'referred'] as $status) {
-            $response = $this->post('/dashboard/consultation-log', [
+            $response = $this->withSession($this->clinicSession())
+                ->post('/dashboard/consultation-log', [
                 'consulted_at' => now()->format('Y-m-d'),
                 'student_name' => "Student {$status}",
                 'grade_section' => 'Grade 10',

@@ -10,14 +10,24 @@ use Illuminate\View\View;
 
 class ConsultationController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
-        $consultations = Consultation::query()
+        $institutionId = $request->session()->get('active_institution_id');
+
+        $baseQuery = function () use ($institutionId) {
+            $q = Consultation::query();
+            if ($institutionId) {
+                $q->where('institution_id', $institutionId);
+            }
+            return $q;
+        };
+
+        $consultations = $baseQuery()
             ->latest('consulted_at')
             ->latest('id')
             ->paginate(10);
 
-        $topConditionStats = Consultation::query()
+        $topConditionStats = $baseQuery()
             ->selectRaw('LOWER(condition) as condition_name, COUNT(*) as total')
             ->whereMonth('consulted_at', now()->month)
             ->whereYear('consulted_at', now()->year)
@@ -27,12 +37,12 @@ class ConsultationController extends Controller
             ->get();
 
         $weekStart = now()->startOfWeek();
-        $dailyTrend = collect(range(0, 6))->map(function (int $offset) use ($weekStart): array {
+        $dailyTrend = collect(range(0, 6))->map(function (int $offset) use ($weekStart, $baseQuery): array {
             $day = $weekStart->copy()->addDays($offset);
 
             return [
                 'label' => $day->format('D'),
-                'count' => Consultation::query()
+                'count' => $baseQuery()
                     ->whereDate('consulted_at', $day->toDateString())
                     ->count(),
             ];
@@ -41,13 +51,11 @@ class ConsultationController extends Controller
         return view('dashboard.consultation-log', [
             'consultations' => $consultations,
             'stats' => [
-                'total' => Consultation::count(),
-                'month' => Consultation::whereMonth('consulted_at', now()->month)
-                    ->whereYear('consulted_at', now()->year)
-                    ->count(),
-                'week' => Consultation::whereBetween('consulted_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
-                'today' => Consultation::whereDate('consulted_at', now()->toDateString())->count(),
-                'referrals' => Consultation::where('status', 'referred')->count(),
+                'total'    => $baseQuery()->count(),
+                'month'    => $baseQuery()->whereMonth('consulted_at', now()->month)->whereYear('consulted_at', now()->year)->count(),
+                'week'     => $baseQuery()->whereBetween('consulted_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
+                'today'    => $baseQuery()->whereDate('consulted_at', now()->toDateString())->count(),
+                'referrals'=> $baseQuery()->where('status', 'referred')->count(),
             ],
             'topConditionStats' => $topConditionStats,
             'dailyTrend' => $dailyTrend,
@@ -91,13 +99,14 @@ class ConsultationController extends Controller
         }
 
         Consultation::create([
-            'consulted_at' => $validated['consulted_at'],
-            'student_name' => $validated['student_name'],
-            'grade_section' => $validated['grade_section'],
-            'condition' => $conditionName,
-            'condition_id' => $conditionId,
+            'institution_id'  => $request->session()->get('active_institution_id'),
+            'consulted_at'    => $validated['consulted_at'],
+            'student_name'    => $validated['student_name'],
+            'grade_section'   => $validated['grade_section'],
+            'condition'       => $conditionName,
+            'condition_id'    => $conditionId,
             'treatment_given' => $validated['treatment_given'],
-            'status' => $validated['status'],
+            'status'          => $validated['status'],
         ]);
 
         return redirect()

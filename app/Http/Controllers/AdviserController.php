@@ -161,6 +161,7 @@ class AdviserController extends Controller
             $sectionLabel = trim((string) $validated['grade_level'] . ' / ' . (string) $validated['section']);
 
             $payload = [
+                'institution_id' => $request->session()->get('active_institution_id'),
                 'student_name' => $studentName,
                 'section' => $sectionLabel !== '' ? $sectionLabel : (string) $validated['section'],
                 'weight' => (float) $validated['weight_kg'],

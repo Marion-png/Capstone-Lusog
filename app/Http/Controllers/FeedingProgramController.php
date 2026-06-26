@@ -24,6 +24,8 @@ class FeedingProgramController extends Controller
 		$isNurseFeedingRoute = $currentRouteName === 'dashboard.school-nurse.feeding-program';
 		$isReadOnly = $isNurseFeedingRoute || $activeRole === 'school_nurse';
 
+		$institutionId = $request->session()->get('active_institution_id');
+
 		$hasSchoolColumn = Schema::hasTable('student_health_records')
 			&& Schema::hasColumn('student_health_records', 'school_name');
 		$selectedSchool = trim((string) $request->query('school', 'all'));
@@ -34,6 +36,7 @@ class FeedingProgramController extends Controller
 		$schoolOptions = collect();
 		if ($hasSchoolColumn) {
 			$schoolOptions = StudentHealthRecord::query()
+				->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
 				->select('school_name')
 				->whereNotNull('school_name')
 				->where('school_name', '!=', '')
@@ -50,6 +53,9 @@ class FeedingProgramController extends Controller
 		$students = collect();
 		if (Schema::hasTable('student_health_records')) {
 			$studentsQuery = StudentHealthRecord::query();
+			if ($institutionId) {
+				$studentsQuery->where('institution_id', $institutionId);
+			}
 			if ($hasSchoolColumn && $selectedSchool !== 'all') {
 				$studentsQuery->where('school_name', $selectedSchool);
 			}
@@ -188,6 +194,10 @@ class FeedingProgramController extends Controller
 		}
 
 		$studentsQuery = StudentHealthRecord::query();
+		$institutionId = $request->session()->get('active_institution_id');
+		if ($institutionId) {
+			$studentsQuery->where('institution_id', $institutionId);
+		}
 		if ($hasSchoolColumn && $selectedSchool !== 'all') {
 			$studentsQuery->where('school_name', $selectedSchool);
 		}
@@ -206,7 +216,7 @@ class FeedingProgramController extends Controller
 			->filter(fn (int $id): bool => in_array($id, $allowedStudentIds, true))
 			->values();
 
-		DB::transaction(function () use ($students, $presentIds, $sessionDate): void {
+		DB::transaction(function () use ($students, $presentIds, $sessionDate, $institutionId): void {
 			$presentLookup = $presentIds->flip();
 			$now = now();
 			$rows = [];
@@ -227,7 +237,7 @@ class FeedingProgramController extends Controller
 				['is_present', 'updated_at']
 			);
 
-			$this->refreshAttendanceRiskFlags();
+			$this->refreshAttendanceRiskFlags($institutionId);
 		});
 
 		$schoolSuffix = $hasSchoolColumn && $selectedSchool !== 'all'
@@ -311,7 +321,7 @@ class FeedingProgramController extends Controller
 		return $programDay;
 	}
 
-	private function refreshAttendanceRiskFlags(): void
+	private function refreshAttendanceRiskFlags(?int $institutionId = null): void
 	{
 		$programDay = $this->resolveProgramDay();
 		$thresholdCount = $programDay > 0
@@ -325,7 +335,9 @@ class FeedingProgramController extends Controller
 			->groupBy('student_health_record_id')
 			->pluck('present_count', 'student_health_record_id');
 
-		StudentHealthRecord::query()->each(function (StudentHealthRecord $record) use ($presentCounts, $thresholdCount, $programDay): void {
+		StudentHealthRecord::query()
+			->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+			->each(function (StudentHealthRecord $record) use ($presentCounts, $thresholdCount, $programDay): void {
 			$normalizedStatus = $this->normalizeNutritionalStatus($record->nutritional_status, $record->bmi_value);
 			if (!$this->isAttendanceEligible($normalizedStatus)) {
 				$record->update([

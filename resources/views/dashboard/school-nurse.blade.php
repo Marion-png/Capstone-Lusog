@@ -115,7 +115,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
                 </div>
                 <div>
-                    <div class="mini-stat-val">2,841</div>
+                    <div class="mini-stat-val">{{ number_format($totalRecords) }}</div>
                     <div class="mini-stat-label">Total Records</div>
                 </div>
             </div>
@@ -124,7 +124,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                 </div>
                 <div>
-                    <div class="mini-stat-val">47</div>
+                    <div class="mini-stat-val">{{ $consultationsToday }}</div>
                     <div class="mini-stat-label">Consultations Today</div>
                 </div>
             </div>
@@ -133,7 +133,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
                 </div>
                 <div>
-                    <div class="mini-stat-val">8</div>
+                    <div class="mini-stat-val">{{ $atRiskCount }}</div>
                     <div class="mini-stat-label">At-Risk Learners</div>
                 </div>
             </div>
@@ -142,7 +142,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 </div>
                 <div>
-                    <div class="mini-stat-val">24</div>
+                    <div class="mini-stat-val">{{ $lowStockCount }}</div>
                     <div class="mini-stat-label">Low Stock Medicines</div>
                 </div>
             </div>
@@ -169,120 +169,88 @@
         <div class="table-card">
             <div class="table-head-bar">
                 <span class="table-head-label">Recent Consultations</span>
-                <span class="table-count">Showing 8 latest entries</span>
+                <span class="table-count">Showing {{ $recentConsultations->count() }} latest {{ Str::plural('entry', $recentConsultations->count()) }}</span>
             </div>
 
             <table>
                 <thead>
                     <tr>
                         <th>Patient</th>
-                        <th>Grade / Dept</th>
+                        <th>Grade / Section</th>
                         <th>Date</th>
-                        <th>Chief Complaint</th>
-                        <th>Assessment</th>
+                        <th>Condition</th>
+                        <th>Treatment</th>
                         <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
+                    @forelse($recentConsultations as $c)
+                    @php
+                        $nameParts = explode(' ', trim($c->student_name));
+                        $initials  = strtoupper(substr($nameParts[0], 0, 1) . substr(end($nameParts), 0, 1));
+                    @endphp
                     <tr>
                         <td>
                             <div class="td-person">
-                                <div class="td-avatar">AS</div>
-                                <div><div class="td-name">Andrei J. Santos</div><div class="td-id">100234560012</div></div>
+                                <div class="td-avatar">{{ $initials }}</div>
+                                <div><div class="td-name">{{ $c->student_name }}</div></div>
                             </div>
                         </td>
-                        <td>Grade 10<br><span style="font-size:.7rem;color:var(--text-3)">Rizal Sec 3</span></td>
-                        <td>Apr 1, 2026</td>
-                        <td>Headache, dizziness</td>
-                        <td>Tension headache</td>
-                        <td><span class="badge-pill bp-red"><span class="dot" style="background:var(--red)"></span>At-Risk</span></td>
-                    </tr>
-                    <tr>
+                        <td>{{ $c->grade_section }}</td>
+                        <td>{{ $c->consulted_at->format('M j, Y') }}</td>
+                        <td>{{ $c->condition }}</td>
+                        <td>{{ $c->treatment_given ?: '—' }}</td>
                         <td>
-                            <div class="td-person">
-                                <div class="td-avatar">ML</div>
-                                <div><div class="td-name">Maria L. Dela Cruz</div><div class="td-id">100234560034</div></div>
-                            </div>
+                            @if($c->status === 'referred')
+                                <span class="badge-pill bp-amber"><span class="dot" style="background:var(--amber)"></span>Referred</span>
+                            @else
+                                <span class="badge-pill bp-green"><span class="dot" style="background:var(--g500)"></span>Treated</span>
+                            @endif
                         </td>
-                        <td>Grade 8<br><span style="font-size:.7rem;color:var(--text-3)">Bonifacio Sec 1</span></td>
-                        <td>Apr 1, 2026</td>
-                        <td>Fever (38.5 C)</td>
-                        <td>Viral fever</td>
-                        <td><span class="badge-pill bp-red"><span class="dot" style="background:var(--red)"></span>At-Risk</span></td>
                     </tr>
+                    @empty
                     <tr>
-                        <td>
-                            <div class="td-person">
-                                <div class="td-avatar">CM</div>
-                                <div><div class="td-name">Carlo R. Mendoza</div><div class="td-id">100234560078</div></div>
-                            </div>
+                        <td colspan="6" style="text-align:center;padding:2rem;color:var(--text-3);font-size:.9rem">
+                            No consultations recorded yet.
                         </td>
-                        <td>Grade 9<br><span style="font-size:.7rem;color:var(--text-3)">Mabini Sec 2</span></td>
-                        <td>Apr 1, 2026</td>
-                        <td>Wound, right knee</td>
-                        <td>Minor laceration</td>
-                        <td><span class="badge-pill bp-green"><span class="dot" style="background:var(--g500)"></span>Normal</span></td>
                     </tr>
-                    <tr>
-                        <td>
-                            <div class="td-person">
-                                <div class="td-avatar">LS</div>
-                                <div><div class="td-name">Lorna G. Santos</div><div class="td-id">EMP-2019-041</div></div>
-                            </div>
-                        </td>
-                        <td>Teaching<br><span style="font-size:.7rem;color:var(--text-3)">English Dept</span></td>
-                        <td>Mar 30, 2026</td>
-                        <td>Hypertension monitoring</td>
-                        <td>Stage 1 hypertension</td>
-                        <td><span class="badge-pill bp-amber"><span class="dot" style="background:var(--amber)"></span>Follow-up</span></td>
-                    </tr>
+                    @endforelse
                 </tbody>
             </table>
         </div>
 
         <div class="grid-summary">
             <div class="panel">
-                <div class="panel-title">Top Consultation Cases</div>
+                <div class="panel-title">Top Consultation Cases <span style="font-size:.75rem;font-weight:400;color:var(--text-3)">(this month)</span></div>
+                @php $maxConditionCount = $topConditions->max('total') ?: 1; @endphp
+                @forelse($topConditions as $cond)
                 <div class="trend-row">
-                    <div class="trend-label">Headache</div>
-                    <div class="trend-track"><div class="trend-fill" style="width:92%;background:var(--blue)"></div></div>
-                    <div class="trend-value">92</div>
+                    <div class="trend-label">{{ ucfirst($cond->condition_name) }}</div>
+                    <div class="trend-track"><div class="trend-fill" style="width:{{ round($cond->total / $maxConditionCount * 100) }}%;background:var(--blue)"></div></div>
+                    <div class="trend-value">{{ $cond->total }}</div>
                 </div>
-                <div class="trend-row">
-                    <div class="trend-label">Stomach Ache</div>
-                    <div class="trend-track"><div class="trend-fill" style="width:78%;background:var(--blue)"></div></div>
-                    <div class="trend-value">78</div>
-                </div>
-                <div class="trend-row">
-                    <div class="trend-label">Fever / Colds</div>
-                    <div class="trend-track"><div class="trend-fill" style="width:65%;background:var(--blue)"></div></div>
-                    <div class="trend-value">65</div>
-                </div>
-                <div class="trend-row">
-                    <div class="trend-label">Injury / Wounds</div>
-                    <div class="trend-track"><div class="trend-fill" style="width:42%;background:var(--blue)"></div></div>
-                    <div class="trend-value">42</div>
-                </div>
+                @empty
+                <p style="color:var(--text-3);font-size:.85rem;text-align:center;padding:1.5rem 0">No consultations this month.</p>
+                @endforelse
             </div>
 
             <div class="panel">
-                <div class="panel-title">Medicine Stock Monitor</div>
+                <div class="panel-title">Medicine Stock Monitor <span style="font-size:.75rem;font-weight:400;color:var(--text-3)">(low stock)</span></div>
+                @forelse($lowStockMedicines as $med)
+                @php
+                    $pct   = $med->minimum_threshold > 0 ? min(100, round($med->stock_quantity / $med->minimum_threshold * 100)) : 0;
+                    $color = $pct <= 25 ? 'var(--red)' : 'var(--amber)';
+                @endphp
                 <div class="inventory-item">
-                    <div class="inventory-meta"><span>Paracetamol 500mg</span><span>15% left</span></div>
-                    <div class="trend-track"><div class="trend-fill" style="width:15%;background:var(--red)"></div></div>
+                    <div class="inventory-meta">
+                        <span>{{ $med->name }}</span>
+                        <span>{{ $med->stock_quantity }} / {{ $med->minimum_threshold }} {{ $med->unit }}</span>
+                    </div>
+                    <div class="trend-track"><div class="trend-fill" style="width:{{ $pct }}%;background:{{ $color }}"></div></div>
                 </div>
-                <div class="inventory-item">
-                    <div class="inventory-meta"><span>Amoxicillin</span><span>22% left</span></div>
-                    <div class="trend-track"><div class="trend-fill" style="width:22%;background:var(--amber)"></div></div>
-                </div>
-                <div class="inventory-item">
-                    <div class="inventory-meta"><span>Mefenamic Acid</span><span>30% left</span></div>
-                    <div class="trend-track"><div class="trend-fill" style="width:30%;background:var(--amber)"></div></div>
-                </div>
-                <div class="inventory-item">
-                    <div class="inventory-meta"><span>Vitamin C</span><span>67% left</span></div>
-                    <div class="trend-track"><div class="trend-fill" style="width:67%;background:var(--g600)"></div></div>
-                </div>
+                @empty
+                <p style="color:var(--text-3);font-size:.85rem;text-align:center;padding:1.5rem 0">All medicines are adequately stocked.</p>
+                @endforelse
             </div>
         </div>
     </div>

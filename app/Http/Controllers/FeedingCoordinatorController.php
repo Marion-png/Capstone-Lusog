@@ -18,9 +18,15 @@ class FeedingCoordinatorController extends Controller
 
     public function dashboard(): View
     {
+        $institutionId = session('active_institution_id');
+
         $students = collect();
         if (Schema::hasTable('student_health_records')) {
-            $students = StudentHealthRecord::query()->get();
+            $q = StudentHealthRecord::query();
+            if ($institutionId) {
+                $q->where('institution_id', $institutionId);
+            }
+            $students = $q->get();
         }
 
         $totalStudents = $students->count();
@@ -44,7 +50,7 @@ class FeedingCoordinatorController extends Controller
         }
 
         $bmiChart = $this->buildBmiChart($students);
-        $weeklyBars = $this->buildWeeklyBars($totalStudents);
+        $weeklyBars = $this->buildWeeklyBars($totalStudents, $institutionId);
         $avgAttendance = $totalStudents > 0
             ? (int) round((collect($weeklyBars)->avg('present') / max(1, $totalStudents)) * 100)
             : 0;
@@ -168,18 +174,19 @@ class FeedingCoordinatorController extends Controller
         ];
     }
 
-    private function buildWeeklyBars(int $totalStudents): array
+    private function buildWeeklyBars(int $totalStudents, ?int $institutionId = null): array
     {
         $hasConsultationTable = Schema::hasTable('consultations');
 
         return collect(range(4, 0))
-            ->map(function (int $offset) use ($hasConsultationTable, $totalStudents): array {
+            ->map(function (int $offset) use ($hasConsultationTable, $totalStudents, $institutionId): array {
                 $weekStart = now()->copy()->startOfWeek()->subWeeks($offset);
                 $weekEnd = $weekStart->copy()->endOfWeek();
 
                 $present = 0;
                 if ($hasConsultationTable) {
                     $present = Consultation::query()
+                        ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
                         ->whereBetween('consulted_at', [$weekStart, $weekEnd])
                         ->distinct('student_name')
                         ->count('student_name');

@@ -14,9 +14,14 @@ class MedicineInventoryController extends Controller
         return view('dashboard.medicine-create');
     }
 
-    public function index(): View
+    public function index(Request $request): View
     {
-        $medicines = Medicine::query()->orderBy('name')->get();
+        $institutionId = $request->session()->get('active_institution_id');
+        $q = Medicine::query();
+        if ($institutionId) {
+            $q->where('institution_id', $institutionId);
+        }
+        $medicines = $q->orderBy('name')->get();
         $lowStockCount = $medicines
             ->filter(fn (Medicine $medicine) => $medicine->stock_quantity < $medicine->minimum_threshold)
             ->count();
@@ -110,7 +115,10 @@ class MedicineInventoryController extends Controller
             'notes' => ['nullable', 'string', 'max:255'],
         ]);
 
-        Medicine::create($validated);
+        Medicine::create([
+            ...$validated,
+            'institution_id' => $request->session()->get('active_institution_id'),
+        ]);
 
         return redirect()
             ->route('dashboard.medicine-inventory')

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Institution;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -13,10 +14,13 @@ class ParentalConsentFormTest extends TestCase
 {
     use RefreshDatabase;
 
+    private Institution $institution;
+
     protected function setUp(): void
     {
         parent::setUp();
         Storage::fake('local');
+        $this->institution = Institution::create(['name' => 'Test School', 'status' => 'active']);
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -24,16 +28,21 @@ class ParentalConsentFormTest extends TestCase
     private function adviserSession(string $grade = 'Grade 1', string $section = 'Sampaguita'): array
     {
         return [
-            'active_role'          => 'class_adviser',
-            'assigned_grade_level' => $grade,
-            'assigned_section'     => $section,
-            'active_name'          => 'Test Adviser',
+            'active_role'           => 'class_adviser',
+            'assigned_grade_level'  => $grade,
+            'assigned_section'      => $section,
+            'active_name'           => 'Test Adviser',
+            'active_institution_id' => $this->institution->id,
         ];
     }
 
     private function nurseSession(): array
     {
-        return ['active_role' => 'school_nurse', 'active_name' => 'Test Nurse'];
+        return [
+            'active_role'           => 'school_nurse',
+            'active_name'           => 'Test Nurse',
+            'active_institution_id' => $this->institution->id,
+        ];
     }
 
     private function makeRecord(string $lrn, string $section = 'Grade 1 / Sampaguita'): StudentHealthRecord
@@ -64,6 +73,7 @@ class ParentalConsentFormTest extends TestCase
     {
         return [
             'active_role'                => 'school_nurse',
+            'active_institution_id'      => $this->institution->id,
             'school_health_card_records' => [
                 0 => [
                     'lrn'        => $lrn,
@@ -119,9 +129,10 @@ class ParentalConsentFormTest extends TestCase
         $this->makeRecord('LRN001');
 
         $response = $this->withSession([
-                'active_role'          => 'class_adviser',
-                'assigned_grade_level' => '',
-                'assigned_section'     => '',
+                'active_role'           => 'class_adviser',
+                'assigned_grade_level'  => '',
+                'assigned_section'      => '',
+                'active_institution_id' => $this->institution->id,
             ])
             ->post(route('parental-consent.store'), [
                 'lrn'     => 'LRN001',
@@ -344,7 +355,7 @@ class ParentalConsentFormTest extends TestCase
         $form = $this->makeConsent($record);
         $form->update(['file_path' => 'parental-consents/1/consent.pdf']);
 
-        $this->withSession(['active_role' => 'clinic_staff'])
+        $this->withSession(['active_role' => 'clinic_staff', 'active_institution_id' => $this->institution->id])
             ->get(route('parental-consent.download', $form->id))
             ->assertOk();
     }

@@ -17,9 +17,12 @@ class StudentHealthRecordController extends Controller
         $records = collect();
 
         if (Schema::hasTable('student_health_records')) {
-            $records = StudentHealthRecord::query()
-                ->orderByDesc('updated_at')
-                ->get();
+            $q = StudentHealthRecord::query();
+            $institutionId = $request->session()->get('active_institution_id');
+            if ($institutionId) {
+                $q->where('institution_id', $institutionId);
+            }
+            $records = $q->orderByDesc('updated_at')->get();
         }
 
         $todayCount = $records
@@ -57,16 +60,27 @@ class StudentHealthRecordController extends Controller
 
     private function ensureClassAdviserDemoData(Request $request): void
     {
-        // Prototype URL-based role assumption: visiting this dashboard always assumes
-        // the class_adviser role, matching how assigned_grade_level/section are also
-        // auto-set here. This supports single-session multi-role demo workflows.
-        $request->session()->put('active_role', 'class_adviser');
-        if ((string) $request->session()->get('active_name', '') === '') {
-            $request->session()->put('active_name', 'Demo Adviser');
-        }
-
         $assignedGradeLevel = (string) $request->session()->get('assigned_grade_level', '');
         $assignedSection = (string) $request->session()->get('assigned_section', '');
+
+        // Only inject demo student rows for the built-in demo account.
+        // Real adviser accounts start with an empty student list.
+        $isDemoAdviser = $request->session()->get('active_username') === 'adviser.demo';
+
+        if (!$isDemoAdviser) {
+            // Strip any demo rows that may have been injected into this session before
+            // this guard was in place, so they don't persist across logins.
+            $demoLrns = ['100234560201', '100234560202', '100234560203'];
+            $existing = $request->session()->get('school_health_card_records', []);
+            $cleaned  = collect($existing)
+                ->reject(fn (array $r) => in_array((string) ($r['lrn'] ?? ''), $demoLrns, true))
+                ->values()
+                ->all();
+            if (count($cleaned) !== count($existing)) {
+                $request->session()->put('school_health_card_records', $cleaned);
+            }
+            return;
+        }
 
         if ($assignedGradeLevel === '' || $assignedSection === '') {
             $assignedGradeLevel = 'Grade 1';
@@ -266,8 +280,9 @@ class StudentHealthRecordController extends Controller
                 'student_id' => $validated['student_id'],
             ],
             [
+                'institution_id' => $request->session()->get('active_institution_id'),
                 'student_name' => $validated['student_name'],
-                'school_name' => $validated['school_name'] ?? null,
+                'school_name' => $validated['school_name'] ?? session('active_school_name'),
                 'section' => $validated['section'],
                 'weight' => (float) $validated['weight_kg'],
                 'bmi_value' => $bmi,
@@ -317,10 +332,12 @@ class StudentHealthRecordController extends Controller
         $records = collect();
 
         if (Schema::hasTable('student_health_records')) {
-            $records = StudentHealthRecord::query()
-                ->orderBy('section')
-                ->orderBy('student_name')
-                ->get();
+            $q = StudentHealthRecord::query();
+            $institutionId = $request->session()->get('active_institution_id');
+            if ($institutionId) {
+                $q->where('institution_id', $institutionId);
+            }
+            $records = $q->orderBy('section')->orderBy('student_name')->get();
         }
 
         $sessionAtRiskRecords = collect($request->session()->get('school_health_card_records', []))

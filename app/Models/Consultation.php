@@ -11,6 +11,7 @@ class Consultation extends Model
     use HasFactory;
 
     protected $fillable = [
+        'institution_id',
         'consulted_at',
         'student_name',
         'grade_section',

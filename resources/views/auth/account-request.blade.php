@@ -172,78 +172,14 @@
                             <option value="nutricor" {{ old('role') === 'nutricor' ? 'selected' : '' }}>Nutritional Coordinator</option>
                         </select>
                     </div>
-                    <div class="field full" id="schoolField">
-                        @php
-                            $davaoSchools = [
-                                'Aurora Quebral Elementary School',
-                                'New Tawas Elementary School',
-                                'Kiopao Elementary School',
-                                'Paraiso Elementary School',
-                                'Makatao Elementary School',
-                                'Datas Elementary School',
-                                'Datu Timawa Elementary School',
-                                'Datu Ansayod Elementary School',
-                                'Balah Licosan Elementary School',
-                                'Maluan Elementary School',
-                                'Kidali ES',
-                                'Dumalogdog E/S',
-                                'Congressman Manuel M. Garcia Elementary School',
-                                'Baguio Central Elementary School',
-                                'Bala ES',
-                                'Dominga ES',
-                                'Darila ES',
-                                'Cabagtukan ES',
-                                'Cabagbahangan Elementary School',
-                                'Wireless ES',
-                                'T. Palma Elementary School',
-                                'Vicenta C. Nograles National High School',
-                                'Lorenzo Latawan National High School',
-                                'Tungkalan National High School',
-                                'Tacunan National High School',
-                                'Salaysay National High School',
-                                'Magtuod National High School',
-                                'Catigan National High School',
-                                'A. L. Navarro National High School',
-                                'Ma. Cristina P. Belcar Agricultural High School',
-                                'Baguio National School of Arts and Trades',
-                                'Elias P. Dacudao Gumalang School of Home Industries',
-                                'Bernardo D. Carpio National High School',
-                                'Cabantian National High School',
-                                'Biao National High School',
-                                'Porferio L. Antipala National High School',
-                                'Binowang National High School',
-                                'Binugao National High School',
-                                'Baracatan National High School',
-                                'Buda National High School',
-                                'Calinan National High School',
-                                'Wangan National High School',
-                                'Crossing Bayabas National High School',
-                                'Elias B. Lopez Memorial National High School',
-                                'Dacudao National High School',
-                                'Daniel R. Aguinaldo National High School',
-                                'Davao City National High School',
-                                'Doña Carmen Denia National High School',
-                                'J. V. Ferriols National High School',
-                                'Davao City Special National High School',
-                                'E. Ramos National High School',
-                                'Erico T. Nograres National High School',
-                                'F. Bangoy National High School',
-                                'Dr. Santiago Dakudao Sr. National High School',
-                                'F. Bustamante National High School',
-                                'Gorgonio Tajo, Sr. National High School',
-                                'Teofilo V. Fernandez National High School',
-                                'Lamanan National High School',
-                                'Saloy National High School',
-                            ];
-                            $sortedSchools = $davaoSchools;
-                            sort($sortedSchools, SORT_NATURAL | SORT_FLAG_CASE);
-                        @endphp
-                        <x-school-search
-                            name="school_name"
-                            label="School (School Nurse, Clinic Staff, School Head, Class Adviser)"
-                            placeholder="Search or type school name..."
-                            :schools="$sortedSchools"
-                        />
+                    <div class="field full" id="schoolField" style="display:none;">
+                        <label for="institution_id">School / Institution <span style="color:#dc2626;">*</span></label>
+                        <select id="institution_id" name="institution_id" style="height:42px;border-radius:10px;border:1px solid var(--line);padding:0 12px;font:inherit;color:var(--text);background:#fff;">
+                            <option value="" disabled selected>Loading schools…</option>
+                        </select>
+                        @error('institution_id')
+                            <span style="color:#dc2626;font-size:0.8rem;">{{ $message }}</span>
+                        @enderror
                     </div>
                     <div class="field" id="gradeField">
                         <label for="assigned_grade_level">Assigned Grade Level</label>
@@ -280,81 +216,89 @@
     </section>
 
     <script>
-        const requestForm = document.getElementById('accountRequestForm');
-        const roleSelect = document.getElementById('role');
-        const schoolHiddenInput = document.querySelector('input[name="school_name"]');
-        const schoolField = document.getElementById('schoolField');
-        const gradeSelect = document.getElementById('assigned_grade_level');
-        const sectionInput = document.getElementById('assigned_section');
-        const gradeField = document.getElementById('gradeField');
-        const sectionField = document.getElementById('sectionField');
+        const SCOPED_ROLES = ['school_nurse', 'clinic_staff', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor'];
+
+        const requestForm     = document.getElementById('accountRequestForm');
+        const roleSelect      = document.getElementById('role');
+        const institutionSel  = document.getElementById('institution_id');
+        const schoolField     = document.getElementById('schoolField');
+        const gradeSelect     = document.getElementById('assigned_grade_level');
+        const sectionInput    = document.getElementById('assigned_section');
+        const gradeField      = document.getElementById('gradeField');
+        const sectionField    = document.getElementById('sectionField');
         const classAdviserHint = document.getElementById('classAdviserHint');
 
-        const syncRoleFields = function () {
-            const isClassAdviser = roleSelect.value === 'class_adviser';
-            const requiresSchool = ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser', 'nutricor'].includes(roleSelect.value);
+        // Fetch institutions from API and populate the dropdown once
+        fetch('/api/institutions')
+            .then(r => r.json())
+            .then(function (institutions) {
+                institutionSel.innerHTML = '<option value="" disabled selected>Select your school…</option>';
+                const oldVal = '{{ old("institution_id") }}';
+                institutions.forEach(function (inst) {
+                    const opt = document.createElement('option');
+                    opt.value = inst.id;
+                    opt.textContent = inst.name;
+                    if (String(inst.id) === oldVal) opt.selected = true;
+                    institutionSel.appendChild(opt);
+                });
+            })
+            .catch(function () {
+                institutionSel.innerHTML = '<option value="" disabled selected>Failed to load schools</option>';
+            });
 
-            schoolField.style.display = requiresSchool ? '' : 'none';
-            gradeField.style.display = isClassAdviser ? '' : 'none';
-            sectionField.style.display = isClassAdviser ? '' : 'none';
+        function syncRoleFields() {
+            const role = roleSelect.value;
+            const requiresSchool = SCOPED_ROLES.includes(role);
+            const isClassAdviser = role === 'class_adviser';
+
+            schoolField.style.display   = requiresSchool ? '' : 'none';
+            gradeField.style.display    = isClassAdviser ? '' : 'none';
+            sectionField.style.display  = isClassAdviser ? '' : 'none';
             classAdviserHint.style.display = isClassAdviser ? '' : 'none';
 
-            schoolHiddenInput.required = requiresSchool;
-            gradeSelect.required = isClassAdviser;
-            sectionInput.required = isClassAdviser;
+            institutionSel.required = requiresSchool;
+            gradeSelect.required    = isClassAdviser;
+            sectionInput.required   = isClassAdviser;
 
             if (!requiresSchool) {
-                schoolHiddenInput.setCustomValidity('');
-                schoolHiddenInput.value = '';
+                institutionSel.value = '';
+                institutionSel.setCustomValidity('');
             }
-
             if (!isClassAdviser) {
-                gradeSelect.setCustomValidity('');
-                sectionInput.setCustomValidity('');
                 gradeSelect.selectedIndex = 0;
                 sectionInput.value = '';
+                gradeSelect.setCustomValidity('');
+                sectionInput.setCustomValidity('');
             }
-        };
+        }
 
         roleSelect.addEventListener('change', function () {
             syncRoleFields();
-            schoolHiddenInput.setCustomValidity('');
-            gradeSelect.setCustomValidity('');
-            sectionInput.setCustomValidity('');
+            institutionSel.setCustomValidity('');
         });
-        
-        schoolHiddenInput.addEventListener('change', function () {
-            schoolHiddenInput.setCustomValidity('');
+
+        institutionSel.addEventListener('change', function () {
+            institutionSel.setCustomValidity('');
         });
-        
+
         sectionInput.addEventListener('input', function () {
             sectionInput.setCustomValidity('');
         });
 
         requestForm.addEventListener('submit', function (event) {
-            const isClassAdviser = roleSelect.value === 'class_adviser';
-            const requiresSchool = ['school_nurse', 'clinic_staff', 'school_head', 'class_adviser', 'nutricor'].includes(roleSelect.value);
+            const role = roleSelect.value;
+            const requiresSchool = SCOPED_ROLES.includes(role);
+            const isClassAdviser = role === 'class_adviser';
 
-            if (requiresSchool) {
-                if (!schoolHiddenInput.value.trim()) {
-                    schoolHiddenInput.setCustomValidity('Please enter school for the selected role.');
-                } else {
-                    schoolHiddenInput.setCustomValidity('');
-                }
+            if (requiresSchool && !institutionSel.value) {
+                institutionSel.setCustomValidity('Please select your school.');
+            } else {
+                institutionSel.setCustomValidity('');
             }
 
             if (isClassAdviser) {
-                if (!gradeSelect.value) {
-                    gradeSelect.setCustomValidity('Please select assigned grade level.');
-                } else {
-                    gradeSelect.setCustomValidity('');
-                }
-
-                if (!sectionInput.value.trim()) {
-                    sectionInput.setCustomValidity('Please enter assigned section.');
-                } else {
-                    sectionInput.setCustomValidity('');
-                }
+                gradeSelect.setCustomValidity(gradeSelect.value ? '' : 'Please select assigned grade level.');
+                sectionInput.setCustomValidity(sectionInput.value.trim() ? '' : 'Please enter assigned section.');
             }
 
             if (!requestForm.checkValidity()) {

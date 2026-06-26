@@ -12,6 +12,7 @@ class StudentHealthRecord extends Model
     use HasFactory;
 
     protected $fillable = [
+        'institution_id',
         'student_name',
         'student_id',
         'school_name',

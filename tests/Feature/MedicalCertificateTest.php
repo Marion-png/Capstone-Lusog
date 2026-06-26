@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Institution;
 use App\Models\MedicalCertificate;
 use App\Models\StudentHealthCondition;
 use App\Models\StudentHealthRecord;
@@ -14,10 +15,13 @@ class MedicalCertificateTest extends TestCase
 {
     use RefreshDatabase;
 
+    private Institution $institution;
+
     protected function setUp(): void
     {
         parent::setUp();
         Storage::fake('local');
+        $this->institution = Institution::create(['name' => 'Test School', 'status' => 'active']);
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────
@@ -29,12 +33,17 @@ class MedicalCertificateTest extends TestCase
             'assigned_grade_level'  => $grade,
             'assigned_section'      => $section,
             'active_name'           => 'Test Adviser',
+            'active_institution_id' => $this->institution->id,
         ];
     }
 
     private function clinicSession(): array
     {
-        return ['active_role' => 'clinic_staff', 'active_name' => 'Test Staff'];
+        return [
+            'active_role'           => 'clinic_staff',
+            'active_name'           => 'Test Staff',
+            'active_institution_id' => $this->institution->id,
+        ];
     }
 
     private function makeRecord(string $lrn, string $section = 'Grade 1 / Sampaguita'): StudentHealthRecord
@@ -91,7 +100,7 @@ class MedicalCertificateTest extends TestCase
     {
         $this->makeRecord('LRN001');
 
-        $response = $this->withSession(['active_role' => 'school_nurse'])
+        $response = $this->withSession(['active_role' => 'school_nurse', 'active_institution_id' => $this->institution->id])
             ->post(route('medical-certificate.store'), $this->validUploadPayload('LRN001'));
 
         $response->assertStatus(403);
@@ -113,7 +122,7 @@ class MedicalCertificateTest extends TestCase
     {
         $this->makeRecord('LRN001');
 
-        $response = $this->withSession(['active_role' => 'school_head'])
+        $response = $this->withSession(['active_role' => 'school_head', 'active_institution_id' => $this->institution->id])
             ->post(route('medical-certificate.store'), $this->validUploadPayload('LRN001'));
 
         $response->assertStatus(403);
@@ -124,7 +133,7 @@ class MedicalCertificateTest extends TestCase
     {
         $this->makeRecord('LRN001');
 
-        $response = $this->withSession(['active_role' => 'feeding_coor'])
+        $response = $this->withSession(['active_role' => 'feeding_coor', 'active_institution_id' => $this->institution->id])
             ->post(route('medical-certificate.store'), $this->validUploadPayload('LRN001'));
 
         $response->assertStatus(403);
@@ -135,7 +144,7 @@ class MedicalCertificateTest extends TestCase
     {
         $this->makeRecord('LRN001');
 
-        $response = $this->withSession(['active_role' => 'nutricor'])
+        $response = $this->withSession(['active_role' => 'nutricor', 'active_institution_id' => $this->institution->id])
             ->post(route('medical-certificate.store'), $this->validUploadPayload('LRN001'));
 
         $response->assertStatus(403);
@@ -321,7 +330,7 @@ class MedicalCertificateTest extends TestCase
             'uploaded_by_name'            => 'Test Adviser',
         ]);
 
-        $this->withSession(['active_role' => 'school_nurse'])
+        $this->withSession(['active_role' => 'school_nurse', 'active_institution_id' => $this->institution->id])
             ->get(route('medical-certificate.download', $cert->id))
             ->assertOk()
             ->assertHeader('Content-Disposition');
@@ -340,7 +349,7 @@ class MedicalCertificateTest extends TestCase
     /** @test */
     public function school_head_cannot_download_certificates(): void
     {
-        $this->withSession(['active_role' => 'school_head'])
+        $this->withSession(['active_role' => 'school_head', 'active_institution_id' => $this->institution->id])
             ->get(route('medical-certificate.download', 999))
             ->assertStatus(403);
     }
@@ -348,7 +357,7 @@ class MedicalCertificateTest extends TestCase
     /** @test */
     public function feeding_coordinator_cannot_download_certificates(): void
     {
-        $this->withSession(['active_role' => 'feeding_coor'])
+        $this->withSession(['active_role' => 'feeding_coor', 'active_institution_id' => $this->institution->id])
             ->get(route('medical-certificate.download', 999))
             ->assertStatus(403);
     }
@@ -356,7 +365,7 @@ class MedicalCertificateTest extends TestCase
     /** @test */
     public function nutritional_coordinator_cannot_download_certificates(): void
     {
-        $this->withSession(['active_role' => 'nutricor'])
+        $this->withSession(['active_role' => 'nutricor', 'active_institution_id' => $this->institution->id])
             ->get(route('medical-certificate.download', 999))
             ->assertStatus(403);
     }
@@ -374,7 +383,7 @@ class MedicalCertificateTest extends TestCase
     public function conditions_api_is_denied_for_unauthorized_roles(): void
     {
         foreach (['school_head', 'feeding_coor', 'nutricor', 'system_admin'] as $role) {
-            $this->withSession(['active_role' => $role])
+            $this->withSession(['active_role' => $role, 'active_institution_id' => $this->institution->id])
                 ->getJson(route('api.student-conditions', ['lrn' => 'X']))
                 ->assertStatus(403);
         }
@@ -395,7 +404,7 @@ class MedicalCertificateTest extends TestCase
             'uploaded_by_name'            => 'Test Adviser',
         ]);
 
-        $response = $this->withSession(['active_role' => 'school_nurse'])
+        $response = $this->withSession(['active_role' => 'school_nurse', 'active_institution_id' => $this->institution->id])
             ->getJson(route('api.student-conditions', ['lrn' => 'LRN001']));
 
         $response->assertOk()

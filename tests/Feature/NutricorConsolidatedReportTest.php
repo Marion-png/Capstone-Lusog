@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -13,14 +14,23 @@ class NutricorConsolidatedReportTest extends TestCase
 
     private const ROUTE = '/dashboard/nutricor-consolidated';
 
+    private Institution $institution;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->institution = Institution::create(['name' => 'Test School', 'status' => 'active']);
+    }
+
     /** Simulate a logged-in nutricor session for the given school. */
     private function nutricorSession(string $schoolName = 'Test School'): array
     {
         return [
-            'active_role'        => 'nutricor',
-            'active_name'        => 'Test Nutricor',
-            'active_username'    => 'nutricor.test',
-            'active_school_name' => $schoolName,
+            'active_role'           => 'nutricor',
+            'active_name'           => 'Test Nutricor',
+            'active_username'       => 'nutricor.test',
+            'active_school_name'    => $schoolName,
+            'active_institution_id' => $this->institution->id,
         ];
     }
 
@@ -28,10 +38,11 @@ class NutricorConsolidatedReportTest extends TestCase
     private function otherRoleSession(string $role = 'school_nurse'): array
     {
         return [
-            'active_role'        => $role,
-            'active_name'        => 'Other User',
-            'active_username'    => 'other.user',
-            'active_school_name' => 'Test School',
+            'active_role'           => $role,
+            'active_name'           => 'Other User',
+            'active_username'       => 'other.user',
+            'active_school_name'    => 'Test School',
+            'active_institution_id' => $this->institution->id,
         ];
     }
 

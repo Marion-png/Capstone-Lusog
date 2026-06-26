@@ -10,6 +10,7 @@ class Medicine extends Model
     use HasFactory;
 
     protected $fillable = [
+        'institution_id',
         'name',
         'stock_quantity',
         'minimum_threshold',

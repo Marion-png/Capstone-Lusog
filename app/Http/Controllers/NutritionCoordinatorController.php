@@ -95,7 +95,10 @@ class NutritionCoordinatorController extends Controller
             return collect();
         }
 
+        $institutionId = session('active_institution_id');
+
         return StudentHealthRecord::query()
+            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
             ->orderBy('school_name')
             ->orderBy('section')
             ->orderBy('student_name')

@@ -7,12 +7,15 @@ use App\Models\StudentHealthRecord;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class NurseController extends Controller
 {
     public function index(Request $request): View
     {
+        $this->syncInstitutionRecordsToSession($request);
+
         $rawRecords = $request->session()->get('school_health_card_records', []);
 
         // Deduplicate by LRN — prefer the entry that already has exam data, otherwise keep first.
@@ -192,5 +195,88 @@ class NurseController extends Controller
         $request->session()->put('school_health_card_records', $records);
 
         return redirect()->route('dashboard.student-health-records')->with('success', 'Medical record saved.');
+    }
+
+    /**
+     * Pull any student_health_records for this institution from the DB into
+     * the nurse's session queue, so adviser submissions from the same school
+     * become visible without requiring a shared browser session.
+     * Records from other institutions are never added.
+     */
+    private function syncInstitutionRecordsToSession(Request $request): void
+    {
+        $institutionId = $request->session()->get('active_institution_id');
+
+        if (!$institutionId || !Schema::hasTable('student_health_records')) {
+            return;
+        }
+
+        $existing   = collect($request->session()->get('school_health_card_records', []));
+        $sessionLrns = $existing
+            ->pluck('lrn')
+            ->filter()
+            ->map(fn ($v) => (string) $v)
+            ->flip();
+
+        $dbRecords = StudentHealthRecord::query()
+            ->where('institution_id', $institutionId)
+            ->get();
+
+        $toAdd = [];
+        foreach ($dbRecords as $record) {
+            $lrn = (string) $record->student_id;
+
+            if ($sessionLrns->has($lrn)) {
+                continue;
+            }
+
+            // student_name is stored as "LastName, FirstName MiddleInitial"
+            $name     = (string) $record->student_name;
+            $commaPos = strpos($name, ', ');
+            if ($commaPos !== false) {
+                $lastName = substr($name, 0, $commaPos);
+                $rest     = substr($name, $commaPos + 2);
+                $spacePos = strpos($rest, ' ');
+                if ($spacePos !== false) {
+                    $firstName  = substr($rest, 0, $spacePos);
+                    $middleName = substr($rest, $spacePos + 1);
+                } else {
+                    $firstName  = $rest;
+                    $middleName = '';
+                }
+            } else {
+                $lastName   = $name;
+                $firstName  = '';
+                $middleName = '';
+            }
+
+            // section is stored as "Grade X / SectionName"
+            $sectionParts = explode(' / ', (string) $record->section, 2);
+            $gradeLevel   = $sectionParts[0] ?? (string) $record->section;
+            $section      = $sectionParts[1] ?? '';
+
+            $toAdd[] = [
+                'lrn'                               => $lrn,
+                'last_name'                         => $lastName,
+                'first_name'                        => $firstName,
+                'middle_name'                       => $middleName,
+                'grade_level'                       => $gradeLevel,
+                'section'                           => $section,
+                'height_cm'                         => $record->baseline_height_cm,
+                'weight_kg'                         => $record->baseline_weight_kg,
+                'age'                               => $record->baseline_age,
+                'bmi_value'                         => $record->bmi_value,
+                'nutritional_status_bmi_for_age'    => $record->nutritional_status,
+                'nutritional_status_height_for_age' => null,
+                'examination'                       => [],
+            ];
+        }
+
+        if (!empty($toAdd)) {
+            $request->session()->put(
+                'school_health_card_records',
+                array_merge($existing->all(), $toAdd)
+            );
+        }
     }
 }
