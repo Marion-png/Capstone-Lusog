@@ -38,55 +38,45 @@ $demoAccounts = [
 ];
 
 Route::get('/', function () use ($demoAccounts) {
-    $existing = collect(session('user_accounts', []))->pluck('username')->toArray();
-    $toAdd = [];
-    foreach ($demoAccounts as $demo) {
-        if (!in_array($demo['username'], $existing)) {
-            $entry = [
-                'name'           => $demo['name'],
-                'username'       => $demo['username'],
-                'password_hash'  => Hash::make($demo['password']),
-                'role'           => $demo['role'],
-                'school_name'    => $demo['school_name'] ?? null,
-                'institution_id' => $demo['institution_id'] ?? null,
-                'created_at'     => now()->toISOString(),
-            ];
-            if ($demo['role'] === 'class_adviser') {
-                $entry['assigned_grade_level'] = $demo['assigned_grade_level'] ?? null;
-                $entry['assigned_section']     = $demo['assigned_section'] ?? null;
+    if (Schema::hasTable('accounts')) {
+        foreach ($demoAccounts as $demo) {
+            if (!DB::table('accounts')->where('username', $demo['username'])->exists()) {
+                DB::table('accounts')->insert([
+                    'name'                 => $demo['name'],
+                    'username'             => $demo['username'],
+                    'password_hash'        => Hash::make($demo['password']),
+                    'role'                 => $demo['role'],
+                    'school_name'          => $demo['school_name'] ?? null,
+                    'institution_id'       => $demo['institution_id'] ?? null,
+                    'assigned_grade_level' => $demo['role'] === 'class_adviser' ? ($demo['assigned_grade_level'] ?? null) : null,
+                    'assigned_section'     => $demo['role'] === 'class_adviser' ? ($demo['assigned_section'] ?? null) : null,
+                    'created_at'           => now(),
+                    'updated_at'           => now(),
+                ]);
             }
-            $toAdd[] = $entry;
         }
-    }
-    if ($toAdd) {
-        session(['user_accounts' => array_merge(session('user_accounts', []), $toAdd)]);
     }
     return view('auth.login', ['demoAccounts' => $demoAccounts]);
 });
 
 Route::get('/login', function () use ($demoAccounts) {
-    $existing = collect(session('user_accounts', []))->pluck('username')->toArray();
-    $toAdd = [];
-    foreach ($demoAccounts as $demo) {
-        if (!in_array($demo['username'], $existing)) {
-            $entry = [
-                'name'           => $demo['name'],
-                'username'       => $demo['username'],
-                'password_hash'  => Hash::make($demo['password']),
-                'role'           => $demo['role'],
-                'school_name'    => $demo['school_name'] ?? null,
-                'institution_id' => $demo['institution_id'] ?? null,
-                'created_at'     => now()->toISOString(),
-            ];
-            if ($demo['role'] === 'class_adviser') {
-                $entry['assigned_grade_level'] = $demo['assigned_grade_level'] ?? null;
-                $entry['assigned_section']     = $demo['assigned_section'] ?? null;
+    if (Schema::hasTable('accounts')) {
+        foreach ($demoAccounts as $demo) {
+            if (!DB::table('accounts')->where('username', $demo['username'])->exists()) {
+                DB::table('accounts')->insert([
+                    'name'                 => $demo['name'],
+                    'username'             => $demo['username'],
+                    'password_hash'        => Hash::make($demo['password']),
+                    'role'                 => $demo['role'],
+                    'school_name'          => $demo['school_name'] ?? null,
+                    'institution_id'       => $demo['institution_id'] ?? null,
+                    'assigned_grade_level' => $demo['role'] === 'class_adviser' ? ($demo['assigned_grade_level'] ?? null) : null,
+                    'assigned_section'     => $demo['role'] === 'class_adviser' ? ($demo['assigned_section'] ?? null) : null,
+                    'created_at'           => now(),
+                    'updated_at'           => now(),
+                ]);
             }
-            $toAdd[] = $entry;
         }
-    }
-    if ($toAdd) {
-        session(['user_accounts' => array_merge(session('user_accounts', []), $toAdd)]);
     }
     return view('auth.login', ['demoAccounts' => $demoAccounts]);
 })->name('login');
@@ -121,16 +111,16 @@ Route::post('/account-request', function (Request $request) {
             ->withInput();
     }
 
-    $pendingRequests = $request->session()->get('pending_account_requests', []);
     $username = strtolower(trim($validated['username']));
 
-    $alreadyPending = collect($pendingRequests)->contains(function (array $item) use ($username): bool {
-        return strtolower(trim((string) ($item['username'] ?? ''))) === $username;
-    });
+    $alreadyPending = Schema::hasTable('account_requests') && DB::table('account_requests')
+        ->whereRaw('LOWER(TRIM(username)) = ?', [$username])
+        ->where('status', 'pending')
+        ->exists();
 
-    $alreadyApproved = collect($request->session()->get('user_accounts', []))->contains(function (array $item) use ($username): bool {
-        return strtolower(trim((string) ($item['username'] ?? ''))) === $username;
-    });
+    $alreadyApproved = Schema::hasTable('accounts') && DB::table('accounts')
+        ->whereRaw('LOWER(TRIM(username)) = ?', [$username])
+        ->exists();
 
     if ($alreadyPending || $alreadyApproved) {
         return back()
@@ -141,7 +131,7 @@ Route::post('/account-request', function (Request $request) {
     $institutionId = in_array($role, $scopedRoles, true) ? ((int) $validated['institution_id']) : null;
     $institution   = $institutionId ? Institution::find($institutionId) : null;
 
-    $pendingRequests[] = [
+    DB::table('account_requests')->insert([
         'id'                   => (string) str()->uuid(),
         'name'                 => $validated['name'],
         'username'             => $validated['username'],
@@ -151,10 +141,11 @@ Route::post('/account-request', function (Request $request) {
         'school_name'          => $institution?->name,
         'assigned_grade_level' => $role === 'class_adviser' ? ($validated['assigned_grade_level'] ?? null) : null,
         'assigned_section'     => $role === 'class_adviser' ? ($validated['assigned_section'] ?? null) : null,
-        'created_at'           => now()->toIso8601String(),
-    ];
-
-    $request->session()->put('pending_account_requests', $pendingRequests);
+        'status'               => 'pending',
+        'decided_at'           => null,
+        'created_at'           => now(),
+        'updated_at'           => now(),
+    ]);
 
     return redirect()
         ->route('account.request')
@@ -648,20 +639,17 @@ Route::get('/dashboard/system-admin', function () {
             ->with('error', 'You are not authorized to open the System Admin page.');
     }
 
-    $accounts = collect(session('user_accounts', []))
-        ->sortByDesc('created_at')
-        ->values()
-        ->all();
+    $accounts = Schema::hasTable('accounts')
+        ? DB::table('accounts')->orderByDesc('created_at')->get()->map(fn ($r) => (array) $r)->values()->all()
+        : [];
 
-    $pendingRequests = collect(session('pending_account_requests', []))
-        ->sortByDesc('created_at')
-        ->values()
-        ->all();
+    $pendingRequests = Schema::hasTable('account_requests')
+        ? DB::table('account_requests')->where('status', 'pending')->orderByDesc('created_at')->get()->map(fn ($r) => (array) $r)->values()->all()
+        : [];
 
-    $requestHistory = collect(session('account_request_history', []))
-        ->sortByDesc('decided_at')
-        ->values()
-        ->all();
+    $requestHistory = Schema::hasTable('account_requests')
+        ? DB::table('account_requests')->whereIn('status', ['accepted', 'declined'])->orderByDesc('decided_at')->get()->map(fn ($r) => array_merge((array) $r, ['submitted_at' => $r->created_at]))->values()->all()
+        : [];
 
     return view('dashboard.system-admin', [
         'accounts' => $accounts,
@@ -696,13 +684,11 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
             ->withInput();
     }
 
-    $accounts = $request->session()->get('user_accounts', []);
     $username = strtolower(trim($validated['username']));
 
-    $alreadyExists = collect($accounts)->contains(function (array $account) use ($username): bool {
-        $existingUsername = strtolower(trim((string) ($account['username'] ?? '')));
-        return $existingUsername === $username;
-    });
+    $alreadyExists = Schema::hasTable('accounts') && DB::table('accounts')
+        ->whereRaw('LOWER(TRIM(username)) = ?', [$username])
+        ->exists();
 
     if ($alreadyExists) {
         return back()
@@ -713,18 +699,18 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
     $institutionId = in_array($role, $scopedRoles, true) ? ((int) $validated['institution_id']) : null;
     $institution   = $institutionId ? Institution::find($institutionId) : null;
 
-    $accounts[] = [
+    DB::table('accounts')->insert([
         'name'                 => $validated['name'],
         'username'             => $validated['username'],
+        'password_hash'        => null,
         'role'                 => $role,
         'institution_id'       => $institutionId,
         'school_name'          => $institution?->name,
         'assigned_grade_level' => $role === 'class_adviser' ? ($validated['assigned_grade_level'] ?? null) : null,
         'assigned_section'     => $role === 'class_adviser' ? ($validated['assigned_section'] ?? null) : null,
-        'created_at'           => now()->toIso8601String(),
-    ];
-
-    $request->session()->put('user_accounts', $accounts);
+        'created_at'           => now(),
+        'updated_at'           => now(),
+    ]);
 
     return back()->with('success', 'User account created successfully.');
 })->name('dashboard.system-admin.accounts.store');
@@ -736,62 +722,41 @@ Route::post('/dashboard/system-admin/requests/{requestId}/approve', function (Re
             ->with('error', 'Only System Admin can approve account requests.');
     }
 
-    $pendingRequests = collect($request->session()->get('pending_account_requests', []));
-    $target = $pendingRequests->first(function (array $item) use ($requestId): bool {
-        return (string) ($item['id'] ?? '') === $requestId;
-    });
+    $target = Schema::hasTable('account_requests')
+        ? DB::table('account_requests')->where('id', $requestId)->first()
+        : null;
 
     if (!$target) {
         return back()->with('error', 'Account request not found.');
     }
 
-    $accounts = $request->session()->get('user_accounts', []);
-    $username = strtolower(trim((string) ($target['username'] ?? '')));
-    $role = (string) ($target['role'] ?? '');
+    $username = strtolower(trim((string) ($target->username ?? '')));
+    $role = (string) ($target->role ?? '');
 
-    $alreadyExists = collect($accounts)->contains(function (array $account) use ($username): bool {
-        $existingUsername = strtolower(trim((string) ($account['username'] ?? '')));
-        return $existingUsername === $username;
-    });
+    $alreadyExists = Schema::hasTable('accounts') && DB::table('accounts')
+        ->whereRaw('LOWER(TRIM(username)) = ?', [$username])
+        ->exists();
 
-    if (!$alreadyExists) {
-        $accounts[] = [
-            'name'                 => $target['name'] ?? '-',
-            'username'             => $target['username'] ?? '-',
-            'password_hash'        => $target['password_hash'] ?? null,
+    if (!$alreadyExists && Schema::hasTable('accounts')) {
+        DB::table('accounts')->insert([
+            'name'                 => $target->name ?? '-',
+            'username'             => $target->username ?? '-',
+            'password_hash'        => $target->password_hash ?? null,
             'role'                 => $role,
-            'institution_id'       => $target['institution_id'] ?? null,
-            'school_name'          => $target['school_name'] ?? null,
-            'assigned_grade_level' => $role === 'class_adviser' ? ($target['assigned_grade_level'] ?? null) : null,
-            'assigned_section'     => $role === 'class_adviser' ? ($target['assigned_section'] ?? null) : null,
-            'created_at'           => now()->toIso8601String(),
-        ];
-        $request->session()->put('user_accounts', $accounts);
+            'institution_id'       => $target->institution_id ?? null,
+            'school_name'          => $target->school_name ?? null,
+            'assigned_grade_level' => $role === 'class_adviser' ? ($target->assigned_grade_level ?? null) : null,
+            'assigned_section'     => $role === 'class_adviser' ? ($target->assigned_section ?? null) : null,
+            'created_at'           => now(),
+            'updated_at'           => now(),
+        ]);
     }
 
-    $remaining = $pendingRequests
-        ->reject(function (array $item) use ($requestId): bool {
-            return (string) ($item['id'] ?? '') === $requestId;
-        })
-        ->values()
-        ->all();
-
-    $history = $request->session()->get('account_request_history', []);
-    $history[] = [
-        'id' => $target['id'] ?? (string) str()->uuid(),
-        'name' => $target['name'] ?? '-',
-        'username' => $target['username'] ?? '-',
-        'role' => $target['role'] ?? '-',
-        'school_name' => $target['school_name'] ?? null,
-        'assigned_grade_level' => $target['assigned_grade_level'] ?? null,
-        'assigned_section' => $target['assigned_section'] ?? null,
-        'submitted_at' => $target['created_at'] ?? null,
-        'status' => 'accepted',
-        'decided_at' => now()->toIso8601String(),
-    ];
-
-    $request->session()->put('account_request_history', $history);
-    $request->session()->put('pending_account_requests', $remaining);
+    DB::table('account_requests')->where('id', $requestId)->update([
+        'status'     => 'accepted',
+        'decided_at' => now(),
+        'updated_at' => now(),
+    ]);
 
     return back()->with('success', 'Account request approved and account created.');
 })->name('dashboard.system-admin.requests.approve');
@@ -803,38 +768,19 @@ Route::post('/dashboard/system-admin/requests/{requestId}/decline', function (Re
             ->with('error', 'Only System Admin can decline account requests.');
     }
 
-    $pendingRequests = collect($request->session()->get('pending_account_requests', []));
-    $target = $pendingRequests->first(function (array $item) use ($requestId): bool {
-        return (string) ($item['id'] ?? '') === $requestId;
-    });
+    $target = Schema::hasTable('account_requests')
+        ? DB::table('account_requests')->where('id', $requestId)->first()
+        : null;
 
     if (!$target) {
         return back()->with('error', 'Account request not found.');
     }
 
-    $remaining = $pendingRequests
-        ->reject(function (array $item) use ($requestId): bool {
-            return (string) ($item['id'] ?? '') === $requestId;
-        })
-        ->values()
-        ->all();
-
-    $history = $request->session()->get('account_request_history', []);
-    $history[] = [
-        'id' => $target['id'] ?? (string) str()->uuid(),
-        'name' => $target['name'] ?? '-',
-        'username' => $target['username'] ?? '-',
-        'role' => $target['role'] ?? '-',
-        'school_name' => $target['school_name'] ?? null,
-        'assigned_grade_level' => $target['assigned_grade_level'] ?? null,
-        'assigned_section' => $target['assigned_section'] ?? null,
-        'submitted_at' => $target['created_at'] ?? null,
-        'status' => 'declined',
-        'decided_at' => now()->toIso8601String(),
-    ];
-
-    $request->session()->put('account_request_history', $history);
-    $request->session()->put('pending_account_requests', $remaining);
+    DB::table('account_requests')->where('id', $requestId)->update([
+        'status'     => 'declined',
+        'decided_at' => now(),
+        'updated_at' => now(),
+    ]);
 
     return back()->with('success', 'Account request declined.');
 })->name('dashboard.system-admin.requests.decline');
@@ -869,11 +815,11 @@ Route::post('/login', function (Request $request) {
     ]);
 
     $username = strtolower(trim((string) $request->input('email')));
-    $accounts = collect($request->session()->get('user_accounts', []));
-    $matchingAccounts = $accounts->filter(function (array $item) use ($username): bool {
-        $itemUsername = strtolower(trim((string) ($item['username'] ?? '')));
-        return $itemUsername === $username;
-    })->values();
+    $matchingAccounts = collect(
+        Schema::hasTable('accounts')
+            ? DB::table('accounts')->whereRaw('LOWER(TRIM(username)) = ?', [$username])->get()->map(fn ($r) => (array) $r)->values()->all()
+            : []
+    );
 
     if ($matchingAccounts->isEmpty()) {
         return back()
