@@ -153,3 +153,25 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
     .sidebar { display: none; }
     .main { margin-left: 0; }
 }
+
+/* ── Smooth modal animation ── */
+@keyframes sn-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sn-modal-in { from { opacity: 0; transform: translateY(-12px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.profile-backdrop.open { animation: sn-backdrop-in .16s ease; }
+.profile-backdrop.open .profile-modal { animation: sn-modal-in .2s cubic-bezier(.22, 1, .36, 1); }
+
+/* ── Content & profile scrollbars ── */
+.content { scrollbar-width: thin; scrollbar-color: var(--g200) transparent; scroll-behavior: smooth; }
+.content::-webkit-scrollbar { width: 5px; }
+.content::-webkit-scrollbar-thumb { background: var(--g200); border-radius: 99px; }
+.profile-body { scrollbar-width: thin; scrollbar-color: var(--g200) transparent; scroll-behavior: smooth; }
+.profile-body::-webkit-scrollbar { width: 4px; }
+.profile-body::-webkit-scrollbar-thumb { background: var(--g200); border-radius: 99px; }
+
+/* ── Optimise hover transitions ── */
+.record-card { will-change: transform; }
+.profile-tab { transition: color .14s, border-color .14s; }
+.profile-body .kv { margin-bottom: 5px; }
+
+/* ── Profile tabs overflow for many tabs ── */
+.profile-tabs { overflow-x: auto; }

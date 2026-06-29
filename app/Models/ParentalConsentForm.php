@@ -14,9 +14,29 @@ class ParentalConsentForm extends Model
         'student_health_record_id',
         'program_type',
         'school_year',
+        'consent_type',
+        'partial_exception',
+        'refused_reason',
+        'allergy_food',
+        'allergy_food_detail',
+        'allergy_medicine',
+        'allergy_medicine_detail',
+        'prev_immunization',
+        'prev_immunization_detail',
+        'has_other_illness',
+        'other_illness_detail',
+        'medical_cert_attached',
         'file_path',
         'file_original_name',
         'uploaded_by_name',
+    ];
+
+    protected $casts = [
+        'allergy_food'        => 'boolean',
+        'allergy_medicine'    => 'boolean',
+        'prev_immunization'   => 'boolean',
+        'has_other_illness'   => 'boolean',
+        'medical_cert_attached' => 'boolean',
     ];
 
     public function studentHealthRecord(): BelongsTo

@@ -231,7 +231,48 @@ tbody tr:hover td{background:#f7fbf8}
 
 #profileClose{position:sticky;left:12px;bottom:12px;width:max-content}
 
+/* Health Assessment (MLHAT) form styles */
+.ha-section{background:#f7faf8;border:1px solid #d1dbd5;border-radius:9px;padding:12px 14px;margin-bottom:12px}
+.ha-section-head{font-size:.72rem;font-weight:700;color:#1d3c31;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #d1dbd5}
+.ha-label{display:block;font-size:.7rem;font-weight:700;color:#334a3f;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.ha-input{width:100%;padding:7px 10px;border:1.5px solid #d1dbd5;border-radius:7px;font-size:.8rem;color:#1d3c31;background:#fff;box-sizing:border-box}
+.ha-input:focus{outline:none;border-color:#15803d}
+.ha-input[readonly]{background:#f0f4f2;color:#6f8c7a;cursor:default}
+textarea.ha-input{font-family:inherit}
+.ha-check{accent-color:#15803d;width:14px;height:14px;cursor:pointer}
+.ha-check-label{display:flex;align-items:center;gap:5px;font-size:.8rem;color:#1d3c31;cursor:pointer;user-select:none}
+.ha-systems-table{width:100%;border-collapse:collapse;font-size:.76rem;min-width:480px}
+.ha-systems-table th{background:#e8f0eb;color:#1d3c31;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:7px 10px;text-align:left;border:1px solid #c9d8ce}
+.ha-systems-table td{padding:6px 10px;border:1px solid #d1dbd5;vertical-align:top}
+.ha-systems-table tbody tr:nth-child(even) td{background:#f7faf8}
+
 @media (max-width:980px){.stats{grid-template-columns:1fr}.grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.profile-grid{grid-template-columns:1fr}.student-grid{grid-template-columns:1fr}.calc-grid{grid-template-columns:1fr 1fr}.add-head{flex-direction:column;align-items:flex-start}}
 @media (max-width:980px){.adviser-dashboard-grid{grid-template-columns:1fr 1fr}.dashboard-panels-two{grid-template-columns:1fr}}
 @media (max-width:620px){.adviser-dashboard-grid{grid-template-columns:1fr}}
 @media (max-width:780px){.sidebar{display:none}.main{margin-left:0}}
+
+/* ── Smooth modal animation ── */
+@keyframes ca-backdrop-in{from{opacity:0}to{opacity:1}}
+@keyframes ca-modal-in{from{opacity:0;transform:translateY(-12px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+.profile-backdrop.open{animation:ca-backdrop-in .16s ease}
+.profile-backdrop.open .student-profile-modal{animation:ca-modal-in .2s cubic-bezier(.22,1,.36,1)}
+.profile-backdrop.open .confirm-modal{animation:ca-modal-in .2s cubic-bezier(.22,1,.36,1)}
+
+/* ── Content area scrollbar ── */
+.content{scrollbar-width:thin;scrollbar-color:#c8e8d8 transparent;scroll-behavior:smooth}
+.content::-webkit-scrollbar{width:5px}
+.content::-webkit-scrollbar-thumb{background:#c8e8d8;border-radius:99px}
+
+/* ── Profile body scrollbar ── */
+.student-profile-body{scrollbar-width:thin;scrollbar-color:#d1dbd5 transparent;scroll-behavior:smooth}
+.student-profile-body::-webkit-scrollbar{width:4px}
+.student-profile-body::-webkit-scrollbar-thumb{background:#d1dbd5;border-radius:99px}
+
+/* ── Optimise hover transitions ── */
+.card{will-change:transform}
+.profile-open-btn{transition:background .15s ease,color .15s ease,border-color .15s ease}
+.my-students-table tbody tr{transition:background .12s ease}
+tbody tr:hover td{background:#f3fbf6}
+
+/* ── Ha-section scrollable overflow (body-systems table) ── */
+.student-profile-section{overflow-x:auto}

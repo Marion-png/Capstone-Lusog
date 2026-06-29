@@ -257,18 +257,42 @@
             @if($consentForm === null)
                 <div style="background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;">
                     No signed parental consent on file for this student for SY {{ $consentSchoolYear }}.
-                    Deworming cannot be marked as given until the Class Adviser uploads a consent form.
+                    Deworming cannot be marked as given until the Class Adviser records a consent form.
+                </div>
+            @elseif($consentForm->consent_type === 'refused')
+                <div style="background:#f3f4f6;border:1px solid #d1d5db;color:#374151;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;">
+                    <span>Consent refused for SY {{ $consentSchoolYear }}@if($consentForm->refused_reason) &mdash; Reason: {{ $consentForm->refused_reason }}@endif.</span>
+                    Deworming cannot be recorded.
+                    @if($consentForm->file_path !== null)
+                        <a href="{{ route('parental-consent.download', $consentForm->id) }}" target="_blank" rel="noopener noreferrer"
+                           style="display:inline-flex;align-items:center;gap:4px;color:#374151;font-size:.74rem;font-weight:700;text-decoration:underline;margin-left:8px;">
+                            View signed form
+                        </a>
+                    @endif
+                </div>
+            @elseif($consentForm->consent_type === 'partial')
+                <div style="background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                    <span>Partial consent on file for SY {{ $consentSchoolYear }}@if($consentForm->partial_exception) &mdash; Except: {{ $consentForm->partial_exception }}@endif. Verify that deworming is included before recording.</span>
+                    @if($consentForm->file_path !== null)
+                        <a href="{{ route('parental-consent.download', $consentForm->id) }}" target="_blank" rel="noopener noreferrer"
+                           style="display:inline-flex;align-items:center;gap:5px;background:#92400e;color:#fff;border-radius:6px;padding:5px 11px;font-size:.74rem;font-weight:700;text-decoration:none;flex-shrink:0;">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                            View Consent Form
+                        </a>
+                    @endif
                 </div>
             @else
-                <div style="display:flex;align-items:center;justify-content:space-between;background:#dcfce7;border:1px solid #86efac;color:#15803d;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;">
-                    <span>Parental consent on file for SY {{ $consentSchoolYear }}. Deworming may be recorded.</span>
-                    <a href="{{ route('parental-consent.download', $consentForm->id) }}"
-                       target="_blank"
-                       rel="noopener noreferrer"
-                       style="display:inline-flex;align-items:center;gap:5px;background:#15803d;color:#fff;border-radius:6px;padding:5px 11px;font-size:.74rem;font-weight:700;text-decoration:none;flex-shrink:0;margin-left:12px;">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                        View Consent Form
-                    </a>
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;background:#dcfce7;border:1px solid #86efac;color:#15803d;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;">
+                    <span>Full parental consent on file for SY {{ $consentSchoolYear }}. Deworming may be recorded.</span>
+                    @if($consentForm->file_path !== null)
+                        <a href="{{ route('parental-consent.download', $consentForm->id) }}"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           style="display:inline-flex;align-items:center;gap:5px;background:#15803d;color:#fff;border-radius:6px;padding:5px 11px;font-size:.74rem;font-weight:700;text-decoration:none;flex-shrink:0;">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                            View Consent Form
+                        </a>
+                    @endif
                 </div>
             @endif
 

@@ -57,12 +57,13 @@ class ParentalConsentFormTest extends TestCase
         ]);
     }
 
-    private function makeConsent(StudentHealthRecord $record, ?string $schoolYear = null): ParentalConsentForm
+    private function makeConsent(StudentHealthRecord $record, ?string $schoolYear = null, string $consentType = 'full'): ParentalConsentForm
     {
         return ParentalConsentForm::create([
             'student_health_record_id' => $record->id,
             'program_type'             => 'Deworming',
             'school_year'              => $schoolYear ?? ParentalConsentForm::currentSchoolYear(),
+            'consent_type'             => $consentType,
             'file_path'                => 'parental-consents/' . $record->id . '/fake.pdf',
             'file_original_name'       => 'consent.pdf',
             'uploaded_by_name'         => 'Test Adviser',
@@ -95,8 +96,9 @@ class ParentalConsentFormTest extends TestCase
 
         $response = $this->withSession($this->adviserSession())
             ->post(route('parental-consent.store'), [
-                'lrn'     => 'LRN001',
-                'consent' => UploadedFile::fake()->create('consent.pdf', 100, 'application/pdf'),
+                'lrn'          => 'LRN001',
+                'consent_type' => 'full',
+                'consent'      => UploadedFile::fake()->create('consent.pdf', 100, 'application/pdf'),
             ]);
 
         $response->assertRedirect();
@@ -104,6 +106,7 @@ class ParentalConsentFormTest extends TestCase
         $this->assertDatabaseHas('parental_consent_forms', [
             'program_type'     => 'Deworming',
             'uploaded_by_name' => 'Test Adviser',
+            'consent_type'     => 'full',
         ]);
         Storage::disk('local')->assertExists(ParentalConsentForm::first()->file_path);
     }
@@ -115,8 +118,9 @@ class ParentalConsentFormTest extends TestCase
 
         $response = $this->withSession($this->adviserSession('Grade 1', 'Sampaguita'))
             ->post(route('parental-consent.store'), [
-                'lrn'     => 'LRN002',
-                'consent' => UploadedFile::fake()->create('consent.pdf', 100, 'application/pdf'),
+                'lrn'          => 'LRN002',
+                'consent_type' => 'full',
+                'consent'      => UploadedFile::fake()->create('consent.pdf', 100, 'application/pdf'),
             ]);
 
         $response->assertStatus(403);
@@ -135,8 +139,9 @@ class ParentalConsentFormTest extends TestCase
                 'active_institution_id' => $this->institution->id,
             ])
             ->post(route('parental-consent.store'), [
-                'lrn'     => 'LRN001',
-                'consent' => UploadedFile::fake()->create('consent.pdf', 100, 'application/pdf'),
+                'lrn'          => 'LRN001',
+                'consent_type' => 'full',
+                'consent'      => UploadedFile::fake()->create('consent.pdf', 100, 'application/pdf'),
             ]);
 
         $response->assertStatus(403);
@@ -149,8 +154,9 @@ class ParentalConsentFormTest extends TestCase
 
         $this->withSession($this->nurseSession())
             ->post(route('parental-consent.store'), [
-                'lrn'     => 'LRN001',
-                'consent' => UploadedFile::fake()->create('consent.pdf', 100, 'application/pdf'),
+                'lrn'          => 'LRN001',
+                'consent_type' => 'full',
+                'consent'      => UploadedFile::fake()->create('consent.pdf', 100, 'application/pdf'),
             ])
             ->assertStatus(403);
     }
@@ -163,8 +169,9 @@ class ParentalConsentFormTest extends TestCase
         // Explicitly clear the role so no session bleeding from prior test methods can pass the gate
         $this->withSession(['active_role' => ''])
             ->post(route('parental-consent.store'), [
-                'lrn'     => 'LRN001',
-                'consent' => UploadedFile::fake()->create('consent.pdf', 100, 'application/pdf'),
+                'lrn'          => 'LRN001',
+                'consent_type' => 'full',
+                'consent'      => UploadedFile::fake()->create('consent.pdf', 100, 'application/pdf'),
             ])
             ->assertStatus(403);
     }
@@ -178,8 +185,9 @@ class ParentalConsentFormTest extends TestCase
 
         $response = $this->withSession($this->adviserSession())
             ->post(route('parental-consent.store'), [
-                'lrn'     => 'LRN001',
-                'consent' => UploadedFile::fake()->create('form.docx', 100, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+                'lrn'          => 'LRN001',
+                'consent_type' => 'full',
+                'consent'      => UploadedFile::fake()->create('form.docx', 100, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
             ]);
 
         $response->assertSessionHasErrors('consent');
@@ -193,8 +201,9 @@ class ParentalConsentFormTest extends TestCase
 
         $this->withSession($this->adviserSession())
             ->post(route('parental-consent.store'), [
-                'lrn'     => 'LRN001',
-                'consent' => UploadedFile::fake()->create('virus.exe', 100, 'application/x-msdownload'),
+                'lrn'          => 'LRN001',
+                'consent_type' => 'full',
+                'consent'      => UploadedFile::fake()->create('virus.exe', 100, 'application/x-msdownload'),
             ])
             ->assertSessionHasErrors('consent');
     }
@@ -206,8 +215,9 @@ class ParentalConsentFormTest extends TestCase
 
         $this->withSession($this->adviserSession())
             ->post(route('parental-consent.store'), [
-                'lrn'     => 'LRN001',
-                'consent' => UploadedFile::fake()->create('big.pdf', 6000, 'application/pdf'),
+                'lrn'          => 'LRN001',
+                'consent_type' => 'full',
+                'consent'      => UploadedFile::fake()->create('big.pdf', 6000, 'application/pdf'),
             ])
             ->assertSessionHasErrors('consent');
     }
@@ -227,8 +237,9 @@ class ParentalConsentFormTest extends TestCase
 
             $this->withSession($this->adviserSession())
                 ->post(route('parental-consent.store'), [
-                    'lrn'     => $lrn,
-                    'consent' => UploadedFile::fake()->create($filename, 100, $mime),
+                    'lrn'          => $lrn,
+                    'consent_type' => 'full',
+                    'consent'      => UploadedFile::fake()->create($filename, 100, $mime),
                 ])
                 ->assertSessionMissing('errors');
         }

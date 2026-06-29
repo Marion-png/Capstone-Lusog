@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdviserController;
+use App\Http\Controllers\HealthAssessmentController;
 use App\Http\Controllers\ConditionController;
 use App\Http\Controllers\MedicalCertificateController;
 use App\Http\Controllers\ParentalConsentFormController;
@@ -593,6 +594,12 @@ Route::get('/parental-consent/{id}/download', [ParentalConsentFormController::cl
 // API: check deworming consent status for a student by LRN (class_adviser, clinic_staff, school_nurse)
 Route::get('/api/student-consent-status', [ParentalConsentFormController::class, 'consentStatus'])
     ->name('api.student-consent-status');
+
+// Health Assessment (MLHAT) — class_adviser submit, nurse/staff read
+Route::post('/adviser/health-assessment', [HealthAssessmentController::class, 'store'])
+    ->name('health-assessment.store');
+Route::get('/api/student-health-assessment', [HealthAssessmentController::class, 'status'])
+    ->name('api.student-health-assessment');
 
 Route::get('/dashboard/feedingcor-program', function (Request $request) {
     $activeRole = strtolower(trim((string) $request->session()->get('active_role', '')));

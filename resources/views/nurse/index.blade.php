@@ -25,7 +25,9 @@
         .badge-done { display: inline-flex; align-items: center; gap: 5px; background: #dcfce7; color: #166534; font-size: .68rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
         .badge-pend { display: inline-flex; align-items: center; gap: 5px; background: #f3f4f6; color: #6b7280; font-size: .68rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
         .badge-consent { display: inline-flex; align-items: center; gap: 5px; background: #dcfce7; color: #166534; font-size: .68rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
-        .badge-no-consent { display: inline-flex; align-items: center; gap: 5px; background: #fef3c7; color: #92400e; font-size: .68rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+        .badge-partial-consent { display: inline-flex; align-items: center; gap: 5px; background: #fef3c7; color: #92400e; font-size: .68rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+        .badge-refused-consent { display: inline-flex; align-items: center; gap: 5px; background: #f3f4f6; color: #374151; font-size: .68rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+        .badge-no-consent { display: inline-flex; align-items: center; gap: 5px; background: #fee2e2; color: #991b1b; font-size: .68rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
         .btn-view-consent { display: inline-flex; align-items: center; gap: 4px; background: none; color: #15803d; font-size: .7rem; font-weight: 700; padding: 2px 6px; border-radius: 5px; text-decoration: none; border: 1.5px solid #86efac; margin-left: 5px; transition: background .15s; }
         .btn-view-consent:hover { background: #dcfce7; }
         .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
@@ -131,15 +133,23 @@
                         <td>{{ $record['weight_kg'] ?? '—' }}</td>
                         <td>
                             @if ($rowConsent !== null)
-                                <span class="badge-consent"><span class="badge-dot"></span>On file</span>
-                                <a href="{{ route('parental-consent.download', $rowConsent->id) }}"
-                                   target="_blank"
-                                   rel="noopener noreferrer"
-                                   class="btn-view-consent"
-                                   title="View consent form in new tab">
-                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                                    View
-                                </a>
+                                @if ($rowConsent->consent_type === 'refused')
+                                    <span class="badge-refused-consent"><span class="badge-dot"></span>Refused</span>
+                                @elseif ($rowConsent->consent_type === 'partial')
+                                    <span class="badge-partial-consent"><span class="badge-dot"></span>Partial</span>
+                                @else
+                                    <span class="badge-consent"><span class="badge-dot"></span>Full consent</span>
+                                @endif
+                                @if ($rowConsent->file_path !== null)
+                                    <a href="{{ route('parental-consent.download', $rowConsent->id) }}"
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       class="btn-view-consent"
+                                       title="View signed consent form">
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                        View
+                                    </a>
+                                @endif
                             @else
                                 <span class="badge-no-consent"><span class="badge-dot"></span>Missing</span>
                             @endif

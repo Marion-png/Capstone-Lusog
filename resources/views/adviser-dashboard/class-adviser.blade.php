@@ -58,8 +58,8 @@
         </a>
     </nav>
     <div class="sb-user">
-        <div class="sb-avatar">{{ substr(auth()->user()->name ?? 'CA',0,2) }}</div>
-        <div class="sb-user-name">{{ auth()->user()->name ?? 'Class Adviser' }}</div>
+        <div class="sb-avatar">{{ strtoupper(substr(session('active_name', 'CA'), 0, 2)) }}</div>
+        <div class="sb-user-name">{{ session('active_name', 'Class Adviser') }}</div>
         <form method="POST" action="{{ route('logout') }}">
             @csrf
             <button type="submit" class="sb-logout" title="Sign out" aria-label="Sign out">
@@ -86,7 +86,7 @@
         @php
             $assignedGradeLevel = session('assigned_grade_level');
             $assignedSection = session('assigned_section');
-            $assignedSchoolName = session('assigned_school_name');
+            $assignedSchoolName = session('assigned_school_name') ?? session('active_school_name');
             $assignedClassLabel = ($assignedGradeLevel && $assignedSection)
                 ? ($assignedGradeLevel . ' / ' . $assignedSection)
                 : 'Not Assigned';
@@ -289,17 +289,17 @@
                                 $recentMiddleInitial = $recentMiddle !== '' ? (' ' . strtoupper(substr($recentMiddle, 0, 1)) . '.') : '';
                                 $recentFullName = trim(($recentRecord['last_name'] ?? '') . ', ' . ($recentRecord['first_name'] ?? '') . $recentMiddleInitial);
                                 $recentLrn = $recentRecord['lrn'] ?? '';
-                                $recentStatus = (!empty($recentRecord['examination']) && isset($lrnsWithCertificates[$recentLrn])) ? 'Complete' : 'Pending';
+                                $recentExamined = !empty($recentRecord['examination']);
                             @endphp
                             <tr>
                                 <td>{{ $recentFullName }}</td>
                                 <td>{{ $recentRecord['lrn'] ?? '-' }}</td>
                                 <td>{{ $recentRecord['nutritional_status_bmi_for_age'] ?? '-' }}</td>
                                 <td>
-                                    @if ($recentStatus === 'Complete')
-                                        <span class="badge ok">Complete</span>
+                                    @if ($recentExamined)
+                                        <span class="badge ok">Nurse Reviewed</span>
                                     @else
-                                        <span class="badge warn">Pending</span>
+                                        <span class="badge warn">Pending Review</span>
                                     @endif
                                 </td>
                             </tr>
@@ -344,8 +344,8 @@
                     <select id="studentsStatusFilter">
                         <option value="all">All Status</option>
                         <option value="pending">Pending Nurse Review</option>
-                        <option value="cert">Pending Certificate</option>
-                        <option value="complete">Complete Record</option>
+                        <option value="cert">Nurse Reviewed</option>
+                        <option value="complete">Complete</option>
                     </select>
                     <button type="button" class="btn btn-secondary" id="studentsClearBtn">Clear</button>
                 </div>
@@ -359,7 +359,7 @@
                                 <th>Gender</th>
                                 <th>BMI</th>
                                 <th>Nutritional Status</th>
-                                <th>Status</th>
+                                <th>Health Card Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -383,10 +383,8 @@
                                     <td>{{ $prototypeRecord['bmi_value'] ?? '-' }}</td>
                                     <td>{{ $prototypeRecord['nutritional_status_bmi_for_age'] ?? '-' }}</td>
                                     <td>
-                                        @if ($isComplete)
-                                            <span class="my-status-badge status-complete">Complete Record</span>
-                                        @elseif ($isExamined)
-                                            <span class="my-status-badge status-cert">Pending Certificate</span>
+                                        @if ($isComplete || $isExamined)
+                                            <span class="my-status-badge status-complete">Nurse Reviewed</span>
                                         @else
                                             <span class="my-status-badge status-pending">Pending Nurse Review</span>
                                         @endif
@@ -590,59 +588,8 @@
                 </div>
             </section>
 
-            <section class="student-profile-section" id="vpConditionsSection">
-                <h4>Health Conditions &amp; Medical Certificates</h4>
-                <div id="vpConditionsList" style="margin-bottom:14px;min-height:24px;">
-                    <div style="font-size:.78rem;color:#7a9e87;">Loading conditions&hellip;</div>
-                </div>
-
-                @if(session('cert_success'))
-                    <div style="background:#dcfce7;border:1px solid #86efac;color:#166534;border-radius:10px;padding:8px 12px;font-size:.78rem;font-weight:600;margin-bottom:10px;">
-                        {{ session('cert_success') }}
-                    </div>
-                @endif
-
-                <div style="border-top:1px solid #e4ece7;padding-top:12px;margin-top:4px;">
-                    <div class="upload-subsection-title">Upload Medical Certificate</div>
-                    <div id="certFileError" class="upload-error-msg" style="display:none;"></div>
-                    <form id="certUploadForm" method="POST" action="{{ route('medical-certificate.store') }}" enctype="multipart/form-data" novalidate>
-                        @csrf
-                        <input type="hidden" id="certLrn" name="lrn">
-                        <input type="hidden" id="certStudentName" name="student_name">
-                        <input type="hidden" id="certWeightKg" name="weight">
-                        <input type="hidden" id="certBmiValue" name="bmi_value">
-                        <input type="hidden" id="certNutriStatus" name="nutritional_status">
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-                            <div class="field">
-                                <label for="certConditionName">Condition / Diagnosis *</label>
-                                <input type="text" id="certConditionName" name="condition_name" placeholder="e.g. Asthma, Diabetes">
-                            </div>
-                            <div class="field">
-                                <label for="certDoctorClinic">Doctor / Clinic</label>
-                                <input type="text" id="certDoctorClinic" name="doctor_clinic" placeholder="Optional">
-                            </div>
-                            <div class="field">
-                                <label for="certDiagDate">Date of Diagnosis</label>
-                                <input type="date" id="certDiagDate" name="diagnosis_date" max="{{ date('Y-m-d') }}">
-                            </div>
-                            <div class="field">
-                                <label for="certFile">Certificate File (PDF/JPG/PNG, max 5 MB) *</label>
-                                <input type="file" id="certFile" name="certificate" accept=".pdf,.jpg,.jpeg,.png">
-                            </div>
-                        </div>
-                        @error('certificate')
-                            <div style="font-size:.74rem;color:#b91c1c;margin-bottom:8px;">{{ $message }}</div>
-                        @enderror
-                        @error('condition_name')
-                            <div style="font-size:.74rem;color:#b91c1c;margin-bottom:8px;">{{ $message }}</div>
-                        @enderror
-                        <button type="submit" class="btn">Upload Certificate</button>
-                    </form>
-                </div>
-            </section>
-
             <section class="student-profile-section" id="vpConsentSection">
-                <h4>Parental Consent &mdash; Deworming Program</h4>
+                <h4>Parental Consent &mdash; Health Services (Sulat-Pahibalo)</h4>
 
                 @if(session('consent_success'))
                     <div style="background:#dcfce7;border:1px solid #86efac;color:#166534;border-radius:10px;padding:8px 12px;font-size:.78rem;font-weight:600;margin-bottom:10px;">
@@ -650,25 +597,419 @@
                     </div>
                 @endif
 
-                <div id="vpConsentStatus" style="margin-bottom:12px;font-size:.78rem;color:#7a9e87;">Select a student to view consent status.</div>
+                <div id="vpConsentStatus" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:.78rem;color:#7a9e87;">
+                    Select a student to view consent status.
+                </div>
 
-                <div style="border-top:1px solid #e4ece7;padding-top:12px;margin-top:4px;">
-                    <div class="upload-subsection-title">Upload Signed Consent Form</div>
+                <div id="vpConsentFormWrap" style="display:none;border-top:1px solid #e4ece7;padding-top:14px;margin-top:4px;">
+                    <div class="upload-subsection-title">Fill in Parental Consent Details</div>
+                    <p style="font-size:.74rem;color:#6f8c7a;margin:4px 0 14px;">Based on what the parent/guardian checked on the physical Sulat-Pahibalo form for SY {{ \App\Models\ParentalConsentForm::currentSchoolYear() }}.</p>
                     <div id="consentFileError" class="upload-error-msg" style="display:none;"></div>
                     <form id="consentUploadForm" method="POST" action="{{ route('parental-consent.store') }}" enctype="multipart/form-data" novalidate>
                         @csrf
                         <input type="hidden" id="consentLrn" name="lrn">
-                        <div class="field" style="margin-bottom:10px;">
-                            <label for="consentFile">Consent Form File (PDF/JPG/PNG, max 5 MB) *</label>
-                            <input type="file" id="consentFile" name="consent" accept=".pdf,.jpg,.jpeg,.png">
+
+                        {{-- Consent choice --}}
+                        <div style="margin-bottom:16px;">
+                            <label style="font-size:.72rem;font-weight:700;color:#334a3f;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:9px;">Parent/Guardian Consent Choice <span style="color:#ef4444;">*</span></label>
+                            <div style="display:flex;flex-direction:column;gap:10px;">
+                                <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;">
+                                    <input type="radio" name="consent_type" value="full" id="consentFull" style="margin-top:3px;accent-color:#15803d;" required>
+                                    <span style="font-size:.82rem;color:#1d3c31;line-height:1.4;"><b>Oo, mutugot</b> &mdash; Full consent to all DOH-recommended health services</span>
+                                </label>
+                                <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;">
+                                    <input type="radio" name="consent_type" value="partial" id="consentPartial" style="margin-top:3px;accent-color:#d97706;">
+                                    <span style="font-size:.82rem;color:#1d3c31;line-height:1.4;"><b>Oo, mutugot</b> &mdash; Partial consent, <em>except</em> the following services:</span>
+                                </label>
+                                <div id="partialExceptionBox" style="display:none;margin-left:26px;margin-top:-4px;">
+                                    <input type="text" name="partial_exception" id="partialException"
+                                        placeholder="e.g. Deworming, Immunization"
+                                        style="width:100%;padding:7px 10px;border:1.5px solid #d1dbd5;border-radius:7px;font-size:.8rem;color:#1d3c31;background:#fff;box-sizing:border-box;">
+                                </div>
+                                <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;">
+                                    <input type="radio" name="consent_type" value="refused" id="consentRefused" style="margin-top:3px;accent-color:#6b7280;">
+                                    <span style="font-size:.82rem;color:#1d3c31;line-height:1.4;"><b>Dili ko mutugot</b> &mdash; No consent. Reason:</span>
+                                </label>
+                                <div id="refusedReasonBox" style="display:none;margin-left:26px;margin-top:-4px;">
+                                    <input type="text" name="refused_reason" id="refusedReason"
+                                        placeholder="Specify reason for refusal"
+                                        style="width:100%;padding:7px 10px;border:1.5px solid #d1dbd5;border-radius:7px;font-size:.8rem;color:#1d3c31;background:#fff;box-sizing:border-box;">
+                                </div>
+                            </div>
+                            @error('consent_type')
+                                <div style="font-size:.74rem;color:#b91c1c;margin-top:5px;">{{ $message }}</div>
+                            @enderror
                         </div>
-                        @error('consent')
-                            <div style="font-size:.74rem;color:#b91c1c;margin-bottom:8px;">{{ $message }}</div>
-                        @enderror
-                        <button type="submit" class="btn">Upload Consent Form</button>
+
+                        {{-- Allergy section --}}
+                        <div style="margin-bottom:14px;padding:12px 14px;background:#f7faf8;border-radius:9px;border:1px solid #d1dbd5;">
+                            <label style="font-size:.72rem;font-weight:700;color:#334a3f;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:10px;">Allergy Information (if any)</label>
+                            <div style="display:flex;flex-direction:column;gap:10px;">
+
+                                <div>
+                                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                                        <input type="checkbox" name="allergy_food" id="allergyFood" value="1" style="accent-color:#15803d;width:15px;height:15px;">
+                                        <span style="font-size:.82rem;color:#1d3c31;font-weight:600;">Pagkaon / Food allergy</span>
+                                    </label>
+                                    <input type="text" name="allergy_food_detail" id="allergyFoodDetail"
+                                        placeholder="Specify food (e.g. shellfish, nuts)"
+                                        style="width:100%;margin-top:6px;padding:6px 10px;border:1.5px solid #d1dbd5;border-radius:7px;font-size:.79rem;color:#1d3c31;background:#fff;display:none;box-sizing:border-box;">
+                                </div>
+
+                                <div>
+                                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                                        <input type="checkbox" name="allergy_medicine" id="allergyMedicine" value="1" style="accent-color:#15803d;width:15px;height:15px;">
+                                        <span style="font-size:.82rem;color:#1d3c31;font-weight:600;">Tambal / Medicine allergy</span>
+                                    </label>
+                                    <input type="text" name="allergy_medicine_detail" id="allergyMedicineDetail"
+                                        placeholder="Specify medicine type"
+                                        style="width:100%;margin-top:6px;padding:6px 10px;border:1.5px solid #d1dbd5;border-radius:7px;font-size:.79rem;color:#1d3c31;background:#fff;display:none;box-sizing:border-box;">
+                                </div>
+
+                                <div>
+                                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                                        <input type="checkbox" name="prev_immunization" id="prevImmunization" value="1" style="accent-color:#15803d;width:15px;height:15px;">
+                                        <span style="font-size:.82rem;color:#1d3c31;font-weight:600;">Nahatag nga Bakuna / Previous Immunization reaction</span>
+                                    </label>
+                                    <input type="text" name="prev_immunization_detail" id="prevImmunizationDetail"
+                                        placeholder="Specify vaccine type or reaction"
+                                        style="width:100%;margin-top:6px;padding:6px 10px;border:1.5px solid #d1dbd5;border-radius:7px;font-size:.79rem;color:#1d3c31;background:#fff;display:none;box-sizing:border-box;">
+                                </div>
+
+                            </div>
+                        </div>
+
+                        {{-- Other illness --}}
+                        <div style="margin-bottom:14px;">
+                            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                                <input type="checkbox" name="has_other_illness" id="hasOtherIllness" value="1" style="accent-color:#15803d;width:15px;height:15px;">
+                                <span style="font-size:.82rem;color:#1d3c31;font-weight:600;">Kasamtangang Sakit / Other illness or disability</span>
+                            </label>
+                            <input type="text" name="other_illness_detail" id="otherIllnessDetail"
+                                placeholder="Specify illness or disability"
+                                style="width:100%;margin-top:6px;padding:6px 10px;border:1.5px solid #d1dbd5;border-radius:7px;font-size:.79rem;color:#1d3c31;background:#fff;display:none;box-sizing:border-box;">
+                        </div>
+
+                        {{-- Medical cert note --}}
+                        <div style="margin-bottom:16px;">
+                            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                                <input type="checkbox" name="medical_cert_attached" id="medicalCertAttached" value="1" style="accent-color:#15803d;width:15px;height:15px;">
+                                <span style="font-size:.82rem;color:#1d3c31;font-weight:600;">Medical Certificate is attached to the physical signed form</span>
+                            </label>
+                        </div>
+
+                        {{-- File upload --}}
+                        <div style="border-top:1px solid #e4ece7;padding-top:12px;margin-top:4px;margin-bottom:12px;">
+                            <div class="upload-subsection-title">Upload Signed Consent Form (Optional)</div>
+                            <div class="field" style="margin-bottom:10px;">
+                                <label for="consentFile">Scanned / photo of signed form (PDF/JPG/PNG, max 5 MB)</label>
+                                <input type="file" id="consentFile" name="consent" accept=".pdf,.jpg,.jpeg,.png">
+                            </div>
+                            @error('consent')
+                                <div style="font-size:.74rem;color:#b91c1c;margin-bottom:8px;">{{ $message }}</div>
+                            @enderror
+                        </div>
+
+                        <button type="submit" class="btn">Save Consent Record</button>
                     </form>
                 </div>
             </section>
+
+            {{-- ── Health Assessment (MLHAT) ─────────────────────────────────── --}}
+            <section class="student-profile-section" id="vpHealthAssessmentSection">
+                <h4>Health Assessment <span style="font-size:.72rem;font-weight:400;color:#6f8c7a;">(Mandatory Learner&rsquo;s Health Assessment Tool)</span></h4>
+
+                @if(session('health_assessment_success'))
+                    <div style="background:#dcfce7;border:1px solid #86efac;color:#166534;border-radius:10px;padding:8px 12px;font-size:.78rem;font-weight:600;margin-bottom:10px;">
+                        {{ session('health_assessment_success') }}
+                    </div>
+                @endif
+
+                <div id="vpHaStatus" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:.78rem;color:#7a9e87;">
+                    Select a student to view assessment status.
+                </div>
+
+                <form id="healthAssessmentForm" method="POST" action="{{ route('health-assessment.store') }}" novalidate style="display:none;">
+                    @csrf
+                    <input type="hidden" id="haLrn" name="lrn">
+
+                    {{-- ── SHEET 1 ────────────────────────────────────────────── --}}
+                    <div class="upload-subsection-title" style="margin-bottom:12px;">Sheet 1 &mdash; Learner Information, History &amp; Vital Signs</div>
+
+                    {{-- A. Assessment Info --}}
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+                        <div>
+                            <label class="ha-label">Date of Assessment</label>
+                            <input type="date" name="date_of_assessment" class="ha-input">
+                        </div>
+                        <div>
+                            <label class="ha-label">Assessed by (Name/Title)</label>
+                            <input type="text" name="assessed_by" class="ha-input" placeholder="e.g. Juan dela Cruz, RN">
+                        </div>
+                    </div>
+
+                    {{-- B. Medical History --}}
+                    <div class="ha-section">
+                        <div class="ha-section-head">B. Medical History <span style="font-weight:400;font-size:.72rem;">(Check all that apply)</span></div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;">
+                            <label class="ha-check-label"><input type="checkbox" name="med_asthma" value="1" class="ha-check"> Asthma</label>
+                            <label class="ha-check-label"><input type="checkbox" name="med_allergies" value="1" class="ha-check" id="haAllergyCheck"> Allergies:</label>
+                            <label class="ha-check-label"><input type="checkbox" name="med_diabetes" value="1" class="ha-check"> Diabetes</label>
+                            <label class="ha-check-label"><input type="checkbox" name="med_heart_condition" value="1" class="ha-check"> Heart Condition</label>
+                            <label class="ha-check-label"><input type="checkbox" name="med_seizure_disorder" value="1" class="ha-check"> Seizure Disorder</label>
+                            <label class="ha-check-label"><input type="checkbox" name="med_tuberculosis" value="1" class="ha-check"> Tuberculosis</label>
+                            <label class="ha-check-label"><input type="checkbox" name="med_frequent_infections" value="1" class="ha-check"> Frequent Infections</label>
+                            <label class="ha-check-label"><input type="checkbox" name="med_hospitalization_surgery" value="1" class="ha-check" id="haHospCheck"> Hospitalization/Surgery:</label>
+                        </div>
+                        <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                            <input type="text" name="med_allergies_detail" id="haAllergyDetail" class="ha-input" placeholder="Specify allergies" style="display:none;">
+                            <input type="text" name="med_hospitalization_detail" id="haHospDetail" class="ha-input" placeholder="Specify details" style="display:none;">
+                        </div>
+                        <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                            <div>
+                                <label class="ha-label">Current Medications</label>
+                                <input type="text" name="med_current_medications" class="ha-input" placeholder="List current medications">
+                            </div>
+                            <div>
+                                <label class="ha-label">Other Conditions</label>
+                                <input type="text" name="med_other_conditions" class="ha-input" placeholder="Specify other conditions">
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- C. Family History --}}
+                    <div class="ha-section">
+                        <div class="ha-section-head">C. Family History</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px 14px;">
+                            <label class="ha-check-label"><input type="checkbox" name="fam_hypertension" value="1" class="ha-check"> Hypertension</label>
+                            <label class="ha-check-label"><input type="checkbox" name="fam_diabetes" value="1" class="ha-check"> Diabetes</label>
+                            <label class="ha-check-label"><input type="checkbox" name="fam_heart_disease" value="1" class="ha-check"> Heart Disease</label>
+                            <label class="ha-check-label"><input type="checkbox" name="fam_cancer" value="1" class="ha-check"> Cancer</label>
+                            <label class="ha-check-label"><input type="checkbox" name="fam_mental_health" value="1" class="ha-check"> Mental Health Conditions</label>
+                        </div>
+                        <div style="margin-top:8px;">
+                            <label class="ha-label">Genetic/Hereditary Disorders</label>
+                            <input type="text" name="fam_genetic_hereditary" class="ha-input" placeholder="Specify if any">
+                        </div>
+                    </div>
+
+                    {{-- D. General Appearance --}}
+                    <div class="ha-section">
+                        <div class="ha-section-head">D. General Appearance</div>
+                        <div style="display:grid;gap:8px;">
+                            <div>
+                                <label class="ha-label">Level of Consciousness</label>
+                                <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:4px;">
+                                    <label class="ha-check-label"><input type="radio" name="appearance_consciousness" value="Alert" class="ha-check"> Alert</label>
+                                    <label class="ha-check-label"><input type="radio" name="appearance_consciousness" value="Drowsy" class="ha-check"> Drowsy</label>
+                                    <label class="ha-check-label"><input type="radio" name="appearance_consciousness" value="Other" class="ha-check" id="haConsciousOtherRadio"> Other:</label>
+                                    <input type="text" name="appearance_consciousness_other" id="haConsciousOtherText" class="ha-input" placeholder="Specify" style="display:none;width:140px;padding:4px 8px;">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="ha-label">Posture/Gait</label>
+                                <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:4px;">
+                                    <label class="ha-check-label"><input type="radio" name="appearance_posture_gait" value="Normal" class="ha-check"> Normal</label>
+                                    <label class="ha-check-label"><input type="radio" name="appearance_posture_gait" value="Abnormal" class="ha-check" id="haPostureAbnormal"> Abnormal:</label>
+                                    <input type="text" name="appearance_posture_detail" id="haPostureDetail" class="ha-input" placeholder="Describe" style="display:none;width:140px;padding:4px 8px;">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="ha-label">Hygiene/Grooming</label>
+                                <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:4px;">
+                                    <label class="ha-check-label"><input type="radio" name="appearance_hygiene" value="Adequate" class="ha-check"> Adequate</label>
+                                    <label class="ha-check-label"><input type="radio" name="appearance_hygiene" value="Needs Attention" class="ha-check"> Needs Attention</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- E. Vital Signs --}}
+                    <div class="ha-section">
+                        <div class="ha-section-head">E. Vital Signs</div>
+                        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+                            <div>
+                                <label class="ha-label">Height (cm)</label>
+                                <input type="number" name="vital_height_cm" id="haVitalHeight" class="ha-input" step="0.1" min="0" max="300" placeholder="e.g. 142.5">
+                            </div>
+                            <div>
+                                <label class="ha-label">Weight (kg)</label>
+                                <input type="number" name="vital_weight_kg" id="haVitalWeight" class="ha-input" step="0.01" min="0" max="300" placeholder="e.g. 38.5">
+                            </div>
+                            <div>
+                                <label class="ha-label">BMI <span style="font-weight:400;">(auto)</span></label>
+                                <input type="number" name="vital_bmi" id="haVitalBmi" class="ha-input" step="0.01" placeholder="Auto-calculated" readonly style="background:#f7faf8;">
+                            </div>
+                            <div>
+                                <label class="ha-label">Temperature (&deg;C)</label>
+                                <input type="number" name="vital_temperature_c" class="ha-input" step="0.1" min="30" max="45" placeholder="e.g. 36.5">
+                            </div>
+                            <div>
+                                <label class="ha-label">Pulse Rate (bpm)</label>
+                                <input type="number" name="vital_pulse_rate" class="ha-input" min="0" max="300" placeholder="e.g. 72">
+                            </div>
+                            <div>
+                                <label class="ha-label">Blood Pressure (mmHg)</label>
+                                <input type="text" name="vital_blood_pressure" class="ha-input" placeholder="e.g. 110/70">
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- ── SHEET 2 ────────────────────────────────────────────── --}}
+                    <div class="upload-subsection-title" style="margin-top:18px;margin-bottom:12px;">Sheet 2 &mdash; Systems Review, Screenings &amp; Recommendations</div>
+
+                    {{-- F. Body Systems --}}
+                    <div class="ha-section">
+                        <div class="ha-section-head">F. Evaluation of Body Systems</div>
+                        <div style="overflow-x:auto;">
+                        <table class="ha-systems-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:22%;">Body System</th>
+                                    <th>Findings <span style="font-weight:400;">(Check applicable)</span></th>
+                                    <th style="width:28%;">Notes / Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @php
+                                $bodySystems = [
+                                    ['key'=>'integumentary',  'label'=>'Integumentary',       'findings'=>['Normal','Lesions/Rashes','Pallor','Other']],
+                                    ['key'=>'heent_head',     'label'=>'HEENT &ndash; Head/Scalp', 'findings'=>['Normal','Abnormal']],
+                                    ['key'=>'heent_eyes',     'label'=>'HEENT &ndash; Eyes',   'findings'=>['Clear','Redness','Discharge']],
+                                    ['key'=>'heent_ears',     'label'=>'HEENT &ndash; Ears',   'findings'=>['Clear','Pain','Discharge']],
+                                    ['key'=>'heent_nose',     'label'=>'HEENT &ndash; Nose',   'findings'=>['Clear','Congested']],
+                                    ['key'=>'heent_throat',   'label'=>'HEENT &ndash; Throat', 'findings'=>['Normal','Inflamed','Tonsillar Issues']],
+                                    ['key'=>'respiratory',    'label'=>'Respiratory',           'findings'=>['Clear Breath Sounds','Cough','Wheezing']],
+                                    ['key'=>'cardiovascular', 'label'=>'Cardiovascular',        'findings'=>['Regular Rhythm','Irregular','Murmur']],
+                                    ['key'=>'gastrointestinal','label'=>'Gastrointestinal',     'findings'=>['Abdomen Soft','Pain','Nausea/Vomiting']],
+                                    ['key'=>'genitourinary',  'label'=>'Genitourinary',         'findings'=>['No Complaints','Pain','Other']],
+                                    ['key'=>'musculoskeletal','label'=>'Musculoskeletal',       'findings'=>['Normal ROM','Deformity','Pain']],
+                                    ['key'=>'neurological',   'label'=>'Neurological',          'findings'=>['Oriented','Reflexes Normal','Abnormal']],
+                                ];
+                                @endphp
+                                @foreach($bodySystems as $sys)
+                                <tr>
+                                    <td style="font-size:.78rem;font-weight:600;color:#1d3c31;">{!! $sys['label'] !!}</td>
+                                    <td>
+                                        <div style="display:flex;flex-wrap:wrap;gap:4px 10px;">
+                                            @foreach($sys['findings'] as $finding)
+                                            <label style="display:flex;align-items:center;gap:4px;font-size:.76rem;cursor:pointer;white-space:nowrap;">
+                                                <input type="checkbox" name="body_systems[{{ $sys['key'] }}][findings][]" value="{{ $finding }}" style="accent-color:#15803d;width:13px;height:13px;">
+                                                {{ $finding }}
+                                            </label>
+                                            @endforeach
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <input type="text" name="body_systems[{{ $sys['key'] }}][notes]" class="ha-input" style="padding:4px 8px;font-size:.75rem;" placeholder="Notes...">
+                                    </td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                        </div>
+                    </div>
+
+                    {{-- G. Vision and Hearing --}}
+                    <div class="ha-section">
+                        <div class="ha-section-head">G. Vision and Hearing Screening</div>
+                        <div style="display:grid;gap:10px;">
+                            <div>
+                                <label class="ha-label">Vision</label>
+                                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:4px;">
+                                    <span style="font-size:.78rem;color:#334a3f;">Right Eye:</span>
+                                    <input type="text" name="vision_right_eye" class="ha-input" style="width:70px;padding:4px 8px;" placeholder="20/___">
+                                    <span style="font-size:.78rem;color:#334a3f;">Left Eye:</span>
+                                    <input type="text" name="vision_left_eye" class="ha-input" style="width:70px;padding:4px 8px;" placeholder="20/___">
+                                    <label class="ha-check-label"><input type="radio" name="vision_result" value="Pass" class="ha-check"> Pass</label>
+                                    <label class="ha-check-label"><input type="radio" name="vision_result" value="Refer" class="ha-check"> Refer</label>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="ha-label">Hearing</label>
+                                <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:4px;">
+                                    <label class="ha-check-label"><input type="radio" name="hearing_result" value="Passed Both" class="ha-check"> Passed Both</label>
+                                    <label class="ha-check-label"><input type="radio" name="hearing_result" value="Failed Right" class="ha-check"> Failed Right</label>
+                                    <label class="ha-check-label"><input type="radio" name="hearing_result" value="Failed Left" class="ha-check"> Failed Left</label>
+                                    <label class="ha-check-label"><input type="radio" name="hearing_result" value="Refer" class="ha-check"> Refer</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- H. Oral Health --}}
+                    <div class="ha-section">
+                        <div class="ha-section-head">H. Oral Health Examination</div>
+                        <div>
+                            <label class="ha-label">Teeth Condition <span style="font-weight:400;">(Check all that apply)</span></label>
+                            <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px;">
+                                <label class="ha-check-label"><input type="checkbox" name="teeth_condition[]" value="Good" class="ha-check"> Good</label>
+                                <label class="ha-check-label"><input type="checkbox" name="teeth_condition[]" value="Fair" class="ha-check"> Fair</label>
+                                <label class="ha-check-label"><input type="checkbox" name="teeth_condition[]" value="Poor" class="ha-check"> Poor</label>
+                                <label class="ha-check-label"><input type="checkbox" name="teeth_condition[]" value="Dental Caries" class="ha-check"> Dental Caries</label>
+                                <label class="ha-check-label"><input type="checkbox" name="teeth_condition[]" value="Gum Inflammation" class="ha-check"> Gum Inflammation</label>
+                                <label class="ha-check-label"><input type="checkbox" name="teeth_condition[]" value="Missing/Broken Teeth" class="ha-check"> Missing/Broken Teeth</label>
+                            </div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;margin-top:10px;">
+                            <div>
+                                <label class="ha-label">Last Dental Visit</label>
+                                <input type="text" name="last_dental_visit" class="ha-input" placeholder="e.g. January 2026">
+                            </div>
+                            <label class="ha-check-label" style="margin-bottom:8px;white-space:nowrap;">
+                                <input type="checkbox" name="dental_referral" value="1" class="ha-check"> Referral to Dentist Recommended
+                            </label>
+                        </div>
+                    </div>
+
+                    {{-- I. Immunization Status --}}
+                    <div class="ha-section">
+                        <div class="ha-section-head">I. Immunization Status</div>
+                        <div style="display:grid;gap:8px;">
+                            <div>
+                                <label class="ha-label">Status</label>
+                                <div style="display:flex;gap:14px;margin-top:4px;">
+                                    <label class="ha-check-label"><input type="radio" name="immunization_status" value="Complete" class="ha-check"> Complete</label>
+                                    <label class="ha-check-label"><input type="radio" name="immunization_status" value="Incomplete" class="ha-check"> Incomplete</label>
+                                    <label class="ha-check-label"><input type="radio" name="immunization_status" value="Not Available" class="ha-check"> Not Available</label>
+                                </div>
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                                <div>
+                                    <label class="ha-label">Missing/Needed Vaccines</label>
+                                    <input type="text" name="missing_needed_vaccines" class="ha-input" placeholder="e.g. MMR, Hepatitis B">
+                                </div>
+                                <div>
+                                    <label class="ha-label">Date Record Reviewed</label>
+                                    <input type="date" name="immunization_date_reviewed" class="ha-input">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- J. Assessment Summary --}}
+                    <div class="ha-section">
+                        <div class="ha-section-head">J. Assessment Summary &amp; Recommendations</div>
+                        <div style="display:grid;gap:8px;">
+                            <div>
+                                <label class="ha-label">Summary of Findings</label>
+                                <textarea name="summary_of_findings" class="ha-input" rows="3" style="resize:vertical;" placeholder="Summarize key findings from the assessment..."></textarea>
+                            </div>
+                            <div>
+                                <label class="ha-label">Recommendations / Referrals</label>
+                                <textarea name="recommendations" class="ha-input" rows="3" style="resize:vertical;" placeholder="Specify recommendations or referrals..."></textarea>
+                            </div>
+                            <div>
+                                <label class="ha-label">Examiner Signature / Name</label>
+                                <input type="text" name="examiner_signature" class="ha-input" placeholder="Full name of examiner">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn" style="margin-top:4px;">Save Health Assessment</button>
+                </form>
+            </section>
+            {{-- ── End Health Assessment ────────────────────────────────────── --}}
 
             <section class="pending-note-box" id="vpPendingBox">
                 <h5>Pending Nurse Review</h5>
@@ -1183,7 +1524,7 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
         return weight / (meters * meters);
     };
 
-    const openProfile = (record, route) => {
+    const openProfile = (record, route, rowStatus = 'pending') => {
         const fullName = [record.last_name, ',', record.first_name, record.middle_name ? (' ' + String(record.middle_name).charAt(0).toUpperCase() + '.') : '']
             .join(' ')
             .replace(' ,', ',')
@@ -1244,13 +1585,14 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
         setText('vpOthers', exam.others || '-');
 
         if (statusBadge) {
-            if (examined) {
-                statusBadge.textContent = 'Pending Certificate';
-                statusBadge.className = 'my-status-badge status-cert';
-            } else {
-                statusBadge.textContent = 'Pending Nurse Review';
-                statusBadge.className = 'my-status-badge status-pending';
-            }
+            const statusMap = {
+                complete: ['Complete Record',      'my-status-badge status-complete'],
+                cert:     ['Nurse Reviewed',       'my-status-badge status-complete'],
+                pending:  ['Pending Nurse Review', 'my-status-badge status-pending'],
+            };
+            const [badgeText, badgeCls] = statusMap[rowStatus] ?? statusMap.pending;
+            statusBadge.textContent = badgeText;
+            statusBadge.className = badgeCls;
         }
 
         if (pendingBox) {
@@ -1261,112 +1603,120 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
             nurseSection.style.display = examined ? 'block' : 'none';
         }
 
-        const lrnInput = document.getElementById('certLrn');
-        if (lrnInput) lrnInput.value = record.lrn || '';
+        // Reset form visibility while API loads — prevents flash of stale form
+        const consentFormWrap = document.getElementById('vpConsentFormWrap');
+        if (consentFormWrap) consentFormWrap.style.display = 'none';
+        const haForm = document.getElementById('healthAssessmentForm');
+        if (haForm) haForm.style.display = 'none';
 
         const consentLrnInput = document.getElementById('consentLrn');
         if (consentLrnInput) consentLrnInput.value = record.lrn || '';
 
         loadConsentStatus(record.lrn || '');
 
-        const certNameInput = document.getElementById('certStudentName');
-        if (certNameInput) certNameInput.value = fullName || 'Unknown Student';
+        const haLrnInput = document.getElementById('haLrn');
+        if (haLrnInput) haLrnInput.value = record.lrn || '';
 
-        const certWeightInput = document.getElementById('certWeightKg');
-        if (certWeightInput) certWeightInput.value = weightKg || '';
-
-        const certBmiInput = document.getElementById('certBmiValue');
-        if (certBmiInput) certBmiInput.value = bmi ? bmi.toFixed(2) : '';
-
-        const certNutriInput = document.getElementById('certNutriStatus');
-        if (certNutriInput) certNutriInput.value = record.nutritional_status_bmi_for_age || '';
-
-        loadConditions(record.lrn || '', examined);
+        loadHealthAssessmentStatus(record.lrn || '');
 
         backdrop.classList.add('open');
         backdrop.setAttribute('aria-hidden', 'false');
     };
 
-    const loadConditions = async (lrn, isExamined = false) => {
-        const listEl = document.getElementById('vpConditionsList');
-        if (!listEl || !lrn) {
-            if (listEl) listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">No LRN available.</div>';
-            return;
-        }
-
-        listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">Loading conditions&hellip;</div>';
-
-        try {
-            const resp = await fetch('/api/student-conditions?lrn=' + encodeURIComponent(lrn), {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            });
-
-            if (!resp.ok) {
-                listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">No conditions on file yet.</div>';
-                return;
-            }
-
-            const data = await resp.json();
-            const conditions = data.conditions || [];
-
-            // Upgrade badge to "Complete Record" only when nurse has examined AND a cert is on file
-            if (isExamined) {
-                const hasAnyCert = conditions.some(c => c.certificate_count > 0);
-                const statusBadge = document.getElementById('vpStatusBadge');
-                if (statusBadge && hasAnyCert) {
-                    statusBadge.textContent = 'Complete Record';
-                    statusBadge.className = 'my-status-badge status-complete';
-                }
-            }
-
-            if (!conditions.length) {
-                listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">No health conditions recorded yet. Use the form below to add one.</div>';
-                return;
-            }
-
-            listEl.innerHTML = conditions.map(c => {
-                const badge = c.is_verified
-                    ? '<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#dcfce7;color:#15803d;">Verified</span>'
-                    : '<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#fef3c7;color:#92400e;">Self-reported</span>';
-                const certNote = c.certificate_count > 0
-                    ? `<span style="font-size:.72rem;color:#7a9e87;margin-left:6px;">${c.certificate_count} cert(s) on file</span>`
-                    : '';
-                return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #edf5ef;">
-                    <span style="font-size:.84rem;font-weight:600;color:#1d3c31;flex:1;">${c.condition_name}</span>
-                    ${badge}${certNote}
-                </div>`;
-            }).join('');
-        } catch (_err) {
-            listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">Could not load conditions.</div>';
-        }
-    };
-
     const loadConsentStatus = async (lrn) => {
         const statusEl = document.getElementById('vpConsentStatus');
+        const formWrap  = document.getElementById('vpConsentFormWrap');
         if (!statusEl) return;
         if (!lrn) {
-            statusEl.textContent = 'No LRN available.';
-            statusEl.style.color = '#7a9e87';
+            statusEl.innerHTML = '<span style="color:#7a9e87;">No LRN available.</span>';
             return;
         }
-        statusEl.textContent = 'Checking consent status…';
-        statusEl.style.color = '#7a9e87';
+        statusEl.innerHTML = '<span style="color:#7a9e87;">Checking consent status&hellip;</span>';
         try {
             const resp = await fetch('/api/student-consent-status?lrn=' + encodeURIComponent(lrn), {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
             if (!resp.ok) {
-                statusEl.textContent = 'Could not check consent status.';
+                statusEl.innerHTML = '<span style="color:#7a9e87;">Could not check consent status.</span>';
                 return;
             }
             const data = await resp.json();
-            if (data.has_consent) {
-                statusEl.innerHTML = '<span style="color:#15803d;font-weight:700;">&#10003; Consent on file</span> for SY ' + (data.school_year || '') + ' (uploaded by ' + (data.uploaded_by || '—') + ' on ' + (data.uploaded_at || '—') + ')';
+            const dot = (color) => `<span style="width:10px;height:10px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0;"></span>`;
+            const meta = (data.uploaded_by && data.uploaded_at) ? ` &mdash; recorded by <b>${data.uploaded_by}</b> on ${data.uploaded_at}` : '';
+
+            if (!data.has_consent) {
+                statusEl.innerHTML = `${dot('#dc2626')} <b style="color:#b91c1c;">No consent on file</b> for SY ${data.school_year || ''}. Fill in the details below.`;
+                if (formWrap) formWrap.style.display = 'block';
             } else {
-                statusEl.innerHTML = '<span style="color:#b91c1c;font-weight:700;">&#10007; No consent on file</span> for SY ' + (data.school_year || '') + '. Upload a signed form below before deworming can be recorded.';
+                // Record exists — lock the form
+                if (formWrap) formWrap.style.display = 'none';
+
+                let typeLabel, dotColor, textColor;
+                if (data.consent_type === 'full') {
+                    typeLabel = 'Full Consent (Oo, mutugot — all services)';
+                    dotColor = '#16a34a'; textColor = '#15803d';
+                } else if (data.consent_type === 'partial') {
+                    const exc = data.partial_exception ? ` — except: ${data.partial_exception}` : '';
+                    typeLabel = `Partial Consent${exc}`;
+                    dotColor = '#d97706'; textColor = '#b45309';
+                } else {
+                    const reason = data.refused_reason ? ` — ${data.refused_reason}` : '';
+                    typeLabel = `Consent Refused (Dili ko mutugot)${reason}`;
+                    dotColor = '#6b7280'; textColor = '#374151';
+                }
+
+                statusEl.innerHTML = `
+                    <div style="width:100%;background:#f0fdf4;border:1px solid #86efac;border-radius:9px;padding:12px 14px;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                            ${dot(dotColor)}
+                            <b style="color:${textColor};font-size:.84rem;">Parental Consent Already on File</b>
+                            <span style="margin-left:auto;font-size:.72rem;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:999px;font-weight:700;">Locked</span>
+                        </div>
+                        <div style="font-size:.8rem;color:#1d3c31;margin-bottom:2px;">${typeLabel}</div>
+                        <div style="font-size:.76rem;color:#6f8c7a;">SY ${data.school_year || '—'}${meta}</div>
+                    </div>`;
             }
         } catch (_err) {
-            statusEl.textContent = 'Could not check consent status.';
+            statusEl.innerHTML = '<span style="color:#7a9e87;">Could not check consent status.</span>';
+        }
+    };
+
+    // ── Health Assessment status loader ────────────────────────────
+    const loadHealthAssessmentStatus = async (lrn) => {
+        const statusEl = document.getElementById('vpHaStatus');
+        const haForm   = document.getElementById('healthAssessmentForm');
+        if (!statusEl) return;
+        if (!lrn) {
+            statusEl.innerHTML = '<span style="color:#7a9e87;">No LRN available.</span>';
+            return;
+        }
+        statusEl.innerHTML = '<span style="color:#7a9e87;">Checking assessment status&hellip;</span>';
+        try {
+            const resp = await fetch('/api/student-health-assessment?lrn=' + encodeURIComponent(lrn), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!resp.ok) { statusEl.innerHTML = '<span style="color:#7a9e87;">Could not check assessment status.</span>'; return; }
+            const d = await resp.json();
+            if (!d.has_assessment) {
+                statusEl.innerHTML = `<span style="width:10px;height:10px;border-radius:50%;background:#dc2626;display:inline-block;flex-shrink:0;margin-right:6px;"></span><b style="color:#b91c1c;">No assessment on file</b> for SY ${d.school_year || '—'}. Fill in the form below and submit.`;
+                if (haForm) haForm.style.display = 'block';
+            } else {
+                // Assessment exists — lock the form
+                if (haForm) haForm.style.display = 'none';
+                const assessedLine = d.date_of_assessment ? ` &mdash; assessed on <b>${d.date_of_assessment}</b>` : '';
+                const submittedLine = d.submitted_by ? ` &mdash; submitted by <b>${d.submitted_by}</b>${d.submitted_at ? ' on ' + d.submitted_at : ''}` : '';
+                statusEl.innerHTML = `
+                    <div style="width:100%;background:#f0fdf4;border:1px solid #86efac;border-radius:9px;padding:12px 14px;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                            <span style="width:10px;height:10px;border-radius:50%;background:#16a34a;display:inline-block;flex-shrink:0;"></span>
+                            <b style="color:#15803d;font-size:.84rem;">Health Assessment Already on File</b>
+                            <span style="margin-left:auto;font-size:.72rem;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:999px;font-weight:700;">Locked</span>
+                        </div>
+                        <div style="font-size:.76rem;color:#6f8c7a;">SY ${d.school_year || '—'}${assessedLine}${submittedLine}</div>
+                    </div>`;
+            }
+        } catch (_err) {
+            statusEl.innerHTML = '<span style="color:#7a9e87;">Could not check assessment status.</span>';
         }
     };
 
@@ -1378,7 +1728,8 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
             } catch (_err) {
                 record = {};
             }
-            openProfile(record, btn.getAttribute('data-route') || '#');
+            const rowStatus = btn.closest('tr')?.getAttribute('data-status') || 'pending';
+            openProfile(record, btn.getAttribute('data-route') || '#', rowStatus);
         });
     });
 
@@ -1396,41 +1747,7 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
 })();
 
 (() => {
-    const certForm = document.getElementById('certUploadForm');
-    const certFile = document.getElementById('certFile');
-    const certConditionName = document.getElementById('certConditionName');
-    const certFileError = document.getElementById('certFileError');
-
-    const showCertError = (msg) => {
-        if (!certFileError) return;
-        certFileError.textContent = msg;
-        certFileError.style.display = 'block';
-        certFileError.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    };
-
-    const hideCertError = () => {
-        if (certFileError) certFileError.style.display = 'none';
-    };
-
-    certFile?.addEventListener('change', hideCertError);
-    certConditionName?.addEventListener('input', hideCertError);
-
-    certForm?.addEventListener('submit', (e) => {
-        if (!certConditionName || !certConditionName.value.trim()) {
-            e.preventDefault();
-            showCertError('Please enter a Condition / Diagnosis name before uploading.');
-            return;
-        }
-        if (!certFile || !certFile.files || certFile.files.length === 0) {
-            e.preventDefault();
-            showCertError('Please select a certificate file (PDF/JPG/PNG) before uploading.');
-            return;
-        }
-        hideCertError();
-    });
-
     const consentForm = document.getElementById('consentUploadForm');
-    const consentFile = document.getElementById('consentFile');
     const consentFileError = document.getElementById('consentFileError');
 
     const showConsentError = (msg) => {
@@ -1444,15 +1761,96 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
         if (consentFileError) consentFileError.style.display = 'none';
     };
 
-    consentFile?.addEventListener('change', hideConsentError);
-
     consentForm?.addEventListener('submit', (e) => {
-        if (!consentFile || !consentFile.files || consentFile.files.length === 0) {
+        const selectedType = consentForm.querySelector('input[name="consent_type"]:checked');
+        if (!selectedType) {
             e.preventDefault();
-            showConsentError('Please select a consent form file (PDF/JPG/PNG) before uploading.');
+            showConsentError('Please select the parent/guardian consent choice before saving.');
             return;
         }
         hideConsentError();
+    });
+
+    // Toggle partial exception / refused reason text inputs
+    const consentTypeInputs = consentForm ? Array.from(consentForm.querySelectorAll('input[name="consent_type"]')) : [];
+    const partialBox = document.getElementById('partialExceptionBox');
+    const refusedBox = document.getElementById('refusedReasonBox');
+
+    consentTypeInputs.forEach((input) => {
+        input.addEventListener('change', () => {
+            if (partialBox) partialBox.style.display = input.value === 'partial' ? 'block' : 'none';
+            if (refusedBox) refusedBox.style.display = input.value === 'refused' ? 'block' : 'none';
+        });
+    });
+
+    // Toggle allergy / illness detail inputs when checkboxes are checked
+    const toggleDetail = (checkboxId, detailId) => {
+        const cb = document.getElementById(checkboxId);
+        const inp = document.getElementById(detailId);
+        if (!cb || !inp) return;
+        cb.addEventListener('change', () => {
+            inp.style.display = cb.checked ? 'block' : 'none';
+        });
+    };
+
+    toggleDetail('allergyFood', 'allergyFoodDetail');
+    toggleDetail('allergyMedicine', 'allergyMedicineDetail');
+    toggleDetail('prevImmunization', 'prevImmunizationDetail');
+    toggleDetail('hasOtherIllness', 'otherIllnessDetail');
+})();
+
+// ── Health Assessment: BMI auto-calc + conditional reveals ──────────
+(() => {
+    const heightInput = document.getElementById('haVitalHeight');
+    const weightInput = document.getElementById('haVitalWeight');
+    const bmiInput    = document.getElementById('haVitalBmi');
+
+    const recalcBmi = () => {
+        const h = parseFloat(heightInput?.value);
+        const w = parseFloat(weightInput?.value);
+        if (bmiInput && h > 0 && w > 0) {
+            bmiInput.value = (w / Math.pow(h / 100, 2)).toFixed(2);
+        } else if (bmiInput) {
+            bmiInput.value = '';
+        }
+    };
+
+    heightInput?.addEventListener('input', recalcBmi);
+    weightInput?.addEventListener('input', recalcBmi);
+
+    // Allergy checkbox → reveal text input
+    const allergyCheck = document.getElementById('haAllergyCheck');
+    const allergyDetail = document.querySelector('input[name="med_allergies_detail"]');
+    allergyCheck?.addEventListener('change', () => {
+        if (allergyDetail) allergyDetail.style.display = allergyCheck.checked ? 'block' : 'none';
+    });
+
+    // Hospitalization checkbox → reveal text input
+    const hospCheck = document.getElementById('haHospCheck');
+    const hospDetail = document.querySelector('input[name="med_hospitalization_detail"]');
+    hospCheck?.addEventListener('change', () => {
+        if (hospDetail) hospDetail.style.display = hospCheck.checked ? 'block' : 'none';
+    });
+
+    // Level of consciousness "Other" radio → reveal text input
+    const consciousOtherRadio = document.getElementById('haConsciousOtherRadio');
+    const consciousOtherText  = document.getElementById('haConsciousOtherText');
+    document.querySelectorAll('input[name="appearance_consciousness"]').forEach((radio) => {
+        radio.addEventListener('change', () => {
+            if (consciousOtherText) {
+                consciousOtherText.style.display = (radio.value === 'Other' && radio.checked) ? 'inline-block' : 'none';
+            }
+        });
+    });
+
+    // Posture/Gait "Abnormal" radio → reveal text input
+    const postureDetail = document.getElementById('haPostureDetail');
+    document.querySelectorAll('input[name="appearance_posture_gait"]').forEach((radio) => {
+        radio.addEventListener('change', () => {
+            if (postureDetail) {
+                postureDetail.style.display = (radio.value === 'Abnormal' && radio.checked) ? 'inline-block' : 'none';
+            }
+        });
     });
 })();
 </script>

@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class ParentalConsentFormController extends Controller
 {
     /**
-     * Upload a signed parental consent form for the Deworming program.
+     * Save parental consent details (and optional signed form upload) for the health services program.
      * Restricted to class_adviser for students in their own assigned class only.
      */
     public function store(Request $request): RedirectResponse
@@ -25,8 +25,20 @@ class ParentalConsentFormController extends Controller
         );
 
         $validated = $request->validate([
-            'lrn'     => ['required', 'string', 'max:50'],
-            'consent' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'lrn'                      => ['required', 'string', 'max:50'],
+            'consent_type'             => ['required', 'string', 'in:full,partial,refused'],
+            'partial_exception'        => ['nullable', 'string', 'max:500'],
+            'refused_reason'           => ['nullable', 'string', 'max:500'],
+            'allergy_food'             => ['nullable', 'boolean'],
+            'allergy_food_detail'      => ['nullable', 'string', 'max:255'],
+            'allergy_medicine'         => ['nullable', 'boolean'],
+            'allergy_medicine_detail'  => ['nullable', 'string', 'max:255'],
+            'prev_immunization'        => ['nullable', 'boolean'],
+            'prev_immunization_detail' => ['nullable', 'string', 'max:255'],
+            'has_other_illness'        => ['nullable', 'boolean'],
+            'other_illness_detail'     => ['nullable', 'string', 'max:255'],
+            'medical_cert_attached'    => ['nullable', 'boolean'],
+            'consent'                  => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
         ]);
 
         $advisedGrade   = (string) $request->session()->get('assigned_grade_level', '');
@@ -48,22 +60,46 @@ class ParentalConsentFormController extends Controller
             'You may only upload consent forms for students in your assigned class.'
         );
 
-        $schoolYear   = ParentalConsentForm::currentSchoolYear();
-        $file         = $request->file('consent');
-        $originalName = $file->getClientOriginalName();
-        $safeName     = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
-        $path         = $file->storeAs('parental-consents/' . $record->id, $safeName, 'local');
+        $schoolYear = ParentalConsentForm::currentSchoolYear();
+        $path       = null;
+        $originalName = null;
+
+        if ($request->hasFile('consent')) {
+            $file         = $request->file('consent');
+            $originalName = $file->getClientOriginalName();
+            $safeName     = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+            $path         = $file->storeAs('parental-consents/' . $record->id, $safeName, 'local');
+        }
 
         ParentalConsentForm::create([
             'student_health_record_id' => $record->id,
             'program_type'             => 'Deworming',
             'school_year'              => $schoolYear,
+            'consent_type'             => $validated['consent_type'],
+            'partial_exception'        => $validated['partial_exception'] ?? null,
+            'refused_reason'           => $validated['refused_reason'] ?? null,
+            'allergy_food'             => !empty($validated['allergy_food']),
+            'allergy_food_detail'      => $validated['allergy_food_detail'] ?? null,
+            'allergy_medicine'         => !empty($validated['allergy_medicine']),
+            'allergy_medicine_detail'  => $validated['allergy_medicine_detail'] ?? null,
+            'prev_immunization'        => !empty($validated['prev_immunization']),
+            'prev_immunization_detail' => $validated['prev_immunization_detail'] ?? null,
+            'has_other_illness'        => !empty($validated['has_other_illness']),
+            'other_illness_detail'     => $validated['other_illness_detail'] ?? null,
+            'medical_cert_attached'    => !empty($validated['medical_cert_attached']),
             'file_path'                => $path,
             'file_original_name'       => $originalName,
             'uploaded_by_name'         => (string) $request->session()->get('active_name', 'Class Adviser'),
         ]);
 
-        return back()->with('consent_success', "Parental consent form uploaded successfully for SY {$schoolYear}.");
+        $typeLabel = match($validated['consent_type']) {
+            'full'    => 'Full consent',
+            'partial' => 'Partial consent',
+            'refused' => 'Consent refused',
+            default   => 'Consent',
+        };
+
+        return back()->with('consent_success', "{$typeLabel} recorded successfully for SY {$schoolYear}.");
     }
 
     /**
@@ -109,11 +145,24 @@ class ParentalConsentFormController extends Controller
             ->first();
 
         return response()->json([
-            'has_consent' => $form !== null,
-            'school_year' => $schoolYear,
-            'uploaded_by' => $form?->uploaded_by_name,
-            'uploaded_at' => $form?->created_at?->format('M d, Y'),
-            'consent_id'  => $form?->id,
+            'has_consent'              => $form !== null,
+            'school_year'              => $schoolYear,
+            'uploaded_by'              => $form?->uploaded_by_name,
+            'uploaded_at'              => $form?->created_at?->format('M d, Y'),
+            'consent_id'               => $form?->id,
+            'consent_type'             => $form?->consent_type,
+            'partial_exception'        => $form?->partial_exception,
+            'refused_reason'           => $form?->refused_reason,
+            'allergy_food'             => (bool) $form?->allergy_food,
+            'allergy_food_detail'      => $form?->allergy_food_detail,
+            'allergy_medicine'         => (bool) $form?->allergy_medicine,
+            'allergy_medicine_detail'  => $form?->allergy_medicine_detail,
+            'prev_immunization'        => (bool) $form?->prev_immunization,
+            'prev_immunization_detail' => $form?->prev_immunization_detail,
+            'has_other_illness'        => (bool) $form?->has_other_illness,
+            'other_illness_detail'     => $form?->other_illness_detail,
+            'medical_cert_attached'    => (bool) $form?->medical_cert_attached,
+            'has_file'                 => $form?->file_path !== null,
         ]);
     }
 
@@ -131,6 +180,7 @@ class ParentalConsentFormController extends Controller
 
         $form = ParentalConsentForm::find($id);
         abort_if($form === null, 404, 'Consent form not found.');
+        abort_if($form->file_path === null, 404, 'No file was uploaded for this consent record.');
 
         abort_unless(
             Storage::disk('local')->exists($form->file_path),

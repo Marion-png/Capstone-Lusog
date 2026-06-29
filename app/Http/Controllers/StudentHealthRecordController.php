@@ -5,14 +5,30 @@ namespace App\Http\Controllers;
 use App\Models\StudentHealthRecord;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class StudentHealthRecordController extends Controller
 {
-    public function classAdviserDashboard(Request $request): View
+    public function classAdviserDashboard(Request $request): View|RedirectResponse
     {
+        if ($request->session()->get('active_role') !== 'class_adviser') {
+            $roleRoutes = [
+                'school_nurse'  => 'dashboard.school-nurse',
+                'clinic_staff'  => 'dashboard.clinic-staff',
+                'school_head'   => 'dashboard.school-head',
+                'feeding_coor'  => 'dashboard.feedingcor-dashboard',
+                'nutricor'      => 'dashboard.nutricor-dashboard',
+                'system_admin'  => 'dashboard.system-admin',
+            ];
+            $role = (string) $request->session()->get('active_role', '');
+            $route = $roleRoutes[$role] ?? 'dashboard.school-nurse';
+            return redirect()->route($route);
+        }
+
         $this->ensureClassAdviserDemoData($request);
+        $this->ensureAssignedSchoolName($request);
 
         $records = collect();
 
@@ -256,6 +272,32 @@ class StudentHealthRecordController extends Controller
         ];
 
         $request->session()->put('school_health_card_records', array_merge($records, $demoRows));
+    }
+
+    /**
+     * Ensure assigned_school_name is always populated in the session.
+     * Sessions created before this key was introduced will not have it, so we
+     * recover it from active_school_name or the accounts table on first access.
+     */
+    private function ensureAssignedSchoolName(Request $request): void
+    {
+        if ($request->session()->get('assigned_school_name') !== null) {
+            return;
+        }
+
+        $schoolName = $request->session()->get('active_school_name');
+
+        if ($schoolName === null && Schema::hasTable('accounts')) {
+            $username = strtolower((string) $request->session()->get('active_username', ''));
+            if ($username !== '') {
+                $account    = DB::table('accounts')->whereRaw('LOWER(TRIM(username)) = ?', [$username])->first();
+                $schoolName = $account?->school_name ?? null;
+            }
+        }
+
+        if ($schoolName !== null) {
+            $request->session()->put('assigned_school_name', $schoolName);
+        }
     }
 
     public function storeBaseline(Request $request): RedirectResponse

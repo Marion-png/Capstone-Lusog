@@ -158,8 +158,8 @@
             <button type="button" class="profile-tab" data-panel="p-shd">SHD Form 2</button>
             <button type="button" class="profile-tab" data-panel="p-growth">Growth &amp; Nutrition</button>
             <button type="button" class="profile-tab" data-panel="p-alerts">Medical Alerts</button>
-            <button type="button" class="profile-tab" data-panel="p-timeline">Health Timeline</button>
             <button type="button" class="profile-tab" data-panel="p-consent">Parental Consent</button>
+            <button type="button" class="profile-tab" data-panel="p-health-assessment">Health Assessment</button>
             @if(session('active_role') === 'clinic_staff')
             <button type="button" class="profile-tab" data-panel="p-conditions">Health Conditions</button>
             @endif
@@ -233,35 +233,19 @@
                     <div class="kv"><div class="k">Current Note:</div><div class="v" id="paStatus">Pending nurse review.</div></div>
                 </div>
             </section>
-            <section id="p-timeline" class="profile-panel">
+            <section id="p-consent" class="profile-panel">
                 <div class="profile-block">
-                    <h4>Health Timeline</h4>
-                    <div id="ptSubmissionBanner" style="margin-bottom:10px;">
-                        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:.82rem;font-weight:700;color:#92400e;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                            Health card submitted &mdash; no medical certificate on file yet
-                        </div>
-                    </div>
-                    <div id="ptExamBanner" style="margin-bottom:12px;">
-                        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:.82rem;font-weight:700;color:#92400e;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                            Nurse examination pending
-                        </div>
-                    </div>
-
-                    <div id="ptConditionsWrap" style="border-top:1px solid #e4ece7;padding-top:12px;">
-                        <div style="font-size:.74rem;font-weight:700;color:#1d3c31;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;">Medical Conditions &amp; Certificates</div>
-                        <div id="ptConditionsList">
-                            <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>
-                        </div>
+                    <h4>Parental Consent &mdash; Health Services (Sulat-Pahibalo)</h4>
+                    <div id="pcConsentStatus">
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view consent status.</div></div>
                     </div>
                 </div>
             </section>
-            <section id="p-consent" class="profile-panel">
+            <section id="p-health-assessment" class="profile-panel">
                 <div class="profile-block">
-                    <h4>Parental Consent &mdash; Deworming Program</h4>
-                    <div id="pcConsentStatus">
-                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view consent status.</div></div>
+                    <h4>Health Assessment <span style="font-size:.72rem;font-weight:400;color:var(--text-3);">(MLHAT)</span></h4>
+                    <div id="phaStatus">
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view assessment.</div></div>
                     </div>
                 </div>
             </section>
@@ -407,35 +391,19 @@
         setText('pdRegionDivision', [record.region, record.division].filter(Boolean).join(' / ') || '-');
 
         setText('psGrade', record.grade_level || '-');
-        setText('psStatus', examined ? 'Examined by Nurse' : 'Pending');
+        setText('psStatus', examined ? 'Examined by Nurse' : 'Pending Nurse Examination');
 
         setText('pgHeight', (record.height_cm || '-') + ' cm');
         setText('pgWeight', (record.weight_kg || '-') + ' kg');
         drawGrowthTrend(record);
         setText('paStatus', examined ? 'Nurse examination details are available.' : 'Pending nurse review.');
 
-        const examBanner = document.getElementById('ptExamBanner');
-        if (examBanner) {
-            if (examined) {
-                examBanner.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#dcfce7;border:1px solid #86efac;border-radius:8px;font-size:.82rem;font-weight:700;color:#166534;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                    Medical examination completed by nurse
-                </div>`;
-            } else {
-                examBanner.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:.82rem;font-weight:700;color:#92400e;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                    Nurse examination pending
-                </div>`;
-            }
-        }
-
-
         @if(session('active_role') === 'clinic_staff')
         loadConditionsForClinicStaff(record.lrn || '');
         @endif
 
-        loadConditionsForTimeline(record.lrn || '');
         loadConsentStatus(record.lrn || '');
+        loadHealthAssessment(record.lrn || '');
 
         backdrop.classList.add('open');
         backdrop.setAttribute('aria-hidden', 'false');
@@ -460,13 +428,66 @@
 
             if (!resp.ok) {
                 statusEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not check consent status.</div></div>';
-                    return;
+                return;
             }
 
             const data = await resp.json();
 
             if (data.has_consent) {
-                const viewBtn = data.consent_id
+                // Status banner colour by consent_type
+                const bannerStyle = data.consent_type === 'refused'
+                    ? 'background:#f3f4f6;border:1px solid #d1d5db;color:#374151;'
+                    : data.consent_type === 'partial'
+                        ? 'background:#fef3c7;border:1px solid #fcd34d;color:#92400e;'
+                        : 'background:#dcfce7;border:1px solid #86efac;color:#166534;';
+
+                const consentLabel = data.consent_type === 'refused'
+                    ? 'Consent Refused'
+                    : data.consent_type === 'partial'
+                        ? 'Partial Consent on file'
+                        : 'Full Consent on file';
+
+                const bannerIcon = data.consent_type === 'refused'
+                    ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+                    : data.consent_type === 'partial'
+                        ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+                        : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+
+                // Conditional sub-info for partial/refused
+                const exceptionRow = data.consent_type === 'partial' && data.partial_exception
+                    ? `<div class="kv"><div class="k">Exception:</div><div class="v">${data.partial_exception}</div></div>`
+                    : '';
+                const refusedRow = data.consent_type === 'refused' && data.refused_reason
+                    ? `<div class="kv"><div class="k">Reason:</div><div class="v">${data.refused_reason}</div></div>`
+                    : '';
+
+                // Allergy rows
+                const allergyRows = [
+                    data.allergy_food
+                        ? `<div class="kv"><div class="k">Food Allergy:</div><div class="v">${data.allergy_food_detail || 'Yes'}</div></div>`
+                        : '',
+                    data.allergy_medicine
+                        ? `<div class="kv"><div class="k">Medicine Allergy:</div><div class="v">${data.allergy_medicine_detail || 'Yes'}</div></div>`
+                        : '',
+                    data.prev_immunization
+                        ? `<div class="kv"><div class="k">Prev. Immunization Reaction:</div><div class="v">${data.prev_immunization_detail || 'Yes'}</div></div>`
+                        : '',
+                ].filter(Boolean).join('');
+
+                const allergySection = allergyRows
+                    ? `<div style="margin:10px 0 4px;padding:10px 12px;background:#f7faf8;border-radius:8px;border:1px solid #d1dbd5;">
+                           <div style="font-size:.68rem;font-weight:700;color:#334a3f;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Allergy Information</div>
+                           ${allergyRows}
+                       </div>`
+                    : '';
+
+                const otherIllnessRow = data.has_other_illness
+                    ? `<div class="kv"><div class="k">Other Illness:</div><div class="v">${data.other_illness_detail || 'Yes'}</div></div>`
+                    : '';
+
+                const medCertRow = `<div class="kv"><div class="k">Med. Cert Attached:</div><div class="v">${data.medical_cert_attached ? 'Yes' : 'No'}</div></div>`;
+
+                const viewBtn = data.has_file && data.consent_id
                     ? `<div style="margin-top:14px;">
                            <a href="/parental-consent/${data.consent_id}/download" target="_blank" rel="noopener noreferrer"
                               style="display:inline-flex;align-items:center;gap:6px;background:#15803d;color:#fff;border-radius:7px;padding:7px 14px;font-size:.78rem;font-weight:700;text-decoration:none;">
@@ -477,13 +498,19 @@
                     : '';
 
                 statusEl.innerHTML = `
-                    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#dcfce7;border:1px solid #86efac;border-radius:8px;font-size:.82rem;font-weight:700;color:#166534;margin-bottom:12px;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                        Parental consent is on file for SY ${data.school_year || '—'}
+                    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;${bannerStyle}border-radius:8px;font-size:.82rem;font-weight:700;margin-bottom:12px;">
+                        ${bannerIcon}
+                        ${consentLabel} &mdash; SY ${data.school_year || '—'}
                     </div>
-                    <div class="kv"><div class="k">School Year:</div><div class="v">${data.school_year || '—'}</div></div>
-                    <div class="kv"><div class="k">Uploaded By:</div><div class="v">${data.uploaded_by || '—'}</div></div>
-                    <div class="kv"><div class="k">Uploaded On:</div><div class="v">${data.uploaded_at || '—'}</div></div>
+                    <div class="kv"><div class="k">Consent Type:</div><div class="v" style="font-weight:600;">${data.consent_type === 'full' ? 'Full Consent' : data.consent_type === 'partial' ? 'Partial Consent' : 'Refused'}</div></div>
+                    ${exceptionRow}
+                    ${refusedRow}
+                    ${allergySection}
+                    ${otherIllnessRow}
+                    ${medCertRow}
+                    <div class="kv" style="margin-top:8px;border-top:1px solid #e4ece7;padding-top:8px;"><div class="k">School Year:</div><div class="v">${data.school_year || '—'}</div></div>
+                    <div class="kv"><div class="k">Submitted By:</div><div class="v">${data.uploaded_by || '—'}</div></div>
+                    <div class="kv"><div class="k">Submitted On:</div><div class="v">${data.uploaded_at || '—'}</div></div>
                     ${viewBtn}`;
 
             } else {
@@ -494,12 +521,114 @@
                     </div>
                     <div class="kv"><div class="k">School Year:</div><div class="v">${data.school_year || '—'}</div></div>
                     <div style="margin-top:10px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:.78rem;color:#92400e;line-height:1.5;">
-                        The Class Adviser has not yet uploaded a signed parental consent form for this student. Deworming cannot be recorded until one is on file.
+                        The Class Adviser has not yet submitted a parental consent record for this student.
                     </div>`;
-
-                }
+            }
         } catch (_err) {
             statusEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load consent status.</div></div>';
+        }
+    };
+
+    const loadHealthAssessment = async (lrn) => {
+        const el = document.getElementById('phaStatus');
+        if (!el) return;
+        if (!lrn) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No LRN available.</div></div>'; return; }
+        el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>';
+        try {
+            const resp = await fetch('/api/student-health-assessment?lrn=' + encodeURIComponent(lrn), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!resp.ok) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load assessment.</div></div>'; return; }
+            const d = await resp.json();
+            if (!d.has_assessment) {
+                el.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;font-size:.82rem;font-weight:700;color:#991b1b;margin-bottom:12px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                        No health assessment on file for SY ${d.school_year || '—'}
+                    </div>
+                    <div style="padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:.78rem;color:#92400e;">
+                        The Class Adviser has not yet submitted an MLHAT health assessment for this student.
+                    </div>`;
+                return;
+            }
+
+            const bool = (v, yes = 'Yes', no = 'No') => v ? `<span style="color:#15803d;font-weight:600;">${yes}</span>` : no;
+            const row = (k, v) => v ? `<div class="kv"><div class="k">${k}:</div><div class="v">${v}</div></div>` : '';
+            const section = (title, html) => `<div style="margin-bottom:12px;padding:10px 12px;background:#f7faf8;border-radius:8px;border:1px solid #d1dbd5;">
+                <div style="font-size:.68rem;font-weight:700;color:#334a3f;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">${title}</div>${html}</div>`;
+
+            // Medical history
+            const medItems = [
+                d.med_asthma && 'Asthma', d.med_diabetes && 'Diabetes',
+                d.med_seizure_disorder && 'Seizure Disorder', d.med_frequent_infections && 'Frequent Infections',
+                d.med_allergies && ('Allergies' + (d.med_allergies_detail ? ': ' + d.med_allergies_detail : '')),
+                d.med_heart_condition && 'Heart Condition', d.med_tuberculosis && 'Tuberculosis',
+                d.med_hospitalization_surgery && ('Hospitalization/Surgery' + (d.med_hospitalization_detail ? ': ' + d.med_hospitalization_detail : '')),
+            ].filter(Boolean);
+            const medHistHtml = medItems.length
+                ? `<div style="font-size:.8rem;color:#1d3c31;">${medItems.join(', ')}</div>` + (d.med_current_medications ? row('Current Medications', d.med_current_medications) : '') + (d.med_other_conditions ? row('Other Conditions', d.med_other_conditions) : '')
+                : '<div class="kv"><div class="k">Findings:</div><div class="v" style="color:#7a9e87;">None reported</div></div>';
+
+            // Family history
+            const famItems = [
+                d.fam_hypertension && 'Hypertension', d.fam_diabetes && 'Diabetes',
+                d.fam_heart_disease && 'Heart Disease', d.fam_cancer && 'Cancer',
+                d.fam_mental_health && 'Mental Health Conditions',
+            ].filter(Boolean);
+            const famHistHtml = (famItems.length ? `<div style="font-size:.8rem;color:#1d3c31;">${famItems.join(', ')}</div>` : '<div class="kv"><div class="k">Findings:</div><div class="v" style="color:#7a9e87;">None reported</div></div>') +
+                (d.fam_genetic_hereditary ? row('Genetic/Hereditary', d.fam_genetic_hereditary) : '');
+
+            // Vital signs
+            const vitals = [
+                d.vital_height_cm && row('Height', d.vital_height_cm + ' cm'),
+                d.vital_weight_kg && row('Weight', d.vital_weight_kg + ' kg'),
+                d.vital_bmi && row('BMI', d.vital_bmi),
+                d.vital_temperature_c && row('Temperature', d.vital_temperature_c + ' °C'),
+                d.vital_pulse_rate && row('Pulse Rate', d.vital_pulse_rate + ' bpm'),
+                d.vital_blood_pressure && row('Blood Pressure', d.vital_blood_pressure + ' mmHg'),
+            ].filter(Boolean).join('');
+
+            // Body systems
+            const systemLabels = {
+                integumentary:'Integumentary', heent_head:'HEENT-Head/Scalp', heent_eyes:'HEENT-Eyes',
+                heent_ears:'HEENT-Ears', heent_nose:'HEENT-Nose', heent_throat:'HEENT-Throat',
+                respiratory:'Respiratory', cardiovascular:'Cardiovascular', gastrointestinal:'Gastrointestinal',
+                genitourinary:'Genitourinary', musculoskeletal:'Musculoskeletal', neurological:'Neurological',
+            };
+            const systems = d.body_systems || {};
+            const systemRows = Object.entries(systems).map(([key, val]) => {
+                const label = systemLabels[key] || key;
+                const findings = (val.findings || []).join(', ');
+                const notes = val.notes || '';
+                if (!findings && !notes) return '';
+                return row(label, findings + (notes ? ` <span style="color:#7a9e87;font-size:.76rem;">(${notes})</span>` : ''));
+            }).filter(Boolean).join('');
+
+            // Oral health
+            const teethStr = (d.teeth_condition || []).join(', ');
+
+            el.innerHTML = `
+                <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#dcfce7;border:1px solid #86efac;border-radius:8px;font-size:.82rem;font-weight:700;color:#166534;margin-bottom:12px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    Health Assessment on file &mdash; SY ${d.school_year || '—'}
+                </div>
+                ${row('Date of Assessment', d.date_of_assessment)}
+                ${row('Assessed By', d.assessed_by)}
+                ${row('Submitted By', d.submitted_by + (d.submitted_at ? ' on ' + d.submitted_at : ''))}
+                ${section('B. Medical History', medHistHtml)}
+                ${section('C. Family History', famHistHtml)}
+                ${vitals ? section('E. Vital Signs', vitals) : ''}
+                ${systemRows ? section('F. Body Systems', systemRows) : ''}
+                ${(d.vision_right_eye || d.vision_left_eye || d.vision_result || d.hearing_result) ? section('G. Vision & Hearing',
+                    row('Vision', [d.vision_right_eye && ('R: ' + d.vision_right_eye), d.vision_left_eye && ('L: ' + d.vision_left_eye), d.vision_result].filter(Boolean).join(' | ')) +
+                    row('Hearing', d.hearing_result)) : ''}
+                ${teethStr || d.last_dental_visit || d.dental_referral ? section('H. Oral Health',
+                    row('Teeth Condition', teethStr) + row('Last Dental Visit', d.last_dental_visit) +
+                    (d.dental_referral ? '<div class="kv"><div class="k">Referral:</div><div class="v" style="color:#dc2626;font-weight:600;">Referral to Dentist Recommended</div></div>' : '')) : ''}
+                ${d.immunization_status || d.missing_needed_vaccines ? section('I. Immunization Status',
+                    row('Status', d.immunization_status) + row('Missing/Needed Vaccines', d.missing_needed_vaccines) + row('Date Reviewed', d.immunization_date_reviewed)) : ''}
+                ${d.summary_of_findings || d.recommendations ? section('J. Summary & Recommendations',
+                    row('Summary of Findings', d.summary_of_findings) + row('Recommendations', d.recommendations) + row('Examiner Signature', d.examiner_signature)) : ''}`;
+        } catch (_err) {
+            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load assessment.</div></div>';
         }
     };
 
@@ -563,88 +692,6 @@
         }
     };
     @endif
-
-    const setSubmissionBanner = (hasCert) => {
-        const banner = document.getElementById('ptSubmissionBanner');
-        if (!banner) return;
-        if (hasCert) {
-            banner.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#dcfce7;border:1px solid #86efac;border-radius:8px;font-size:.82rem;font-weight:700;color:#166534;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                Health card submitted &mdash; medical certificate on file
-            </div>`;
-        } else {
-            banner.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:.82rem;font-weight:700;color:#92400e;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                Health card submitted &mdash; no medical certificate on file yet
-            </div>`;
-        }
-    };
-
-    const loadConditionsForTimeline = async (lrn) => {
-        const listEl = document.getElementById('ptConditionsList');
-        if (!listEl) return;
-
-        if (!lrn) {
-            listEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No LRN available.</div></div>';
-            setSubmissionBanner(false);
-            return;
-        }
-
-        listEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>';
-
-        try {
-            const resp = await fetch('/api/student-conditions?lrn=' + encodeURIComponent(lrn), {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            });
-
-            if (!resp.ok) {
-                listEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No conditions on file.</div></div>';
-                setSubmissionBanner(false);
-                return;
-            }
-
-            const data = await resp.json();
-            const conditions = data.conditions || [];
-
-            if (!conditions.length) {
-                listEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No medical conditions recorded for this student.</div></div>';
-                setSubmissionBanner(false);
-                return;
-            }
-
-            setSubmissionBanner(conditions.some(c => c.certificate_count > 0));
-
-            listEl.innerHTML = conditions.map(c => {
-                const badge = c.is_verified
-                    ? '<span style="font-size:.67rem;font-weight:700;padding:2px 7px;border-radius:999px;background:#dcfce7;color:#15803d;margin-left:6px;">Verified / Diagnosed</span>'
-                    : '<span style="font-size:.67rem;font-weight:700;padding:2px 7px;border-radius:999px;background:#fef3c7;color:#92400e;margin-left:6px;">Self-reported</span>';
-                const certDetails = (c.certificates || []).map(cert => {
-                    const doctor = cert.doctor_clinic ? ` — ${cert.doctor_clinic}` : '';
-                    const date = cert.diagnosis_date ? ` (${cert.diagnosis_date})` : '';
-                    const dl = cert.download_url
-                        ? `<a href="${cert.download_url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;font-size:.72rem;font-weight:700;color:#15803d;text-decoration:none;border:1px solid #86efac;background:#f0fdf4;border-radius:6px;padding:3px 9px;margin-left:6px;white-space:nowrap;">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                            View Medical Certificate
-                           </a>`
-                        : '';
-                    return `<div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:4px 0 4px 12px;font-size:.76rem;color:#3d5c47;">
-                        <span style="color:#7a9e87;">•</span>
-                        <span>${cert.original_name}${doctor}${date}</span>
-                        <span style="color:#7a9e87;">— uploaded by ${cert.uploaded_by} on ${cert.uploaded_at}</span>
-                        ${dl}
-                    </div>`;
-                }).join('');
-                return `<div style="border-bottom:1px solid #edf5ef;padding:7px 0;">
-                    <div style="display:flex;align-items:center;gap:4px;">
-                        <span style="font-size:.88rem;font-weight:700;color:#1d3c31;">${c.condition_name}</span>${badge}
-                    </div>
-                    ${certDetails || '<div style="font-size:.72rem;color:#7a9e87;padding:3px 0 0 12px;">No certificates on file.</div>'}
-                </div>`;
-            }).join('');
-        } catch (_err) {
-            listEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load conditions.</div></div>';
-        }
-    };
 
     const closeProfile = () => {
         backdrop.classList.remove('open');

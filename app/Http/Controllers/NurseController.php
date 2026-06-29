@@ -108,21 +108,29 @@ class NurseController extends Controller
             abort(404);
         }
 
-        // Gate: block if deworming is being marked "given" but no consent is on file
+        // Gate: block if deworming is being marked "given" but no valid consent is on file
         if ($request->input('deworming') === 'V') {
             $lrn           = (string) ($records[$index]['lrn'] ?? '');
             $studentRecord = StudentHealthRecord::where('student_id', $lrn)->first();
             $schoolYear    = ParentalConsentForm::currentSchoolYear();
-            $hasConsent    = $studentRecord !== null
-                && ParentalConsentForm::where('student_health_record_id', $studentRecord->id)
+            $consentForm   = $studentRecord !== null
+                ? ParentalConsentForm::where('student_health_record_id', $studentRecord->id)
                     ->where('program_type', 'Deworming')
                     ->where('school_year', $schoolYear)
-                    ->exists();
+                    ->latest()
+                    ->first()
+                : null;
 
-            if (!$hasConsent) {
+            if ($consentForm === null) {
                 return back()
                     ->withInput()
                     ->withErrors(['deworming' => "Cannot proceed — no signed parental consent on file for this student for SY {$schoolYear}."]);
+            }
+
+            if ($consentForm->consent_type === 'refused') {
+                return back()
+                    ->withInput()
+                    ->withErrors(['deworming' => "Cannot proceed — the parent/guardian refused consent for health services for SY {$schoolYear}."]);
             }
         }
 
