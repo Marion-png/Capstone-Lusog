@@ -175,7 +175,12 @@
                     <div class="field full" id="schoolField" style="display:none;">
                         <label for="institution_id">School / Institution <span style="color:#dc2626;">*</span></label>
                         <select id="institution_id" name="institution_id" style="height:42px;border-radius:10px;border:1px solid var(--line);padding:0 12px;font:inherit;color:var(--text);background:#fff;">
-                            <option value="" disabled selected>Loading schools…</option>
+                            <option value="" disabled {{ old('institution_id') ? '' : 'selected' }}>Select your school…</option>
+                            @foreach (($institutions ?? collect()) as $institution)
+                                <option value="{{ $institution->id }}" {{ (string) old('institution_id') === (string) $institution->id ? 'selected' : '' }}>
+                                    {{ $institution->name }}
+                                </option>
+                            @endforeach
                         </select>
                         @error('institution_id')
                             <span style="color:#dc2626;font-size:0.8rem;">{{ $message }}</span>
@@ -227,24 +232,39 @@
         const gradeField      = document.getElementById('gradeField');
         const sectionField    = document.getElementById('sectionField');
         const classAdviserHint = document.getElementById('classAdviserHint');
+        const oldInstitutionId = @json((string) old('institution_id', ''));
 
-        // Fetch institutions from API and populate the dropdown once
-        fetch('/api/institutions')
-            .then(r => r.json())
-            .then(function (institutions) {
-                institutionSel.innerHTML = '<option value="" disabled selected>Select your school…</option>';
-                const oldVal = '{{ old("institution_id") }}';
-                institutions.forEach(function (inst) {
-                    const opt = document.createElement('option');
-                    opt.value = inst.id;
-                    opt.textContent = inst.name;
-                    if (String(inst.id) === oldVal) opt.selected = true;
-                    institutionSel.appendChild(opt);
-                });
-            })
-            .catch(function () {
-                institutionSel.innerHTML = '<option value="" disabled selected>Failed to load schools</option>';
+        function populateSchools(institutions) {
+            if (!Array.isArray(institutions) || institutions.length === 0) {
+                return;
+            }
+
+            institutionSel.innerHTML = '<option value="" disabled>Select your school…</option>';
+
+            institutions.forEach(function (inst) {
+                const opt = document.createElement('option');
+                opt.value = inst.id;
+                opt.textContent = inst.name;
+                if (String(inst.id) === oldInstitutionId) opt.selected = true;
+                institutionSel.appendChild(opt);
             });
+
+            if (!oldInstitutionId) {
+                institutionSel.selectedIndex = 0;
+            }
+        }
+
+        // Refresh institutions from API when available; keep server-rendered schools if it fails.
+        fetch('/api/institutions')
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error('Unable to load schools');
+                }
+
+                return response.json();
+            })
+            .then(populateSchools)
+            .catch(function () {});
 
         function syncRoleFields() {
             const role = roleSelect.value;

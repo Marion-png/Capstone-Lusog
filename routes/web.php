@@ -87,7 +87,17 @@ Route::get('/admin-login', function () {
 })->name('admin.login');
 
 Route::get('/account-request', function () {
-    return view('auth.account-request');
+    $institutions = collect();
+
+    if (Schema::hasTable('institutions')) {
+        if (! Institution::active()->exists()) {
+            Institution::seedDefaults();
+        }
+
+        $institutions = Institution::active()->orderBy('name')->get(['id', 'name']);
+    }
+
+    return view('auth.account-request', ['institutions' => $institutions]);
 })->name('account.request');
 
 Route::post('/account-request', function (Request $request) {
@@ -383,6 +393,14 @@ Route::post('/dashboard/consultation-log', [ConsultationController::class, 'stor
 
 // API: list active institutions for registration dropdown
 Route::get('/api/institutions', function () {
+    if (! Schema::hasTable('institutions')) {
+        return response()->json([]);
+    }
+
+    if (Schema::hasTable('institutions') && ! Institution::active()->exists()) {
+        Institution::seedDefaults();
+    }
+
     return Institution::active()->orderBy('name')->get(['id', 'name']);
 })->name('api.institutions.index');
 

@@ -92,12 +92,24 @@ class InstitutionRegistrationTest extends TestCase
         $response->assertSessionHasNoErrors();
         $response->assertRedirect(route('account.request'));
 
-        $pending = $response->baseResponse->getSession()->get('pending_account_requests', []);
-        $request = collect($pending)->firstWhere('username', 'nurse.maria');
+        $this->assertDatabaseHas('account_requests', [
+            'username'       => 'nurse.maria',
+            'institution_id' => $this->institution->id,
+            'school_name'    => 'Test School',
+            'status'         => 'pending',
+        ]);
+    }
 
-        $this->assertNotNull($request);
-        $this->assertEquals($this->institution->id, $request['institution_id']);
-        $this->assertEquals('Test School', $request['school_name']);
+    /** @test */
+    public function account_request_page_seeds_and_shows_default_schools_when_none_exist(): void
+    {
+        Institution::query()->delete();
+
+        $response = $this->get('/account-request');
+
+        $response->assertOk();
+        $response->assertSee('Davao City National High School');
+        $response->assertSee('Doña Carmen Denia National High School');
     }
 
     /** @test */
