@@ -19,18 +19,19 @@ class NurseController extends Controller
         $rawRecords = $request->session()->get('school_health_card_records', []);
 
         // Deduplicate by LRN — prefer the entry that already has exam data, otherwise keep first.
-        $seen    = [];
+        $seen = [];
         $records = [];
         foreach ($rawRecords as $r) {
             $lrn = (string) ($r['lrn'] ?? '');
             if ($lrn === '') {
                 $records[] = $r;
+
                 continue;
             }
-            if (!isset($seen[$lrn])) {
-                $seen[$lrn]  = count($records);
-                $records[]   = $r;
-            } elseif (!empty($r['examination']) && empty($records[$seen[$lrn]]['examination'])) {
+            if (! isset($seen[$lrn])) {
+                $seen[$lrn] = count($records);
+                $records[] = $r;
+            } elseif (! empty($r['examination']) && empty($records[$seen[$lrn]]['examination'])) {
                 $records[$seen[$lrn]] = $r; // replace with the examined copy
             }
         }
@@ -38,15 +39,15 @@ class NurseController extends Controller
 
         $consentByLrn = [];
 
-        if (!empty($records)) {
+        if (! empty($records)) {
             $schoolYear = ParentalConsentForm::currentSchoolYear();
-            $lrns       = array_values(array_filter(array_column($records, 'lrn'), fn($v) => $v !== null && $v !== ''));
+            $lrns = array_values(array_filter(array_column($records, 'lrn'), fn ($v) => $v !== null && $v !== ''));
 
-            if (!empty($lrns)) {
+            if (! empty($lrns)) {
                 $studentRecords = StudentHealthRecord::whereIn('student_id', $lrns)->get()->keyBy('student_id');
-                $studentIds     = $studentRecords->pluck('id')->toArray();
+                $studentIds = $studentRecords->pluck('id')->toArray();
 
-                if (!empty($studentIds)) {
+                if (! empty($studentIds)) {
                     $consents = ParentalConsentForm::whereIn('student_health_record_id', $studentIds)
                         ->where('program_type', 'Deworming')
                         ->where('school_year', $schoolYear)
@@ -54,8 +55,8 @@ class NurseController extends Controller
                         ->keyBy('student_health_record_id');
 
                     foreach ($lrns as $lrn) {
-                        $sr                  = $studentRecords->get($lrn);
-                        $consentByLrn[$lrn]  = ($sr !== null && $consents->has($sr->id))
+                        $sr = $studentRecords->get($lrn);
+                        $consentByLrn[$lrn] = ($sr !== null && $consents->has($sr->id))
                             ? $consents->get($sr->id)
                             : null;
                     }
@@ -64,7 +65,7 @@ class NurseController extends Controller
         }
 
         return view('nurse.index', [
-            'records'      => $records,
+            'records' => $records,
             'consentByLrn' => $consentByLrn,
         ]);
     }
@@ -73,12 +74,12 @@ class NurseController extends Controller
     {
         $records = $request->session()->get('school_health_card_records', []);
 
-        if (!isset($records[$index])) {
+        if (! isset($records[$index])) {
             abort(404);
         }
 
-        $lrn         = (string) ($records[$index]['lrn'] ?? '');
-        $schoolYear  = ParentalConsentForm::currentSchoolYear();
+        $lrn = (string) ($records[$index]['lrn'] ?? '');
+        $schoolYear = ParentalConsentForm::currentSchoolYear();
         $consentForm = null;
 
         if ($lrn !== '') {
@@ -93,9 +94,9 @@ class NurseController extends Controller
         }
 
         return view('nurse.examine', [
-            'index'             => $index,
-            'record'            => $records[$index],
-            'consentForm'       => $consentForm,
+            'index' => $index,
+            'record' => $records[$index],
+            'consentForm' => $consentForm,
             'consentSchoolYear' => $schoolYear,
         ]);
     }
@@ -104,16 +105,16 @@ class NurseController extends Controller
     {
         $records = $request->session()->get('school_health_card_records', []);
 
-        if (!isset($records[$index])) {
+        if (! isset($records[$index])) {
             abort(404);
         }
 
         // Gate: block if deworming is being marked "given" but no valid consent is on file
         if ($request->input('deworming') === 'V') {
-            $lrn           = (string) ($records[$index]['lrn'] ?? '');
+            $lrn = (string) ($records[$index]['lrn'] ?? '');
             $studentRecord = StudentHealthRecord::where('student_id', $lrn)->first();
-            $schoolYear    = ParentalConsentForm::currentSchoolYear();
-            $consentForm   = $studentRecord !== null
+            $schoolYear = ParentalConsentForm::currentSchoolYear();
+            $consentForm = $studentRecord !== null
                 ? ParentalConsentForm::where('student_health_record_id', $studentRecord->id)
                     ->where('program_type', 'Deworming')
                     ->where('school_year', $schoolYear)
@@ -155,7 +156,7 @@ class NurseController extends Controller
         }
 
         $attendanceByMonth = $records[$index]['attendance_by_month'] ?? [];
-        if (!is_array($attendanceByMonth)) {
+        if (! is_array($attendanceByMonth)) {
             $attendanceByMonth = [];
         }
         $monthKey = Carbon::parse($examDate)->format('Y-m');
@@ -202,6 +203,35 @@ class NurseController extends Controller
 
         $request->session()->put('school_health_card_records', $records);
 
+        // Persist the examination to the database so it survives session expiry
+        // and server restarts. Only update records that already exist in the DB
+        // (i.e. real students submitted by an adviser) to avoid creating orphans.
+        $lrn = (string) ($records[$index]['lrn'] ?? '');
+        if ($lrn !== '' && Schema::hasTable('student_health_records')) {
+            $studentRecord = StudentHealthRecord::where('student_id', $lrn)->first();
+
+            if ($studentRecord !== null) {
+                $endlineHeight = $request->input('height_cm');
+                $endlineWeight = $request->input('weight_kg');
+                $endlineBmi = null;
+                if (is_numeric($endlineHeight) && is_numeric($endlineWeight) && (float) $endlineHeight > 0) {
+                    $heightMeters = ((float) $endlineHeight) / 100;
+                    $endlineBmi = round(((float) $endlineWeight) / ($heightMeters * $heightMeters), 2);
+                }
+
+                $studentRecord->update([
+                    'examination' => $records[$index]['examination'],
+                    'attendance_by_month' => $attendanceByMonth,
+                    'weight' => is_numeric($endlineWeight) ? (float) $endlineWeight : $studentRecord->weight,
+                    'endline_height_cm' => is_numeric($endlineHeight) ? (float) $endlineHeight : $studentRecord->endline_height_cm,
+                    'endline_weight_kg' => is_numeric($endlineWeight) ? (float) $endlineWeight : $studentRecord->endline_weight_kg,
+                    'endline_bmi_value' => $endlineBmi ?? $studentRecord->endline_bmi_value,
+                    'endline_nutritional_status' => $lockedBmiStatus !== '' ? $lockedBmiStatus : $studentRecord->endline_nutritional_status,
+                    'endline_recorded_at' => $examDate,
+                ]);
+            }
+        }
+
         return redirect()->route('dashboard.student-health-records')->with('success', 'Medical record saved.');
     }
 
@@ -215,11 +245,11 @@ class NurseController extends Controller
     {
         $institutionId = $request->session()->get('active_institution_id');
 
-        if (!$institutionId || !Schema::hasTable('student_health_records')) {
+        if (! $institutionId || ! Schema::hasTable('student_health_records')) {
             return;
         }
 
-        $existing   = collect($request->session()->get('school_health_card_records', []));
+        $existing = collect($request->session()->get('school_health_card_records', []));
         $sessionLrns = $existing
             ->pluck('lrn')
             ->filter()
@@ -239,48 +269,51 @@ class NurseController extends Controller
             }
 
             // student_name is stored as "LastName, FirstName MiddleInitial"
-            $name     = (string) $record->student_name;
+            $name = (string) $record->student_name;
             $commaPos = strpos($name, ', ');
             if ($commaPos !== false) {
                 $lastName = substr($name, 0, $commaPos);
-                $rest     = substr($name, $commaPos + 2);
+                $rest = substr($name, $commaPos + 2);
                 $spacePos = strpos($rest, ' ');
                 if ($spacePos !== false) {
-                    $firstName  = substr($rest, 0, $spacePos);
+                    $firstName = substr($rest, 0, $spacePos);
                     $middleName = substr($rest, $spacePos + 1);
                 } else {
-                    $firstName  = $rest;
+                    $firstName = $rest;
                     $middleName = '';
                 }
             } else {
-                $lastName   = $name;
-                $firstName  = '';
+                $lastName = $name;
+                $firstName = '';
                 $middleName = '';
             }
 
             // section is stored as "Grade X / SectionName"
             $sectionParts = explode(' / ', (string) $record->section, 2);
-            $gradeLevel   = $sectionParts[0] ?? (string) $record->section;
-            $section      = $sectionParts[1] ?? '';
+            $gradeLevel = $sectionParts[0] ?? (string) $record->section;
+            $section = $sectionParts[1] ?? '';
 
             $toAdd[] = [
-                'lrn'                               => $lrn,
-                'last_name'                         => $lastName,
-                'first_name'                        => $firstName,
-                'middle_name'                       => $middleName,
-                'grade_level'                       => $gradeLevel,
-                'section'                           => $section,
-                'height_cm'                         => $record->baseline_height_cm,
-                'weight_kg'                         => $record->baseline_weight_kg,
-                'age'                               => $record->baseline_age,
-                'bmi_value'                         => $record->bmi_value,
-                'nutritional_status_bmi_for_age'    => $record->nutritional_status,
+                'lrn' => $lrn,
+                'last_name' => $lastName,
+                'first_name' => $firstName,
+                'middle_name' => $middleName,
+                'grade_level' => $gradeLevel,
+                'section' => $section,
+                'height_cm' => $record->baseline_height_cm,
+                'weight_kg' => $record->baseline_weight_kg,
+                'age' => $record->baseline_age,
+                'bmi_value' => $record->bmi_value,
+                'nutritional_status_bmi_for_age' => $record->nutritional_status,
                 'nutritional_status_height_for_age' => null,
-                'examination'                       => [],
+                // Restore any previously saved examination/attendance from the DB
+                // so the nurse's earlier input survives session expiry and restarts.
+                'examination' => $record->examination ?? [],
+                'attendance_by_month' => $record->attendance_by_month ?? [],
             ];
         }
 
-        if (!empty($toAdd)) {
+        if (! empty($toAdd)) {
             $request->session()->put(
                 'school_health_card_records',
                 array_merge($existing->all(), $toAdd)

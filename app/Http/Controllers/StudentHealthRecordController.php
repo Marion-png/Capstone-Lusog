@@ -27,7 +27,7 @@ class StudentHealthRecordController extends Controller
             return redirect()->route($route);
         }
 
-        $this->ensureClassAdviserDemoData($request);
+        $this->stripLegacyDemoRows($request);
         $this->ensureAssignedSchoolName($request);
 
         $records = collect();
@@ -74,204 +74,22 @@ class StudentHealthRecordController extends Controller
         ]);
     }
 
-    private function ensureClassAdviserDemoData(Request $request): void
+    /**
+     * Remove any leftover built-in demo student rows that older sessions may
+     * still carry, so they don't reappear after the demo accounts were removed.
+     */
+    private function stripLegacyDemoRows(Request $request): void
     {
-        $assignedGradeLevel = (string) $request->session()->get('assigned_grade_level', '');
-        $assignedSection = (string) $request->session()->get('assigned_section', '');
-
-        // Only inject demo student rows for the built-in demo account.
-        // Real adviser accounts start with an empty student list.
-        $isDemoAdviser = $request->session()->get('active_username') === 'adviser.demo';
-
-        if (!$isDemoAdviser) {
-            // Strip any demo rows that may have been injected into this session before
-            // this guard was in place, so they don't persist across logins.
-            $demoLrns = ['100234560201', '100234560202', '100234560203'];
-            $existing = $request->session()->get('school_health_card_records', []);
-            $cleaned  = collect($existing)
-                ->reject(fn (array $r) => in_array((string) ($r['lrn'] ?? ''), $demoLrns, true))
-                ->values()
-                ->all();
-            if (count($cleaned) !== count($existing)) {
-                $request->session()->put('school_health_card_records', $cleaned);
-            }
-            return;
-        }
-
-        if ($assignedGradeLevel === '' || $assignedSection === '') {
-            $assignedGradeLevel = 'Grade 1';
-            $assignedSection = 'Sampaguita';
-
-            $request->session()->put('assigned_grade_level', $assignedGradeLevel);
-            $request->session()->put('assigned_section', $assignedSection);
-        }
-
-        $records = $request->session()->get('school_health_card_records', []);
-
-        // Deduplicate by LRN — if demo rows are already present (regardless of grade/section),
-        // do not re-seed. Prevents duplicate entries when assigned class changes between visits.
         $demoLrns = ['100234560201', '100234560202', '100234560203'];
-        $hasDemoLrns = collect($records)->contains(
-            fn (array $record) => in_array((string) ($record['lrn'] ?? ''), $demoLrns, true)
-        );
+        $existing = $request->session()->get('school_health_card_records', []);
+        $cleaned  = collect($existing)
+            ->reject(fn (array $r) => in_array((string) ($r['lrn'] ?? ''), $demoLrns, true))
+            ->values()
+            ->all();
 
-        if ($hasDemoLrns) {
-            // Deduplicate session records by LRN — prefer the copy that has exam data.
-            // This cleans up any duplicate demo rows left by prior role-switch sessions.
-            $seen = [];
-            $cleaned = [];
-            foreach ($records as $record) {
-                $lrn = (string) ($record['lrn'] ?? '');
-                if ($lrn === '') {
-                    $cleaned[] = $record;
-                    continue;
-                }
-                if (!isset($seen[$lrn])) {
-                    $seen[$lrn] = count($cleaned);
-                    $cleaned[] = $record;
-                } elseif (!empty($record['examination']) && empty($cleaned[$seen[$lrn]]['examination'])) {
-                    $cleaned[$seen[$lrn]] = $record;
-                }
-            }
-            if (count($cleaned) !== count($records)) {
-                $request->session()->put('school_health_card_records', array_values($cleaned));
-            }
-            return;
+        if (count($cleaned) !== count($existing)) {
+            $request->session()->put('school_health_card_records', $cleaned);
         }
-
-        $demoRows = [
-            [
-                'last_name' => 'Santos',
-                'first_name' => 'Andrea',
-                'middle_name' => 'Lopez',
-                'lrn' => '100234560201',
-                'birth_month' => 3,
-                'birth_day' => 12,
-                'birth_year' => 2010,
-                'birthplace' => 'Quezon City',
-                'parent_guardian' => 'Maria Santos',
-                'address' => 'Blk 10 Lot 2, Brgy. Rizal',
-                'school_id' => 'DCNHS-001',
-                'region' => 'NCR',
-                'division' => 'Quezon City',
-                'telephone_no' => '09171230001',
-                'height_cm' => 151.2,
-                'weight_kg' => 43.1,
-                'age' => 16,
-                'bmi_value' => 18.85,
-                'nutritional_status_bmi_for_age' => 'Normal',
-                'nutritional_status_height_for_age' => 'Normal Height-for-Age',
-                'grade_level' => $assignedGradeLevel,
-                'section' => $assignedSection,
-                'attendance_by_month' => [
-                    '2026-01' => 17,
-                    '2026-02' => 18,
-                    '2026-03' => 19,
-                ],
-                'baseline_snapshot' => [
-                    'height_cm' => 149.7,
-                    'weight_kg' => 41.8,
-                ],
-                'endline_snapshot' => [
-                    'height_cm' => 151.2,
-                    'weight_kg' => 43.1,
-                    'nutritional_status_bmi' => 'Normal',
-                ],
-                'examination' => [
-                    'date_of_examination' => '2026-03-12',
-                    'height_cm' => 151.2,
-                    'weight_kg' => 43.1,
-                    'nutritional_status_bmi' => 'Normal',
-                    'examined_by' => 'Nurse M. Lopez',
-                ],
-            ],
-            [
-                'last_name' => 'Dela Cruz',
-                'first_name' => 'Joshua',
-                'middle_name' => 'Reyes',
-                'lrn' => '100234560202',
-                'birth_month' => 8,
-                'birth_day' => 5,
-                'birth_year' => 2010,
-                'birthplace' => 'Pasig City',
-                'parent_guardian' => 'Liza Dela Cruz',
-                'address' => 'Purok 3, Brgy. Commonwealth',
-                'school_id' => 'DCNHS-001',
-                'region' => 'NCR',
-                'division' => 'Quezon City',
-                'telephone_no' => '09171230002',
-                'height_cm' => 147.5,
-                'weight_kg' => 36.9,
-                'age' => 15,
-                'bmi_value' => 16.96,
-                'nutritional_status_bmi_for_age' => 'Normal',
-                'nutritional_status_height_for_age' => 'Stunted',
-                'grade_level' => $assignedGradeLevel,
-                'section' => $assignedSection,
-                'attendance_by_month' => [
-                    '2026-01' => 15,
-                    '2026-02' => 16,
-                    '2026-03' => 14,
-                ],
-                'baseline_snapshot' => [
-                    'height_cm' => 146.8,
-                    'weight_kg' => 35.7,
-                ],
-                'endline_snapshot' => [
-                    'height_cm' => 147.5,
-                    'weight_kg' => 36.9,
-                    'nutritional_status_bmi' => 'Normal',
-                ],
-                'examination' => [],
-            ],
-            [
-                'last_name' => 'Fernandez',
-                'first_name' => 'Kim',
-                'middle_name' => 'A.',
-                'lrn' => '100234560203',
-                'birth_month' => 11,
-                'birth_day' => 21,
-                'birth_year' => 2010,
-                'birthplace' => 'Manila',
-                'parent_guardian' => 'Nora Fernandez',
-                'address' => 'Sitio Maligaya, Brgy. Holy Spirit',
-                'school_id' => 'DCNHS-001',
-                'region' => 'NCR',
-                'division' => 'Quezon City',
-                'telephone_no' => '09171230003',
-                'height_cm' => 153.4,
-                'weight_kg' => 49.8,
-                'age' => 15,
-                'bmi_value' => 21.16,
-                'nutritional_status_bmi_for_age' => 'Normal',
-                'nutritional_status_height_for_age' => 'Normal Height-for-Age',
-                'grade_level' => $assignedGradeLevel,
-                'section' => $assignedSection,
-                'attendance_by_month' => [
-                    '2026-01' => 18,
-                    '2026-02' => 17,
-                    '2026-03' => 18,
-                ],
-                'baseline_snapshot' => [
-                    'height_cm' => 152.1,
-                    'weight_kg' => 47.6,
-                ],
-                'endline_snapshot' => [
-                    'height_cm' => 153.4,
-                    'weight_kg' => 49.8,
-                    'nutritional_status_bmi' => 'Normal',
-                ],
-                'examination' => [
-                    'date_of_examination' => '2026-03-05',
-                    'height_cm' => 153.4,
-                    'weight_kg' => 49.8,
-                    'nutritional_status_bmi' => 'Normal',
-                    'examined_by' => 'Nurse M. Lopez',
-                ],
-            ],
-        ];
-
-        $request->session()->put('school_health_card_records', array_merge($records, $demoRows));
     }
 
     /**

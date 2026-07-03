@@ -10,7 +10,6 @@ class Institution extends Model
     protected $fillable = ['name', 'address', 'status'];
 
     public const DEFAULT_SCHOOLS = [
-        'Demo Elementary School',
         'A. L. Navarro National High School',
         'Aurora Quebral Elementary School',
         'Baguio Central Elementary School',

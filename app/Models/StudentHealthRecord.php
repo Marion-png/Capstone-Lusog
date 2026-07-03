@@ -34,12 +34,16 @@ class StudentHealthRecord extends Model
         'endline_recorded_at',
         'attendance_sessions_count',
         'is_at_risk',
+        'examination',
+        'attendance_by_month',
     ];
 
     protected $casts = [
         'baseline_recorded_at' => 'date',
         'endline_recorded_at' => 'date',
         'is_at_risk' => 'boolean',
+        'examination' => 'array',
+        'attendance_by_month' => 'array',
     ];
 
     public function healthConditions(): HasMany

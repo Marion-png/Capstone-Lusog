@@ -25,61 +25,12 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Route;
 
-$demoInstitutionId = Schema::hasTable('institutions')
-    ? optional(Institution::where('name', 'Demo Elementary School')->first())->id
-    : null;
-
-$demoAccounts = [
-    ['role' => 'school_nurse',  'label' => 'School Nurse',            'username' => 'nurse.demo',   'password' => 'Demo@123', 'name' => 'Demo Nurse',        'school_name' => 'Demo Elementary School', 'institution_id' => $demoInstitutionId],
-    ['role' => 'clinic_staff',  'label' => 'Clinic Staff',            'username' => 'staff.demo',   'password' => 'Demo@123', 'name' => 'Demo Staff',        'school_name' => 'Demo Elementary School', 'institution_id' => $demoInstitutionId],
-    ['role' => 'class_adviser', 'label' => 'Class Adviser',           'username' => 'adviser.demo', 'password' => 'Demo@123', 'name' => 'Demo Adviser',      'school_name' => 'Demo Elementary School', 'institution_id' => $demoInstitutionId, 'assigned_grade_level' => 'Grade 1', 'assigned_section' => 'Sampaguita'],
-    ['role' => 'school_head',   'label' => 'School Head',             'username' => 'head.demo',    'password' => 'Demo@123', 'name' => 'Demo School Head',  'school_name' => 'Demo Elementary School', 'institution_id' => $demoInstitutionId],
-    ['role' => 'feeding_coor',  'label' => 'Feeding Coordinator',     'username' => 'feeding.demo', 'password' => 'Demo@123', 'name' => 'Demo Feeding Coor', 'school_name' => 'Demo Elementary School', 'institution_id' => $demoInstitutionId],
-    ['role' => 'nutricor',      'label' => 'Nutritional Coordinator', 'username' => 'nutricor.demo','password' => 'Demo@123', 'name' => 'Demo Nutri-Cor',   'school_name' => 'Demo Elementary School', 'institution_id' => $demoInstitutionId],
-];
-
-Route::get('/', function () use ($demoAccounts) {
-    if (Schema::hasTable('accounts')) {
-        foreach ($demoAccounts as $demo) {
-            if (!DB::table('accounts')->where('username', $demo['username'])->exists()) {
-                DB::table('accounts')->insert([
-                    'name'                 => $demo['name'],
-                    'username'             => $demo['username'],
-                    'password_hash'        => Hash::make($demo['password']),
-                    'role'                 => $demo['role'],
-                    'school_name'          => $demo['school_name'] ?? null,
-                    'institution_id'       => $demo['institution_id'] ?? null,
-                    'assigned_grade_level' => $demo['role'] === 'class_adviser' ? ($demo['assigned_grade_level'] ?? null) : null,
-                    'assigned_section'     => $demo['role'] === 'class_adviser' ? ($demo['assigned_section'] ?? null) : null,
-                    'created_at'           => now(),
-                    'updated_at'           => now(),
-                ]);
-            }
-        }
-    }
-    return view('auth.login', ['demoAccounts' => $demoAccounts]);
+Route::get('/', function () {
+    return view('auth.login', ['demoAccounts' => []]);
 });
 
-Route::get('/login', function () use ($demoAccounts) {
-    if (Schema::hasTable('accounts')) {
-        foreach ($demoAccounts as $demo) {
-            if (!DB::table('accounts')->where('username', $demo['username'])->exists()) {
-                DB::table('accounts')->insert([
-                    'name'                 => $demo['name'],
-                    'username'             => $demo['username'],
-                    'password_hash'        => Hash::make($demo['password']),
-                    'role'                 => $demo['role'],
-                    'school_name'          => $demo['school_name'] ?? null,
-                    'institution_id'       => $demo['institution_id'] ?? null,
-                    'assigned_grade_level' => $demo['role'] === 'class_adviser' ? ($demo['assigned_grade_level'] ?? null) : null,
-                    'assigned_section'     => $demo['role'] === 'class_adviser' ? ($demo['assigned_section'] ?? null) : null,
-                    'created_at'           => now(),
-                    'updated_at'           => now(),
-                ]);
-            }
-        }
-    }
-    return view('auth.login', ['demoAccounts' => $demoAccounts]);
+Route::get('/login', function () {
+    return view('auth.login', ['demoAccounts' => []]);
 })->name('login');
 
 Route::get('/admin-login', function () {
