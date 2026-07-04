@@ -22,7 +22,7 @@ Master List <span>Beneficiaries</span>
         return ['General', 'ok'];
     };
 @endphp
-<input type="text" class="search" placeholder="Search student name...">
+<input type="text" class="search" id="beneficiarySearch" placeholder="Search student name..." autocomplete="off">
 
 <article class="card">
     <div class="card-head">Beneficiary List</div>
@@ -65,4 +65,26 @@ Master List <span>Beneficiaries</span>
         </table>
     </div>
 </article>
+
+<script>
+(function () {
+    const search = document.getElementById('beneficiarySearch');
+    if (!search) return;
+
+    const rows = Array.from(document.querySelectorAll('.card table tbody tr'));
+
+    search.addEventListener('input', function () {
+        const query = this.value.trim().toLowerCase();
+
+        rows.forEach(function (row) {
+            const nameCell = row.querySelector('td:nth-child(2)');
+            if (!nameCell) return; // skip the "no records" placeholder row
+
+            // Plain character-by-character substring match on the name. No highlighting.
+            const name = nameCell.textContent.toLowerCase();
+            row.style.display = name.indexOf(query) !== -1 ? '' : 'none';
+        });
+    });
+})();
+</script>
 @endsection

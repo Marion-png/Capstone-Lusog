@@ -90,7 +90,10 @@
             padding: 14px 12px;
             position: relative;
             z-index: 2;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
         }
+        .sb-nav::-webkit-scrollbar { width: 0; height: 0; display: none; }
         .sidebar:not(:hover) .sb-nav { padding: 12px 8px; }
         .sb-section-label {
             font-size: .6rem;
@@ -362,7 +365,7 @@
         <div class="sb-avatar">{{ $initials ?: 'NC' }}</div>
         <div class="sb-user-meta">
             <div class="sb-user-name">{{ $displayName }}</div>
-            <div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
+            <div class="sb-user-role">All Schools</div>
         </div>
         <form method="POST" action="{{ route('logout') }}">
             @csrf

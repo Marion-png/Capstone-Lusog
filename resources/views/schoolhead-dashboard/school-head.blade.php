@@ -79,7 +79,8 @@
         .sb-logout { margin-left: auto; background: none; border: none; color: rgba(255,255,255,.4); cursor: pointer; padding: 4px; border-radius: 6px; transition: color .15s, background .15s; display: grid; place-items: center; }
         .sb-logout:hover { color: #fecaca; background: rgba(239,68,68,.14); }
         .sb-logout svg { width: 15px; height: 15px; }
-        .sidebar:not(:hover) .sb-logout { margin-left: 0; }
+        .sidebar:not(:hover) .sb-user form,
+        .sidebar:not(:hover) .sb-logout { display: none; }
 
         .main { margin-left: var(--sidebar-collapsed-w); height: 100vh; display: flex; flex-direction: column; overflow: hidden; transition: margin-left .26s ease; }
         .sidebar:hover ~ .main { margin-left: var(--sidebar-w); }
@@ -187,6 +188,7 @@
         .chart.is-animating .bar-healthy { animation-delay: .18s; }
         .chart.is-animating .bar-risk { animation-delay: .06s; }
         .bar-label { margin-top: 5px; font-size: .62rem; color: var(--text-3); text-align: center; }
+        .chart-empty { flex: 1; display: grid; place-items: center; height: 154px; font-size: .74rem; color: var(--text-3); }
 
         @keyframes growBar {
             from { transform: scaleY(0); }
@@ -292,7 +294,7 @@
             <article class="card stat">
                 <div class="label">Wasted Rate</div>
                 <div class="num">{{ $stats['wasted_rate'] ?? '0%' }}</div>
-                <div class="hint">46 of 389 students</div>
+                <div class="hint">{{ $stats['wasted_count'] ?? 0 }} of {{ $stats['total_students'] ?? 0 }} students</div>
             </article>
         </section>
 
@@ -330,12 +332,11 @@
                         <span><i class="dot-legend dot-risk"></i>At Risk</span>
                     </div>
                     <div class="chart">
-                        <div class="bar-col"><div class="bar-stack"><div class="bar-healthy" style="height: 8%"></div><div class="bar-risk" style="height: 46%"></div></div><div class="bar-label">Grade 7</div></div>
-                        <div class="bar-col"><div class="bar-stack"><div class="bar-healthy" style="height: 10%"></div><div class="bar-risk" style="height: 51%"></div></div><div class="bar-label">Grade 8</div></div>
-                        <div class="bar-col"><div class="bar-stack"><div class="bar-healthy" style="height: 10%"></div><div class="bar-risk" style="height: 43%"></div></div><div class="bar-label">Grade 9</div></div>
-                        <div class="bar-col"><div class="bar-stack"><div class="bar-healthy" style="height: 9%"></div><div class="bar-risk" style="height: 56%"></div></div><div class="bar-label">Grade 10</div></div>
-                        <div class="bar-col"><div class="bar-stack"><div class="bar-healthy" style="height: 9%"></div><div class="bar-risk" style="height: 61%"></div></div><div class="bar-label">Grade 11</div></div>
-                        <div class="bar-col"><div class="bar-stack"><div class="bar-healthy" style="height: 10%"></div><div class="bar-risk" style="height: 54%"></div></div><div class="bar-label">Grade 12</div></div>
+                        @forelse ($gradeChart ?? [] as $col)
+                        <div class="bar-col"><div class="bar-stack"><div class="bar-healthy" style="height: {{ $col['healthy_pct'] }}%" title="{{ $col['healthy'] }} healthy"></div><div class="bar-risk" style="height: {{ $col['risk_pct'] }}%" title="{{ $col['risk'] }} at risk"></div></div><div class="bar-label">{{ $col['label'] }}</div></div>
+                        @empty
+                        <div class="chart-empty">No student data yet.</div>
+                        @endforelse
                     </div>
                 </div>
             </article>
