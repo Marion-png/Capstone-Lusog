@@ -72,8 +72,11 @@
         <a href="{{ route('dashboard.medicine-inventory') }}">Medicine Inventory</a>
     </nav>
     <div class="user">
-        <div class="avatar">{{ substr(auth()->user()->name ?? 'CS',0,2) }}</div>
-        <div style="font-size:.78rem">Clinic Staff</div>
+        <div class="avatar">{{ strtoupper(substr(session('active_name', 'CS'), 0, 2)) }}</div>
+        <div style="min-width:0;line-height:1.2">
+            <div style="font-size:.78rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ session('active_name', 'Clinic Staff') }}</div>
+            <div style="font-size:.68rem;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ session('active_school_name', 'No school assigned') }}</div>
+        </div>
         <form method="POST" action="{{ route('logout') }}" class="logout-form">
             @csrf
             <button type="submit" class="logout-btn" title="Sign out" aria-label="Sign out">

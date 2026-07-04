@@ -33,7 +33,7 @@
     </nav>
     <div class="sb-user">
         <div class="sb-avatar">{{ substr(session('active_name', 'School Nurse'), 0, 2) }}</div>
-        <div class="sb-user-meta"><div class="sb-user-name">{{ session('active_name', 'School Nurse') }}</div><div class="sb-user-role">School Nurse - DCNHS</div></div>
+        <div class="sb-user-meta"><div class="sb-user-name">{{ session('active_name', 'School Nurse') }}</div><div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div></div>
         <form method="POST" action="{{ route('logout') }}">
             @csrf
             <button type="submit" class="sb-logout" title="Sign out" aria-label="Sign out">

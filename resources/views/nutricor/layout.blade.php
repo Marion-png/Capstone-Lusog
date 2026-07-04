@@ -362,7 +362,7 @@
         <div class="sb-avatar">{{ $initials ?: 'NC' }}</div>
         <div class="sb-user-meta">
             <div class="sb-user-name">{{ $displayName }}</div>
-            <div class="sb-user-role">Nutritional Coordinator</div>
+            <div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
         </div>
         <form method="POST" action="{{ route('logout') }}">
             @csrf

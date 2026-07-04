@@ -64,13 +64,13 @@
 		.sidebar:not(:hover) .sb-link svg { width: 18px; height: 18px; }
 		.sb-user { padding: 14px 16px; border-top: 1px solid rgba(255,255,255,.08); display: flex; align-items: center; gap: 11px; position: relative; z-index: 2; }
 		.sb-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--g600); display: grid; place-items: center; font-size: .8rem; font-weight: 700; color: white; flex-shrink: 0; }
-		.sb-user-name { font-size: .8rem; font-weight: 600; color: white; line-height: 1.2; }
-		.sb-user-role { font-size: .68rem; color: var(--g300); }
+		.sb-user-name { font-size: .8rem; font-weight: 600; color: white; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+		.sb-user-role { font-size: .68rem; color: var(--g300); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 		.sb-logout { margin-left: auto; background: none; border: none; color: rgba(255,255,255,.35); cursor: pointer; padding: 4px; border-radius: 6px; transition: color .15s, background .15s; display: grid; place-items: center; }
 		.sb-logout:hover { color: var(--red); background: rgba(239,68,68,.1); }
 		.sb-logout svg { width: 15px; height: 15px; }
 		.sidebar:not(:hover) .sb-user { justify-content: center; padding: 10px; }
-		.sb-user-meta { max-width: 180px; opacity: 1; transform: translateX(0); overflow: hidden; transition: max-width .24s ease, opacity .18s ease, transform .24s ease; }
+		.sb-user-meta { min-width: 0; max-width: 180px; opacity: 1; transform: translateX(0); overflow: hidden; transition: max-width .24s ease, opacity .18s ease, transform .24s ease; }
 		.sidebar:not(:hover) .sb-user-meta { max-width: 0; opacity: 0; transform: translateX(-6px); }
 		.sidebar:not(:hover) .sb-user form { display: none; }
 

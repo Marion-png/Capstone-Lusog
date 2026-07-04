@@ -10,15 +10,19 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--cream);c
 .sb-nav{flex:1;overflow-y:auto;padding:16px 12px}
 .sb-link{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;color:rgba(255,255,255,.62);font-size:.83rem;font-weight:500;margin-bottom:2px;white-space:nowrap;overflow:hidden}
 .sb-link.active{background:rgba(34,197,94,.18);color:var(--g300)}
+.sb-link svg{width:16px;height:16px;flex-shrink:0}
 .sidebar:not(:hover) .sb-link{justify-content:center;font-size:0;padding:10px;gap:0}
+.sidebar:not(:hover) .sb-link svg{width:18px;height:18px}
 .sb-user{padding:14px 16px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:11px}
-.sb-avatar{width:34px;height:34px;border-radius:50%;background:#16a34a;display:grid;place-items:center;font-size:.8rem;font-weight:700;color:#fff}
-.sb-user-name{font-size:.8rem;font-weight:600;color:#fff}
+.sb-avatar{width:34px;height:34px;border-radius:50%;background:#16a34a;display:grid;place-items:center;font-size:.8rem;font-weight:700;color:#fff;flex-shrink:0}
+.sb-user-meta{min-width:0;max-width:170px;overflow:hidden}
+.sb-user-name{font-size:.8rem;font-weight:600;color:#fff;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-user-role{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sb-user form{margin-left:auto;display:flex;align-items:center}
 .sb-logout{background:none;border:none;color:rgba(255,255,255,.62);cursor:pointer;border-radius:8px;width:30px;height:30px;display:grid;place-items:center;transition:background .15s,color .15s}
 .sb-logout:hover{background:rgba(239,68,68,.14);color:#fecaca}
 .sb-logout svg{width:16px;height:16px}
-.sidebar:not(:hover) .sb-user-name{display:none}
+.sidebar:not(:hover) .sb-user-meta{display:none}
 .sidebar:not(:hover) .sb-user form{display:none}
 .main{margin-left:var(--sidebar-collapsed-w);height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:margin-left .24s ease}
 .sidebar:hover~.main{margin-left:var(--sidebar-w)}

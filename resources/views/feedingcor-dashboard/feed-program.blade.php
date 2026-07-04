@@ -92,7 +92,7 @@
 		<div class="sb-avatar">{{ $initials ?: 'FC' }}</div>
 		<div class="sb-user-meta">
 			<div class="sb-user-name">{{ $displayName }}</div>
-			<div class="sb-user-role">{{ $roleLabel }}</div>
+			<div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
 		</div>
 		<form method="POST" action="{{ route('logout') }}">
 			@csrf
@@ -232,10 +232,10 @@
 			$lowAttendanceCount = $studentCollection->filter(fn ($student) => (float) ($student['attendance_percent'] ?? 0) < 70)->count();
 		@endphp
 
-		<section class="card section" style="margin-top: 14px;">
-			<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;">
+		<section class="card section" style="margin-top: 14px; padding: 16px;">
+			<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px;">
 				<h2 class="section-title" style="margin-bottom:0;">Today's Feeding Session</h2>
-				<span class="muted">{{ now()->format('F d, Y') }}</span>
+				<span class="muted" style="font-size:.72rem;font-weight:500;">{{ now()->format('F d, Y') }}</span>
 			</div>
 			<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;background:#f0fdf4;border:1px solid #dcfce7;border-radius:10px;">
 				<div>
@@ -246,7 +246,7 @@
 					<span class="session-chip present">{{ $presentEstimate }} Present</span>
 					<span class="session-chip absent">{{ $absentEstimate }} Absent</span>
 					@if (!$isReadOnly)
-					<button type="button" class="btn btn-primary session-action" id="recordAttendanceBtn" style="padding:7px 12px;">
+					<button type="button" class="btn btn-primary" id="recordAttendanceBtn">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;margin-right:6px;"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
 						Mark Attendance
 					</button>

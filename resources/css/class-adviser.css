@@ -22,8 +22,10 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);colo
 .sb-user form{margin-left:auto;display:flex;align-items:center}
 .sidebar:hover .sb-user{padding:14px 16px}
 .sb-avatar{width:34px;height:34px;border-radius:50%;background:#16a34a;display:grid;place-items:center;font-weight:700;font-size:.76rem;letter-spacing:.02em;line-height:1;flex-shrink:0}
-.sb-user-name{white-space:nowrap;opacity:0;max-width:0;overflow:hidden;transform:translateX(-6px);transition:opacity .16s ease,max-width .26s ease,transform .26s ease}
-.sidebar:hover .sb-user-name{opacity:1;max-width:170px;transform:translateX(0)}
+.sb-user-meta{min-width:0;white-space:nowrap;opacity:0;max-width:0;overflow:hidden;transform:translateX(-6px);transition:opacity .16s ease,max-width .26s ease,transform .26s ease}
+.sidebar:hover .sb-user-meta{opacity:1;max-width:170px;transform:translateX(0)}
+.sb-user-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;line-height:1.2}
+.sb-user-role{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.68rem;color:var(--g300);line-height:1.2}
 .sb-logout{background:none;border:none;color:rgba(255,255,255,.62);cursor:pointer;border-radius:8px;width:30px;height:30px;display:grid;place-items:center;transition:background .2s ease,color .2s ease}
 .sb-logout svg{width:16px;height:16px}
 .sb-logout:hover{background:rgba(239,68,68,.14);color:#fecaca}

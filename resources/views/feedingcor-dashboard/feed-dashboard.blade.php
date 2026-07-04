@@ -42,7 +42,7 @@
 	</nav>
 	<div class="sb-user">
 		@php
-			$displayName = trim(auth()->user()->name ?? 'Feeding Coordinator');
+			$displayName = trim((string) session('active_name', 'Feeding Coordinator'));
 			$initials = collect(preg_split('/\s+/', $displayName))
 				->filter()
 				->map(fn ($part) => strtoupper(substr($part, 0, 1)))
@@ -51,7 +51,8 @@
 		@endphp
 		<div class="sb-avatar">{{ $initials ?: 'FC' }}</div>
 		<div class="sb-user-meta">
-			<div class="sb-user-name">{{ auth()->user()->name ?? 'Feeding Coordinator' }}</div>
+			<div class="sb-user-name">{{ $displayName }}</div>
+			<div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
 		</div>
 		<form method="POST" action="{{ route('logout') }}">
 			@csrf

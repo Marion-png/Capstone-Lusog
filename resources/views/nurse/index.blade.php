@@ -69,7 +69,7 @@
         <div class="sb-avatar">{{ strtoupper(substr(session('active_name', 'SN'), 0, 2)) }}</div>
         <div class="sb-user-meta">
             <div class="sb-user-name">{{ session('active_name', 'School Nurse') }}</div>
-            <div class="sb-user-role">School Nurse</div>
+            <div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
         </div>
         <form method="POST" action="{{ route('logout') }}">
             @csrf

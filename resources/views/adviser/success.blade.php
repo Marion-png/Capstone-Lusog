@@ -57,8 +57,11 @@
         </a>
     </nav>
     <div class="sb-user">
-        <div class="sb-avatar">{{ substr(auth()->user()->name ?? 'CA',0,2) }}</div>
-        <div class="sb-user-name">{{ auth()->user()->name ?? 'Class Adviser' }}</div>
+        <div class="sb-avatar">{{ strtoupper(substr(session('active_name', 'CA'), 0, 2)) }}</div>
+        <div class="sb-user-meta">
+            <div class="sb-user-name">{{ session('active_name', 'Class Adviser') }}</div>
+            <div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
+        </div>
         <form method="POST" action="{{ route('logout') }}">
             @csrf
             <button type="submit" class="sb-logout" title="Sign out" aria-label="Sign out">
