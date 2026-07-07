@@ -215,5 +215,6 @@
 	});
 })();
 </script>
+@include('partials.sidebar-hover-pin')
 </body>
 </html>

@@ -94,6 +94,83 @@
             pointer-events: none;
         }
 
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(48px);
+            opacity: 0.55;
+            pointer-events: none;
+            will-change: transform;
+        }
+
+        .orb-1 {
+            width: 260px;
+            height: 260px;
+            background: radial-gradient(circle, rgba(147, 240, 196, 0.85), rgba(147, 240, 196, 0) 70%);
+            top: -40px;
+            left: -60px;
+            animation: roam1 18s ease-in-out infinite alternate;
+        }
+
+        .orb-2 {
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 70%);
+            bottom: 8%;
+            right: -50px;
+            animation: roam2 22s ease-in-out infinite alternate;
+        }
+
+        .orb-3 {
+            width: 170px;
+            height: 170px;
+            background: radial-gradient(circle, rgba(94, 222, 165, 0.8), rgba(94, 222, 165, 0) 70%);
+            top: 55%;
+            left: 6%;
+            animation: roam3 16s ease-in-out infinite alternate;
+        }
+
+        .orb-4 {
+            width: 140px;
+            height: 140px;
+            background: radial-gradient(circle, rgba(196, 255, 224, 0.75), rgba(196, 255, 224, 0) 70%);
+            top: 12%;
+            right: 14%;
+            animation: roam4 20s ease-in-out infinite alternate;
+        }
+
+        @keyframes roam1 {
+            0%   { transform: translate(0, 0) scale(1); }
+            35%  { transform: translate(180px, 120px) scale(1.15); }
+            70%  { transform: translate(60px, 260px) scale(0.9); }
+            100% { transform: translate(220px, 40px) scale(1.05); }
+        }
+
+        @keyframes roam2 {
+            0%   { transform: translate(0, 0) scale(1); }
+            40%  { transform: translate(-200px, -140px) scale(1.2); }
+            75%  { transform: translate(-80px, -300px) scale(0.85); }
+            100% { transform: translate(-260px, -40px) scale(1.1); }
+        }
+
+        @keyframes roam3 {
+            0%   { transform: translate(0, 0) scale(1); }
+            30%  { transform: translate(160px, -100px) scale(1.1); }
+            65%  { transform: translate(300px, 60px) scale(0.9); }
+            100% { transform: translate(80px, 140px) scale(1.2); }
+        }
+
+        @keyframes roam4 {
+            0%   { transform: translate(0, 0) scale(1); }
+            45%  { transform: translate(-140px, 180px) scale(1.25); }
+            80%  { transform: translate(-240px, 40px) scale(0.9); }
+            100% { transform: translate(-60px, 260px) scale(1.05); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .orb { animation: none; }
+        }
+
         .brand-wrap {
             position: relative;
             z-index: 1;
@@ -468,6 +545,10 @@
 <body>
 <div class="shell">
     <section class="left">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+        <div class="orb orb-4"></div>
         <div class="brand-wrap">
             <img
                 src="{{ asset('images/lusog-logo.png') }}"

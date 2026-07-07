@@ -296,5 +296,6 @@
         </section>
     </div>
 </div>
+@include('partials.sidebar-hover-pin')
 </body>
 </html>

@@ -56,6 +56,20 @@
             </svg>
             <span class="sb-link-label">Deworming Request</span>
         </a>
+        @php
+            $cfUnread = \Illuminate\Support\Facades\Schema::hasTable('health_consent_forms')
+                ? \App\Models\HealthConsentForm::where('adviser_unread', true)->count()
+                : 0;
+        @endphp
+        <a href="{{ route('consent-forms.index') }}" class="sb-link">
+            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+                <rect x="9" y="3" width="6" height="4" rx="1"/>
+                <path d="M9 14l2 2 4-4"/>
+            </svg>
+            <span class="sb-link-label">Health Services Consent</span>
+            @if ($cfUnread > 0)<span class="sb-badge">{{ $cfUnread }}</span>@endif
+        </a>
     </nav>
     <div class="sb-user">
         <div class="sb-avatar">{{ strtoupper(substr(session('active_name', 'CA'), 0, 2)) }}</div>
@@ -1857,5 +1871,6 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
     });
 })();
 </script>
+@include('partials.sidebar-hover-pin')
 </body>
 </html>

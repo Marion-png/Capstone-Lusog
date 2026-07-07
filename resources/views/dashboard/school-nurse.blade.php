@@ -25,6 +25,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
             Dashboard
         </a>
+        <a href="{{ route('nurse.index') }}" class="sb-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+            Review Queue
+        </a>
         @php
             $pendingHealthCards = collect(session('school_health_card_records', []))->filter(fn($r) => empty($r['examination']))->count();
         @endphp
@@ -45,6 +49,10 @@
         <a href="{{ route('dashboard.school-nurse.deworming') }}" class="sb-link">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 3-7-3"/><path d="M3 9v6l7 3 7-3V9"/><polyline points="3 9 12 6 21 9"/></svg>
             Deworming Program
+        </a>
+        <a href="{{ route('consent-forms.nurse-index') }}" class="sb-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
+            Consent Forms
         </a>
         <div class="sb-section-label">Inventory</div>
         <a href="{{ route('dashboard.medicine-inventory') }}" class="sb-link">
@@ -255,5 +263,6 @@
         </div>
     </div>
 </div>
+@include('partials.sidebar-hover-pin')
 </body>
 </html>

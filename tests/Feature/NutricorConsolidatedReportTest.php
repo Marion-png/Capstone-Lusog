@@ -49,11 +49,13 @@ class NutricorConsolidatedReportTest extends TestCase
     // ── Access control ─────────────────────────────────────────────────────
 
     #[Test]
-    public function unauthenticated_request_redirects_to_login(): void
+    public function unauthenticated_request_starts_prototype_nutricor_session(): void
     {
         $response = $this->get(self::ROUTE);
 
-        $response->assertRedirect(route('login'));
+        $response->assertStatus(200);
+        $response->assertSessionHas('active_role', 'nutricor');
+        $response->assertSessionHas('active_username', 'prototype');
     }
 
     #[Test]

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdviserController;
 use App\Http\Controllers\HealthAssessmentController;
+use App\Http\Controllers\HealthConsentFormController;
 use App\Http\Controllers\ConditionController;
 use App\Http\Controllers\MedicalCertificateController;
 use App\Http\Controllers\ParentalConsentFormController;
@@ -563,6 +564,31 @@ Route::get('/parental-consent/{id}/download', [ParentalConsentFormController::cl
 // API: check deworming consent status for a student by LRN (class_adviser, clinic_staff, school_nurse)
 Route::get('/api/student-consent-status', [ParentalConsentFormController::class, 'consentStatus'])
     ->name('api.student-consent-status');
+
+// Health Services Consent Form (Sulat-Pahibalo) — adviser prepares/sends,
+// parent signs via unique link, nurse gets read-only access when completed.
+Route::get('/dashboard/class-adviser/consent-forms', [HealthConsentFormController::class, 'index'])
+    ->name('consent-forms.index');
+Route::post('/dashboard/class-adviser/consent-forms/open', [HealthConsentFormController::class, 'open'])
+    ->name('consent-forms.open');
+Route::get('/dashboard/class-adviser/consent-forms/{form}', [HealthConsentFormController::class, 'show'])
+    ->whereNumber('form')->name('consent-forms.show');
+Route::post('/dashboard/class-adviser/consent-forms/{form}/draft', [HealthConsentFormController::class, 'saveDraft'])
+    ->whereNumber('form')->name('consent-forms.draft');
+Route::post('/dashboard/class-adviser/consent-forms/{form}/send', [HealthConsentFormController::class, 'send'])
+    ->whereNumber('form')->name('consent-forms.send');
+Route::post('/dashboard/class-adviser/consent-forms/{form}/review', [HealthConsentFormController::class, 'review'])
+    ->whereNumber('form')->name('consent-forms.review');
+Route::get('/dashboard/school-nurse/consent-forms', [HealthConsentFormController::class, 'nurseIndex'])
+    ->name('consent-forms.nurse-index');
+Route::get('/dashboard/school-nurse/consent-forms/{form}', [HealthConsentFormController::class, 'nurseShow'])
+    ->whereNumber('form')->name('consent-forms.nurse-show');
+Route::get('/dashboard/consent-forms/{form}/print', [HealthConsentFormController::class, 'print'])
+    ->whereNumber('form')->name('consent-forms.print');
+Route::get('/consent/{token}', [HealthConsentFormController::class, 'parentShow'])
+    ->name('consent-forms.parent');
+Route::post('/consent/{token}', [HealthConsentFormController::class, 'parentSubmit'])
+    ->name('consent-forms.parent-submit');
 
 // Health Assessment (MLHAT) — class_adviser submit, nurse/staff read
 Route::post('/adviser/health-assessment', [HealthAssessmentController::class, 'store'])

@@ -41,6 +41,10 @@
 			{{ $isReadOnly ? 'Health Records' : 'Student Health Records' }}
 		</a>
 		@if ($isReadOnly)
+		<a href="{{ route('nurse.index') }}" class="sb-link">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+			Review Queue
+		</a>
 		<a href="{{ route('dashboard.consultation-log') }}" class="sb-link">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
 			Consultation Log
@@ -55,6 +59,10 @@
 		<a href="{{ route('dashboard.school-nurse.deworming') }}" class="sb-link">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 3-7-3"/><path d="M3 9v6l7 3 7-3V9"/><polyline points="3 9 12 6 21 9"/></svg>
 			Deworming Program
+		</a>
+		<a href="{{ route('consent-forms.nurse-index') }}" class="sb-link">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
+			Consent Forms
 		</a>
 		<div class="sb-section-label">Inventory</div>
 		<a href="{{ route('dashboard.medicine-inventory') }}" class="sb-link">
@@ -1700,5 +1708,6 @@
 	});
 })();
 </script>
+@include('partials.sidebar-hover-pin')
 </body>
 </html>

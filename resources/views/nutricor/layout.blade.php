@@ -54,7 +54,7 @@
             overflow: hidden;
             transition: width .24s ease;
         }
-        .sidebar:hover { width: var(--sidebar-w); }
+.sidebar:hover, .sidebar.sb-pin { width: var(--sidebar-w); }
         .sidebar::after {
             content: '';
             position: absolute;
@@ -81,8 +81,8 @@
             transition: padding .24s ease;
         }
         .sb-logo img { width: 176px; max-width: 100%; transition: width .24s ease; }
-        .sidebar:not(:hover) .sb-logo { padding: 14px 10px; }
-        .sidebar:not(:hover) .sb-logo img { width: 48px; }
+        .sidebar:not(:hover):not(.sb-pin) .sb-logo { padding: 14px 10px; }
+        .sidebar:not(:hover):not(.sb-pin) .sb-logo img { width: 48px; }
 
         .sb-nav {
             flex: 1;
@@ -91,10 +91,9 @@
             position: relative;
             z-index: 2;
             scrollbar-width: none;
-            -ms-overflow-style: none;
-        }
+            -ms-overflow-style: none; transition: padding .24s ease; }
         .sb-nav::-webkit-scrollbar { width: 0; height: 0; display: none; }
-        .sidebar:not(:hover) .sb-nav { padding: 12px 8px; }
+        .sidebar:not(:hover):not(.sb-pin) .sb-nav { padding: 12px 8px; }
         .sb-section-label {
             font-size: .6rem;
             font-weight: 700;
@@ -106,7 +105,7 @@
             max-height: 20px;
             transition: max-height .24s ease, opacity .18s ease, transform .24s ease, margin .24s ease;
         }
-        .sidebar:not(:hover) .sb-section-label {
+        .sidebar:not(:hover):not(.sb-pin) .sb-section-label {
             max-height: 0;
             opacity: 0;
             transform: translateX(-6px);
@@ -129,14 +128,9 @@
         }
         .sb-link:hover { background: rgba(255,255,255,.08); color: rgba(255,255,255,.95); }
         .sb-link.active { background: rgba(34,197,94,.18); color: var(--g300); }
-        .sb-link i { width: 16px; text-align: center; }
-        .sidebar:not(:hover) .sb-link {
-            justify-content: center;
-            font-size: 0;
-            padding: 10px;
-            gap: 0;
-        }
-        .sidebar:not(:hover) .sb-link i { font-size: 16px; }
+        .sb-link i { width: 16px; text-align: center; transition: font-size .24s ease; }
+        .sidebar:not(:hover):not(.sb-pin) .sb-link { font-size: 0; padding: 10px 22px; gap: 0; }
+        .sidebar:not(:hover):not(.sb-pin) .sb-link i { font-size: 16px; }
 
         .sb-user {
             padding: 14px 16px;
@@ -145,8 +139,7 @@
             align-items: center;
             gap: 10px;
             position: relative;
-            z-index: 2;
-        }
+            z-index: 2; transition: padding .24s ease, gap .24s ease; }
         .sb-avatar {
             width: 34px;
             height: 34px;
@@ -159,7 +152,7 @@
             font-size: .8rem;
             flex-shrink: 0;
         }
-        .sb-user-meta { transition: max-width .24s ease, opacity .18s ease, transform .24s ease; max-width: 180px; }
+        .sb-user-meta { transition: max-width .24s ease, opacity .18s ease, transform .24s ease; max-width: 180px; overflow: hidden; white-space: nowrap; }
         .sb-user-name { color: #fff; font-size: .78rem; font-weight: 600; }
         .sb-user-role { color: var(--g300); font-size: .66rem; }
         .sb-logout {
@@ -173,9 +166,10 @@
             border-radius: 6px;
         }
         .sb-logout:hover { color: #ef4444; background: rgba(239,68,68,.12); }
-        .sidebar:not(:hover) .sb-user { justify-content: center; padding: 10px; }
-        .sidebar:not(:hover) .sb-user-meta { max-width: 0; opacity: 0; transform: translateX(-6px); }
-        .sidebar:not(:hover) .sb-user form { display: none; }
+        .sidebar:not(:hover):not(.sb-pin) .sb-user { padding: 10px 21px; gap: 0; }
+        .sidebar:not(:hover):not(.sb-pin) .sb-user-meta { max-width: 0; opacity: 0; transform: translateX(-6px); }
+        .sb-user form { max-width: 40px; overflow: hidden; transition: max-width .24s ease, opacity .18s ease; }
+        .sidebar:not(:hover):not(.sb-pin) .sb-user form { max-width: 0; opacity: 0; }
 
         .main {
             margin-left: var(--sidebar-collapsed-w);
@@ -185,7 +179,7 @@
             overflow: hidden;
             transition: margin-left .24s ease;
         }
-        .sidebar:hover ~ .main { margin-left: var(--sidebar-w); }
+.sidebar:hover ~ .main, .sidebar.sb-pin ~ .main { margin-left: var(--sidebar-w); }
 
         .topbar {
             height: var(--topbar-h);
@@ -388,5 +382,6 @@
         @yield('content')
     </div>
 </div>
+@include('partials.sidebar-hover-pin')
 </body>
 </html>
