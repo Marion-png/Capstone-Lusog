@@ -13,6 +13,7 @@
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
+	<style id="printPageStyle">@page{size:A4 portrait;margin:10mm}</style>
 </head>
 <body>
 <aside class="sidebar">
@@ -69,6 +70,10 @@
 					<option value="form6-milk">Form 6 - Milk Component (List of Beneficiaries)</option>
 					<option value="form7-milk">Form 7 - Milk Component (Milk Deliveries)</option>
 					<option value="form7a-milk">Form 7-a - Milk Component (Drop-off Points)</option>
+					<option value="bmi-baseline">BMI Report - Baseline Nutritional Assessment (Grades 7-10)</option>
+					<option value="bmi-summary">BMI Report - Baseline vs Endline Summary (Per Grade)</option>
+					<option value="feeding-narrative">Feeding Program - Narrative Report</option>
+					<option value="feeding-masterlist">Feeding Program - Masterlist of Qualified Recipients</option>
 				</select>
 			</div>
 			<p class="selector-note">The selected template will appear below.</p>
@@ -78,7 +83,7 @@
 			Please select a form template to open the encoder.
 		</div>
 
-		<section class="sheet-wrap form-panel" id="form5Panel">
+		<section class="sheet-wrap form-panel" id="form5Panel" data-template="form5-milk">
 			<div class="sheet-tools">
 				<div class="sheet-status" id="form5DraftStatus">Draft not saved yet.</div>
 				<div class="sheet-btns">
@@ -167,7 +172,7 @@
 			</div>
 		</section>
 
-		<section class="sheet-wrap form-panel" id="form6Panel">
+		<section class="sheet-wrap form-panel" id="form6Panel" data-template="form6-milk">
 			<div class="sheet-tools">
 				<div class="sheet-status" id="form6DraftStatus">Draft not saved yet.</div>
 				<div class="sheet-btns">
@@ -228,7 +233,7 @@
 			</div>
 		</section>
 
-		<section class="sheet-wrap form-panel" id="form7Panel">
+		<section class="sheet-wrap form-panel" id="form7Panel" data-template="form7-milk">
 			<div class="sheet-tools">
 				<div class="sheet-status" id="form7DraftStatus">Draft not saved yet.</div>
 				<div class="sheet-btns">
@@ -322,7 +327,7 @@
 			</div>
 		</section>
 
-		<section class="sheet-wrap form-panel" id="form7aPanel">
+		<section class="sheet-wrap form-panel" id="form7aPanel" data-template="form7a-milk">
 			<div class="sheet-tools">
 				<div class="sheet-status" id="form7aDraftStatus">Draft not saved yet.</div>
 				<div class="sheet-btns">
@@ -413,15 +418,195 @@
 				</div>
 			</div>
 		</section>
+
+		<section class="sheet-wrap form-panel" id="bmiBaselinePanel" data-template="bmi-baseline">
+			<div class="sheet-tools">
+				<div class="sheet-status" id="bmiBaselineDraftStatus">Draft not saved yet.</div>
+				<div class="sheet-btns">
+					<button type="button" class="btn btn-primary" id="saveBmiBaselineDraftBtn">Save Draft</button>
+					<button type="button" class="btn btn-ghost" id="printBmiBaselineBtn">Print Form</button>
+					<button type="button" class="btn btn-warn" id="clearBmiBaselineDraftBtn">Clear</button>
+				</div>
+			</div>
+
+			<div class="form-sheet">
+				<div class="form-sheet-inner">
+					<div class="report-head">
+						<div class="report-school">{{ session('active_school_name', 'School name not set') }}</div>
+						<input type="text" class="report-addr-input" data-field="bmib_school_address" placeholder="School address" aria-label="School address">
+						<div class="report-banner">Baseline Nutritional Assessment (BMI) Report</div>
+						<div class="report-sy">S.Y. <input type="text" class="inline-line-input" data-field="bmib_school_year" placeholder="20__-20__" aria-label="School year"></div>
+					</div>
+
+					<div class="report-body">
+						@foreach ([7, 8, 9, 10] as $grade)
+							<div class="grade-title">GRADE {{ $grade }} BMI</div>
+							@include('feedingcor-dashboard.partials.bmi-table', ['prefix' => 'bmib_g' . $grade, 'editable' => true])
+						@endforeach
+
+						<div class="grade-title grade-title-overall">OVERALL BMI</div>
+						<p class="auto-note">Overall figures and all Total cells are computed automatically from the grade-level entries.</p>
+						@include('feedingcor-dashboard.partials.bmi-table', ['prefix' => 'bmib_overall', 'editable' => false])
+					</div>
+
+					<div class="foot-grid cols-3">
+						<div class="foot-block">
+							<div class="foot-label">Prepared by:</div>
+							<input type="text" class="sign-input" data-field="bmib_prepared_name" placeholder="Full name" aria-label="Prepared by name">
+							<input type="text" class="foot-role-input" data-field="bmib_prepared_role" placeholder="School Clinic Nurse / Teacher" aria-label="Prepared by designation">
+						</div>
+						<div class="foot-block">
+							<div class="foot-label">Attested by:</div>
+							<input type="text" class="sign-input" data-field="bmib_attested_name" placeholder="Full name" aria-label="Attested by name">
+							<input type="text" class="foot-role-input" data-field="bmib_attested_role" placeholder="MAPEH Department Head" aria-label="Attested by designation">
+						</div>
+						<div class="foot-block">
+							<div class="foot-label">Noted by:</div>
+							<input type="text" class="sign-input" data-field="bmib_noted_name" placeholder="Full name" aria-label="Noted by name">
+							<input type="text" class="foot-role-input" data-field="bmib_noted_role" placeholder="Principal III" aria-label="Noted by designation">
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section class="sheet-wrap form-panel" id="bmiSummaryPanel" data-template="bmi-summary">
+			<div class="sheet-tools">
+				<div class="sheet-status" id="bmiSummaryDraftStatus">Draft not saved yet.</div>
+				<div class="sheet-btns">
+					<button type="button" class="btn btn-primary" id="saveBmiSummaryDraftBtn">Save Draft</button>
+					<button type="button" class="btn btn-ghost" id="printBmiSummaryBtn">Print Form</button>
+					<button type="button" class="btn btn-warn" id="clearBmiSummaryDraftBtn">Clear</button>
+				</div>
+			</div>
+
+			<div class="form-sheet">
+				<div class="form-sheet-inner">
+					<div class="report-head">
+						<div class="report-school">{{ session('active_school_name', 'School name not set') }}</div>
+						<input type="text" class="report-addr-input" data-field="bmis_school_address" placeholder="School address" aria-label="School address">
+						<div class="report-banner">Baseline Nutritional Assessment (BMI) Report</div>
+						<div class="report-sy">S.Y. <input type="text" class="inline-line-input" data-field="bmis_school_year" placeholder="20__-20__" aria-label="School year"></div>
+					</div>
+
+					<div class="report-body">
+						@foreach (['m1' => 'JULY 2025', 'm2' => 'FEBRUARY 2026'] as $monthKey => $monthPlaceholder)
+							<div class="grade-title">GRADE <input type="text" class="inline-line-input inline-short" data-field="bmis_{{ $monthKey }}_grade" placeholder="7" aria-label="Grade level"> BMI</div>
+							<div class="month-title">MONTH OF <input type="text" class="inline-line-input" data-field="bmis_{{ $monthKey }}_month" placeholder="{{ $monthPlaceholder }}" aria-label="Month covered"></div>
+							@include('feedingcor-dashboard.partials.bmi-table', ['prefix' => 'bmis_' . $monthKey, 'editable' => true])
+						@endforeach
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section class="sheet-wrap form-panel" id="narrativePanel" data-template="feeding-narrative">
+			<div class="sheet-tools">
+				<div class="sheet-status" id="narrativeDraftStatus">Draft not saved yet.</div>
+				<div class="sheet-btns">
+					<button type="button" class="btn btn-primary" id="saveNarrativeDraftBtn">Save Draft</button>
+					<button type="button" class="btn btn-ghost" id="printNarrativeBtn">Print Form</button>
+					<button type="button" class="btn btn-warn" id="clearNarrativeDraftBtn">Clear</button>
+				</div>
+			</div>
+
+			<div class="form-sheet">
+				<div class="form-sheet-inner">
+					<div class="report-head">
+						<div class="deped-lines">Republika ng Pilipinas<br>Kagawaran ng Edukasyon</div>
+						<input type="text" class="report-addr-input" data-field="narr_region" placeholder="Rehiyon / Region" aria-label="Region">
+						<input type="text" class="report-addr-input" data-field="narr_division" placeholder="Sangay / Division" aria-label="Division">
+						<div class="report-school">{{ session('active_school_name', 'School name not set') }}</div>
+						<input type="text" class="report-addr-input" data-field="narr_school_address" placeholder="School address" aria-label="School address">
+						<div class="report-title-lines">Report on the Feeding Program of {{ session('active_school_name', 'the school') }} Funded by <input type="text" class="inline-line-input inline-wide" data-field="narr_funder" placeholder="Sponsor / Funding partner" aria-label="Funding partner"></div>
+					</div>
+
+					<div class="report-body">
+						@foreach (['introduction' => 'Introduction', 'background' => 'Background and Rationale', 'implementation' => 'Implementation', 'results' => 'Results and Impact', 'conclusion' => 'Conclusion and Recommendation'] as $sectionKey => $sectionLabel)
+							<div class="narrative-section">
+								<div class="narrative-label">{{ $sectionLabel }}</div>
+								<textarea class="narrative-textarea" data-field="narr_{{ $sectionKey }}" placeholder="Write the {{ strtolower($sectionLabel) }} here..." aria-label="{{ $sectionLabel }}"></textarea>
+							</div>
+						@endforeach
+					</div>
+
+					<div class="foot-grid">
+						<div class="foot-block">
+							<div class="foot-label">Prepared by:</div>
+							<input type="text" class="sign-input" data-field="narr_prepared_name" placeholder="Full name" aria-label="Prepared by name">
+							<div class="foot-role">School Feeding Coordinator</div>
+						</div>
+						<div class="foot-block">
+							<div class="foot-label">Noted by:</div>
+							<input type="text" class="sign-input" data-field="narr_noted_name" placeholder="Full name" aria-label="Noted by name">
+							<input type="text" class="foot-role-input" data-field="narr_noted_role" placeholder="Principal III" aria-label="Noted by designation">
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section class="sheet-wrap form-panel" id="masterlistPanel" data-template="feeding-masterlist">
+			<div class="sheet-tools">
+				<div class="sheet-status" id="mlDraftStatus">Draft not saved yet.</div>
+				<div class="sheet-btns">
+					<button type="button" class="btn btn-secondary" id="addMlRowsBtn">Add 10 Rows</button>
+					<button type="button" class="btn btn-primary" id="saveMlDraftBtn">Save Draft</button>
+					<button type="button" class="btn btn-ghost" id="printMlBtn">Print Form</button>
+					<button type="button" class="btn btn-warn" id="clearMlDraftBtn">Clear</button>
+				</div>
+			</div>
+
+			<div class="form-sheet">
+				<div class="form-sheet-inner">
+					<div class="report-head">
+						<div class="report-school">{{ session('active_school_name', 'School name not set') }}</div>
+						<input type="text" class="report-addr-input" data-field="ml_school_address" placeholder="School address" aria-label="School address">
+						<div class="report-title-lines">Masterlists of Identified Severely Wasted and Wasted Students Who Are Qualified for Feeding Program</div>
+						<div class="report-sy">S.Y. <input type="text" class="inline-line-input" data-field="ml_school_year" placeholder="20__-20__" aria-label="School year"></div>
+					</div>
+
+					<table class="template-table" aria-label="Masterlist of feeding program recipients">
+						<thead>
+							<tr>
+								<th class="num-col">No.</th>
+								<th class="name-col">Name</th>
+								<th class="grade-col">Grade</th>
+								<th>Section</th>
+							</tr>
+						</thead>
+						<tbody id="mlTbody">
+							@for ($row = 1; $row <= 20; $row++)
+								<tr class="ml-row">
+									<td class="num-col ml-num">{{ $row }}</td>
+									<td><input type="text" class="cell-input" data-field="ml_row{{ $row }}_name" placeholder="Student full name"></td>
+									<td><input type="text" class="cell-input" data-field="ml_row{{ $row }}_grade" placeholder="Grade"></td>
+									<td><input type="text" class="cell-input" data-field="ml_row{{ $row }}_section" placeholder="Section"></td>
+								</tr>
+							@endfor
+						</tbody>
+					</table>
+
+					<div class="foot-grid">
+						<div class="foot-block">
+							<div class="foot-label">Prepared by:</div>
+							<input type="text" class="sign-input" data-field="ml_prepared_name" placeholder="Full name" aria-label="Prepared by name">
+							<div class="foot-role">Feeding Coordinator</div>
+						</div>
+						<div class="foot-block">
+							<div class="foot-label">Noted by:</div>
+							<input type="text" class="sign-input" data-field="ml_noted_name" placeholder="Full name" aria-label="Noted by name">
+							<input type="text" class="foot-role-input" data-field="ml_noted_role" placeholder="Principal III" aria-label="Noted by designation">
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
 	</div>
 </div>
 <script>
 (() => {
 	const templateSelect = document.getElementById('formTemplateSelect');
-	const form5Panel = document.getElementById('form5Panel');
-	const form6Panel = document.getElementById('form6Panel');
-	const form7Panel = document.getElementById('form7Panel');
-	const form7aPanel = document.getElementById('form7aPanel');
 	const emptyStatePanel = document.getElementById('emptyStatePanel');
 
 	const stamp = () => new Date().toLocaleString('en-US', {
@@ -504,21 +689,43 @@
 		loadDraft();
 	};
 
+	const printPageStyle = document.getElementById('printPageStyle');
+	const landscapeTemplates = ['bmi-baseline', 'bmi-summary', 'form7-milk', 'form7a-milk'];
+
+	const autoGrowNarrative = (textarea) => {
+		if (!textarea.offsetParent) {
+			return;
+		}
+		textarea.style.height = 'auto';
+		textarea.style.height = `${textarea.scrollHeight + 2}px`;
+	};
+
+	const autoGrowAllNarratives = () => {
+		document.querySelectorAll('.narrative-textarea').forEach(autoGrowNarrative);
+	};
+
 	const syncSelectedTemplate = () => {
-		if (!templateSelect || !form5Panel || !form6Panel || !form7Panel || !form7aPanel || !emptyStatePanel) {
+		if (!templateSelect || !emptyStatePanel) {
 			return;
 		}
 
 		const selected = String(templateSelect.value || '');
-		const showForm5 = selected === 'form5-milk';
-		const showForm6 = selected === 'form6-milk';
-		const showForm7 = selected === 'form7-milk';
-		const showForm7a = selected === 'form7a-milk';
-		form5Panel.classList.toggle('active', showForm5);
-		form6Panel.classList.toggle('active', showForm6);
-		form7Panel.classList.toggle('active', showForm7);
-		form7aPanel.classList.toggle('active', showForm7a);
-		emptyStatePanel.style.display = showForm5 || showForm6 || showForm7 || showForm7a ? 'none' : '';
+		let anyActive = false;
+		document.querySelectorAll('.form-panel').forEach((panel) => {
+			const isActive = selected !== '' && panel.getAttribute('data-template') === selected;
+			panel.classList.toggle('active', isActive);
+			anyActive = anyActive || isActive;
+		});
+		emptyStatePanel.style.display = anyActive ? 'none' : '';
+
+		if (printPageStyle) {
+			const orientation = landscapeTemplates.includes(selected) ? 'landscape' : 'portrait';
+			printPageStyle.textContent = `@page{size:A4 ${orientation};margin:10mm}`;
+		}
+
+		if (selected === 'feeding-narrative') {
+			autoGrowAllNarratives();
+		}
 	};
 
 	const form7aTablesContainer = document.getElementById('form7aTablesContainer');
@@ -757,6 +964,197 @@
 		}
 	};
 
+	// --- BMI report templates: auto-computed totals ---
+	const bmiNsKeys = ['sw', 'w', 'n', 'ow', 'ob'];
+	const bmiHfaKeys = ['ss', 'st', 'hn', 't'];
+	const bmiAllKeys = bmiNsKeys.concat(bmiHfaKeys);
+
+	const bmiField = (name) => document.querySelector(`[data-field="${name}"]`);
+
+	const bmiValue = (name) => {
+		const input = bmiField(name);
+		const parsed = Number(input ? input.value : 0);
+		return Number.isFinite(parsed) ? parsed : 0;
+	};
+
+	const setBmiValue = (name, value) => {
+		const input = bmiField(name);
+		if (input) {
+			input.value = String(value);
+		}
+	};
+
+	const computeBmiTable = (prefix) => {
+		['male', 'female'].forEach((sex) => {
+			setBmiValue(`${prefix}_${sex}_nst`, bmiNsKeys.reduce((sum, key) => sum + bmiValue(`${prefix}_${sex}_${key}`), 0));
+			setBmiValue(`${prefix}_${sex}_hfat`, bmiHfaKeys.reduce((sum, key) => sum + bmiValue(`${prefix}_${sex}_${key}`), 0));
+		});
+
+		bmiAllKeys.concat(['nst', 'hfat']).forEach((key) => {
+			setBmiValue(`${prefix}_total_${key}`, bmiValue(`${prefix}_male_${key}`) + bmiValue(`${prefix}_female_${key}`));
+		});
+	};
+
+	const bmiBaselineGrades = ['bmib_g7', 'bmib_g8', 'bmib_g9', 'bmib_g10'];
+
+	const computeBmiBaseline = () => {
+		bmiBaselineGrades.forEach(computeBmiTable);
+
+		['male', 'female'].forEach((sex) => {
+			bmiAllKeys.forEach((key) => {
+				setBmiValue(`bmib_overall_${sex}_${key}`, bmiBaselineGrades.reduce((sum, grade) => sum + bmiValue(`${grade}_${sex}_${key}`), 0));
+			});
+		});
+
+		computeBmiTable('bmib_overall');
+	};
+
+	const computeBmiSummary = () => {
+		computeBmiTable('bmis_m1');
+		computeBmiTable('bmis_m2');
+	};
+
+	// --- Masterlist template: dynamic rows + draft ---
+	const mlTbody = document.getElementById('mlTbody');
+	const mlStatusNode = document.getElementById('mlDraftStatus');
+	const addMlRowsBtn = document.getElementById('addMlRowsBtn');
+	const saveMlDraftBtn = document.getElementById('saveMlDraftBtn');
+	const clearMlDraftBtn = document.getElementById('clearMlDraftBtn');
+	const printMlBtn = document.getElementById('printMlBtn');
+	const mlStorageKey = 'feeding_masterlist_draft_v1';
+	const mlBaseRowCount = 20;
+
+	const renumberMlRows = () => {
+		if (!mlTbody) {
+			return;
+		}
+
+		Array.from(mlTbody.querySelectorAll('.ml-row')).forEach((row, index) => {
+			const rowNumber = index + 1;
+			const numCell = row.querySelector('.ml-num');
+			if (numCell) {
+				numCell.textContent = String(rowNumber);
+			}
+
+			row.querySelectorAll('[data-field]').forEach((input) => {
+				const key = input.getAttribute('data-field');
+				if (!key) {
+					return;
+				}
+				input.setAttribute('data-field', key.replace(/^ml_row\d+_/, `ml_row${rowNumber}_`));
+			});
+		});
+	};
+
+	const addMlRows = (count) => {
+		if (!mlTbody) {
+			return;
+		}
+
+		const firstRow = mlTbody.querySelector('.ml-row');
+		if (!firstRow) {
+			return;
+		}
+
+		for (let i = 0; i < count; i++) {
+			const clone = firstRow.cloneNode(true);
+			clone.querySelectorAll('input').forEach((input) => {
+				input.value = '';
+			});
+			mlTbody.appendChild(clone);
+		}
+
+		renumberMlRows();
+	};
+
+	const saveMlDraft = () => {
+		if (!mlTbody) {
+			return;
+		}
+
+		const payload = {
+			rowCount: mlTbody.querySelectorAll('.ml-row').length,
+			values: {},
+		};
+
+		document.querySelectorAll('[data-field^="ml_"]').forEach((field) => {
+			const key = field.getAttribute('data-field');
+			if (!key) {
+				return;
+			}
+			payload.values[key] = String(field.value || '').trim();
+		});
+
+		window.localStorage.setItem(mlStorageKey, JSON.stringify(payload));
+		if (mlStatusNode) {
+			mlStatusNode.textContent = `Draft saved on ${stamp()}.`;
+		}
+	};
+
+	const loadMlDraft = () => {
+		if (!mlTbody) {
+			return;
+		}
+
+		try {
+			const raw = window.localStorage.getItem(mlStorageKey);
+			if (!raw) {
+				return;
+			}
+
+			const parsed = JSON.parse(raw);
+			const rowCount = Math.max(mlBaseRowCount, Number(parsed.rowCount || mlBaseRowCount));
+			const missingRows = rowCount - mlTbody.querySelectorAll('.ml-row').length;
+			if (missingRows > 0) {
+				addMlRows(missingRows);
+			}
+
+			if (parsed.values && typeof parsed.values === 'object') {
+				document.querySelectorAll('[data-field^="ml_"]').forEach((field) => {
+					const key = field.getAttribute('data-field');
+					if (!key) {
+						return;
+					}
+					field.value = typeof parsed.values[key] === 'string' ? parsed.values[key] : '';
+				});
+			}
+
+			if (mlStatusNode) {
+				mlStatusNode.textContent = 'Draft loaded from local storage.';
+			}
+		} catch (_error) {
+			if (mlStatusNode) {
+				mlStatusNode.textContent = 'Unable to load existing draft.';
+			}
+		}
+	};
+
+	const clearMlDraft = () => {
+		if (!mlTbody) {
+			return;
+		}
+
+		Array.from(mlTbody.querySelectorAll('.ml-row')).forEach((row, index) => {
+			if (index < mlBaseRowCount) {
+				row.querySelectorAll('input').forEach((input) => {
+					input.value = '';
+				});
+				return;
+			}
+			row.remove();
+		});
+
+		document.querySelectorAll('[data-field^="ml_"]').forEach((field) => {
+			field.value = '';
+		});
+
+		renumberMlRows();
+		window.localStorage.removeItem(mlStorageKey);
+		if (mlStatusNode) {
+			mlStatusNode.textContent = 'Draft cleared.';
+		}
+	};
+
 	initDraftModule({
 		storageKey: 'sbfp_milk_form5_draft_v1',
 		fieldPrefix: 'form5_',
@@ -783,6 +1181,64 @@
 		clearId: 'clearForm7DraftBtn',
 		printId: 'printForm7Btn',
 	});
+
+	initDraftModule({
+		storageKey: 'feeding_bmi_baseline_draft_v1',
+		fieldPrefix: 'bmib_',
+		statusId: 'bmiBaselineDraftStatus',
+		saveId: 'saveBmiBaselineDraftBtn',
+		clearId: 'clearBmiBaselineDraftBtn',
+		printId: 'printBmiBaselineBtn',
+	});
+
+	initDraftModule({
+		storageKey: 'feeding_bmi_summary_draft_v1',
+		fieldPrefix: 'bmis_',
+		statusId: 'bmiSummaryDraftStatus',
+		saveId: 'saveBmiSummaryDraftBtn',
+		clearId: 'clearBmiSummaryDraftBtn',
+		printId: 'printBmiSummaryBtn',
+	});
+
+	initDraftModule({
+		storageKey: 'feeding_narrative_report_draft_v1',
+		fieldPrefix: 'narr_',
+		statusId: 'narrativeDraftStatus',
+		saveId: 'saveNarrativeDraftBtn',
+		clearId: 'clearNarrativeDraftBtn',
+		printId: 'printNarrativeBtn',
+	});
+
+	const bmiBaselinePanel = document.getElementById('bmiBaselinePanel');
+	if (bmiBaselinePanel) {
+		bmiBaselinePanel.addEventListener('input', computeBmiBaseline);
+	}
+
+	const bmiSummaryPanel = document.getElementById('bmiSummaryPanel');
+	if (bmiSummaryPanel) {
+		bmiSummaryPanel.addEventListener('input', computeBmiSummary);
+	}
+
+	if (addMlRowsBtn) {
+		addMlRowsBtn.addEventListener('click', () => {
+			addMlRows(10);
+			if (mlStatusNode) {
+				mlStatusNode.textContent = 'Rows added. Save draft to keep changes.';
+			}
+		});
+	}
+
+	if (saveMlDraftBtn) {
+		saveMlDraftBtn.addEventListener('click', saveMlDraft);
+	}
+
+	if (clearMlDraftBtn) {
+		clearMlDraftBtn.addEventListener('click', clearMlDraft);
+	}
+
+	if (printMlBtn) {
+		printMlBtn.addEventListener('click', () => window.print());
+	}
 
 	document.querySelectorAll('[data-form7-beneficiaries],[data-form7-new],[data-form7-replacement],[data-field^="form7_row"][data-field$="_rejected"]').forEach((input) => {
 		input.addEventListener('input', updateForm7Totals);
@@ -819,8 +1275,17 @@
 		templateSelect.addEventListener('change', syncSelectedTemplate);
 	}
 
+	document.querySelectorAll('.narrative-textarea').forEach((textarea) => {
+		textarea.addEventListener('input', () => autoGrowNarrative(textarea));
+	});
+
+	window.addEventListener('beforeprint', autoGrowAllNarratives);
+
 	updateForm7Totals();
 	loadForm7aDraft();
+	loadMlDraft();
+	computeBmiBaseline();
+	computeBmiSummary();
 	syncSelectedTemplate();
 })();
 </script>
