@@ -67,6 +67,15 @@ All routes are inline closures or controller actions in `routes/web.php` — no 
 - Some data (deworming requests, account lists) falls back to session when DB tables don't exist — the controllers check `Schema::hasTable()` before querying.
 - **Uploaded files** (medical certificates, parental consent forms) are stored in `storage/app/private/` using Laravel's `private` disk.
 
+### Multi-School Data Separation (invariant)
+
+Data separation covers **all** modules and records — health records, consultations, medicine inventory, deworming, consent forms, health assessments, feeding attendance, and accounts. Rules to preserve in every change:
+
+- Every query that reads or writes school-owned data must be scoped by the session's `active_institution_id`. Use `StudentHealthRecord::forActiveInstitution()` for student lookups by LRN; child tables (certificates, consents, assessments, attendance) inherit scope through their parent record — verify the parent's `institution_id` before serving them (e.g. downloads).
+- Rows created for a school must be stamped with `institution_id` from the session.
+- Usernames on `accounts` are unique **per school** (`username + institution_id`), not globally: a teacher working in multiple schools holds a separate account per school. Login verifies the password against every account with that username and asks for a school choice (`school_choices` flash + `institution_id` input) when more than one matches.
+- `system_admin` is the only unscoped role; `InstitutionScope` middleware ejects scoped roles that have no `active_institution_id`.
+
 ### Key Models and Their Scope
 
 - `StudentHealthRecord` — the central model. Tracks a student across baseline/endline nutrition measurements, feeding attendance, conditions, and consent. Filtered by `school_name` (string) to scope per school.

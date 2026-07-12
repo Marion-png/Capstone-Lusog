@@ -58,7 +58,9 @@
         </a>
         @php
             $cfUnread = \Illuminate\Support\Facades\Schema::hasTable('health_consent_forms')
-                ? \App\Models\HealthConsentForm::where('adviser_unread', true)->count()
+                ? \App\Models\HealthConsentForm::where('adviser_unread', true)
+                    ->when(session('active_institution_id'), fn ($q, $id) => $q->where('institution_id', $id))
+                    ->count()
                 : 0;
         @endphp
         <a href="{{ route('consent-forms.index') }}" class="sb-link">
@@ -602,133 +604,6 @@
                     <div><span>4Ps Beneficiary:</span><b id="vp4ps">-</b></div>
                     <div><span>Menarche:</span><b id="vpMenarche">-</b></div>
                     <div class="full"><span>Others:</span><b id="vpOthers">-</b></div>
-                </div>
-            </section>
-
-            <section class="student-profile-section" id="vpConsentSection">
-                <h4>Parental Consent &mdash; Health Services (Sulat-Pahibalo)</h4>
-
-                @if(session('consent_success'))
-                    <div style="background:#dcfce7;border:1px solid #86efac;color:#166534;border-radius:10px;padding:8px 12px;font-size:.78rem;font-weight:600;margin-bottom:10px;">
-                        {{ session('consent_success') }}
-                    </div>
-                @endif
-
-                <div id="vpConsentStatus" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:.78rem;color:#7a9e87;">
-                    Select a student to view consent status.
-                </div>
-
-                <div id="vpConsentFormWrap" style="display:none;border-top:1px solid #e4ece7;padding-top:14px;margin-top:4px;">
-                    <div class="upload-subsection-title">Fill in Parental Consent Details</div>
-                    <p style="font-size:.74rem;color:#6f8c7a;margin:4px 0 14px;">Based on what the parent/guardian checked on the physical Sulat-Pahibalo form for SY {{ \App\Models\ParentalConsentForm::currentSchoolYear() }}.</p>
-                    <div id="consentFileError" class="upload-error-msg" style="display:none;"></div>
-                    <form id="consentUploadForm" method="POST" action="{{ route('parental-consent.store') }}" enctype="multipart/form-data" novalidate>
-                        @csrf
-                        <input type="hidden" id="consentLrn" name="lrn">
-
-                        {{-- Consent choice --}}
-                        <div style="margin-bottom:16px;">
-                            <label style="font-size:.72rem;font-weight:700;color:#334a3f;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:9px;">Parent/Guardian Consent Choice <span style="color:#ef4444;">*</span></label>
-                            <div style="display:flex;flex-direction:column;gap:10px;">
-                                <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;">
-                                    <input type="radio" name="consent_type" value="full" id="consentFull" style="margin-top:3px;accent-color:#15803d;" required>
-                                    <span style="font-size:.82rem;color:#1d3c31;line-height:1.4;"><b>Oo, mutugot</b> &mdash; Full consent to all DOH-recommended health services</span>
-                                </label>
-                                <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;">
-                                    <input type="radio" name="consent_type" value="partial" id="consentPartial" style="margin-top:3px;accent-color:#d97706;">
-                                    <span style="font-size:.82rem;color:#1d3c31;line-height:1.4;"><b>Oo, mutugot</b> &mdash; Partial consent, <em>except</em> the following services:</span>
-                                </label>
-                                <div id="partialExceptionBox" style="display:none;margin-left:26px;margin-top:-4px;">
-                                    <input type="text" name="partial_exception" id="partialException"
-                                        placeholder="e.g. Deworming, Immunization"
-                                        style="width:100%;padding:7px 10px;border:1.5px solid #d1dbd5;border-radius:7px;font-size:.8rem;color:#1d3c31;background:#fff;box-sizing:border-box;">
-                                </div>
-                                <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;">
-                                    <input type="radio" name="consent_type" value="refused" id="consentRefused" style="margin-top:3px;accent-color:#6b7280;">
-                                    <span style="font-size:.82rem;color:#1d3c31;line-height:1.4;"><b>Dili ko mutugot</b> &mdash; No consent. Reason:</span>
-                                </label>
-                                <div id="refusedReasonBox" style="display:none;margin-left:26px;margin-top:-4px;">
-                                    <input type="text" name="refused_reason" id="refusedReason"
-                                        placeholder="Specify reason for refusal"
-                                        style="width:100%;padding:7px 10px;border:1.5px solid #d1dbd5;border-radius:7px;font-size:.8rem;color:#1d3c31;background:#fff;box-sizing:border-box;">
-                                </div>
-                            </div>
-                            @error('consent_type')
-                                <div style="font-size:.74rem;color:#b91c1c;margin-top:5px;">{{ $message }}</div>
-                            @enderror
-                        </div>
-
-                        {{-- Allergy section --}}
-                        <div style="margin-bottom:14px;padding:12px 14px;background:#f7faf8;border-radius:9px;border:1px solid #d1dbd5;">
-                            <label style="font-size:.72rem;font-weight:700;color:#334a3f;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:10px;">Allergy Information (if any)</label>
-                            <div style="display:flex;flex-direction:column;gap:10px;">
-
-                                <div>
-                                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                                        <input type="checkbox" name="allergy_food" id="allergyFood" value="1" style="accent-color:#15803d;width:15px;height:15px;">
-                                        <span style="font-size:.82rem;color:#1d3c31;font-weight:600;">Pagkaon / Food allergy</span>
-                                    </label>
-                                    <input type="text" name="allergy_food_detail" id="allergyFoodDetail"
-                                        placeholder="Specify food (e.g. shellfish, nuts)"
-                                        style="width:100%;margin-top:6px;padding:6px 10px;border:1.5px solid #d1dbd5;border-radius:7px;font-size:.79rem;color:#1d3c31;background:#fff;display:none;box-sizing:border-box;">
-                                </div>
-
-                                <div>
-                                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                                        <input type="checkbox" name="allergy_medicine" id="allergyMedicine" value="1" style="accent-color:#15803d;width:15px;height:15px;">
-                                        <span style="font-size:.82rem;color:#1d3c31;font-weight:600;">Tambal / Medicine allergy</span>
-                                    </label>
-                                    <input type="text" name="allergy_medicine_detail" id="allergyMedicineDetail"
-                                        placeholder="Specify medicine type"
-                                        style="width:100%;margin-top:6px;padding:6px 10px;border:1.5px solid #d1dbd5;border-radius:7px;font-size:.79rem;color:#1d3c31;background:#fff;display:none;box-sizing:border-box;">
-                                </div>
-
-                                <div>
-                                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                                        <input type="checkbox" name="prev_immunization" id="prevImmunization" value="1" style="accent-color:#15803d;width:15px;height:15px;">
-                                        <span style="font-size:.82rem;color:#1d3c31;font-weight:600;">Nahatag nga Bakuna / Previous Immunization reaction</span>
-                                    </label>
-                                    <input type="text" name="prev_immunization_detail" id="prevImmunizationDetail"
-                                        placeholder="Specify vaccine type or reaction"
-                                        style="width:100%;margin-top:6px;padding:6px 10px;border:1.5px solid #d1dbd5;border-radius:7px;font-size:.79rem;color:#1d3c31;background:#fff;display:none;box-sizing:border-box;">
-                                </div>
-
-                            </div>
-                        </div>
-
-                        {{-- Other illness --}}
-                        <div style="margin-bottom:14px;">
-                            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                                <input type="checkbox" name="has_other_illness" id="hasOtherIllness" value="1" style="accent-color:#15803d;width:15px;height:15px;">
-                                <span style="font-size:.82rem;color:#1d3c31;font-weight:600;">Kasamtangang Sakit / Other illness or disability</span>
-                            </label>
-                            <input type="text" name="other_illness_detail" id="otherIllnessDetail"
-                                placeholder="Specify illness or disability"
-                                style="width:100%;margin-top:6px;padding:6px 10px;border:1.5px solid #d1dbd5;border-radius:7px;font-size:.79rem;color:#1d3c31;background:#fff;display:none;box-sizing:border-box;">
-                        </div>
-
-                        {{-- Medical cert note --}}
-                        <div style="margin-bottom:16px;">
-                            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                                <input type="checkbox" name="medical_cert_attached" id="medicalCertAttached" value="1" style="accent-color:#15803d;width:15px;height:15px;">
-                                <span style="font-size:.82rem;color:#1d3c31;font-weight:600;">Medical Certificate is attached to the physical signed form</span>
-                            </label>
-                        </div>
-
-                        {{-- File upload --}}
-                        <div style="border-top:1px solid #e4ece7;padding-top:12px;margin-top:4px;margin-bottom:12px;">
-                            <div class="upload-subsection-title">Upload Signed Consent Form (Optional)</div>
-                            <div class="field" style="margin-bottom:10px;">
-                                <label for="consentFile">Scanned / photo of signed form (PDF/JPG/PNG, max 5 MB)</label>
-                                <input type="file" id="consentFile" name="consent" accept=".pdf,.jpg,.jpeg,.png">
-                            </div>
-                            @error('consent')
-                                <div style="font-size:.74rem;color:#b91c1c;margin-bottom:8px;">{{ $message }}</div>
-                            @enderror
-                        </div>
-
-                        <button type="submit" class="btn">Save Consent Record</button>
-                    </form>
                 </div>
             </section>
 
@@ -1621,15 +1496,8 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
         }
 
         // Reset form visibility while API loads — prevents flash of stale form
-        const consentFormWrap = document.getElementById('vpConsentFormWrap');
-        if (consentFormWrap) consentFormWrap.style.display = 'none';
         const haForm = document.getElementById('healthAssessmentForm');
         if (haForm) haForm.style.display = 'none';
-
-        const consentLrnInput = document.getElementById('consentLrn');
-        if (consentLrnInput) consentLrnInput.value = record.lrn || '';
-
-        loadConsentStatus(record.lrn || '');
 
         const haLrnInput = document.getElementById('haLrn');
         if (haLrnInput) haLrnInput.value = record.lrn || '';
@@ -1638,64 +1506,6 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
 
         backdrop.classList.add('open');
         backdrop.setAttribute('aria-hidden', 'false');
-    };
-
-    const loadConsentStatus = async (lrn) => {
-        const statusEl = document.getElementById('vpConsentStatus');
-        const formWrap  = document.getElementById('vpConsentFormWrap');
-        if (!statusEl) return;
-        if (!lrn) {
-            statusEl.innerHTML = '<span style="color:#7a9e87;">No LRN available.</span>';
-            return;
-        }
-        statusEl.innerHTML = '<span style="color:#7a9e87;">Checking consent status&hellip;</span>';
-        try {
-            const resp = await fetch('/api/student-consent-status?lrn=' + encodeURIComponent(lrn), {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            });
-            if (!resp.ok) {
-                statusEl.innerHTML = '<span style="color:#7a9e87;">Could not check consent status.</span>';
-                return;
-            }
-            const data = await resp.json();
-            const dot = (color) => `<span style="width:10px;height:10px;border-radius:50%;background:${color};display:inline-block;flex-shrink:0;"></span>`;
-            const meta = (data.uploaded_by && data.uploaded_at) ? ` &mdash; recorded by <b>${data.uploaded_by}</b> on ${data.uploaded_at}` : '';
-
-            if (!data.has_consent) {
-                statusEl.innerHTML = `${dot('#dc2626')} <b style="color:#b91c1c;">No consent on file</b> for SY ${data.school_year || ''}. Fill in the details below.`;
-                if (formWrap) formWrap.style.display = 'block';
-            } else {
-                // Record exists — lock the form
-                if (formWrap) formWrap.style.display = 'none';
-
-                let typeLabel, dotColor, textColor;
-                if (data.consent_type === 'full') {
-                    typeLabel = 'Full Consent (Oo, mutugot — all services)';
-                    dotColor = '#16a34a'; textColor = '#15803d';
-                } else if (data.consent_type === 'partial') {
-                    const exc = data.partial_exception ? ` — except: ${data.partial_exception}` : '';
-                    typeLabel = `Partial Consent${exc}`;
-                    dotColor = '#d97706'; textColor = '#b45309';
-                } else {
-                    const reason = data.refused_reason ? ` — ${data.refused_reason}` : '';
-                    typeLabel = `Consent Refused (Dili ko mutugot)${reason}`;
-                    dotColor = '#6b7280'; textColor = '#374151';
-                }
-
-                statusEl.innerHTML = `
-                    <div style="width:100%;background:#f0fdf4;border:1px solid #86efac;border-radius:9px;padding:12px 14px;">
-                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                            ${dot(dotColor)}
-                            <b style="color:${textColor};font-size:.84rem;">Parental Consent Already on File</b>
-                            <span style="margin-left:auto;font-size:.72rem;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:999px;font-weight:700;">Locked</span>
-                        </div>
-                        <div style="font-size:.8rem;color:#1d3c31;margin-bottom:2px;">${typeLabel}</div>
-                        <div style="font-size:.76rem;color:#6f8c7a;">SY ${data.school_year || '—'}${meta}</div>
-                    </div>`;
-            }
-        } catch (_err) {
-            statusEl.innerHTML = '<span style="color:#7a9e87;">Could not check consent status.</span>';
-        }
     };
 
     // ── Health Assessment status loader ────────────────────────────
@@ -1761,59 +1571,6 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
             closeProfile();
         }
     });
-})();
-
-(() => {
-    const consentForm = document.getElementById('consentUploadForm');
-    const consentFileError = document.getElementById('consentFileError');
-
-    const showConsentError = (msg) => {
-        if (!consentFileError) return;
-        consentFileError.textContent = msg;
-        consentFileError.style.display = 'block';
-        consentFileError.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    };
-
-    const hideConsentError = () => {
-        if (consentFileError) consentFileError.style.display = 'none';
-    };
-
-    consentForm?.addEventListener('submit', (e) => {
-        const selectedType = consentForm.querySelector('input[name="consent_type"]:checked');
-        if (!selectedType) {
-            e.preventDefault();
-            showConsentError('Please select the parent/guardian consent choice before saving.');
-            return;
-        }
-        hideConsentError();
-    });
-
-    // Toggle partial exception / refused reason text inputs
-    const consentTypeInputs = consentForm ? Array.from(consentForm.querySelectorAll('input[name="consent_type"]')) : [];
-    const partialBox = document.getElementById('partialExceptionBox');
-    const refusedBox = document.getElementById('refusedReasonBox');
-
-    consentTypeInputs.forEach((input) => {
-        input.addEventListener('change', () => {
-            if (partialBox) partialBox.style.display = input.value === 'partial' ? 'block' : 'none';
-            if (refusedBox) refusedBox.style.display = input.value === 'refused' ? 'block' : 'none';
-        });
-    });
-
-    // Toggle allergy / illness detail inputs when checkboxes are checked
-    const toggleDetail = (checkboxId, detailId) => {
-        const cb = document.getElementById(checkboxId);
-        const inp = document.getElementById(detailId);
-        if (!cb || !inp) return;
-        cb.addEventListener('change', () => {
-            inp.style.display = cb.checked ? 'block' : 'none';
-        });
-    };
-
-    toggleDetail('allergyFood', 'allergyFoodDetail');
-    toggleDetail('allergyMedicine', 'allergyMedicineDetail');
-    toggleDetail('prevImmunization', 'prevImmunizationDetail');
-    toggleDetail('hasOtherIllness', 'otherIllnessDetail');
 })();
 
 // ── Health Assessment: BMI auto-calc + conditional reveals ──────────

@@ -49,6 +49,7 @@ class MedicalCertificateTest extends TestCase
     private function makeRecord(string $lrn, string $section = 'Grade 1 / Sampaguita'): StudentHealthRecord
     {
         return StudentHealthRecord::create([
+            'institution_id'      => $this->institution->id,
             'student_name'        => 'Test Student',
             'student_id'          => $lrn,
             'section'             => $section,

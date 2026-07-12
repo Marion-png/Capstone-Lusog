@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Models\ParentalConsentForm;
 
 class StudentHealthRecord extends Model
 {
@@ -45,6 +45,18 @@ class StudentHealthRecord extends Model
         'examination' => 'array',
         'attendance_by_month' => 'array',
     ];
+
+    /**
+     * Restrict the query to the logged-in user's school. Records are never
+     * shared across institutions; sessions without a school (legacy/system
+     * admin) are left unfiltered.
+     */
+    public function scopeForActiveInstitution(Builder $query): Builder
+    {
+        $institutionId = session('active_institution_id');
+
+        return $institutionId ? $query->where('institution_id', $institutionId) : $query;
+    }
 
     public function healthConditions(): HasMany
     {

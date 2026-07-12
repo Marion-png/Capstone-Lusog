@@ -26,14 +26,14 @@ class MedicalCertificateController extends Controller
         );
 
         $validated = $request->validate([
-            'lrn'            => ['required', 'string', 'max:50'],
+            'lrn' => ['required', 'string', 'max:50'],
             'condition_name' => ['required', 'string', 'max:255'],
-            'certificate'    => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
-            'doctor_clinic'  => ['nullable', 'string', 'max:255'],
+            'certificate' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'doctor_clinic' => ['nullable', 'string', 'max:255'],
             'diagnosis_date' => ['nullable', 'date', 'before_or_equal:today'],
         ]);
 
-        $advisedGrade   = (string) $request->session()->get('assigned_grade_level', '');
+        $advisedGrade = (string) $request->session()->get('assigned_grade_level', '');
         $advisedSection = (string) $request->session()->get('assigned_section', '');
 
         abort_if(
@@ -44,15 +44,16 @@ class MedicalCertificateController extends Controller
 
         $expectedSection = trim("{$advisedGrade} / {$advisedSection}");
 
-        $record = StudentHealthRecord::where('student_id', $validated['lrn'])->first();
+        $record = StudentHealthRecord::forActiveInstitution()->where('student_id', $validated['lrn'])->first();
 
         if ($record === null) {
             $record = StudentHealthRecord::create([
-                'student_id'         => $validated['lrn'],
-                'student_name'       => trim((string) $request->input('student_name', 'Unknown Student')),
-                'section'            => $expectedSection,
-                'weight'             => (float) $request->input('weight', 0),
-                'bmi_value'          => (float) $request->input('bmi_value', 0),
+                'institution_id' => $request->session()->get('active_institution_id'),
+                'student_id' => $validated['lrn'],
+                'student_name' => trim((string) $request->input('student_name', 'Unknown Student')),
+                'section' => $expectedSection,
+                'weight' => (float) $request->input('weight', 0),
+                'bmi_value' => (float) $request->input('bmi_value', 0),
                 'nutritional_status' => trim((string) $request->input('nutritional_status', 'Unknown')),
             ]);
         } else {
@@ -65,21 +66,21 @@ class MedicalCertificateController extends Controller
 
         $condition = StudentHealthCondition::firstOrCreate([
             'student_health_record_id' => $record->id,
-            'condition_name'           => trim($validated['condition_name']),
+            'condition_name' => trim($validated['condition_name']),
         ]);
 
-        $file         = $request->file('certificate');
+        $file = $request->file('certificate');
         $originalName = $file->getClientOriginalName();
-        $safeName     = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
-        $path         = $file->storeAs('medical-certificates/' . $record->id, $safeName, 'local');
+        $safeName = time().'_'.preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
+        $path = $file->storeAs('medical-certificates/'.$record->id, $safeName, 'local');
 
         MedicalCertificate::create([
             'student_health_condition_id' => $condition->id,
-            'file_path'                   => $path,
-            'file_original_name'          => $originalName,
-            'doctor_clinic'               => $validated['doctor_clinic'] ?? null,
-            'diagnosis_date'              => $validated['diagnosis_date'] ?? null,
-            'uploaded_by_name'            => (string) $request->session()->get('active_name', 'Class Adviser'),
+            'file_path' => $path,
+            'file_original_name' => $originalName,
+            'doctor_clinic' => $validated['doctor_clinic'] ?? null,
+            'diagnosis_date' => $validated['diagnosis_date'] ?? null,
+            'uploaded_by_name' => (string) $request->session()->get('active_name', 'Class Adviser'),
         ]);
 
         return back()->with('cert_success', "Certificate for \"{$condition->condition_name}\" uploaded successfully.");
@@ -97,8 +98,16 @@ class MedicalCertificateController extends Controller
             'Only Clinic Staff or School Nurse may download medical certificates.'
         );
 
-        $cert = MedicalCertificate::find($id);
+        $cert = MedicalCertificate::with('condition.studentHealthRecord')->find($id);
         abort_if($cert === null, 404, 'Certificate not found.');
+
+        $institutionId = $request->session()->get('active_institution_id');
+        $recordInstitutionId = $cert->condition?->studentHealthRecord?->institution_id;
+        abort_if(
+            $institutionId && $recordInstitutionId && (int) $recordInstitutionId !== (int) $institutionId,
+            404,
+            'Certificate not found.'
+        );
 
         abort_unless(
             Storage::disk('local')->exists($cert->file_path),
@@ -131,13 +140,13 @@ class MedicalCertificateController extends Controller
             return response()->json(['conditions' => []]);
         }
 
-        $record = StudentHealthRecord::where('student_id', $lrn)->first();
+        $record = StudentHealthRecord::forActiveInstitution()->where('student_id', $lrn)->first();
         if ($record === null) {
             return response()->json(['conditions' => []]);
         }
 
         if ($activeRole === 'class_adviser') {
-            $grade   = (string) $request->session()->get('assigned_grade_level', '');
+            $grade = (string) $request->session()->get('assigned_grade_level', '');
             $section = (string) $request->session()->get('assigned_section', '');
             $expected = trim("{$grade} / {$section}");
             if ($grade === '' || $section === '' || $record->section !== $expected) {
@@ -149,25 +158,26 @@ class MedicalCertificateController extends Controller
             ->with('certificates')
             ->get();
 
-        $data = $conditions->map(function (StudentHealthCondition $c) use ($activeRole) {
-            $certs = $c->certificates->map(function (MedicalCertificate $cert) use ($activeRole) {
+        $data = $conditions->map(function (StudentHealthCondition $c) {
+            $certs = $c->certificates->map(function (MedicalCertificate $cert) {
                 $entry = [
-                    'id'            => $cert->id,
+                    'id' => $cert->id,
                     'original_name' => $cert->file_original_name,
                     'doctor_clinic' => $cert->doctor_clinic,
-                    'diagnosis_date'=> $cert->diagnosis_date?->format('Y-m-d'),
-                    'uploaded_by'   => $cert->uploaded_by_name,
-                    'uploaded_at'   => $cert->created_at->format('M d, Y'),
+                    'diagnosis_date' => $cert->diagnosis_date?->format('Y-m-d'),
+                    'uploaded_by' => $cert->uploaded_by_name,
+                    'uploaded_at' => $cert->created_at->format('M d, Y'),
                 ];
                 $entry['download_url'] = route('medical-certificate.download', $cert->id);
+
                 return $entry;
             });
 
             return [
-                'condition_name'    => $c->condition_name,
-                'is_verified'       => $certs->isNotEmpty(),
+                'condition_name' => $c->condition_name,
+                'is_verified' => $certs->isNotEmpty(),
                 'certificate_count' => $certs->count(),
-                'certificates'      => $certs,
+                'certificates' => $certs,
             ];
         });
 

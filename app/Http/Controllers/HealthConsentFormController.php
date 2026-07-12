@@ -18,13 +18,17 @@ class HealthConsentFormController extends Controller
 
         $students = $this->assignedStudents($request);
         $schoolYear = HealthConsentForm::currentSchoolYear();
+        $institutionId = $request->session()->get('active_institution_id');
 
         $forms = HealthConsentForm::where('school_year', $schoolYear)
+            ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
             ->whereIn('student_lrn', $students->pluck('lrn')->filter()->values())
             ->get()
             ->keyBy('student_lrn');
 
-        $unreadCount = HealthConsentForm::where('adviser_unread', true)->count();
+        $unreadCount = HealthConsentForm::where('adviser_unread', true)
+            ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
+            ->count();
 
         return view('consent-forms.index', [
             'students' => $students,
@@ -51,10 +55,12 @@ class HealthConsentFormController extends Controller
                 ->with('error', 'Student not found in your assigned class.');
         }
 
-        $form = HealthConsentForm::firstOrNew([
-            'student_lrn' => $validated['lrn'],
-            'school_year' => HealthConsentForm::currentSchoolYear(),
-        ]);
+        $form = HealthConsentForm::query()
+            ->when($request->session()->get('active_institution_id'), fn ($q, $id) => $q->where('institution_id', $id))
+            ->firstOrNew([
+                'student_lrn' => $validated['lrn'],
+                'school_year' => HealthConsentForm::currentSchoolYear(),
+            ]);
 
         if (! $form->exists) {
             $form->fill([
@@ -87,6 +93,8 @@ class HealthConsentFormController extends Controller
             return $redirect;
         }
 
+        $this->assertSameInstitution($request, $form);
+
         if ($form->adviser_unread) {
             $form->adviser_unread = false;
             $form->save();
@@ -101,6 +109,8 @@ class HealthConsentFormController extends Controller
         if ($redirect = $this->requireRole($request, ['class_adviser'])) {
             return $redirect;
         }
+
+        $this->assertSameInstitution($request, $form);
 
         if ($form->isLockedForAdviser()) {
             return redirect()->route('consent-forms.show', $form)
@@ -120,6 +130,8 @@ class HealthConsentFormController extends Controller
         if ($redirect = $this->requireRole($request, ['class_adviser'])) {
             return $redirect;
         }
+
+        $this->assertSameInstitution($request, $form);
 
         if ($form->isLockedForAdviser()) {
             return redirect()->route('consent-forms.show', $form)
@@ -204,6 +216,8 @@ class HealthConsentFormController extends Controller
             return $redirect;
         }
 
+        $this->assertSameInstitution($request, $form);
+
         if ($form->status !== HealthConsentForm::STATUS_SIGNED) {
             return redirect()->route('consent-forms.show', $form)
                 ->with('error', 'Only forms signed by the parent can be marked as reviewed.');
@@ -244,6 +258,8 @@ class HealthConsentFormController extends Controller
             return $redirect;
         }
 
+        $this->assertSameInstitution($request, $form);
+
         if (! in_array($form->status, [HealthConsentForm::STATUS_SIGNED, HealthConsentForm::STATUS_REVIEWED], true)) {
             return redirect()->route('consent-forms.nurse-index')
                 ->with('error', 'This form is not yet available.');
@@ -261,6 +277,8 @@ class HealthConsentFormController extends Controller
         if ($redirect = $this->requireRole($request, ['class_adviser', 'school_nurse', 'clinic_staff'])) {
             return $redirect;
         }
+
+        $this->assertSameInstitution($request, $form);
 
         return view('consent-forms.print', ['form' => $form]);
     }
@@ -309,5 +327,16 @@ class HealthConsentFormController extends Controller
         }
 
         return null;
+    }
+
+    /** Forms are never visible across schools, even via a direct URL. */
+    private function assertSameInstitution(Request $request, HealthConsentForm $form): void
+    {
+        $institutionId = $request->session()->get('active_institution_id');
+
+        abort_if(
+            $institutionId && $form->institution_id && (int) $form->institution_id !== (int) $institutionId,
+            404
+        );
     }
 }

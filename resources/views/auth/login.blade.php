@@ -657,6 +657,20 @@
                 </div>
             </div>
 
+            @if (session('school_choices'))
+                <div class="field">
+                    <label for="institution_id">School</label>
+                    <select id="institution_id" name="institution_id" required class="control">
+                        <option value="">Select your school</option>
+                        @foreach (session('school_choices') as $institutionId => $schoolName)
+                            <option value="{{ $institutionId }}" {{ (string) old('institution_id') === (string) $institutionId ? 'selected' : '' }}>
+                                {{ $schoolName }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+            @endif
+
             <label class="remember">
                 <input type="checkbox" id="remember" name="remember" {{ old('remember') ? 'checked' : '' }}>
                 Keep me signed in for 30 days

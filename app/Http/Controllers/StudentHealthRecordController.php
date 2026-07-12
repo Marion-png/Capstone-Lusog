@@ -15,15 +15,16 @@ class StudentHealthRecordController extends Controller
     {
         if ($request->session()->get('active_role') !== 'class_adviser') {
             $roleRoutes = [
-                'school_nurse'  => 'dashboard.school-nurse',
-                'clinic_staff'  => 'dashboard.clinic-staff',
-                'school_head'   => 'dashboard.school-head',
-                'feeding_coor'  => 'dashboard.feedingcor-dashboard',
-                'nutricor'      => 'dashboard.nutricor-dashboard',
-                'system_admin'  => 'dashboard.system-admin',
+                'school_nurse' => 'dashboard.school-nurse',
+                'clinic_staff' => 'dashboard.clinic-staff',
+                'school_head' => 'dashboard.school-head',
+                'feeding_coor' => 'dashboard.feedingcor-dashboard',
+                'nutricor' => 'dashboard.nutricor-dashboard',
+                'system_admin' => 'dashboard.system-admin',
             ];
             $role = (string) $request->session()->get('active_role', '');
             $route = $roleRoutes[$role] ?? 'dashboard.school-nurse';
+
             return redirect()->route($route);
         }
 
@@ -50,6 +51,7 @@ class StudentHealthRecordController extends Controller
         $flaggedCount = $records
             ->filter(function (StudentHealthRecord $record): bool {
                 $status = strtolower((string) $record->nutritional_status);
+
                 return str_contains($status, 'wast');
             })
             ->count();
@@ -57,7 +59,8 @@ class StudentHealthRecordController extends Controller
         $lrnsWithCertificates = [];
         if (Schema::hasTable('student_health_conditions') && Schema::hasTable('medical_certificates')) {
             $lrnsWithCertificates = array_flip(
-                StudentHealthRecord::whereHas('healthConditions.certificates')
+                StudentHealthRecord::forActiveInstitution()
+                    ->whereHas('healthConditions.certificates')
                     ->pluck('student_id')
                     ->toArray()
             );
@@ -82,7 +85,7 @@ class StudentHealthRecordController extends Controller
     {
         $demoLrns = ['100234560201', '100234560202', '100234560203'];
         $existing = $request->session()->get('school_health_card_records', []);
-        $cleaned  = collect($existing)
+        $cleaned = collect($existing)
             ->reject(fn (array $r) => in_array((string) ($r['lrn'] ?? ''), $demoLrns, true))
             ->values()
             ->all();
@@ -108,7 +111,10 @@ class StudentHealthRecordController extends Controller
         if ($schoolName === null && Schema::hasTable('accounts')) {
             $username = strtolower((string) $request->session()->get('active_username', ''));
             if ($username !== '') {
-                $account    = DB::table('accounts')->whereRaw('LOWER(TRIM(username)) = ?', [$username])->first();
+                $account = DB::table('accounts')
+                    ->whereRaw('LOWER(TRIM(username)) = ?', [$username])
+                    ->when($request->session()->get('active_institution_id'), fn ($q, $id) => $q->where('institution_id', $id))
+                    ->first();
                 $schoolName = $account?->school_name ?? null;
             }
         }
@@ -203,18 +209,19 @@ class StudentHealthRecordController extends Controller
         $sessionAtRiskRecords = collect($request->session()->get('school_health_card_records', []))
             ->filter(function (array $row): bool {
                 $status = strtolower((string) ($row['nutritional_status_bmi_for_age'] ?? ''));
+
                 return str_contains($status, 'wasted') || str_contains($status, 'underweight');
             })
             ->map(function (array $row): object {
                 $middle = trim((string) ($row['middle_name'] ?? ''));
-                $middleInitial = $middle !== '' ? (' ' . strtoupper(substr($middle, 0, 1)) . '.') : '';
-                $fullName = trim((string) ($row['last_name'] ?? '') . ', ' . (string) ($row['first_name'] ?? '') . $middleInitial);
+                $middleInitial = $middle !== '' ? (' '.strtoupper(substr($middle, 0, 1)).'.') : '';
+                $fullName = trim((string) ($row['last_name'] ?? '').', '.(string) ($row['first_name'] ?? '').$middleInitial);
 
                 $baselineStatus = (string) ($row['nutritional_status_bmi_for_age'] ?? '');
                 $baselineBmi = is_numeric($row['bmi_value'] ?? null) ? (float) $row['bmi_value'] : null;
 
                 $endlineBmiRaw = data_get($row, 'endline_snapshot.bmi_value');
-                if (!is_numeric($endlineBmiRaw)) {
+                if (! is_numeric($endlineBmiRaw)) {
                     $endlineWeight = data_get($row, 'endline_snapshot.weight_kg');
                     $heightCm = $row['height_cm'] ?? null;
                     if (is_numeric($endlineWeight) && is_numeric($heightCm) && (float) $heightCm > 0) {
@@ -225,7 +232,7 @@ class StudentHealthRecordController extends Controller
 
                 return (object) [
                     'student_name' => $fullName !== '' ? $fullName : ((string) ($row['first_name'] ?? 'Unknown Student')),
-                    'section' => trim((string) ($row['grade_level'] ?? '') . ' / ' . (string) ($row['section'] ?? '')),
+                    'section' => trim((string) ($row['grade_level'] ?? '').' / '.(string) ($row['section'] ?? '')),
                     'baseline_bmi_value' => $baselineBmi,
                     'baseline_nutritional_status' => $baselineStatus,
                     'endline_bmi_value' => is_numeric($endlineBmiRaw) ? (float) $endlineBmiRaw : null,

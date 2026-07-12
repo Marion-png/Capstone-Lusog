@@ -76,22 +76,28 @@ Route::post('/account-request', function (Request $request) {
 
     $username = strtolower(trim($validated['username']));
 
+    // Usernames are unique per school: the same teacher may register a
+    // separate account for each school they work in.
+    $requestedInstitutionId = in_array($role, $scopedRoles, true) ? ((int) $validated['institution_id']) : null;
+
     $alreadyPending = Schema::hasTable('account_requests') && DB::table('account_requests')
         ->whereRaw('LOWER(TRIM(username)) = ?', [$username])
+        ->where('institution_id', $requestedInstitutionId)
         ->where('status', 'pending')
         ->exists();
 
     $alreadyApproved = Schema::hasTable('accounts') && DB::table('accounts')
         ->whereRaw('LOWER(TRIM(username)) = ?', [$username])
+        ->where('institution_id', $requestedInstitutionId)
         ->exists();
 
     if ($alreadyPending || $alreadyApproved) {
         return back()
-            ->withErrors(['username' => 'A request or account with this username already exists.'])
+            ->withErrors(['username' => 'A request or account with this username already exists for the selected school.'])
             ->withInput();
     }
 
-    $institutionId = in_array($role, $scopedRoles, true) ? ((int) $validated['institution_id']) : null;
+    $institutionId = $requestedInstitutionId;
     $institution   = $institutionId ? Institution::find($institutionId) : null;
 
     DB::table('account_requests')->insert([
@@ -247,8 +253,11 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/{decision}', function
     }
 
     if (Schema::hasTable('deworming_requests')) {
+        $institutionId = $request->session()->get('active_institution_id');
+
         $exists = DB::table('deworming_requests')
             ->where('id', $requestId)
+            ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
             ->exists();
 
         if (!$exists) {
@@ -257,6 +266,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/{decision}', function
 
         DB::table('deworming_requests')
             ->where('id', $requestId)
+            ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
             ->update([
                 'status' => 'approved',
                 'reviewed_at' => now(),
@@ -296,8 +306,11 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/comment', function (R
     ]);
 
     if (Schema::hasTable('deworming_requests')) {
+        $institutionId = $request->session()->get('active_institution_id');
+
         $exists = DB::table('deworming_requests')
             ->where('id', $requestId)
+            ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
             ->exists();
 
         if (!$exists) {
@@ -306,6 +319,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/comment', function (R
 
         DB::table('deworming_requests')
             ->where('id', $requestId)
+            ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
             ->update([
                 'status' => 'commented',
                 'nurse_comment' => trim((string) $validated['nurse_comment']),
@@ -687,18 +701,20 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
     }
 
     $username = strtolower(trim($validated['username']));
+    $institutionId = in_array($role, $scopedRoles, true) ? ((int) $validated['institution_id']) : null;
 
+    // Usernames are unique per school, not globally — one account per school.
     $alreadyExists = Schema::hasTable('accounts') && DB::table('accounts')
         ->whereRaw('LOWER(TRIM(username)) = ?', [$username])
+        ->where('institution_id', $institutionId)
         ->exists();
 
     if ($alreadyExists) {
         return back()
-            ->withErrors(['username' => 'An account with this username already exists.'])
+            ->withErrors(['username' => 'An account with this username already exists for the selected school.'])
             ->withInput();
     }
 
-    $institutionId = in_array($role, $scopedRoles, true) ? ((int) $validated['institution_id']) : null;
     $institution   = $institutionId ? Institution::find($institutionId) : null;
 
     DB::table('accounts')->insert([
@@ -737,6 +753,7 @@ Route::post('/dashboard/system-admin/requests/{requestId}/approve', function (Re
 
     $alreadyExists = Schema::hasTable('accounts') && DB::table('accounts')
         ->whereRaw('LOWER(TRIM(username)) = ?', [$username])
+        ->where('institution_id', $target->institution_id ?? null)
         ->exists();
 
     if (!$alreadyExists && Schema::hasTable('accounts')) {
@@ -829,21 +846,47 @@ Route::post('/login', function (Request $request) {
             ->with('error', 'Account was not found. Please submit a Create Account request first.');
     }
 
-    if ($matchingAccounts->count() > 1) {
-        return back()
-            ->withInput()
-            ->with('error', 'Multiple roles are linked to this username. Contact System Admin to keep one unique role per username.');
-    }
+    // The same username may exist in several schools (one separate account per
+    // school). Keep only the accounts whose password matches, then require a
+    // school choice if more than one remains.
+    $candidates = $matchingAccounts
+        ->filter(function (array $account) use ($request) {
+            $passwordHash = (string) ($account['password_hash'] ?? '');
 
-    $account = $matchingAccounts->first();
-    $role = (string) ($account['role'] ?? '');
-    $passwordHash = (string) ($account['password_hash'] ?? '');
+            return $passwordHash === '' || Hash::check((string) $request->input('password'), $passwordHash);
+        })
+        ->values();
 
-    if ($passwordHash !== '' && !Hash::check((string) $request->input('password'), $passwordHash)) {
+    if ($candidates->isEmpty()) {
         return back()
             ->withInput(['email' => $request->input('email')])
             ->with('error', 'Invalid username or password.');
     }
+
+    if ($candidates->count() > 1) {
+        $selectedInstitutionId = $request->input('institution_id');
+
+        if ($selectedInstitutionId) {
+            $candidates = $candidates
+                ->filter(fn (array $a) => (string) ($a['institution_id'] ?? '') === (string) $selectedInstitutionId)
+                ->values();
+        }
+
+        if ($candidates->count() !== 1) {
+            $schoolChoices = $matchingAccounts
+                ->filter(fn (array $a) => ! empty($a['institution_id']))
+                ->mapWithKeys(fn (array $a) => [(string) $a['institution_id'] => (string) ($a['school_name'] ?? 'School #'.$a['institution_id'])])
+                ->all();
+
+            return back()
+                ->withInput(['email' => $request->input('email')])
+                ->with('school_choices', $schoolChoices)
+                ->with('error', 'This username has an account in more than one school. Please select your school and sign in again.');
+        }
+    }
+
+    $account = $candidates->first();
+    $role = (string) ($account['role'] ?? '');
 
     if ($role === 'class_adviser') {
         $request->session()->put('assigned_grade_level', $account['assigned_grade_level'] ?? null);

@@ -57,7 +57,9 @@
         </a>
         @php
             $cfUnread = \Illuminate\Support\Facades\Schema::hasTable('health_consent_forms')
-                ? \App\Models\HealthConsentForm::where('adviser_unread', true)->count()
+                ? \App\Models\HealthConsentForm::where('adviser_unread', true)
+                    ->when(session('active_institution_id'), fn ($q, $id) => $q->where('institution_id', $id))
+                    ->count()
                 : 0;
         @endphp
         <a href="{{ route('consent-forms.index') }}" class="sb-link">
