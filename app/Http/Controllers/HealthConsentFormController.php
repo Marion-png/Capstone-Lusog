@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\HealthConsentForm;
+use App\Support\StudentRosterSync;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -286,6 +287,10 @@ class HealthConsentFormController extends Controller
     /** Students of the adviser's assigned class, normalized for this module. */
     private function assignedStudents(Request $request)
     {
+        // Rebuild the roster from the database so the list survives session
+        // expiry, re-login, and server restarts.
+        StudentRosterSync::syncToSession($request);
+
         $grade = (string) $request->session()->get('assigned_grade_level', '');
         $section = (string) $request->session()->get('assigned_section', '');
 

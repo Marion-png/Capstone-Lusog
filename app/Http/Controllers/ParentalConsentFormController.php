@@ -4,11 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
+use App\Support\EncryptedFileStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ParentalConsentFormController extends Controller
 {
@@ -67,8 +68,7 @@ class ParentalConsentFormController extends Controller
         if ($request->hasFile('consent')) {
             $file = $request->file('consent');
             $originalName = $file->getClientOriginalName();
-            $safeName = time().'_'.preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
-            $path = $file->storeAs('parental-consents/'.$record->id, $safeName, 'local');
+            $path = EncryptedFileStorage::store($file, 'parental-consents/'.$record->id);
         }
 
         ParentalConsentForm::create([
@@ -170,7 +170,7 @@ class ParentalConsentFormController extends Controller
      * Serve a consent form file for download.
      * Restricted to school_nurse and clinic_staff.
      */
-    public function download(Request $request, int $id): StreamedResponse
+    public function download(Request $request, int $id): Response
     {
         abort_unless(
             in_array($request->session()->get('active_role'), ['clinic_staff', 'school_nurse'], true),
@@ -197,6 +197,6 @@ class ParentalConsentFormController extends Controller
             'Consent form file not found on disk.'
         );
 
-        return Storage::disk('local')->response($form->file_path, $form->file_original_name, [], 'inline');
+        return EncryptedFileStorage::response($form->file_path, $form->file_original_name, 'inline');
     }
 }

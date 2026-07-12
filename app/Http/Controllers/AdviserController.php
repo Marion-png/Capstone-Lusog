@@ -117,7 +117,7 @@ class AdviserController extends Controller
         $nutritionalStatusBmiForAge = $this->classifyBmiForAge($bmi, $age);
         $nutritionalStatusHeightForAge = $this->classifyHeightForAge($heightCm, $age);
 
-        $records[] = [
+        $sessionRow = [
             'last_name' => $validated['last_name'],
             'first_name' => $validated['first_name'],
             'middle_name' => $validated['middle_name'] ?? null,
@@ -144,6 +144,7 @@ class AdviserController extends Controller
             'examination' => [],
         ];
 
+        $records[] = $sessionRow;
         $request->session()->put('school_health_card_records', $records);
 
         if (Schema::hasTable('student_health_records')) {
@@ -160,10 +161,17 @@ class AdviserController extends Controller
 
             $sectionLabel = trim((string) $validated['grade_level'] . ' / ' . (string) $validated['section']);
 
+            // Persist the full adviser entry so the roster can be rebuilt after
+            // session loss or a server restart. Examination data lives in its
+            // own column, so it is excluded here.
+            $details = $sessionRow;
+            unset($details['examination']);
+
             $payload = [
                 'institution_id' => $request->session()->get('active_institution_id'),
                 'student_name' => $studentName,
                 'section' => $sectionLabel !== '' ? $sectionLabel : (string) $validated['section'],
+                'student_details' => $details,
                 'weight' => (float) $validated['weight_kg'],
                 'bmi_value' => $bmi,
                 'nutritional_status' => $nutritionalStatusBmiForAge,
@@ -184,7 +192,10 @@ class AdviserController extends Controller
             $payload = array_intersect_key($payload, $existingColumns);
 
             StudentHealthRecord::query()->updateOrCreate(
-                ['student_id' => (string) $validated['lrn']],
+                [
+                    'student_id' => (string) $validated['lrn'],
+                    'institution_id' => $request->session()->get('active_institution_id'),
+                ],
                 $payload
             );
         }

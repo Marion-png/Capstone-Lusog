@@ -24,6 +24,15 @@ php artisan migrate:fresh --seed   # reset DB and seed conditions
 
 ## Architecture
 
+### Student Roster Persistence (invariant)
+
+Adviser-entered student data must survive session expiry, re-login, and server restarts. The database is the source of truth; `session('school_health_card_records')` is only a working copy:
+
+- `AdviserController::store` persists the **full** entry (names, birth date, guardian, address, contact, gender, ...) into the encrypted `student_health_records.student_details` JSON column, alongside the nutrition summary columns.
+- `App\Support\StudentRosterSync::syncToSession()` rebuilds the session roster from the DB (scoped to the active institution) and is called by the adviser dashboard, the consent-forms module, and the nurse queue. Any new page that reads `school_health_card_records` must call it first.
+- Never treat the session as the only store for new student-entered fields — persist them in `student_details` too.
+- `AdviserRosterPersistenceTest` guards this invariant; keep it passing.
+
 ### Authentication — Session-Only, No Laravel Auth
 
 This app does **not** use `Laravel\Auth` or the `users` table for login. Authentication is entirely session-based:
@@ -66,6 +75,28 @@ All routes are inline closures or controller actions in `routes/web.php` — no 
 - **Session storage:** `SESSION_DRIVER=file`. Session data is in `storage/framework/sessions/`.
 - Some data (deworming requests, account lists) falls back to session when DB tables don't exist — the controllers check `Schema::hasTable()` before querying.
 - **Uploaded files** (medical certificates, parental consent forms) are stored in `storage/app/private/` using Laravel's `private` disk.
+
+### Encryption at Rest (invariant)
+
+All personal and sensitive personal information (student names, contact details, medical/health data, consent answers, signatures) is encrypted at rest with AES-256 keyed by `APP_KEY`. Rules to preserve in every change:
+
+- Sensitive model attributes use the custom casts in `App\Casts` — `EncryptedString`, `EncryptedArray`, `EncryptedBoolean`. They always encrypt on write but tolerate legacy plaintext on read (falling back to the raw value instead of throwing `DecryptException`), so pre-encryption rows and empty-string defaults never 500 a page. Do **not** use Laravel's built-in `encrypted` casts here — they throw on plaintext. See the `$casts` arrays on `StudentHealthRecord`, `Consultation`, `StudentHealthCondition`, `MedicalCertificate`, `ParentalConsentForm`, `HealthAssessment`, and `HealthConsentForm` for the authoritative field lists.
+- **Never reference an encrypted column in SQL** — no `WHERE`, `ORDER BY`, `GROUP BY`, `DISTINCT`, or aggregate on it. Fetch first, then filter/sort/group on the decrypted collection in PHP. Lookup keys deliberately left plain: `student_id` (LRN), `student_lrn`, `school_name`, `section`, `school_year`, `token`, `status`, `institution_id`, `is_at_risk`, `attendance_sessions_count`.
+- Uploaded documents (medical certificates, signed consent scans) are stored encrypted via `App\Support\EncryptedFileStorage` — use it for any new upload/download, never `storeAs()` + `Storage::response()` directly.
+- Sessions are encrypted (`SESSION_ENCRYPT=true`) because adviser-entered student data (addresses, guardians, phone numbers) lives in the session.
+- Losing `APP_KEY` means losing the data — treat it as a production secret and never rotate it without re-encrypting (see `2026_07_12_000003_encrypt_existing_sensitive_data.php` for the in-place re-encryption pattern).
+- `EncryptionAtRestTest` guards this invariant; keep it passing.
+
+### Audit Trail (invariant)
+
+Every access and action on personal/sensitive personal information is logged to the append-only `audit_logs` table for forensic investigation. Rules to preserve:
+
+- Models holding sensitive data use the `App\Models\Concerns\Auditable` trait — it logs created/updated/deleted with field-level old/new values in the encrypted `details` column. Any new model with personal data must add the trait.
+- `App\Http\Middleware\AuditSensitiveAccess` logs page views, API reads, and document downloads on sensitive URL patterns — add new sensitive URL prefixes to its `SENSITIVE_PATTERNS` list.
+- Actions that bypass Eloquent (raw `DB::table` writes, e.g. the account routes) must call `App\Support\AuditTrail::record()` explicitly.
+- Login, failed login, and logout events are recorded in the login/logout routes.
+- Audit entries are evidence: never update or delete `audit_logs` rows from application code (`AuditLog` has no updated_at and no edit path). The System Admin views them at `/dashboard/system-admin/audit-logs`.
+- `AuditTrailTest` guards this invariant; keep it passing.
 
 ### Multi-School Data Separation (invariant)
 

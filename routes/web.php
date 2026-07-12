@@ -19,6 +19,7 @@ use App\Models\Consultation;
 use App\Models\Institution;
 use App\Models\Medicine;
 use App\Models\StudentHealthRecord;
+use App\Support\AuditTrail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -99,6 +100,8 @@ Route::post('/account-request', function (Request $request) {
 
     $institutionId = $requestedInstitutionId;
     $institution   = $institutionId ? Institution::find($institutionId) : null;
+
+    AuditTrail::record('created', 'AccountRequest', null, "Account request submitted for username '{$username}' ({$role})");
 
     DB::table('account_requests')->insert([
         'id'                   => (string) str()->uuid(),
@@ -399,11 +402,16 @@ Route::get('/dashboard/clinic-staff', function () {
         if ($institutionId) {
             $q->where('institution_id', $institutionId);
         }
+        // student_name is encrypted at rest, so the tiebreak sort happens in PHP.
         $atRiskStudents = $q
             ->orderByDesc('attendance_sessions_count')
-            ->orderBy('student_name')
+            ->get()
+            ->sortBy([
+                ['attendance_sessions_count', 'desc'],
+                ['student_name', 'asc'],
+            ])
             ->take(8)
-            ->get();
+            ->values();
     }
 
     return view('dashboard.clinic-staff', [
@@ -674,6 +682,39 @@ Route::get('/dashboard/system-admin', function () {
     ]);
 })->name('dashboard.system-admin');
 
+Route::get('/dashboard/system-admin/audit-logs', function (Request $request) {
+    if ($request->session()->get('active_role') !== 'system_admin') {
+        return redirect()
+            ->route('login')
+            ->with('error', 'Only System Admin can view the audit trail.');
+    }
+
+    $filterAction = trim((string) $request->query('action', ''));
+    $filterUsername = trim((string) $request->query('username', ''));
+
+    $hasTable = Schema::hasTable('audit_logs');
+
+    $logs = $hasTable
+        ? \App\Models\AuditLog::query()
+            ->when($filterAction !== '', fn ($q) => $q->where('action', $filterAction))
+            ->when($filterUsername !== '', fn ($q) => $q->where('actor_username', 'like', "%{$filterUsername}%"))
+            ->orderByDesc('id')
+            ->limit(200)
+            ->get()
+        : collect();
+
+    $actions = $hasTable
+        ? \App\Models\AuditLog::query()->select('action')->distinct()->orderBy('action')->pluck('action')
+        : collect();
+
+    return view('dashboard.system-admin-audit-logs', [
+        'logs' => $logs,
+        'actions' => $actions,
+        'filterAction' => $filterAction,
+        'filterUsername' => $filterUsername,
+    ]);
+})->name('dashboard.system-admin.audit-logs');
+
 Route::post('/dashboard/system-admin/accounts', function (Request $request) {
     if ($request->session()->get('active_role') !== 'system_admin') {
         return redirect()
@@ -716,6 +757,8 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
     }
 
     $institution   = $institutionId ? Institution::find($institutionId) : null;
+
+    AuditTrail::record('created', 'Account', null, "System Admin created account '{$username}' ({$role})");
 
     DB::table('accounts')->insert([
         'name'                 => $validated['name'],
@@ -777,6 +820,8 @@ Route::post('/dashboard/system-admin/requests/{requestId}/approve', function (Re
         'updated_at' => now(),
     ]);
 
+    AuditTrail::record('approved', 'AccountRequest', null, "Approved account request for username '{$username}' ({$role})");
+
     return back()->with('success', 'Account request approved and account created.');
 })->name('dashboard.system-admin.requests.approve');
 
@@ -801,6 +846,8 @@ Route::post('/dashboard/system-admin/requests/{requestId}/decline', function (Re
         'updated_at' => now(),
     ]);
 
+    AuditTrail::record('declined', 'AccountRequest', null, "Declined account request for username '".strtolower(trim((string) ($target->username ?? '')))."'");
+
     return back()->with('success', 'Account request declined.');
 })->name('dashboard.system-admin.requests.decline');
 
@@ -819,6 +866,8 @@ Route::post('/health-records', function (Request $request) {
 })->name('health-records.store');
 
 Route::post('/logout', function (Request $request) {
+    AuditTrail::record('logout', null, null, 'Logged out');
+
     Auth::logout();
 
     $request->session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name', 'active_role', 'active_name', 'active_username', 'active_school_name', 'active_institution_id']);
@@ -841,6 +890,8 @@ Route::post('/login', function (Request $request) {
     );
 
     if ($matchingAccounts->isEmpty()) {
+        AuditTrail::record('login_failed', null, null, "Failed login: username '{$username}' not found");
+
         return back()
             ->withInput()
             ->with('error', 'Account was not found. Please submit a Create Account request first.');
@@ -858,6 +909,8 @@ Route::post('/login', function (Request $request) {
         ->values();
 
     if ($candidates->isEmpty()) {
+        AuditTrail::record('login_failed', null, null, "Failed login: wrong password for username '{$username}'");
+
         return back()
             ->withInput(['email' => $request->input('email')])
             ->with('error', 'Invalid username or password.');
@@ -902,6 +955,8 @@ Route::post('/login', function (Request $request) {
     $request->session()->put('active_school_name', $account['school_name'] ?? null);
     $request->session()->put('active_institution_id', $account['institution_id'] ?? null);
 
+    AuditTrail::record('login', null, null, "Logged in as '{$username}' ({$role})");
+
     $routeByRole = [
         'school_nurse' => 'dashboard.school-nurse',
         'clinic_staff' => 'dashboard.clinic-staff',
@@ -925,6 +980,8 @@ Route::post('/admin-login', function (Request $request) {
     $expectedPassword = (string) env('SYSTEM_ADMIN_PASSWORD', 'admin123');
 
     if ($validated['username'] !== $expectedUsername || $validated['password'] !== $expectedPassword) {
+        AuditTrail::record('login_failed', null, null, "Failed System Admin login attempt for username '{$validated['username']}'");
+
         return back()
             ->withInput(['username' => $validated['username']])
             ->with('error', 'Invalid System Admin credentials.');
@@ -934,6 +991,8 @@ Route::post('/admin-login', function (Request $request) {
     $request->session()->put('active_name', 'System Admin');
     $request->session()->put('active_username', $validated['username']);
     $request->session()->forget(['assigned_grade_level', 'assigned_section']);
+
+    AuditTrail::record('login', null, null, "System Admin logged in");
 
     return redirect()->route('dashboard.system-admin');
 })->name('admin.login.submit');

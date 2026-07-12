@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
+use App\Support\StudentRosterSync;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,10 @@ class StudentHealthRecordController extends Controller
 
         $this->stripLegacyDemoRows($request);
         $this->ensureAssignedSchoolName($request);
+
+        // Rebuild the roster from the database so adviser-entered students
+        // survive session expiry, re-login, and server restarts.
+        StudentRosterSync::syncToSession($request);
 
         $records = collect();
 
@@ -203,7 +208,11 @@ class StudentHealthRecordController extends Controller
             if ($institutionId) {
                 $q->where('institution_id', $institutionId);
             }
-            $records = $q->orderBy('section')->orderBy('student_name')->get();
+            // student_name is encrypted at rest, so sorting happens in PHP.
+            $records = $q->get()->sortBy([
+                ['section', 'asc'],
+                ['student_name', 'asc'],
+            ])->values();
         }
 
         $sessionAtRiskRecords = collect($request->session()->get('school_health_card_records', []))

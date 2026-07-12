@@ -91,18 +91,22 @@ class NutritionCoordinatorController extends Controller
 
     private function records(): Collection
     {
-        if (!Schema::hasTable('student_health_records')) {
+        if (! Schema::hasTable('student_health_records')) {
             return collect();
         }
 
         $institutionId = session('active_institution_id');
 
+        // student_name is encrypted at rest, so the final sort happens in PHP.
         return StudentHealthRecord::query()
             ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-            ->orderBy('school_name')
-            ->orderBy('section')
-            ->orderBy('student_name')
-            ->get();
+            ->get()
+            ->sortBy([
+                ['school_name', 'asc'],
+                ['section', 'asc'],
+                ['student_name', 'asc'],
+            ])
+            ->values();
     }
 
     private function summary(Collection $records): array
@@ -216,10 +220,10 @@ class NutritionCoordinatorController extends Controller
         $counts = array_fill_keys(array_keys(self::STATUS_LABELS), 0);
 
         foreach ($records as $record) {
-            if ($period === 'baseline' && !$this->hasBaseline($record)) {
+            if ($period === 'baseline' && ! $this->hasBaseline($record)) {
                 continue;
             }
-            if ($period === 'endline' && !$this->hasEndline($record)) {
+            if ($period === 'endline' && ! $this->hasEndline($record)) {
                 continue;
             }
 

@@ -5,11 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\MedicalCertificate;
 use App\Models\StudentHealthCondition;
 use App\Models\StudentHealthRecord;
+use App\Support\EncryptedFileStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class MedicalCertificateController extends Controller
 {
@@ -64,15 +65,19 @@ class MedicalCertificateController extends Controller
             );
         }
 
-        $condition = StudentHealthCondition::firstOrCreate([
-            'student_health_record_id' => $record->id,
-            'condition_name' => trim($validated['condition_name']),
-        ]);
+        // condition_name is encrypted at rest, so deduplication compares in PHP.
+        $conditionName = trim($validated['condition_name']);
+        $condition = StudentHealthCondition::where('student_health_record_id', $record->id)
+            ->get()
+            ->first(fn (StudentHealthCondition $c) => strcasecmp($c->condition_name, $conditionName) === 0)
+            ?? StudentHealthCondition::create([
+                'student_health_record_id' => $record->id,
+                'condition_name' => $conditionName,
+            ]);
 
         $file = $request->file('certificate');
         $originalName = $file->getClientOriginalName();
-        $safeName = time().'_'.preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
-        $path = $file->storeAs('medical-certificates/'.$record->id, $safeName, 'local');
+        $path = EncryptedFileStorage::store($file, 'medical-certificates/'.$record->id);
 
         MedicalCertificate::create([
             'student_health_condition_id' => $condition->id,
@@ -90,7 +95,7 @@ class MedicalCertificateController extends Controller
      * Serve a certificate file for download.
      * Restricted to clinic_staff only.
      */
-    public function download(Request $request, int $id): StreamedResponse
+    public function download(Request $request, int $id): Response
     {
         abort_unless(
             in_array($request->session()->get('active_role'), ['clinic_staff', 'school_nurse'], true),
@@ -115,10 +120,7 @@ class MedicalCertificateController extends Controller
             'Certificate file not found on disk.'
         );
 
-        return Storage::disk('local')->response(
-            $cert->file_path,
-            $cert->file_original_name
-        );
+        return EncryptedFileStorage::response($cert->file_path, $cert->file_original_name);
     }
 
     /**

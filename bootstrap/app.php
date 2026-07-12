@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AuditSensitiveAccess;
 use App\Http\Middleware\EnsureActiveSession;
 use App\Http\Middleware\InstitutionScope;
 use Illuminate\Foundation\Application;
@@ -17,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->appendToGroup('web', EnsureActiveSession::class);
         $middleware->appendToGroup('web', InstitutionScope::class);
+        $middleware->appendToGroup('web', AuditSensitiveAccess::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (TokenMismatchException $e, Request $request) {

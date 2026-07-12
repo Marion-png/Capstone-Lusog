@@ -24,7 +24,7 @@ class Condition extends Model
             return $query;
         }
 
-        return $query->whereRaw('LOWER(name) LIKE ?', ['%' . strtolower($search) . '%']);
+        return $query->whereRaw('LOWER(name) LIKE ?', ['%'.strtolower($search).'%']);
     }
 
     /**

@@ -2,6 +2,9 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedArray;
+use App\Casts\EncryptedString;
+use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -9,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class StudentHealthRecord extends Model
 {
+    use Auditable;
     use HasFactory;
 
     protected $fillable = [
@@ -17,6 +21,7 @@ class StudentHealthRecord extends Model
         'student_id',
         'school_name',
         'section',
+        'student_details',
         'weight',
         'bmi_value',
         'nutritional_status',
@@ -38,12 +43,33 @@ class StudentHealthRecord extends Model
         'attendance_by_month',
     ];
 
+    /**
+     * Personal and health data is encrypted at rest (AES-256 via APP_KEY).
+     * Columns used in SQL predicates (student_id, school_name, section,
+     * institution_id, is_at_risk, attendance_sessions_count) stay plain —
+     * never move an encrypted column into a WHERE/ORDER BY/GROUP BY.
+     */
     protected $casts = [
+        'student_name' => EncryptedString::class,
+        'weight' => EncryptedString::class,
+        'bmi_value' => EncryptedString::class,
+        'nutritional_status' => EncryptedString::class,
+        'baseline_age' => EncryptedString::class,
+        'baseline_height_cm' => EncryptedString::class,
+        'baseline_weight_kg' => EncryptedString::class,
+        'baseline_bmi_value' => EncryptedString::class,
+        'baseline_nutritional_status' => EncryptedString::class,
+        'endline_age' => EncryptedString::class,
+        'endline_height_cm' => EncryptedString::class,
+        'endline_weight_kg' => EncryptedString::class,
+        'endline_bmi_value' => EncryptedString::class,
+        'endline_nutritional_status' => EncryptedString::class,
         'baseline_recorded_at' => 'date',
         'endline_recorded_at' => 'date',
         'is_at_risk' => 'boolean',
-        'examination' => 'array',
-        'attendance_by_month' => 'array',
+        'examination' => EncryptedArray::class,
+        'attendance_by_month' => EncryptedArray::class,
+        'student_details' => EncryptedArray::class,
     ];
 
     /**

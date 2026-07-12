@@ -50,11 +50,12 @@ class ConsultationTest extends TestCase
 
         $response->assertRedirect(route('dashboard.consultation-log'));
 
-        $this->assertDatabaseHas('consultations', [
-            'student_name' => 'John Doe',
-            'condition' => 'Fever',
-            'condition_id' => $condition->id,
-        ]);
+        // student_name and condition are encrypted at rest — assert via the model.
+        $consultation = Consultation::where('condition_id', $condition->id)->first();
+        $this->assertNotNull($consultation);
+        $this->assertSame('John Doe', $consultation->student_name);
+        $this->assertSame('Fever', $consultation->condition);
+        $this->assertNotSame('John Doe', $consultation->getRawOriginal('student_name'));
     }
 
     /** @test */
@@ -72,10 +73,11 @@ class ConsultationTest extends TestCase
 
         $response->assertRedirect(route('dashboard.consultation-log'));
 
-        $this->assertDatabaseHas('consultations', [
-            'student_name' => 'Jane Doe',
-            'condition' => 'Custom Condition',
-        ]);
+        // student_name and condition are encrypted at rest — assert via the model.
+        $consultation = Consultation::latest('id')->first();
+        $this->assertNotNull($consultation);
+        $this->assertSame('Jane Doe', $consultation->student_name);
+        $this->assertSame('Custom Condition', $consultation->condition);
     }
 
     /** @test */

@@ -128,7 +128,7 @@ class FeedingCoordinatorController extends Controller
 
         $values = $months->map(function (Carbon $month) use ($students, $globalAverage): float {
             $monthRows = $students->filter(function ($row) use ($month): bool {
-                if (!$row->created_at) {
+                if (! $row->created_at) {
                     return false;
                 }
 
@@ -185,14 +185,16 @@ class FeedingCoordinatorController extends Controller
 
                 $present = 0;
                 if ($hasConsultationTable) {
+                    // student_name is encrypted at rest — count distinct students in PHP.
                     $present = Consultation::query()
                         ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
                         ->whereBetween('consulted_at', [$weekStart, $weekEnd])
-                        ->distinct('student_name')
-                        ->count('student_name');
+                        ->pluck('student_name')
+                        ->unique()
+                        ->count();
                 }
 
-                if (!$hasConsultationTable || $present === 0) {
+                if (! $hasConsultationTable || $present === 0) {
                     $present = $totalStudents;
                 }
 
@@ -200,8 +202,9 @@ class FeedingCoordinatorController extends Controller
                 $missed = max(0, $totalStudents - $present);
 
                 $base = max(1, $totalStudents);
+
                 return [
-                    'label' => 'Week ' . (5 - $offset),
+                    'label' => 'Week '.(5 - $offset),
                     'present' => $present,
                     'missed' => $missed,
                     'present_height' => (int) max(8, round(($present / $base) * 136)),

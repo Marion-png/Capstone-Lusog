@@ -107,9 +107,13 @@ class ParentalConsentFormTest extends TestCase
         $this->assertDatabaseHas('parental_consent_forms', [
             'program_type'     => 'Deworming',
             'uploaded_by_name' => 'Test Adviser',
-            'consent_type'     => 'full',
         ]);
-        Storage::disk('local')->assertExists(ParentalConsentForm::first()->file_path);
+
+        // consent_type is encrypted at rest — assert via the model.
+        $form = ParentalConsentForm::first();
+        $this->assertSame('full', $form->consent_type);
+        $this->assertNotSame('full', $form->getRawOriginal('consent_type'));
+        Storage::disk('local')->assertExists($form->file_path);
     }
 
     /** @test */

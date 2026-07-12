@@ -2,11 +2,15 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedArray;
+use App\Casts\EncryptedString;
+use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class HealthConsentForm extends Model
 {
+    use Auditable;
     use HasFactory;
 
     // Workflow statuses
@@ -87,9 +91,26 @@ class HealthConsentForm extends Model
         'created_by_name', 'adviser_unread', 'audit',
     ];
 
+    /**
+     * Student identity, consent answers, health details, and the signature
+     * image are encrypted at rest. token / student_lrn / school_year /
+     * status / institution_id / adviser_unread stay plain — queries filter
+     * on them.
+     */
     protected $casts = [
-        'services' => 'array',
-        'audit' => 'array',
+        'student_name' => EncryptedString::class,
+        'student_address' => EncryptedString::class,
+        'parent_guardian_name' => EncryptedString::class,
+        'consent_choice' => EncryptedString::class,
+        'consent_exceptions' => EncryptedString::class,
+        'refusal_reason' => EncryptedString::class,
+        'allergy_food' => EncryptedString::class,
+        'allergy_medicine' => EncryptedString::class,
+        'prev_immunization' => EncryptedString::class,
+        'other_illness' => EncryptedString::class,
+        'signature' => EncryptedString::class,
+        'services' => EncryptedArray::class,
+        'audit' => EncryptedArray::class,
         'adviser_unread' => 'boolean',
         'sent_at' => 'datetime',
         'signed_at' => 'datetime',

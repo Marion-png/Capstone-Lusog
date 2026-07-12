@@ -19,6 +19,7 @@ class ConsultationController extends Controller
             if ($institutionId) {
                 $q->where('institution_id', $institutionId);
             }
+
             return $q;
         };
 
@@ -27,14 +28,18 @@ class ConsultationController extends Controller
             ->latest('id')
             ->paginate(10);
 
+        // condition is encrypted at rest, so grouping happens in PHP after decryption.
         $topConditionStats = $baseQuery()
-            ->selectRaw('LOWER(condition) as condition_name, COUNT(*) as total')
             ->whereMonth('consulted_at', now()->month)
             ->whereYear('consulted_at', now()->year)
-            ->groupBy('condition_name')
-            ->orderByDesc('total')
-            ->limit(7)
-            ->get();
+            ->pluck('condition')
+            ->map(fn ($condition) => strtolower((string) $condition))
+            ->filter()
+            ->countBy()
+            ->sortDesc()
+            ->take(7)
+            ->map(fn ($total, $conditionName) => (object) ['condition_name' => $conditionName, 'total' => $total])
+            ->values();
 
         $weekStart = now()->startOfWeek();
         $dailyTrend = collect(range(0, 6))->map(function (int $offset) use ($weekStart, $baseQuery): array {
@@ -51,11 +56,11 @@ class ConsultationController extends Controller
         return view('dashboard.consultation-log', [
             'consultations' => $consultations,
             'stats' => [
-                'total'    => $baseQuery()->count(),
-                'month'    => $baseQuery()->whereMonth('consulted_at', now()->month)->whereYear('consulted_at', now()->year)->count(),
-                'week'     => $baseQuery()->whereBetween('consulted_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
-                'today'    => $baseQuery()->whereDate('consulted_at', now()->toDateString())->count(),
-                'referrals'=> $baseQuery()->where('status', 'referred')->count(),
+                'total' => $baseQuery()->count(),
+                'month' => $baseQuery()->whereMonth('consulted_at', now()->month)->whereYear('consulted_at', now()->year)->count(),
+                'week' => $baseQuery()->whereBetween('consulted_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
+                'today' => $baseQuery()->whereDate('consulted_at', now()->toDateString())->count(),
+                'referrals' => $baseQuery()->where('status', 'referred')->count(),
             ],
             'topConditionStats' => $topConditionStats,
             'dailyTrend' => $dailyTrend,
@@ -99,14 +104,14 @@ class ConsultationController extends Controller
         }
 
         Consultation::create([
-            'institution_id'  => $request->session()->get('active_institution_id'),
-            'consulted_at'    => $validated['consulted_at'],
-            'student_name'    => $validated['student_name'],
-            'grade_section'   => $validated['grade_section'],
-            'condition'       => $conditionName,
-            'condition_id'    => $conditionId,
+            'institution_id' => $request->session()->get('active_institution_id'),
+            'consulted_at' => $validated['consulted_at'],
+            'student_name' => $validated['student_name'],
+            'grade_section' => $validated['grade_section'],
+            'condition' => $conditionName,
+            'condition_id' => $conditionId,
             'treatment_given' => $validated['treatment_given'],
-            'status'          => $validated['status'],
+            'status' => $validated['status'],
         ]);
 
         return redirect()

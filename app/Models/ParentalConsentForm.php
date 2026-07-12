@@ -2,12 +2,16 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedBoolean;
+use App\Casts\EncryptedString;
+use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ParentalConsentForm extends Model
 {
+    use Auditable;
     use HasFactory;
 
     protected $fillable = [
@@ -31,12 +35,25 @@ class ParentalConsentForm extends Model
         'uploaded_by_name',
     ];
 
+    /**
+     * Consent decisions and health details are encrypted at rest. Only
+     * program_type / school_year / student_health_record_id remain plain
+     * because queries filter on them.
+     */
     protected $casts = [
-        'allergy_food'        => 'boolean',
-        'allergy_medicine'    => 'boolean',
-        'prev_immunization'   => 'boolean',
-        'has_other_illness'   => 'boolean',
-        'medical_cert_attached' => 'boolean',
+        'consent_type' => EncryptedString::class,
+        'partial_exception' => EncryptedString::class,
+        'refused_reason' => EncryptedString::class,
+        'allergy_food_detail' => EncryptedString::class,
+        'allergy_medicine_detail' => EncryptedString::class,
+        'prev_immunization_detail' => EncryptedString::class,
+        'other_illness_detail' => EncryptedString::class,
+        'file_original_name' => EncryptedString::class,
+        'allergy_food' => EncryptedBoolean::class,
+        'allergy_medicine' => EncryptedBoolean::class,
+        'prev_immunization' => EncryptedBoolean::class,
+        'has_other_illness' => EncryptedBoolean::class,
+        'medical_cert_attached' => EncryptedBoolean::class,
     ];
 
     public function studentHealthRecord(): BelongsTo
@@ -53,9 +70,10 @@ class ParentalConsentForm extends Model
     public static function currentSchoolYear(): string
     {
         $month = (int) now()->format('n');
-        $year  = (int) now()->format('Y');
+        $year = (int) now()->format('Y');
+
         return $month >= 6
-            ? "{$year}-" . ($year + 1)
-            : ($year - 1) . "-{$year}";
+            ? "{$year}-".($year + 1)
+            : ($year - 1)."-{$year}";
     }
 }

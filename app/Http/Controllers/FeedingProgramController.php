@@ -61,10 +61,11 @@ class FeedingProgramController extends Controller
                 $studentsQuery->where('school_name', $selectedSchool);
             }
 
+            // student_name is encrypted at rest, so sorting happens in PHP.
             $students = $studentsQuery
-                ->orderBy('student_name')
                 ->get()
                 ->filter(fn (StudentHealthRecord $record): bool => $this->isAttendanceEligible($record->nutritional_status))
+                ->sortBy('student_name')
                 ->values();
         }
 

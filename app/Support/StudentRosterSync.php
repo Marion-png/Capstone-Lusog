@@ -1,0 +1,114 @@
+<?php
+
+namespace App\Support;
+
+use App\Models\StudentHealthRecord;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Rebuilds the session roster (`school_health_card_records`) from the
+ * database, so adviser- and nurse-facing pages survive session expiry,
+ * re-login, and server restarts. The database is the source of truth;
+ * the session is only a working copy. Records from other institutions
+ * are never added.
+ */
+class StudentRosterSync
+{
+    public static function syncToSession(Request $request): void
+    {
+        $institutionId = $request->session()->get('active_institution_id');
+
+        if (! $institutionId || ! Schema::hasTable('student_health_records')) {
+            return;
+        }
+
+        $existing = collect($request->session()->get('school_health_card_records', []));
+        $sessionLrns = $existing
+            ->pluck('lrn')
+            ->filter()
+            ->map(fn ($v) => (string) $v)
+            ->flip();
+
+        $dbRecords = StudentHealthRecord::query()
+            ->where('institution_id', $institutionId)
+            ->get();
+
+        $toAdd = [];
+        foreach ($dbRecords as $record) {
+            $lrn = (string) $record->student_id;
+
+            if ($sessionLrns->has($lrn)) {
+                continue;
+            }
+
+            $toAdd[] = self::buildSessionRow($record, $lrn);
+        }
+
+        if (! empty($toAdd)) {
+            $request->session()->put(
+                'school_health_card_records',
+                array_merge($existing->all(), $toAdd)
+            );
+        }
+    }
+
+    private static function buildSessionRow(StudentHealthRecord $record, string $lrn): array
+    {
+        // Records saved with the full adviser entry restore every field
+        // (birth date, guardian, address, contact, gender, ...).
+        $row = is_array($record->student_details) ? $record->student_details : [];
+
+        if ($row === []) {
+            $row = self::rowFromLegacyColumns($record);
+        }
+
+        $row['lrn'] = $lrn;
+        // Nurse examination and feeding attendance live in their own columns.
+        $row['examination'] = $record->examination ?? [];
+        $row['attendance_by_month'] = $record->attendance_by_month ?? [];
+
+        return $row;
+    }
+
+    /**
+     * Older rows only stored the nutrition summary, so the roster entry is
+     * reconstructed from "LastName, FirstName Middle" and "Grade X / Section".
+     */
+    private static function rowFromLegacyColumns(StudentHealthRecord $record): array
+    {
+        $name = (string) $record->student_name;
+        $lastName = $name;
+        $firstName = '';
+        $middleName = '';
+
+        $commaPos = strpos($name, ', ');
+        if ($commaPos !== false) {
+            $lastName = substr($name, 0, $commaPos);
+            $rest = substr($name, $commaPos + 2);
+            $spacePos = strpos($rest, ' ');
+            if ($spacePos !== false) {
+                $firstName = substr($rest, 0, $spacePos);
+                $middleName = substr($rest, $spacePos + 1);
+            } else {
+                $firstName = $rest;
+            }
+        }
+
+        $sectionParts = explode(' / ', (string) $record->section, 2);
+
+        return [
+            'last_name' => $lastName,
+            'first_name' => $firstName,
+            'middle_name' => $middleName,
+            'grade_level' => $sectionParts[0] ?? (string) $record->section,
+            'section' => $sectionParts[1] ?? '',
+            'height_cm' => $record->baseline_height_cm,
+            'weight_kg' => $record->baseline_weight_kg,
+            'age' => $record->baseline_age,
+            'bmi_value' => $record->bmi_value,
+            'nutritional_status_bmi_for_age' => $record->nutritional_status,
+            'nutritional_status_height_for_age' => null,
+        ];
+    }
+}
