@@ -266,4 +266,141 @@ class HealthAssessmentController extends Controller
             'examiner_signature' => $assessment->examiner_signature,
         ]);
     }
+
+    /** Adviser: list of assigned students with their MLHAT status. */
+    public function index(Request $request)
+    {
+        if ($redirect = $this->requirePageRole($request, ['class_adviser'])) {
+            return $redirect;
+        }
+
+        $students = $this->assignedStudents($request);
+        $schoolYear = HealthAssessment::currentSchoolYear();
+
+        $records = Schema::hasTable('student_health_records')
+            ? StudentHealthRecord::whereIn('student_id', $students->pluck('lrn')->filter()->values())->get()->keyBy('student_id')
+            : collect();
+
+        $assessments = Schema::hasTable('health_assessments')
+            ? HealthAssessment::whereIn('student_health_record_id', $records->pluck('id'))
+                ->where('school_year', $schoolYear)
+                ->get()
+                ->keyBy('student_health_record_id')
+            : collect();
+
+        return view('health-assessments.index', [
+            'students' => $students,
+            'records' => $records,
+            'assessments' => $assessments,
+            'schoolYear' => $schoolYear,
+        ]);
+    }
+
+    /** Adviser: open the full MLHAT form for one student (new or edit). */
+    public function form(Request $request, string $lrn)
+    {
+        if ($redirect = $this->requirePageRole($request, ['class_adviser'])) {
+            return $redirect;
+        }
+
+        $student = $this->assignedStudents($request)
+            ->first(fn ($row) => (string) ($row['lrn'] ?? '') === $lrn);
+
+        if (! $student) {
+            return redirect()->route('health-assessments.index')
+                ->with('error', 'Student not found in your assigned class.');
+        }
+
+        $record = StudentHealthRecord::where('student_id', $lrn)->first();
+
+        if (! $record) {
+            return redirect()->route('health-assessments.index')
+                ->with('error', 'Submit this student\'s School Health Card first — the assessment attaches to that record.');
+        }
+
+        $assessment = HealthAssessment::forStudent($record->id, HealthAssessment::currentSchoolYear());
+
+        return view('health-assessments.form', [
+            'student' => $student,
+            'record' => $record,
+            'assessment' => $assessment,
+            'schoolYear' => HealthAssessment::currentSchoolYear(),
+        ]);
+    }
+
+    /** Read-only view of a submitted assessment (adviser, nurse, clinic staff). */
+    public function show(Request $request, HealthAssessment $assessment)
+    {
+        if ($redirect = $this->requirePageRole($request, ['class_adviser', 'school_nurse', 'clinic_staff'])) {
+            return $redirect;
+        }
+
+        $assessment->load('studentHealthRecord');
+
+        return view('health-assessments.show', [
+            'assessment' => $assessment,
+            'record' => $assessment->studentHealthRecord,
+        ]);
+    }
+
+    /** Nurse/clinic staff: read-only list of all submitted assessments. */
+    public function nurseIndex(Request $request)
+    {
+        if ($redirect = $this->requirePageRole($request, ['school_nurse', 'clinic_staff'])) {
+            return $redirect;
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+
+        $assessments = Schema::hasTable('health_assessments')
+            ? HealthAssessment::with('studentHealthRecord')
+                ->where('school_year', HealthAssessment::currentSchoolYear())
+                ->when($institutionId, fn ($q) => $q->whereHas(
+                    'studentHealthRecord',
+                    fn ($r) => $r->where('institution_id', $institutionId)
+                ))
+                ->latest()
+                ->get()
+            : collect();
+
+        return view('health-assessments.nurse-index', ['assessments' => $assessments]);
+    }
+
+    /** Students of the adviser's assigned class, from the session workflow. */
+    private function assignedStudents(Request $request)
+    {
+        $grade = (string) $request->session()->get('assigned_grade_level', '');
+        $section = (string) $request->session()->get('assigned_section', '');
+
+        return collect($request->session()->get('school_health_card_records', []))
+            ->filter(function ($row) use ($grade, $section) {
+                if ($grade === '' || $section === '') {
+                    return true;
+                }
+
+                return (string) ($row['grade_level'] ?? '') === $grade
+                    && strcasecmp(trim((string) ($row['section'] ?? '')), trim($section)) === 0;
+            })
+            ->map(fn ($row) => [
+                'lrn' => (string) ($row['lrn'] ?? ''),
+                'name' => trim(($row['last_name'] ?? '').', '.($row['first_name'] ?? '').' '.($row['middle_name'] ?? '')),
+                'grade_level' => (string) ($row['grade_level'] ?? ''),
+                'section' => (string) ($row['section'] ?? ''),
+                'gender' => (string) ($row['gender'] ?? ''),
+                'age' => $row['age'] ?? null,
+                'birth_month' => $row['birth_month'] ?? null,
+                'birth_day' => $row['birth_day'] ?? null,
+                'birth_year' => $row['birth_year'] ?? null,
+            ])
+            ->values();
+    }
+
+    private function requirePageRole(Request $request, array $roles): ?RedirectResponse
+    {
+        if (! in_array($request->session()->get('active_role'), $roles, true)) {
+            return redirect()->route('login')->with('error', 'You do not have access to that page.');
+        }
+
+        return null;
+    }
 }

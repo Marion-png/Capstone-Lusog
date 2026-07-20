@@ -77,6 +77,12 @@
             <span class="sb-link-label">Health Services Consent</span>
             @if ($cfUnread > 0)<span class="sb-badge">{{ $cfUnread }}</span>@endif
         </a>
+        <a href="{{ route('health-assessments.index') }}" class="sb-link">
+            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+            <span class="sb-link-label">Health Assessment (MLHAT)</span>
+        </a>
     </nav>
     <div class="sb-user">
         <div class="sb-avatar">{{ strtoupper(substr(session('active_name', 'CA'), 0, 2)) }}</div>

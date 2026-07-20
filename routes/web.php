@@ -613,6 +613,14 @@ Route::post('/consent/{token}', [HealthConsentFormController::class, 'parentSubm
     ->name('consent-forms.parent-submit');
 
 // Health Assessment (MLHAT) — class_adviser submit, nurse/staff read
+Route::get('/dashboard/class-adviser/health-assessments', [HealthAssessmentController::class, 'index'])
+    ->name('health-assessments.index');
+Route::get('/dashboard/class-adviser/health-assessments/{lrn}', [HealthAssessmentController::class, 'form'])
+    ->name('health-assessments.form');
+Route::get('/dashboard/school-nurse/health-assessments', [HealthAssessmentController::class, 'nurseIndex'])
+    ->name('health-assessments.nurse-index');
+Route::get('/dashboard/health-assessments/{assessment}', [HealthAssessmentController::class, 'show'])
+    ->whereNumber('assessment')->name('health-assessments.show');
 Route::post('/adviser/health-assessment', [HealthAssessmentController::class, 'store'])
     ->name('health-assessment.store');
 Route::get('/api/student-health-assessment', [HealthAssessmentController::class, 'status'])

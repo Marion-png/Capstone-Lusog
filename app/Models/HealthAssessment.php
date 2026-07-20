@@ -12,7 +12,53 @@ use Illuminate\Support\Facades\Schema;
 
 class HealthAssessment extends Model
 {
+<<<<<<< Updated upstream
     use Auditable;
+=======
+    /**
+     * Section F of the paper MLHAT: body systems and their checkable
+     * findings. Keys match the `body_systems` JSON structure submitted by
+     * the adviser form (body_systems[<key>][findings][] / [notes]).
+     */
+    public const BODY_SYSTEMS = [
+        'integumentary' => ['label' => 'Integumentary', 'findings' => ['Normal', 'Lesions/Rashes', 'Pallor', 'Other']],
+        'heent_head' => ['label' => 'HEENT – Head/Scalp', 'findings' => ['Normal', 'Abnormal']],
+        'heent_eyes' => ['label' => 'HEENT – Eyes', 'findings' => ['Clear', 'Redness', 'Discharge']],
+        'heent_ears' => ['label' => 'HEENT – Ears', 'findings' => ['Clear', 'Pain', 'Discharge']],
+        'heent_nose' => ['label' => 'HEENT – Nose', 'findings' => ['Clear', 'Congested']],
+        'heent_throat' => ['label' => 'HEENT – Throat', 'findings' => ['Normal', 'Inflamed', 'Tonsillar Issues']],
+        'respiratory' => ['label' => 'Respiratory', 'findings' => ['Clear Breath Sounds', 'Cough', 'Wheezing']],
+        'cardiovascular' => ['label' => 'Cardiovascular', 'findings' => ['Regular Rhythm', 'Irregular', 'Murmur']],
+        'gastrointestinal' => ['label' => 'Gastrointestinal', 'findings' => ['Abdomen Soft', 'Pain', 'Nausea/Vomiting']],
+        'genitourinary' => ['label' => 'Genitourinary', 'findings' => ['No Complaints', 'Pain', 'Other']],
+        'musculoskeletal' => ['label' => 'Musculoskeletal', 'findings' => ['Normal ROM', 'Deformity', 'Pain']],
+        'neurological' => ['label' => 'Neurological', 'findings' => ['Oriented', 'Reflexes Normal', 'Abnormal']],
+    ];
+
+    /** Section B checkbox fields => labels (detail write-ins handled separately). */
+    public const MEDICAL_HISTORY_FLAGS = [
+        'med_asthma' => 'Asthma',
+        'med_diabetes' => 'Diabetes',
+        'med_seizure_disorder' => 'Seizure Disorder',
+        'med_frequent_infections' => 'Frequent Infections',
+        'med_allergies' => 'Allergies',
+        'med_heart_condition' => 'Heart Condition',
+        'med_tuberculosis' => 'Tuberculosis',
+        'med_hospitalization_surgery' => 'Hospitalization/Surgery',
+    ];
+
+    /** Section C checkbox fields => labels. */
+    public const FAMILY_HISTORY_FLAGS = [
+        'fam_hypertension' => 'Hypertension',
+        'fam_diabetes' => 'Diabetes',
+        'fam_heart_disease' => 'Heart Disease',
+        'fam_cancer' => 'Cancer',
+        'fam_mental_health' => 'Mental Health Conditions',
+    ];
+
+    /** Section H teeth condition options. */
+    public const TEETH_CONDITIONS = ['Good', 'Fair', 'Poor', 'Dental Caries', 'Gum Inflammation', 'Missing/Broken Teeth'];
+>>>>>>> Stashed changes
 
     protected $fillable = [
         'student_health_record_id', 'school_year', 'date_of_assessment', 'assessed_by',
@@ -51,6 +97,7 @@ class HealthAssessment extends Model
     protected $casts = [
         'date_of_assessment' => 'date',
         'immunization_date_reviewed' => 'date',
+<<<<<<< Updated upstream
         'med_asthma' => EncryptedBoolean::class,
         'med_diabetes' => EncryptedBoolean::class,
         'med_seizure_disorder' => EncryptedBoolean::class,
@@ -93,6 +140,24 @@ class HealthAssessment extends Model
         'summary_of_findings' => EncryptedString::class,
         'recommendations' => EncryptedString::class,
         'examiner_signature' => EncryptedString::class,
+=======
+        'med_asthma' => 'boolean',
+        'med_diabetes' => 'boolean',
+        'med_seizure_disorder' => 'boolean',
+        'med_frequent_infections' => 'boolean',
+        'med_allergies' => 'boolean',
+        'med_heart_condition' => 'boolean',
+        'med_tuberculosis' => 'boolean',
+        'med_hospitalization_surgery' => 'boolean',
+        'fam_hypertension' => 'boolean',
+        'fam_diabetes' => 'boolean',
+        'fam_heart_disease' => 'boolean',
+        'fam_cancer' => 'boolean',
+        'fam_mental_health' => 'boolean',
+        'dental_referral' => 'boolean',
+        'body_systems' => 'array',
+        'teeth_condition' => 'array',
+>>>>>>> Stashed changes
     ];
 
     public function studentHealthRecord(): BelongsTo

@@ -84,7 +84,7 @@ class EnsureActiveSession
             $request->is('dashboard/clinic-staff*') => [['clinic_staff'], 'clinic_staff'],
             $request->is('dashboard/consultation-log*', 'dashboard/medicine-inventory*') => [['clinic_staff', 'school_nurse'], 'clinic_staff'],
             $request->is('dashboard/student-health-records*', 'dashboard/data-visualization*') => [['school_nurse', 'clinic_staff'], 'school_nurse'],
-            $request->is('dashboard/consent-forms*') => [['class_adviser', 'school_nurse', 'clinic_staff'], 'school_nurse'],
+            $request->is('dashboard/consent-forms*', 'dashboard/health-assessments*') => [['class_adviser', 'school_nurse', 'clinic_staff'], 'school_nurse'],
             $request->is('dashboard/school-nurse*', 'nurse', 'nurse/*') => [['school_nurse'], 'school_nurse'],
             default => [null, 'school_nurse'],
         };
