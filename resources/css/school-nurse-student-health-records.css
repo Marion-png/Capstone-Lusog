@@ -124,15 +124,27 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 .kv .v { color: var(--text-1); font-weight: 600; }
 
 /* ── Growth chart ── */
-.growth-chart-wrap { margin-top: 10px; border: 1px solid #dce9e3; border-radius: 10px; background: #fbfdfc; padding: 10px; }
-.growth-chart-title { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); margin-bottom: 6px; }
-.growth-chart { width: 100%; height: 175px; display: block; }
-.growth-grid-line { stroke: #dce9e3; stroke-width: 1; }
-.growth-line-height { fill: none; stroke: var(--g700); stroke-width: 3; stroke-linecap: round; }
-.growth-bar-weight { fill: #2563eb; opacity: .88; }
-.growth-dot-height { fill: var(--g700); }
+.growth-chart-wrap { margin-top: 10px; border: 1px solid #dce9e3; border-radius: 12px; background: #fff; padding: 14px 14px 10px; box-shadow: 0 1px 2px rgba(20, 83, 45, .04); }
+.growth-chart-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.growth-chart-title { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); }
+.growth-delta { display: flex; gap: 6px; }
+.growth-delta-pill { font-size: .68rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #f0fdf4; color: var(--g700); border: 1px solid #d3ecdd; white-space: nowrap; }
+.growth-delta-pill.is-weight { background: #eff6ff; color: #2563eb; border-color: #d9e8fc; }
+
+.growth-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 26px 18px; color: var(--text-3); }
+.growth-empty svg { width: 30px; height: 30px; color: #b7cdc2; }
+.growth-empty p { font-size: .78rem; line-height: 1.5; max-width: 320px; }
+
+.growth-chart { width: 100%; height: auto; aspect-ratio: 520 / 180; display: block; overflow: visible; }
+.growth-grid-line { stroke: #eef3f0; stroke-width: 1; }
+.growth-grid-baseline { stroke: #dce9e3; }
+.growth-line-height { fill: none; stroke: var(--g700); stroke-width: 2.5; stroke-linecap: round; }
+.growth-bar-weight { fill: #60a5fa; stroke: #fff; stroke-width: 1; }
+.growth-dot-height { fill: var(--g700); stroke: #fff; stroke-width: 2; }
 .growth-axis-label { fill: var(--text-3); font-size: 10px; font-weight: 700; }
-.growth-value-label { fill: var(--g900); font-size: 10px; font-weight: 700; text-anchor: middle; }
+.growth-value-label { fill: var(--g900); font-size: 10.5px; font-weight: 800; text-anchor: middle; }
+.growth-value-height { fill: var(--g900); }
+.growth-value-weight { fill: #1d4ed8; }
 .growth-legend { display: flex; gap: 12px; align-items: center; margin-top: 4px; color: var(--text-2); font-size: .7rem; font-weight: 600; }
 .growth-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }

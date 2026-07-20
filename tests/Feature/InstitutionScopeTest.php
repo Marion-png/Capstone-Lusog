@@ -14,6 +14,7 @@ class InstitutionScopeTest extends TestCase
     use RefreshDatabase;
 
     private Institution $schoolA;
+
     private Institution $schoolB;
 
     protected function setUp(): void
@@ -32,24 +33,24 @@ class InstitutionScopeTest extends TestCase
     {
         Consultation::create([
             'institution_id' => $this->schoolA->id,
-            'consulted_at'   => now(),
-            'student_name'   => 'Student A',
-            'grade_section'  => '1-A',
-            'condition'      => 'Fever',
-            'status'         => 'treated',
+            'consulted_at' => now(),
+            'student_name' => 'Student A',
+            'grade_section' => '1-A',
+            'condition' => 'Fever',
+            'status' => 'treated',
         ]);
 
         Consultation::create([
             'institution_id' => $this->schoolB->id,
-            'consulted_at'   => now(),
-            'student_name'   => 'Student B',
-            'grade_section'  => '1-B',
-            'condition'      => 'Cough',
-            'status'         => 'treated',
+            'consulted_at' => now(),
+            'student_name' => 'Student B',
+            'grade_section' => '1-B',
+            'condition' => 'Cough',
+            'status' => 'treated',
         ]);
 
         $response = $this->withSession([
-            'active_role'        => 'clinic_staff',
+            'active_role' => 'clinic_staff',
             'active_institution_id' => $this->schoolA->id,
         ])->get('/dashboard/consultation-log');
 
@@ -63,25 +64,25 @@ class InstitutionScopeTest extends TestCase
     {
         Consultation::create([
             'institution_id' => $this->schoolA->id,
-            'consulted_at'   => now(),
-            'student_name'   => 'Student A',
-            'grade_section'  => '1-A',
-            'condition'      => 'Fever',
-            'status'         => 'treated',
+            'consulted_at' => now(),
+            'student_name' => 'Student A',
+            'grade_section' => '1-A',
+            'condition' => 'Fever',
+            'status' => 'treated',
         ]);
 
         Consultation::create([
             'institution_id' => $this->schoolB->id,
-            'consulted_at'   => now(),
-            'student_name'   => 'Student B',
-            'grade_section'  => '1-B',
-            'condition'      => 'Cough',
-            'status'         => 'treated',
+            'consulted_at' => now(),
+            'student_name' => 'Student B',
+            'grade_section' => '1-B',
+            'condition' => 'Cough',
+            'status' => 'treated',
         ]);
 
         // System admin has no institution_id — null means see all
         $response = $this->withSession([
-            'active_role'           => 'system_admin',
+            'active_role' => 'system_admin',
             'active_institution_id' => null,
         ])->get('/dashboard/consultation-log');
 
@@ -98,23 +99,23 @@ class InstitutionScopeTest extends TestCase
     public function school_nurse_only_sees_medicines_from_their_school(): void
     {
         Medicine::create([
-            'institution_id'    => $this->schoolA->id,
-            'name'              => 'Paracetamol A',
-            'stock_quantity'    => 50,
+            'institution_id' => $this->schoolA->id,
+            'name' => 'Paracetamol A',
+            'stock_quantity' => 50,
             'minimum_threshold' => 10,
-            'unit'              => 'tablets',
+            'unit' => 'tablets',
         ]);
 
         Medicine::create([
-            'institution_id'    => $this->schoolB->id,
-            'name'              => 'Paracetamol B',
-            'stock_quantity'    => 30,
+            'institution_id' => $this->schoolB->id,
+            'name' => 'Paracetamol B',
+            'stock_quantity' => 30,
             'minimum_threshold' => 10,
-            'unit'              => 'tablets',
+            'unit' => 'tablets',
         ]);
 
         $response = $this->withSession([
-            'active_role'           => 'school_nurse',
+            'active_role' => 'school_nurse',
             'active_institution_id' => $this->schoolA->id,
         ])->get('/dashboard/medicine-inventory');
 
@@ -131,17 +132,17 @@ class InstitutionScopeTest extends TestCase
     public function storing_medicine_stamps_the_nurses_institution_id(): void
     {
         $this->withSession([
-            'active_role'           => 'school_nurse',
+            'active_role' => 'school_nurse',
             'active_institution_id' => $this->schoolA->id,
         ])->post('/dashboard/medicine-inventory', [
-            'name'              => 'Amoxicillin',
-            'stock_quantity'    => 100,
+            'name' => 'Amoxicillin',
+            'stock_quantity' => 100,
             'minimum_threshold' => 20,
-            'unit'              => 'capsules',
+            'unit' => 'capsules',
         ]);
 
         $this->assertDatabaseHas('medicines', [
-            'name'           => 'Amoxicillin',
+            'name' => 'Amoxicillin',
             'institution_id' => $this->schoolA->id,
         ]);
     }
@@ -154,17 +155,18 @@ class InstitutionScopeTest extends TestCase
     public function scoped_user_cannot_see_another_schools_health_records(): void
     {
         StudentHealthRecord::create([
-            'institution_id'   => $this->schoolB->id,
-            'student_name'     => 'Ghost Student',
-            'student_id'       => 'LRN-999',
-            'section'          => '1-B',
-            'weight'           => 30.0,
-            'bmi_value'        => 15.5,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'institution_id' => $this->schoolB->id,
+            'student_name' => 'Ghost Student',
+            'student_id' => 'LRN-999',
+            'section' => '1-B',
+            'weight' => 30.0,
+            'bmi_value' => 15.5,
             'nutritional_status' => 'Wasted',
         ]);
 
         $response = $this->withSession([
-            'active_role'           => 'clinic_staff',
+            'active_role' => 'clinic_staff',
             'active_institution_id' => $this->schoolA->id,
         ])->get('/dashboard/student-health-records');
 
@@ -180,7 +182,7 @@ class InstitutionScopeTest extends TestCase
     public function scoped_role_with_no_institution_id_is_redirected_to_login(): void
     {
         $response = $this->withSession([
-            'active_role'           => 'school_nurse',
+            'active_role' => 'school_nurse',
             'active_institution_id' => null,
         ])->get('/dashboard/school-nurse');
 

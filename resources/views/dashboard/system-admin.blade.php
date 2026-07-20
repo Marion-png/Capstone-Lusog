@@ -99,7 +99,7 @@
     </div>
 </aside>
 <div class="main">
-    <header class="topbar"><div class="topbar-breadcrumb">Dashboard > System Administrator</div><div class="topbar-chip">Platform Control Center</div></header>
+    <header class="topbar"><div class="topbar-breadcrumb">Dashboard > System Administrator</div><div class="topbar-chip">Platform Control Center</div>@include('partials.live-clock')</header>
     <div class="content">
         <h1 class="title">System Administrator <i>Control Center</i></h1>
         <p class="sub">User governance, predictive restocking settings, notification policies, and audit visibility.</p>

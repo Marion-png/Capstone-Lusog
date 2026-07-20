@@ -118,6 +118,7 @@
 <div class="main">
 	<header class="topbar">
 		<div class="topbar-bc"><span>{{ $isReadOnly ? 'School Nurse' : 'Dashboard' }}</span><span>&rsaquo;</span><span>Feeding Program</span></div>
+	    @include('partials.live-clock')
 	</header>
 
 	<div class="content">

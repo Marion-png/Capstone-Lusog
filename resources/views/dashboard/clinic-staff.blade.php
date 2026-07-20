@@ -97,6 +97,7 @@
             <span class="bc-current">Clinic Staff</span>
         </div>
         <div class="topbar-chip chip"><div class="dot"></div>Operations Workspace</div>
+        @include('partials.live-clock')
     </header>
     <div class="content">
         <h1 class="title">Clinic Staff <i>Operations Hub</i></h1>

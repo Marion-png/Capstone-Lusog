@@ -28,6 +28,7 @@ class EncryptionAtRestTest extends TestCase
         $institution = Institution::create(['name' => 'Test School', 'status' => 'active']);
 
         $record = StudentHealthRecord::create([
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
             'institution_id' => $institution->id,
             'student_id' => 'LRN001',
             'student_name' => 'Dela Cruz, Juan A.',
@@ -64,6 +65,7 @@ class EncryptionAtRestTest extends TestCase
         ]);
 
         $record = StudentHealthRecord::create([
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
             'student_id' => 'LRN002',
             'student_name' => 'Reyes, Maria',
             'section' => 'Grade 3 / Rosal',
@@ -72,7 +74,8 @@ class EncryptionAtRestTest extends TestCase
             'nutritional_status' => 'Normal',
         ]);
         $condition = StudentHealthCondition::create([
-            'student_health_record_id' => $record->id,
+            'student_lrn' => $record->student_id,
+            'institution_id' => $record->institution_id,
             'condition_name' => 'Epilepsy',
         ]);
 

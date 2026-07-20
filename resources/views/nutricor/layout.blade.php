@@ -371,6 +371,7 @@
 <div class="main">
     <header class="topbar">
         <div class="topbar-bc"><span>Nutritional Coordinator</span><span>&rsaquo;</span><span>@yield('crumb', 'Dashboard')</span></div>
+        @include('partials.live-clock')
     </header>
 
     <div class="content">

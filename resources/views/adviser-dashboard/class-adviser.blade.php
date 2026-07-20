@@ -106,6 +106,7 @@
             <span class="bc-current">Class Adviser</span>
         </div>
         <div class="topbar-chip chip"><div class="dot"></div>Encoding Workspace</div>
+        @include('partials.live-clock')
     </header>
     <div class="content">
         @php

@@ -105,6 +105,7 @@
             <span class="bc-current">Class Adviser</span>
         </div>
         <div class="topbar-chip chip"><div class="dot"></div>Class Adviser</div>
+        @include('partials.live-clock')
     </header>
     <div class="content">
         <div class="card section" style="max-width:640px;margin-top:12px;">

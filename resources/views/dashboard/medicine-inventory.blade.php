@@ -70,6 +70,7 @@
             <span class="bc-sep">&rsaquo;</span>
             <span class="bc-current">Medicine Inventory</span>
         </div>
+        @include('partials.live-clock')
     </header>
 
     <div class="content">

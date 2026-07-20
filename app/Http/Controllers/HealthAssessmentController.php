@@ -91,7 +91,7 @@ class HealthAssessmentController extends Controller
         ]);
 
         $expectedSection = trim("{$advisedGrade} / {$advisedSection}");
-        $record = StudentHealthRecord::forActiveInstitution()->where('student_id', $validated['lrn'])->first();
+        $record = StudentHealthRecord::currentForStudent($validated['lrn'], $request->session()->get('active_institution_id'));
 
         abort_if(
             $record === null || $record->section !== $expectedSection,
@@ -183,7 +183,7 @@ class HealthAssessmentController extends Controller
             return response()->json(['has_assessment' => false]);
         }
 
-        $record = StudentHealthRecord::forActiveInstitution()->where('student_id', $lrn)->first();
+        $record = StudentHealthRecord::currentForStudent($lrn, $request->session()->get('active_institution_id'));
 
         if ($activeRole === 'class_adviser' && $record !== null) {
             $grade = (string) $request->session()->get('assigned_grade_level', '');
@@ -278,7 +278,14 @@ class HealthAssessmentController extends Controller
         $schoolYear = HealthAssessment::currentSchoolYear();
 
         $records = Schema::hasTable('student_health_records')
-            ? StudentHealthRecord::whereIn('student_id', $students->pluck('lrn')->filter()->values())->get()->keyBy('student_id')
+            ? StudentHealthRecord::when(
+                $request->session()->get('active_institution_id'),
+                fn ($q, $id) => $q->where('institution_id', $id)
+            )
+                ->whereIn('student_id', $students->pluck('lrn')->filter()->values())
+                ->forCurrentSchoolYear($schoolYear)
+                ->get()
+                ->keyBy('student_id')
             : collect();
 
         $assessments = Schema::hasTable('health_assessments')
@@ -311,7 +318,7 @@ class HealthAssessmentController extends Controller
                 ->with('error', 'Student not found in your assigned class.');
         }
 
-        $record = StudentHealthRecord::where('student_id', $lrn)->first();
+        $record = StudentHealthRecord::currentForStudent($lrn, $request->session()->get('active_institution_id'));
 
         if (! $record) {
             return redirect()->route('health-assessments.index')

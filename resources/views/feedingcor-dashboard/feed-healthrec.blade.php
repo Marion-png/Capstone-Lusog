@@ -63,6 +63,7 @@
 <div class="main">
     <header class="topbar">
         <div class="topbar-bc"><span>Dashboard</span><span>&rsaquo;</span><span>Student Health Records</span></div>
+        @include('partials.live-clock')
     </header>
 
     <div class="content">

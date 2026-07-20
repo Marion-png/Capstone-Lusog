@@ -111,6 +111,7 @@
             <span class="bc-current">Class Adviser &middot; Deworming</span>
         </div>
         <div class="topbar-chip chip"><div class="dot"></div>Class Adviser</div>
+        @include('partials.live-clock')
     </header>
     <div class="content">
         <h1 class="title">Deworming <i>Request</i></h1>

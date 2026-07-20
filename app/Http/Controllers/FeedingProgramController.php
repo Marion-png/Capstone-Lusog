@@ -38,6 +38,7 @@ class FeedingProgramController extends Controller
         if ($hasSchoolColumn) {
             $schoolOptions = StudentHealthRecord::query()
                 ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+                ->forCurrentSchoolYear()
                 ->select('school_name')
                 ->whereNotNull('school_name')
                 ->where('school_name', '!=', '')
@@ -63,6 +64,7 @@ class FeedingProgramController extends Controller
 
             // student_name is encrypted at rest, so sorting happens in PHP.
             $students = $studentsQuery
+                ->forCurrentSchoolYear()
                 ->get()
                 ->filter(fn (StudentHealthRecord $record): bool => $this->isAttendanceEligible($record->nutritional_status))
                 ->sortBy('student_name')
@@ -204,7 +206,7 @@ class FeedingProgramController extends Controller
             $studentsQuery->where('school_name', $selectedSchool);
         }
 
-        $students = $studentsQuery->get(['id', 'nutritional_status', 'bmi_value']);
+        $students = $studentsQuery->forCurrentSchoolYear()->get(['id', 'nutritional_status', 'bmi_value']);
         $students = $students
             ->filter(fn (StudentHealthRecord $student): bool => $this->isAttendanceEligible($this->normalizeNutritionalStatus($student->nutritional_status, $student->bmi_value)))
             ->values();
@@ -308,7 +310,7 @@ class FeedingProgramController extends Controller
             $firstAttendanceDate = FeedingAttendance::query()
                 ->when($institutionId, fn ($q) => $q->whereIn(
                     'student_health_record_id',
-                    StudentHealthRecord::query()->where('institution_id', $institutionId)->select('id')
+                    StudentHealthRecord::query()->where('institution_id', $institutionId)->forCurrentSchoolYear()->select('id')
                 ))
                 ->whereDate('session_date', '<=', $todayDate)
                 ->min('session_date');
@@ -349,6 +351,7 @@ class FeedingProgramController extends Controller
 
         StudentHealthRecord::query()
             ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+            ->forCurrentSchoolYear()
             ->each(function (StudentHealthRecord $record) use ($presentCounts, $thresholdCount, $programDay): void {
                 $normalizedStatus = $this->normalizeNutritionalStatus($record->nutritional_status, $record->bmi_value);
                 if (! $this->isAttendanceEligible($normalizedStatus)) {

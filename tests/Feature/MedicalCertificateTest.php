@@ -29,10 +29,10 @@ class MedicalCertificateTest extends TestCase
     private function adviserSession(string $grade = 'Grade 1', string $section = 'Sampaguita'): array
     {
         return [
-            'active_role'           => 'class_adviser',
-            'assigned_grade_level'  => $grade,
-            'assigned_section'      => $section,
-            'active_name'           => 'Test Adviser',
+            'active_role' => 'class_adviser',
+            'assigned_grade_level' => $grade,
+            'assigned_section' => $section,
+            'active_name' => 'Test Adviser',
             'active_institution_id' => $this->institution->id,
         ];
     }
@@ -40,8 +40,8 @@ class MedicalCertificateTest extends TestCase
     private function clinicSession(): array
     {
         return [
-            'active_role'           => 'clinic_staff',
-            'active_name'           => 'Test Staff',
+            'active_role' => 'clinic_staff',
+            'active_name' => 'Test Staff',
             'active_institution_id' => $this->institution->id,
         ];
     }
@@ -49,22 +49,23 @@ class MedicalCertificateTest extends TestCase
     private function makeRecord(string $lrn, string $section = 'Grade 1 / Sampaguita'): StudentHealthRecord
     {
         return StudentHealthRecord::create([
-            'institution_id'      => $this->institution->id,
-            'student_name'        => 'Test Student',
-            'student_id'          => $lrn,
-            'section'             => $section,
-            'weight'              => 30.0,
-            'bmi_value'           => 16.5,
-            'nutritional_status'  => 'Normal',
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'institution_id' => $this->institution->id,
+            'student_name' => 'Test Student',
+            'student_id' => $lrn,
+            'section' => $section,
+            'weight' => 30.0,
+            'bmi_value' => 16.5,
+            'nutritional_status' => 'Normal',
         ]);
     }
 
     private function validUploadPayload(string $lrn, array $overrides = []): array
     {
         return array_merge([
-            'lrn'            => $lrn,
+            'lrn' => $lrn,
             'condition_name' => 'Asthma',
-            'certificate'    => UploadedFile::fake()->create('cert.pdf', 100, 'application/pdf'),
+            'certificate' => UploadedFile::fake()->create('cert.pdf', 100, 'application/pdf'),
         ], $overrides);
     }
 
@@ -214,16 +215,16 @@ class MedicalCertificateTest extends TestCase
             $mime = match (true) {
                 str_ends_with($filename, '.pdf') => 'application/pdf',
                 str_ends_with($filename, '.jpg') => 'image/jpeg',
-                default                          => 'image/png',
+                default => 'image/png',
             };
 
             $this->makeRecord("LRN00{$i}a", 'Grade 1 / Sampaguita');
 
             $this->withSession($this->adviserSession())
                 ->post(route('medical-certificate.store'), [
-                    'lrn'            => "LRN00{$i}a",
+                    'lrn' => "LRN00{$i}a",
                     'condition_name' => 'Test',
-                    'certificate'    => UploadedFile::fake()->create($filename, 100, $mime),
+                    'certificate' => UploadedFile::fake()->create($filename, 100, $mime),
                 ])
                 ->assertSessionMissing('errors');
         }
@@ -247,16 +248,17 @@ class MedicalCertificateTest extends TestCase
     /** @test */
     public function condition_with_certificate_is_verified(): void
     {
-        $record    = $this->makeRecord('LRN001');
+        $record = $this->makeRecord('LRN001');
         $condition = StudentHealthCondition::create([
-            'student_health_record_id' => $record->id,
-            'condition_name'           => 'Asthma',
+            'student_lrn' => $record->student_id,
+            'institution_id' => $record->institution_id,
+            'condition_name' => 'Asthma',
         ]);
         MedicalCertificate::create([
             'student_health_condition_id' => $condition->id,
-            'file_path'                   => 'medical-certificates/1/fake.pdf',
-            'file_original_name'          => 'cert.pdf',
-            'uploaded_by_name'            => 'Test Adviser',
+            'file_path' => 'medical-certificates/1/fake.pdf',
+            'file_original_name' => 'cert.pdf',
+            'uploaded_by_name' => 'Test Adviser',
         ]);
 
         $this->assertTrue($condition->isVerified());
@@ -272,10 +274,11 @@ class MedicalCertificateTest extends TestCase
     /** @test */
     public function condition_without_certificate_is_self_reported(): void
     {
-        $record    = $this->makeRecord('LRN001');
+        $record = $this->makeRecord('LRN001');
         StudentHealthCondition::create([
-            'student_health_record_id' => $record->id,
-            'condition_name'           => 'Allergies',
+            'student_lrn' => $record->student_id,
+            'institution_id' => $record->institution_id,
+            'condition_name' => 'Allergies',
         ]);
 
         $response = $this->withSession($this->clinicSession())
@@ -291,19 +294,20 @@ class MedicalCertificateTest extends TestCase
     /** @test */
     public function clinic_staff_can_download_a_certificate(): void
     {
-        $record    = $this->makeRecord('LRN001');
+        $record = $this->makeRecord('LRN001');
         $condition = StudentHealthCondition::create([
-            'student_health_record_id' => $record->id,
-            'condition_name'           => 'Asthma',
+            'student_lrn' => $record->student_id,
+            'institution_id' => $record->institution_id,
+            'condition_name' => 'Asthma',
         ]);
 
         Storage::disk('local')->put('medical-certificates/1/cert.pdf', 'PDF content');
 
         $cert = MedicalCertificate::create([
             'student_health_condition_id' => $condition->id,
-            'file_path'                   => 'medical-certificates/1/cert.pdf',
-            'file_original_name'          => 'cert.pdf',
-            'uploaded_by_name'            => 'Test Adviser',
+            'file_path' => 'medical-certificates/1/cert.pdf',
+            'file_original_name' => 'cert.pdf',
+            'uploaded_by_name' => 'Test Adviser',
         ]);
 
         $response = $this->withSession($this->clinicSession())
@@ -316,19 +320,20 @@ class MedicalCertificateTest extends TestCase
     /** @test */
     public function school_nurse_can_download_certificates(): void
     {
-        $record    = $this->makeRecord('LRN001');
+        $record = $this->makeRecord('LRN001');
         $condition = StudentHealthCondition::create([
-            'student_health_record_id' => $record->id,
-            'condition_name'           => 'Asthma',
+            'student_lrn' => $record->student_id,
+            'institution_id' => $record->institution_id,
+            'condition_name' => 'Asthma',
         ]);
 
         Storage::disk('local')->put('medical-certificates/1/cert.pdf', 'PDF content');
 
         $cert = MedicalCertificate::create([
             'student_health_condition_id' => $condition->id,
-            'file_path'                   => 'medical-certificates/1/cert.pdf',
-            'file_original_name'          => 'cert.pdf',
-            'uploaded_by_name'            => 'Test Adviser',
+            'file_path' => 'medical-certificates/1/cert.pdf',
+            'file_original_name' => 'cert.pdf',
+            'uploaded_by_name' => 'Test Adviser',
         ]);
 
         $this->withSession(['active_role' => 'school_nurse', 'active_institution_id' => $this->institution->id])
@@ -393,16 +398,17 @@ class MedicalCertificateTest extends TestCase
     /** @test */
     public function school_nurse_can_read_conditions_in_health_timeline(): void
     {
-        $record    = $this->makeRecord('LRN001');
+        $record = $this->makeRecord('LRN001');
         $condition = StudentHealthCondition::create([
-            'student_health_record_id' => $record->id,
-            'condition_name'           => 'Asthma',
+            'student_lrn' => $record->student_id,
+            'institution_id' => $record->institution_id,
+            'condition_name' => 'Asthma',
         ]);
         MedicalCertificate::create([
             'student_health_condition_id' => $condition->id,
-            'file_path'                   => 'medical-certificates/1/cert.pdf',
-            'file_original_name'          => 'cert.pdf',
-            'uploaded_by_name'            => 'Test Adviser',
+            'file_path' => 'medical-certificates/1/cert.pdf',
+            'file_original_name' => 'cert.pdf',
+            'uploaded_by_name' => 'Test Adviser',
         ]);
 
         $response = $this->withSession(['active_role' => 'school_nurse', 'active_institution_id' => $this->institution->id])
@@ -417,16 +423,17 @@ class MedicalCertificateTest extends TestCase
     /** @test */
     public function conditions_api_returns_download_url_only_for_clinic_staff(): void
     {
-        $record    = $this->makeRecord('LRN001');
+        $record = $this->makeRecord('LRN001');
         $condition = StudentHealthCondition::create([
-            'student_health_record_id' => $record->id,
-            'condition_name'           => 'Asthma',
+            'student_lrn' => $record->student_id,
+            'institution_id' => $record->institution_id,
+            'condition_name' => 'Asthma',
         ]);
         MedicalCertificate::create([
             'student_health_condition_id' => $condition->id,
-            'file_path'                   => 'medical-certificates/1/cert.pdf',
-            'file_original_name'          => 'cert.pdf',
-            'uploaded_by_name'            => 'Test Adviser',
+            'file_path' => 'medical-certificates/1/cert.pdf',
+            'file_original_name' => 'cert.pdf',
+            'uploaded_by_name' => 'Test Adviser',
         ]);
 
         // Clinic staff gets download_url
@@ -445,17 +452,18 @@ class MedicalCertificateTest extends TestCase
 
     private function makeDummyCert(): MedicalCertificate
     {
-        $record    = $this->makeRecord('LRN999');
+        $record = $this->makeRecord('LRN999');
         $condition = StudentHealthCondition::create([
-            'student_health_record_id' => $record->id,
-            'condition_name'           => 'Test',
+            'student_lrn' => $record->student_id,
+            'institution_id' => $record->institution_id,
+            'condition_name' => 'Test',
         ]);
 
         return MedicalCertificate::create([
             'student_health_condition_id' => $condition->id,
-            'file_path'                   => 'medical-certificates/1/cert.pdf',
-            'file_original_name'          => 'cert.pdf',
-            'uploaded_by_name'            => 'Test Adviser',
+            'file_path' => 'medical-certificates/1/cert.pdf',
+            'file_original_name' => 'cert.pdf',
+            'uploaded_by_name' => 'Test Adviser',
         ]);
     }
 }

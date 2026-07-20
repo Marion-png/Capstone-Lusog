@@ -111,6 +111,7 @@
             <span class="bc-current">Health Records</span>
         </div>
         <div class="topbar-chip"><div class="dot"></div>School Nurse</div>
+        @include('partials.live-clock')
     </header>
 
     <div class="content">
@@ -168,6 +169,7 @@
             <button type="button" class="profile-tab" data-panel="p-alerts">Medical Alerts</button>
             <button type="button" class="profile-tab" data-panel="p-consent">Parental Consent</button>
             <button type="button" class="profile-tab" data-panel="p-health-assessment">Health Assessment</button>
+            <button type="button" class="profile-tab" data-panel="p-history">Health History</button>
             @if(session('active_role') === 'clinic_staff')
             <button type="button" class="profile-tab" data-panel="p-conditions">Health Conditions</button>
             @endif
@@ -205,32 +207,41 @@
                     <div class="kv"><div class="k">Height:</div><div class="v" id="pgHeight">-</div></div>
                     <div class="kv"><div class="k">Weight:</div><div class="v" id="pgWeight">-</div></div>
                     <div class="growth-chart-wrap">
-                        <div class="growth-chart-title">Over Time: Height (Line) and Weight (Bar)</div>
-                        <svg id="pgTrendChart" class="growth-chart" viewBox="0 0 520 180" preserveAspectRatio="none" aria-label="Growth and nutrition line chart">
-                            <line x1="48" y1="20" x2="48" y2="150" class="growth-grid-line" />
-                            <line x1="48" y1="150" x2="500" y2="150" class="growth-grid-line" />
-                            <line x1="48" y1="52" x2="500" y2="52" class="growth-grid-line" />
-                            <line x1="48" y1="84" x2="500" y2="84" class="growth-grid-line" />
-                            <line x1="48" y1="116" x2="500" y2="116" class="growth-grid-line" />
+                        <div class="growth-chart-head">
+                            <div class="growth-chart-title">Growth Over Time</div>
+                            <div class="growth-delta" id="pgDelta" style="display:none;"></div>
+                        </div>
 
-                            <polyline id="pgHeightLine" class="growth-line-height" points="" />
-                            <rect id="pgWeightBarStart" class="growth-bar-weight" x="113" y="130" width="34" height="20" rx="6" />
-                            <rect id="pgWeightBarEnd" class="growth-bar-weight" x="373" y="124" width="34" height="26" rx="6" />
+                        <div class="growth-empty" id="pgAwaitingExam" style="display:none;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+                            <p>Baseline measurement recorded. A growth comparison will appear here once the School Nurse completes an endline examination.</p>
+                        </div>
 
-                            <circle id="pgHeightStart" class="growth-dot-height" r="4" cx="130" cy="120" />
-                            <circle id="pgHeightEnd" class="growth-dot-height" r="4" cx="390" cy="96" />
+                        <div id="pgChartBody">
+                            <svg id="pgTrendChart" class="growth-chart" viewBox="0 0 520 180" aria-label="Growth and nutrition line chart">
+                                <line x1="48" y1="20" x2="500" y2="20" class="growth-grid-line" />
+                                <line x1="48" y1="150" x2="500" y2="150" class="growth-grid-line growth-grid-baseline" />
+                                <line x1="48" y1="85" x2="500" y2="85" class="growth-grid-line" />
 
-                            <text x="118" y="168" class="growth-axis-label">Baseline</text>
-                            <text x="380" y="168" class="growth-axis-label">Current</text>
+                                <polyline id="pgHeightLine" class="growth-line-height" points="" />
+                                <rect id="pgWeightBarStart" class="growth-bar-weight" x="119" y="130" width="24" height="20" rx="7" />
+                                <rect id="pgWeightBarEnd" class="growth-bar-weight" x="379" y="124" width="24" height="26" rx="7" />
 
-                            <text id="pgHeightStartLabel" x="130" y="114" class="growth-value-label">-</text>
-                            <text id="pgHeightEndLabel" x="390" y="90" class="growth-value-label">-</text>
-                            <text id="pgWeightStartLabel" x="130" y="126" class="growth-value-label">-</text>
-                            <text id="pgWeightEndLabel" x="390" y="120" class="growth-value-label">-</text>
-                        </svg>
-                        <div class="growth-legend">
-                            <span><i class="legend-dot height"></i>Height (cm)</span>
-                            <span><i class="legend-dot weight"></i>Weight (kg)</span>
+                                <circle id="pgHeightStart" class="growth-dot-height" r="5" cx="130" cy="120" />
+                                <circle id="pgHeightEnd" class="growth-dot-height" r="5" cx="390" cy="96" />
+
+                                <text x="130" y="168" class="growth-axis-label" text-anchor="middle">Baseline</text>
+                                <text x="390" y="168" class="growth-axis-label" text-anchor="middle">Latest</text>
+
+                                <text id="pgHeightStartLabel" x="130" y="108" class="growth-value-label growth-value-height">-</text>
+                                <text id="pgHeightEndLabel" x="390" y="84" class="growth-value-label growth-value-height">-</text>
+                                <text id="pgWeightStartLabel" x="131" y="122" class="growth-value-label growth-value-weight">-</text>
+                                <text id="pgWeightEndLabel" x="391" y="116" class="growth-value-label growth-value-weight">-</text>
+                            </svg>
+                            <div class="growth-legend">
+                                <span><i class="legend-dot height"></i>Height (cm)</span>
+                                <span><i class="legend-dot weight"></i>Weight (kg)</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -254,6 +265,14 @@
                     <h4>Health Assessment <span style="font-size:.72rem;font-weight:400;color:var(--text-3);">(MLHAT)</span></h4>
                     <div id="phaStatus">
                         <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view assessment.</div></div>
+                    </div>
+                </div>
+            </section>
+            <section id="p-history" class="profile-panel">
+                <div class="profile-block">
+                    <h4>Health History <span style="font-size:.72rem;font-weight:400;color:var(--text-3);">(across school years)</span></h4>
+                    <div id="pHistoryList">
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view history.</div></div>
                     </div>
                 </div>
             </section>
@@ -304,10 +323,45 @@
             return Number.isFinite(parsed) ? parsed : null;
         };
 
+        const awaitingEl = document.getElementById('pgAwaitingExam');
+        const chartBodyEl = document.getElementById('pgChartBody');
+        const deltaEl = document.getElementById('pgDelta');
+
+        // Until the nurse records an endline measurement, "current" has no
+        // real value of its own — show a clear waiting state instead of a
+        // chart that plots the baseline against itself.
+        const hasEndlineData = Boolean(
+            (record?.examination && Object.keys(record.examination).length > 0) || record?.endline_snapshot
+        );
+
+        if (!hasEndlineData) {
+            if (awaitingEl) awaitingEl.style.display = 'flex';
+            if (chartBodyEl) chartBodyEl.style.display = 'none';
+            if (deltaEl) deltaEl.style.display = 'none';
+            return;
+        }
+
+        if (awaitingEl) awaitingEl.style.display = 'none';
+        if (chartBodyEl) chartBodyEl.style.display = '';
+
         const baselineHeight = toNum(record?.baseline_snapshot?.height_cm ?? record?.height_cm);
         const currentHeight = toNum(record?.examination?.height_cm ?? record?.endline_snapshot?.height_cm ?? record?.height_cm);
         const baselineWeight = toNum(record?.baseline_snapshot?.weight_kg ?? record?.weight_kg);
         const currentWeight = toNum(record?.examination?.weight_kg ?? record?.endline_snapshot?.weight_kg ?? record?.weight_kg);
+
+        if (deltaEl) {
+            const pills = [];
+            if (baselineHeight !== null && currentHeight !== null) {
+                const d = currentHeight - baselineHeight;
+                pills.push(`<span class="growth-delta-pill">Height ${d >= 0 ? '+' : ''}${d.toFixed(1)} cm</span>`);
+            }
+            if (baselineWeight !== null && currentWeight !== null) {
+                const d = currentWeight - baselineWeight;
+                pills.push(`<span class="growth-delta-pill is-weight">Weight ${d >= 0 ? '+' : ''}${d.toFixed(1)} kg</span>`);
+            }
+            deltaEl.innerHTML = pills.join('');
+            deltaEl.style.display = pills.length ? 'flex' : 'none';
+        }
 
         const yForMetric = (value, minVal, maxVal) => {
             if (value === null) {
@@ -320,7 +374,7 @@
 
         const bx = 130;
         const cx = 390;
-        const barWidth = 34;
+        const barWidth = 24;
 
         const heightValues = [baselineHeight, currentHeight].filter((value) => value !== null);
         const weightValues = [baselineWeight, currentWeight].filter((value) => value !== null);
@@ -412,6 +466,7 @@
 
         loadConsentStatus(record.lrn || '');
         loadHealthAssessment(record.lrn || '');
+        loadHealthHistory(record.lrn || '');
 
         backdrop.classList.add('open');
         backdrop.setAttribute('aria-hidden', 'false');
@@ -637,6 +692,54 @@
                     row('Summary of Findings', d.summary_of_findings) + row('Recommendations', d.recommendations) + row('Examiner Signature', d.examiner_signature)) : ''}`;
         } catch (_err) {
             el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load assessment.</div></div>';
+        }
+    };
+
+    const loadHealthHistory = async (lrn) => {
+        const el = document.getElementById('pHistoryList');
+        if (!el) return;
+        if (!lrn) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No LRN available.</div></div>'; return; }
+        el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>';
+        try {
+            const resp = await fetch('/api/student-health-history?lrn=' + encodeURIComponent(lrn), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!resp.ok) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load history.</div></div>'; return; }
+            const d = await resp.json();
+            const years = d.years || [];
+
+            if (!years.length) {
+                el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No records on file for this student yet.</div></div>';
+                return;
+            }
+
+            const fmt = (v, unit) => (v === null || v === undefined || v === '') ? '—' : (v + (unit || ''));
+
+            el.innerHTML = `
+                <div style="font-size:.76rem;color:#3d5c47;margin-bottom:10px;">
+                    ${years.length} school year${years.length > 1 ? 's' : ''} on file for this student. Each year's data is preserved separately — promoting a student to a new grade never overwrites prior years.
+                </div>
+            ` + years.slice().reverse().map(y => `
+                <div style="border:1px solid ${y.is_current ? '#86efac' : '#e4ece7'};background:${y.is_current ? '#f0fdf4' : '#fff'};border-radius:10px;padding:10px 12px;margin-bottom:10px;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                        <span style="font-size:.86rem;font-weight:700;color:#1d3c31;">SY ${y.school_year}</span>
+                        ${y.is_current ? '<span style="font-size:.66rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#15803d;color:#fff;">Current</span>' : ''}
+                        <span style="font-size:.76rem;color:#7a9e87;">&mdash; ${y.section || '—'}</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                        <div>
+                            <div style="font-size:.66rem;font-weight:700;color:#7a9e87;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;">Baseline (${fmt(y.baseline.recorded_at)})</div>
+                            <div style="font-size:.78rem;color:#1d3c31;">Ht ${fmt(y.baseline.height_cm, ' cm')} &middot; Wt ${fmt(y.baseline.weight_kg, ' kg')} &middot; BMI ${fmt(y.baseline.bmi)}</div>
+                            <div style="font-size:.76rem;color:#3d5c47;">${fmt(y.baseline.status)}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:.66rem;font-weight:700;color:#7a9e87;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;">Endline (${fmt(y.endline.recorded_at)})</div>
+                            <div style="font-size:.78rem;color:#1d3c31;">Ht ${fmt(y.endline.height_cm, ' cm')} &middot; Wt ${fmt(y.endline.weight_kg, ' kg')} &middot; BMI ${fmt(y.endline.bmi)}</div>
+                            <div style="font-size:.76rem;color:#3d5c47;">${fmt(y.endline.status)}</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        } catch (_err) {
+            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load history.</div></div>';
         }
     };
 

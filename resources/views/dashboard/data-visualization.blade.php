@@ -67,6 +67,7 @@
             <span class="bc-current">Data Visualization</span>
         </div>
         <div class="topbar-chip">DCNHS - SY 2025-2026</div>
+        @include('partials.live-clock')
     </header>
 
     <div class="content">

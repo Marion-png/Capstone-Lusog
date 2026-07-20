@@ -127,6 +127,7 @@
             <span class="bc-current">Adviser Submissions</span>
         </div>
         <div class="topbar-chip"><div class="dot"></div>School Nurse</div>
+        @include('partials.live-clock')
     </header>
 
     <div class="content">

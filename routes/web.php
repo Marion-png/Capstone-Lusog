@@ -1,31 +1,32 @@
 <?php
 
 use App\Http\Controllers\AdviserController;
-use App\Http\Controllers\HealthAssessmentController;
-use App\Http\Controllers\HealthConsentFormController;
 use App\Http\Controllers\ConditionController;
-use App\Http\Controllers\MedicalCertificateController;
-use App\Http\Controllers\ParentalConsentFormController;
-use App\Http\Controllers\NutricorController;
 use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\FeedingCoordinatorController;
 use App\Http\Controllers\FeedingProgramController;
+use App\Http\Controllers\HealthAssessmentController;
+use App\Http\Controllers\HealthConsentFormController;
+use App\Http\Controllers\MedicalCertificateController;
 use App\Http\Controllers\MedicineInventoryController;
-use App\Http\Controllers\NutritionCoordinatorController;
 use App\Http\Controllers\NurseController;
+use App\Http\Controllers\NutricorController;
+use App\Http\Controllers\NutritionCoordinatorController;
+use App\Http\Controllers\ParentalConsentFormController;
 use App\Http\Controllers\SchoolHeadController;
 use App\Http\Controllers\StudentHealthRecordController;
+use App\Models\AuditLog;
 use App\Models\Consultation;
 use App\Models\Institution;
 use App\Models\Medicine;
 use App\Models\StudentHealthRecord;
 use App\Support\AuditTrail;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 
 Route::get('/', function () {
     return view('auth.login', ['demoAccounts' => []]);
@@ -57,13 +58,13 @@ Route::post('/account-request', function (Request $request) {
     $scopedRoles = ['school_nurse', 'clinic_staff', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor'];
 
     $validated = $request->validate([
-        'name'                 => ['required', 'string', 'max:255'],
-        'username'             => ['required', 'string', 'max:255'],
-        'password'             => ['required', 'string', 'min:6', 'confirmed'],
-        'role'                 => ['required', 'in:school_nurse,clinic_staff,class_adviser,school_head,feeding_coor,nutricor'],
-        'institution_id'       => ['nullable', 'integer', 'exists:institutions,id'],
+        'name' => ['required', 'string', 'max:255'],
+        'username' => ['required', 'string', 'max:255'],
+        'password' => ['required', 'string', 'min:6', 'confirmed'],
+        'role' => ['required', 'in:school_nurse,clinic_staff,class_adviser,school_head,feeding_coor,nutricor'],
+        'institution_id' => ['nullable', 'integer', 'exists:institutions,id'],
         'assigned_grade_level' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:50'],
-        'assigned_section'     => ['required_if:role,class_adviser', 'nullable', 'string', 'max:100'],
+        'assigned_section' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:100'],
     ]);
 
     $role = $validated['role'];
@@ -99,24 +100,24 @@ Route::post('/account-request', function (Request $request) {
     }
 
     $institutionId = $requestedInstitutionId;
-    $institution   = $institutionId ? Institution::find($institutionId) : null;
+    $institution = $institutionId ? Institution::find($institutionId) : null;
 
     AuditTrail::record('created', 'AccountRequest', null, "Account request submitted for username '{$username}' ({$role})");
 
     DB::table('account_requests')->insert([
-        'id'                   => (string) str()->uuid(),
-        'name'                 => $validated['name'],
-        'username'             => $validated['username'],
-        'password_hash'        => Hash::make((string) $validated['password']),
-        'role'                 => $role,
-        'institution_id'       => $institutionId,
-        'school_name'          => $institution?->name,
+        'id' => (string) str()->uuid(),
+        'name' => $validated['name'],
+        'username' => $validated['username'],
+        'password_hash' => Hash::make((string) $validated['password']),
+        'role' => $role,
+        'institution_id' => $institutionId,
+        'school_name' => $institution?->name,
         'assigned_grade_level' => $role === 'class_adviser' ? ($validated['assigned_grade_level'] ?? null) : null,
-        'assigned_section'     => $role === 'class_adviser' ? ($validated['assigned_section'] ?? null) : null,
-        'status'               => 'pending',
-        'decided_at'           => null,
-        'created_at'           => now(),
-        'updated_at'           => now(),
+        'assigned_section' => $role === 'class_adviser' ? ($validated['assigned_section'] ?? null) : null,
+        'status' => 'pending',
+        'decided_at' => null,
+        'created_at' => now(),
+        'updated_at' => now(),
     ]);
 
     return redirect()
@@ -148,20 +149,22 @@ Route::post('/nurse/{index}/examine', [NurseController::class, 'saveExamination'
 Route::get('/dashboard/school-nurse', function (Request $request) {
     $institutionId = $request->session()->get('active_institution_id');
 
-    $totalRecords      = 0;
+    $totalRecords = 0;
     $consultationsToday = 0;
-    $atRiskCount       = 0;
-    $lowStockCount     = 0;
+    $atRiskCount = 0;
+    $lowStockCount = 0;
     $recentConsultations = collect();
-    $topConditions       = collect();
-    $lowStockMedicines   = collect();
+    $topConditions = collect();
+    $lowStockMedicines = collect();
 
     if (Schema::hasTable('student_health_records')) {
         $totalRecords = StudentHealthRecord::query()
             ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+            ->forCurrentSchoolYear()
             ->count();
         $atRiskCount = StudentHealthRecord::query()
             ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+            ->forCurrentSchoolYear()
             ->where('is_at_risk', true)
             ->count();
     }
@@ -211,16 +214,18 @@ Route::get('/dashboard/school-nurse', function (Request $request) {
 
 Route::get('/dashboard/student-health-records', function () {
     $role = (string) session('active_role', '');
-    if (!in_array($role, ['school_nurse', 'clinic_staff'], true)) {
+    if (! in_array($role, ['school_nurse', 'clinic_staff'], true)) {
         $redirectByRole = [
             'class_adviser' => 'dashboard.class-adviser',
-            'school_head'   => 'dashboard.school-head',
-            'feeding_coor'  => 'dashboard.feedingcor-dashboard',
-            'nutricor'      => 'dashboard.nutricor-dashboard',
-            'system_admin'  => 'dashboard.system-admin',
+            'school_head' => 'dashboard.school-head',
+            'feeding_coor' => 'dashboard.feedingcor-dashboard',
+            'nutricor' => 'dashboard.nutricor-dashboard',
+            'system_admin' => 'dashboard.system-admin',
         ];
+
         return redirect()->route($redirectByRole[$role] ?? 'login');
     }
+
     return view('dashboard.student-health-records');
 })->name('dashboard.student-health-records');
 
@@ -251,7 +256,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/{decision}', function
     $activeRole = strtolower(trim((string) $request->session()->get('active_role', '')));
     $allowedReviewerRoles = ['school_nurse', 'school nurse', 'clinic_staff', 'clinic staff', 'nurse'];
 
-    if (!in_array($activeRole, $allowedReviewerRoles, true)) {
+    if (! in_array($activeRole, $allowedReviewerRoles, true)) {
         return redirect()->route('dashboard.school-nurse')->with('error', 'Only School Nurse can review deworming requests.');
     }
 
@@ -263,7 +268,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/{decision}', function
             ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
             ->exists();
 
-        if (!$exists) {
+        if (! $exists) {
             return back()->with('error', 'Deworming request not found.');
         }
 
@@ -300,7 +305,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/comment', function (R
     $activeRole = strtolower(trim((string) $request->session()->get('active_role', '')));
     $allowedReviewerRoles = ['school_nurse', 'school nurse', 'clinic_staff', 'clinic staff', 'nurse'];
 
-    if (!in_array($activeRole, $allowedReviewerRoles, true)) {
+    if (! in_array($activeRole, $allowedReviewerRoles, true)) {
         return redirect()->route('dashboard.school-nurse')->with('error', 'Only School Nurse can add comments to deworming requests.');
     }
 
@@ -316,7 +321,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/comment', function (R
             ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
             ->exists();
 
-        if (!$exists) {
+        if (! $exists) {
             return back()->with('error', 'Deworming request not found.');
         }
 
@@ -404,6 +409,7 @@ Route::get('/dashboard/clinic-staff', function () {
         }
         // student_name is encrypted at rest, so the tiebreak sort happens in PHP.
         $atRiskStudents = $q
+            ->forCurrentSchoolYear()
             ->orderByDesc('attendance_sessions_count')
             ->get()
             ->sortBy([
@@ -482,23 +488,23 @@ Route::post('/dashboard/class-adviser/deworming', function (Request $request) {
     }
 
     $newRequest = [
-        'id'                  => (string) str()->uuid(),
-        'submitted_at'        => now(),
-        'submitted_by'        => (string) $request->session()->get('active_name', 'Class Adviser'),
-        'submitted_by_role'   => $submittedByRole,
-        'campaign'            => $validated['campaign'],
-        'total_students'      => (int) $validated['total_students'],
+        'id' => (string) str()->uuid(),
+        'submitted_at' => now(),
+        'submitted_by' => (string) $request->session()->get('active_name', 'Class Adviser'),
+        'submitted_by_role' => $submittedByRole,
+        'campaign' => $validated['campaign'],
+        'total_students' => (int) $validated['total_students'],
         'consenting_students' => (int) $validated['consenting_students'],
-        'tablets_requested'   => (int) $validated['consenting_students'],
-        'status'              => 'pending',
-        'released_date'       => null,
-        'grade_level'         => (string) $request->session()->get('assigned_grade_level', ''),
-        'section'             => (string) $request->session()->get('assigned_section', ''),
-        'institution_id'      => $request->session()->get('active_institution_id'),
-        'nurse_comment'       => null,
-        'commented_at'        => null,
-        'reviewed_at'         => null,
-        'reviewed_by'         => null,
+        'tablets_requested' => (int) $validated['consenting_students'],
+        'status' => 'pending',
+        'released_date' => null,
+        'grade_level' => (string) $request->session()->get('assigned_grade_level', ''),
+        'section' => (string) $request->session()->get('assigned_section', ''),
+        'institution_id' => $request->session()->get('active_institution_id'),
+        'nurse_comment' => null,
+        'commented_at' => null,
+        'reviewed_at' => null,
+        'reviewed_by' => null,
     ];
 
     if (Schema::hasTable('deworming_requests')) {
@@ -625,6 +631,8 @@ Route::post('/adviser/health-assessment', [HealthAssessmentController::class, 's
     ->name('health-assessment.store');
 Route::get('/api/student-health-assessment', [HealthAssessmentController::class, 'status'])
     ->name('api.student-health-assessment');
+Route::get('/api/student-health-history', [StudentHealthRecordController::class, 'history'])
+    ->name('api.student-health-history');
 
 Route::get('/dashboard/feedingcor-program', function (Request $request) {
     $activeRole = strtolower(trim((string) $request->session()->get('active_role', '')));
@@ -651,7 +659,7 @@ Route::post('/dashboard/school-head/approvals/{approval}/{decision}', [SchoolHea
 Route::get('/dashboard/system-admin', function () {
     $activeRole = session('active_role');
     if ($activeRole !== 'system_admin') {
-        if (!$activeRole) {
+        if (! $activeRole) {
             return redirect()
                 ->route('login')
                 ->with('error', 'Please sign in as System Admin to access this page.');
@@ -703,7 +711,7 @@ Route::get('/dashboard/system-admin/audit-logs', function (Request $request) {
     $hasTable = Schema::hasTable('audit_logs');
 
     $logs = $hasTable
-        ? \App\Models\AuditLog::query()
+        ? AuditLog::query()
             ->when($filterAction !== '', fn ($q) => $q->where('action', $filterAction))
             ->when($filterUsername !== '', fn ($q) => $q->where('actor_username', 'like', "%{$filterUsername}%"))
             ->orderByDesc('id')
@@ -712,7 +720,7 @@ Route::get('/dashboard/system-admin/audit-logs', function (Request $request) {
         : collect();
 
     $actions = $hasTable
-        ? \App\Models\AuditLog::query()->select('action')->distinct()->orderBy('action')->pluck('action')
+        ? AuditLog::query()->select('action')->distinct()->orderBy('action')->pluck('action')
         : collect();
 
     return view('dashboard.system-admin-audit-logs', [
@@ -733,12 +741,12 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
     $scopedRoles = ['school_nurse', 'clinic_staff', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor'];
 
     $validated = $request->validate([
-        'name'                 => ['required', 'string', 'max:255'],
-        'username'             => ['required', 'string', 'max:255'],
-        'role'                 => ['required', 'in:school_nurse,clinic_staff,class_adviser,school_head,feeding_coor,nutricor'],
-        'institution_id'       => ['nullable', 'integer', 'exists:institutions,id'],
+        'name' => ['required', 'string', 'max:255'],
+        'username' => ['required', 'string', 'max:255'],
+        'role' => ['required', 'in:school_nurse,clinic_staff,class_adviser,school_head,feeding_coor,nutricor'],
+        'institution_id' => ['nullable', 'integer', 'exists:institutions,id'],
         'assigned_grade_level' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:50'],
-        'assigned_section'     => ['required_if:role,class_adviser', 'nullable', 'string', 'max:100'],
+        'assigned_section' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:100'],
     ]);
 
     $role = $validated['role'];
@@ -764,21 +772,21 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
             ->withInput();
     }
 
-    $institution   = $institutionId ? Institution::find($institutionId) : null;
+    $institution = $institutionId ? Institution::find($institutionId) : null;
 
     AuditTrail::record('created', 'Account', null, "System Admin created account '{$username}' ({$role})");
 
     DB::table('accounts')->insert([
-        'name'                 => $validated['name'],
-        'username'             => $validated['username'],
-        'password_hash'        => null,
-        'role'                 => $role,
-        'institution_id'       => $institutionId,
-        'school_name'          => $institution?->name,
+        'name' => $validated['name'],
+        'username' => $validated['username'],
+        'password_hash' => null,
+        'role' => $role,
+        'institution_id' => $institutionId,
+        'school_name' => $institution?->name,
         'assigned_grade_level' => $role === 'class_adviser' ? ($validated['assigned_grade_level'] ?? null) : null,
-        'assigned_section'     => $role === 'class_adviser' ? ($validated['assigned_section'] ?? null) : null,
-        'created_at'           => now(),
-        'updated_at'           => now(),
+        'assigned_section' => $role === 'class_adviser' ? ($validated['assigned_section'] ?? null) : null,
+        'created_at' => now(),
+        'updated_at' => now(),
     ]);
 
     return back()->with('success', 'User account created successfully.');
@@ -795,7 +803,7 @@ Route::post('/dashboard/system-admin/requests/{requestId}/approve', function (Re
         ? DB::table('account_requests')->where('id', $requestId)->first()
         : null;
 
-    if (!$target) {
+    if (! $target) {
         return back()->with('error', 'Account request not found.');
     }
 
@@ -807,23 +815,23 @@ Route::post('/dashboard/system-admin/requests/{requestId}/approve', function (Re
         ->where('institution_id', $target->institution_id ?? null)
         ->exists();
 
-    if (!$alreadyExists && Schema::hasTable('accounts')) {
+    if (! $alreadyExists && Schema::hasTable('accounts')) {
         DB::table('accounts')->insert([
-            'name'                 => $target->name ?? '-',
-            'username'             => $target->username ?? '-',
-            'password_hash'        => $target->password_hash ?? null,
-            'role'                 => $role,
-            'institution_id'       => $target->institution_id ?? null,
-            'school_name'          => $target->school_name ?? null,
+            'name' => $target->name ?? '-',
+            'username' => $target->username ?? '-',
+            'password_hash' => $target->password_hash ?? null,
+            'role' => $role,
+            'institution_id' => $target->institution_id ?? null,
+            'school_name' => $target->school_name ?? null,
             'assigned_grade_level' => $role === 'class_adviser' ? ($target->assigned_grade_level ?? null) : null,
-            'assigned_section'     => $role === 'class_adviser' ? ($target->assigned_section ?? null) : null,
-            'created_at'           => now(),
-            'updated_at'           => now(),
+            'assigned_section' => $role === 'class_adviser' ? ($target->assigned_section ?? null) : null,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
     }
 
     DB::table('account_requests')->where('id', $requestId)->update([
-        'status'     => 'accepted',
+        'status' => 'accepted',
         'decided_at' => now(),
         'updated_at' => now(),
     ]);
@@ -844,12 +852,12 @@ Route::post('/dashboard/system-admin/requests/{requestId}/decline', function (Re
         ? DB::table('account_requests')->where('id', $requestId)->first()
         : null;
 
-    if (!$target) {
+    if (! $target) {
         return back()->with('error', 'Account request not found.');
     }
 
     DB::table('account_requests')->where('id', $requestId)->update([
-        'status'     => 'declined',
+        'status' => 'declined',
         'decided_at' => now(),
         'updated_at' => now(),
     ]);
@@ -1000,7 +1008,7 @@ Route::post('/admin-login', function (Request $request) {
     $request->session()->put('active_username', $validated['username']);
     $request->session()->forget(['assigned_grade_level', 'assigned_section']);
 
-    AuditTrail::record('login', null, null, "System Admin logged in");
+    AuditTrail::record('login', null, null, 'System Admin logged in');
 
     return redirect()->route('dashboard.system-admin');
 })->name('admin.login.submit');

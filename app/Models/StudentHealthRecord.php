@@ -17,6 +17,7 @@ class StudentHealthRecord extends Model
 
     protected $fillable = [
         'institution_id',
+        'school_year',
         'student_name',
         'student_id',
         'school_name',
@@ -84,13 +85,44 @@ class StudentHealthRecord extends Model
         return $institutionId ? $query->where('institution_id', $institutionId) : $query;
     }
 
-    public function healthConditions(): HasMany
-    {
-        return $this->hasMany(StudentHealthCondition::class);
-    }
-
     public function consentForms(): HasMany
     {
         return $this->hasMany(ParentalConsentForm::class);
+    }
+
+    /**
+     * The single canonical DepEd school-year string ("2026-2027"), delegated
+     * to ParentalConsentForm so there is exactly one implementation of the
+     * June-May formula in the codebase.
+     */
+    public static function currentSchoolYear(): string
+    {
+        return ParentalConsentForm::currentSchoolYear();
+    }
+
+    /**
+     * Filters to rows for the given (or current) school year. school_year is
+     * required with no NULL fallback, so "current" always means exactly one
+     * thing — no stray row can silently double-match alongside a real one.
+     */
+    public function scopeForCurrentSchoolYear(Builder $query, ?string $schoolYear = null): Builder
+    {
+        return $query->where('school_year', $schoolYear ?? static::currentSchoolYear());
+    }
+
+    /**
+     * The single reusable replacement for ad-hoc
+     * `where('student_id', $lrn)->first()` reads across the app. Resolves
+     * exactly one row per LRN even once a student has rows from multiple
+     * school years (e.g. after grade promotion / re-encoding).
+     */
+    public static function currentForStudent(string $lrn, ?int $institutionId = null, ?string $schoolYear = null): ?self
+    {
+        return static::query()
+            ->where('student_id', $lrn)
+            ->when($institutionId, fn (Builder $q) => $q->where('institution_id', $institutionId))
+            ->forCurrentSchoolYear($schoolYear)
+            ->latest('id')
+            ->first();
     }
 }

@@ -105,6 +105,7 @@
             <span class="bc-current">Class Adviser &middot; Health Card</span>
         </div>
         <div class="topbar-chip chip"><div class="dot"></div>Class Adviser</div>
+        @include('partials.live-clock')
     </header>
     <div class="content">
         <h1 class="title">School Health Card</h1>

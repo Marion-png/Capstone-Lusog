@@ -55,7 +55,7 @@ class AdviserController extends Controller
         $birthDay = $request->input('birth_day');
         $birthYear = $request->input('birth_year');
 
-        if ((!$birthMonth || !$birthDay || !$birthYear) && $birthDate !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $birthDate)) {
+        if ((! $birthMonth || ! $birthDay || ! $birthYear) && $birthDate !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $birthDate)) {
             [$yearPart, $monthPart, $dayPart] = explode('-', $birthDate);
             $request->merge([
                 'birth_year' => (int) $yearPart,
@@ -66,7 +66,7 @@ class AdviserController extends Controller
 
         $heightCm = $request->input('height_cm');
         $heightMeters = $request->input('height_m');
-        if ((!is_numeric($heightCm) || (float) $heightCm <= 0) && is_numeric($heightMeters)) {
+        if ((! is_numeric($heightCm) || (float) $heightCm <= 0) && is_numeric($heightMeters)) {
             $request->merge([
                 'height_cm' => round(((float) $heightMeters) * 100, 2),
             ]);
@@ -159,7 +159,7 @@ class AdviserController extends Controller
                 $schoolName = (string) ($validated['division'] ?? '');
             }
 
-            $sectionLabel = trim((string) $validated['grade_level'] . ' / ' . (string) $validated['section']);
+            $sectionLabel = trim((string) $validated['grade_level'].' / '.(string) $validated['section']);
 
             // Persist the full adviser entry so the roster can be rebuilt after
             // session loss or a server restart. Examination data lives in its
@@ -169,6 +169,7 @@ class AdviserController extends Controller
 
             $payload = [
                 'institution_id' => $request->session()->get('active_institution_id'),
+                'school_year' => StudentHealthRecord::currentSchoolYear(),
                 'student_name' => $studentName,
                 'section' => $sectionLabel !== '' ? $sectionLabel : (string) $validated['section'],
                 'student_details' => $details,
@@ -195,6 +196,7 @@ class AdviserController extends Controller
                 [
                     'student_id' => (string) $validated['lrn'],
                     'institution_id' => $request->session()->get('active_institution_id'),
+                    'school_year' => StudentHealthRecord::currentSchoolYear(),
                 ],
                 $payload
             );
@@ -232,6 +234,7 @@ class AdviserController extends Controller
         }
 
         $heightMeters = $heightCm / 100;
+
         return round($weightKg / ($heightMeters * $heightMeters), 2);
     }
 
@@ -277,8 +280,8 @@ class AdviserController extends Controller
     private function buildStudentName(string $lastName, string $firstName, string $middleName): string
     {
         $middleName = trim($middleName);
-        $middleInitial = $middleName !== '' ? (' ' . strtoupper(substr($middleName, 0, 1)) . '.') : '';
+        $middleInitial = $middleName !== '' ? (' '.strtoupper(substr($middleName, 0, 1)).'.') : '';
 
-        return trim(trim($lastName) . ', ' . trim($firstName) . $middleInitial);
+        return trim(trim($lastName).', '.trim($firstName).$middleInitial);
     }
 }

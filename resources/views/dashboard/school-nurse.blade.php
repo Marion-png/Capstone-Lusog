@@ -100,6 +100,7 @@
             <span class="bc-current">Overview</span>
         </div>
         <div class="topbar-chip"><div class="dot"></div>DCNHS - SY 2025-2026</div>
+        @include('partials.live-clock')
     </header>
 
     <div class="content">

@@ -12,9 +12,8 @@ use Illuminate\Support\Facades\Schema;
 
 class HealthAssessment extends Model
 {
-<<<<<<< Updated upstream
     use Auditable;
-=======
+
     /**
      * Section F of the paper MLHAT: body systems and their checkable
      * findings. Keys match the `body_systems` JSON structure submitted by
@@ -58,7 +57,6 @@ class HealthAssessment extends Model
 
     /** Section H teeth condition options. */
     public const TEETH_CONDITIONS = ['Good', 'Fair', 'Poor', 'Dental Caries', 'Gum Inflammation', 'Missing/Broken Teeth'];
->>>>>>> Stashed changes
 
     protected $fillable = [
         'student_health_record_id', 'school_year', 'date_of_assessment', 'assessed_by',
@@ -97,7 +95,6 @@ class HealthAssessment extends Model
     protected $casts = [
         'date_of_assessment' => 'date',
         'immunization_date_reviewed' => 'date',
-<<<<<<< Updated upstream
         'med_asthma' => EncryptedBoolean::class,
         'med_diabetes' => EncryptedBoolean::class,
         'med_seizure_disorder' => EncryptedBoolean::class,
@@ -140,24 +137,6 @@ class HealthAssessment extends Model
         'summary_of_findings' => EncryptedString::class,
         'recommendations' => EncryptedString::class,
         'examiner_signature' => EncryptedString::class,
-=======
-        'med_asthma' => 'boolean',
-        'med_diabetes' => 'boolean',
-        'med_seizure_disorder' => 'boolean',
-        'med_frequent_infections' => 'boolean',
-        'med_allergies' => 'boolean',
-        'med_heart_condition' => 'boolean',
-        'med_tuberculosis' => 'boolean',
-        'med_hospitalization_surgery' => 'boolean',
-        'fam_hypertension' => 'boolean',
-        'fam_diabetes' => 'boolean',
-        'fam_heart_disease' => 'boolean',
-        'fam_cancer' => 'boolean',
-        'fam_mental_health' => 'boolean',
-        'dental_referral' => 'boolean',
-        'body_systems' => 'array',
-        'teeth_condition' => 'array',
->>>>>>> Stashed changes
     ];
 
     public function studentHealthRecord(): BelongsTo
@@ -167,12 +146,7 @@ class HealthAssessment extends Model
 
     public static function currentSchoolYear(): string
     {
-        $month = (int) now()->format('n');
-        $year = (int) now()->format('Y');
-
-        return $month >= 6
-            ? "{$year}-".($year + 1)
-            : ($year - 1)."-{$year}";
+        return ParentalConsentForm::currentSchoolYear();
     }
 
     public static function forStudent(int $studentHealthRecordId, string $schoolYear): ?self

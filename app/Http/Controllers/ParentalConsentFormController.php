@@ -53,7 +53,7 @@ class ParentalConsentFormController extends Controller
 
         $expectedSection = trim("{$advisedGrade} / {$advisedSection}");
 
-        $record = StudentHealthRecord::forActiveInstitution()->where('student_id', $validated['lrn'])->first();
+        $record = StudentHealthRecord::currentForStudent($validated['lrn'], $request->session()->get('active_institution_id'));
 
         abort_if(
             $record === null || $record->section !== $expectedSection,
@@ -121,7 +121,7 @@ class ParentalConsentFormController extends Controller
             return response()->json(['has_consent' => false, 'school_year' => ParentalConsentForm::currentSchoolYear()]);
         }
 
-        $record = StudentHealthRecord::forActiveInstitution()->where('student_id', $lrn)->first();
+        $record = StudentHealthRecord::currentForStudent($lrn, $request->session()->get('active_institution_id'));
 
         if ($activeRole === 'class_adviser' && $record !== null) {
             $grade = (string) $request->session()->get('assigned_grade_level', '');

@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\StudentHealthCondition;
 use App\Models\StudentHealthRecord;
 use App\Support\StudentRosterSync;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -44,7 +46,7 @@ class StudentHealthRecordController extends Controller
             if ($institutionId) {
                 $q->where('institution_id', $institutionId);
             }
-            $records = $q->orderByDesc('updated_at')->get();
+            $records = $q->forCurrentSchoolYear()->orderByDesc('updated_at')->get();
         }
 
         $todayCount = $records
@@ -64,9 +66,14 @@ class StudentHealthRecordController extends Controller
         $lrnsWithCertificates = [];
         if (Schema::hasTable('student_health_conditions') && Schema::hasTable('medical_certificates')) {
             $lrnsWithCertificates = array_flip(
-                StudentHealthRecord::forActiveInstitution()
-                    ->whereHas('healthConditions.certificates')
-                    ->pluck('student_id')
+                StudentHealthCondition::query()
+                    ->when(
+                        $request->session()->get('active_institution_id'),
+                        fn ($q, $id) => $q->where('institution_id', $id)
+                    )
+                    ->whereHas('certificates')
+                    ->pluck('student_lrn')
+                    ->unique()
                     ->toArray()
             );
         }
@@ -129,6 +136,67 @@ class StudentHealthRecordController extends Controller
         }
     }
 
+    /**
+     * Every school year on file for one student, oldest first — proves
+     * grade promotion preserves history instead of overwriting it.
+     * Allowed roles: class_adviser (own class only), clinic_staff, school_nurse.
+     */
+    public function history(Request $request): JsonResponse
+    {
+        $activeRole = (string) $request->session()->get('active_role', '');
+
+        abort_unless(
+            in_array($activeRole, ['class_adviser', 'clinic_staff', 'school_nurse'], true),
+            403,
+            'Access denied.'
+        );
+
+        $lrn = (string) $request->query('lrn', '');
+        if ($lrn === '' || ! Schema::hasTable('student_health_records')) {
+            return response()->json(['years' => []]);
+        }
+
+        $records = StudentHealthRecord::where('student_id', $lrn)
+            ->when(
+                $request->session()->get('active_institution_id'),
+                fn ($q, $id) => $q->where('institution_id', $id)
+            )
+            ->orderBy('school_year')
+            ->get();
+
+        if ($activeRole === 'class_adviser') {
+            $grade = (string) $request->session()->get('assigned_grade_level', '');
+            $section = (string) $request->session()->get('assigned_section', '');
+            $expected = trim("{$grade} / {$section}");
+            $current = $records->firstWhere('school_year', StudentHealthRecord::currentSchoolYear());
+            if ($grade === '' || $section === '' || $current === null || $current->section !== $expected) {
+                return response()->json(['years' => []]);
+            }
+        }
+
+        return response()->json([
+            'years' => $records->map(fn (StudentHealthRecord $r) => [
+                'school_year' => $r->school_year,
+                'section' => $r->section,
+                'is_current' => $r->school_year === StudentHealthRecord::currentSchoolYear(),
+                'baseline' => [
+                    'height_cm' => $r->baseline_height_cm,
+                    'weight_kg' => $r->baseline_weight_kg,
+                    'bmi' => $r->baseline_bmi_value,
+                    'status' => $r->baseline_nutritional_status,
+                    'recorded_at' => optional($r->baseline_recorded_at)->format('M d, Y'),
+                ],
+                'endline' => [
+                    'height_cm' => $r->endline_height_cm,
+                    'weight_kg' => $r->endline_weight_kg,
+                    'bmi' => $r->endline_bmi_value,
+                    'status' => $r->endline_nutritional_status,
+                    'recorded_at' => optional($r->endline_recorded_at)->format('M d, Y'),
+                ],
+            ])->values(),
+        ]);
+    }
+
     public function storeBaseline(Request $request): RedirectResponse
     {
         $validated = $request->validate([
@@ -146,12 +214,16 @@ class StudentHealthRecordController extends Controller
         $status = $this->classifyStatus($bmi, (int) $validated['age']);
         $recordedAt = $validated['recorded_at'] ?? now()->toDateString();
 
+        $institutionId = $request->session()->get('active_institution_id');
+
         StudentHealthRecord::query()->updateOrCreate(
             [
                 'student_id' => $validated['student_id'],
+                'institution_id' => $institutionId,
+                'school_year' => StudentHealthRecord::currentSchoolYear(),
             ],
             [
-                'institution_id' => $request->session()->get('active_institution_id'),
+                'institution_id' => $institutionId,
                 'student_name' => $validated['student_name'],
                 'school_name' => $validated['school_name'] ?? session('active_school_name'),
                 'section' => $validated['section'],
@@ -209,7 +281,7 @@ class StudentHealthRecordController extends Controller
                 $q->where('institution_id', $institutionId);
             }
             // student_name is encrypted at rest, so sorting happens in PHP.
-            $records = $q->get()->sortBy([
+            $records = $q->forCurrentSchoolYear()->get()->sortBy([
                 ['section', 'asc'],
                 ['student_name', 'asc'],
             ])->values();

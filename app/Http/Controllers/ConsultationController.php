@@ -90,7 +90,7 @@ class ConsultationController extends Controller
 
         if (! $conditionId && ! $conditionText) {
             return back()
-                ->withErrors(['condition' => 'Please select or enter a condition.'])
+                ->withErrors(['condition_id' => 'Please select or enter a condition.'])
                 ->withInput();
         }
 

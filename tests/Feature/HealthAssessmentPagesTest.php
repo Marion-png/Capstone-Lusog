@@ -60,6 +60,7 @@ class HealthAssessmentPagesTest extends TestCase
     private function makeRecord(): StudentHealthRecord
     {
         return StudentHealthRecord::create([
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
             'institution_id' => $this->institution->id,
             'student_id' => '123456789012',
             'student_name' => 'Dela Cruz, Juan',

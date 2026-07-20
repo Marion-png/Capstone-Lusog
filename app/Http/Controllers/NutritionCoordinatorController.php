@@ -100,6 +100,7 @@ class NutritionCoordinatorController extends Controller
         // student_name is encrypted at rest, so the final sort happens in PHP.
         return StudentHealthRecord::query()
             ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+            ->forCurrentSchoolYear()
             ->get()
             ->sortBy([
                 ['school_name', 'asc'],

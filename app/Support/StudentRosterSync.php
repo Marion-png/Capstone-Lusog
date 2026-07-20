@@ -32,6 +32,7 @@ class StudentRosterSync
 
         $dbRecords = StudentHealthRecord::query()
             ->where('institution_id', $institutionId)
+            ->forCurrentSchoolYear()
             ->get();
 
         $toAdd = [];
@@ -43,6 +44,7 @@ class StudentRosterSync
             }
 
             $toAdd[] = self::buildSessionRow($record, $lrn);
+            $sessionLrns->put($lrn, true);
         }
 
         if (! empty($toAdd)) {

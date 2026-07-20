@@ -74,6 +74,7 @@
             <span class="bc-current">Deworming Program</span>
         </div>
         <div class="topbar-chip">Class Adviser Request Monitor</div>
+        @include('partials.live-clock')
     </header>
 
     <div class="content">

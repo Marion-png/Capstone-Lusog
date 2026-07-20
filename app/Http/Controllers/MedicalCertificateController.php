@@ -45,11 +45,12 @@ class MedicalCertificateController extends Controller
 
         $expectedSection = trim("{$advisedGrade} / {$advisedSection}");
 
-        $record = StudentHealthRecord::forActiveInstitution()->where('student_id', $validated['lrn'])->first();
+        $record = StudentHealthRecord::currentForStudent($validated['lrn'], $request->session()->get('active_institution_id'));
 
         if ($record === null) {
             $record = StudentHealthRecord::create([
                 'institution_id' => $request->session()->get('active_institution_id'),
+                'school_year' => StudentHealthRecord::currentSchoolYear(),
                 'student_id' => $validated['lrn'],
                 'student_name' => trim((string) $request->input('student_name', 'Unknown Student')),
                 'section' => $expectedSection,
@@ -65,13 +66,19 @@ class MedicalCertificateController extends Controller
             );
         }
 
+        $institutionId = $request->session()->get('active_institution_id');
+
         // condition_name is encrypted at rest, so deduplication compares in PHP.
+        // Conditions are keyed by student (LRN + institution), not by this
+        // year's record, so they carry forward automatically across grade
+        // promotion instead of resetting each school year.
         $conditionName = trim($validated['condition_name']);
-        $condition = StudentHealthCondition::where('student_health_record_id', $record->id)
+        $condition = StudentHealthCondition::forStudent($validated['lrn'], $institutionId)
             ->get()
             ->first(fn (StudentHealthCondition $c) => strcasecmp($c->condition_name, $conditionName) === 0)
             ?? StudentHealthCondition::create([
-                'student_health_record_id' => $record->id,
+                'student_lrn' => $validated['lrn'],
+                'institution_id' => $institutionId,
                 'condition_name' => $conditionName,
             ]);
 
@@ -103,11 +110,11 @@ class MedicalCertificateController extends Controller
             'Only Clinic Staff or School Nurse may download medical certificates.'
         );
 
-        $cert = MedicalCertificate::with('condition.studentHealthRecord')->find($id);
+        $cert = MedicalCertificate::with('condition')->find($id);
         abort_if($cert === null, 404, 'Certificate not found.');
 
         $institutionId = $request->session()->get('active_institution_id');
-        $recordInstitutionId = $cert->condition?->studentHealthRecord?->institution_id;
+        $recordInstitutionId = $cert->condition?->institution_id;
         abort_if(
             $institutionId && $recordInstitutionId && (int) $recordInstitutionId !== (int) $institutionId,
             404,
@@ -142,7 +149,7 @@ class MedicalCertificateController extends Controller
             return response()->json(['conditions' => []]);
         }
 
-        $record = StudentHealthRecord::forActiveInstitution()->where('student_id', $lrn)->first();
+        $record = StudentHealthRecord::currentForStudent($lrn, $request->session()->get('active_institution_id'));
         if ($record === null) {
             return response()->json(['conditions' => []]);
         }
@@ -156,7 +163,7 @@ class MedicalCertificateController extends Controller
             }
         }
 
-        $conditions = StudentHealthCondition::where('student_health_record_id', $record->id)
+        $conditions = StudentHealthCondition::forStudent($lrn, $request->session()->get('active_institution_id'))
             ->with('certificates')
             ->get();
 

@@ -67,6 +67,7 @@
 	<header class="topbar">
 		<div class="topbar-bc"><span>Dashboard</span><span>&rsaquo;</span><span>Feeding Program</span></div>
 		<div class="topbar-chip"><div class="dot"></div>Monitoring Active</div>
+	    @include('partials.live-clock')
 	</header>
 
 	<div class="content">

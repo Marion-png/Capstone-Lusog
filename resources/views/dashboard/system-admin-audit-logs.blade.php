@@ -34,6 +34,7 @@
     <header class="topbar">
         <a href="{{ route('dashboard.system-admin') }}">&larr; Control Center</a>
         <h1>Audit Trail</h1>
+        @include('partials.live-clock')
     </header>
     <div class="content">
         <p class="sub">Every access and action performed on personal and sensitive personal information — who, what, when, and from where. Entries are append-only; change payloads are stored encrypted. Showing the latest 200 matching entries.</p>

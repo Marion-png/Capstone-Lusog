@@ -45,7 +45,7 @@ class NurseController extends Controller
             $lrns = array_values(array_filter(array_column($records, 'lrn'), fn ($v) => $v !== null && $v !== ''));
 
             if (! empty($lrns)) {
-                $studentRecords = StudentHealthRecord::forActiveInstitution()->whereIn('student_id', $lrns)->get()->keyBy('student_id');
+                $studentRecords = StudentHealthRecord::forActiveInstitution()->whereIn('student_id', $lrns)->forCurrentSchoolYear($schoolYear)->get()->keyBy('student_id');
                 $studentIds = $studentRecords->pluck('id')->toArray();
 
                 if (! empty($studentIds)) {
@@ -84,7 +84,7 @@ class NurseController extends Controller
         $consentForm = null;
 
         if ($lrn !== '') {
-            $studentRecord = StudentHealthRecord::forActiveInstitution()->where('student_id', $lrn)->first();
+            $studentRecord = StudentHealthRecord::currentForStudent($lrn, $request->session()->get('active_institution_id'));
             if ($studentRecord !== null) {
                 $consentForm = ParentalConsentForm::where('student_health_record_id', $studentRecord->id)
                     ->where('program_type', 'Deworming')
@@ -113,7 +113,7 @@ class NurseController extends Controller
         // Gate: block if deworming is being marked "given" but no valid consent is on file
         if ($request->input('deworming') === 'V') {
             $lrn = (string) ($records[$index]['lrn'] ?? '');
-            $studentRecord = StudentHealthRecord::forActiveInstitution()->where('student_id', $lrn)->first();
+            $studentRecord = StudentHealthRecord::currentForStudent($lrn, $request->session()->get('active_institution_id'));
             $schoolYear = ParentalConsentForm::currentSchoolYear();
             $consentForm = $studentRecord !== null
                 ? ParentalConsentForm::where('student_health_record_id', $studentRecord->id)
@@ -209,7 +209,7 @@ class NurseController extends Controller
         // (i.e. real students submitted by an adviser) to avoid creating orphans.
         $lrn = (string) ($records[$index]['lrn'] ?? '');
         if ($lrn !== '' && Schema::hasTable('student_health_records')) {
-            $studentRecord = StudentHealthRecord::forActiveInstitution()->where('student_id', $lrn)->first();
+            $studentRecord = StudentHealthRecord::currentForStudent($lrn, $request->session()->get('active_institution_id'));
 
             if ($studentRecord !== null) {
                 $endlineHeight = $request->input('height_cm');
@@ -235,5 +235,4 @@ class NurseController extends Controller
 
         return redirect()->route('dashboard.student-health-records')->with('success', 'Medical record saved.');
     }
-
 }

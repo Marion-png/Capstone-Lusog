@@ -171,6 +171,7 @@
 	<header class="topbar">
 		<div class="topbar-bc"><span>Dashboard</span><span>&rsaquo;</span><span>Reports</span></div>
 		<div class="topbar-chip"><div class="dot"></div>Read-Only Monitoring</div>
+	    @include('partials.live-clock')
 	</header>
 
 	<div class="content">

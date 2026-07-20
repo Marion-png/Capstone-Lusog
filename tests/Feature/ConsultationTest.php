@@ -28,7 +28,7 @@ class ConsultationTest extends TestCase
     private function clinicSession(): array
     {
         return [
-            'active_role'           => 'clinic_staff',
+            'active_role' => 'clinic_staff',
             'active_institution_id' => $this->institution->id,
         ];
     }
@@ -40,13 +40,13 @@ class ConsultationTest extends TestCase
 
         $response = $this->withSession($this->clinicSession())
             ->post('/dashboard/consultation-log', [
-            'consulted_at' => now()->format('Y-m-d'),
-            'student_name' => 'John Doe',
-            'grade_section' => 'Grade 10 - A',
-            'condition_id' => $condition->id,
-            'treatment_given' => 'Rest and fluids',
-            'status' => 'treated',
-        ]);
+                'consulted_at' => now()->format('Y-m-d'),
+                'student_name' => 'John Doe',
+                'grade_section' => 'Grade 10 - A',
+                'condition_id' => $condition->id,
+                'treatment_given' => 'Rest and fluids',
+                'status' => 'treated',
+            ]);
 
         $response->assertRedirect(route('dashboard.consultation-log'));
 
@@ -63,13 +63,13 @@ class ConsultationTest extends TestCase
     {
         $response = $this->withSession($this->clinicSession())
             ->post('/dashboard/consultation-log', [
-            'consulted_at' => now()->format('Y-m-d'),
-            'student_name' => 'Jane Doe',
-            'grade_section' => 'Grade 10 - B',
-            'condition' => 'Custom Condition',
-            'treatment_given' => 'Observation',
-            'status' => 'referred',
-        ]);
+                'consulted_at' => now()->format('Y-m-d'),
+                'student_name' => 'Jane Doe',
+                'grade_section' => 'Grade 10 - B',
+                'condition' => 'Custom Condition',
+                'treatment_given' => 'Observation',
+                'status' => 'referred',
+            ]);
 
         $response->assertRedirect(route('dashboard.consultation-log'));
 
@@ -85,14 +85,43 @@ class ConsultationTest extends TestCase
     {
         $response = $this->withSession($this->clinicSession())
             ->post('/dashboard/consultation-log', [
-            'consulted_at' => now()->format('Y-m-d'),
-            'student_name' => 'Test Student',
-            'grade_section' => 'Grade 10 - C',
-            'treatment_given' => 'Test',
-            'status' => 'treated',
-        ]);
+                'consulted_at' => now()->format('Y-m-d'),
+                'student_name' => 'Test Student',
+                'grade_section' => 'Grade 10 - C',
+                'treatment_given' => 'Test',
+                'status' => 'treated',
+            ]);
 
-        $response->assertSessionHasErrors('condition');
+        // The condition-search component only ever renders @error('condition_id')
+        // (its `name` prop). The error must be attached under that same key or
+        // it never reaches the user — see missing_condition_error_is_visible_to_the_condition_search_component.
+        $response->assertSessionHasErrors('condition_id');
+
+        $this->assertSame(0, Consultation::count());
+    }
+
+    /**
+     * Regression: the controller used to attach the "missing condition" error
+     * under the key 'condition', but resources/views/components/condition-search.blade.php
+     * only displays @error($name) where $name is the `name` prop passed in
+     * (consultation-create.blade.php passes name="condition_id"). The mismatch
+     * meant a user who submitted without picking a condition — e.g. typed a
+     * name and pressed Enter, which (before the JS fix) didn't select
+     * anything — saw no error message at all. The form just silently failed
+     * and nothing was ever saved.
+     */
+    /** @test */
+    public function missing_condition_error_is_visible_to_the_condition_search_component(): void
+    {
+        $response = $this->withSession($this->clinicSession())
+            ->post('/dashboard/consultation-log', [
+                'consulted_at' => now()->format('Y-m-d'),
+                'student_name' => 'Pedro Reyes',
+                'grade_section' => 'Grade 9 - C',
+                'status' => 'treated',
+            ]);
+
+        $response->assertSessionHasErrors(['condition_id' => 'Please select or enter a condition.']);
     }
 
     /** @test */
@@ -126,13 +155,13 @@ class ConsultationTest extends TestCase
     {
         $response = $this->withSession($this->clinicSession())
             ->post('/dashboard/consultation-log', [
-            'consulted_at' => now()->format('Y-m-d'),
-            'student_name' => 'Test Student',
-            'grade_section' => 'Grade 10',
-            'condition_id' => 9999,
-            'treatment_given' => 'Test',
-            'status' => 'treated',
-        ]);
+                'consulted_at' => now()->format('Y-m-d'),
+                'student_name' => 'Test Student',
+                'grade_section' => 'Grade 10',
+                'condition_id' => 9999,
+                'treatment_given' => 'Test',
+                'status' => 'treated',
+            ]);
 
         $response->assertSessionHasErrors('condition_id');
     }
@@ -145,13 +174,13 @@ class ConsultationTest extends TestCase
         foreach (['treated', 'referred'] as $status) {
             $response = $this->withSession($this->clinicSession())
                 ->post('/dashboard/consultation-log', [
-                'consulted_at' => now()->format('Y-m-d'),
-                'student_name' => "Student {$status}",
-                'grade_section' => 'Grade 10',
-                'condition_id' => $condition->id,
-                'treatment_given' => 'Test',
-                'status' => $status,
-            ]);
+                    'consulted_at' => now()->format('Y-m-d'),
+                    'student_name' => "Student {$status}",
+                    'grade_section' => 'Grade 10',
+                    'condition_id' => $condition->id,
+                    'treatment_given' => 'Test',
+                    'status' => $status,
+                ]);
 
             $response->assertRedirect();
         }

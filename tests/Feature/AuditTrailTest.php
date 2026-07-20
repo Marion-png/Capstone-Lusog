@@ -41,6 +41,7 @@ class AuditTrailTest extends TestCase
     private function makeRecord(): StudentHealthRecord
     {
         return StudentHealthRecord::create([
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
             'institution_id' => $this->institution->id,
             'student_id' => 'LRN001',
             'student_name' => 'Dela Cruz, Juan A.',

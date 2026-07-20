@@ -438,7 +438,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         function selectFocused() {
+            // No result explicitly highlighted via arrow keys yet (the common
+            // case: type then press Enter) — default to the top match, or
+            // offer to add the typed text as a new condition.
             if (focusedIndex === -1) {
+                if (filteredResults.length > 0) {
+                    selectCondition(filteredResults[0]);
+                } else if (input.value.length > 0 && !hasExactMatch()) {
+                    addNewCondition();
+                }
                 return;
             }
 

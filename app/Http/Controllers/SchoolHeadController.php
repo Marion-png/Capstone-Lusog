@@ -43,7 +43,7 @@ class SchoolHeadController extends Controller
                 $query->where('school_name', $schoolName);
             }
 
-            $students = $query->get(['section', 'nutritional_status', 'baseline_nutritional_status']);
+            $students = $query->forCurrentSchoolYear()->get(['section', 'nutritional_status', 'baseline_nutritional_status']);
             $totalStudents = $students->count();
 
             foreach ($students as $student) {
@@ -79,7 +79,7 @@ class SchoolHeadController extends Controller
             $columnPct = $maxGradeTotal > 0 ? ($gradeTotal / $maxGradeTotal) * 90 : 0;
 
             $gradeChart[] = [
-                'label' => 'Grade ' . $grade,
+                'label' => 'Grade '.$grade,
                 'healthy' => $bucket['healthy'],
                 'risk' => $bucket['risk'],
                 'healthy_pct' => $gradeTotal > 0 ? round($columnPct * ($bucket['healthy'] / $gradeTotal), 1) : 0,
@@ -88,7 +88,7 @@ class SchoolHeadController extends Controller
         }
 
         $wastedRate = $totalStudents > 0
-            ? round(($wastedCount / $totalStudents) * 100, 1) . '%'
+            ? round(($wastedCount / $totalStudents) * 100, 1).'%'
             : '0%';
 
         return view('schoolhead-dashboard.school-head', [

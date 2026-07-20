@@ -26,7 +26,7 @@ class FeedingCoordinatorController extends Controller
             if ($institutionId) {
                 $q->where('institution_id', $institutionId);
             }
-            $students = $q->get();
+            $students = $q->forCurrentSchoolYear()->get();
         }
 
         $totalStudents = $students->count();
