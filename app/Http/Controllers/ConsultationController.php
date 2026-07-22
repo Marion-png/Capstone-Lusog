@@ -10,8 +10,12 @@ use Illuminate\View\View;
 
 class ConsultationController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request): View|RedirectResponse
     {
+        if ($redirect = $this->requireClinicRole($request)) {
+            return $redirect;
+        }
+
         $institutionId = $request->session()->get('active_institution_id');
 
         $baseQuery = function () use ($institutionId) {
@@ -67,13 +71,21 @@ class ConsultationController extends Controller
         ]);
     }
 
-    public function create(): View
+    public function create(Request $request): View|RedirectResponse
     {
+        if ($redirect = $this->requireClinicRole($request)) {
+            return $redirect;
+        }
+
         return view('dashboard.consultation-create');
     }
 
     public function store(Request $request): RedirectResponse
     {
+        if ($redirect = $this->requireClinicRole($request)) {
+            return $redirect;
+        }
+
         $validated = $request->validate([
             'consulted_at' => ['required', 'date'],
             'student_name' => ['required', 'string', 'max:255'],
@@ -117,5 +129,27 @@ class ConsultationController extends Controller
         return redirect()
             ->route('dashboard.consultation-log')
             ->with('success', 'Consultation saved successfully.');
+    }
+
+    /**
+     * Redirects a non-nurse/clinic-staff session to its own dashboard
+     * instead of letting it view or write consultation data.
+     */
+    private function requireClinicRole(Request $request): ?RedirectResponse
+    {
+        $role = (string) $request->session()->get('active_role', '');
+        if (in_array($role, ['school_nurse', 'clinic_staff', 'system_admin'], true)) {
+            return null;
+        }
+
+        $redirectByRole = [
+            'class_adviser' => 'dashboard.class-adviser',
+            'school_head' => 'dashboard.school-head',
+            'feeding_coor' => 'dashboard.feedingcor-dashboard',
+            'nutricor' => 'dashboard.nutricor-dashboard',
+            'system_admin' => 'dashboard.system-admin',
+        ];
+
+        return redirect()->route($redirectByRole[$role] ?? 'login');
     }
 }

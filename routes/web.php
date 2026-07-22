@@ -147,6 +147,19 @@ Route::post('/nurse/{index}/examine', [NurseController::class, 'saveExamination'
     ->name('nurse.examine.save');
 
 Route::get('/dashboard/school-nurse', function (Request $request) {
+    $role = (string) $request->session()->get('active_role', '');
+    if (! in_array($role, ['school_nurse', 'clinic_staff', 'system_admin'], true)) {
+        $redirectByRole = [
+            'class_adviser' => 'dashboard.class-adviser',
+            'school_head' => 'dashboard.school-head',
+            'feeding_coor' => 'dashboard.feedingcor-dashboard',
+            'nutricor' => 'dashboard.nutricor-dashboard',
+            'system_admin' => 'dashboard.system-admin',
+        ];
+
+        return redirect()->route($redirectByRole[$role] ?? 'login');
+    }
+
     $institutionId = $request->session()->get('active_institution_id');
 
     $totalRecords = 0;
@@ -214,7 +227,7 @@ Route::get('/dashboard/school-nurse', function (Request $request) {
 
 Route::get('/dashboard/student-health-records', function () {
     $role = (string) session('active_role', '');
-    if (! in_array($role, ['school_nurse', 'clinic_staff'], true)) {
+    if (! in_array($role, ['school_nurse', 'clinic_staff', 'system_admin'], true)) {
         $redirectByRole = [
             'class_adviser' => 'dashboard.class-adviser',
             'school_head' => 'dashboard.school-head',
@@ -230,6 +243,19 @@ Route::get('/dashboard/student-health-records', function () {
 })->name('dashboard.student-health-records');
 
 Route::get('/dashboard/school-nurse/deworming', function (Request $request) {
+    $role = (string) $request->session()->get('active_role', '');
+    if (! in_array($role, ['school_nurse', 'clinic_staff', 'system_admin'], true)) {
+        $redirectByRole = [
+            'class_adviser' => 'dashboard.class-adviser',
+            'school_head' => 'dashboard.school-head',
+            'feeding_coor' => 'dashboard.feedingcor-dashboard',
+            'nutricor' => 'dashboard.nutricor-dashboard',
+            'system_admin' => 'dashboard.system-admin',
+        ];
+
+        return redirect()->route($redirectByRole[$role] ?? 'login');
+    }
+
     $institutionId = $request->session()->get('active_institution_id');
 
     if (Schema::hasTable('deworming_requests')) {
@@ -386,6 +412,19 @@ Route::post('/api/conditions', [ConditionController::class, 'store'])
     ->name('api.conditions.store');
 
 Route::get('/dashboard/data-visualization', function () {
+    $role = (string) session('active_role', '');
+    if (! in_array($role, ['school_nurse', 'clinic_staff', 'system_admin'], true)) {
+        $redirectByRole = [
+            'class_adviser' => 'dashboard.class-adviser',
+            'school_head' => 'dashboard.school-head',
+            'feeding_coor' => 'dashboard.feedingcor-dashboard',
+            'nutricor' => 'dashboard.nutricor-dashboard',
+            'system_admin' => 'dashboard.system-admin',
+        ];
+
+        return redirect()->route($redirectByRole[$role] ?? 'login');
+    }
+
     return view('dashboard.data-visualization');
 })->name('dashboard.data-visualization');
 

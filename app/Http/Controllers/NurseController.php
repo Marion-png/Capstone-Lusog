@@ -13,8 +13,12 @@ use Illuminate\View\View;
 
 class NurseController extends Controller
 {
-    public function index(Request $request): View
+    public function index(Request $request): View|RedirectResponse
     {
+        if ($redirect = $this->requireNurseRole($request)) {
+            return $redirect;
+        }
+
         StudentRosterSync::syncToSession($request);
 
         $rawRecords = $request->session()->get('school_health_card_records', []);
@@ -71,8 +75,12 @@ class NurseController extends Controller
         ]);
     }
 
-    public function examine(Request $request, int $index): View
+    public function examine(Request $request, int $index): View|RedirectResponse
     {
+        if ($redirect = $this->requireNurseRole($request)) {
+            return $redirect;
+        }
+
         $records = $request->session()->get('school_health_card_records', []);
 
         if (! isset($records[$index])) {
@@ -104,6 +112,10 @@ class NurseController extends Controller
 
     public function saveExamination(Request $request, int $index): RedirectResponse
     {
+        if ($redirect = $this->requireNurseRole($request)) {
+            return $redirect;
+        }
+
         $records = $request->session()->get('school_health_card_records', []);
 
         if (! isset($records[$index])) {
@@ -234,5 +246,29 @@ class NurseController extends Controller
         }
 
         return redirect()->route('dashboard.student-health-records')->with('success', 'Medical record saved.');
+    }
+
+    /**
+     * Redirects a non-nurse session to its own dashboard instead of letting
+     * it view nurse-only screens. Without this, a mismatched session could
+     * browse the nurse pages that have no guard and only get bounced away
+     * unpredictably on the one page (Health Records) that does check.
+     */
+    private function requireNurseRole(Request $request): ?RedirectResponse
+    {
+        $role = (string) $request->session()->get('active_role', '');
+        if (in_array($role, ['school_nurse', 'clinic_staff', 'system_admin'], true)) {
+            return null;
+        }
+
+        $redirectByRole = [
+            'class_adviser' => 'dashboard.class-adviser',
+            'school_head' => 'dashboard.school-head',
+            'feeding_coor' => 'dashboard.feedingcor-dashboard',
+            'nutricor' => 'dashboard.nutricor-dashboard',
+            'system_admin' => 'dashboard.system-admin',
+        ];
+
+        return redirect()->route($redirectByRole[$role] ?? 'login');
     }
 }
