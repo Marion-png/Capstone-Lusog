@@ -27,49 +27,48 @@ class FeedingProgramController extends Controller
 
         $institutionId = $request->session()->get('active_institution_id');
 
-        $hasSchoolColumn = Schema::hasTable('student_health_records')
-            && Schema::hasColumn('student_health_records', 'school_name');
-        $selectedSchool = trim((string) $request->query('school', 'all'));
-        if ($selectedSchool === '') {
-            $selectedSchool = 'all';
+        // A Feeding Coordinator is scoped to a single institution, so the
+        // relevant slice is grade level, not school. Grade level lives in the
+        // plain "section" column as "Grade X / Section"; we derive the options
+        // and filter in PHP so nothing depends on the encrypted columns.
+        $selectedGrade = trim((string) $request->query('grade', 'all'));
+        if ($selectedGrade === '') {
+            $selectedGrade = 'all';
         }
 
-        $schoolOptions = collect();
-        if ($hasSchoolColumn) {
-            $schoolOptions = StudentHealthRecord::query()
-                ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-                ->forCurrentSchoolYear()
-                ->select('school_name')
-                ->whereNotNull('school_name')
-                ->where('school_name', '!=', '')
-                ->distinct()
-                ->orderBy('school_name')
-                ->pluck('school_name')
-                ->values();
-
-            if ($selectedSchool !== 'all' && ! $schoolOptions->contains($selectedSchool)) {
-                $selectedSchool = 'all';
-            }
-        }
-
-        $students = collect();
+        $eligibleStudents = collect();
         if (Schema::hasTable('student_health_records')) {
             $studentsQuery = StudentHealthRecord::query();
             if ($institutionId) {
                 $studentsQuery->where('institution_id', $institutionId);
             }
-            if ($hasSchoolColumn && $selectedSchool !== 'all') {
-                $studentsQuery->where('school_name', $selectedSchool);
-            }
 
-            // student_name is encrypted at rest, so sorting happens in PHP.
-            $students = $studentsQuery
+            // nutritional_status is encrypted at rest, so eligibility filtering
+            // happens in PHP after fetch.
+            $eligibleStudents = $studentsQuery
                 ->forCurrentSchoolYear()
                 ->get()
                 ->filter(fn (StudentHealthRecord $record): bool => $this->isAttendanceEligible($record->nutritional_status))
-                ->sortBy('student_name')
                 ->values();
         }
+
+        // Always offer the full DepEd grade range (Grade 1–12), regardless of
+        // which grades currently have beneficiaries on file.
+        $gradeOptions = collect(range(1, 12))
+            ->map(fn (int $level): string => 'Grade '.$level)
+            ->values();
+
+        if ($selectedGrade !== 'all' && ! $gradeOptions->contains($selectedGrade)) {
+            $selectedGrade = 'all';
+        }
+
+        // student_name is encrypted at rest, so sorting happens in PHP.
+        $students = $eligibleStudents
+            ->when($selectedGrade !== 'all', fn ($collection) => $collection->filter(
+                fn (StudentHealthRecord $record): bool => $this->resolveGradeLevel((string) $record->section) === $selectedGrade
+            ))
+            ->sortBy('student_name')
+            ->values();
 
         $programDay = $this->resolveProgramDay($institutionId);
         $atRiskThresholdCount = $programDay > 0
@@ -154,9 +153,9 @@ class FeedingProgramController extends Controller
             ],
             'students' => $studentRows,
             'atRiskStudents' => $atRiskStudents,
-            'schoolOptions' => $schoolOptions,
-            'selectedSchool' => $selectedSchool,
-            'hasSchoolColumn' => $hasSchoolColumn,
+            'gradeOptions' => $gradeOptions,
+            'selectedGrade' => $selectedGrade,
+            'hasGradeFilter' => $gradeOptions->isNotEmpty(),
         ]);
     }
 
@@ -178,7 +177,7 @@ class FeedingProgramController extends Controller
             'session_date' => ['required', 'date', 'before_or_equal:today'],
             'present_student_ids' => ['nullable', 'array'],
             'present_student_ids.*' => ['integer', 'exists:student_health_records,id'],
-            'school' => ['nullable', 'string', 'max:255'],
+            'grade' => ['nullable', 'string', 'max:255'],
         ]);
 
         $sessionDate = Carbon::parse((string) $request->input('session_date'))->toDateString();
@@ -191,10 +190,9 @@ class FeedingProgramController extends Controller
             return back()->with('error', 'Attendance tracking tables are not ready. Run migrations first.');
         }
 
-        $hasSchoolColumn = Schema::hasColumn('student_health_records', 'school_name');
-        $selectedSchool = trim((string) $request->input('school', 'all'));
-        if ($selectedSchool === '') {
-            $selectedSchool = 'all';
+        $selectedGrade = trim((string) $request->input('grade', 'all'));
+        if ($selectedGrade === '') {
+            $selectedGrade = 'all';
         }
 
         $studentsQuery = StudentHealthRecord::query();
@@ -202,13 +200,13 @@ class FeedingProgramController extends Controller
         if ($institutionId) {
             $studentsQuery->where('institution_id', $institutionId);
         }
-        if ($hasSchoolColumn && $selectedSchool !== 'all') {
-            $studentsQuery->where('school_name', $selectedSchool);
-        }
 
-        $students = $studentsQuery->forCurrentSchoolYear()->get(['id', 'nutritional_status', 'bmi_value']);
+        $students = $studentsQuery->forCurrentSchoolYear()->get(['id', 'section', 'nutritional_status', 'bmi_value']);
         $students = $students
             ->filter(fn (StudentHealthRecord $student): bool => $this->isAttendanceEligible($this->normalizeNutritionalStatus($student->nutritional_status, $student->bmi_value)))
+            ->when($selectedGrade !== 'all', fn ($collection) => $collection->filter(
+                fn (StudentHealthRecord $student): bool => $this->resolveGradeLevel((string) $student->section) === $selectedGrade
+            ))
             ->values();
 
         if ($students->isEmpty()) {
@@ -244,13 +242,25 @@ class FeedingProgramController extends Controller
             $this->refreshAttendanceRiskFlags($institutionId);
         });
 
-        $schoolSuffix = $hasSchoolColumn && $selectedSchool !== 'all'
-            ? ' for '.$selectedSchool
+        $gradeSuffix = $selectedGrade !== 'all'
+            ? ' for '.$selectedGrade
             : '';
 
         return redirect()
-            ->route('dashboard.feedingcor-program', ['school' => $selectedSchool])
-            ->with('success', 'Attendance for '.Carbon::parse($sessionDate)->format('M d, Y').$schoolSuffix.' was recorded successfully.');
+            ->route('dashboard.feedingcor-program', ['grade' => $selectedGrade])
+            ->with('success', 'Attendance for '.Carbon::parse($sessionDate)->format('M d, Y').$gradeSuffix.' was recorded successfully.');
+    }
+
+    /**
+     * Grade level is the part of the plain "section" string before the
+     * "Grade X / Section" slash. Rows with no section land in "Unassigned"
+     * so they still surface under a filterable bucket.
+     */
+    private function resolveGradeLevel(string $section): string
+    {
+        $grade = trim(explode(' / ', $section, 2)[0]);
+
+        return $grade !== '' ? $grade : 'Unassigned';
     }
 
     private function isAttendanceEligible(?string $nutritionalStatus): bool

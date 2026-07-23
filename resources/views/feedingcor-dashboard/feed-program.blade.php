@@ -137,13 +137,13 @@
 				<div class="page-eyebrow">Feeding Program</div>
 				<h1 class="page-title">Feeding <span>Program</span></h1>
 				<p class="page-sub">120-Day Supplementary Feeding Program tracking.</p>
-				@if ($hasSchoolColumn)
+				@if ($hasGradeFilter ?? false)
 					<form method="GET" action="{{ route($programRouteName) }}" class="school-filter-form">
-						<label for="schoolFilterSelect" class="school-filter-label">School:</label>
-						<select id="schoolFilterSelect" name="school" class="school-filter-select" onchange="this.form.submit()">
-							<option value="all" {{ ($selectedSchool ?? 'all') === 'all' ? 'selected' : '' }}>All Schools</option>
-							@foreach (($schoolOptions ?? collect()) as $schoolOption)
-								<option value="{{ $schoolOption }}" {{ ($selectedSchool ?? 'all') === $schoolOption ? 'selected' : '' }}>{{ $schoolOption }}</option>
+						<label for="gradeFilterSelect" class="school-filter-label">Grade Level:</label>
+						<select id="gradeFilterSelect" name="grade" class="school-filter-select" onchange="this.form.submit()">
+							<option value="all" {{ ($selectedGrade ?? 'all') === 'all' ? 'selected' : '' }}>All Grade Levels</option>
+							@foreach (($gradeOptions ?? collect()) as $gradeOption)
+								<option value="{{ $gradeOption }}" {{ ($selectedGrade ?? 'all') === $gradeOption ? 'selected' : '' }}>{{ $gradeOption }}</option>
 							@endforeach
 						</select>
 					</form>
@@ -357,7 +357,7 @@
 		</div>
 		<form method="POST" action="{{ route('feedingcor-program.attendance.store') }}" id="attendanceForm">
 			@csrf
-			<input type="hidden" name="school" value="{{ $selectedSchool ?? 'all' }}">
+			<input type="hidden" name="grade" value="{{ $selectedGrade ?? 'all' }}">
 			@php
 				$attendanceStudents = ($students ?? collect())
 					->filter(fn ($student) => (bool) ($student['is_attendance_eligible'] ?? false))
@@ -444,7 +444,7 @@
 								</div>
 							</div>
 					@empty
-						<div class="weight-label" style="font-size:.86rem;">No eligible learners found for this school. Only Wasted/Severely Wasted/Underweight BMI results can be recorded here.</div>
+						<div class="weight-label" style="font-size:.86rem;">No eligible learners found for this grade level. Only Wasted/Severely Wasted/Underweight BMI results can be recorded here.</div>
 						@endforelse
 					</div>
 				</div>

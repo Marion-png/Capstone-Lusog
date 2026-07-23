@@ -76,7 +76,18 @@
 					<option value="feeding-masterlist">Feeding Program - Masterlist of Qualified Recipients</option>
 				</select>
 			</div>
-			<p class="selector-note">The selected template will appear below.</p>
+			<div class="selector-row">
+				<label class="selector-label" for="gradeLevelSelect">Grade Level (auto-fill from adviser records):</label>
+				<select id="gradeLevelSelect" class="selector-input" aria-label="Select grade level to auto-fill">
+					<option value="">Select a grade level...</option>
+					@forelse (($gradeOptions ?? []) as $gradeOption)
+						<option value="{{ $gradeOption }}">{{ $gradeOption }}</option>
+					@empty
+						<option value="" disabled>No students on file yet</option>
+					@endforelse
+				</select>
+			</div>
+			<p class="selector-note">The selected template will appear below. Choosing a grade level fills the <strong>Masterlist</strong> and <strong>Milk Beneficiaries</strong> forms with that grade's students from the adviser's records — grades are never mixed.</p>
 		</section>
 
 		<div class="placeholder-panel" id="emptyStatePanel">
@@ -607,7 +618,11 @@
 <script>
 (() => {
 	const templateSelect = document.getElementById('formTemplateSelect');
+	const gradeLevelSelect = document.getElementById('gradeLevelSelect');
 	const emptyStatePanel = document.getElementById('emptyStatePanel');
+
+	// Adviser-entered students grouped by grade level (one grade per form).
+	const studentsByGrade = @json($studentsByGrade ?? []);
 
 	const stamp = () => new Date().toLocaleString('en-US', {
 		year: 'numeric',
@@ -1155,6 +1170,85 @@
 		}
 	};
 
+	// --- Auto-fill roster forms from adviser records (one grade at a time) ---
+	const gradeStudents = (grade) => (Array.isArray(studentsByGrade[grade]) ? studentsByGrade[grade] : []);
+
+	const fillMasterlistForGrade = (grade) => {
+		if (!mlTbody) {
+			return;
+		}
+
+		const qualified = gradeStudents(grade).filter((student) => student && student.qualified);
+
+		// Trim back to the base rows, then grow to fit the qualified list.
+		Array.from(mlTbody.querySelectorAll('.ml-row')).forEach((row, index) => {
+			if (index >= mlBaseRowCount) {
+				row.remove();
+			}
+		});
+		const needed = Math.max(mlBaseRowCount, qualified.length);
+		const current = mlTbody.querySelectorAll('.ml-row').length;
+		if (needed > current) {
+			addMlRows(needed - current);
+		}
+
+		Array.from(mlTbody.querySelectorAll('.ml-row')).forEach((row, index) => {
+			const student = qualified[index] || null;
+			const nameInput = row.querySelector('[data-field$="_name"]');
+			const gradeInput = row.querySelector('[data-field$="_grade"]');
+			const sectionInput = row.querySelector('[data-field$="_section"]');
+			if (nameInput) nameInput.value = student ? student.name : '';
+			if (gradeInput) gradeInput.value = student ? student.grade : '';
+			if (sectionInput) sectionInput.value = student ? student.section : '';
+		});
+
+		if (mlStatusNode) {
+			mlStatusNode.textContent = qualified.length > 0
+				? `Loaded ${qualified.length} qualified ${grade} student(s) from adviser records. Save draft to keep changes.`
+				: `No qualified (Wasted / Severely Wasted / Underweight) ${grade} students on file.`;
+		}
+	};
+
+	const fillForm6ForGrade = (grade) => {
+		const beneficiaries = gradeStudents(grade).filter((student) => student && student.qualified);
+		const nameInputs = Array.from(document.querySelectorAll('[data-field^="form6_row"][data-field$="_name"]'));
+
+		nameInputs.forEach((nameInput) => {
+			const rowMatch = (nameInput.getAttribute('data-field') || '').match(/^form6_row(\d+)_name$/);
+			if (!rowMatch) {
+				return;
+			}
+			const rowNumber = Number(rowMatch[1]);
+			const student = beneficiaries[rowNumber - 1] || null;
+			const gradeSectionInput = document.querySelector(`[data-field="form6_row${rowNumber}_grade_section"]`);
+			nameInput.value = student ? student.name : '';
+			if (gradeSectionInput) {
+				gradeSectionInput.value = student
+					? (student.section ? `${student.grade} / ${student.section}` : student.grade)
+					: '';
+			}
+		});
+
+		const form6Status = document.getElementById('form6DraftStatus');
+		if (form6Status) {
+			const shown = Math.min(beneficiaries.length, nameInputs.length);
+			const overflow = beneficiaries.length > nameInputs.length
+				? ` Only the first ${nameInputs.length} fit this template.`
+				: '';
+			form6Status.textContent = beneficiaries.length > 0
+				? `Loaded ${shown} ${grade} beneficiary/-ies from adviser records.${overflow} Save draft to keep changes.`
+				: `No ${grade} beneficiaries on file.`;
+		}
+	};
+
+	const applyGradeAutofill = (grade) => {
+		if (!grade) {
+			return;
+		}
+		fillMasterlistForGrade(grade);
+		fillForm6ForGrade(grade);
+	};
+
 	initDraftModule({
 		storageKey: 'sbfp_milk_form5_draft_v1',
 		fieldPrefix: 'form5_',
@@ -1273,6 +1367,10 @@
 
 	if (templateSelect) {
 		templateSelect.addEventListener('change', syncSelectedTemplate);
+	}
+
+	if (gradeLevelSelect) {
+		gradeLevelSelect.addEventListener('change', () => applyGradeAutofill(gradeLevelSelect.value));
 	}
 
 	document.querySelectorAll('.narrative-textarea').forEach((textarea) => {

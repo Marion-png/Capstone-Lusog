@@ -5,15 +5,102 @@ namespace App\Http\Controllers;
 use App\Models\Consultation;
 use App\Models\StudentHealthRecord;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class FeedingCoordinatorController extends Controller
 {
-    public function sbfpForms(): View
+    public function sbfpForms(Request $request): View
     {
-        return view('feedingcor-dashboard.sbfp-forms');
+        $institutionId = $request->session()->get('active_institution_id');
+
+        $records = collect();
+        if (Schema::hasTable('student_health_records')) {
+            $query = StudentHealthRecord::query();
+            if ($institutionId) {
+                $query->where('institution_id', $institutionId);
+            }
+            $records = $query->forCurrentSchoolYear()->get();
+        }
+
+        // Group adviser-entered students by grade level so each SBFP form is
+        // filled with one grade only — Grade 8 is never mixed with Grade 9.
+        // Names and statuses are encrypted at rest, so the grouping and sorting
+        // happen in PHP after fetch (the plain "section" column holds the grade).
+        $studentsByGrade = [];
+        foreach ($records as $record) {
+            [$grade, $section] = $this->splitSection((string) $record->section);
+            $status = $this->normalizeStatus((string) $record->nutritional_status);
+
+            $studentsByGrade[$grade][] = [
+                'name' => (string) $record->student_name,
+                'grade' => $grade,
+                'section' => $section,
+                'status' => $status,
+                'bmi' => $record->bmi_value !== null ? (string) $record->bmi_value : '',
+                'qualified' => $this->isQualifiedForFeeding($status),
+            ];
+        }
+
+        uksort($studentsByGrade, fn (string $a, string $b): int => strnatcasecmp($a, $b));
+        foreach ($studentsByGrade as $grade => $rows) {
+            usort($rows, fn (array $a, array $b): int => strnatcasecmp($a['name'], $b['name']));
+            $studentsByGrade[$grade] = $rows;
+        }
+
+        return view('feedingcor-dashboard.sbfp-forms', [
+            'studentsByGrade' => $studentsByGrade,
+            'gradeOptions' => array_keys($studentsByGrade),
+        ]);
+    }
+
+    /**
+     * Splits the plain "Grade X / Section" string into [grade, section].
+     * Rows with no section land under "Unassigned" so they stay selectable.
+     */
+    private function splitSection(string $section): array
+    {
+        $parts = explode(' / ', $section, 2);
+        $grade = trim($parts[0]);
+        $sectionName = trim($parts[1] ?? '');
+
+        return [$grade !== '' ? $grade : 'Unassigned', $sectionName];
+    }
+
+    private function normalizeStatus(string $status): string
+    {
+        $normalized = strtolower(trim($status));
+        if ($normalized === '') {
+            return '';
+        }
+        if (str_contains($normalized, 'severe')) {
+            return 'Severely Wasted';
+        }
+        if (str_contains($normalized, 'wast')) {
+            return 'Wasted';
+        }
+        if (str_contains($normalized, 'underweight')) {
+            return 'Underweight';
+        }
+        if (str_contains($normalized, 'over')) {
+            return 'Overweight';
+        }
+        if (str_contains($normalized, 'normal')) {
+            return 'Normal';
+        }
+
+        return $status;
+    }
+
+    private function isQualifiedForFeeding(string $status): bool
+    {
+        $normalized = strtolower($status);
+
+        return str_contains($normalized, 'wast')
+            || str_contains($normalized, 'severe')
+            || str_contains($normalized, 'underweight');
     }
 
     public function dashboard(): View
