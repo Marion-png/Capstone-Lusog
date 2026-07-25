@@ -596,9 +596,28 @@ Route::get('/dashboard/nutricor-consolidated', [NutricorController::class, 'cons
 
 Route::get('/dashboard/feedingcor-sbfp-forms', [FeedingCoordinatorController::class, 'sbfpForms'])
     ->name('dashboard.feedingcor-sbfp-forms');
+Route::post('/dashboard/feedingcor-sbfp-forms', [FeedingCoordinatorController::class, 'saveReportDetails'])
+    ->name('feedingcor.report-details.save');
+
+// Feeding Coordinator — read-only, auto-computed reports (+ CSV export).
+Route::get('/dashboard/feedingcor-reports', [FeedingCoordinatorController::class, 'reports'])
+    ->name('dashboard.feedingcor-reports');
+Route::get('/dashboard/feedingcor-reports/export', [FeedingCoordinatorController::class, 'reportsExport'])
+    ->name('dashboard.feedingcor-reports.export');
 
 Route::get('/dashboard/feedingcor-health-records', [StudentHealthRecordController::class, 'feedingHealthRecords'])
     ->name('dashboard.feedingcor-health-records');
+
+// Feeding Coordinator — separate Baseline and Endline measurement forms.
+// Endline is gated on an existing baseline inside storeEndline.
+Route::get('/dashboard/feedingcor-baseline', [FeedingCoordinatorController::class, 'baselineForm'])
+    ->name('dashboard.feedingcor-baseline');
+Route::post('/dashboard/feedingcor-baseline', [StudentHealthRecordController::class, 'storeBaseline'])
+    ->name('feedingcor.baseline.store');
+Route::get('/dashboard/feedingcor-endline', [FeedingCoordinatorController::class, 'endlineForm'])
+    ->name('dashboard.feedingcor-endline');
+Route::post('/dashboard/feedingcor-endline/{record}', [StudentHealthRecordController::class, 'storeEndline'])
+    ->whereNumber('record')->name('feedingcor.endline.store');
 
 Route::post('/dashboard/class-adviser/health-records/baseline', [StudentHealthRecordController::class, 'storeBaseline'])
     ->name('class-adviser.health-records.baseline.store');
@@ -688,8 +707,8 @@ Route::get('/dashboard/feedingcor-program', function (Request $request) {
 Route::get('/dashboard/school-nurse/feeding-program', [FeedingProgramController::class, 'index'])
     ->name('dashboard.school-nurse.feeding-program');
 
-Route::post('/dashboard/feedingcor-program/attendance', [FeedingProgramController::class, 'storeAttendance'])
-    ->name('feedingcor-program.attendance.store');
+Route::post('/dashboard/feedingcor-program/attendance/import', [FeedingProgramController::class, 'importAttendance'])
+    ->name('feedingcor-program.attendance.import');
 
 Route::post('/dashboard/school-head/approvals/{approval}/{decision}', [SchoolHeadController::class, 'decide'])
     ->whereIn('decision', ['approve', 'decline'])

@@ -199,6 +199,10 @@ class StudentHealthRecordController extends Controller
 
     public function storeBaseline(Request $request): RedirectResponse
     {
+        if (! $this->canRecordMeasurements($request)) {
+            return redirect()->route('login')->with('error', 'You are not allowed to record baseline data.');
+        }
+
         $validated = $request->validate([
             'student_name' => ['required', 'string', 'max:255'],
             'student_id' => ['required', 'string', 'max:100'],
@@ -244,6 +248,23 @@ class StudentHealthRecordController extends Controller
 
     public function storeEndline(Request $request, StudentHealthRecord $record): RedirectResponse
     {
+        if (! $this->canRecordMeasurements($request)) {
+            return redirect()->route('login')->with('error', 'You are not allowed to record endline data.');
+        }
+
+        // Child records inherit school scope from their parent — never serve or
+        // write one belonging to another institution.
+        $institutionId = $request->session()->get('active_institution_id');
+        if ($institutionId && (int) $record->institution_id !== (int) $institutionId) {
+            abort(403);
+        }
+
+        // Endline is only meaningful once a baseline exists for the same
+        // student and program cycle (school year).
+        if ($record->baseline_bmi_value === null) {
+            return back()->with('error', 'Record the baseline measurement first — endline cannot be entered without a baseline.');
+        }
+
         $validated = $request->validate([
             'age' => ['required', 'integer', 'min:2', 'max:25'],
             'height_cm' => ['required', 'numeric', 'min:50', 'max:250'],
@@ -363,6 +384,14 @@ class StudentHealthRecordController extends Controller
             'statusCounts' => $statusCounts,
             'sectionSummary' => $sectionSummary,
         ]);
+    }
+
+    /** Baseline/endline measurements may be recorded by the feeding coordinator or class adviser. */
+    private function canRecordMeasurements(Request $request): bool
+    {
+        $role = strtolower(trim((string) $request->session()->get('active_role', '')));
+
+        return in_array($role, ['feeding_coor', 'class_adviser'], true);
     }
 
     private function computeBmi(float $heightCm, float $weightKg): float

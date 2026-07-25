@@ -2,58 +2,339 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AttendanceImport;
 use App\Models\Consultation;
+use App\Models\FeedingAttendance;
+use App\Models\FeedingReportDetail;
 use App\Models\StudentHealthRecord;
 use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FeedingCoordinatorController extends Controller
 {
+    /**
+     * SBFP report *metadata* only — the narrative, milk consignee contacts and
+     * signatory blocks that genuinely cannot be computed from data. The report
+     * figures themselves live on the read-only Reports screen. Persisted
+     * server-side (not localStorage) so they survive and stay per-school.
+     */
     public function sbfpForms(Request $request): View
     {
         $institutionId = $request->session()->get('active_institution_id');
+        $schoolYear = StudentHealthRecord::currentSchoolYear();
 
+        $details = FeedingReportDetail::query()
+            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+            ->where('school_year', $schoolYear)
+            ->first();
+
+        return view('feedingcor-dashboard.sbfp-forms', [
+            'schoolYear' => $schoolYear,
+            'narrative' => (array) ($details?->narrative ?? []),
+            'consignees' => (array) ($details?->consignees ?? []),
+            'signatories' => (array) ($details?->signatories ?? []),
+        ]);
+    }
+
+    /** Save the manual SBFP report metadata for the current period. */
+    public function saveReportDetails(Request $request): RedirectResponse
+    {
+        $role = strtolower(trim((string) $request->session()->get('active_role', '')));
+        if ($role !== 'feeding_coor') {
+            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can edit report details.');
+        }
+
+        $validated = $request->validate([
+            'narrative' => ['nullable', 'array'],
+            'narrative.*' => ['nullable', 'string', 'max:5000'],
+            'consignees' => ['nullable', 'array'],
+            'consignees.*' => ['nullable', 'array'],
+            'consignees.*.*' => ['nullable', 'string', 'max:255'],
+            'signatories' => ['nullable', 'array'],
+            'signatories.*' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $consignees = array_values(array_filter(
+            $validated['consignees'] ?? [],
+            fn ($row) => is_array($row) && trim(implode('', array_map('strval', $row))) !== ''
+        ));
+
+        FeedingReportDetail::updateOrCreate(
+            [
+                'institution_id' => $request->session()->get('active_institution_id'),
+                'school_year' => StudentHealthRecord::currentSchoolYear(),
+            ],
+            [
+                'narrative' => $validated['narrative'] ?? [],
+                'consignees' => $consignees,
+                'signatories' => $validated['signatories'] ?? [],
+            ]
+        );
+
+        return back()->with('success', 'Report details saved.');
+    }
+
+    /** Baseline measurement entry — one form, separate from endline. */
+    public function baselineForm(Request $request): View
+    {
+        return view('feedingcor-dashboard.baseline', [
+            'studentsByGrade' => $this->studentsForEntry($request->session()->get('active_institution_id')),
+        ]);
+    }
+
+    /** Endline measurement entry — only openable per student once a baseline exists. */
+    public function endlineForm(Request $request): View
+    {
+        return view('feedingcor-dashboard.endline', [
+            'studentsByGrade' => $this->studentsForEntry($request->session()->get('active_institution_id')),
+        ]);
+    }
+
+    /**
+     * Read-only, auto-computed SBFP reports. Nothing here is hand-keyed —
+     * every figure is recomputed from stored attendance + student records on
+     * each load. Attendance for the period gates report generation; incomplete
+     * baseline/endline data surfaces as "what's missing", never as zeros.
+     */
+    public function reports(Request $request): View
+    {
+        $institutionId = $request->session()->get('active_institution_id');
+        $schoolYears = $this->schoolYearOptions($institutionId);
+        $selectedYear = trim((string) $request->query('year', ''));
+        if ($selectedYear === '' || ! $schoolYears->contains($selectedYear)) {
+            $selectedYear = StudentHealthRecord::currentSchoolYear();
+        }
+
+        $attendanceUploaded = AttendanceImport::existsForPeriod($institutionId, $selectedYear);
+        $lastImport = AttendanceImport::latestForPeriod($institutionId, $selectedYear);
+
+        // Attendance-first gate: no report data is computed until attendance
+        // has been uploaded for the period.
+        $report = $attendanceUploaded ? $this->computeReport($institutionId, $selectedYear) : null;
+
+        return view('feedingcor-dashboard.reports', [
+            'schoolYears' => $schoolYears,
+            'selectedYear' => $selectedYear,
+            'attendanceUploaded' => $attendanceUploaded,
+            'lastImport' => $lastImport,
+            'atRiskThreshold' => 75,
+            'report' => $report,
+        ]);
+    }
+
+    /** CSV export of the computed masterlist (qualified + at-risk + attendance). */
+    public function reportsExport(Request $request): StreamedResponse|RedirectResponse
+    {
+        $institutionId = $request->session()->get('active_institution_id');
+        $selectedYear = trim((string) $request->query('year', '')) ?: StudentHealthRecord::currentSchoolYear();
+
+        if (! AttendanceImport::existsForPeriod($institutionId, $selectedYear)) {
+            return redirect()
+                ->route('dashboard.feedingcor-reports', ['year' => $selectedYear])
+                ->with('error', 'Upload attendance for SY '.$selectedYear.' before exporting reports.');
+        }
+
+        $report = $this->computeReport($institutionId, $selectedYear);
+        $header = ['No.', 'Name', 'Grade', 'Section', 'Nutritional Status', 'Attendance %', 'At-Risk', 'Baseline BMI', 'Baseline Status', 'Endline BMI', 'Endline Status'];
+
+        $filename = 'feeding-report-'.str_replace(' ', '', $selectedYear).'.csv';
+
+        return response()->streamDownload(function () use ($header, $report): void {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, $header);
+            $i = 1;
+            foreach ($report['qualified'] as $row) {
+                fputcsv($out, [
+                    $i++,
+                    $row['name'],
+                    $row['grade'],
+                    $row['section'],
+                    $row['status'],
+                    $row['attendance_pct'] === null ? '' : $row['attendance_pct'].'%',
+                    $row['is_at_risk'] ? 'YES' : '',
+                    $row['baseline_bmi'] ?? '',
+                    $row['baseline_status'] ?? '',
+                    $row['endline_bmi'] ?? '',
+                    $row['endline_status'] ?? '',
+                ]);
+            }
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /**
+     * The institution's current-year students grouped by grade, each carrying
+     * its baseline / endline state so the split forms can pre-fill and gate.
+     *
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function studentsForEntry(?int $institutionId): array
+    {
+        if (! Schema::hasTable('student_health_records')) {
+            return [];
+        }
+
+        $query = StudentHealthRecord::query();
+        if ($institutionId) {
+            $query->where('institution_id', $institutionId);
+        }
+        $records = $query->forCurrentSchoolYear()->get();
+
+        $byGrade = [];
+        foreach ($records as $record) {
+            [$grade, $section] = $this->splitSection((string) $record->section);
+
+            $byGrade[$grade][] = [
+                'id' => $record->id,
+                'student_id' => (string) $record->student_id,
+                'name' => (string) $record->student_name,
+                'grade' => $grade,
+                'section' => $section,
+                'section_raw' => (string) $record->section,
+                'has_baseline' => $record->baseline_bmi_value !== null,
+                'baseline' => [
+                    'age' => $record->baseline_age,
+                    'height_cm' => $record->baseline_height_cm,
+                    'weight_kg' => $record->baseline_weight_kg,
+                    'bmi' => $record->baseline_bmi_value,
+                    'status' => $record->baseline_nutritional_status,
+                    'recorded_at' => optional($record->baseline_recorded_at)->toDateString(),
+                ],
+                'endline' => [
+                    'age' => $record->endline_age,
+                    'height_cm' => $record->endline_height_cm,
+                    'weight_kg' => $record->endline_weight_kg,
+                    'bmi' => $record->endline_bmi_value,
+                    'status' => $record->endline_nutritional_status,
+                    'recorded_at' => optional($record->endline_recorded_at)->toDateString(),
+                ],
+            ];
+        }
+
+        uksort($byGrade, fn (string $a, string $b): int => strnatcasecmp($a, $b));
+        foreach ($byGrade as $grade => $rows) {
+            usort($rows, fn (array $a, array $b): int => strnatcasecmp($a['name'], $b['name']));
+            $byGrade[$grade] = $rows;
+        }
+
+        return $byGrade;
+    }
+
+    /**
+     * Recomputes every SBFP report figure for a period from stored data.
+     *
+     * @return array<string, mixed>
+     */
+    private function computeReport(?int $institutionId, string $schoolYear): array
+    {
         $records = collect();
         if (Schema::hasTable('student_health_records')) {
             $query = StudentHealthRecord::query();
             if ($institutionId) {
                 $query->where('institution_id', $institutionId);
             }
-            $records = $query->forCurrentSchoolYear()->get();
+            $records = $query->forCurrentSchoolYear($schoolYear)->get();
         }
 
-        // Group adviser-entered students by grade level so each SBFP form is
-        // filled with one grade only — Grade 8 is never mixed with Grade 9.
-        // Names and statuses are encrypted at rest, so the grouping and sorting
-        // happen in PHP after fetch (the plain "section" column holds the grade).
-        $studentsByGrade = [];
-        foreach ($records as $record) {
+        // Denominator for attendance % = distinct feeding-session dates on file.
+        $totalSessions = 0;
+        if (Schema::hasTable('feeding_attendances') && $records->isNotEmpty()) {
+            $totalSessions = FeedingAttendance::query()
+                ->whereIn('student_health_record_id', $records->pluck('id'))
+                ->distinct()
+                ->count('session_date');
+        }
+
+        $rows = $records->map(function (StudentHealthRecord $record) use ($totalSessions): array {
             [$grade, $section] = $this->splitSection((string) $record->section);
             $status = $this->normalizeStatus((string) $record->nutritional_status);
+            $present = (int) ($record->attendance_sessions_count ?? 0);
 
-            $studentsByGrade[$grade][] = [
+            return [
                 'name' => (string) $record->student_name,
                 'grade' => $grade,
                 'section' => $section,
                 'status' => $status,
-                'bmi' => $record->bmi_value !== null ? (string) $record->bmi_value : '',
                 'qualified' => $this->isQualifiedForFeeding($status),
+                'present' => $present,
+                'attendance_pct' => $totalSessions > 0 ? (int) round($present / $totalSessions * 100) : null,
+                'is_at_risk' => (bool) $record->is_at_risk,
+                'baseline_bmi' => $record->baseline_bmi_value,
+                'baseline_status' => $record->baseline_nutritional_status ?: $status,
+                'endline_bmi' => $record->endline_bmi_value,
+                'endline_status' => $record->endline_nutritional_status,
+                'has_baseline' => $record->baseline_bmi_value !== null,
+                'has_endline' => $record->endline_bmi_value !== null,
             ];
+        })->sort(fn (array $a, array $b): int => strnatcasecmp($a['grade'], $b['grade']) ?: strcasecmp($a['name'], $b['name']))->values();
+
+        $qualified = $rows->where('qualified', true)->values();
+
+        $gradeSummary = $rows->groupBy('grade')->map(function (Collection $group, string $grade): array {
+            $countStatus = fn (string $needle): int => $group->filter(fn (array $x): bool => strtolower($x['status']) === $needle)->count();
+
+            return [
+                'grade' => $grade,
+                'total' => $group->count(),
+                'severely_wasted' => $countStatus('severely wasted'),
+                'wasted' => $countStatus('wasted'),
+                'underweight' => $countStatus('underweight'),
+                'normal' => $countStatus('normal'),
+                'overweight' => $countStatus('overweight'),
+                'at_risk' => $group->where('is_at_risk', true)->count(),
+            ];
+        })->sortKeys(SORT_NATURAL | SORT_FLAG_CASE)->values();
+
+        $comparison = $rows->where('has_baseline', true)->map(function (array $x): array {
+            $x['delta'] = ($x['has_endline'] && $x['baseline_bmi'] !== null && $x['endline_bmi'] !== null)
+                ? round((float) $x['endline_bmi'] - (float) $x['baseline_bmi'], 2)
+                : null;
+
+            return $x;
+        })->values();
+
+        return [
+            'qualified' => $qualified,
+            'atRisk' => $qualified->where('is_at_risk', true)->values(),
+            'gradeSummary' => $gradeSummary,
+            'comparison' => $comparison,
+            'totalSessions' => $totalSessions,
+            'totalStudents' => $rows->count(),
+            'qualifiedCount' => $qualified->count(),
+            'missingBaseline' => $qualified->where('has_baseline', false)->values(),
+            'missingEndline' => $qualified->where('has_baseline', true)->where('has_endline', false)->values(),
+        ];
+    }
+
+    /**
+     * Distinct school years on file (period filter), newest first, always
+     * including the current year.
+     *
+     * @return Collection<int, string>
+     */
+    private function schoolYearOptions(?int $institutionId): Collection
+    {
+        $years = collect();
+        if (Schema::hasTable('student_health_records') && Schema::hasColumn('student_health_records', 'school_year')) {
+            $years = StudentHealthRecord::query()
+                ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+                ->select('school_year')
+                ->whereNotNull('school_year')
+                ->where('school_year', '!=', '')
+                ->distinct()
+                ->pluck('school_year');
         }
 
-        uksort($studentsByGrade, fn (string $a, string $b): int => strnatcasecmp($a, $b));
-        foreach ($studentsByGrade as $grade => $rows) {
-            usort($rows, fn (array $a, array $b): int => strnatcasecmp($a['name'], $b['name']));
-            $studentsByGrade[$grade] = $rows;
-        }
-
-        return view('feedingcor-dashboard.sbfp-forms', [
-            'studentsByGrade' => $studentsByGrade,
-            'gradeOptions' => array_keys($studentsByGrade),
-        ]);
+        return $years->push(StudentHealthRecord::currentSchoolYear())
+            ->unique()
+            ->sortDesc()
+            ->values();
     }
 
     /**

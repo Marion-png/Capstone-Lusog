@@ -59,11 +59,20 @@ Roles stored as strings in `session('active_role')`. The seven roles are:
 | `clinic_staff` | Consultation logging, medicine inventory |
 | `class_adviser` | Student data entry, medical certificates, consent forms |
 | `school_head` | Reports, deworming approval |
-| `feeding_coor` | SBFP feeding program attendance |
+| `feeding_coor` | SBFP: uploads attendance (gates the workflow), records baseline/endline, views auto-computed reports |
 | `nutricor` | Nutrition analytics, consolidated reports |
 | `system_admin` | Account approval/management |
 
 Role checks in controllers are manual string comparisons on `session('active_role')`.
+
+### Feeding Coordinator workflow (attendance-first)
+
+The coordinator's flow is ordered and mostly computed — the period is the `school_year`:
+
+1. **Attendance upload first.** `FeedingProgramController::importAttendance` parses a DMIRIE-style CSV/XLSX (`App\Support\AttendanceSheetParser` — NAME/GRADE/SECTION + dated columns), matches rows to learners, writes `feeding_attendances`, recomputes at-risk (`refreshAttendanceRiskFlags`: attended **< 75%** of sessions), and records one `AttendanceImport` batch — all in a single transaction (no partial writes). `AttendanceImport::existsForPeriod()` is the gate.
+2. **At-risk is derived, never tagged.** Only attendance decides; nutritional status never auto-flags a learner.
+3. **Baseline / Endline are separate forms** (`FeedingCoordinatorController::baselineForm`/`endlineForm`; POST reuses `StudentHealthRecordController::storeBaseline`/`storeEndline`). They write the existing `baseline_*`/`endline_*` columns on the one `StudentHealthRecord` row (student↔cycle link). **Endline is blocked until a baseline exists** (guard in `storeEndline`).
+4. **Reports are read-only and computed** (`FeedingCoordinatorController::reports` → `feedingcor-dashboard/reports.blade.php`): masterlist, per-grade nutrition, baseline-vs-endline, attendance — recomputed each load, gated on attendance, and showing "what's missing" instead of zeros. Only manual admin metadata (narrative, consignees, signatories) is stored, in `feeding_report_details` (encrypted). The old localStorage SBFP encoder was removed.
 
 ### Routing Pattern
 

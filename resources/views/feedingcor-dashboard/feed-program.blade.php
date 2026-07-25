@@ -87,6 +87,18 @@
 			Generate Reports
 		</a>
 		@else
+		<a href="{{ route('dashboard.feedingcor-baseline') }}" class="sb-link">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+			Baseline Entry
+		</a>
+		<a href="{{ route('dashboard.feedingcor-endline') }}" class="sb-link">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
+			Endline Entry
+		</a>
+		<a href="{{ route('dashboard.feedingcor-reports') }}" class="sb-link">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+			Reports
+		</a>
 		<a href="{{ route('dashboard.feedingcor-sbfp-forms') }}" class="sb-link">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="8" y1="9" x2="10" y2="9"/></svg>
 			SBFP Forms
@@ -238,34 +250,29 @@
 
 		@php
 			$studentCollection = ($students ?? collect());
-			$totalStudents = $studentCollection->count();
-			$avgAttendanceNumeric = (float) preg_replace('/[^\d.]/', '', (string) ($programStats['avg_attendance'] ?? '0'));
-			$presentEstimate = (int) round(($avgAttendanceNumeric / 100) * $totalStudents);
-			$absentEstimate = max(0, $totalStudents - $presentEstimate);
 			$lowAttendanceCount = $studentCollection->filter(fn ($student) => (float) ($student['attendance_percent'] ?? 0) < 70)->count();
 		@endphp
 
 		<section class="card section" style="margin-top: 14px; padding: 16px;">
 			<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px;">
-				<h2 class="section-title" style="margin-bottom:0;">Today's Feeding Session</h2>
+				<h2 class="section-title" style="margin-bottom:0;">Feeding Session Attendance</h2>
 				<span class="muted" style="font-size:.72rem;font-weight:500;">{{ now()->format('F d, Y') }}</span>
 			</div>
-			<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;background:#f0fdf4;border:1px solid #dcfce7;border-radius:10px;">
-				<div>
-					<div class="student-name" style="font-size:.86rem;">Meal: Nutribun + Fortified Milk</div>
-					<div class="muted" style="font-size:.7rem;">Served at 10:00 AM - Recess Time</div>
-				</div>
-				<div style="display:flex;gap:8px;align-items:center;">
-					<span class="session-chip present">{{ $presentEstimate }} Present</span>
-					<span class="session-chip absent">{{ $absentEstimate }} Absent</span>
-					@if (!$isReadOnly)
-					<button type="button" class="btn btn-primary" id="recordAttendanceBtn">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;margin-right:6px;"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
-						Mark Attendance
-					</button>
-					@endif
-				</div>
+			@if (!$isReadOnly)
+			<button type="button" id="uploadAttendanceBtn" style="width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:26px 16px;background:#f8fafc;border:1.5px dashed #cbd5e1;border-radius:12px;cursor:pointer;">
+				<svg viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="1.6" style="width:34px;height:34px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+				<span class="student-name" style="font-size:.92rem;">Upload the feeding attendance sheet</span>
+				<span class="muted" style="font-size:.74rem;max-width:440px;">Attendance and at-risk learners are updated automatically from the sheet you upload (CSV or Excel). Learners attending below {{ $programStats['at_risk_threshold'] ?? 75 }}% of the sessions are flagged at-risk.</span>
+				<span class="btn btn-primary" style="pointer-events:none;">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+					Upload Attendance Sheet
+				</span>
+			</button>
+			@else
+			<div style="padding:10px 12px;background:#f0fdf4;border:1px solid #dcfce7;border-radius:10px;">
+				<div class="muted" style="font-size:.74rem;">View-only: the feeding attendance sheet is uploaded by the Feeding Coordinator.</div>
 			</div>
+			@endif
 		</section>
 
 		<section class="table-section" style="margin-top:16px;">
@@ -349,109 +356,26 @@
 	</div>
 </div>
 
-<div class="modal-backdrop" id="attendanceModalBackdrop" aria-hidden="true">
-	<div class="modal-panel attendance-modal-panel" role="dialog" aria-modal="true" aria-labelledby="attendanceModalTitle">
+<div class="modal-backdrop" id="uploadAttendanceModalBackdrop" aria-hidden="true">
+	<div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="uploadAttendanceTitle">
 		<div class="modal-head">
-			<h2 id="attendanceModalTitle" class="modal-title">Record Attendance Session</h2>
-			<button type="button" class="modal-close" id="closeAttendanceModal" aria-label="Close">&times;</button>
+			<h2 id="uploadAttendanceTitle" class="modal-title">Upload Attendance Sheet</h2>
+			<button type="button" class="modal-close" id="closeUploadAttendanceModal" aria-label="Close">&times;</button>
 		</div>
-		<form method="POST" action="{{ route('feedingcor-program.attendance.store') }}" id="attendanceForm">
+		<form method="POST" action="{{ route('feedingcor-program.attendance.import') }}" enctype="multipart/form-data" id="uploadAttendanceForm">
 			@csrf
 			<input type="hidden" name="grade" value="{{ $selectedGrade ?? 'all' }}">
-			@php
-				$attendanceStudents = ($students ?? collect())
-					->filter(fn ($student) => (bool) ($student['is_attendance_eligible'] ?? false))
-					->values();
-			@endphp
 			<div class="modal-body">
-				<div class="attendance-legend" aria-label="Feeding attendance coding legend">
-					<table>
-						<thead>
-							<tr>
-								<th>B. Deworming</th>
-								<th>D. Actual Feeding</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td>(x) - not dewormed</td>
-								<td>(H) - Present, served with Hot meals</td>
-							</tr>
-							<tr>
-								<td>(/) - dewormed</td>
-								<td>(M) - Present, served with Milk</td>
-							</tr>
-							<tr>
-								<td>&nbsp;</td>
-								<td>(H/M) - Present, served with Hot meals &amp; Milk</td>
-							</tr>
-							<tr>
-								<td>&nbsp;</td>
-								<td>(A) - Absent, not served</td>
-							</tr>
-							<tr>
-								<td>&nbsp;</td>
-								<td>(H2/M2)(H/M2) - Present, served twice</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
 				<div class="weight-item">
-					<div class="weight-label">Session Date</div>
+					<div class="weight-label">Attendance file <span>(.csv, .xlsx)</span></div>
 					<div class="weight-field-wrap">
-						<input type="date" name="session_date" class="weight-input" value="{{ now()->toDateString() }}" required>
-					</div>
-				</div>
-				<div class="weight-item">
-					<div class="weight-label">Mark Present Beneficiaries</div>
-					<p class="attendance-rule-note">Only learners tagged as <strong>Wasted</strong>, <strong>Severely Wasted</strong>, or <strong>Underweight</strong> from Class Adviser BMI results are included in this attendance update.</p>
-					@if ($attendanceStudents->isNotEmpty())
-						<div class="attendance-tools">
-							<button type="button" class="attendance-mini-btn present" id="markAllPresentBtn">Mark All Present</button>
-							<button type="button" class="attendance-mini-btn absent" id="markAllAbsentBtn">Mark All Absent</button>
-						</div>
-					@endif
-					@php
-						$oldPresentIds = collect(old('present_student_ids', []))->map(fn ($value) => (string) $value)->all();
-					@endphp
-					<div class="attendance-list-wrap">
-						@forelse ($attendanceStudents as $student)
-							@php
-								$isPresent = empty($oldPresentIds) ? true : in_array((string) $student['id'], $oldPresentIds, true);
-								$oldDeworming = old('deworming_codes.' . $student['id'], '/');
-								$oldFeeding = old('feeding_codes.' . $student['id'], $isPresent ? 'H' : 'A');
-							@endphp
-							<div class="attendance-row">
-								<input type="checkbox" class="attendance-present-input" name="present_student_ids[]" value="{{ $student['id'] }}" id="present_{{ $student['id'] }}" {{ $isPresent ? 'checked' : '' }} hidden>
-								<div>
-									<div class="weight-label" style="font-size:.9rem;">{{ $student['student_name'] }}</div>
-									<div class="attendance-meta">{{ $student['section'] }} · {{ $student['attendance'] }} ({{ $student['attendance_percent'] }}%) · BMI: {{ $student['nutritional_status'] }}</div>
-								</div>
-								<select name="deworming_codes[{{ $student['id'] }}]" class="attendance-inline-select" aria-label="Deworming status for {{ $student['student_name'] }}">
-									<option value="/" {{ $oldDeworming === '/' ? 'selected' : '' }}>/</option>
-									<option value="x" {{ $oldDeworming === 'x' ? 'selected' : '' }}>x</option>
-								</select>
-								<select name="feeding_codes[{{ $student['id'] }}]" class="attendance-inline-select" aria-label="Actual feeding code for {{ $student['student_name'] }}">
-									<option value="H" {{ $oldFeeding === 'H' ? 'selected' : '' }}>H</option>
-									<option value="M" {{ $oldFeeding === 'M' ? 'selected' : '' }}>M</option>
-									<option value="H/M" {{ $oldFeeding === 'H/M' ? 'selected' : '' }}>H/M</option>
-									<option value="A" {{ $oldFeeding === 'A' ? 'selected' : '' }}>A</option>
-									<option value="H2/M2" {{ $oldFeeding === 'H2/M2' ? 'selected' : '' }}>H2/M2</option>
-								</select>
-								<div class="attendance-choice-group" aria-label="Attendance choice for {{ $student['student_name'] }}">
-									<label class="attendance-choice-label"><input type="radio" class="attendance-choice" name="attendance_choice_{{ $student['id'] }}" value="present" {{ $isPresent ? 'checked' : '' }}> Present</label>
-									<label class="attendance-choice-label"><input type="radio" class="attendance-choice" name="attendance_choice_{{ $student['id'] }}" value="absent" {{ $isPresent ? '' : 'checked' }}> Absent</label>
-								</div>
-							</div>
-					@empty
-						<div class="weight-label" style="font-size:.86rem;">No eligible learners found for this grade level. Only Wasted/Severely Wasted/Underweight BMI results can be recorded here.</div>
-						@endforelse
+						<input type="file" name="attendance_file" accept=".csv,.txt,.xlsx,.xls" required class="weight-input">
 					</div>
 				</div>
 			</div>
 			<div class="modal-foot">
-				<button type="button" class="btn btn-ghost" id="cancelAttendanceModal">Cancel</button>
-				<button type="submit" class="btn btn-primary">Save Attendance</button>
+				<button type="button" class="btn btn-ghost" id="cancelUploadAttendanceModal">Cancel</button>
+				<button type="submit" class="btn btn-primary">Upload &amp; Process</button>
 			</div>
 		</form>
 	</div>
@@ -566,13 +490,10 @@
 	const form1MetaSection = document.getElementById('form1MetaSection');
 	const form1MetaInputs = Array.from(document.querySelectorAll('[data-meta-field]'));
 	const openBtn = document.getElementById('openWeightsModal');
-	const recordAttendanceBtn = document.getElementById('recordAttendanceBtn');
-	const attendanceForm = document.getElementById('attendanceForm');
-	const markAllPresentBtn = document.getElementById('markAllPresentBtn');
-	const markAllAbsentBtn = document.getElementById('markAllAbsentBtn');
-	const attendanceBackdrop = document.getElementById('attendanceModalBackdrop');
-	const closeAttendanceModal = document.getElementById('closeAttendanceModal');
-	const cancelAttendanceModal = document.getElementById('cancelAttendanceModal');
+	const uploadAttendanceBtn = document.getElementById('uploadAttendanceBtn');
+	const uploadAttendanceBackdrop = document.getElementById('uploadAttendanceModalBackdrop');
+	const closeUploadAttendanceModal = document.getElementById('closeUploadAttendanceModal');
+	const cancelUploadAttendanceModal = document.getElementById('cancelUploadAttendanceModal');
 	const focusAtRiskBtn = document.getElementById('focusAtRiskBtn');
 	const atRiskSection = document.getElementById('atRiskSection');
 	const riskFilter = document.getElementById('riskFilter');
@@ -1432,82 +1353,14 @@
 		});
 	}
 
-	if (recordAttendanceBtn) {
-		recordAttendanceBtn.addEventListener('click', () => {
-			if (attendanceBackdrop) {
-				setModal(attendanceBackdrop, true);
-			}
-		});
+	if (uploadAttendanceBtn && uploadAttendanceBackdrop) {
+		uploadAttendanceBtn.addEventListener('click', () => setModal(uploadAttendanceBackdrop, true));
 	}
-
-	const syncAttendanceHiddenInputs = () => {
-		if (!attendanceForm) {
-			return;
+	[closeUploadAttendanceModal, cancelUploadAttendanceModal].forEach((btn) => {
+		if (btn) {
+			btn.addEventListener('click', () => setModal(uploadAttendanceBackdrop, false));
 		}
-		const rows = Array.from(attendanceForm.querySelectorAll('.attendance-row'));
-		rows.forEach((row) => {
-			const hiddenInput = row.querySelector('.attendance-present-input');
-			const selectedChoice = row.querySelector('.attendance-choice:checked');
-			if (!hiddenInput || !selectedChoice) {
-				return;
-			}
-			hiddenInput.checked = selectedChoice.value === 'present';
-		});
-	};
-
-	if (markAllPresentBtn) {
-		markAllPresentBtn.addEventListener('click', () => {
-			if (!attendanceForm) {
-				return;
-			}
-			Array.from(attendanceForm.querySelectorAll('.attendance-choice[value="present"]')).forEach((radio) => {
-				radio.checked = true;
-			});
-			syncAttendanceHiddenInputs();
-		});
-	}
-
-	if (markAllAbsentBtn) {
-		markAllAbsentBtn.addEventListener('click', () => {
-			if (!attendanceForm) {
-				return;
-			}
-			Array.from(attendanceForm.querySelectorAll('.attendance-choice[value="absent"]')).forEach((radio) => {
-				radio.checked = true;
-			});
-			syncAttendanceHiddenInputs();
-		});
-	}
-
-	if (attendanceForm) {
-		attendanceForm.addEventListener('change', (event) => {
-			if (event.target && event.target.classList && event.target.classList.contains('attendance-choice')) {
-				syncAttendanceHiddenInputs();
-			}
-		});
-
-		attendanceForm.addEventListener('submit', () => {
-			syncAttendanceHiddenInputs();
-		});
-
-		syncAttendanceHiddenInputs();
-	}
-
-	if (closeAttendanceModal) {
-		closeAttendanceModal.addEventListener('click', () => setModal(attendanceBackdrop, false));
-	}
-
-	if (cancelAttendanceModal) {
-		cancelAttendanceModal.addEventListener('click', () => setModal(attendanceBackdrop, false));
-	}
-
-	if (attendanceBackdrop) {
-		attendanceBackdrop.addEventListener('click', (event) => {
-			if (event.target === attendanceBackdrop) {
-				setModal(attendanceBackdrop, false);
-			}
-		});
-	}
+	});
 
 	if (focusAtRiskBtn && atRiskSection) {
 		focusAtRiskBtn.addEventListener('click', () => {
@@ -1685,8 +1538,8 @@
 		if (event.key === 'Escape' && backdrop.classList.contains('open')) {
 			closeModal();
 		}
-		if (event.key === 'Escape' && attendanceBackdrop && attendanceBackdrop.classList.contains('open')) {
-			setModal(attendanceBackdrop, false);
+		if (event.key === 'Escape' && uploadAttendanceBackdrop && uploadAttendanceBackdrop.classList.contains('open')) {
+			setModal(uploadAttendanceBackdrop, false);
 		}
 		if (event.key === 'Escape' && encodeFormBackdrop && encodeFormBackdrop.classList.contains('open')) {
 			setModal(encodeFormBackdrop, false);
