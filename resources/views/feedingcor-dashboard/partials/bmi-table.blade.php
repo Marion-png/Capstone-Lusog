@@ -1,8 +1,11 @@
 @php
 	/** @var string $prefix Field prefix, e.g. "bmib_g7" */
+	/** @var array<string,int|string> $values Pre-computed cell values keyed by "{prefix}_{sex}_{col}" */
 	$editable = $editable ?? true;
+	$values = $values ?? [];
 	$nsColumns = ['sw' => 'Severely Wasted', 'w' => 'Wasted', 'n' => 'Normal', 'ow' => 'Overweight', 'ob' => 'Obese'];
 	$hfaColumns = ['ss' => 'Severely Stunted', 'st' => 'Stunted', 'hn' => 'Normal', 't' => 'Tall'];
+	$cell = fn (string $sexKey, string $col) => $values[$prefix.'_'.$sexKey.'_'.$col] ?? '';
 @endphp
 <table class="template-table bmi-table" aria-label="BMI nutritional status and height-for-age table">
 	<thead>
@@ -28,13 +31,13 @@
 			<tr>
 				<td class="sex-cell">{{ $sexLabel }}</td>
 				@foreach (array_keys($nsColumns) as $key)
-					<td><input type="number" min="0" class="cell-input bmi-input" data-field="{{ $prefix }}_{{ $sexKey }}_{{ $key }}" @if ($rowEditable) placeholder="0" @else readonly @endif></td>
+					<td><input type="number" min="0" class="cell-input bmi-input" data-field="{{ $prefix }}_{{ $sexKey }}_{{ $key }}" value="{{ $cell($sexKey, $key) }}" @if ($rowEditable) placeholder="0" @else readonly @endif></td>
 				@endforeach
-				<td><input type="number" class="cell-input bmi-input" data-field="{{ $prefix }}_{{ $sexKey }}_nst" readonly></td>
+				<td><input type="number" class="cell-input bmi-input" data-field="{{ $prefix }}_{{ $sexKey }}_nst" value="{{ $cell($sexKey, 'nst') }}" readonly></td>
 				@foreach (array_keys($hfaColumns) as $key)
-					<td><input type="number" min="0" class="cell-input bmi-input" data-field="{{ $prefix }}_{{ $sexKey }}_{{ $key }}" @if ($rowEditable) placeholder="0" @else readonly @endif></td>
+					<td><input type="number" min="0" class="cell-input bmi-input" data-field="{{ $prefix }}_{{ $sexKey }}_{{ $key }}" value="{{ $cell($sexKey, $key) }}" @if ($rowEditable) placeholder="0" @else readonly @endif></td>
 				@endforeach
-				<td><input type="number" class="cell-input bmi-input" data-field="{{ $prefix }}_{{ $sexKey }}_hfat" readonly></td>
+				<td><input type="number" class="cell-input bmi-input" data-field="{{ $prefix }}_{{ $sexKey }}_hfat" value="{{ $cell($sexKey, 'hfat') }}" readonly></td>
 			</tr>
 		@endforeach
 	</tbody>

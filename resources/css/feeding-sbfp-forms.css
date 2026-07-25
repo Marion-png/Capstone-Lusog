@@ -37,6 +37,7 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--cream);c
 
 .selector-wrap{margin-top:14px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow-card)}
 .selector-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.selector-row+.selector-row{margin-top:16px}
 .selector-label{font-size:.76rem;font-weight:700;color:#29453d}
 .selector-input{appearance:none;min-width:320px;max-width:100%;border:1px solid #cfdfd9;border-radius:10px;background:#fff;padding:9px 34px 9px 12px;font-size:.78rem;font-weight:600;color:#2f4e45;background-image:linear-gradient(45deg, transparent 50%, #7d918c 50%),linear-gradient(135deg, #7d918c 50%, transparent 50%);background-position:calc(100% - 16px) 52%,calc(100% - 10px) 52%;background-size:6px 6px,6px 6px;background-repeat:no-repeat}
 .selector-note{margin-top:8px;font-size:.74rem;color:#607d74}

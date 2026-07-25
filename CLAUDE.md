@@ -35,12 +35,12 @@ Adviser-entered student data must survive session expiry, re-login, and server r
 
 ### Authentication — Session-Only, No Laravel Auth
 
-This app does **not** use `Laravel\Auth` or the `users` table for login. Authentication is entirely session-based:
+This app does **not** use `Laravel\Auth` or the `users` table for login. Authentication is custom and session-based; login accounts live in the database:
 
-- On every visit to `/` or `/login`, six hardcoded demo accounts are injected into `session('user_accounts')` if not already present (see top of `routes/web.php`).
-- Login (`POST /login`) looks up the username in `session('user_accounts')`, verifies the password hash, then writes role data into the session.
-- The active session keys are: `active_role`, `active_name`, `active_username`, `active_school_name`. Class advisers also get `assigned_grade_level` and `assigned_section`.
-- `session('user_accounts')` holds all accounts (demo + system-admin-approved). `session('pending_account_requests')` holds unapproved registrations.
+- Accounts are rows in the `accounts` table (`name`, `username`, `password_hash`, `role`, `institution_id`, `school_name`, plus adviser `assigned_grade_level` / `assigned_section`). Usernames are unique **per school** (see the Multi-School invariant).
+- Login (`POST /login`) looks up the username in `accounts`, verifies the password hash, and on a match writes role data into the session. Active session keys: `active_role`, `active_name`, `active_username`, `active_school_name`, `active_institution_id` (class advisers also get `assigned_grade_level` / `assigned_section`).
+- New accounts are self-service: a registration writes a pending row to `account_requests`; the System Admin approves it into `accounts`.
+- **Prototype auto-session:** visiting a protected URL without a session does not force a login. `EnsureActiveSession` seeds a demo session for the role that URL belongs to, so any role's UI opens by typing its URL; a real account session is never overwritten. `PrototypeSessionTest` guards this.
 - System admin login (`/admin-login`) uses `SYSTEM_ADMIN_USERNAME` / `SYSTEM_ADMIN_PASSWORD` env vars (defaults: `systemadmin` / `admin123`).
 
 ### Route Guard
@@ -59,7 +59,7 @@ Roles stored as strings in `session('active_role')`. The seven roles are:
 | `clinic_staff` | Consultation logging, medicine inventory |
 | `class_adviser` | Student data entry, medical certificates, consent forms |
 | `school_head` | Reports, deworming approval |
-| `feeding_coor` | SBFP: uploads attendance (gates the workflow), records baseline/endline, views auto-computed reports |
+| `feeding_coor` | SBFP: uploads attendance (gates the workflow), fills SBFP forms, views auto-tabulated BMI reports |
 | `nutricor` | Nutrition analytics, consolidated reports |
 | `system_admin` | Account approval/management |
 
@@ -71,18 +71,20 @@ The coordinator's flow is ordered and mostly computed — the period is the `sch
 
 1. **Attendance upload first.** `FeedingProgramController::importAttendance` parses a DMIRIE-style CSV/XLSX (`App\Support\AttendanceSheetParser` — NAME/GRADE/SECTION + dated columns), matches rows to learners, writes `feeding_attendances`, recomputes at-risk (`refreshAttendanceRiskFlags`: attended **< 75%** of sessions), and records one `AttendanceImport` batch — all in a single transaction (no partial writes). `AttendanceImport::existsForPeriod()` is the gate.
 2. **At-risk is derived, never tagged.** Only attendance decides; nutritional status never auto-flags a learner.
-3. **Baseline / Endline are separate forms** (`FeedingCoordinatorController::baselineForm`/`endlineForm`; POST reuses `StudentHealthRecordController::storeBaseline`/`storeEndline`). They write the existing `baseline_*`/`endline_*` columns on the one `StudentHealthRecord` row (student↔cycle link). **Endline is blocked until a baseline exists** (guard in `storeEndline`).
-4. **Reports are read-only and computed** (`FeedingCoordinatorController::reports` → `feedingcor-dashboard/reports.blade.php`): masterlist, per-grade nutrition, baseline-vs-endline, attendance — recomputed each load, gated on attendance, and showing "what's missing" instead of zeros. Only manual admin metadata (narrative, consignees, signatories) is stored, in `feeding_report_details` (encrypted). The old localStorage SBFP encoder was removed.
-
+3. **SBFP Forms is the coordinator's single forms page** (`FeedingCoordinatorController::sbfpForms` → `feedingcor-dashboard/sbfp-forms.blade.php`). Two kinds of templates live here:
+   - **Hand-encoded, client-side (localStorage) drafts:** Milk Component Forms 5/6/7/7-a, narrative report, and masterlist. The masterlist and beneficiary (Form 6) forms auto-fill from adviser records grouped by grade (one grade per form; `isQualifiedForFeeding` = Wasted / Severely Wasted / Underweight).
+   - **Auto-tabulated, read-only DepEd BMI reports:** the **Baseline** (`bmib_*`) and **Final** (`bmif_*`) Nutritional Assessment grids (Grades 7-10 + Overall). `buildBmiValues()` counts learners by grade × sex × BMI-for-age × height-for-age — in PHP, since those fields are encrypted at rest — and the `partials/bmi-table` cells render those server values read-only (no draft, print only). Source: sex + HFA from `student_details` (`gender`, `nutritional_status_height_for_age`), BMI-for-age from `baseline_nutritional_status` (Baseline) / `endline_nutritional_status` (Final); Final HFA is recomputed from endline height/age. The adviser's non-standard "Underweight" status is grouped under **Wasted** (the DepEd sheet has no Underweight column); the classifier never emits "Obese", so that column stays 0. `FeedingBmiReportTest` guards this.
+   
+   There are **no separate Baseline, Endline, or Reports tabs** on the coordinator — DB-backed baseline/endline measurements are entered by the class adviser (`StudentHealthRecordController::storeBaseline`/`storeEndline`).
 ### Routing Pattern
 
 All routes are inline closures or controller actions in `routes/web.php` — no route groups by role. Permission checks inside closures and controllers gate access manually. There is no route-level role middleware.
 
 ### Data Layer
 
-- **Database:** SQLite (`database/database.sqlite`), 15 migrations.
+- **Database:** SQLite (`database/database.sqlite`), 36 migrations.
 - **Session storage:** `SESSION_DRIVER=file`. Session data is in `storage/framework/sessions/`.
-- Some data (deworming requests, account lists) falls back to session when DB tables don't exist — the controllers check `Schema::hasTable()` before querying.
+- Some data (e.g. deworming requests) falls back to session when its DB table doesn't exist — the controllers check `Schema::hasTable()` before querying.
 - **Uploaded files** (medical certificates, parental consent forms) are stored in `storage/app/private/` using Laravel's `private` disk.
 
 ### Encryption at Rest (invariant)
