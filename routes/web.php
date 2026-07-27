@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Controllers\AdviserController;
+use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\ConditionController;
 use App\Http\Controllers\ConsultationController;
+use App\Http\Controllers\EventController;
 use App\Http\Controllers\FeedingCoordinatorController;
 use App\Http\Controllers\FeedingProgramController;
 use App\Http\Controllers\HealthAssessmentController;
@@ -467,6 +469,9 @@ Route::get('/dashboard/clinic-staff', function () {
 Route::get('/dashboard/class-adviser', [StudentHealthRecordController::class, 'classAdviserDashboard'])
     ->name('dashboard.class-adviser');
 
+Route::get('/dashboard/class-adviser/feeding-status', [StudentHealthRecordController::class, 'feedingStatus'])
+    ->name('dashboard.class-adviser.feeding-status');
+
 Route::get('/dashboard/class-adviser/deworming', function (Request $request) {
     $assignedGradeLevel = (string) $request->session()->get('assigned_grade_level', '');
     $assignedSection = (string) $request->session()->get('assigned_section', '');
@@ -672,6 +677,20 @@ Route::get('/api/student-health-assessment', [HealthAssessmentController::class,
     ->name('api.student-health-assessment');
 Route::get('/api/student-health-history', [StudentHealthRecordController::class, 'history'])
     ->name('api.student-health-history');
+
+// Dashboard announcements — post/remove restricted to Announcement::POSTER_ROLES (school_nurse for now)
+Route::post('/announcements', [AnnouncementController::class, 'store'])
+    ->name('announcements.store');
+Route::post('/announcements/{announcement}/delete', [AnnouncementController::class, 'destroy'])
+    ->whereNumber('announcement')
+    ->name('announcements.destroy');
+
+// Dashboard upcoming events — create/remove restricted to Event::CREATOR_ROLES (school_nurse for now)
+Route::post('/events', [EventController::class, 'store'])
+    ->name('events.store');
+Route::post('/events/{event}/delete', [EventController::class, 'destroy'])
+    ->whereNumber('event')
+    ->name('events.destroy');
 
 Route::get('/dashboard/feedingcor-program', function (Request $request) {
     $activeRole = strtolower(trim((string) $request->session()->get('active_role', '')));

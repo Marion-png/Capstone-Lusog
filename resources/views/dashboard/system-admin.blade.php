@@ -111,6 +111,8 @@
             <div class="flash flash-err">{{ $errors->first() }}</div>
         @endif
 
+        @include('partials.announcements')
+
         @php
             $accountsCollection = collect($accounts ?? []);
             $pendingRequestsCollection = collect($pendingRequests ?? []);

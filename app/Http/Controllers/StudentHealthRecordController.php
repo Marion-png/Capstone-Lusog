@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\HealthAssessment;
+use App\Models\HealthConsentForm;
 use App\Models\StudentHealthCondition;
 use App\Models\StudentHealthRecord;
 use App\Support\StudentRosterSync;
@@ -86,6 +88,205 @@ class StudentHealthRecordController extends Controller
                 'flagged' => $flaggedCount,
             ],
             'lrnsWithCertificates' => $lrnsWithCertificates,
+            'overview' => $this->buildAdviserOverview($request),
+        ]);
+    }
+
+    /**
+     * Redesigned dashboard data: real per-class totals, a "needs attention"
+     * list (consent declined/pending, no health profile, at-risk), and a
+     * recent-activity feed — all derived from this adviser's own roster
+     * (session, scoped to their assigned grade/section) joined against the
+     * DB-backed consent and assessment records.
+     */
+    private function buildAdviserOverview(Request $request): array
+    {
+        $grade = (string) $request->session()->get('assigned_grade_level', '');
+        $section = (string) $request->session()->get('assigned_section', '');
+        $institutionId = $request->session()->get('active_institution_id');
+
+        $roster = collect($request->session()->get('school_health_card_records', []))
+            ->filter(function ($row) use ($grade, $section) {
+                if ($grade === '' || $section === '') {
+                    return true;
+                }
+
+                return (string) ($row['grade_level'] ?? '') === $grade
+                    && strcasecmp(trim((string) ($row['section'] ?? '')), trim($section)) === 0;
+            })
+            ->unique(fn ($row) => (string) ($row['lrn'] ?? ''))
+            ->values();
+
+        $gradeSection = trim("{$grade} / {$section}", ' /') ?: 'Not Assigned';
+        $lrns = $roster->pluck('lrn')->filter()->values();
+
+        $empty = [
+            'grade_section' => $gradeSection,
+            'total' => 0,
+            'complete' => 0,
+            'pending' => 0,
+            'needs_followup' => 0,
+            'needs_attention' => collect(),
+            'recent_activity' => collect(),
+        ];
+
+        if ($lrns->isEmpty()) {
+            return $empty;
+        }
+
+        $shRecords = Schema::hasTable('student_health_records')
+            ? StudentHealthRecord::query()
+                ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
+                ->whereIn('student_id', $lrns)
+                ->forCurrentSchoolYear()
+                ->get()
+                ->keyBy('student_id')
+            : collect();
+
+        $consentForms = Schema::hasTable('health_consent_forms')
+            ? HealthConsentForm::where('school_year', HealthConsentForm::currentSchoolYear())
+                ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
+                ->whereIn('student_lrn', $lrns)
+                ->get()
+                ->keyBy('student_lrn')
+            : collect();
+
+        $assessments = collect();
+        if (Schema::hasTable('health_assessments') && $shRecords->isNotEmpty()) {
+            $assessments = HealthAssessment::whereIn('student_health_record_id', $shRecords->pluck('id'))
+                ->where('school_year', HealthAssessment::currentSchoolYear())
+                ->get()
+                ->keyBy('student_health_record_id');
+        }
+
+        $complete = 0;
+        $needsFollowup = 0;
+        $needsAttention = collect();
+        $activity = collect();
+
+        foreach ($roster as $row) {
+            $lrn = (string) ($row['lrn'] ?? '');
+            if ($lrn === '') {
+                continue;
+            }
+
+            $middle = trim((string) ($row['middle_name'] ?? ''));
+            $middleInitial = $middle !== '' ? ' '.strtoupper(substr($middle, 0, 1)).'.' : '';
+            $name = trim(($row['last_name'] ?? '').', '.($row['first_name'] ?? '').$middleInitial);
+
+            $shRecord = $shRecords->get($lrn);
+            $assessment = $shRecord ? $assessments->get($shRecord->id) : null;
+            $consent = $consentForms->get($lrn);
+
+            $hasAssessment = $assessment !== null;
+            if ($hasAssessment) {
+                $complete++;
+            }
+
+            $atRisk = (bool) ($shRecord?->is_at_risk);
+            $consentDenied = $consent && $consent->consent_choice === HealthConsentForm::CONSENT_DENY;
+            $consentPending = $consent && $consent->status === HealthConsentForm::STATUS_SENT;
+
+            $badges = [];
+            if ($consentDenied) {
+                $badges[] = ['label' => 'Consent form declined', 'tone' => 'bad'];
+            } elseif ($consentPending) {
+                $badges[] = ['label' => 'Consent form pending', 'tone' => 'warn'];
+            }
+            if (! $hasAssessment) {
+                $badges[] = ['label' => 'Health profile not started', 'tone' => 'warn'];
+            }
+            if ($atRisk) {
+                $badges[] = ['label' => 'Flagged at-risk', 'tone' => 'bad'];
+            }
+
+            if ($consentDenied || $atRisk) {
+                $needsFollowup++;
+            }
+
+            if (! empty($badges)) {
+                $needsAttention->push([
+                    'lrn' => $lrn,
+                    'name' => $name !== ',' ? $name : $lrn,
+                    'section' => trim(($row['grade_level'] ?? '').'-'.($row['section'] ?? ''), '-'),
+                    'badges' => $badges,
+                    'updated_at' => $shRecord?->updated_at ?? $consent?->updated_at,
+                ]);
+            }
+
+            if ($assessment?->created_at) {
+                $activity->push([
+                    'icon' => 'profile',
+                    'text' => "Health profile completed for {$name}",
+                    'badge' => 'PROFILE',
+                    'at' => $assessment->created_at,
+                ]);
+            }
+            if ($consent && $consent->status === HealthConsentForm::STATUS_SIGNED && $consent->signed_at) {
+                $verb = $consent->consent_choice === HealthConsentForm::CONSENT_DENY ? 'declined' : 'signed';
+                $activity->push([
+                    'icon' => $consent->consent_choice === HealthConsentForm::CONSENT_DENY ? 'declined' : 'consent',
+                    'text' => "Consent form {$verb} by guardian of {$name}",
+                    'badge' => 'CONSENT',
+                    'at' => $consent->signed_at,
+                ]);
+            }
+        }
+
+        return [
+            'grade_section' => $gradeSection,
+            'total' => $roster->count(),
+            'complete' => $complete,
+            'pending' => max(0, $roster->count() - $complete),
+            'needs_followup' => $needsFollowup,
+            'needs_attention' => $needsAttention->sortByDesc('updated_at')->values()->take(6),
+            'recent_activity' => $activity->sortByDesc('at')->values()->take(6),
+        ];
+    }
+
+    /**
+     * Read-only feeding/nutrition status for the adviser's own class —
+     * nutritional status, at-risk flag, and feeding-program attendance
+     * pulled from student_health_records. Advisers don't manage the feeding
+     * program (that's the Feeding Coordinator/Nurse), this is a summary view.
+     */
+    public function feedingStatus(Request $request): View|RedirectResponse
+    {
+        if ($request->session()->get('active_role') !== 'class_adviser') {
+            return redirect()->route('dashboard.class-adviser');
+        }
+
+        $grade = (string) $request->session()->get('assigned_grade_level', '');
+        $section = (string) $request->session()->get('assigned_section', '');
+        $institutionId = $request->session()->get('active_institution_id');
+
+        $lrns = collect($request->session()->get('school_health_card_records', []))
+            ->filter(function ($row) use ($grade, $section) {
+                if ($grade === '' || $section === '') {
+                    return true;
+                }
+
+                return (string) ($row['grade_level'] ?? '') === $grade
+                    && strcasecmp(trim((string) ($row['section'] ?? '')), trim($section)) === 0;
+            })
+            ->pluck('lrn')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $students = collect();
+        if (Schema::hasTable('student_health_records') && $lrns->isNotEmpty()) {
+            $students = StudentHealthRecord::query()
+                ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
+                ->whereIn('student_id', $lrns)
+                ->forCurrentSchoolYear()
+                ->orderBy('student_name')
+                ->get();
+        }
+
+        return view('adviser-dashboard.feeding-status', [
+            'students' => $students,
+            'gradeSection' => trim("{$grade} / {$section}", ' /') ?: 'Not Assigned',
         ]);
     }
 

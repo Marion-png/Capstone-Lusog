@@ -16,6 +16,7 @@ Nutritional Coordinator <span>Dashboard</span>
         return 'ok';
     };
 @endphp
+@include('partials.announcements')
 <section class="grid-5">
     <article class="card stat">
         <div class="label">Total Students</div>

@@ -21,98 +21,10 @@
         : 'Not Assigned';
 @endphp
 
-<aside class="sidebar">
-    <div class="sb-grid"></div>
-    <div class="sb-logo"><img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA Logo"></div>
-    <nav class="sb-nav">
-        <a href="{{ route('dashboard.class-adviser') }}" class="sb-link">
-            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <rect x="3" y="3" width="7" height="7"/>
-                <rect x="14" y="3" width="7" height="4"/>
-                <rect x="14" y="12" width="7" height="9"/>
-                <rect x="3" y="14" width="7" height="7"/>
-            </svg>
-            <span class="sb-link-label">Dashboard</span>
-        </a>
-        <a href="{{ route('dashboard.class-adviser', ['tab' => 'form']) }}" class="sb-link">
-            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                <circle cx="9" cy="7" r="4"/>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-            </svg>
-            <span class="sb-link-label">School Health Card Form</span>
-        </a>
-        <a href="{{ route('dashboard.class-adviser', ['tab' => 'saved']) }}" class="sb-link">
-            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <line x1="8" y1="6" x2="21" y2="6"/>
-                <line x1="8" y1="12" x2="21" y2="12"/>
-                <line x1="8" y1="18" x2="21" y2="18"/>
-                <line x1="3" y1="6" x2="3.01" y2="6"/>
-                <line x1="3" y1="12" x2="3.01" y2="12"/>
-                <line x1="3" y1="18" x2="3.01" y2="18"/>
-            </svg>
-            <span class="sb-link-label">My Students</span>
-        </a>
-        <a href="{{ route('dashboard.class-adviser.deworming') }}" class="sb-link active">
-            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M10.5 6.5l7 7a2.12 2.12 0 1 1-3 3l-7-7a2.12 2.12 0 0 1 3-3z"></path>
-                <path d="M8.5 8.5l-3 3"></path>
-            </svg>
-            <span class="sb-link-label">Deworming Request</span>
-        </a>
-        @php
-            $cfUnread = \Illuminate\Support\Facades\Schema::hasTable('health_consent_forms')
-                ? \App\Models\HealthConsentForm::where('adviser_unread', true)
-                    ->when(session('active_institution_id'), fn ($q, $id) => $q->where('institution_id', $id))
-                    ->count()
-                : 0;
-        @endphp
-        <a href="{{ route('consent-forms.index') }}" class="sb-link">
-            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
-                <rect x="9" y="3" width="6" height="4" rx="1"/>
-                <path d="M9 14l2 2 4-4"/>
-            </svg>
-            <span class="sb-link-label">Health Services Consent</span>
-            @if ($cfUnread > 0)<span class="sb-badge">{{ $cfUnread }}</span>@endif
-        </a>
-        <a href="{{ route('health-assessments.index') }}" class="sb-link">
-            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-            </svg>
-            <span class="sb-link-label">Health Assessment (MLHAT)</span>
-        </a>
-    </nav>
-    <div class="sb-user">
-        <div class="sb-avatar">{{ strtoupper(substr(session('active_name', 'CA'), 0, 2)) }}</div>
-        <div class="sb-user-meta">
-            <div class="sb-user-name">{{ session('active_name', 'Class Adviser') }}</div>
-            <div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
-        </div>
-        <form method="POST" action="{{ route('logout') }}">
-            @csrf
-            <button type="submit" class="sb-logout" title="Sign out" aria-label="Sign out">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                    <path d="M16 17l5-5-5-5"/>
-                    <path d="M21 12H9"/>
-                </svg>
-            </button>
-        </form>
-    </div>
-</aside>
+@include('partials.adviser-sidebar', ['active' => 'deworming'])
 
-<div class="main">
-    <header class="top">
-        <div class="topbar-breadcrumb crumb">
-            <a href="{{ route('dashboard.class-adviser') }}" class="bc-home">Dashboard</a>
-            <span class="bc-sep">&rsaquo;</span>
-            <span class="bc-current">Class Adviser &middot; Deworming</span>
-        </div>
-        <div class="topbar-chip chip"><div class="dot"></div>Class Adviser</div>
-        @include('partials.live-clock')
-    </header>
+<div class="asb-main">
+    @include('partials.adviser-topbar', ['breadcrumb' => 'Deworming Request'])
     <div class="content">
         <h1 class="title">Deworming <i>Request</i></h1>
         <p class="sub">Submit and track deworming tablet requests for your assigned class.</p>
@@ -245,6 +157,5 @@
     updateTablets();
 })();
 </script>
-@include('partials.sidebar-hover-pin')
 </body>
 </html>

@@ -103,6 +103,8 @@
         <h1 class="title">Clinic Staff <i>Operations Hub</i></h1>
         <p class="sub">Focused tools for daily encoding, triage updates, inventory issuance, and follow-up tracking.</p>
 
+        @include('partials.announcements')
+
         <section class="stats">
             <article class="card stat"><b>31</b><span>New walk-ins today</span></article>
             <article class="card stat"><b>18</b><span>Records encoded</span></article>

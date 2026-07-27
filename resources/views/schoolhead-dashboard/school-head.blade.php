@@ -282,6 +282,8 @@
             <div class="flash flash-error">{{ session('error') }}</div>
         @endif
 
+        @include('partials.announcements')
+
         <section class="stats">
             <article class="card stat">
                 <div class="label">Total Students</div>

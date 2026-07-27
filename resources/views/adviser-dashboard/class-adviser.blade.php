@@ -16,98 +16,10 @@
     @endif
 </head>
 <body>
-<aside class="sidebar">
-    <div class="sb-grid"></div>
-    <div class="sb-logo"><img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA Logo"></div>
-    <nav class="sb-nav">
-        <a href="#" class="sb-link active js-proto-nav" data-target="prototype-dashboard-panel">
-            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <rect x="3" y="3" width="7" height="7"/>
-                <rect x="14" y="3" width="7" height="4"/>
-                <rect x="14" y="12" width="7" height="9"/>
-                <rect x="3" y="14" width="7" height="7"/>
-            </svg>
-            <span class="sb-link-label">Dashboard</span>
-        </a>
-        <a href="#" class="sb-link js-proto-nav" data-target="prototype-form-panel">
-            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                <circle cx="9" cy="7" r="4"/>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-            </svg>
-            <span class="sb-link-label">School Health Card Form</span>
-        </a>
-        <a href="#" class="sb-link js-proto-nav" data-target="prototype-saved-panel">
-            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <line x1="8" y1="6" x2="21" y2="6"/>
-                <line x1="8" y1="12" x2="21" y2="12"/>
-                <line x1="8" y1="18" x2="21" y2="18"/>
-                <line x1="3" y1="6" x2="3.01" y2="6"/>
-                <line x1="3" y1="12" x2="3.01" y2="12"/>
-                <line x1="3" y1="18" x2="3.01" y2="18"/>
-            </svg>
-            <span class="sb-link-label">Saved Submissions</span>
-        </a>
-        <a href="{{ route('dashboard.class-adviser.deworming') }}" class="sb-link">
-            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M10.5 6.5l7 7a2.12 2.12 0 1 1-3 3l-7-7a2.12 2.12 0 0 1 3-3z"></path>
-                <path d="M8.5 8.5l-3 3"></path>
-            </svg>
-            <span class="sb-link-label">Deworming Request</span>
-        </a>
-        @php
-            $cfUnread = \Illuminate\Support\Facades\Schema::hasTable('health_consent_forms')
-                ? \App\Models\HealthConsentForm::where('adviser_unread', true)
-                    ->when(session('active_institution_id'), fn ($q, $id) => $q->where('institution_id', $id))
-                    ->count()
-                : 0;
-        @endphp
-        <a href="{{ route('consent-forms.index') }}" class="sb-link">
-            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
-                <rect x="9" y="3" width="6" height="4" rx="1"/>
-                <path d="M9 14l2 2 4-4"/>
-            </svg>
-            <span class="sb-link-label">Health Services Consent</span>
-            @if ($cfUnread > 0)<span class="sb-badge">{{ $cfUnread }}</span>@endif
-        </a>
-        <a href="{{ route('health-assessments.index') }}" class="sb-link">
-            <svg class="sb-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-            </svg>
-            <span class="sb-link-label">Health Assessment (MLHAT)</span>
-        </a>
-    </nav>
-    <div class="sb-user">
-        <div class="sb-avatar">{{ strtoupper(substr(session('active_name', 'CA'), 0, 2)) }}</div>
-        <div class="sb-user-meta">
-            <div class="sb-user-name">{{ session('active_name', 'Class Adviser') }}</div>
-            <div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
-        </div>
-        <form method="POST" action="{{ route('logout') }}">
-            @csrf
-            <button type="submit" class="sb-logout" title="Sign out" aria-label="Sign out">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                    <path d="M16 17l5-5-5-5"/>
-                    <path d="M21 12H9"/>
-                </svg>
-            </button>
-        </form>
-    </div>
-</aside>
+@include('partials.adviser-sidebar', ['active' => request('tab') === 'saved' ? 'students' : (request('tab') === 'form' ? 'form' : 'dashboard')])
 
-<div class="main">
-    <header class="top">
-        <div class="topbar-breadcrumb crumb">
-            <a href="{{ route('dashboard.class-adviser') }}" class="bc-home">Dashboard</a>
-            <span class="bc-sep">&rsaquo;</span>
-            <span class="bc-current">Class Adviser</span>
-        </div>
-        <div class="topbar-chip chip"><div class="dot"></div>Encoding Workspace</div>
-        @include('partials.live-clock')
-    </header>
+<div class="asb-main">
+    @include('partials.adviser-topbar', ['breadcrumb' => 'Dashboard'])
     <div class="content">
         @php
             $assignedGradeLevel = session('assigned_grade_level');
@@ -253,99 +165,119 @@
                     $chartEndlineValues[] = round((float) $endlineWeight, 1);
                 }
             }
+            $adviserTab = request('tab');
         @endphp
 
-        <section id="prototype-dashboard-panel" class="section-panel active" style="margin-top:12px;">
-            <div class="adviser-dashboard-grid">
+        <section id="prototype-dashboard-panel" class="section-panel {{ $adviserTab === 'saved' || $adviserTab === 'form' ? '' : 'active' }}" style="margin-top:12px;">
+            @php
+                $greetHour = (int) now()->format('G');
+                $greeting = $greetHour < 12 ? 'Good morning' : ($greetHour < 18 ? 'Good afternoon' : 'Good evening');
+                $ov = $overview;
+            @endphp
+
+            <div class="hero-banner">
+                <h1 class="hero-title">{{ $greeting }}, {{ session('active_name', 'Class Adviser') }}</h1>
+                <p class="hero-sub">{{ $ov['grade_section'] }} &middot; Manage your students' health profiles and track their well-being.</p>
+                <div class="hero-stats">
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>{{ $ov['total'] }} Total students</span>
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>{{ $ov['complete'] }} Complete profiles</span>
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>{{ $ov['pending'] }} Pending</span>
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>{{ $ov['needs_followup'] }} Needs follow-up</span>
+                </div>
+            </div>
+
+            <div class="dashboard-stat-row">
                 <article class="card dashboard-stat-card dashboard-total">
-                    <span>Total Students</span>
-                    <b>{{ $studentsTotal }}</b>
-                    <small>Assigned class records</small>
-                </article>
-                <article class="card dashboard-stat-card dashboard-wasted">
-                    <span>Wasted Students</span>
-                    <b>{{ $wastedStudentsTotal }}</b>
-                    <small>Needs attention</small>
+                    <div class="dsc-icon dsc-icon-total"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+                    <div><b>{{ $ov['total'] }}</b><span>Total Students</span><small>All enrolled in your class</small></div>
                 </article>
                 <article class="card dashboard-stat-card dashboard-complete">
-                    <span>Complete Records</span>
-                    <b>{{ $completeRecordsTotal }}</b>
-                    <small>{{ $safePercent($completeRecordsTotal, $studentsTotal) }}% completion</small>
+                    <div class="dsc-icon dsc-icon-complete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+                    <div><b>{{ $ov['complete'] }}</b><span>Complete Profiles</span><small>Full health assessment done</small></div>
                 </article>
                 <article class="card dashboard-stat-card dashboard-pending">
-                    <span>Pending Clinical Teacher Review</span>
-                    <b>{{ $pendingReviewTotal }}</b>
-                    <small>For examination follow-up</small>
+                    <div class="dsc-icon dsc-icon-pending"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+                    <div><b>{{ $ov['pending'] }}</b><span>Pending Assessments</span><small>Health assessment needed</small></div>
+                </article>
+                <article class="card dashboard-stat-card dashboard-wasted">
+                    <div class="dsc-icon dsc-icon-alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+                    <div><b>{{ $ov['needs_followup'] }}</b><span>Needs Follow-up</span><small>Requires medical attention</small></div>
+                </article>
+            </div>
+
+            <div class="dashboard-panels-two" id="needs-attention">
+                <article class="card section">
+                    <div class="panel-head">
+                        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;color:#d97706;vertical-align:-2px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Needs Attention</h3>
+                        <a href="{{ route('dashboard.class-adviser', ['tab' => 'saved']) }}" class="panel-head-link">View all students</a>
+                    </div>
+                    @forelse ($ov['needs_attention'] as $item)
+                        <div class="na-row">
+                            <div class="na-avatar">{{ strtoupper(substr($item['name'], 0, 2)) }}</div>
+                            <div class="na-body">
+                                <div class="na-name">{{ $item['name'] }}</div>
+                                <div class="na-meta">LRN {{ $item['lrn'] }} &middot; {{ $item['section'] }}</div>
+                                <div class="na-badges">
+                                    @foreach ($item['badges'] as $badge)
+                                        <span class="na-badge na-badge-{{ $badge['tone'] }}">{{ $badge['label'] }}</span>
+                                    @endforeach
+                                </div>
+                            </div>
+                        </div>
+                    @empty
+                        <p class="muted" style="padding:8px 0;font-size:.82rem;">Nothing needs attention right now.</p>
+                    @endforelse
+                </article>
+
+                <article class="card section">
+                    <div class="panel-head">
+                        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;color:#15803d;vertical-align:-2px;"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> Recent Activity</h3>
+                    </div>
+                    @forelse ($ov['recent_activity'] as $event)
+                        <div class="ra-row">
+                            <div class="ra-icon ra-icon-{{ $event['icon'] }}">
+                                @if ($event['icon'] === 'declined')
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                                @else
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                @endif
+                            </div>
+                            <div class="ra-body">
+                                <div class="ra-text">{!! $event['text'] !!}</div>
+                                <div class="ra-meta"><span class="ra-badge">{{ $event['badge'] }}</span> {{ $event['at']->diffForHumans() }}</div>
+                            </div>
+                        </div>
+                    @empty
+                        <p class="muted" style="padding:8px 0;font-size:.82rem;">No recent activity yet.</p>
+                    @endforelse
                 </article>
             </div>
 
             <div class="dashboard-panels-two">
-                <article class="card section">
-                    <h3>Class Nutritional Status</h3>
-                    <div class="chart-wrap">
-                        <canvas id="nutritionPieChart"></canvas>
-                    </div>
-                    <p class="chart-note">Baseline distribution for your assigned class.</p>
-                </article>
-
-                <article class="card section">
-                    <h3>Wasted Students Participation</h3>
-                    <div class="chart-wrap">
-                        <canvas id="participationBarChart"></canvas>
-                    </div>
-                    <p class="chart-note">Comparison of baseline ({{ $baselineMonthLabel }}) and endline ({{ $endlineMonthLabel }}) values.</p>
-                </article>
+                @include('partials.announcements')
+                @include('partials.upcoming-events')
             </div>
 
-            <article class="card section" style="margin-top:12px;">
-                <h3>Recent Student Records</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>LRN</th>
-                            <th>BMI Status</th>
-                            <th>Record State</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse ($recentStudents as $recentRecord)
-                            @php
-                                $recentMiddle = trim((string) ($recentRecord['middle_name'] ?? ''));
-                                $recentMiddleInitial = $recentMiddle !== '' ? (' ' . strtoupper(substr($recentMiddle, 0, 1)) . '.') : '';
-                                $recentFullName = trim(($recentRecord['last_name'] ?? '') . ', ' . ($recentRecord['first_name'] ?? '') . $recentMiddleInitial);
-                                $recentLrn = $recentRecord['lrn'] ?? '';
-                                $recentExamined = !empty($recentRecord['examination']);
-                            @endphp
-                            <tr>
-                                <td>{{ $recentFullName }}</td>
-                                <td>{{ $recentRecord['lrn'] ?? '-' }}</td>
-                                <td>{{ $recentRecord['nutritional_status_bmi_for_age'] ?? '-' }}</td>
-                                <td>
-                                    @if ($recentExamined)
-                                        <span class="badge ok">Clinical Teacher Reviewed</span>
-                                    @else
-                                        <span class="badge warn">Pending Review</span>
-                                    @endif
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="4" class="muted">No student records yet.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </article>
-
-            <div class="dashboard-quick-actions">
-                <button type="button" class="btn" data-target="prototype-form-panel" id="openAddStudentFromDashboard">Add New Student</button>
-                <button type="button" class="btn btn-secondary" data-target="prototype-saved-panel" id="openSavedFromDashboard">View My Students</button>
-                <a href="{{ route('dashboard.class-adviser.deworming') }}" class="btn btn-secondary">Open Deworming</a>
+            <div class="quick-action-grid">
+                <button type="button" class="quick-action-card" id="openSavedFromDashboard">
+                    <div class="qa-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div>
+                    <div><div class="qa-title">Manage Students</div><div class="qa-desc">View and manage all your students' health records</div></div>
+                    <svg class="qa-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </button>
+                <a href="{{ route('consent-forms.index') }}" class="quick-action-card">
+                    <div class="qa-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg></div>
+                    <div><div class="qa-title">Consent Forms</div><div class="qa-desc">Review and manage parent consent forms</div></div>
+                    <svg class="qa-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </a>
+                <a href="{{ route('dashboard.class-adviser.feeding-status') }}" class="quick-action-card">
+                    <div class="qa-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg></div>
+                    <div><div class="qa-title">Feeding Status</div><div class="qa-desc">Track students' feeding program participation</div></div>
+                    <svg class="qa-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </a>
             </div>
         </section>
 
-        <section id="prototype-saved-panel" class="section-panel" style="margin-top:12px;">
+        <section id="prototype-saved-panel" class="section-panel {{ $adviserTab === 'saved' ? 'active' : '' }}" style="margin-top:12px;">
             <article class="card my-students-card">
                 <div class="my-students-head">
                     <div>
@@ -428,7 +360,7 @@
             </article>
         </section>
 
-        <section id="prototype-form-panel" class="card section section-panel" style="margin-top:12px;">
+        <section id="prototype-form-panel" class="card section section-panel {{ $adviserTab === 'form' ? 'active' : '' }}" style="margin-top:12px;">
             <div class="add-head">
                 <div class="add-head-left">
                     <a href="{{ route('dashboard.class-adviser') }}" class="add-back" aria-label="Back to class adviser dashboard">
@@ -926,47 +858,28 @@ const dashboardEndlineValues = @json($chartEndlineValues);
 const dashboardBaselineMonthLabel = @json($baselineMonthLabel);
 const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
 
-(() => {
-    const navLinks = Array.from(document.querySelectorAll('.js-proto-nav'));
-    const tabPanels = Array.from(document.querySelectorAll('.section-panel'));
+// Shared by the sidebar's real links (?tab=...), the Cancel button, and the
+// dashboard's quick-action cards — switches the visible .section-panel
+// directly, without needing a clickable nav element for every tab.
+window.switchAdviserTab = (targetId) => {
+    document.querySelectorAll('.section-panel').forEach((panel) => {
+        panel.classList.toggle('active', panel.id === targetId);
+    });
+};
 
-    if (!navLinks.length || !tabPanels.length) {
+(() => {
+    if (!document.querySelector('.section-panel')) {
         return;
     }
 
-    navLinks.forEach((link) => {
-        link.addEventListener('click', (event) => {
-            event.preventDefault();
-            const targetId = link.getAttribute('data-target');
-
-            navLinks.forEach((navLink) => {
-                navLink.classList.remove('active');
-            });
-
-            tabPanels.forEach((panel) => {
-                panel.classList.remove('active');
-            });
-
-            link.classList.add('active');
-
-            const targetPanel = document.getElementById(targetId);
-            if (targetPanel) {
-                targetPanel.classList.add('active');
-            }
-        });
-    });
-
     const tabParam = new URLSearchParams(window.location.search).get('tab');
-    if (tabParam === 'saved') {
-        const savedLink = document.querySelector('.js-proto-nav[data-target="prototype-saved-panel"]');
-        savedLink?.click();
-    } else if (tabParam === 'form') {
-        const formLink = document.querySelector('.js-proto-nav[data-target="prototype-form-panel"]');
-        formLink?.click();
-    } else {
-        const dashboardLink = document.querySelector('.js-proto-nav[data-target="prototype-dashboard-panel"]');
-        dashboardLink?.click();
-    }
+    const targetId = tabParam === 'saved'
+        ? 'prototype-saved-panel'
+        : tabParam === 'form'
+            ? 'prototype-form-panel'
+            : 'prototype-dashboard-panel';
+
+    window.switchAdviserTab(targetId);
 })();
 
 (() => {
@@ -1295,7 +1208,7 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
         byId('bmiDisplay').textContent = '-';
         byId('nutriStatusDisplay').textContent = '-';
         byId('hfaDisplay').textContent = '-';
-        document.querySelector('.js-proto-nav[data-target="prototype-dashboard-panel"]')?.click();
+        window.switchAdviserTab?.('prototype-dashboard-panel');
     });
 
     closeBtn.addEventListener('click', closeModal);
@@ -1357,37 +1270,25 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
         statusSelect.value = 'all';
         applyFilters();
     });
+
+    // The topbar search (?tab=saved&q=...) feeds this same input rather than
+    // duplicating filter logic server-side.
+    const urlQuery = new URLSearchParams(window.location.search).get('q');
+    if (urlQuery) {
+        searchInput.value = urlQuery;
+        applyFilters();
+    }
 })();
 
 (() => {
-    const addBtn = document.getElementById('openAddStudentBtn');
-    const target = document.querySelector('.js-proto-nav[data-target="prototype-form-panel"]');
-    const addFromDashboard = document.getElementById('openAddStudentFromDashboard');
-    const savedFromDashboard = document.getElementById('openSavedFromDashboard');
-    const savedTarget = document.querySelector('.js-proto-nav[data-target="prototype-saved-panel"]');
-
-    if (!addBtn || !target) {
-        if (addFromDashboard && target) {
-            addFromDashboard.addEventListener('click', () => target.click());
-        }
-
-        if (savedFromDashboard && savedTarget) {
-            savedFromDashboard.addEventListener('click', () => savedTarget.click());
-        }
-
-        return;
-    }
-
-    addBtn.addEventListener('click', () => {
-        target.click();
+    document.getElementById('openAddStudentBtn')?.addEventListener('click', () => {
+        window.switchAdviserTab?.('prototype-form-panel');
     });
-
-    addFromDashboard?.addEventListener('click', () => {
-        target.click();
+    document.getElementById('openAddStudentFromDashboard')?.addEventListener('click', () => {
+        window.switchAdviserTab?.('prototype-form-panel');
     });
-
-    savedFromDashboard?.addEventListener('click', () => {
-        savedTarget?.click();
+    document.getElementById('openSavedFromDashboard')?.addEventListener('click', () => {
+        window.switchAdviserTab?.('prototype-saved-panel');
     });
 })();
 

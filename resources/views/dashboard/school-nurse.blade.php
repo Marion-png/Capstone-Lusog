@@ -122,6 +122,11 @@
             </div>
         </div>
 
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;">
+            @include('partials.announcements')
+            @include('partials.upcoming-events')
+        </div>
+
         <div class="mini-stats">
             <div class="mini-stat">
                 <div class="mini-stat-icon" style="background:var(--g100);color:var(--g700)">

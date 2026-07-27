@@ -77,6 +77,8 @@
 			<p class="page-sub">Monitor JHS/SHS participation, nutritional outcomes, and weekly check-ins at a glance.</p>
 		</div>
 
+		@include('partials.announcements')
+
 		<section class="stats">
 			<article class="card stat">
 				<div class="label">Enrolled Students</div>
