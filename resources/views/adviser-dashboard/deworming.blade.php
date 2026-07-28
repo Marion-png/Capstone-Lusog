@@ -134,7 +134,7 @@
 
         <section class="card section" style="margin-top:12px;">
             <h3>Bi-Annual Deworming Campaign</h3>
-            <p class="muted" style="font-size:.8rem;line-height:1.45;margin-bottom:10px;">Submit your tablet request based on signed parent consent forms. The School Nurse will review your request before release.</p>
+            <p class="muted" style="font-size:.8rem;line-height:1.45;margin-bottom:10px;">Submit your tablet request based on signed parent consent forms. The Clinical Teacher will review your request before release.</p>
 
             <form method="POST" action="{{ route('dashboard.class-adviser.deworming.store') }}" id="dewormingForm" autocomplete="off">
                 @csrf
@@ -188,7 +188,7 @@
                         <th>Tablets</th>
                         <th>Status</th>
                         <th>Release Date</th>
-                        <th>Nurse Comment</th>
+                        <th>Clinical Teacher Comment</th>
                     </tr>
                 </thead>
                 <tbody>

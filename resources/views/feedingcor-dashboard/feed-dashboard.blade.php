@@ -100,82 +100,195 @@
 			</article>
 		</section>
 
-		<section class="grid-2" id="feeding-program">
-			<article class="card chart-card">
+		<section class="dash-stack" id="feeding-program">
+			<article class="card chart-card full-chart">
 				<h2 class="chart-title">Avg BMI Progress Over Time</h2>
 				<div class="chart-surface">
-				<svg class="chart-svg" viewBox="0 0 520 250" role="img" aria-label="Average BMI progress line chart">
+				@php
+					$plot = $bmiChart['plot'] ?? ['left' => 48, 'right' => 900, 'top' => 24, 'bottom' => 196];
+					$chartMonths = $bmiChart['months'] ?? [];
+					$yTicks = $bmiChart['y_ticks'] ?? [];
+				@endphp
+				<svg class="chart-svg bmi-chart-svg" viewBox="0 0 {{ ($plot['right'] ?? 900) + 20 }} 250" role="img" aria-label="Average BMI progress line chart">
 					<defs>
 						<linearGradient id="bmiAreaGradient" x1="0" y1="0" x2="0" y2="1">
-							<stop offset="0%" stop-color="#2a9d8f" stop-opacity="0.25"></stop>
+							<stop offset="0%" stop-color="#2a9d8f" stop-opacity="0.30"></stop>
+							<stop offset="55%" stop-color="#2a9d8f" stop-opacity="0.08"></stop>
 							<stop offset="100%" stop-color="#2a9d8f" stop-opacity="0"></stop>
 						</linearGradient>
+						<linearGradient id="bmiLineGradient" x1="0" y1="0" x2="1" y2="0">
+							<stop offset="0%" stop-color="#1f9d76"></stop>
+							<stop offset="55%" stop-color="#2a9d8f"></stop>
+							<stop offset="100%" stop-color="#12b3a6"></stop>
+						</linearGradient>
+						<filter id="bmiLineGlow" x="-20%" y="-50%" width="140%" height="220%">
+							<feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#2a9d8f" flood-opacity="0.30"></feDropShadow>
+						</filter>
+						<filter id="bmiDotShadow" x="-70%" y="-70%" width="240%" height="240%">
+							<feDropShadow dx="0" dy="1.5" stdDeviation="1.6" flood-color="#0d3b33" flood-opacity="0.30"></feDropShadow>
+						</filter>
 					</defs>
-					<line class="axis-line" x1="48" y1="20" x2="48" y2="210"></line>
-					<line class="axis-line" x1="48" y1="210" x2="500" y2="210"></line>
-					<line class="grid-line" x1="48" y1="52" x2="500" y2="52"></line>
-					<line class="grid-line" x1="48" y1="122" x2="500" y2="122"></line>
-					<line class="grid-line" x1="48" y1="178" x2="500" y2="178"></line>
-					<line class="grid-line" x1="48" y1="20" x2="48" y2="210"></line>
-					<line class="grid-line" x1="138" y1="20" x2="138" y2="210"></line>
-					<line class="grid-line" x1="228" y1="20" x2="228" y2="210"></line>
-					<line class="grid-line" x1="318" y1="20" x2="318" y2="210"></line>
-					<line class="grid-line" x1="408" y1="20" x2="408" y2="210"></line>
-					<line class="grid-line" x1="500" y1="20" x2="500" y2="210"></line>
 
-					@php
-						$chartPoints = collect($bmiChart['points'] ?? []);
-						$linePoints = $chartPoints->map(fn ($point) => $point['x'] . ',' . $point['y'])->implode(' ');
-						$areaPoints = '48,210 ' . $linePoints . ' 500,210';
-						$months = $bmiChart['month_labels'] ?? [];
-						$yTicks = $bmiChart['y_ticks'] ?? [0, 0, 0];
-					@endphp
-					<polygon class="area-fill" points="{{ $areaPoints }}"></polygon>
-					<polyline class="line-main" points="{{ $linePoints }}"></polyline>
-					@foreach ($chartPoints as $point)
-						<circle class="line-dot" cx="{{ $point['x'] }}" cy="{{ $point['y'] }}" r="3.5"></circle>
+					@foreach (($bmiChart['bands'] ?? []) as $band)
+						<rect class="bmi-band band-{{ $band['class'] }}" x="{{ $plot['left'] }}" y="{{ $band['y'] }}" width="{{ $plot['right'] - $plot['left'] }}" height="{{ max(0, $band['height']) }}"></rect>
+						<text class="bmi-band-label" x="{{ $plot['left'] + 6 }}" y="{{ $band['label_y'] }}">{{ $band['label'] }}</text>
 					@endforeach
 
-					<text class="axis-txt" x="24" y="56">{{ $yTicks[0] ?? 0 }}</text>
-					<text class="axis-txt" x="24" y="126">{{ $yTicks[1] ?? 0 }}</text>
-					<text class="axis-txt" x="24" y="182">{{ $yTicks[2] ?? 0 }}</text>
-					@foreach ($months as $index => $month)
-						<text class="axis-txt" x="{{ 40 + ($index * 90) }}" y="228">{{ $month }}</text>
+					@foreach ($yTicks as $tick)
+						<line class="grid-line" x1="{{ $plot['left'] }}" y1="{{ $tick['y'] }}" x2="{{ $plot['right'] }}" y2="{{ $tick['y'] }}"></line>
+					@endforeach
+					<line class="axis-line" x1="{{ $plot['left'] }}" y1="{{ $plot['bottom'] }}" x2="{{ $plot['right'] }}" y2="{{ $plot['bottom'] }}"></line>
+
+					<path class="area-fill" d="{{ $bmiChart['area_path'] ?? '' }}"></path>
+					<path class="line-main" d="{{ $bmiChart['line_path'] ?? '' }}"></path>
+					@foreach ($chartMonths as $month)
+						<circle class="line-dot bmi-dot{{ $month['is_outlier'] ? ' is-outlier' : '' }}{{ $month['has_data'] ? '' : ' no-data' }}" cx="{{ $month['x'] }}" cy="{{ $month['y'] }}" r="{{ $month['is_outlier'] ? 6 : 5 }}" data-index="{{ $month['index'] }}" tabindex="0" role="button" aria-label="{{ $month['full'] }} summary">
+							<title>{{ $month['full'] }}@if ($month['has_data']) &mdash; {{ $month['count'] }} learners, avg BMI {{ $month['avg_bmi'] }} ({{ $month['band'] }})@endif</title>
+						</circle>
+					@endforeach
+
+					@foreach ($yTicks as $tick)
+						<text class="axis-txt" x="{{ $plot['left'] - 10 }}" y="{{ $tick['y'] + 4 }}" text-anchor="end">{{ $tick['label'] }}</text>
+					@endforeach
+					@foreach ($chartMonths as $month)
+						<text class="axis-txt" x="{{ $month['x'] }}" y="{{ $plot['bottom'] + 24 }}" text-anchor="middle">{{ $month['label'] }}</text>
 					@endforeach
 				</svg>
 				</div>
+				@if (! empty($bmiChart['has_outlier']))
+					<div class="bmi-outlier-banner">&#9888; {{ $bmiChart['outlier_label'] }}'s average is an outlier &mdash; worth verifying against individual records before reporting.</div>
+				@endif
+				<div class="bmi-month-summary" id="bmiMonthSummary" data-default="{{ $bmiChart['default_index'] ?? 0 }}"></div>
+				<script>
+				(() => {
+					const months = @json($bmiChart['months'] ?? []);
+					const panel = document.getElementById('bmiMonthSummary');
+					if (!panel) return;
+					const dots = Array.from(document.querySelectorAll('.bmi-dot'));
+					const bandClass = (b) => b === 'Overweight watch' ? 'over' : (b === 'Underweight watch' ? 'under' : 'healthy');
+					const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+					const render = (i) => {
+						const m = months[i];
+						if (!m) return;
+						let h = '<div class="bmi-sum-head"><span class="bmi-sum-month">' + esc(m.full) + '</span>';
+						if (m.band) h += '<span class="bmi-sum-badge ' + bandClass(m.band) + '">' + esc(m.band) + '</span>';
+						h += '</div>';
+						if (m.has_data) {
+							h += '<div class="bmi-sum-stats"><span><strong>' + m.count + '</strong> learner' + (m.count === 1 ? '' : 's') + ' measured</span><span><strong>' + m.avg_bmi + '</strong> avg BMI</span></div>';
+							if (m.status && m.status.length) h += '<div class="bmi-sum-chips">' + m.status.map((s) => '<span class="bmi-chip">' + esc(s.label) + ': ' + s.count + '</span>').join('') + '</div>';
+							if (m.is_outlier) h += '<div class="bmi-sum-flag">Flagged as an outlier &mdash; verify individual records.</div>';
+						} else {
+							h += '<div class="bmi-sum-empty">No measurements recorded this month.</div>';
+						}
+						panel.innerHTML = h;
+						panel.classList.remove('bmi-anim');
+						void panel.offsetWidth;
+						panel.classList.add('bmi-anim');
+						dots.forEach((d) => d.classList.toggle('bmi-dot-active', Number(d.dataset.index) === i));
+					};
+					const surface = document.querySelector('.chart-surface');
+					let tip = null;
+					if (surface) {
+						tip = document.createElement('div');
+						tip.className = 'bmi-tip';
+						surface.appendChild(tip);
+					}
+					const showTip = (i, dot) => {
+						if (!tip || !surface) return;
+						const m = months[i];
+						if (!m) return;
+						let h = '<div class="bmi-tip-label">' + esc(m.label) + ' &middot; avg. BMI</div>';
+						if (m.has_data) {
+							h += '<div class="bmi-tip-value">' + m.avg_bmi + '</div>';
+							if (m.is_outlier) h += '<div class="bmi-tip-flag">&#9873; flagged for review</div>';
+						} else {
+							h += '<div class="bmi-tip-empty">No measurements</div>';
+						}
+						tip.innerHTML = h;
+						const dr = dot.getBoundingClientRect();
+						const sr = surface.getBoundingClientRect();
+						const half = tip.offsetWidth / 2;
+						let x = dr.left + dr.width / 2 - sr.left;
+						x = Math.max(half + 4, Math.min(sr.width - half - 4, x));
+						tip.style.left = x + 'px';
+						tip.style.top = (dr.top - sr.top) + 'px';
+						tip.classList.add('show');
+					};
+					const hideTip = () => { if (tip) tip.classList.remove('show'); };
+					dots.forEach((d) => {
+						const i = Number(d.dataset.index);
+						d.addEventListener('click', () => render(i));
+						d.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); render(i); } });
+						d.addEventListener('mouseenter', () => showTip(i, d));
+						d.addEventListener('mouseleave', hideTip);
+						d.addEventListener('focus', () => showTip(i, d));
+						d.addEventListener('blur', hideTip);
+					});
+					render(Number(panel.dataset.default) || 0);
+				})();
+				</script>
 			</article>
 
-			<article class="card chart-card">
-				<h2 class="chart-title">Student Progress Breakdown</h2>
-				<div class="donut-wrap">
-					<div class="donut" style="background: {{ $progressCounts['donut_style'] ?? 'conic-gradient(var(--teal) 0 100%)' }};">
-						<div class="donut-center"><div><strong>{{ $dashboardStats['total_students'] ?? 0 }}</strong>Students</div></div>
-					</div>
+			<article class="card roster-card">
+				<h2 class="chart-title">Student Roster</h2>
+				<div class="roster-chips">
+					<span class="rchip rchip-improving">Improving {{ $roster['improving'] }}</span>
+					<span class="rchip rchip-stable">Stable {{ $roster['stable'] }}</span>
+					<span class="rchip rchip-attention">Needs attention {{ $roster['attention'] }}</span>
 				</div>
-				<div class="legend-row">
-					<span class="legend-item"><span class="legend-dot" style="background: var(--teal);"></span>Improving ({{ $progressCounts['improving'] ?? 0 }})</span>
-					<span class="legend-item"><span class="legend-dot" style="background: var(--blue);"></span>Stable ({{ $progressCounts['stable'] ?? 0 }})</span>
-					<span class="legend-item"><span class="legend-dot" style="background: var(--red);"></span>Regressing ({{ $progressCounts['regressing'] ?? 0 }})</span>
+				<div class="roster-list">
+					@forelse ($roster['students'] as $s)
+						<div class="roster-row">
+							<div class="roster-avatar">{{ $s['initials'] }}</div>
+							<div class="roster-meta">
+								<div class="roster-name">{{ $s['name'] }}</div>
+								<div class="roster-grade">{{ $s['grade'] }}</div>
+							</div>
+							@if ($s['trend'] === 'up')
+								<div class="roster-change up">&#9650; +{{ number_format($s['change'], 1) }}</div>
+							@elseif ($s['trend'] === 'down')
+								<div class="roster-change down">&#9660; {{ number_format($s['change'], 1) }}</div>
+							@else
+								<div class="roster-change flat">&middot; {{ number_format($s['change'], 1) }}</div>
+							@endif
+						</div>
+					@empty
+						<div class="roster-empty">No students on file yet.</div>
+					@endforelse
 				</div>
 			</article>
 		</section>
 
-		<section class="card chart-card full-chart">
-			<h2 class="chart-title">Weekly Check-ins (JHS/SHS)</h2>
-			<div class="bars-area">
-				@forelse (($weeklyBars ?? []) as $bar)
-					<div class="bar-col">
-						<div class="bar-value">{{ $bar['present'] }}</div>
-						<div class="bar-stack">
-							<div class="bar-good" style="height: {{ $bar['present_height'] }}px;"></div>
-							<div class="bar-risk" style="height: {{ $bar['missed_height'] }}px;"></div>
-						</div>
-						<div class="bar-label">{{ $bar['label'] }}</div>
-					</div>
-				@empty
-					<div class="bar-col"><div class="bar-value">0</div><div class="bar-stack"><div class="bar-good" style="height: 0;"></div><div class="bar-risk" style="height: 0;"></div></div><div class="bar-label">No Data</div></div>
-				@endforelse
+		<section class="card checkins-card full-chart">
+			<h2 class="chart-title">Weight &amp; BMI Log</h2>
+			@php $statusLabels = ['improving' => 'Improving', 'stable' => 'Stable', 'attention' => 'Needs attention']; @endphp
+			<div class="table-scroll">
+				<table class="checkins-table">
+					<thead>
+						<tr>
+							<th>Student</th>
+							<th>Grade</th>
+							<th class="ta-r">Weight</th>
+							<th class="ta-r">BMI</th>
+							<th class="ta-r">Change</th>
+							<th class="ta-r">Status</th>
+						</tr>
+					</thead>
+					<tbody>
+						@forelse ($roster['students'] as $s)
+							<tr>
+								<td class="ci-name">{{ $s['name'] }}</td>
+								<td class="ci-grade">{{ $s['grade'] }}</td>
+								<td class="ta-r ci-mono">{{ $s['weight'] }} kg</td>
+								<td class="ta-r ci-mono">{{ $s['bmi'] }}</td>
+								<td class="ta-r ci-mono {{ $s['trend'] }}">{{ $s['trend'] === 'up' ? '+' : '' }}{{ number_format($s['change'], 1) }}</td>
+								<td class="ta-r"><span class="status-chip status-{{ $s['status'] }}">{{ $statusLabels[$s['status']] }}</span></td>
+							</tr>
+						@empty
+							<tr><td colspan="6" class="ci-empty">No check-ins recorded yet.</td></tr>
+						@endforelse
+					</tbody>
+				</table>
 			</div>
 		</section>
 

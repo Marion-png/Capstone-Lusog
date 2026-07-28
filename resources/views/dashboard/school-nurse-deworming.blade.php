@@ -45,9 +45,9 @@
         <a href="#" class="sb-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Generate Reports</a>
     </nav>
     <div class="sb-user">
-        <div class="sb-avatar">{{ substr(session('active_name', 'School Nurse'), 0, 2) }}</div>
+        <div class="sb-avatar">{{ substr(session('active_name', 'Clinical Teacher'), 0, 2) }}</div>
         <div class="sb-user-meta">
-            <div class="sb-user-name">{{ session('active_name', 'School Nurse') }}</div>
+            <div class="sb-user-name">{{ session('active_name', 'Clinical Teacher') }}</div>
             <div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
         </div>
         <form method="POST" action="{{ route('logout') }}">
@@ -124,7 +124,7 @@
                         <th>Tablets Requested</th>
                         <th>Status</th>
                         <th>Release Date</th>
-                        <th>Nurse Comment</th>
+                        <th>Clinical Teacher Comment</th>
                         <th>Actions</th>
                     </tr>
                 </thead>

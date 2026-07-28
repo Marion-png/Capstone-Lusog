@@ -110,7 +110,7 @@
     <div class="content">
         <div class="card section" style="max-width:640px;margin-top:12px;">
             <div class="section" style="padding:14px;">
-                <h1 class="h4 mb-3">Record submitted to School Nurse.</h1>
+                <h1 class="h4 mb-3">Record submitted to Clinical Teacher.</h1>
                 <p class="muted">The student info and adviser measurements are now stored in session for prototype workflow testing.</p>
                 <div style="margin-top:12px;display:flex;gap:8px;">
                     <a href="{{ route('adviser.create') }}" class="btn">Add Another Student</a>

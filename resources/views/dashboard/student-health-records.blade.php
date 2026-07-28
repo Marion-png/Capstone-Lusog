@@ -91,7 +91,7 @@
     <div class="sb-user">
         <div class="sb-avatar">{{ strtoupper(substr(session('active_name', 'SN'), 0, 2)) }}</div>
         <div class="sb-user-meta">
-            <div class="sb-user-name">{{ session('active_name', 'School Nurse') }}</div>
+            <div class="sb-user-name">{{ session('active_name', 'Clinical Teacher') }}</div>
             <div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
         </div>
         <form method="POST" action="{{ route('logout') }}">
@@ -110,7 +110,7 @@
             <span class="bc-sep">&rsaquo;</span>
             <span class="bc-current">Health Records</span>
         </div>
-        <div class="topbar-chip"><div class="dot"></div>School Nurse</div>
+        <div class="topbar-chip"><div class="dot"></div>Clinical Teacher</div>
         @include('partials.live-clock')
     </header>
 
@@ -121,8 +121,8 @@
 
         <div class="cards">
             <div class="mini-card"><div class="val">{{ count($records) }}</div><div class="lbl">Total Submissions</div></div>
-            <div class="mini-card"><div class="val">{{ $pendingCount }}</div><div class="lbl">Pending Nurse Examination</div></div>
-            <div class="mini-card"><div class="val">{{ $doneCount }}</div><div class="lbl">Examined by Nurse</div></div>
+            <div class="mini-card"><div class="val">{{ $pendingCount }}</div><div class="lbl">Pending Clinical Teacher Examination</div></div>
+            <div class="mini-card"><div class="val">{{ $doneCount }}</div><div class="lbl">Examined by Clinical Teacher</div></div>
         </div>
 
         <div class="record-grid">
@@ -214,7 +214,7 @@
 
                         <div class="growth-empty" id="pgAwaitingExam" style="display:none;">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-                            <p>Baseline measurement recorded. A growth comparison will appear here once the School Nurse completes an endline examination.</p>
+                            <p>Baseline measurement recorded. A growth comparison will appear here once the Clinical Teacher completes an endline examination.</p>
                         </div>
 
                         <div id="pgChartBody">
@@ -249,7 +249,7 @@
             <section id="p-alerts" class="profile-panel">
                 <div class="profile-block">
                     <h4>Medical Alerts</h4>
-                    <div class="kv"><div class="k">Current Note:</div><div class="v" id="paStatus">Pending nurse review.</div></div>
+                    <div class="kv"><div class="k">Current Note:</div><div class="v" id="paStatus">Pending Clinical Teacher review.</div></div>
                 </div>
             </section>
             <section id="p-consent" class="profile-panel">
@@ -327,7 +327,7 @@
         const chartBodyEl = document.getElementById('pgChartBody');
         const deltaEl = document.getElementById('pgDelta');
 
-        // Until the nurse records an endline measurement, "current" has no
+        // Until the Clinical Teacher records an endline measurement, "current" has no
         // real value of its own — show a clear waiting state instead of a
         // chart that plots the baseline against itself.
         const hasEndlineData = Boolean(
@@ -453,12 +453,12 @@
         setText('pdRegionDivision', [record.region, record.division].filter(Boolean).join(' / ') || '-');
 
         setText('psGrade', record.grade_level || '-');
-        setText('psStatus', examined ? 'Examined by Nurse' : 'Pending Nurse Examination');
+        setText('psStatus', examined ? 'Examined by Clinical Teacher' : 'Pending Clinical Teacher Examination');
 
         setText('pgHeight', (record.height_cm || '-') + ' cm');
         setText('pgWeight', (record.weight_kg || '-') + ' kg');
         drawGrowthTrend(record);
-        setText('paStatus', examined ? 'Nurse examination details are available.' : 'Pending nurse review.');
+        setText('paStatus', examined ? 'Clinical Teacher examination details are available.' : 'Pending Clinical Teacher review.');
 
         @if(session('active_role') === 'clinic_staff')
         loadConditionsForClinicStaff(record.lrn || '');

@@ -237,7 +237,7 @@ class HealthConsentFormTest extends TestCase
             'Sent to parent',
             'Signed by parent/guardian',
             'Reviewed by adviser',
-            'Viewed by school nurse',
+            'Viewed by Clinical Teacher',
         ], $actions);
     }
 }

@@ -78,9 +78,9 @@
         </a>
     </nav>
     <div class="sb-user">
-        <div class="sb-avatar">{{ substr(session('active_name', 'School Nurse'), 0, 2) }}</div>
+        <div class="sb-avatar">{{ substr(session('active_name', 'Clinical Teacher'), 0, 2) }}</div>
         <div class="sb-user-meta">
-            <div class="sb-user-name">{{ session('active_name', 'School Nurse') }}</div>
+            <div class="sb-user-name">{{ session('active_name', 'Clinical Teacher') }}</div>
             <div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
         </div>
         <form method="POST" action="{{ route('logout') }}">
@@ -106,7 +106,7 @@
     <div class="content">
         <div class="page-header">
             <div>
-                <div class="page-eyebrow">School Nurse Dashboard</div>
+                <div class="page-eyebrow">Clinical Teacher Dashboard</div>
                 <h1 class="page-title">Daily Clinic <span>Operations Overview</span></h1>
                 <p class="page-sub">Track consultations, at-risk learners, and medicine inventory from one dashboard.</p>
             </div>

@@ -139,7 +139,7 @@ class ConditionControllerTest extends TestCase
             ]);
 
         $response->assertStatus(403)
-            ->assertJsonFragment(['message' => 'Unauthorized. Only clinic staff and school nurses can add conditions.']);
+            ->assertJsonFragment(['message' => 'Unauthorized. Only clinic staff and Clinical Teachers can add conditions.']);
 
         $this->assertDatabaseMissing('conditions', ['name' => 'Unauthorized Condition']);
     }

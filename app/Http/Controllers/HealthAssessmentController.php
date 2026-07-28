@@ -350,7 +350,7 @@ class HealthAssessmentController extends Controller
         ]);
     }
 
-    /** Nurse/clinic staff: read-only list of all submitted assessments. */
+    /** Clinical Teacher/clinic staff: read-only list of all submitted assessments. */
     public function nurseIndex(Request $request)
     {
         if ($redirect = $this->requirePageRole($request, ['school_nurse', 'clinic_staff'])) {

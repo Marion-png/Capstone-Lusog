@@ -634,7 +634,7 @@
                     id="email"
                     name="email"
                     value="{{ old('email') }}"
-                    placeholder="nurse.maria"
+                    placeholder="clinicalteacher.maria"
                     autocomplete="username"
                     required
                     class="control {{ $errors->has('email') ? 'is-error' : '' }}"

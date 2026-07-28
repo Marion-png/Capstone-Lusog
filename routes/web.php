@@ -125,7 +125,7 @@ Route::post('/account-request', function (Request $request) {
         ->with('success', 'Account request submitted. Please wait for System Admin approval.');
 })->name('account.request.submit');
 
-// Prototype flow: Class Adviser -> School Nurse (Session-based, no database)
+// Prototype flow: Class Adviser -> Clinical Teacher (Session-based, no database)
 Route::get('/adviser/create', [AdviserController::class, 'create'])
     ->name('adviser.create');
 
@@ -283,7 +283,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/{decision}', function
     $allowedReviewerRoles = ['school_nurse', 'school nurse', 'clinic_staff', 'clinic staff', 'nurse'];
 
     if (! in_array($activeRole, $allowedReviewerRoles, true)) {
-        return redirect()->route('dashboard.school-nurse')->with('error', 'Only School Nurse can review deworming requests.');
+        return redirect()->route('dashboard.school-nurse')->with('error', 'Only Clinical Teacher can review deworming requests.');
     }
 
     if (Schema::hasTable('deworming_requests')) {
@@ -304,7 +304,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/{decision}', function
             ->update([
                 'status' => 'approved',
                 'reviewed_at' => now(),
-                'reviewed_by' => (string) $request->session()->get('active_name', 'School Nurse'),
+                'reviewed_by' => (string) $request->session()->get('active_name', 'Clinical Teacher'),
                 'released_date' => now()->toDateString(),
                 'updated_at' => now(),
             ]);
@@ -318,7 +318,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/{decision}', function
 
         $requests[$index]['status'] = 'approved';
         $requests[$index]['reviewed_at'] = now()->toIso8601String();
-        $requests[$index]['reviewed_by'] = (string) $request->session()->get('active_name', 'School Nurse');
+        $requests[$index]['reviewed_by'] = (string) $request->session()->get('active_name', 'Clinical Teacher');
         $requests[$index]['released_date'] = now()->toDateString();
 
         $request->session()->put('deworming_requests', $requests->values()->all());
@@ -332,7 +332,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/comment', function (R
     $allowedReviewerRoles = ['school_nurse', 'school nurse', 'clinic_staff', 'clinic staff', 'nurse'];
 
     if (! in_array($activeRole, $allowedReviewerRoles, true)) {
-        return redirect()->route('dashboard.school-nurse')->with('error', 'Only School Nurse can add comments to deworming requests.');
+        return redirect()->route('dashboard.school-nurse')->with('error', 'Only Clinical Teacher can add comments to deworming requests.');
     }
 
     $validated = $request->validate([
@@ -358,7 +358,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/comment', function (R
                 'status' => 'commented',
                 'nurse_comment' => trim((string) $validated['nurse_comment']),
                 'commented_at' => now(),
-                'reviewed_by' => (string) $request->session()->get('active_name', 'School Nurse'),
+                'reviewed_by' => (string) $request->session()->get('active_name', 'Clinical Teacher'),
                 'released_date' => null,
                 'updated_at' => now(),
             ]);
@@ -373,7 +373,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/comment', function (R
         $requests[$index]['status'] = 'commented';
         $requests[$index]['nurse_comment'] = trim((string) $validated['nurse_comment']);
         $requests[$index]['commented_at'] = now()->toIso8601String();
-        $requests[$index]['reviewed_by'] = (string) $request->session()->get('active_name', 'School Nurse');
+        $requests[$index]['reviewed_by'] = (string) $request->session()->get('active_name', 'Clinical Teacher');
         $requests[$index]['released_date'] = null;
 
         $request->session()->put('deworming_requests', $requests->values()->all());
@@ -513,7 +513,7 @@ Route::get('/dashboard/class-adviser/deworming', function (Request $request) {
 
 Route::post('/dashboard/class-adviser/deworming', function (Request $request) {
     // Keep submission working even if the active role changed in another tab.
-    // This avoids losing adviser input and still forwards requests to School Nurse view.
+    // This avoids losing adviser input and still forwards requests to Clinical Teacher view.
     $submittedByRole = (string) $request->session()->get('active_role', 'class_adviser');
 
     $validated = $request->validate([
@@ -561,7 +561,7 @@ Route::post('/dashboard/class-adviser/deworming', function (Request $request) {
 
     return redirect()
         ->route('dashboard.class-adviser.deworming')
-        ->with('success', 'Deworming request submitted successfully and sent to School Nurse monitoring.');
+        ->with('success', 'Deworming request submitted successfully and sent to Clinical Teacher monitoring.');
 })->name('dashboard.class-adviser.deworming.store');
 
 Route::get('/dashboard/school-head', [SchoolHeadController::class, 'index'])
@@ -679,7 +679,7 @@ Route::get('/dashboard/feedingcor-program', function (Request $request) {
     if ($activeRole === 'school_nurse') {
         return redirect()
             ->route('dashboard.school-nurse.feeding-program')
-            ->with('error', 'School Nurse has view-only access to Feeding Program.');
+            ->with('error', 'Clinical Teacher has view-only access to Feeding Program.');
     }
 
     return app(FeedingProgramController::class)->index($request);

@@ -107,7 +107,7 @@ class MedicalCertificateController extends Controller
         abort_unless(
             in_array($request->session()->get('active_role'), ['clinic_staff', 'school_nurse'], true),
             403,
-            'Only Clinic Staff or School Nurse may download medical certificates.'
+            'Only Clinic Staff or Clinical Teacher may download medical certificates.'
         );
 
         $cert = MedicalCertificate::with('condition')->find($id);

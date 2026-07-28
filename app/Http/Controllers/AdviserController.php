@@ -204,7 +204,7 @@ class AdviserController extends Controller
 
         return redirect()
             ->route('dashboard.class-adviser')
-            ->with('success', 'Record submitted to School Nurse.');
+            ->with('success', 'Record submitted to Clinical Teacher.');
     }
 
     public function success(): View

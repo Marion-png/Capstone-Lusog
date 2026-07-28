@@ -31,7 +31,7 @@ class ConditionController extends Controller
 
     /**
      * Store a new condition.
-     * Only clinic staff and school nurse can add new conditions.
+     * Only clinic staff and Clinical Teacher can add new conditions.
      */
     public function store(Request $request): JsonResponse
     {
@@ -41,7 +41,7 @@ class ConditionController extends Controller
 
         if (! in_array($activeRole, $allowedRoles, true)) {
             return response()->json(
-                ['message' => 'Unauthorized. Only clinic staff and school nurses can add conditions.'],
+                ['message' => 'Unauthorized. Only clinic staff and Clinical Teachers can add conditions.'],
                 403
             );
         }

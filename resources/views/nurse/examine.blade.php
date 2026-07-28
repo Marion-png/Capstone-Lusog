@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
-    <title>Nurse Examination - SIGLA</title>
+    <title>Clinical Teacher Examination - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
     <style>
@@ -116,7 +116,7 @@
 
 <div class="page-header">
     <div>
-        <div class="page-eyebrow">School Nurse &rsaquo; Health Records</div>
+        <div class="page-eyebrow">Clinical Teacher &rsaquo; Health Records</div>
         <h1>Medical <span>Examination Form</span></h1>
     </div>
     <a href="{{ route('dashboard.student-health-records') }}" class="btn btn-ghost">

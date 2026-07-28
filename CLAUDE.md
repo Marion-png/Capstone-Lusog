@@ -55,7 +55,7 @@ Roles stored as strings in `session('active_role')`. The seven roles are:
 
 | session value | Description |
 |---|---|
-| `school_nurse` | Manages deworming, consultations, health records |
+| `school_nurse` | **Clinical Teacher** (UI label; the role key stays `school_nurse`) — manages deworming, consultations, health records |
 | `clinic_staff` | Consultation logging, medicine inventory |
 | `class_adviser` | Student data entry, medical certificates, consent forms |
 | `school_head` | Reports, deworming approval |

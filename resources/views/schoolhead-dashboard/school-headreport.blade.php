@@ -219,7 +219,7 @@
 				<tbody>
 					<tr>
 						<td>Nutritional Status Summary</td>
-						<td>School Nurse</td>
+						<td>Clinical Teacher</td>
 						<td>Q1 2026</td>
 						<td><span class="status-pill status-submitted">Submitted</span></td>
 					</tr>
@@ -231,7 +231,7 @@
 					</tr>
 					<tr>
 						<td>Deworming Completion Report</td>
-						<td>School Nurse</td>
+						<td>Clinical Teacher</td>
 						<td>Q1 2026</td>
 						<td><span class="status-pill status-pending">Pending Sign-off</span></td>
 					</tr>

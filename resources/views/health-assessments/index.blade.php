@@ -23,7 +23,7 @@
 
 <div class="cf-wrap">
     <h1 class="cf-page-title">Mandatory Learner's <i>Health Assessment Tool</i></h1>
-    <p class="cf-page-sub">Complete the two-sheet MLHAT for each learner, in cooperation with their parents. Submitted assessments become visible to you and the School Nurse.</p>
+    <p class="cf-page-sub">Complete the two-sheet MLHAT for each learner, in cooperation with their parents. Submitted assessments become visible to you and the Clinical Teacher.</p>
 
     @if (session('success')) <div class="cf-flash cf-flash-ok">{{ session('success') }}</div> @endif
     @if (session('health_assessment_success')) <div class="cf-flash cf-flash-ok">{{ session('health_assessment_success') }}</div> @endif

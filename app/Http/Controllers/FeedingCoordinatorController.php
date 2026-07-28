@@ -61,7 +61,7 @@ class FeedingCoordinatorController extends Controller
     }
 
     /**
-     * The School Nurse registered to this coordinator's school, used to
+     * The Clinical Teacher registered to this coordinator's school, used to
      * pre-fill the "Prepared by" signatory on the BMI reports. Matched on the
      * same institution (falling back to the plain school name), so a nurse from
      * another school is never pulled in.
@@ -440,7 +440,81 @@ class FeedingCoordinatorController extends Controller
             ],
             'bmiChart' => $bmiChart,
             'weeklyBars' => $weeklyBars,
+            'roster' => $this->buildRoster($students),
         ]);
+    }
+
+    /**
+     * Per-student roster powering the Student Roster panel and the Weekly
+     * Check-ins table: name, grade, latest weight/BMI, the BMI change (endline
+     * vs baseline) and a derived status. Learners needing attention sort first.
+     *
+     * @param  Collection<int, StudentHealthRecord>  $students
+     * @return array{students: list<array<string, mixed>>, improving: int, attention: int, stable: int}
+     */
+    private function buildRoster(Collection $students): array
+    {
+        $priority = ['attention' => 0, 'improving' => 1, 'stable' => 2];
+
+        $rows = $students->map(function (StudentHealthRecord $record): array {
+            [$grade] = $this->splitSection((string) $record->section);
+            $baseline = $record->baseline_bmi_value;
+            $endline = $record->endline_bmi_value;
+            $currentBmi = $endline ?? $record->bmi_value;
+
+            $change = ($endline !== null && $baseline !== null)
+                ? round((float) $endline - (float) $baseline, 1)
+                : 0.0;
+            $trend = $change > 0.05 ? 'up' : ($change < -0.05 ? 'down' : 'flat');
+
+            $statusNorm = $this->resolveStatus((string) $record->nutritional_status);
+            if ($trend === 'up') {
+                $status = 'improving';
+            } elseif ($trend === 'down' || in_array($statusNorm, ['severe', 'wasted'], true)) {
+                $status = 'attention';
+            } else {
+                $status = 'stable';
+            }
+
+            return [
+                'initials' => $this->initials((string) $record->student_name),
+                'name' => (string) $record->student_name,
+                'grade' => $grade,
+                'weight' => $record->weight !== null ? number_format((float) $record->weight, 1) : '—',
+                'bmi' => $currentBmi !== null ? number_format((float) $currentBmi, 1) : '—',
+                'change' => $change,
+                'trend' => $trend,
+                'status' => $status,
+            ];
+        })->sortBy(fn (array $r) => sprintf('%d-%s', $priority[$r['status']], strtolower($r['name'])))->values();
+
+        return [
+            'students' => $rows->all(),
+            'improving' => $rows->where('status', 'improving')->count(),
+            'attention' => $rows->where('status', 'attention')->count(),
+            'stable' => $rows->where('status', 'stable')->count(),
+        ];
+    }
+
+    /** Two-letter monogram for a "Last, First M." (or plain) student name. */
+    private function initials(string $name): string
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return '—';
+        }
+
+        if (str_contains($name, ',')) {
+            [$last, $first] = array_pad(array_map('trim', explode(',', $name, 2)), 2, '');
+            $letters = mb_substr($first, 0, 1).mb_substr($last, 0, 1);
+        } else {
+            $parts = preg_split('/\s+/', $name) ?: [];
+            $letters = mb_substr($parts[0] ?? '', 0, 1).mb_substr($parts[1] ?? '', 0, 1);
+        }
+
+        $letters = trim($letters);
+
+        return mb_strtoupper($letters !== '' ? $letters : mb_substr($name, 0, 2));
     }
 
     private function resolveLevel(string $section): string
@@ -479,7 +553,7 @@ class FeedingCoordinatorController extends Controller
     private function buildBmiChart(Collection $students): array
     {
         $left = 48.0;
-        $right = 500.0;
+        $right = 900.0;
         $top = 24.0;
         $bottom = 196.0;
         $underweight = 18.5;
@@ -492,7 +566,7 @@ class FeedingCoordinatorController extends Controller
         // Bucket learners by the month they were recorded; carry the last known
         // average forward so the line stays continuous through empty months.
         $carry = $globalAverage > 0 ? $globalAverage : 21.0;
-        $monthsData = $months->map(function (Carbon $month) use ($students, $statusOrder, &$carry): array {
+        $monthsData = $months->map(function (Carbon $month) use ($students, $statusOrder, $underweight, $overweight, &$carry): array {
             $rows = $students->filter(
                 fn ($row) => $row->created_at && Carbon::parse($row->created_at)->format('Y-m') === $month->format('Y-m')
             );
@@ -561,20 +635,64 @@ class FeedingCoordinatorController extends Controller
         ], $bands);
 
         $line = $monthsData->map(fn (array $m) => $m['x'].','.$m['y'])->implode(' ');
-        $outlierIndex = $monthsData->firstWhere('is_outlier', true)['index'] ?? null;
-        $lastWithData = $monthsData->where('has_data', true)->last()['index'] ?? 5;
+        $points = $monthsData->map(fn (array $m) => [(float) $m['x'], (float) $m['y']])->all();
+        $linePath = $this->smoothPath($points);
+        $firstX = $points !== [] ? $points[0][0] : $left;
+        $lastX = $points !== [] ? $points[count($points) - 1][0] : $right;
+        $areaPath = $linePath === '' ? '' : $linePath.' L '.$lastX.' '.$bottom.' L '.$firstX.' '.$bottom.' Z';
+        $outlierMonth = $monthsData->firstWhere('is_outlier', true);
+        $lastDataMonth = $monthsData->where('has_data', true)->last();
+        $defaultIndex = $outlierMonth ? $outlierMonth['index'] : ($lastDataMonth ? $lastDataMonth['index'] : 5);
 
         return [
             'plot' => ['left' => $left, 'right' => $right, 'top' => $top, 'bottom' => $bottom],
             'bands' => $bands,
             'y_ticks' => array_map(fn (float $v) => ['label' => rtrim(rtrim(number_format($v, 1), '0'), '.'), 'y' => $y($v)], [$max, $overweight, $underweight, $min]),
             'line' => $line,
+            'line_path' => $linePath,
             'area' => $left.','.$bottom.' '.$line.' '.$right.','.$bottom,
+            'area_path' => $areaPath,
             'months' => $monthsData->all(),
             'has_outlier' => $outlierLabels !== [],
             'outlier_label' => implode(' & ', $outlierLabels),
-            'default_index' => $outlierIndex ?? $lastWithData,
+            'default_index' => $defaultIndex,
         ];
+    }
+
+    /**
+     * Catmull-Rom spline through the points rendered as SVG cubic beziers, so
+     * the BMI line curves smoothly instead of using hard polyline corners.
+     *
+     * @param  list<array{0: float, 1: float}>  $points
+     */
+    private function smoothPath(array $points): string
+    {
+        $count = count($points);
+        if ($count === 0) {
+            return '';
+        }
+        if ($count === 1) {
+            return 'M '.$points[0][0].' '.$points[0][1];
+        }
+
+        $path = 'M '.$points[0][0].' '.$points[0][1];
+        for ($i = 0; $i < $count - 1; $i++) {
+            $p0 = $points[$i - 1] ?? $points[$i];
+            $p1 = $points[$i];
+            $p2 = $points[$i + 1];
+            $p3 = $points[$i + 2] ?? $p2;
+
+            $c1x = $p1[0] + ($p2[0] - $p0[0]) / 6;
+            $c1y = $p1[1] + ($p2[1] - $p0[1]) / 6;
+            $c2x = $p2[0] - ($p3[0] - $p1[0]) / 6;
+            $c2y = $p2[1] - ($p3[1] - $p1[1]) / 6;
+
+            $path .= ' C '.round($c1x, 1).' '.round($c1y, 1)
+                .', '.round($c2x, 1).' '.round($c2y, 1)
+                .', '.round($p2[0], 1).' '.round($p2[1], 1);
+        }
+
+        return $path;
     }
 
     private function bmiBandLabel(?float $value, float $underweight, float $overweight): string

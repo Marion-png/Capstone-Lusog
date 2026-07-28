@@ -25,7 +25,7 @@
 
 <div class="cf-wrap">
     <h1 class="cf-page-title">Health Services Consent <i>Sulat-Pahibalo</i></h1>
-    <p class="cf-page-sub">Prepare the official consent form for each learner, send it to the parent/guardian for e-signature, then review and release it to the School Nurse.</p>
+    <p class="cf-page-sub">Prepare the official consent form for each learner, send it to the parent/guardian for e-signature, then review and release it to the Clinical Teacher.</p>
 
     @if (session('success')) <div class="cf-flash cf-flash-ok">{{ session('success') }}</div> @endif
     @if (session('error')) <div class="cf-flash cf-flash-err">{{ session('error') }}</div> @endif

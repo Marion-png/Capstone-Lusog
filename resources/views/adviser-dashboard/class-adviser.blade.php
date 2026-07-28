@@ -118,7 +118,7 @@
                 : 'Not Assigned';
         @endphp
         <h1 class="title">Class Adviser <i>Encoding Workspace</i></h1>
-        <p class="sub">School Health Card prototype workflow for adviser submission and nurse follow-up.</p>
+        <p class="sub">School Health Card prototype workflow for adviser submission and Clinical Teacher follow-up.</p>
         <div class="assigned-class-banner">
             <div>
                 <div class="assigned-class-label">Assigned School</div>
@@ -273,7 +273,7 @@
                     <small>{{ $safePercent($completeRecordsTotal, $studentsTotal) }}% completion</small>
                 </article>
                 <article class="card dashboard-stat-card dashboard-pending">
-                    <span>Pending Nurse Review</span>
+                    <span>Pending Clinical Teacher Review</span>
                     <b>{{ $pendingReviewTotal }}</b>
                     <small>For examination follow-up</small>
                 </article>
@@ -323,7 +323,7 @@
                                 <td>{{ $recentRecord['nutritional_status_bmi_for_age'] ?? '-' }}</td>
                                 <td>
                                     @if ($recentExamined)
-                                        <span class="badge ok">Nurse Reviewed</span>
+                                        <span class="badge ok">Clinical Teacher Reviewed</span>
                                     @else
                                         <span class="badge warn">Pending Review</span>
                                     @endif
@@ -360,7 +360,7 @@
 
                 <div class="my-students-stats">
                     <div class="my-stat-box box-total"><span>Total Students</span><b>{{ $studentsTotal }}</b></div>
-                    <div class="my-stat-box box-pending"><span>Pending Nurse Review</span><b>{{ $pendingReviewTotal }}</b></div>
+                    <div class="my-stat-box box-pending"><span>Pending Clinical Teacher Review</span><b>{{ $pendingReviewTotal }}</b></div>
                     <div class="my-stat-box box-complete"><span>Complete Records</span><b>{{ $completeRecordsTotal }}</b></div>
                     <div class="my-stat-box box-wasted"><span>Wasted Students</span><b>{{ $wastedStudentsTotal }}</b></div>
                 </div>
@@ -369,8 +369,8 @@
                     <input id="studentsSearch" type="text" placeholder="Search by name or LRN...">
                     <select id="studentsStatusFilter">
                         <option value="all">All Status</option>
-                        <option value="pending">Pending Nurse Review</option>
-                        <option value="cert">Nurse Reviewed</option>
+                        <option value="pending">Pending Clinical Teacher Review</option>
+                        <option value="cert">Clinical Teacher Reviewed</option>
                         <option value="complete">Complete</option>
                     </select>
                     <button type="button" class="btn btn-secondary" id="studentsClearBtn">Clear</button>
@@ -410,9 +410,9 @@
                                     <td>{{ $prototypeRecord['nutritional_status_bmi_for_age'] ?? '-' }}</td>
                                     <td>
                                         @if ($isComplete || $isExamined)
-                                            <span class="my-status-badge status-complete">Nurse Reviewed</span>
+                                            <span class="my-status-badge status-complete">Clinical Teacher Reviewed</span>
                                         @else
-                                            <span class="my-status-badge status-pending">Pending Nurse Review</span>
+                                            <span class="my-status-badge status-pending">Pending Clinical Teacher Review</span>
                                         @endif
                                     </td>
                                     <td>
@@ -507,7 +507,7 @@
                     <input id="proto_division" name="division" type="hidden" value="{{ old('division', 'Quezon City') }}">
                 </div>
 
-                <div class="note-box">After submission, the school nurse will complete the remaining SHD form fields. You can view complete updates once nurse review is done.</div>
+                <div class="note-box">After submission, the Clinical Teacher will complete the remaining SHD form fields. You can view complete updates once Clinical Teacher review is done.</div>
 
                 <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
                     <button type="button" class="btn btn-secondary" id="cancelAddStudent">Cancel</button>
@@ -525,7 +525,7 @@
             <button type="button" class="confirm-close" id="confirmCloseBtn">x</button>
         </div>
         <div class="confirm-body">
-            <div class="confirm-info">Please review the information before submitting. The school nurse will complete the remaining health record.</div>
+            <div class="confirm-info">Please review the information before submitting. The Clinical Teacher will complete the remaining health record.</div>
             <div id="summaryContainer"></div>
             <div class="confirm-actions">
                 <button type="button" class="btn btn-secondary" id="confirmEditBtn">Edit</button>
@@ -550,7 +550,7 @@
                 <div class="student-profile-name" id="vpName">-</div>
                 <div class="student-profile-lrn" id="vpLrn">LRN: -</div>
             </div>
-            <span class="my-status-badge status-pending" id="vpStatusBadge">Pending Nurse Review</span>
+            <span class="my-status-badge status-pending" id="vpStatusBadge">Pending Clinical Teacher Review</span>
         </div>
 
         <div class="student-profile-body">
@@ -586,7 +586,7 @@
             </section>
 
             <section class="student-profile-section" id="vpNurseSection" style="display:none;">
-                <h4>Nurse Examination Record (Read-only)</h4>
+                <h4>Clinical Teacher Examination Record (Read-only)</h4>
                 <div class="student-profile-grid">
                     <div><span>Date of Examination:</span><b id="vpExamDate">-</b></div>
                     <div><span>Examined By:</span><b id="vpExaminedBy">-</b></div>
@@ -911,8 +911,8 @@
             {{-- ── End Health Assessment ────────────────────────────────────── --}}
 
             <section class="pending-note-box" id="vpPendingBox">
-                <h5>Pending Nurse Review</h5>
-                <p>This student's health record is pending completion by the school nurse.</p>
+                <h5>Pending Clinical Teacher Review</h5>
+                <p>This student's health record is pending completion by the Clinical Teacher.</p>
             </section>
         </div>
     </div>
@@ -1486,8 +1486,8 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
         if (statusBadge) {
             const statusMap = {
                 complete: ['Complete Record',      'my-status-badge status-complete'],
-                cert:     ['Nurse Reviewed',       'my-status-badge status-complete'],
-                pending:  ['Pending Nurse Review', 'my-status-badge status-pending'],
+                cert:     ['Clinical Teacher Reviewed',       'my-status-badge status-complete'],
+                pending:  ['Pending Clinical Teacher Review', 'my-status-badge status-pending'],
             };
             const [badgeText, badgeCls] = statusMap[rowStatus] ?? statusMap.pending;
             statusBadge.textContent = badgeText;

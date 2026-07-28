@@ -22,8 +22,8 @@
 	$programRouteName = $isReadOnly ? 'dashboard.school-nurse.feeding-program' : 'dashboard.feedingcor-program';
 	$dashboardRouteName = $isReadOnly ? 'dashboard.school-nurse' : 'dashboard.feedingcor-dashboard';
 	$healthRecordsRouteName = $isReadOnly ? 'dashboard.student-health-records' : 'dashboard.feedingcor-health-records';
-	$displayName = trim((string) session('active_name', $isReadOnly ? 'School Nurse' : 'Feeding Coordinator'));
-	$roleLabel = $isReadOnly ? 'School Nurse' : 'Feeding Coordinator';
+	$displayName = trim((string) session('active_name', $isReadOnly ? 'Clinical Teacher' : 'Feeding Coordinator'));
+	$roleLabel = $isReadOnly ? 'Clinical Teacher' : 'Feeding Coordinator';
 @endphp
 <aside class="sidebar">
 	<div class="sb-grid"></div>
@@ -117,7 +117,7 @@
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>{{ $isReadOnly ? 'School Nurse' : 'Dashboard' }}</span><span>&rsaquo;</span><span>Feeding Program</span></div>
+		<div class="topbar-bc"><span>{{ $isReadOnly ? 'Clinical Teacher' : 'Dashboard' }}</span><span>&rsaquo;</span><span>Feeding Program</span></div>
 	    @include('partials.live-clock')
 	</header>
 
@@ -129,7 +129,7 @@
 			<div class="flash err">{{ session('error') }}</div>
 		@endif
 		@if ($isReadOnly)
-			<div class="flash">View-only mode: School Nurse can review feeding data but cannot submit attendance.</div>
+			<div class="flash">View-only mode: Clinical Teacher can review feeding data but cannot submit attendance.</div>
 		@endif
 
 		<div class="head-row">

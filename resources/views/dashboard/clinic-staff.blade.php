@@ -119,7 +119,7 @@
                         <tr><td>08:41</td><td>Juan Dela Cruz</td><td>Headache</td><td><span class="pill ok">Encoded</span></td></tr>
                         <tr><td>09:05</td><td>Ana Gonzales</td><td>Fever</td><td><span class="pill warn">For Review</span></td></tr>
                         <tr><td>09:22</td><td>Maria Santos</td><td>Abdominal pain</td><td><span class="pill ok">Encoded</span></td></tr>
-                        <tr><td>09:47</td><td>Carlo Mendoza</td><td>Skin allergy</td><td><span class="pill bad">Refer Nurse</span></td></tr>
+                        <tr><td>09:47</td><td>Carlo Mendoza</td><td>Skin allergy</td><td><span class="pill bad">Refer to Clinical Teacher</span></td></tr>
                     </tbody>
                 </table>
             </article>
