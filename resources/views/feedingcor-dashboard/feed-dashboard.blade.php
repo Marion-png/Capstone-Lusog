@@ -14,59 +14,14 @@
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
+    <style>{!! file_get_contents(resource_path('css/feedingcor-sidebar.css')) !!}</style>
 </head>
 <body>
-<aside class="sidebar">
-	<div class="sb-grid"></div>
-	<div class="sb-logo">
-		<img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA Logo" class="sb-logo-full">
-	</div>
-	<nav class="sb-nav">
-		<div class="sb-section-label">Main</div>
-		<a href="{{ route('dashboard.feedingcor-dashboard') }}" class="sb-link active">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-			Dashboard
-		</a>
-		<a href="{{ route('dashboard.feedingcor-health-records') }}" class="sb-link">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-			Student Health Records
-		</a>
-		<a href="{{ route('dashboard.feedingcor-program') }}" class="sb-link">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
-			Feeding Program
-		</a>
-		<a href="{{ route('dashboard.feedingcor-sbfp-forms') }}" class="sb-link">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="8" y1="9" x2="10" y2="9"/></svg>
-			SBFP Forms
-		</a>
-	</nav>
-	<div class="sb-user">
-		@php
-			$displayName = trim((string) session('active_name', 'Feeding Coordinator'));
-			$initials = collect(preg_split('/\s+/', $displayName))
-				->filter()
-				->map(fn ($part) => strtoupper(substr($part, 0, 1)))
-				->take(2)
-				->implode('');
-		@endphp
-		<div class="sb-avatar">{{ $initials ?: 'FC' }}</div>
-		<div class="sb-user-meta">
-			<div class="sb-user-name">{{ $displayName }}</div>
-			<div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
-		</div>
-		<form method="POST" action="{{ route('logout') }}">
-			@csrf
-			<button type="submit" class="sb-logout" title="Sign out">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-			</button>
-		</form>
-	</div>
-</aside>
+@include('partials.feedingcor-sidebar', ['active' => 'dashboard'])
 
 <div class="main">
 	<header class="topbar">
 		<div class="topbar-bc"><span>Dashboard</span><span>&rsaquo;</span><span>Feeding Program</span></div>
-		<div class="topbar-chip"><div class="dot"></div>Monitoring Active</div>
 	    @include('partials.live-clock')
 	</header>
 
@@ -110,43 +65,35 @@
 					$plot = $bmiChart['plot'] ?? ['left' => 48, 'right' => 900, 'top' => 24, 'bottom' => 196];
 					$chartMonths = $bmiChart['months'] ?? [];
 					$yTicks = $bmiChart['y_ticks'] ?? [];
+					// Hit areas are full-height columns so a data point stays an
+					// easy target on a phone, well past the 44px minimum.
+					$hitWidth = count($chartMonths) > 1
+						? ($plot['right'] - $plot['left']) / (count($chartMonths) - 1)
+						: ($plot['right'] - $plot['left']);
 				@endphp
 				<svg class="chart-svg bmi-chart-svg" viewBox="0 0 {{ ($plot['right'] ?? 900) + 20 }} 250" role="img" aria-label="Average BMI progress line chart">
-					<defs>
-						<linearGradient id="bmiAreaGradient" x1="0" y1="0" x2="0" y2="1">
-							<stop offset="0%" stop-color="#2a9d8f" stop-opacity="0.30"></stop>
-							<stop offset="55%" stop-color="#2a9d8f" stop-opacity="0.08"></stop>
-							<stop offset="100%" stop-color="#2a9d8f" stop-opacity="0"></stop>
-						</linearGradient>
-						<linearGradient id="bmiLineGradient" x1="0" y1="0" x2="1" y2="0">
-							<stop offset="0%" stop-color="#1f9d76"></stop>
-							<stop offset="55%" stop-color="#2a9d8f"></stop>
-							<stop offset="100%" stop-color="#12b3a6"></stop>
-						</linearGradient>
-						<filter id="bmiLineGlow" x="-20%" y="-50%" width="140%" height="220%">
-							<feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#2a9d8f" flood-opacity="0.30"></feDropShadow>
-						</filter>
-						<filter id="bmiDotShadow" x="-70%" y="-70%" width="240%" height="240%">
-							<feDropShadow dx="0" dy="1.5" stdDeviation="1.6" flood-color="#0d3b33" flood-opacity="0.30"></feDropShadow>
-						</filter>
-					</defs>
-
 					@foreach (($bmiChart['bands'] ?? []) as $band)
-						<rect class="bmi-band band-{{ $band['class'] }}" x="{{ $plot['left'] }}" y="{{ $band['y'] }}" width="{{ $plot['right'] - $plot['left'] }}" height="{{ max(0, $band['height']) }}"></rect>
-						<text class="bmi-band-label" x="{{ $plot['left'] + 6 }}" y="{{ $band['label_y'] }}">{{ $band['label'] }}</text>
+						<rect class="bmi-band band-{{ $band['class'] }}" x="{{ $plot['left'] }}" y="{{ $band['y'] }}" width="{{ $plot['right'] - $plot['left'] }}" height="{{ $band['height'] }}"></rect>
 					@endforeach
 
-					@foreach ($yTicks as $tick)
-						<line class="grid-line" x1="{{ $plot['left'] }}" y1="{{ $tick['y'] }}" x2="{{ $plot['right'] }}" y2="{{ $tick['y'] }}"></line>
+					@foreach (($bmiChart['zone_lines'] ?? []) as $zoneY)
+						<line class="zone-line" x1="{{ $plot['left'] }}" y1="{{ $zoneY }}" x2="{{ $plot['right'] }}" y2="{{ $zoneY }}"></line>
 					@endforeach
-					<line class="axis-line" x1="{{ $plot['left'] }}" y1="{{ $plot['bottom'] }}" x2="{{ $plot['right'] }}" y2="{{ $plot['bottom'] }}"></line>
 
 					<path class="area-fill" d="{{ $bmiChart['area_path'] ?? '' }}"></path>
 					<path class="line-main" d="{{ $bmiChart['line_path'] ?? '' }}"></path>
+
+					{{-- Zone labels paint last so the line and area fill can never sit on top of them. --}}
+					@foreach (($bmiChart['bands'] ?? []) as $band)
+						<text class="bmi-band-label label-{{ $band['class'] }}" x="{{ $plot['left'] + 10 }}" y="{{ $band['label_y'] }}">{{ $band['label'] }}</text>
+					@endforeach
+
 					@foreach ($chartMonths as $month)
-						<circle class="line-dot bmi-dot{{ $month['is_outlier'] ? ' is-outlier' : '' }}{{ $month['has_data'] ? '' : ' no-data' }}" cx="{{ $month['x'] }}" cy="{{ $month['y'] }}" r="{{ $month['is_outlier'] ? 6 : 5 }}" data-index="{{ $month['index'] }}" tabindex="0" role="button" aria-label="{{ $month['full'] }} summary">
-							<title>{{ $month['full'] }}@if ($month['has_data']) &mdash; {{ $month['count'] }} learners, avg BMI {{ $month['avg_bmi'] }} ({{ $month['band'] }})@endif</title>
-						</circle>
+						<g class="bmi-point" data-index="{{ $month['index'] }}" tabindex="0" role="button"
+							aria-label="{{ $month['full'] }}@if ($month['has_data']) — average BMI {{ $month['avg_bmi'] }}, {{ $month['band'] }}, {{ $month['count'] }} learners @else — no measurements @endif">
+							<rect class="bmi-hit" x="{{ round($month['x'] - $hitWidth / 2, 1) }}" y="{{ $plot['top'] }}" width="{{ round($hitWidth, 1) }}" height="{{ $plot['bottom'] - $plot['top'] }}"></rect>
+							<circle class="bmi-dot{{ $month['is_current'] ? ' is-current' : '' }}{{ $month['has_data'] ? '' : ' no-data' }}" cx="{{ $month['x'] }}" cy="{{ $month['y'] }}" r="{{ $month['is_current'] ? 6 : 4.5 }}"></circle>
+						</g>
 					@endforeach
 
 					@foreach ($yTicks as $tick)
@@ -156,77 +103,111 @@
 						<text class="axis-txt" x="{{ $month['x'] }}" y="{{ $plot['bottom'] + 24 }}" text-anchor="middle">{{ $month['label'] }}</text>
 					@endforeach
 				</svg>
+				<div class="bmi-card" id="bmiMonthSummary" role="status" data-default="{{ $bmiChart['default_index'] ?? 0 }}"></div>
 				</div>
 				@if (! empty($bmiChart['has_outlier']))
 					<div class="bmi-outlier-banner">&#9888; {{ $bmiChart['outlier_label'] }}'s average is an outlier &mdash; worth verifying against individual records before reporting.</div>
 				@endif
-				<div class="bmi-month-summary" id="bmiMonthSummary" data-default="{{ $bmiChart['default_index'] ?? 0 }}"></div>
 				<script>
 				(() => {
 					const months = @json($bmiChart['months'] ?? []);
-					const panel = document.getElementById('bmiMonthSummary');
-					if (!panel) return;
-					const dots = Array.from(document.querySelectorAll('.bmi-dot'));
+					const card = document.getElementById('bmiMonthSummary');
+					const surface = document.querySelector('.chart-surface');
+					if (!card || !surface) return;
+
+					const points = Array.from(surface.querySelectorAll('.bmi-point'));
 					const bandClass = (b) => b === 'Overweight watch' ? 'over' : (b === 'Underweight watch' ? 'under' : 'healthy');
 					const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-					const render = (i) => {
-						const m = months[i];
-						if (!m) return;
-						let h = '<div class="bmi-sum-head"><span class="bmi-sum-month">' + esc(m.full) + '</span>';
-						if (m.band) h += '<span class="bmi-sum-badge ' + bandClass(m.band) + '">' + esc(m.band) + '</span>';
+					let pinned = null;
+
+					const build = (m) => {
+						let h = '<div class="bmi-card-head"><span class="bmi-card-date">' + esc(m.full) + '</span>';
+						if (m.band) h += '<span class="bmi-card-zone ' + bandClass(m.band) + '">' + esc(m.band) + '</span>';
 						h += '</div>';
 						if (m.has_data) {
-							h += '<div class="bmi-sum-stats"><span><strong>' + m.count + '</strong> learner' + (m.count === 1 ? '' : 's') + ' measured</span><span><strong>' + m.avg_bmi + '</strong> avg BMI</span></div>';
-							if (m.status && m.status.length) h += '<div class="bmi-sum-chips">' + m.status.map((s) => '<span class="bmi-chip">' + esc(s.label) + ': ' + s.count + '</span>').join('') + '</div>';
-							if (m.is_outlier) h += '<div class="bmi-sum-flag">Flagged as an outlier &mdash; verify individual records.</div>';
+							h += '<div class="bmi-card-figure"><span class="bmi-card-value">' + m.avg_bmi + '</span><span class="bmi-card-unit">avg BMI</span>';
+							if (m.delta !== null && m.delta !== undefined) {
+								const dir = m.delta > 0 ? 'up' : (m.delta < 0 ? 'down' : 'flat');
+								const sign = m.delta > 0 ? '+' : '';
+								h += '<span class="bmi-card-delta ' + dir + '">' + sign + m.delta.toFixed(1) + ' vs previous</span>';
+							} else {
+								h += '<span class="bmi-card-delta flat">first reading</span>';
+							}
+							h += '</div>';
+							h += '<div class="bmi-card-meta">' + m.count + ' learner' + (m.count === 1 ? '' : 's') + ' measured</div>';
+							if (m.status && m.status.length) h += '<div class="bmi-card-chips">' + m.status.map((s) => '<span class="bmi-chip">' + esc(s.label) + ': ' + s.count + '</span>').join('') + '</div>';
+							if (m.is_outlier) h += '<div class="bmi-card-flag">Flagged as an outlier &mdash; verify individual records.</div>';
 						} else {
-							h += '<div class="bmi-sum-empty">No measurements recorded this month.</div>';
+							h += '<div class="bmi-card-empty">No measurements recorded this month.</div>';
 						}
-						panel.innerHTML = h;
-						panel.classList.remove('bmi-anim');
-						void panel.offsetWidth;
-						panel.classList.add('bmi-anim');
-						dots.forEach((d) => d.classList.toggle('bmi-dot-active', Number(d.dataset.index) === i));
+						return h;
 					};
-					const surface = document.querySelector('.chart-surface');
-					let tip = null;
-					if (surface) {
-						tip = document.createElement('div');
-						tip.className = 'bmi-tip';
-						surface.appendChild(tip);
-					}
-					const showTip = (i, dot) => {
-						if (!tip || !surface) return;
+
+					const show = (i) => {
 						const m = months[i];
-						if (!m) return;
-						let h = '<div class="bmi-tip-label">' + esc(m.label) + ' &middot; avg. BMI</div>';
-						if (m.has_data) {
-							h += '<div class="bmi-tip-value">' + m.avg_bmi + '</div>';
-							if (m.is_outlier) h += '<div class="bmi-tip-flag">&#9873; flagged for review</div>';
-						} else {
-							h += '<div class="bmi-tip-empty">No measurements</div>';
-						}
-						tip.innerHTML = h;
-						const dr = dot.getBoundingClientRect();
-						const sr = surface.getBoundingClientRect();
-						const half = tip.offsetWidth / 2;
-						let x = dr.left + dr.width / 2 - sr.left;
-						x = Math.max(half + 4, Math.min(sr.width - half - 4, x));
-						tip.style.left = x + 'px';
-						tip.style.top = (dr.top - sr.top) + 'px';
-						tip.classList.add('show');
+						const point = points[i];
+						if (!m || !point) return;
+
+						card.innerHTML = build(m);
+						card.classList.add('show');
+						points.forEach((p) => p.classList.toggle('is-active', p === point));
+
+						// Anchor above the dot, clamped so the card never leaves the surface.
+						const dot = point.querySelector('.bmi-dot').getBoundingClientRect();
+						const box = surface.getBoundingClientRect();
+						const half = card.offsetWidth / 2;
+						const x = Math.max(half + 8, Math.min(box.width - half - 8, dot.left + dot.width / 2 - box.left));
+						const above = dot.top - box.top - 14;
+						card.style.left = x + 'px';
+						card.classList.toggle('below', above < card.offsetHeight);
+						card.style.top = (above < card.offsetHeight ? dot.bottom - box.top + 14 : above) + 'px';
 					};
-					const hideTip = () => { if (tip) tip.classList.remove('show'); };
-					dots.forEach((d) => {
-						const i = Number(d.dataset.index);
-						d.addEventListener('click', () => render(i));
-						d.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); render(i); } });
-						d.addEventListener('mouseenter', () => showTip(i, d));
-						d.addEventListener('mouseleave', hideTip);
-						d.addEventListener('focus', () => showTip(i, d));
-						d.addEventListener('blur', hideTip);
+
+					const hide = () => {
+						if (pinned !== null) return;
+						card.classList.remove('show');
+						points.forEach((p) => p.classList.remove('is-active'));
+					};
+
+					const togglePin = (i) => {
+						if (pinned === i) {
+							pinned = null;
+							card.classList.remove('is-pinned');
+							hide();
+							return;
+						}
+						pinned = i;
+						card.classList.add('is-pinned');
+						show(i);
+					};
+
+					points.forEach((point, i) => {
+						point.addEventListener('pointerenter', () => { if (pinned === null) show(i); });
+						point.addEventListener('pointerleave', hide);
+						point.addEventListener('focus', () => { if (pinned === null) show(i); });
+						point.addEventListener('blur', hide);
+						point.addEventListener('click', (e) => { e.stopPropagation(); togglePin(i); });
+						point.addEventListener('keydown', (e) => {
+							if (e.key !== 'Enter' && e.key !== ' ') return;
+							e.preventDefault();
+							togglePin(i);
+						});
 					});
-					render(Number(panel.dataset.default) || 0);
+
+					// Clicking away releases the pin.
+					document.addEventListener('click', (e) => {
+						if (pinned === null || e.target.closest('.bmi-point')) return;
+						pinned = null;
+						card.classList.remove('is-pinned');
+						hide();
+					});
+					document.addEventListener('keydown', (e) => {
+						if (e.key !== 'Escape' || pinned === null) return;
+						pinned = null;
+						card.classList.remove('is-pinned');
+						hide();
+					});
+					window.addEventListener('resize', () => { if (pinned !== null) show(pinned); });
 				})();
 				</script>
 			</article>
@@ -311,10 +292,10 @@
 		main.classList.add('page-ready');
 	});
 
-	document.querySelectorAll('.sb-link[href]').forEach((link) => {
+	document.querySelectorAll('.asb-link[href]').forEach((link) => {
 		link.addEventListener('click', (event) => {
 			const href = link.getAttribute('href');
-			if (!href || link.classList.contains('active')) {
+			if (!href || href === '#' || link.classList.contains('active')) {
 				return;
 			}
 			if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
@@ -324,13 +305,13 @@
 			event.preventDefault();
 			main.classList.remove('page-ready');
 			main.classList.add('page-exit');
+			// Matches --asb-page-out in feedingcor-sidebar.css.
 			window.setTimeout(() => {
 				window.location.href = href;
-			}, 220);
+			}, 340);
 		});
 	});
 })();
 </script>
-@include('partials.sidebar-hover-pin')
 </body>
 </html>

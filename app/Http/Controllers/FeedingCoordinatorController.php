@@ -612,27 +612,64 @@ class FeedingCoordinatorController extends Controller
         $xs = array_map(fn (int $i) => round($left + $i * ($right - $left) / 5, 1), range(0, 5));
         $outlierLabels = [];
 
-        $monthsData = $monthsData->map(function (array $m, int $i) use ($xs, $y, $median, $threshold, $dataValues, &$outlierLabels): array {
+        // Delta is measured against the previous month that actually has a
+        // reading, so carried-forward months never report a fake "no change".
+        $previousReading = null;
+        $monthsData = $monthsData->map(function (array $m, int $i) use ($xs, $y, $median, $threshold, $dataValues, &$outlierLabels, &$previousReading): array {
             $isOutlier = $m['has_data'] && count($dataValues) >= 3 && abs((float) $m['value'] - $median) > $threshold;
             if ($isOutlier) {
                 $outlierLabels[] = $m['label'];
             }
 
-            return $m + ['index' => $i, 'x' => $xs[$i], 'y' => $y((float) $m['value']), 'is_outlier' => $isOutlier];
+            $delta = ($m['has_data'] && $previousReading !== null)
+                ? round((float) $m['avg_bmi'] - $previousReading, 1)
+                : null;
+            if ($m['has_data']) {
+                $previousReading = (float) $m['avg_bmi'];
+            }
+
+            return $m + [
+                'index' => $i,
+                'x' => $xs[$i],
+                'y' => $y((float) $m['value']),
+                'is_outlier' => $isOutlier,
+                'delta' => $delta,
+            ];
         })->values();
+
+        // The most recent reading is drawn a touch larger than the rest.
+        $currentIndex = ($monthsData->where('has_data', true)->last()['index'] ?? null)
+            ?? $monthsData->count() - 1;
+        $monthsData = $monthsData->map(fn (array $m) => $m + ['is_current' => $m['index'] === $currentIndex])->values();
 
         $bands = [
             ['class' => 'over', 'label' => 'Overweight watch', 'top' => $y($max), 'floor' => $y($overweight)],
             ['class' => 'healthy', 'label' => 'Healthy range', 'top' => $y($overweight), 'floor' => $y($underweight)],
             ['class' => 'under', 'label' => 'Underweight watch', 'top' => $y($underweight), 'floor' => $y($min)],
         ];
-        $bands = array_map(fn (array $b) => [
-            'class' => $b['class'],
-            'label' => $b['label'],
-            'y' => $b['top'],
-            'height' => round($b['floor'] - $b['top'], 1),
-            'label_y' => round($b['top'] + 13, 1),
-        ], $bands);
+
+        // Labels sit at the band edge furthest from where the curve enters the
+        // chart, so the line never runs through the text. Without this the
+        // "Underweight watch" label sat right under the 18.5 boundary — exactly
+        // where a healthy-but-low average draws its line.
+        $curveY = $monthsData->isEmpty() ? null : (float) $monthsData->first()['y'];
+        $bands = array_map(function (array $b) use ($curveY): array {
+            $height = round($b['floor'] - $b['top'], 1);
+            $atTop = $b['top'] + 13;
+            $atFloor = $b['floor'] - 7;
+
+            $labelY = ($height >= 30 && $curveY !== null && abs($curveY - $atFloor) > abs($curveY - $atTop))
+                ? $atFloor
+                : $atTop;
+
+            return [
+                'class' => $b['class'],
+                'label' => $b['label'],
+                'y' => $b['top'],
+                'height' => max(0, $height),
+                'label_y' => round($labelY, 1),
+            ];
+        }, $bands);
 
         $line = $monthsData->map(fn (array $m) => $m['x'].','.$m['y'])->implode(' ');
         $points = $monthsData->map(fn (array $m) => [(float) $m['x'], (float) $m['y']])->all();
@@ -648,6 +685,8 @@ class FeedingCoordinatorController extends Controller
             'plot' => ['left' => $left, 'right' => $right, 'top' => $top, 'bottom' => $bottom],
             'bands' => $bands,
             'y_ticks' => array_map(fn (float $v) => ['label' => rtrim(rtrim(number_format($v, 1), '0'), '.'), 'y' => $y($v)], [$max, $overweight, $underweight, $min]),
+            // Hairlines are drawn only where a zone changes — no full grid.
+            'zone_lines' => array_map(fn (float $v) => $y($v), [$overweight, $underweight]),
             'line' => $line,
             'line_path' => $linePath,
             'area' => $left.','.$bottom.' '.$line.' '.$right.','.$bottom,
@@ -660,8 +699,14 @@ class FeedingCoordinatorController extends Controller
     }
 
     /**
-     * Catmull-Rom spline through the points rendered as SVG cubic beziers, so
-     * the BMI line curves smoothly instead of using hard polyline corners.
+     * Monotone cubic interpolation (Fritsch-Carlson) through the points,
+     * rendered as SVG cubic beziers.
+     *
+     * Deliberately not Catmull-Rom / cardinal: those overshoot: a flat run of
+     * months would bulge above or below its own values, inventing a dip or a
+     * peak that the data never had. Fritsch-Carlson limits each tangent to the
+     * neighbouring secants, so the curve only bends where the readings actually
+     * change direction and stays perfectly flat where they do not.
      *
      * @param  list<array{0: float, 1: float}>  $points
      */
@@ -675,21 +720,50 @@ class FeedingCoordinatorController extends Controller
             return 'M '.$points[0][0].' '.$points[0][1];
         }
 
+        // Secant slope of each segment.
+        $secants = [];
+        for ($i = 0; $i < $count - 1; $i++) {
+            $dx = $points[$i + 1][0] - $points[$i][0];
+            $secants[$i] = $dx == 0.0 ? 0.0 : ($points[$i + 1][1] - $points[$i][1]) / $dx;
+        }
+
+        // Tangent at each point: average of the two adjacent secants, forced to
+        // zero at every local extremum so the curve cannot overshoot past it.
+        $tangents = [$secants[0]];
+        for ($i = 1; $i < $count - 1; $i++) {
+            $prev = $secants[$i - 1];
+            $next = $secants[$i];
+            $tangents[$i] = ($prev * $next <= 0.0) ? 0.0 : ($prev + $next) / 2;
+        }
+        $tangents[$count - 1] = $secants[$count - 2];
+
+        // Fritsch-Carlson limiter: keep each tangent within three times the
+        // smaller neighbouring secant, which is the monotonicity guarantee.
+        for ($i = 0; $i < $count - 1; $i++) {
+            if ($secants[$i] == 0.0) {
+                $tangents[$i] = 0.0;
+                $tangents[$i + 1] = 0.0;
+
+                continue;
+            }
+
+            $a = $tangents[$i] / $secants[$i];
+            $b = $tangents[$i + 1] / $secants[$i];
+            $s = $a * $a + $b * $b;
+            if ($s > 9.0) {
+                $t = 3.0 / sqrt($s);
+                $tangents[$i] = $t * $a * $secants[$i];
+                $tangents[$i + 1] = $t * $b * $secants[$i];
+            }
+        }
+
         $path = 'M '.$points[0][0].' '.$points[0][1];
         for ($i = 0; $i < $count - 1; $i++) {
-            $p0 = $points[$i - 1] ?? $points[$i];
-            $p1 = $points[$i];
-            $p2 = $points[$i + 1];
-            $p3 = $points[$i + 2] ?? $p2;
+            $dx = ($points[$i + 1][0] - $points[$i][0]) / 3;
 
-            $c1x = $p1[0] + ($p2[0] - $p0[0]) / 6;
-            $c1y = $p1[1] + ($p2[1] - $p0[1]) / 6;
-            $c2x = $p2[0] - ($p3[0] - $p1[0]) / 6;
-            $c2y = $p2[1] - ($p3[1] - $p1[1]) / 6;
-
-            $path .= ' C '.round($c1x, 1).' '.round($c1y, 1)
-                .', '.round($c2x, 1).' '.round($c2y, 1)
-                .', '.round($p2[0], 1).' '.round($p2[1], 1);
+            $path .= ' C '.round($points[$i][0] + $dx, 1).' '.round($points[$i][1] + $tangents[$i] * $dx, 1)
+                .', '.round($points[$i + 1][0] - $dx, 1).' '.round($points[$i + 1][1] - $tangents[$i + 1] * $dx, 1)
+                .', '.round($points[$i + 1][0], 1).' '.round($points[$i + 1][1], 1);
         }
 
         return $path;

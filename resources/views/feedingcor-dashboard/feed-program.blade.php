@@ -14,6 +14,9 @@
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
+    @unless ((bool) ($isReadOnly ?? (session('active_role') === 'school_nurse')))
+        <style>{!! file_get_contents(resource_path('css/feedingcor-sidebar.css')) !!}</style>
+    @endunless
 </head>
 <body>
 @php
@@ -25,6 +28,9 @@
 	$displayName = trim((string) session('active_name', $isReadOnly ? 'Clinical Teacher' : 'Feeding Coordinator'));
 	$roleLabel = $isReadOnly ? 'Clinical Teacher' : 'Feeding Coordinator';
 @endphp
+@if (! $isReadOnly)
+@include('partials.feedingcor-sidebar', ['active' => 'program'])
+@else
 <aside class="sidebar">
 	<div class="sb-grid"></div>
 	<div class="sb-logo">
@@ -114,6 +120,7 @@
 		</form>
 	</div>
 </aside>
+@endif
 
 <div class="main">
 	<header class="topbar">
@@ -1259,10 +1266,10 @@
 			main.classList.add('page-ready');
 		});
 
-		document.querySelectorAll('.sb-link[href]').forEach((link) => {
+		document.querySelectorAll('.sb-link[href], .asb-link[href]').forEach((link) => {
 			link.addEventListener('click', (event) => {
 				const href = link.getAttribute('href');
-				if (!href || link.classList.contains('active')) {
+				if (!href || href === '#' || link.classList.contains('active')) {
 					return;
 				}
 				if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
@@ -1272,9 +1279,11 @@
 				event.preventDefault();
 				main.classList.remove('page-ready');
 				main.classList.add('page-exit');
+				// Coordinator fade is --asb-page-out in feedingcor-sidebar.css;
+				// the nurse keeps this page's own shorter transition.
 				window.setTimeout(() => {
 					window.location.href = href;
-				}, 220);
+				}, {{ $isReadOnly ? 220 : 340 }});
 			});
 		});
 	}

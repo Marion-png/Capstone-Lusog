@@ -125,55 +125,90 @@
 		.section { padding: 16px 18px; }
 		.section-title { font-size: .82rem; letter-spacing: .02em; color: var(--text-2); margin-bottom: 10px; font-weight: 700; }
 
-		.chart-card { padding: 16px; }
-		.chart-title { font-size: .92rem; color: #25453d; font-weight: 700; margin-bottom: 10px; }
+		/* ── Avg BMI progress chart ────────────────────────────────────────
+		   Flat surfaces only: no gradients, glows or drop shadows on the chart
+		   itself. One accent (--teal) carries the line, the area and every dot;
+		   zone meaning lives in the bands and the summary card's badge, never in
+		   the dot colours. The only shadow in here is on the floating card, so it
+		   reads as sitting above the plot. ── */
+		.chart-card { padding: 22px 24px 24px; }
+		.chart-title { font-size: .92rem; color: #25453d; font-weight: 700; margin-bottom: 14px; }
 		.chart-surface {
 			position: relative;
-			border: 1px solid #d8e6e2;
-			border-radius: 12px;
-			background: linear-gradient(180deg, #ffffff 0%, #fbfdfc 100%);
-			padding: 12px 10px 8px;
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			background: #ffffff;
+			padding: 18px 16px 12px;
 		}
 		.chart-svg { width: 100%; height: 230px; display: block; }
-		.bmi-chart-svg { width: 100%; height: auto; }
-		.axis-txt { fill: #4f6660; font-size: 13px; font-family: 'DM Sans', sans-serif; font-weight: 600; }
-		.grid-line { stroke: #d3e0dc; stroke-dasharray: 2 6; stroke-width: 1; }
-		.axis-line { stroke: #cdddd8; stroke-width: 1.2; }
-		.area-fill { fill: url(#bmiAreaGradient); animation: bmiFade 1.2s ease-out both; }
-		.line-main { fill: none; stroke: url(#bmiLineGradient); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; filter: url(#bmiLineGlow); stroke-dasharray: 1800; stroke-dashoffset: 1800; animation: bmiDraw 1.3s cubic-bezier(.45,0,.15,1) forwards; }
-		.line-dot { fill: var(--teal); stroke: #ffffff; stroke-width: 2.5; filter: url(#bmiDotShadow); transform-box: fill-box; transform-origin: center; animation: bmiDotIn .5s cubic-bezier(.34,1.56,.64,1) 1s backwards; }
-		.line-dot.no-data { fill: #ffffff; stroke: var(--teal); stroke-width: 2.5; }
-		.line-dot.is-outlier { fill: var(--red, #e05c4b); stroke: #ffffff; }
-		.bmi-band { opacity: .3; }
-		.band-under { fill: #b9cbe0; }
-		.band-healthy { fill: #bcd9b0; }
-		.band-over { fill: #eccf92; }
-		.bmi-band-label { fill: #55706a; font-size: 11px; font-family: 'DM Sans', sans-serif; font-weight: 700; letter-spacing: .02em; }
-		.bmi-dot { cursor: pointer; transition: r .2s cubic-bezier(.34,1.56,.64,1), stroke-width .15s ease; }
-		.bmi-dot:focus { outline: none; }
-		.bmi-dot:focus-visible { stroke: #16382b; stroke-width: 3; }
-		.bmi-dot:hover { r: 8.5; stroke-width: 3.5; }
-		.bmi-dot-active { r: 8.5; stroke: #16382b; stroke-width: 3; }
-		.bmi-outlier-banner { margin-top: 12px; padding: 9px 12px; border-radius: 9px; background: #fdecec; border: 1px solid #f6cccc; color: #b23b3b; font-size: .78rem; font-weight: 600; }
-		.bmi-month-summary { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: #fafcfb; }
-		.bmi-sum-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
-		.bmi-sum-month { font-size: .9rem; font-weight: 700; color: #25453d; }
-		.bmi-sum-badge { font-size: .68rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; }
-		.bmi-sum-badge.over { background: #f6e2bd; color: #8a5a12; }
-		.bmi-sum-badge.healthy { background: #cfe8c6; color: #2f6b34; }
-		.bmi-sum-badge.under { background: #d3e0ef; color: #35597f; }
-		.bmi-sum-stats { display: flex; flex-wrap: wrap; gap: 16px; font-size: .82rem; color: #45635b; margin-bottom: 8px; }
-		.bmi-sum-stats strong { font-size: 1rem; color: #25453d; }
-		.bmi-sum-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-		.bmi-chip { font-size: .72rem; font-weight: 600; color: #45635b; background: #eef4f1; border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; }
-		.bmi-sum-flag { margin-top: 8px; font-size: .74rem; font-weight: 600; color: #b23b3b; }
-		.bmi-sum-empty { font-size: .8rem; color: #7c918b; }
-		.bmi-dot.is-outlier { animation: bmiDotIn .5s cubic-bezier(.34,1.56,.64,1) 1s backwards, bmiOutlierPulse 2s ease-in-out 1.7s infinite; }
-		.bmi-dot.is-outlier:hover, .bmi-dot.is-outlier.bmi-dot-active { animation: none; r: 9.5; }
-		.bmi-outlier-banner { animation: bmiSlideIn .35s ease-out; }
-		.bmi-month-summary.bmi-anim { animation: bmiSlideIn .28s ease-out; }
-		.bmi-chip { transition: background .15s ease, transform .15s ease; }
-		.bmi-chip:hover { background: #dfeee8; transform: translateY(-1px); }
+		.bmi-chart-svg { width: 100%; height: auto; overflow: visible; }
+		.axis-txt { fill: #7c918b; font-size: 12px; font-family: 'DM Sans', sans-serif; font-weight: 500; }
+
+		/* Flat zone tints; each label is a dark shade of its own band's family. */
+		.bmi-band { opacity: 1; }
+		.band-under { fill: #eaf0f7; }
+		.band-healthy { fill: #e8f2e5; }
+		.band-over { fill: #f9f0e0; }
+		/* Labels are placed at whichever band edge is furthest from the curve
+		   (see buildBmiChart), and carry a flat knockout in their own band's
+		   tint so they stay legible even when the line runs straight past them.
+		   paint-order puts that stroke behind the glyphs — a solid colour, not
+		   a glow or blur. */
+		.bmi-band-label { font-size: 10.5px; font-family: 'DM Sans', sans-serif; font-weight: 600; font-variant-caps: all-small-caps; letter-spacing: .10em; paint-order: stroke; stroke-width: 4px; stroke-linejoin: round; }
+		.label-under { fill: #3d6291; stroke: #eaf0f7; }
+		.label-healthy { fill: #35703a; stroke: #e8f2e5; }
+		.label-over { fill: #8a601a; stroke: #f9f0e0; }
+		/* Hairlines at the zone boundaries only — no full grid. */
+		.zone-line { stroke: #b9cabf; stroke-dasharray: 3 5; stroke-width: 1; opacity: .7; }
+
+		.area-fill { fill: var(--teal); fill-opacity: .08; animation: bmiFade 1.1s ease-out both; }
+		.line-main { fill: none; stroke: var(--teal); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1800; stroke-dashoffset: 1800; animation: bmiDraw 1.2s cubic-bezier(.45,0,.15,1) forwards; }
+
+		/* Full-height hit column keeps the touch target well over 44px. */
+		.bmi-point { cursor: pointer; }
+		.bmi-point:focus { outline: none; }
+		.bmi-hit { fill: transparent; }
+		.bmi-dot { fill: var(--teal); stroke: #ffffff; stroke-width: 2; transition: r .16s ease; }
+		.bmi-dot.no-data { fill: #ffffff; stroke: var(--teal); }
+		.bmi-point:hover .bmi-dot, .bmi-point.is-active .bmi-dot { r: 7; }
+		.bmi-point:focus-visible .bmi-dot { stroke: #16382b; stroke-width: 2.5; r: 7; }
+
+		.bmi-outlier-banner { margin-top: 14px; padding: 9px 12px; border-radius: 10px; background: #fdecec; border: 1px solid #f6cccc; color: #b23b3b; font-size: .78rem; font-weight: 600; }
+
+		/* Floating summary card — hover previews it, a click pins it open. */
+		.bmi-card {
+			position: absolute; z-index: 6; left: 0; top: 0;
+			min-width: 188px; max-width: min(280px, calc(100% - 24px));
+			padding: 14px 16px; border-radius: 14px;
+			background: #ffffff; border: 1px solid var(--border);
+			box-shadow: 0 10px 26px rgba(16,56,43,.13);
+			opacity: 0; visibility: hidden; pointer-events: none;
+			transform: translate(-50%, -100%);
+			transition: opacity .12s ease, visibility .12s ease;
+		}
+		.bmi-card.show { opacity: 1; visibility: visible; }
+		.bmi-card.below { transform: translate(-50%, 0); }
+		.bmi-card.is-pinned { pointer-events: auto; border-color: #b8ddd6; }
+		.bmi-card-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 8px; }
+		.bmi-card-date { font-size: .74rem; font-weight: 600; color: #5f7670; }
+		.bmi-card-zone { font-size: .62rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+		.bmi-card-zone.over { background: #f9f0e0; color: #8a601a; }
+		.bmi-card-zone.healthy { background: #e8f2e5; color: #35703a; }
+		.bmi-card-zone.under { background: #eaf0f7; color: #3d6291; }
+		/* The one number that matters gets the editorial treatment. */
+		.bmi-card-figure { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+		.bmi-card-value { font-family: 'DM Serif Display', serif; font-size: 2rem; line-height: 1; color: #16382b; font-variant-numeric: tabular-nums; }
+		.bmi-card-unit { font-size: .7rem; color: #7c918b; }
+		.bmi-card-delta { font-size: .72rem; font-weight: 600; font-variant-numeric: tabular-nums; width: 100%; margin-top: 4px; }
+		.bmi-card-delta.up { color: #1f7a68; }
+		.bmi-card-delta.down { color: var(--red); }
+		.bmi-card-delta.flat { color: #9aa8a2; }
+		.bmi-card-meta { margin-top: 10px; font-size: .74rem; color: #5f7670; }
+		.bmi-card-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+		.bmi-chip { font-size: .68rem; font-weight: 600; color: #45635b; background: #f2f7f4; border-radius: 999px; padding: 2px 9px; }
+		.bmi-card-flag { margin-top: 9px; font-size: .72rem; font-weight: 600; color: #b23b3b; }
+		.bmi-card-empty { font-size: .78rem; color: #7c918b; }
+
 		.roster-card { padding: 16px; display: flex; flex-direction: column; }
 		.roster-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 		.rchip { font-size: .7rem; font-weight: 600; border-radius: 999px; padding: 3px 10px; }
@@ -214,20 +249,10 @@
 		.status-stable { background: #eceee9; color: #5f7670; }
 		.status-attention { background: #fbe3e0; color: #c0392b; }
 		.dash-stack { display: flex; flex-direction: column; gap: 16px; }
-		.bmi-tip { position: absolute; z-index: 6; pointer-events: none; min-width: 92px; padding: 8px 11px; border-radius: 10px; background: #ffffff; border: 1px solid var(--border); box-shadow: 0 8px 22px rgba(16,56,43,.16); opacity: 0; transform: translate(-50%, calc(-100% - 6px)); transition: opacity .16s ease, transform .16s ease; }
-		.bmi-tip.show { opacity: 1; transform: translate(-50%, calc(-100% - 12px)); }
-		.bmi-tip::after { content: ''; position: absolute; left: 50%; bottom: -5px; width: 9px; height: 9px; background: #ffffff; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); transform: translateX(-50%) rotate(45deg); }
-		.bmi-tip-label { font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #7c918b; margin-bottom: 2px; }
-		.bmi-tip-value { font-size: 1.05rem; font-weight: 700; color: #16382b; font-variant-numeric: tabular-nums; line-height: 1.1; }
-		.bmi-tip-flag { font-size: .64rem; font-weight: 600; color: var(--red); margin-top: 3px; }
-		.bmi-tip-empty { font-size: .72rem; color: #7c918b; }
 		@keyframes bmiDraw { to { stroke-dashoffset: 0; } }
 		@keyframes bmiFade { from { opacity: 0; } to { opacity: 1; } }
-		@keyframes bmiSlideIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-		@keyframes bmiDotIn { from { opacity: 0; transform: scale(.2); } to { opacity: 1; transform: scale(1); } }
-		@keyframes bmiOutlierPulse { 0%, 100% { r: 6; } 50% { r: 8.5; } }
 		@media (prefers-reduced-motion: reduce) {
-			.line-main, .area-fill, .bmi-dot, .bmi-dot.is-outlier, .bmi-month-summary.bmi-anim, .bmi-outlier-banner, .bmi-chip { animation: none !important; transition: none !important; stroke-dashoffset: 0 !important; }
+			.line-main, .area-fill, .bmi-dot, .bmi-card, .bmi-outlier-banner { animation: none !important; transition: none !important; stroke-dashoffset: 0 !important; }
 		}
 
 		.donut-wrap { height: 230px; display: grid; place-items: center; }

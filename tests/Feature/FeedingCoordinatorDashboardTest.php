@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\FeedingCoordinatorController;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -93,6 +94,34 @@ class FeedingCoordinatorDashboardTest extends TestCase
         foreach ($months as $month) {
             $this->assertArrayHasKey('band', $month);
             $this->assertSame('Healthy range', $month['band']);
+        }
+    }
+
+    /**
+     * The BMI line uses monotone cubic (Fritsch-Carlson) interpolation, not a
+     * Catmull-Rom / cardinal spline. The difference only shows on flat or
+     * turning data: a cardinal spline bulges past the readings there, drawing a
+     * dip or peak nobody measured. Guard the two shapes where that happens.
+     */
+    #[Test]
+    public function the_bmi_spline_never_overshoots_the_readings(): void
+    {
+        $method = new \ReflectionMethod(FeedingCoordinatorController::class, 'smoothPath');
+        $method->setAccessible(true);
+        $controller = (new \ReflectionClass(FeedingCoordinatorController::class))->newInstanceWithoutConstructor();
+
+        // A flat run followed by a drop must stay perfectly flat while flat.
+        $flatThenDrop = $method->invoke($controller, [[0.0, 100.0], [100.0, 100.0], [200.0, 100.0], [300.0, 50.0]]);
+        $this->assertStringContainsString('C 33.3 100, 66.7 100, 100 100', $flatThenDrop);
+        $this->assertStringContainsString('C 133.3 100, 166.7 100, 200 100', $flatThenDrop);
+
+        // Around a peak, no control point may pass the peak itself (y = 40).
+        $peak = $method->invoke($controller, [[0.0, 100.0], [100.0, 40.0], [200.0, 100.0]]);
+        preg_match_all('/-?\d+(?:\.\d+)?/', substr($peak, 1), $numbers);
+        $ys = array_values(array_filter($numbers[0], fn ($n, $i) => $i % 2 === 1, ARRAY_FILTER_USE_BOTH));
+        foreach ($ys as $value) {
+            $this->assertGreaterThanOrEqual(40.0, (float) $value, 'Spline overshot above the peak');
+            $this->assertLessThanOrEqual(100.0, (float) $value, 'Spline overshot below the endpoints');
         }
     }
 }
