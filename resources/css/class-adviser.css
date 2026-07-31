@@ -1,6 +1,12 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#f7f8f5;--card:#fff;--border:#e4ece7;--text:#0d1f14;--muted:#6f8c7a;--g900:#14532d;--g700:#15803d;--g300:#86efac;--g100:#dcfce7;--red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;--sidebar:248px;--sidebar-collapsed:76px;--radius-sm:10px;--shadow:0 1px 4px rgba(5,46,22,.06),0 4px 16px rgba(5,46,22,.06)}
 html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+/* The redesigned .asb-sidebar/.asb-main layout is a normal-flow page (the
+   sidebar is fixed, the content isn't height-clamped), so it needs the page
+   itself to scroll — unlike the old .sidebar/.main app-shell, which capped
+   .main at 100vh and scrolled only inside .content. Scope the override to
+   pages using the new shell so the old dashboards keep their behavior. */
+body:has(.asb-main){height:auto;min-height:100%;overflow:visible}
 .sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-collapsed);background:var(--g900);display:flex;flex-direction:column;overflow:hidden;transition:width .26s ease;box-shadow:inset -1px 0 0 rgba(255,255,255,.04)}
 .sidebar:hover, .sidebar.sb-pin {width:var(--sidebar)}
 .sb-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(134,239,172,.05) 1px, transparent 1px),linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);background-size:28px 28px;pointer-events:none}
