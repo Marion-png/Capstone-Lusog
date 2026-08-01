@@ -23,14 +23,6 @@
         <h1 class="title">Feeding <i>&amp; Nutrition Status</i></h1>
         <p class="sub">Read-only summary of your class's nutritional status and feeding program eligibility. Attendance is recorded by the Feeding Coordinator.</p>
 
-        <div class="assigned-class-banner">
-            <div>
-                <div class="assigned-class-label">Assigned Class</div>
-                <div class="assigned-class-value">{{ $gradeSection }}</div>
-            </div>
-            <div class="assigned-class-note">Showing current school year records for your assigned class only.</div>
-        </div>
-
         <section class="card section" style="margin-top:16px;">
             @if ($students->isEmpty())
                 <div style="padding:30px;text-align:center;color:var(--muted);font-size:.85rem;">

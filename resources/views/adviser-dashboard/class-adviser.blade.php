@@ -16,10 +16,14 @@
     @endif
 </head>
 <body>
-@include('partials.adviser-sidebar', ['active' => request('tab') === 'saved' ? 'students' : (request('tab') === 'form' ? 'form' : 'dashboard')])
+@include('partials.adviser-sidebar', ['active' => in_array(request('tab'), ['saved', 'form'], true) ? 'students' : 'dashboard'])
 
 <div class="asb-main">
-    @include('partials.adviser-topbar', ['breadcrumb' => 'Dashboard'])
+    @include('partials.adviser-topbar', ['breadcrumb' => match (request('tab')) {
+        'saved' => 'My Students',
+        'form' => 'Enroll Student',
+        default => 'Dashboard',
+    }])
     <div class="content">
         @php
             $assignedGradeLevel = session('assigned_grade_level');
@@ -29,18 +33,6 @@
                 ? ($assignedGradeLevel . ' / ' . $assignedSection)
                 : 'Not Assigned';
         @endphp
-        <h1 class="title">Class Adviser <i>Encoding Workspace</i></h1>
-        <p class="sub">School Health Card prototype workflow for adviser submission and Clinical Teacher follow-up.</p>
-        <div class="assigned-class-banner">
-            <div>
-                <div class="assigned-class-label">Assigned School</div>
-                <div class="assigned-class-value">{{ $assignedSchoolName ?: 'Not Assigned' }}</div>
-                <div class="assigned-class-label">Assigned Class</div>
-                <div class="assigned-class-value">{{ $assignedClassLabel }}</div>
-            </div>
-            <div class="assigned-class-note">Only learners from this grade and section are shown and can be encoded.</div>
-        </div>
-
         @if (session('success'))
             <div class="toast-success" id="successToast" role="status" aria-live="polite">
                 <span>{{ session('success') }}</span>
@@ -175,6 +167,11 @@
                 $ov = $overview;
             @endphp
 
+            {{-- Scoped to this panel: My Students and Enroll Student each carry
+                 their own heading, so a shared page title only duplicates them. --}}
+            <h1 class="title">Class Adviser <i>Encoding Workspace</i></h1>
+            <p class="sub" style="margin-bottom:12px;">School Health Card encoding for your assigned class.</p>
+
             <div class="hero-banner">
                 <h1 class="hero-title">{{ $greeting }}, {{ session('active_name', 'Class Adviser') }}</h1>
                 <p class="hero-sub">{{ $ov['grade_section'] }} &middot; Manage your students' health profiles and track their well-being.</p>
@@ -278,46 +275,94 @@
         </section>
 
         <section id="prototype-saved-panel" class="section-panel {{ $adviserTab === 'saved' ? 'active' : '' }}" style="margin-top:12px;">
-            <article class="card my-students-card">
-                <div class="my-students-head">
-                    <div>
-                        <h3 class="my-students-title">My Students</h3>
-                        <p class="my-students-sub">View all students in your class</p>
+            @php
+                $needsFollowupTotal = $prototypeRecords->filter(function ($row) use ($rosterMeta) {
+                    $status = strtolower((string) ($row['nutritional_status_bmi_for_age'] ?? ''));
+                    $atRisk = (bool) ($rosterMeta[(string) ($row['lrn'] ?? '')]['at_risk'] ?? false);
+
+                    return $atRisk
+                        || str_contains($status, 'wasted')
+                        || str_contains($status, 'underweight')
+                        || str_contains($status, 'obese');
+                })->count();
+
+                $profileBadges = [
+                    'complete' => 'Complete',
+                    'partial' => 'Partial',
+                    'pending' => 'Pending',
+                ];
+                $consentBadges = [
+                    'approved' => 'Approved',
+                    'partial' => 'Partial',
+                    'declined' => 'Declined',
+                    'pending' => 'Pending',
+                ];
+            @endphp
+
+            <div class="ms-page-header">
+                <div>
+                    <h2 class="ms-page-title">My Students</h2>
+                    <p class="ms-page-sub">{{ $ov['grade_section'] }} &middot; Manage your students' health profiles and track their well-being.</p>
+                </div>
+                <div class="ms-header-actions">
+                    <button type="button" class="btn" id="openAddStudentBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Enroll Student
+                    </button>
+                </div>
+            </div>
+
+            <div class="ms-stats-bar">
+                <div class="ms-stat">
+                    <div class="ms-stat-icon ms-icon-total"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+                    <div><div class="ms-stat-number">{{ $studentsTotal }}</div><div class="ms-stat-label">Total Students</div></div>
+                </div>
+                <div class="ms-stat">
+                    <div class="ms-stat-icon ms-icon-complete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+                    <div><div class="ms-stat-number">{{ $ov['complete'] }}</div><div class="ms-stat-label">Complete Profiles</div></div>
+                </div>
+                <div class="ms-stat">
+                    <div class="ms-stat-icon ms-icon-pending"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+                    <div><div class="ms-stat-number">{{ $ov['pending'] }}</div><div class="ms-stat-label">Pending Assessments</div></div>
+                </div>
+                <div class="ms-stat">
+                    <div class="ms-stat-icon ms-icon-alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+                    <div><div class="ms-stat-number">{{ $needsFollowupTotal }}</div><div class="ms-stat-label">Needs Follow-up</div></div>
+                </div>
+            </div>
+
+            <article class="ms-table-container">
+                <div class="ms-table-header">
+                    <h3>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                        Student Records
+                        <span class="ms-count-badge" id="studentsCountBadge">{{ $studentsTotal }}</span>
+                    </h3>
+                    <div class="ms-table-actions">
+                        <div class="ms-search-wrapper">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input id="studentsSearch" class="ms-search-input" type="text" placeholder="Search by name or LRN..." autocomplete="off">
+                        </div>
+                        <select id="studentsStatusFilter" class="ms-filter-select" aria-label="Filter by profile status">
+                            <option value="all">All Students</option>
+                            <option value="complete">Complete Profile</option>
+                            <option value="partial">Partial Profile</option>
+                            <option value="pending">Pending Assessment</option>
+                        </select>
                     </div>
-                    <div class="my-students-right">
-                        <span id="myStudentsDate">-</span>
-                        <button type="button" class="btn" data-target="prototype-form-panel" id="openAddStudentBtn">+ Add Student</button>
-                    </div>
                 </div>
 
-                <div class="my-students-stats">
-                    <div class="my-stat-box box-total"><span>Total Students</span><b>{{ $studentsTotal }}</b></div>
-                    <div class="my-stat-box box-pending"><span>Pending Clinical Teacher Review</span><b>{{ $pendingReviewTotal }}</b></div>
-                    <div class="my-stat-box box-complete"><span>Complete Records</span><b>{{ $completeRecordsTotal }}</b></div>
-                    <div class="my-stat-box box-wasted"><span>Wasted Students</span><b>{{ $wastedStudentsTotal }}</b></div>
-                </div>
-
-                <div class="my-students-tools">
-                    <input id="studentsSearch" type="text" placeholder="Search by name or LRN...">
-                    <select id="studentsStatusFilter">
-                        <option value="all">All Status</option>
-                        <option value="pending">Pending Clinical Teacher Review</option>
-                        <option value="cert">Clinical Teacher Reviewed</option>
-                        <option value="complete">Complete</option>
-                    </select>
-                    <button type="button" class="btn btn-secondary" id="studentsClearBtn">Clear</button>
-                </div>
-
-                <div class="my-students-table-wrap">
-                    <table class="my-students-table">
+                <div class="ms-table-scroll">
+                    <table class="ms-table">
                         <thead>
                             <tr>
-                                <th>Student Name</th>
                                 <th>LRN</th>
-                                <th>Gender</th>
-                                <th>BMI</th>
-                                <th>Nutritional Status</th>
-                                <th>Health Card Status</th>
+                                <th>Student Name</th>
+                                <th>Sex</th>
+                                <th>Age</th>
+                                <th>Health Status</th>
+                                <th>Profile Status</th>
+                                <th>Consent</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -327,35 +372,72 @@
                                     $middle = trim((string) ($prototypeRecord['middle_name'] ?? ''));
                                     $middleInitial = $middle !== '' ? (' ' . strtoupper(substr($middle, 0, 1)) . '.') : '';
                                     $fullName = trim(($prototypeRecord['last_name'] ?? '') . ', ' . ($prototypeRecord['first_name'] ?? '') . $middleInitial);
+                                    $rowLrn = (string) ($prototypeRecord['lrn'] ?? '');
+                                    $meta = $rosterMeta[$rowLrn] ?? ['has_assessment' => false, 'consent' => 'pending', 'at_risk' => false];
                                     $isExamined = !empty($prototypeRecord['examination']);
-                                    $rowLrn = $prototypeRecord['lrn'] ?? '';
-                                    $hasCert = isset($lrnsWithCertificates[$rowLrn]);
-                                    $isComplete = $isExamined && $hasCert;
-                                    $statusKey = $isComplete ? 'complete' : ($isExamined ? 'cert' : 'pending');
-                                    $genderValue = $prototypeRecord['gender'] ?? '-';
+                                    $profileKey = $meta['has_assessment'] ? 'complete' : ($isExamined ? 'partial' : 'pending');
+                                    $consentKey = $meta['consent'];
+                                    $healthStatus = trim((string) ($prototypeRecord['nutritional_status_bmi_for_age'] ?? ''));
                                 @endphp
-                                <tr class="js-student-row" data-name="{{ strtolower($fullName) }}" data-lrn="{{ strtolower((string) ($prototypeRecord['lrn'] ?? '')) }}" data-status="{{ $statusKey }}">
-                                    <td>{{ $fullName }}</td>
-                                    <td>{{ $prototypeRecord['lrn'] ?? '-' }}</td>
-                                    <td>{{ $genderValue }}</td>
-                                    <td>{{ $prototypeRecord['bmi_value'] ?? '-' }}</td>
-                                    <td>{{ $prototypeRecord['nutritional_status_bmi_for_age'] ?? '-' }}</td>
+                                <tr class="js-student-row"
+                                    data-name="{{ strtolower($fullName) }}"
+                                    data-lrn="{{ strtolower($rowLrn) }}"
+                                    data-status="{{ $profileKey }}">
+                                    <td><strong>{{ $rowLrn !== '' ? $rowLrn : '-' }}</strong></td>
+                                    <td class="ms-student-name">{{ $fullName }}</td>
+                                    <td>{{ $prototypeRecord['gender'] ?? '-' }}</td>
+                                    <td>{{ $prototypeRecord['age'] ?? '-' }}</td>
+                                    <td>{{ $healthStatus !== '' ? $healthStatus : 'Not assessed' }}</td>
+                                    <td><span class="ms-badge ms-profile-{{ $profileKey }}">{{ $profileBadges[$profileKey] }}</span></td>
+                                    <td><span class="ms-badge ms-consent-{{ $consentKey }}">{{ $consentBadges[$consentKey] }}</span></td>
                                     <td>
-                                        @if ($isComplete || $isExamined)
-                                            <span class="my-status-badge status-complete">Clinical Teacher Reviewed</span>
-                                        @else
-                                            <span class="my-status-badge status-pending">Pending Clinical Teacher Review</span>
-                                        @endif
-                                    </td>
-                                    <td>
-                                        <button type="button" class="profile-open-btn js-profile-open" data-route="{{ route('nurse.examine', $index) }}" data-record='@json($prototypeRecord)'>View Profile</button>
+                                        <div class="ms-actions">
+                                            <button type="button" class="ms-act ms-act-view js-profile-open" title="View Profile" aria-label="View Profile" data-record='@json($prototypeRecord)' data-meta='@json($meta)'>
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                            </button>
+                                            <button type="button" class="ms-act ms-act-edit js-student-edit" title="Edit Profile" aria-label="Edit Profile" data-record='@json($prototypeRecord)'>
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+                                            </button>
+                                            <form method="POST" action="{{ route('consent-forms.open') }}" class="ms-act-form">
+                                                @csrf
+                                                <input type="hidden" name="lrn" value="{{ $rowLrn }}">
+                                                <button type="submit" class="ms-act ms-act-consent" title="Parent's Consent" aria-label="Parent's Consent">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M14.5 18.5c1-1.5 2-1.5 3 0s2 1.5 3 0"/><path d="M12 16c1.5-3.5 3-5 4-3.5s-1 3.5-2 5"/></svg>
+                                                </button>
+                                            </form>
+                                        </div>
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="7" class="muted">No School Health Card prototype submissions yet for your assigned class.</td></tr>
+                                <tr class="js-students-empty">
+                                    <td colspan="8">
+                                        <div class="ms-empty-state">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                                            <h4>No Students Yet</h4>
+                                            <p>Start by enrolling your first student into {{ $ov['grade_section'] }}.</p>
+                                            <button type="button" class="btn" id="openAddStudentEmptyBtn">Enroll Student</button>
+                                        </div>
+                                    </td>
+                                </tr>
                             @endforelse
+                            <tr class="js-students-nomatch" hidden>
+                                <td colspan="8">
+                                    <div class="ms-empty-state">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                        <h4>No Students Found</h4>
+                                        <p>No students match your current search or filter.</p>
+                                    </div>
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
+                </div>
+
+                <div class="ms-table-footer">
+                    <div class="ms-footer-info">
+                        Showing <strong id="msShowingStart">0</strong> to <strong id="msShowingEnd">0</strong> of <strong id="msShowingTotal">0</strong> students
+                    </div>
+                    <div class="ms-pagination" id="msPagination"></div>
                 </div>
             </article>
         </section>
@@ -363,12 +445,12 @@
         <section id="prototype-form-panel" class="card section section-panel {{ $adviserTab === 'form' ? 'active' : '' }}" style="margin-top:12px;">
             <div class="add-head">
                 <div class="add-head-left">
-                    <a href="{{ route('dashboard.class-adviser') }}" class="add-back" aria-label="Back to class adviser dashboard">
+                    <a href="{{ route('dashboard.class-adviser', ['tab' => 'saved']) }}" class="add-back" aria-label="Back to My Students">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
                     </a>
                     <div>
-                        <h3 class="add-title">Add New Student</h3>
-                        <p class="add-sub">Enter basic information, weight, and height. BMI and nutritional status will be auto-calculated.</p>
+                        <h3 class="add-title" id="enrolFormTitle">Enroll Student</h3>
+                        <p class="add-sub" id="enrolFormSub">Mandatory Learner's Health Assessment. Both sheets are open &mdash; fill them in any order.</p>
                     </div>
                 </div>
                 <div class="add-date" id="currentDate">-</div>
@@ -388,6 +470,22 @@
                 <input type="hidden" name="grade_level" value="{{ $assignedGradeLevel ?? '' }}">
                 <input type="hidden" name="section" value="{{ $assignedSection ?? '' }}">
 
+                {{-- Both sheets are reachable from the moment the form opens: Sheet 2
+                     is never gated behind completing Sheet 1. --}}
+                <div class="sheet-tabs" role="tablist" aria-label="Health assessment sheets">
+                    <button type="button" class="sheet-tab active" role="tab" id="sheetTab1" data-sheet="sheetPanel1" aria-selected="true" aria-controls="sheetPanel1">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                        Sheet 1
+                        <span class="sheet-tab-badge">Learner Info &amp; Vital Signs</span>
+                    </button>
+                    <button type="button" class="sheet-tab" role="tab" id="sheetTab2" data-sheet="sheetPanel2" aria-selected="false" aria-controls="sheetPanel2">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/><path d="M8 15v1a6 6 0 0 0 6 6v0a6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/></svg>
+                        Sheet 2
+                        <span class="sheet-tab-badge">Systems Review</span>
+                    </button>
+                </div>
+
+                <div class="sheet-panel active" id="sheetPanel1" role="tabpanel" aria-labelledby="sheetTab1">
                 <div class="student-section">
                     <h4>Student Information</h4>
                     <div class="student-grid">
@@ -410,11 +508,92 @@
                     </div>
                 </div>
 
+                @php
+                    // Same fallback rule as Sheet 2: the array's presence, not a
+                    // key's, decides whether to use the default checked state.
+                    $hh = old('health_history');
+                    $hhPosted = is_array($hh);
+                    $hhFlag = fn (string $key, bool $default = false) => $hhPosted ? ! empty($hh[$key]) : $default;
+                    $hhText = fn (string $key, string $default = '') => $hhPosted ? (string) ($hh[$key] ?? '') : $default;
+                @endphp
+
                 <div class="student-section">
-                    <h4>Health Data (Baseline)</h4>
+                    <h4>Medical History</h4>
+                    <div class="sr-checkgrid">
+                        <label><input type="checkbox" name="health_history[med_asthma]" value="1" {{ $hhFlag('med_asthma') ? 'checked' : '' }}> Asthma</label>
+                        <label><input type="checkbox" name="health_history[med_diabetes]" value="1" {{ $hhFlag('med_diabetes') ? 'checked' : '' }}> Diabetes</label>
+                        <label><input type="checkbox" name="health_history[med_seizure]" value="1" {{ $hhFlag('med_seizure') ? 'checked' : '' }}> Seizure Disorder</label>
+                        <label><input type="checkbox" name="health_history[med_infections]" value="1" {{ $hhFlag('med_infections') ? 'checked' : '' }}> Frequent Infections</label>
+                        <label><input type="checkbox" name="health_history[med_heart]" value="1" {{ $hhFlag('med_heart') ? 'checked' : '' }}> Heart Condition</label>
+                        <label><input type="checkbox" name="health_history[med_tuberculosis]" value="1" {{ $hhFlag('med_tuberculosis') ? 'checked' : '' }}> Tuberculosis</label>
+                    </div>
+                    <div class="student-grid" style="margin-top:10px;">
+                        <div class="field">
+                            <label class="sr-inline-check"><input type="checkbox" name="health_history[med_allergies]" value="1" {{ $hhFlag('med_allergies') ? 'checked' : '' }}> Allergies</label>
+                            <input id="hh_allergies_detail" name="health_history[allergies_detail]" type="text" placeholder="Specify allergies" value="{{ $hhText('allergies_detail') }}">
+                        </div>
+                        <div class="field">
+                            <label class="sr-inline-check"><input type="checkbox" name="health_history[med_hospitalization]" value="1" {{ $hhFlag('med_hospitalization') ? 'checked' : '' }}> Hospitalization / Surgery</label>
+                            <input id="hh_hospitalization_detail" name="health_history[hospitalization_detail]" type="text" placeholder="Specify procedure and year" value="{{ $hhText('hospitalization_detail') }}">
+                        </div>
+                        <div class="field"><label for="hh_current_medications">Current Medications</label><input id="hh_current_medications" name="health_history[current_medications]" type="text" value="{{ $hhText('current_medications') }}"></div>
+                        <div class="field"><label for="hh_other_conditions">Other Conditions</label><input id="hh_other_conditions" name="health_history[other_conditions]" type="text" value="{{ $hhText('other_conditions') }}"></div>
+                    </div>
+                </div>
+
+                <div class="student-section">
+                    <h4>Family History</h4>
+                    <div class="sr-checkgrid">
+                        <label><input type="checkbox" name="health_history[fam_hypertension]" value="1" {{ $hhFlag('fam_hypertension') ? 'checked' : '' }}> Hypertension</label>
+                        <label><input type="checkbox" name="health_history[fam_diabetes]" value="1" {{ $hhFlag('fam_diabetes') ? 'checked' : '' }}> Diabetes</label>
+                        <label><input type="checkbox" name="health_history[fam_heart]" value="1" {{ $hhFlag('fam_heart') ? 'checked' : '' }}> Heart Disease</label>
+                        <label><input type="checkbox" name="health_history[fam_cancer]" value="1" {{ $hhFlag('fam_cancer') ? 'checked' : '' }}> Cancer</label>
+                        <label><input type="checkbox" name="health_history[fam_mental]" value="1" {{ $hhFlag('fam_mental') ? 'checked' : '' }}> Mental Health Conditions</label>
+                    </div>
+                    <div class="student-grid" style="margin-top:10px;">
+                        <div class="field full"><label for="hh_genetic_disorders">Genetic / Hereditary Disorders</label><input id="hh_genetic_disorders" name="health_history[genetic_disorders]" type="text" value="{{ $hhText('genetic_disorders') }}"></div>
+                    </div>
+                </div>
+
+                <div class="student-section">
+                    <h4>General Appearance</h4>
+                    @php $consciousness = $hhText('consciousness', 'Alert'); $posture = $hhText('posture', 'Normal'); $hygiene = $hhText('hygiene', 'Adequate'); @endphp
+                    <div class="student-grid">
+                        <div class="field">
+                            <label>Level of Consciousness</label>
+                            <div class="sr-radios">
+                                <label><input type="radio" name="health_history[consciousness]" value="Alert" {{ $consciousness === 'Alert' ? 'checked' : '' }}> Alert</label>
+                                <label><input type="radio" name="health_history[consciousness]" value="Drowsy" {{ $consciousness === 'Drowsy' ? 'checked' : '' }}> Drowsy</label>
+                                <label><input type="radio" name="health_history[consciousness]" value="Other" {{ $consciousness === 'Other' ? 'checked' : '' }}> Other</label>
+                            </div>
+                            <input id="hh_consciousness_other" name="health_history[consciousness_other]" type="text" placeholder="If other, specify" value="{{ $hhText('consciousness_other') }}">
+                        </div>
+                        <div class="field">
+                            <label>Posture / Gait</label>
+                            <div class="sr-radios">
+                                <label><input type="radio" name="health_history[posture]" value="Normal" {{ $posture === 'Normal' ? 'checked' : '' }}> Normal</label>
+                                <label><input type="radio" name="health_history[posture]" value="Abnormal" {{ $posture === 'Abnormal' ? 'checked' : '' }}> Abnormal</label>
+                            </div>
+                            <input id="hh_posture_detail" name="health_history[posture_detail]" type="text" placeholder="If abnormal, specify" value="{{ $hhText('posture_detail') }}">
+                        </div>
+                        <div class="field">
+                            <label>Hygiene / Grooming</label>
+                            <div class="sr-radios">
+                                <label><input type="radio" name="health_history[hygiene]" value="Adequate" {{ $hygiene === 'Adequate' ? 'checked' : '' }}> Adequate</label>
+                                <label><input type="radio" name="health_history[hygiene]" value="Needs Attention" {{ $hygiene === 'Needs Attention' ? 'checked' : '' }}> Needs Attention</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="student-section">
+                    <h4>Vital Signs</h4>
                     <div class="student-grid" style="margin-bottom:10px;">
                         <div class="field"><label for="weight">Weight (kg) <span style="color:#ef4444">*</span></label><input id="weight" name="weight_kg" type="number" step="0.1" min="0.1" max="200" placeholder="e.g., 34" value="{{ old('weight_kg') }}" required><div class="muted" style="font-size:.7rem;">Valid range: 0.1 - 200 kg</div></div>
                         <div class="field"><label for="height">Height (m) <span style="color:#ef4444">*</span></label><input id="height" name="height_m" type="number" step="0.01" min="0.50" max="2.50" placeholder="e.g., 1.27" value="{{ old('height_cm') ? number_format(old('height_cm') / 100, 2, '.', '') : '' }}" required><div class="muted" style="font-size:.7rem;">Convert cm to m: 127 cm = 1.27 m | Valid range: 0.50 - 2.50 m</div></div>
+                        <div class="field"><label for="temperature">Temp (&deg;C)</label><input id="temperature" name="temperature_c" type="number" step="0.1" min="25" max="45" placeholder="e.g., 36.5" value="{{ old('temperature_c') }}"></div>
+                        <div class="field"><label for="pulse">Pulse (BPM)</label><input id="pulse" name="pulse_bpm" type="number" step="1" min="20" max="250" placeholder="e.g., 72" value="{{ old('pulse_bpm') }}"></div>
+                        <div class="field"><label for="bloodPressure">BP (mmHg)</label><input id="bloodPressure" name="blood_pressure" type="text" maxlength="20" placeholder="e.g., 110/70" value="{{ old('blood_pressure') }}"></div>
                     </div>
 
                     <div class="calc-box">
@@ -432,14 +611,156 @@
                         </div>
                     </div>
                 </div>
+                </div>{{-- end Sheet 1 --}}
+
+                @php
+                    // On a validation redirect, unchecked boxes are simply absent from
+                    // old input — so the presence of the array, not of each key, decides
+                    // whether to fall back to the default checked state.
+                    $sr = old('systems_review');
+                    $srPosted = is_array($sr);
+                    $srFlag = fn (string $key, bool $default = false) => $srPosted ? ! empty($sr[$key]) : $default;
+                    $srText = fn (string $key, string $default = '') => $srPosted ? (string) ($sr[$key] ?? '') : $default;
+                @endphp
+
+                <div class="sheet-panel" id="sheetPanel2" role="tabpanel" aria-labelledby="sheetTab2">
+                    <div class="student-section">
+                        <h4>Systems Review</h4>
+
+                        <div class="sr-block">
+                            <span class="sr-label">Skin / Integumentary</span>
+                            <div class="sr-checkgrid">
+                                <label><input type="checkbox" name="systems_review[skin_normal]" value="1" {{ $srFlag('skin_normal', true) ? 'checked' : '' }}> Normal</label>
+                                <label><input type="checkbox" name="systems_review[skin_lesions]" value="1" {{ $srFlag('skin_lesions') ? 'checked' : '' }}> Lesions / Rashes</label>
+                                <label><input type="checkbox" name="systems_review[skin_pallor]" value="1" {{ $srFlag('skin_pallor') ? 'checked' : '' }}> Pallor</label>
+                            </div>
+                        </div>
+
+                        <div class="sr-block">
+                            <span class="sr-label">HEENT (Head, Eyes, Ears, Nose, Throat)</span>
+                            <div class="sr-checkgrid">
+                                <label><input type="checkbox" name="systems_review[heent_normal]" value="1" {{ $srFlag('heent_normal', true) ? 'checked' : '' }}> Normal</label>
+                                <label><input type="checkbox" name="systems_review[heent_abnormal]" value="1" {{ $srFlag('heent_abnormal') ? 'checked' : '' }}> Abnormal</label>
+                            </div>
+                            <div class="student-grid" style="margin-top:8px;">
+                                <div class="field"><label for="sr_right_eye">Right Eye</label><input id="sr_right_eye" name="systems_review[right_eye]" type="text" placeholder="e.g., 20/20" value="{{ $srText('right_eye') }}"></div>
+                                <div class="field"><label for="sr_left_eye">Left Eye</label><input id="sr_left_eye" name="systems_review[left_eye]" type="text" placeholder="e.g., 20/25" value="{{ $srText('left_eye') }}"></div>
+                            </div>
+                        </div>
+
+                        <div class="sr-block">
+                            <span class="sr-label">Respiratory</span>
+                            <div class="sr-checkgrid">
+                                <label><input type="checkbox" name="systems_review[resp_clear]" value="1" {{ $srFlag('resp_clear', true) ? 'checked' : '' }}> Clear breath sounds</label>
+                                <label><input type="checkbox" name="systems_review[resp_cough]" value="1" {{ $srFlag('resp_cough') ? 'checked' : '' }}> Cough</label>
+                            </div>
+                        </div>
+
+                        <div class="sr-block">
+                            <span class="sr-label">Cardiovascular</span>
+                            <div class="sr-checkgrid">
+                                <label><input type="checkbox" name="systems_review[cardio_regular]" value="1" {{ $srFlag('cardio_regular', true) ? 'checked' : '' }}> Regular rhythm</label>
+                                <label><input type="checkbox" name="systems_review[cardio_irregular]" value="1" {{ $srFlag('cardio_irregular') ? 'checked' : '' }}> Irregular</label>
+                            </div>
+                        </div>
+
+                        <div class="sr-block">
+                            <span class="sr-label">Abdomen / GI</span>
+                            <div class="sr-checkgrid">
+                                <label><input type="checkbox" name="systems_review[abdo_soft]" value="1" {{ $srFlag('abdo_soft', true) ? 'checked' : '' }}> Soft, non-tender</label>
+                                <label><input type="checkbox" name="systems_review[abdo_pain]" value="1" {{ $srFlag('abdo_pain') ? 'checked' : '' }}> Pain</label>
+                            </div>
+                        </div>
+
+                        <div class="sr-block">
+                            <span class="sr-label">Neurologic</span>
+                            <div class="sr-checkgrid">
+                                <label><input type="checkbox" name="systems_review[neuro_alert]" value="1" {{ $srFlag('neuro_alert', true) ? 'checked' : '' }}> Alert, oriented</label>
+                                <label><input type="checkbox" name="systems_review[neuro_reflexes]" value="1" {{ $srFlag('neuro_reflexes', true) ? 'checked' : '' }}> Reflexes normal</label>
+                                <label><input type="checkbox" name="systems_review[neuro_abnormal]" value="1" {{ $srFlag('neuro_abnormal') ? 'checked' : '' }}> Abnormal</label>
+                            </div>
+                        </div>
+
+                        <div class="sr-block">
+                            <span class="sr-label">Dental</span>
+                            <div class="sr-checkgrid">
+                                <label><input type="checkbox" name="systems_review[dental_good]" value="1" {{ $srFlag('dental_good', true) ? 'checked' : '' }}> Good</label>
+                                <label><input type="checkbox" name="systems_review[dental_fair]" value="1" {{ $srFlag('dental_fair') ? 'checked' : '' }}> Fair</label>
+                                <label><input type="checkbox" name="systems_review[dental_poor]" value="1" {{ $srFlag('dental_poor') ? 'checked' : '' }}> Poor</label>
+                                <label><input type="checkbox" name="systems_review[dental_caries]" value="1" {{ $srFlag('dental_caries') ? 'checked' : '' }}> Dental caries</label>
+                                <label><input type="checkbox" name="systems_review[dental_gum]" value="1" {{ $srFlag('dental_gum') ? 'checked' : '' }}> Gum inflammation</label>
+                                <label><input type="checkbox" name="systems_review[dental_referral]" value="1" {{ $srFlag('dental_referral') ? 'checked' : '' }}> Referral to dentist</label>
+                            </div>
+                        </div>
+
+                        <div class="sr-block">
+                            <span class="sr-label">Immunization Status</span>
+                            <div class="sr-checkgrid">
+                                <label><input type="checkbox" name="systems_review[immun_complete]" value="1" {{ $srFlag('immun_complete', true) ? 'checked' : '' }}> Complete</label>
+                                <label><input type="checkbox" name="systems_review[immun_incomplete]" value="1" {{ $srFlag('immun_incomplete') ? 'checked' : '' }}> Incomplete</label>
+                                <label><input type="checkbox" name="systems_review[immun_not_available]" value="1" {{ $srFlag('immun_not_available') ? 'checked' : '' }}> Not available</label>
+                            </div>
+                            <div class="student-grid" style="margin-top:8px;">
+                                <div class="field"><label for="sr_immun_date">Date Record Reviewed</label><input id="sr_immun_date" name="systems_review[immun_date]" type="date" value="{{ $srText('immun_date') }}"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="student-section">
+                        <h4>Findings &amp; Recommendations</h4>
+                        <div class="student-grid">
+                            <div class="field full"><label for="sr_notes">Notes / Details</label><textarea id="sr_notes" name="systems_review[notes]" rows="2" placeholder="Additional notes and findings...">{{ $srText('notes') }}</textarea></div>
+                            <div class="field full"><label for="sr_summary">Summary of Findings</label><textarea id="sr_summary" name="systems_review[summary]" rows="2" placeholder="Summary of health assessment findings...">{{ $srText('summary') }}</textarea></div>
+                            <div class="field full"><label for="sr_recommendations">Recommendations / Referrals</label><textarea id="sr_recommendations" name="systems_review[recommendations]" rows="2" placeholder="Recommendations and referrals...">{{ $srText('recommendations') }}</textarea></div>
+
+                            <div class="field full">
+                                <label>Examiner Signature</label>
+                                <div class="sig-wrapper">
+                                    <div class="sig-tabs">
+                                        <button type="button" class="sig-tab active" data-sigpanel="sigPanelDraw">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+                                            Draw Signature
+                                        </button>
+                                        <button type="button" class="sig-tab" data-sigpanel="sigPanelUpload">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                            Upload Image
+                                        </button>
+                                    </div>
+                                    <div class="sig-panel active" id="sigPanelDraw">
+                                        <canvas id="signatureCanvas"></canvas>
+                                        <div class="sig-actions">
+                                            <button type="button" class="sig-clear" id="signatureClear">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20H7L3 16a2 2 0 0 1 0-3l9-9a2 2 0 0 1 3 0l5 5a2 2 0 0 1 0 3l-8 8"/></svg>
+                                                Clear
+                                            </button>
+                                            <span class="sig-hint">Sign above using your mouse or touchscreen</span>
+                                        </div>
+                                    </div>
+                                    <div class="sig-panel" id="sigPanelUpload">
+                                        <div class="sig-upload" id="signatureUploadArea" role="button" tabindex="0">
+                                            <div id="signatureUploadPreview">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                                <p>Click to upload a signature image</p>
+                                                <p class="sig-hint">PNG or JPG, max 2MB</p>
+                                            </div>
+                                        </div>
+                                        <input type="file" id="signatureFileInput" accept="image/png,image/jpeg" hidden>
+                                    </div>
+                                </div>
+                                <input type="hidden" id="examinerSignatureData" name="systems_review[examiner_signature]" value="{{ $srText('examiner_signature') }}">
+                            </div>
+
+                            <div class="field"><label for="sr_examiner_name">Examiner Name</label><input id="sr_examiner_name" name="systems_review[examiner_name]" type="text" placeholder="e.g., Maria Santos, RN" value="{{ $srText('examiner_name', session('active_name', '')) }}"></div>
+                            <div class="field"><label for="sr_examiner_date">Date</label><input id="sr_examiner_date" name="systems_review[examiner_date]" type="date" value="{{ $srText('examiner_date') }}"></div>
+                        </div>
+                    </div>
+                </div>{{-- end Sheet 2 --}}
 
                 <div class="student-grid" style="display:none;">
                     <input id="proto_school_id" name="school_id" type="hidden" value="{{ old('school_id', 'DCNHS-001') }}">
                     <input id="proto_region" name="region" type="hidden" value="{{ old('region', 'NCR') }}">
                     <input id="proto_division" name="division" type="hidden" value="{{ old('division', 'Quezon City') }}">
                 </div>
-
-                <div class="note-box">After submission, the Clinical Teacher will complete the remaining SHD form fields. You can view complete updates once Clinical Teacher review is done.</div>
 
                 <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
                     <button type="button" class="btn btn-secondary" id="cancelAddStudent">Cancel</button>
@@ -457,7 +778,7 @@
             <button type="button" class="confirm-close" id="confirmCloseBtn">x</button>
         </div>
         <div class="confirm-body">
-            <div class="confirm-info">Please review the information before submitting. The Clinical Teacher will complete the remaining health record.</div>
+            <div class="confirm-info">Please review the information before submitting.</div>
             <div id="summaryContainer"></div>
             <div class="confirm-actions">
                 <button type="button" class="btn btn-secondary" id="confirmEditBtn">Edit</button>
@@ -473,26 +794,54 @@
             <button type="button" class="student-profile-back" id="profileClose">&larr;</button>
             <div>
                 <div class="student-profile-titleline">Student Profile</div>
-                <div class="student-profile-subline">Health Record (Adviser Entry)</div>
+                <div class="student-profile-subline">View only &mdash; use Edit Profile on My Students to make changes</div>
             </div>
         </div>
 
-        <div class="student-profile-hero">
-            <div>
-                <div class="student-profile-name" id="vpName">-</div>
-                <div class="student-profile-lrn" id="vpLrn">LRN: -</div>
+        <div class="sp-cover"></div>
+
+        <div class="sp-identity">
+            <div class="sp-avatar" id="vpInitials">&ndash;</div>
+            <div class="sp-identity-body">
+                <div class="sp-name" id="vpName">-</div>
+                <div class="sp-class" id="vpGradeSection">-</div>
+                <div class="sp-meta">
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="8.5" cy="10" r="2"/><path d="M5 17c.7-1.7 2-2.5 3.5-2.5S11.3 15.3 12 17"/><line x1="15" y1="9" x2="19" y2="9"/><line x1="15" y1="13" x2="19" y2="13"/></svg>LRN: <b id="vpLrn">-</b></span>
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="14" r="5"/><path d="M19 5l-5.4 5.4M15 5h4v4"/></svg>Sex: <b id="vpGender">-</b></span>
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Age: <b id="vpAge">-</b></span>
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>DOB: <b id="vpDob">-</b></span>
+                </div>
             </div>
-            <span class="my-status-badge status-pending" id="vpStatusBadge">Pending Clinical Teacher Review</span>
+            {{-- Advisers get Print only. Editing happens on My Students, never here. --}}
+            <div class="sp-identity-actions">
+                <button type="button" class="btn btn-secondary" id="vpPrint">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                    Print
+                </button>
+            </div>
+        </div>
+
+        <div class="sp-tabs" role="tablist" aria-label="Student profile sections">
+            <button type="button" class="sp-tab active" role="tab" aria-selected="true" data-panel="vpTabSheet1">Sheet 1 <span class="sp-tab-badge">Learner Info</span></button>
+            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabSheet2">Sheet 2 <span class="sp-tab-badge">Systems Review</span></button>
+            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabConsent">Consent <span class="sp-tab-badge" id="vpConsentTabBadge">&ndash;</span></button>
+            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabFeeding">Feeding Status <span class="sp-tab-badge" id="vpFeedingTabBadge">&ndash;</span></button>
         </div>
 
         <div class="student-profile-body">
+        <div class="sp-panel active" id="vpTabSheet1" role="tabpanel">
+            {{-- Sheet 1 mirrors the enrolment form's Sheet 1 exactly: learner
+                 information, parent/guardian, and baseline health data. Nothing
+                 from Sheet 2 or from another role's records belongs here. --}}
             <section class="student-profile-section">
-                <h4>Student Information</h4>
+                <h4>Learner Information</h4>
                 <div class="student-profile-grid">
-                    <div><span>Date of Birth:</span><b id="vpDob">-</b></div>
+                    <div><span>Name of Learner:</span><b id="vpS1Name">-</b></div>
+                    <div><span>LRN:</span><b id="vpS1Lrn">-</b></div>
+                    <div><span>Date of Birth:</span><b id="vpS1Dob">-</b></div>
                     <div><span>Birthplace:</span><b id="vpBirthplace">-</b></div>
-                    <div><span>Gender:</span><b id="vpGender">-</b></div>
-                    <div><span>Grade &amp; Section:</span><b id="vpGradeSection">-</b></div>
+                    <div><span>Sex:</span><b id="vpS1Sex">-</b></div>
+                    <div><span>Grade &amp; Section:</span><b id="vpS1GradeSection">-</b></div>
                 </div>
             </section>
 
@@ -506,346 +855,67 @@
             </section>
 
             <section class="student-profile-section">
-                <h4>Health Data (Baseline) - Adviser Entry</h4>
+                <h4>Medical &amp; Family History</h4>
+                <div id="vpHealthHistory"></div>
+            </section>
+
+            <section class="student-profile-section">
+                <h4>General Appearance</h4>
+                <div class="student-profile-grid metrics">
+                    <div><span>Level of Consciousness:</span><b id="vpConsciousness">-</b></div>
+                    <div><span>Posture / Gait:</span><b id="vpPosture">-</b></div>
+                    <div><span>Hygiene / Grooming:</span><b id="vpHygiene">-</b></div>
+                </div>
+            </section>
+
+            <section class="student-profile-section">
+                <h4>Vital Signs</h4>
                 <div class="student-profile-grid metrics">
                     <div><span>Weight:</span><b id="vpWeight">-</b></div>
                     <div><span>Height:</span><b id="vpHeight">-</b></div>
                     <div><span>(Height)<sup>2</sup>:</span><b id="vpHeightSquared">-</b></div>
                     <div><span>BMI:</span><b id="vpBmi">-</b></div>
+                    <div><span>Temperature:</span><b id="vpTemperature">-</b></div>
+                    <div><span>Pulse:</span><b id="vpPulse">-</b></div>
+                    <div><span>Blood Pressure:</span><b id="vpBloodPressure">-</b></div>
                     <div><span>Nutritional Status:</span><b id="vpNutri">-</b></div>
                     <div><span>Height-for-Age:</span><b id="vpHfa">-</b></div>
                 </div>
             </section>
 
-            <section class="student-profile-section" id="vpNurseSection" style="display:none;">
-                <h4>Clinical Teacher Examination Record (Read-only)</h4>
+        </div>{{-- end Sheet 1 panel --}}
+
+        <div class="sp-panel" id="vpTabSheet2" role="tabpanel">
+            <section class="student-profile-section">
+                <h4>Systems Review</h4>
+                <div id="vpSystemsReview"></div>
+            </section>
+        </div>
+
+        <div class="sp-panel" id="vpTabConsent" role="tabpanel">
+            <section class="student-profile-section">
+                <h4>Parent's Consent</h4>
                 <div class="student-profile-grid">
-                    <div><span>Date of Examination:</span><b id="vpExamDate">-</b></div>
-                    <div><span>Examined By:</span><b id="vpExaminedBy">-</b></div>
-                    <div><span>Temperature / BP:</span><b id="vpTempBp">-</b></div>
-                    <div><span>Heart Rate:</span><b id="vpHeartRate">-</b></div>
-                    <div><span>Pulse Rate:</span><b id="vpPulseRate">-</b></div>
-                    <div><span>Respiratory Rate:</span><b id="vpRespRate">-</b></div>
-                    <div><span>Nutritional Status (BMI/Wt-for-Age):</span><b id="vpExamNutriBmi">-</b></div>
-                    <div><span>Nutritional Status (Height-for-Age):</span><b id="vpExamNutriHfa">-</b></div>
-                    <div><span>Vision Screening:</span><b id="vpVision">-</b></div>
-                    <div><span>Auditory Screening:</span><b id="vpAuditory">-</b></div>
-                    <div><span>Skin/Scalp:</span><b id="vpSkin">-</b></div>
-                    <div><span>Eyes/Ears/Nose:</span><b id="vpEyesEarsNose">-</b></div>
-                    <div><span>Mouth/Throat/Neck:</span><b id="vpMouthThroatNeck">-</b></div>
-                    <div><span>Lungs/Heart:</span><b id="vpLungsHeart">-</b></div>
-                    <div><span>Abdomen:</span><b id="vpAbdomen">-</b></div>
-                    <div><span>Deformities:</span><b id="vpDeformities">-</b></div>
-                    <div><span>Iron Supplementation:</span><b id="vpIron">-</b></div>
-                    <div><span>Deworming:</span><b id="vpDeworming">-</b></div>
-                    <div><span>Immunization:</span><b id="vpImmunization">-</b></div>
-                    <div><span>SBFP Beneficiary:</span><b id="vpSbfp">-</b></div>
-                    <div><span>4Ps Beneficiary:</span><b id="vp4ps">-</b></div>
-                    <div><span>Menarche:</span><b id="vpMenarche">-</b></div>
-                    <div class="full"><span>Others:</span><b id="vpOthers">-</b></div>
+                    <div><span>Status:</span><b id="vpConsentStatus">-</b></div>
+                    <div><span>Response:</span><b id="vpConsentChoice">-</b></div>
+                    <div><span>Signed by guardian:</span><b id="vpConsentSigned">-</b></div>
+                    <div><span>Reviewed by adviser:</span><b id="vpConsentReviewed">-</b></div>
                 </div>
+                <div class="sp-note">Open the Consent Forms page to send, review, or print this learner's Sulat-Pahibalo.</div>
             </section>
+        </div>
 
-            {{-- ── Health Assessment (MLHAT) ─────────────────────────────────── --}}
-            <section class="student-profile-section" id="vpHealthAssessmentSection">
-                <h4>Health Assessment <span style="font-size:.72rem;font-weight:400;color:#6f8c7a;">(Mandatory Learner&rsquo;s Health Assessment Tool)</span></h4>
-
-                @if(session('health_assessment_success'))
-                    <div style="background:#dcfce7;border:1px solid #86efac;color:#166534;border-radius:10px;padding:8px 12px;font-size:.78rem;font-weight:600;margin-bottom:10px;">
-                        {{ session('health_assessment_success') }}
-                    </div>
-                @endif
-
-                <div id="vpHaStatus" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:.78rem;color:#7a9e87;">
-                    Select a student to view assessment status.
+        <div class="sp-panel" id="vpTabFeeding" role="tabpanel">
+            <section class="student-profile-section">
+                <h4>Feeding Status</h4>
+                <div class="student-profile-grid metrics">
+                    <div><span>Baseline nutritional status:</span><b id="vpFeedBaseline">-</b></div>
+                    <div><span>Endline nutritional status:</span><b id="vpFeedEndline">-</b></div>
+                    <div><span>Attendance sessions:</span><b id="vpFeedSessions">-</b></div>
                 </div>
-
-                <form id="healthAssessmentForm" method="POST" action="{{ route('health-assessment.store') }}" novalidate style="display:none;">
-                    @csrf
-                    <input type="hidden" id="haLrn" name="lrn">
-
-                    {{-- ── SHEET 1 ────────────────────────────────────────────── --}}
-                    <div class="upload-subsection-title" style="margin-bottom:12px;">Sheet 1 &mdash; Learner Information, History &amp; Vital Signs</div>
-
-                    {{-- A. Assessment Info --}}
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-                        <div>
-                            <label class="ha-label">Date of Assessment</label>
-                            <input type="date" name="date_of_assessment" class="ha-input">
-                        </div>
-                        <div>
-                            <label class="ha-label">Assessed by (Name/Title)</label>
-                            <input type="text" name="assessed_by" class="ha-input" placeholder="e.g. Juan dela Cruz, RN">
-                        </div>
-                    </div>
-
-                    {{-- B. Medical History --}}
-                    <div class="ha-section">
-                        <div class="ha-section-head">B. Medical History <span style="font-weight:400;font-size:.72rem;">(Check all that apply)</span></div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;">
-                            <label class="ha-check-label"><input type="checkbox" name="med_asthma" value="1" class="ha-check"> Asthma</label>
-                            <label class="ha-check-label"><input type="checkbox" name="med_allergies" value="1" class="ha-check" id="haAllergyCheck"> Allergies:</label>
-                            <label class="ha-check-label"><input type="checkbox" name="med_diabetes" value="1" class="ha-check"> Diabetes</label>
-                            <label class="ha-check-label"><input type="checkbox" name="med_heart_condition" value="1" class="ha-check"> Heart Condition</label>
-                            <label class="ha-check-label"><input type="checkbox" name="med_seizure_disorder" value="1" class="ha-check"> Seizure Disorder</label>
-                            <label class="ha-check-label"><input type="checkbox" name="med_tuberculosis" value="1" class="ha-check"> Tuberculosis</label>
-                            <label class="ha-check-label"><input type="checkbox" name="med_frequent_infections" value="1" class="ha-check"> Frequent Infections</label>
-                            <label class="ha-check-label"><input type="checkbox" name="med_hospitalization_surgery" value="1" class="ha-check" id="haHospCheck"> Hospitalization/Surgery:</label>
-                        </div>
-                        <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                            <input type="text" name="med_allergies_detail" id="haAllergyDetail" class="ha-input" placeholder="Specify allergies" style="display:none;">
-                            <input type="text" name="med_hospitalization_detail" id="haHospDetail" class="ha-input" placeholder="Specify details" style="display:none;">
-                        </div>
-                        <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                            <div>
-                                <label class="ha-label">Current Medications</label>
-                                <input type="text" name="med_current_medications" class="ha-input" placeholder="List current medications">
-                            </div>
-                            <div>
-                                <label class="ha-label">Other Conditions</label>
-                                <input type="text" name="med_other_conditions" class="ha-input" placeholder="Specify other conditions">
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- C. Family History --}}
-                    <div class="ha-section">
-                        <div class="ha-section-head">C. Family History</div>
-                        <div style="display:flex;flex-wrap:wrap;gap:6px 14px;">
-                            <label class="ha-check-label"><input type="checkbox" name="fam_hypertension" value="1" class="ha-check"> Hypertension</label>
-                            <label class="ha-check-label"><input type="checkbox" name="fam_diabetes" value="1" class="ha-check"> Diabetes</label>
-                            <label class="ha-check-label"><input type="checkbox" name="fam_heart_disease" value="1" class="ha-check"> Heart Disease</label>
-                            <label class="ha-check-label"><input type="checkbox" name="fam_cancer" value="1" class="ha-check"> Cancer</label>
-                            <label class="ha-check-label"><input type="checkbox" name="fam_mental_health" value="1" class="ha-check"> Mental Health Conditions</label>
-                        </div>
-                        <div style="margin-top:8px;">
-                            <label class="ha-label">Genetic/Hereditary Disorders</label>
-                            <input type="text" name="fam_genetic_hereditary" class="ha-input" placeholder="Specify if any">
-                        </div>
-                    </div>
-
-                    {{-- D. General Appearance --}}
-                    <div class="ha-section">
-                        <div class="ha-section-head">D. General Appearance</div>
-                        <div style="display:grid;gap:8px;">
-                            <div>
-                                <label class="ha-label">Level of Consciousness</label>
-                                <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:4px;">
-                                    <label class="ha-check-label"><input type="radio" name="appearance_consciousness" value="Alert" class="ha-check"> Alert</label>
-                                    <label class="ha-check-label"><input type="radio" name="appearance_consciousness" value="Drowsy" class="ha-check"> Drowsy</label>
-                                    <label class="ha-check-label"><input type="radio" name="appearance_consciousness" value="Other" class="ha-check" id="haConsciousOtherRadio"> Other:</label>
-                                    <input type="text" name="appearance_consciousness_other" id="haConsciousOtherText" class="ha-input" placeholder="Specify" style="display:none;width:140px;padding:4px 8px;">
-                                </div>
-                            </div>
-                            <div>
-                                <label class="ha-label">Posture/Gait</label>
-                                <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:4px;">
-                                    <label class="ha-check-label"><input type="radio" name="appearance_posture_gait" value="Normal" class="ha-check"> Normal</label>
-                                    <label class="ha-check-label"><input type="radio" name="appearance_posture_gait" value="Abnormal" class="ha-check" id="haPostureAbnormal"> Abnormal:</label>
-                                    <input type="text" name="appearance_posture_detail" id="haPostureDetail" class="ha-input" placeholder="Describe" style="display:none;width:140px;padding:4px 8px;">
-                                </div>
-                            </div>
-                            <div>
-                                <label class="ha-label">Hygiene/Grooming</label>
-                                <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:4px;">
-                                    <label class="ha-check-label"><input type="radio" name="appearance_hygiene" value="Adequate" class="ha-check"> Adequate</label>
-                                    <label class="ha-check-label"><input type="radio" name="appearance_hygiene" value="Needs Attention" class="ha-check"> Needs Attention</label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- E. Vital Signs --}}
-                    <div class="ha-section">
-                        <div class="ha-section-head">E. Vital Signs</div>
-                        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
-                            <div>
-                                <label class="ha-label">Height (cm)</label>
-                                <input type="number" name="vital_height_cm" id="haVitalHeight" class="ha-input" step="0.1" min="0" max="300" placeholder="e.g. 142.5">
-                            </div>
-                            <div>
-                                <label class="ha-label">Weight (kg)</label>
-                                <input type="number" name="vital_weight_kg" id="haVitalWeight" class="ha-input" step="0.01" min="0" max="300" placeholder="e.g. 38.5">
-                            </div>
-                            <div>
-                                <label class="ha-label">BMI <span style="font-weight:400;">(auto)</span></label>
-                                <input type="number" name="vital_bmi" id="haVitalBmi" class="ha-input" step="0.01" placeholder="Auto-calculated" readonly style="background:#f7faf8;">
-                            </div>
-                            <div>
-                                <label class="ha-label">Temperature (&deg;C)</label>
-                                <input type="number" name="vital_temperature_c" class="ha-input" step="0.1" min="30" max="45" placeholder="e.g. 36.5">
-                            </div>
-                            <div>
-                                <label class="ha-label">Pulse Rate (bpm)</label>
-                                <input type="number" name="vital_pulse_rate" class="ha-input" min="0" max="300" placeholder="e.g. 72">
-                            </div>
-                            <div>
-                                <label class="ha-label">Blood Pressure (mmHg)</label>
-                                <input type="text" name="vital_blood_pressure" class="ha-input" placeholder="e.g. 110/70">
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- ── SHEET 2 ────────────────────────────────────────────── --}}
-                    <div class="upload-subsection-title" style="margin-top:18px;margin-bottom:12px;">Sheet 2 &mdash; Systems Review, Screenings &amp; Recommendations</div>
-
-                    {{-- F. Body Systems --}}
-                    <div class="ha-section">
-                        <div class="ha-section-head">F. Evaluation of Body Systems</div>
-                        <div style="overflow-x:auto;">
-                        <table class="ha-systems-table">
-                            <thead>
-                                <tr>
-                                    <th style="width:22%;">Body System</th>
-                                    <th>Findings <span style="font-weight:400;">(Check applicable)</span></th>
-                                    <th style="width:28%;">Notes / Details</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @php
-                                $bodySystems = [
-                                    ['key'=>'integumentary',  'label'=>'Integumentary',       'findings'=>['Normal','Lesions/Rashes','Pallor','Other']],
-                                    ['key'=>'heent_head',     'label'=>'HEENT &ndash; Head/Scalp', 'findings'=>['Normal','Abnormal']],
-                                    ['key'=>'heent_eyes',     'label'=>'HEENT &ndash; Eyes',   'findings'=>['Clear','Redness','Discharge']],
-                                    ['key'=>'heent_ears',     'label'=>'HEENT &ndash; Ears',   'findings'=>['Clear','Pain','Discharge']],
-                                    ['key'=>'heent_nose',     'label'=>'HEENT &ndash; Nose',   'findings'=>['Clear','Congested']],
-                                    ['key'=>'heent_throat',   'label'=>'HEENT &ndash; Throat', 'findings'=>['Normal','Inflamed','Tonsillar Issues']],
-                                    ['key'=>'respiratory',    'label'=>'Respiratory',           'findings'=>['Clear Breath Sounds','Cough','Wheezing']],
-                                    ['key'=>'cardiovascular', 'label'=>'Cardiovascular',        'findings'=>['Regular Rhythm','Irregular','Murmur']],
-                                    ['key'=>'gastrointestinal','label'=>'Gastrointestinal',     'findings'=>['Abdomen Soft','Pain','Nausea/Vomiting']],
-                                    ['key'=>'genitourinary',  'label'=>'Genitourinary',         'findings'=>['No Complaints','Pain','Other']],
-                                    ['key'=>'musculoskeletal','label'=>'Musculoskeletal',       'findings'=>['Normal ROM','Deformity','Pain']],
-                                    ['key'=>'neurological',   'label'=>'Neurological',          'findings'=>['Oriented','Reflexes Normal','Abnormal']],
-                                ];
-                                @endphp
-                                @foreach($bodySystems as $sys)
-                                <tr>
-                                    <td style="font-size:.78rem;font-weight:600;color:#1d3c31;">{!! $sys['label'] !!}</td>
-                                    <td>
-                                        <div style="display:flex;flex-wrap:wrap;gap:4px 10px;">
-                                            @foreach($sys['findings'] as $finding)
-                                            <label style="display:flex;align-items:center;gap:4px;font-size:.76rem;cursor:pointer;white-space:nowrap;">
-                                                <input type="checkbox" name="body_systems[{{ $sys['key'] }}][findings][]" value="{{ $finding }}" style="accent-color:#15803d;width:13px;height:13px;">
-                                                {{ $finding }}
-                                            </label>
-                                            @endforeach
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <input type="text" name="body_systems[{{ $sys['key'] }}][notes]" class="ha-input" style="padding:4px 8px;font-size:.75rem;" placeholder="Notes...">
-                                    </td>
-                                </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                        </div>
-                    </div>
-
-                    {{-- G. Vision and Hearing --}}
-                    <div class="ha-section">
-                        <div class="ha-section-head">G. Vision and Hearing Screening</div>
-                        <div style="display:grid;gap:10px;">
-                            <div>
-                                <label class="ha-label">Vision</label>
-                                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:4px;">
-                                    <span style="font-size:.78rem;color:#334a3f;">Right Eye:</span>
-                                    <input type="text" name="vision_right_eye" class="ha-input" style="width:70px;padding:4px 8px;" placeholder="20/___">
-                                    <span style="font-size:.78rem;color:#334a3f;">Left Eye:</span>
-                                    <input type="text" name="vision_left_eye" class="ha-input" style="width:70px;padding:4px 8px;" placeholder="20/___">
-                                    <label class="ha-check-label"><input type="radio" name="vision_result" value="Pass" class="ha-check"> Pass</label>
-                                    <label class="ha-check-label"><input type="radio" name="vision_result" value="Refer" class="ha-check"> Refer</label>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="ha-label">Hearing</label>
-                                <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:4px;">
-                                    <label class="ha-check-label"><input type="radio" name="hearing_result" value="Passed Both" class="ha-check"> Passed Both</label>
-                                    <label class="ha-check-label"><input type="radio" name="hearing_result" value="Failed Right" class="ha-check"> Failed Right</label>
-                                    <label class="ha-check-label"><input type="radio" name="hearing_result" value="Failed Left" class="ha-check"> Failed Left</label>
-                                    <label class="ha-check-label"><input type="radio" name="hearing_result" value="Refer" class="ha-check"> Refer</label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- H. Oral Health --}}
-                    <div class="ha-section">
-                        <div class="ha-section-head">H. Oral Health Examination</div>
-                        <div>
-                            <label class="ha-label">Teeth Condition <span style="font-weight:400;">(Check all that apply)</span></label>
-                            <div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px;">
-                                <label class="ha-check-label"><input type="checkbox" name="teeth_condition[]" value="Good" class="ha-check"> Good</label>
-                                <label class="ha-check-label"><input type="checkbox" name="teeth_condition[]" value="Fair" class="ha-check"> Fair</label>
-                                <label class="ha-check-label"><input type="checkbox" name="teeth_condition[]" value="Poor" class="ha-check"> Poor</label>
-                                <label class="ha-check-label"><input type="checkbox" name="teeth_condition[]" value="Dental Caries" class="ha-check"> Dental Caries</label>
-                                <label class="ha-check-label"><input type="checkbox" name="teeth_condition[]" value="Gum Inflammation" class="ha-check"> Gum Inflammation</label>
-                                <label class="ha-check-label"><input type="checkbox" name="teeth_condition[]" value="Missing/Broken Teeth" class="ha-check"> Missing/Broken Teeth</label>
-                            </div>
-                        </div>
-                        <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;margin-top:10px;">
-                            <div>
-                                <label class="ha-label">Last Dental Visit</label>
-                                <input type="text" name="last_dental_visit" class="ha-input" placeholder="e.g. January 2026">
-                            </div>
-                            <label class="ha-check-label" style="margin-bottom:8px;white-space:nowrap;">
-                                <input type="checkbox" name="dental_referral" value="1" class="ha-check"> Referral to Dentist Recommended
-                            </label>
-                        </div>
-                    </div>
-
-                    {{-- I. Immunization Status --}}
-                    <div class="ha-section">
-                        <div class="ha-section-head">I. Immunization Status</div>
-                        <div style="display:grid;gap:8px;">
-                            <div>
-                                <label class="ha-label">Status</label>
-                                <div style="display:flex;gap:14px;margin-top:4px;">
-                                    <label class="ha-check-label"><input type="radio" name="immunization_status" value="Complete" class="ha-check"> Complete</label>
-                                    <label class="ha-check-label"><input type="radio" name="immunization_status" value="Incomplete" class="ha-check"> Incomplete</label>
-                                    <label class="ha-check-label"><input type="radio" name="immunization_status" value="Not Available" class="ha-check"> Not Available</label>
-                                </div>
-                            </div>
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                                <div>
-                                    <label class="ha-label">Missing/Needed Vaccines</label>
-                                    <input type="text" name="missing_needed_vaccines" class="ha-input" placeholder="e.g. MMR, Hepatitis B">
-                                </div>
-                                <div>
-                                    <label class="ha-label">Date Record Reviewed</label>
-                                    <input type="date" name="immunization_date_reviewed" class="ha-input">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {{-- J. Assessment Summary --}}
-                    <div class="ha-section">
-                        <div class="ha-section-head">J. Assessment Summary &amp; Recommendations</div>
-                        <div style="display:grid;gap:8px;">
-                            <div>
-                                <label class="ha-label">Summary of Findings</label>
-                                <textarea name="summary_of_findings" class="ha-input" rows="3" style="resize:vertical;" placeholder="Summarize key findings from the assessment..."></textarea>
-                            </div>
-                            <div>
-                                <label class="ha-label">Recommendations / Referrals</label>
-                                <textarea name="recommendations" class="ha-input" rows="3" style="resize:vertical;" placeholder="Specify recommendations or referrals..."></textarea>
-                            </div>
-                            <div>
-                                <label class="ha-label">Examiner Signature / Name</label>
-                                <input type="text" name="examiner_signature" class="ha-input" placeholder="Full name of examiner">
-                            </div>
-                        </div>
-                    </div>
-
-                    <button type="submit" class="btn" style="margin-top:4px;">Save Health Assessment</button>
-                </form>
+                <div class="sp-note">At-risk is derived from feeding attendance and is maintained by the Feeding Coordinator.</div>
             </section>
-            {{-- ── End Health Assessment ────────────────────────────────────── --}}
-
-            <section class="pending-note-box" id="vpPendingBox">
-                <h5>Pending Clinical Teacher Review</h5>
-                <p>This student's health record is pending completion by the Clinical Teacher.</p>
-            </section>
+        </div>
         </div>
     </div>
 </div>
@@ -861,10 +931,25 @@ const dashboardEndlineMonthLabel = @json($endlineMonthLabel);
 // Shared by the sidebar's real links (?tab=...), the Cancel button, and the
 // dashboard's quick-action cards — switches the visible .section-panel
 // directly, without needing a clickable nav element for every tab.
+const ADVISER_TAB_LABELS = {
+    'prototype-dashboard-panel': 'Dashboard',
+    'prototype-saved-panel': 'My Students',
+    'prototype-form-panel': 'Enroll Student',
+};
+
 window.switchAdviserTab = (targetId) => {
     document.querySelectorAll('.section-panel').forEach((panel) => {
         panel.classList.toggle('active', panel.id === targetId);
     });
+
+    // Keep the topbar breadcrumb on the panel that is actually showing.
+    const label = ADVISER_TAB_LABELS[targetId];
+    if (label) {
+        const title = document.getElementById('asbCrumbTitle');
+        const current = document.getElementById('asbCrumbCurrent');
+        if (title) title.textContent = label;
+        if (current) current.textContent = label;
+    }
 };
 
 (() => {
@@ -1169,10 +1254,13 @@ window.switchAdviserTab = (targetId) => {
                 ],
             },
             {
-                title: 'Health Data (Baseline)',
+                title: 'Vital Signs',
                 rows: [
                     ['Weight', `${byId('weight')?.value || '-'} kg`],
                     ['Height', `${byId('height')?.value || '-'} m`],
+                    ['Temperature', byId('temperature')?.value ? `${byId('temperature').value} °C` : '-'],
+                    ['Pulse', byId('pulse')?.value ? `${byId('pulse').value} bpm` : '-'],
+                    ['Blood Pressure', byId('bloodPressure')?.value || '-'],
                     ['(Height)^2', byId('heightSquared')?.textContent || '-'],
                     ['BMI', `${byId('bmiDisplay')?.textContent || '-'} kg/m^2`],
                     ['Nutritional Status', byId('nutriStatusDisplay')?.textContent || '-'],
@@ -1194,6 +1282,15 @@ window.switchAdviserTab = (targetId) => {
     };
 
     reviewBtn.addEventListener('click', () => {
+        // A control inside a hidden sheet can't be focused, so reportValidity()
+        // would fail without ever showing its message. Reveal the sheet holding
+        // the first invalid field before validating.
+        const firstInvalid = form.querySelector(':invalid');
+        const invalidSheet = firstInvalid?.closest('.sheet-panel');
+        if (invalidSheet && !invalidSheet.classList.contains('active')) {
+            window.showAdviserSheet?.(invalidSheet.id);
+        }
+
         if (!form.reportValidity()) {
             return;
         }
@@ -1208,7 +1305,9 @@ window.switchAdviserTab = (targetId) => {
         byId('bmiDisplay').textContent = '-';
         byId('nutriStatusDisplay').textContent = '-';
         byId('hfaDisplay').textContent = '-';
-        window.switchAdviserTab?.('prototype-dashboard-panel');
+        window.showAdviserSheet?.('sheetPanel1');
+        // The form is only reachable from My Students, so Cancel returns there.
+        window.switchAdviserTab?.('prototype-saved-panel');
     });
 
     closeBtn.addEventListener('click', closeModal);
@@ -1225,70 +1324,466 @@ window.switchAdviserTab = (targetId) => {
     });
 })();
 
-(() => {
-    const dateNode = document.getElementById('myStudentsDate');
-    if (!dateNode) {
-        return;
-    }
-
-    dateNode.textContent = new Date().toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-    });
-})();
-
+// My Students table: search + profile-status filter + pagination. Every row is
+// rendered server-side; this only decides which of them are on screen.
 (() => {
     const searchInput = document.getElementById('studentsSearch');
     const statusSelect = document.getElementById('studentsStatusFilter');
-    const clearBtn = document.getElementById('studentsClearBtn');
-    const rows = Array.from(document.querySelectorAll('.js-student-row'));
+    const tbody = document.getElementById('studentsTableBody');
 
-    if (!searchInput || !statusSelect || !clearBtn || !rows.length) {
+    if (!searchInput || !statusSelect || !tbody) {
         return;
     }
+
+    const rows = Array.from(tbody.querySelectorAll('.js-student-row'));
+    const noMatchRow = tbody.querySelector('.js-students-nomatch');
+    const pagination = document.getElementById('msPagination');
+    const startOut = document.getElementById('msShowingStart');
+    const endOut = document.getElementById('msShowingEnd');
+    const totalOut = document.getElementById('msShowingTotal');
+    const countBadge = document.getElementById('studentsCountBadge');
+    const perPage = 8;
+
+    let page = 1;
+    let matches = rows.slice();
+
+    const setPage = (next) => {
+        page = next;
+        render();
+    };
+
+    const renderPagination = (totalPages) => {
+        if (!pagination) {
+            return;
+        }
+
+        pagination.innerHTML = '';
+        if (matches.length <= perPage) {
+            return;
+        }
+
+        const addButton = (label, targetPage, { disabled = false, active = false } = {}) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = label;
+            button.disabled = disabled;
+            if (active) {
+                button.classList.add('active');
+            }
+            if (!disabled && !active) {
+                button.addEventListener('click', () => setPage(targetPage));
+            }
+            pagination.appendChild(button);
+        };
+
+        addButton('‹', page - 1, { disabled: page === 1 });
+
+        const maxVisible = 5;
+        let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+        const endPage = Math.min(totalPages, startPage + maxVisible - 1);
+        startPage = Math.max(1, Math.min(startPage, endPage - maxVisible + 1));
+
+        for (let i = startPage; i <= endPage; i += 1) {
+            addButton(String(i), i, { active: i === page });
+        }
+
+        addButton('›', page + 1, { disabled: page === totalPages });
+    };
+
+    const render = () => {
+        const totalPages = Math.max(1, Math.ceil(matches.length / perPage));
+        page = Math.min(Math.max(page, 1), totalPages);
+
+        const start = (page - 1) * perPage;
+        const end = Math.min(start + perPage, matches.length);
+        const onPage = new Set(matches.slice(start, end));
+
+        rows.forEach((row) => {
+            row.style.display = onPage.has(row) ? '' : 'none';
+        });
+
+        // Only shown when a search or filter hides every row — the server-rendered
+        // "no students yet" row covers a genuinely empty roster.
+        if (noMatchRow) {
+            noMatchRow.hidden = rows.length === 0 || matches.length > 0;
+        }
+
+        if (startOut) startOut.textContent = String(matches.length === 0 ? 0 : start + 1);
+        if (endOut) endOut.textContent = String(end);
+        if (totalOut) totalOut.textContent = String(matches.length);
+        if (countBadge) countBadge.textContent = String(matches.length);
+
+        renderPagination(totalPages);
+    };
 
     const applyFilters = () => {
         const keyword = searchInput.value.trim().toLowerCase();
         const status = statusSelect.value;
 
-        rows.forEach((row) => {
-            const name = row.getAttribute('data-name') || '';
-            const lrn = row.getAttribute('data-lrn') || '';
-            const rowStatus = row.getAttribute('data-status') || '';
+        matches = rows.filter((row) => {
+            const name = row.dataset.name || '';
+            const lrn = row.dataset.lrn || '';
             const keywordMatch = !keyword || name.includes(keyword) || lrn.includes(keyword);
-            const statusMatch = status === 'all' || rowStatus === status;
+            const statusMatch = status === 'all' || (row.dataset.status || '') === status;
 
-            row.style.display = keywordMatch && statusMatch ? '' : 'none';
+            return keywordMatch && statusMatch;
         });
+
+        // A narrower result set can leave the current page out of range.
+        page = 1;
+        render();
     };
 
     searchInput.addEventListener('input', applyFilters);
     statusSelect.addEventListener('change', applyFilters);
-    clearBtn.addEventListener('click', () => {
-        searchInput.value = '';
-        statusSelect.value = 'all';
-        applyFilters();
-    });
 
     // The topbar search (?tab=saved&q=...) feeds this same input rather than
     // duplicating filter logic server-side.
     const urlQuery = new URLSearchParams(window.location.search).get('q');
     if (urlQuery) {
         searchInput.value = urlQuery;
-        applyFilters();
     }
+
+    applyFilters();
 })();
 
+// Enrolment form sheets. Both tabs are always enabled — Sheet 2 is reachable
+// before Sheet 1 is filled in.
+window.showAdviserSheet = (panelId) => {
+    const panels = Array.from(document.querySelectorAll('.sheet-panel'));
+    if (!panels.length || !panelId) {
+        return;
+    }
+
+    panels.forEach((panel) => panel.classList.toggle('active', panel.id === panelId));
+    document.querySelectorAll('.sheet-tab').forEach((tab) => {
+        const selected = tab.dataset.sheet === panelId;
+        tab.classList.toggle('active', selected);
+        tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+    });
+
+    // The signature canvas can only be sized once Sheet 2 is actually visible.
+    if (panelId === 'sheetPanel2') {
+        requestAnimationFrame(() => window.initSignaturePad?.());
+    }
+};
+
 (() => {
-    document.getElementById('openAddStudentBtn')?.addEventListener('click', () => {
-        window.switchAdviserTab?.('prototype-form-panel');
+    document.querySelectorAll('.sheet-tab').forEach((tab) => {
+        tab.addEventListener('click', () => window.showAdviserSheet(tab.dataset.sheet));
     });
-    document.getElementById('openAddStudentFromDashboard')?.addEventListener('click', () => {
-        window.switchAdviserTab?.('prototype-form-panel');
+})();
+
+// Examiner signature — draw on a canvas or upload an image. Either way the
+// result lands in one hidden input as a data URL.
+(() => {
+    const canvas = document.getElementById('signatureCanvas');
+    const dataInput = document.getElementById('examinerSignatureData');
+    const uploadArea = document.getElementById('signatureUploadArea');
+    const uploadPreview = document.getElementById('signatureUploadPreview');
+    const fileInput = document.getElementById('signatureFileInput');
+
+    if (!canvas || !dataInput) {
+        return;
+    }
+
+    const MAX_BYTES = 2 * 1024 * 1024;
+    const EMPTY_UPLOAD = uploadPreview ? uploadPreview.innerHTML : '';
+    let ctx = null;
+    let drawing = false;
+
+    const wipeCanvas = () => {
+        if (!ctx) {
+            return;
+        }
+        const rect = canvas.getBoundingClientRect();
+        ctx.clearRect(0, 0, rect.width, rect.height);
+    };
+
+    // Resizing a canvas clears its bitmap, so anything already captured is
+    // painted back afterwards.
+    const restore = () => {
+        const value = dataInput.value;
+        if (!value || !ctx || value.indexOf('data:image/') !== 0) {
+            return;
+        }
+        const rect = canvas.getBoundingClientRect();
+        const image = new Image();
+        image.onload = () => ctx.drawImage(image, 0, 0, rect.width, rect.height);
+        image.src = value;
+    };
+
+    // The pad lives inside a hidden panel until Sheet 2 is opened, and a hidden
+    // element measures 0 wide — so sizing is deferred until it is on screen.
+    const ensureCanvas = () => {
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0) {
+            return false;
+        }
+
+        const ratio = window.devicePixelRatio || 1;
+        const width = Math.round(rect.width * ratio);
+        const height = Math.round(rect.height * ratio);
+
+        if (ctx && canvas.width === width && canvas.height === height) {
+            return true;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx = canvas.getContext('2d');
+        ctx.scale(ratio, ratio);
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#0d2b1e';
+        restore();
+        return true;
+    };
+
+    const pointAt = (event) => {
+        const rect = canvas.getBoundingClientRect();
+        return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    };
+
+    canvas.addEventListener('pointerdown', (event) => {
+        if (!ensureCanvas()) {
+            return;
+        }
+        drawing = true;
+        canvas.setPointerCapture(event.pointerId);
+        const point = pointAt(event);
+        ctx.beginPath();
+        ctx.moveTo(point.x, point.y);
+        event.preventDefault();
     });
+
+    canvas.addEventListener('pointermove', (event) => {
+        if (!drawing) {
+            return;
+        }
+        const point = pointAt(event);
+        ctx.lineTo(point.x, point.y);
+        ctx.stroke();
+        event.preventDefault();
+    });
+
+    const stopDrawing = (event) => {
+        if (!drawing) {
+            return;
+        }
+        drawing = false;
+        if (canvas.hasPointerCapture(event.pointerId)) {
+            canvas.releasePointerCapture(event.pointerId);
+        }
+        dataInput.value = canvas.toDataURL('image/png');
+    };
+
+    canvas.addEventListener('pointerup', stopDrawing);
+    canvas.addEventListener('pointercancel', stopDrawing);
+
+    const resetUpload = () => {
+        if (uploadPreview) {
+            uploadPreview.innerHTML = EMPTY_UPLOAD;
+        }
+        if (fileInput) {
+            fileInput.value = '';
+        }
+    };
+
+    window.initSignaturePad = () => { ensureCanvas(); };
+
+    window.clearSignaturePad = () => {
+        wipeCanvas();
+        dataInput.value = '';
+        resetUpload();
+    };
+
+    document.getElementById('signatureClear')?.addEventListener('click', () => window.clearSignaturePad());
+
+    document.querySelectorAll('.sig-tab').forEach((tab) => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.sig-tab').forEach((t) => t.classList.toggle('active', t === tab));
+            document.querySelectorAll('.sig-panel').forEach((panel) => {
+                panel.classList.toggle('active', panel.id === tab.dataset.sigpanel);
+            });
+            if (tab.dataset.sigpanel === 'sigPanelDraw') {
+                requestAnimationFrame(() => ensureCanvas());
+            }
+        });
+    });
+
+    uploadArea?.addEventListener('click', () => fileInput?.click());
+    uploadArea?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            fileInput?.click();
+        }
+    });
+
+    fileInput?.addEventListener('change', () => {
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) {
+            return;
+        }
+
+        const reject = (message) => {
+            resetUpload();
+            if (uploadPreview) {
+                const error = document.createElement('p');
+                error.className = 'sig-error';
+                error.textContent = message;
+                uploadPreview.appendChild(error);
+            }
+        };
+
+        if (!['image/png', 'image/jpeg'].includes(file.type)) {
+            reject('That file is not a PNG or JPG.');
+            return;
+        }
+        if (file.size > MAX_BYTES) {
+            reject('That image is larger than 2MB.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            dataInput.value = event.target.result;
+            if (uploadPreview) {
+                uploadPreview.textContent = '';
+                const image = document.createElement('img');
+                image.src = event.target.result;
+                image.alt = 'Uploaded signature';
+                uploadPreview.appendChild(image);
+            }
+            // An upload replaces anything drawn, so the two never disagree.
+            wipeCanvas();
+        };
+        reader.readAsDataURL(file);
+    });
+})();
+
+// Enrol / edit modes share one form. Editing posts the same LRN, which the
+// controller resolves to the existing record instead of a second one.
+(() => {
+    const form = document.getElementById('studentForm');
+    const title = document.getElementById('enrolFormTitle');
+    const sub = document.getElementById('enrolFormSub');
+    const lrnInput = document.getElementById('proto_lrn');
+
+    if (!form) {
+        return;
+    }
+
+    const ENROL_SUB = sub?.textContent || '';
+    const EDIT_SUB = 'Update this learner’s record. The LRN identifies the record, so it stays fixed here.';
+
+    const setValue = (id, value) => {
+        const node = document.getElementById(id);
+        if (node) {
+            node.value = value === null || value === undefined ? '' : String(value);
+        }
+    };
+
+    // Nudge the BMI / height-for-age calculator and the birth-date part sync,
+    // which both listen for real user input.
+    const recalculate = () => {
+        ['height', 'weight', 'birthDate'].forEach((id) => {
+            document.getElementById(id)?.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+    };
+
+    const setMode = (editing) => {
+        if (title) title.textContent = editing ? 'Edit Student Profile' : 'Enroll Student';
+        if (sub) sub.textContent = editing ? EDIT_SUB : ENROL_SUB;
+        if (lrnInput) lrnInput.readOnly = editing;
+        form.dataset.mode = editing ? 'edit' : 'enrol';
+    };
+
+    const fillForm = (record) => {
+        setValue('proto_last_name', record.last_name);
+        setValue('proto_first_name', record.first_name);
+        setValue('proto_middle_name', record.middle_name);
+        setValue('proto_lrn', record.lrn);
+        setValue('proto_birthplace', record.birthplace);
+        setValue('gender', record.gender);
+        setValue('proto_parent_guardian', record.parent_guardian);
+        setValue('proto_telephone_no', record.telephone_no);
+        setValue('proto_address', record.address);
+        setValue('weight', record.weight_kg);
+        setValue('temperature', record.temperature_c);
+        setValue('pulse', record.pulse_bpm);
+        setValue('bloodPressure', record.blood_pressure);
+
+        const heightCm = Number(record.height_cm);
+        setValue('height', Number.isFinite(heightCm) && heightCm > 0 ? (heightCm / 100).toFixed(2) : '');
+
+        const { birth_year: year, birth_month: month, birth_day: day } = record;
+        setValue('birthDate', year && month && day
+            ? `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+            : '');
+
+        // Both grouped sections repopulate the same way: checkboxes by truthiness,
+        // radios by matching value, everything else by assignment.
+        const fillGroup = (prefix, values) => {
+            const data = values && typeof values === 'object' ? values : {};
+
+            form.querySelectorAll(`[name^="${prefix}["]`).forEach((node) => {
+                const key = node.name.slice(prefix.length + 1, -1);
+
+                if (node.type === 'checkbox') {
+                    node.checked = Boolean(data[key]);
+                } else if (node.type === 'radio') {
+                    node.checked = data[key] === node.value;
+                } else {
+                    node.value = data[key] ?? '';
+                }
+            });
+        };
+
+        fillGroup('systems_review', record.systems_review);
+        fillGroup('health_history', record.health_history);
+
+        recalculate();
+    };
+
+    window.openEnrolmentForm = () => {
+        form.reset();
+        // form.reset() restores input values but not the canvas bitmap.
+        window.clearSignaturePad?.();
+        setMode(false);
+        recalculate();
+        window.switchAdviserTab?.('prototype-form-panel');
+        window.showAdviserSheet?.('sheetPanel1');
+    };
+
+    // The roster keeps no copy of the signature image, so the pad opens empty
+    // on edit; leaving it blank keeps whatever is already on file.
+    window.openEditForm = (record) => {
+        form.reset();
+        window.clearSignaturePad?.();
+        setMode(true);
+        fillForm(record);
+        window.switchAdviserTab?.('prototype-form-panel');
+        window.showAdviserSheet?.('sheetPanel1');
+    };
+
+    document.getElementById('openAddStudentBtn')?.addEventListener('click', window.openEnrolmentForm);
+    document.getElementById('openAddStudentEmptyBtn')?.addEventListener('click', window.openEnrolmentForm);
     document.getElementById('openSavedFromDashboard')?.addEventListener('click', () => {
         window.switchAdviserTab?.('prototype-saved-panel');
+    });
+
+    document.querySelectorAll('.js-student-edit').forEach((button) => {
+        button.addEventListener('click', () => {
+            let record;
+            try {
+                record = JSON.parse(button.getAttribute('data-record') || '{}');
+            } catch (_err) {
+                record = {};
+            }
+            window.openEditForm(record);
+        });
     });
 })();
 
@@ -1324,30 +1819,236 @@ window.switchAdviserTab = (targetId) => {
         return weight / (meters * meters);
     };
 
-    const openProfile = (record, route, rowStatus = 'pending') => {
+    // ── Sheet 2 read-only rendering ────────────────────────────────
+    const SYSTEMS_REVIEW_GROUPS = [
+        ['Skin / Integumentary', [['skin_normal', 'Normal'], ['skin_lesions', 'Lesions / Rashes'], ['skin_pallor', 'Pallor']]],
+        ['HEENT', [['heent_normal', 'Normal'], ['heent_abnormal', 'Abnormal']]],
+        ['Respiratory', [['resp_clear', 'Clear breath sounds'], ['resp_cough', 'Cough']]],
+        ['Cardiovascular', [['cardio_regular', 'Regular rhythm'], ['cardio_irregular', 'Irregular']]],
+        ['Abdomen / GI', [['abdo_soft', 'Soft, non-tender'], ['abdo_pain', 'Pain']]],
+        ['Neurologic', [['neuro_alert', 'Alert, oriented'], ['neuro_reflexes', 'Reflexes normal'], ['neuro_abnormal', 'Abnormal']]],
+        ['Dental', [['dental_good', 'Good'], ['dental_fair', 'Fair'], ['dental_poor', 'Poor'], ['dental_caries', 'Dental caries'], ['dental_gum', 'Gum inflammation'], ['dental_referral', 'Referral to dentist']]],
+        ['Immunization', [['immun_complete', 'Complete'], ['immun_incomplete', 'Incomplete'], ['immun_not_available', 'Not available']]],
+    ];
+
+    const SYSTEMS_REVIEW_TEXT = [
+        ['right_eye', 'Right Eye'], ['left_eye', 'Left Eye'], ['immun_date', 'Date Record Reviewed'],
+        ['notes', 'Notes / Details'], ['summary', 'Summary of Findings'],
+        ['recommendations', 'Recommendations / Referrals'],
+        ['examiner_name', 'Examiner Name'], ['examiner_date', 'Date'],
+    ];
+
+    // Built with DOM nodes rather than innerHTML: every value here is
+    // adviser-typed free text.
+    const renderSystemsReview = (review) => {
+        const host = document.getElementById('vpSystemsReview');
+        if (!host) {
+            return;
+        }
+
+        host.textContent = '';
+
+        if (!review || typeof review !== 'object' || Object.keys(review).length === 0) {
+            const empty = document.createElement('p');
+            empty.className = 'sp-note';
+            empty.textContent = 'No systems review was recorded for this learner.';
+            host.appendChild(empty);
+            return;
+        }
+
+        SYSTEMS_REVIEW_GROUPS.forEach(([title, items]) => {
+            const block = document.createElement('div');
+            block.className = 'sp-review-block';
+
+            const heading = document.createElement('span');
+            heading.className = 'sp-review-title';
+            heading.textContent = title;
+            block.appendChild(heading);
+
+            const list = document.createElement('div');
+            list.className = 'sp-review-items';
+            items.forEach(([key, label]) => {
+                const on = Boolean(review[key]);
+                const item = document.createElement('span');
+                item.className = on ? 'sp-review-item on' : 'sp-review-item';
+                item.textContent = (on ? '✓ ' : '– ') + label;
+                list.appendChild(item);
+            });
+            block.appendChild(list);
+            host.appendChild(block);
+        });
+
+        const notes = SYSTEMS_REVIEW_TEXT.filter(([key]) => {
+            const value = review[key];
+            return value !== null && value !== undefined && String(value).trim() !== '';
+        });
+
+        // The roster carries a flag rather than the signature image itself.
+        if (review.examiner_signature_present) {
+            notes.push(['examiner_signature_present', 'Examiner Signature']);
+            review.examiner_signature_present = 'Signed';
+        }
+
+        if (notes.length) {
+            const grid = document.createElement('div');
+            grid.className = 'student-profile-grid';
+            grid.style.marginTop = '12px';
+            notes.forEach(([key, label]) => {
+                const cell = document.createElement('div');
+                if (['notes', 'summary', 'recommendations'].includes(key)) {
+                    cell.className = 'full';
+                }
+                const k = document.createElement('span');
+                k.textContent = label + ':';
+                const v = document.createElement('b');
+                v.textContent = String(review[key]);
+                cell.append(k, v);
+                grid.appendChild(cell);
+            });
+            host.appendChild(grid);
+        }
+    };
+
+    const HEALTH_HISTORY_GROUPS = [
+        ['Medical History', [['med_asthma', 'Asthma'], ['med_diabetes', 'Diabetes'], ['med_seizure', 'Seizure Disorder'], ['med_infections', 'Frequent Infections'], ['med_heart', 'Heart Condition'], ['med_tuberculosis', 'Tuberculosis'], ['med_allergies', 'Allergies'], ['med_hospitalization', 'Hospitalization / Surgery']]],
+        ['Family History', [['fam_hypertension', 'Hypertension'], ['fam_diabetes', 'Diabetes'], ['fam_heart', 'Heart Disease'], ['fam_cancer', 'Cancer'], ['fam_mental', 'Mental Health Conditions']]],
+    ];
+
+    const HEALTH_HISTORY_TEXT = [
+        ['allergies_detail', 'Allergy details'], ['hospitalization_detail', 'Hospitalization / Surgery'],
+        ['current_medications', 'Current Medications'], ['other_conditions', 'Other Conditions'],
+        ['genetic_disorders', 'Genetic / Hereditary Disorders'],
+    ];
+
+    const renderHealthHistory = (history) => {
+        const host = document.getElementById('vpHealthHistory');
+        if (!host) {
+            return;
+        }
+
+        host.textContent = '';
+
+        if (!history || typeof history !== 'object' || Object.keys(history).length === 0) {
+            const empty = document.createElement('p');
+            empty.className = 'sp-note';
+            empty.textContent = 'No medical or family history was recorded for this learner.';
+            host.appendChild(empty);
+            return;
+        }
+
+        HEALTH_HISTORY_GROUPS.forEach(([title, items]) => {
+            const block = document.createElement('div');
+            block.className = 'sp-review-block';
+
+            const heading = document.createElement('span');
+            heading.className = 'sp-review-title';
+            heading.textContent = title;
+            block.appendChild(heading);
+
+            const list = document.createElement('div');
+            list.className = 'sp-review-items';
+            items.forEach(([key, label]) => {
+                const on = Boolean(history[key]);
+                const item = document.createElement('span');
+                item.className = on ? 'sp-review-item on' : 'sp-review-item';
+                item.textContent = (on ? '✓ ' : '– ') + label;
+                list.appendChild(item);
+            });
+            block.appendChild(list);
+            host.appendChild(block);
+        });
+
+        const notes = HEALTH_HISTORY_TEXT.filter(([key]) => {
+            const value = history[key];
+            return value !== null && value !== undefined && String(value).trim() !== '';
+        });
+
+        if (notes.length) {
+            const grid = document.createElement('div');
+            grid.className = 'student-profile-grid';
+            grid.style.marginTop = '12px';
+            notes.forEach(([key, label]) => {
+                const cell = document.createElement('div');
+                const k = document.createElement('span');
+                k.textContent = label + ':';
+                const v = document.createElement('b');
+                v.textContent = String(history[key]);
+                cell.append(k, v);
+                grid.appendChild(cell);
+            });
+            host.appendChild(grid);
+        }
+    };
+
+    const openProfile = (record, meta = {}) => {
         const fullName = [record.last_name, ',', record.first_name, record.middle_name ? (' ' + String(record.middle_name).charAt(0).toUpperCase() + '.') : '']
             .join(' ')
             .replace(' ,', ',')
             .replace(/\s+/g, ' ')
             .trim();
         const dob = [record.birth_year, record.birth_month, record.birth_day].filter(Boolean).join('-');
-        const examined = record.examination && Object.keys(record.examination).length > 0;
         const heightCm = toNumber(record.height_cm);
         const weightKg = toNumber(record.weight_kg);
         const bmi = record.bmi_value ? Number(record.bmi_value) : computeBmi(heightCm, weightKg);
         const heightM = heightCm ? (heightCm / 100) : null;
         const heightSquared = heightM ? (heightM * heightM) : null;
-        const statusBadge = document.getElementById('vpStatusBadge');
-        const pendingBox = document.getElementById('vpPendingBox');
-        const nurseSection = document.getElementById('vpNurseSection');
-        const exam = record.examination && typeof record.examination === 'object' ? record.examination : {};
+        const gradeSection = [record.grade_level, record.section].filter(Boolean).join(' - ') || '-';
 
+        const initials = `${record.first_name || ''}${record.last_name || ''}`.trim()
+            ? ((record.first_name || ' ').charAt(0) + (record.last_name || ' ').charAt(0)).toUpperCase()
+            : '--';
+
+        setText('vpInitials', initials);
         setText('vpName', fullName || '-');
-        setText('vpLrn', 'LRN: ' + (record.lrn || '-'));
+        setText('vpLrn', record.lrn || '-');
+        setText('vpAge', record.age || '-');
         setText('vpDob', dob || '-');
         setText('vpBirthplace', record.birthplace || '-');
         setText('vpGender', record.gender || '-');
-        setText('vpGradeSection', [record.grade_level, record.section].filter(Boolean).join(' - ') || '-');
+        setText('vpGradeSection', gradeSection);
+
+        // Sheet 1 renders the learner-information block in full, the same way
+        // the enrolment form's Sheet 1 does.
+        setText('vpS1Name', fullName || '-');
+        setText('vpS1Lrn', record.lrn || '-');
+        setText('vpS1Dob', dob || '-');
+        setText('vpS1Sex', record.gender || '-');
+        setText('vpS1GradeSection', gradeSection);
+
+        renderSystemsReview(record.systems_review);
+        renderHealthHistory(record.health_history);
+
+        const history = record.health_history && typeof record.health_history === 'object'
+            ? record.health_history
+            : {};
+        const consciousness = history.consciousness === 'Other' && history.consciousness_other
+            ? `Other — ${history.consciousness_other}`
+            : history.consciousness;
+        const posture = history.posture === 'Abnormal' && history.posture_detail
+            ? `Abnormal — ${history.posture_detail}`
+            : history.posture;
+
+        setText('vpConsciousness', consciousness || '-');
+        setText('vpPosture', posture || '-');
+        setText('vpHygiene', history.hygiene || '-');
+
+        setText('vpTemperature', record.temperature_c ? `${record.temperature_c} °C` : '-');
+        setText('vpPulse', record.pulse_bpm ? `${record.pulse_bpm} bpm` : '-');
+        setText('vpBloodPressure', record.blood_pressure || '-');
+
+        const consent = meta.consent_detail || {};
+        const consentLabels = { approved: 'Approved', partial: 'Partial', declined: 'Declined', pending: 'Pending' };
+        setText('vpConsentTabBadge', consentLabels[meta.consent] || 'Pending');
+        setText('vpConsentStatus', consent.status || 'Not started');
+        setText('vpConsentChoice', consent.choice || 'Awaiting guardian response');
+        setText('vpConsentSigned', consent.signed_at || '-');
+        setText('vpConsentReviewed', consent.reviewed_at || '-');
+
+        const feeding = meta.feeding || {};
+        setText('vpFeedingTabBadge', meta.at_risk ? 'At risk' : 'Not flagged');
+        setText('vpFeedBaseline', feeding.baseline_status || record.nutritional_status_bmi_for_age || '-');
+        setText('vpFeedEndline', feeding.endline_status || '-');
+        setText('vpFeedSessions', feeding.sessions ? String(feeding.sessions) : '0');
 
         setText('vpGuardian', record.parent_guardian || '-');
         setText('vpContact', record.telephone_no || '-');
@@ -1360,111 +2061,42 @@ window.switchAdviserTab = (targetId) => {
         setText('vpNutri', record.nutritional_status_bmi_for_age || '-');
         setText('vpHfa', record.nutritional_status_height_for_age || '-');
 
-        setText('vpExamDate', exam.date_of_examination || '-');
-        setText('vpExaminedBy', exam.examined_by || '-');
-        setText('vpTempBp', exam.temperature_bp || '-');
-        setText('vpHeartRate', exam.heart_rate || '-');
-        setText('vpPulseRate', exam.pulse_rate || '-');
-        setText('vpRespRate', exam.respiratory_rate || '-');
-        setText('vpExamNutriBmi', exam.nutritional_status_bmi || '-');
-        setText('vpExamNutriHfa', exam.nutritional_status_height_age || '-');
-        setText('vpVision', exam.vision_screening || '-');
-        setText('vpAuditory', exam.auditory_screening || '-');
-        setText('vpSkin', exam.skin_scalp || '-');
-        setText('vpEyesEarsNose', exam.eyes_ears_nose || '-');
-        setText('vpMouthThroatNeck', exam.mouth_throat_neck || '-');
-        setText('vpLungsHeart', exam.lungs_heart || '-');
-        setText('vpAbdomen', exam.abdomen || '-');
-        setText('vpDeformities', exam.deformities || '-');
-        setText('vpIron', exam.iron_supplementation || '-');
-        setText('vpDeworming', exam.deworming || '-');
-        setText('vpImmunization', exam.immunization || '-');
-        setText('vpSbfp', exam.sbfp_beneficiary || '-');
-        setText('vp4ps', exam.four_ps_beneficiary || '-');
-        setText('vpMenarche', exam.menarche || '-');
-        setText('vpOthers', exam.others || '-');
-
-        if (statusBadge) {
-            const statusMap = {
-                complete: ['Complete Record',      'my-status-badge status-complete'],
-                cert:     ['Clinical Teacher Reviewed',       'my-status-badge status-complete'],
-                pending:  ['Pending Clinical Teacher Review', 'my-status-badge status-pending'],
-            };
-            const [badgeText, badgeCls] = statusMap[rowStatus] ?? statusMap.pending;
-            statusBadge.textContent = badgeText;
-            statusBadge.className = badgeCls;
-        }
-
-        if (pendingBox) {
-            pendingBox.style.display = examined ? 'none' : 'block';
-        }
-
-        if (nurseSection) {
-            nurseSection.style.display = examined ? 'block' : 'none';
-        }
-
-        // Reset form visibility while API loads — prevents flash of stale form
-        const haForm = document.getElementById('healthAssessmentForm');
-        if (haForm) haForm.style.display = 'none';
-
-        const haLrnInput = document.getElementById('haLrn');
-        if (haLrnInput) haLrnInput.value = record.lrn || '';
-
-        loadHealthAssessmentStatus(record.lrn || '');
+        // Always reopen on the first tab.
+        showProfileTab('vpTabSheet1');
 
         backdrop.classList.add('open');
         backdrop.setAttribute('aria-hidden', 'false');
     };
 
-    // ── Health Assessment status loader ────────────────────────────
-    const loadHealthAssessmentStatus = async (lrn) => {
-        const statusEl = document.getElementById('vpHaStatus');
-        const haForm   = document.getElementById('healthAssessmentForm');
-        if (!statusEl) return;
-        if (!lrn) {
-            statusEl.innerHTML = '<span style="color:#7a9e87;">No LRN available.</span>';
-            return;
-        }
-        statusEl.innerHTML = '<span style="color:#7a9e87;">Checking assessment status&hellip;</span>';
-        try {
-            const resp = await fetch('/api/student-health-assessment?lrn=' + encodeURIComponent(lrn), {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            });
-            if (!resp.ok) { statusEl.innerHTML = '<span style="color:#7a9e87;">Could not check assessment status.</span>'; return; }
-            const d = await resp.json();
-            if (!d.has_assessment) {
-                statusEl.innerHTML = `<span style="width:10px;height:10px;border-radius:50%;background:#dc2626;display:inline-block;flex-shrink:0;margin-right:6px;"></span><b style="color:#b91c1c;">No assessment on file</b> for SY ${d.school_year || '—'}. Fill in the form below and submit.`;
-                if (haForm) haForm.style.display = 'block';
-            } else {
-                // Assessment exists — lock the form
-                if (haForm) haForm.style.display = 'none';
-                const assessedLine = d.date_of_assessment ? ` &mdash; assessed on <b>${d.date_of_assessment}</b>` : '';
-                const submittedLine = d.submitted_by ? ` &mdash; submitted by <b>${d.submitted_by}</b>${d.submitted_at ? ' on ' + d.submitted_at : ''}` : '';
-                statusEl.innerHTML = `
-                    <div style="width:100%;background:#f0fdf4;border:1px solid #86efac;border-radius:9px;padding:12px 14px;">
-                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                            <span style="width:10px;height:10px;border-radius:50%;background:#16a34a;display:inline-block;flex-shrink:0;"></span>
-                            <b style="color:#15803d;font-size:.84rem;">Health Assessment Already on File</b>
-                            <span style="margin-left:auto;font-size:.72rem;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:999px;font-weight:700;">Locked</span>
-                        </div>
-                        <div style="font-size:.76rem;color:#6f8c7a;">SY ${d.school_year || '—'}${assessedLine}${submittedLine}</div>
-                    </div>`;
-            }
-        } catch (_err) {
-            statusEl.innerHTML = '<span style="color:#7a9e87;">Could not check assessment status.</span>';
-        }
+    // ── Profile tabs ───────────────────────────────────────────────
+    const showProfileTab = (panelId) => {
+        document.querySelectorAll('.sp-panel').forEach((panel) => {
+            panel.classList.toggle('active', panel.id === panelId);
+        });
+        document.querySelectorAll('.sp-tab').forEach((tab) => {
+            const selected = tab.dataset.panel === panelId;
+            tab.classList.toggle('active', selected);
+            tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+        });
     };
+
+    document.querySelectorAll('.sp-tab').forEach((tab) => {
+        tab.addEventListener('click', () => showProfileTab(tab.dataset.panel));
+    });
+
+    document.getElementById('vpPrint')?.addEventListener('click', () => window.print());
 
     openButtons.forEach((btn) => {
         btn.addEventListener('click', () => {
-            let record = {};
-            try {
-                record = JSON.parse(btn.getAttribute('data-record') || '{}');
-            } catch (_err) {
-                record = {};
-            }
-            const rowStatus = btn.closest('tr')?.getAttribute('data-status') || 'pending';
-            openProfile(record, btn.getAttribute('data-route') || '#', rowStatus);
+            const parse = (attr) => {
+                try {
+                    return JSON.parse(btn.getAttribute(attr) || '{}');
+                } catch (_err) {
+                    return {};
+                }
+            };
+
+            openProfile(parse('data-record'), parse('data-meta'));
         });
     });
 

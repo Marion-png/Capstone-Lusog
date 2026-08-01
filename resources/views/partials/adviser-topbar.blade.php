@@ -13,12 +13,14 @@
 @endphp
 <header class="asb-topbar">
     <div class="asb-crumb">
-        <div class="asb-crumb-title">{{ $breadcrumb }}</div>
+        {{-- The dashboard switches its tabs client-side, so these two carry ids
+             for switchAdviserTab() to keep in step with the visible panel. --}}
+        <div class="asb-crumb-title" id="asbCrumbTitle">{{ $breadcrumb }}</div>
         <div class="asb-crumb-path">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="width:12px;height:12px;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
             <a href="{{ route('dashboard.class-adviser') }}">Home</a>
             <span>/</span>
-            <span>{{ $breadcrumb }}</span>
+            <span id="asbCrumbCurrent">{{ $breadcrumb }}</span>
         </div>
     </div>
 

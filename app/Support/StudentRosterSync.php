@@ -70,6 +70,32 @@ class StudentRosterSync
         $row['examination'] = $record->examination ?? [];
         $row['attendance_by_month'] = $record->attendance_by_month ?? [];
 
+        return self::withoutSignature($row);
+    }
+
+    /**
+     * Drop the examiner signature image from a roster row, leaving a flag in
+     * its place.
+     *
+     * The signature is a base64 data URL — tens of kilobytes drawn, up to
+     * ~2.8MB uploaded. The session holds every learner in the class and is
+     * decrypted, read, and rewritten on every request, so keeping the images
+     * there would grow it without bound. `student_details` remains the store.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    public static function withoutSignature(array $row): array
+    {
+        if (! isset($row['systems_review']) || ! is_array($row['systems_review'])) {
+            return $row;
+        }
+
+        $signature = $row['systems_review']['examiner_signature'] ?? null;
+
+        $row['systems_review']['examiner_signature'] = null;
+        $row['systems_review']['examiner_signature_present'] = is_string($signature) && $signature !== '';
+
         return $row;
     }
 

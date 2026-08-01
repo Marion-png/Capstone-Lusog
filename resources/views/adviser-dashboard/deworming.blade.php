@@ -29,14 +29,6 @@
         <h1 class="title">Deworming <i>Request</i></h1>
         <p class="sub">Submit and track deworming tablet requests for your assigned class.</p>
 
-        <div class="assigned-class-banner">
-            <div>
-                <div class="assigned-class-label">Assigned Class</div>
-                <div class="assigned-class-value">{{ $assignedClass }}</div>
-            </div>
-            <div class="assigned-class-note">Requests are automatically tied to this class.</div>
-        </div>
-
         @if (session('success'))
             <div class="flash flash-ok">{{ session('success') }}</div>
         @endif

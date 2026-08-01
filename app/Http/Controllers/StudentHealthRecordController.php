@@ -89,7 +89,119 @@ class StudentHealthRecordController extends Controller
             ],
             'lrnsWithCertificates' => $lrnsWithCertificates,
             'overview' => $this->buildAdviserOverview($request),
+            'rosterMeta' => $this->buildRosterMeta($request),
         ]);
+    }
+
+    /**
+     * Per-learner profile/consent state for the My Students table, keyed by
+     * LRN. consent_choice is encrypted, so consent forms are fetched by the
+     * plain student_lrn column and classified in PHP.
+     *
+     * @return array<string, array{has_assessment: bool, consent: string, at_risk: bool}>
+     */
+    private function buildRosterMeta(Request $request): array
+    {
+        $institutionId = $request->session()->get('active_institution_id');
+
+        $lrns = collect($request->session()->get('school_health_card_records', []))
+            ->pluck('lrn')
+            ->filter()
+            ->map(fn ($lrn) => (string) $lrn)
+            ->unique()
+            ->values();
+
+        if ($lrns->isEmpty()) {
+            return [];
+        }
+
+        $shRecords = Schema::hasTable('student_health_records')
+            ? StudentHealthRecord::query()
+                ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
+                ->whereIn('student_id', $lrns)
+                ->forCurrentSchoolYear()
+                ->get()
+                ->keyBy('student_id')
+            : collect();
+
+        $assessments = collect();
+        if (Schema::hasTable('health_assessments') && $shRecords->isNotEmpty()) {
+            $assessments = HealthAssessment::whereIn('student_health_record_id', $shRecords->pluck('id'))
+                ->where('school_year', HealthAssessment::currentSchoolYear())
+                ->get()
+                ->keyBy('student_health_record_id');
+        }
+
+        $consentForms = Schema::hasTable('health_consent_forms')
+            ? HealthConsentForm::where('school_year', HealthConsentForm::currentSchoolYear())
+                ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
+                ->whereIn('student_lrn', $lrns)
+                ->get()
+                ->keyBy('student_lrn')
+            : collect();
+
+        $meta = [];
+        foreach ($lrns as $lrn) {
+            $shRecord = $shRecords->get($lrn);
+            $assessment = $shRecord ? $assessments->get($shRecord->id) : null;
+            $consent = $consentForms->get($lrn);
+
+            $meta[$lrn] = [
+                'has_assessment' => $assessment !== null,
+                'consent' => $this->classifyConsentStatus($consent),
+                'at_risk' => (bool) ($shRecord?->is_at_risk),
+                // Read-only summaries for the Consent and Feeding Status tabs
+                // of the student profile.
+                'consent_detail' => [
+                    'status' => $consent
+                        ? (HealthConsentForm::statusBadges()[$consent->status]['label'] ?? $consent->status)
+                        : null,
+                    'choice' => $consent ? $this->consentChoiceLabel($consent->consent_choice) : null,
+                    'signed_at' => $consent?->signed_at?->toDateString(),
+                    'reviewed_at' => $consent?->reviewed_at?->toDateString(),
+                ],
+                'feeding' => [
+                    'baseline_status' => $shRecord?->baseline_nutritional_status,
+                    'endline_status' => $shRecord?->endline_nutritional_status,
+                    'sessions' => (int) ($shRecord?->attendance_sessions_count ?? 0),
+                ],
+                'assessment_date' => $assessment?->date_of_assessment?->toDateString(),
+            ];
+        }
+
+        return $meta;
+    }
+
+    private function consentChoiceLabel(?string $choice): ?string
+    {
+        return match ($choice) {
+            HealthConsentForm::CONSENT_ALL => 'Consented to all health services',
+            HealthConsentForm::CONSENT_SPECIFIC => 'Consented with exceptions',
+            HealthConsentForm::CONSENT_DENY => 'Consent declined',
+            default => null,
+        };
+    }
+
+    /**
+     * A consent form only counts as answered once the parent has signed it —
+     * drafts and sent-but-unsigned forms are still pending.
+     */
+    private function classifyConsentStatus(?HealthConsentForm $form): string
+    {
+        if ($form === null) {
+            return 'pending';
+        }
+
+        $answered = [HealthConsentForm::STATUS_SIGNED, HealthConsentForm::STATUS_REVIEWED];
+        if (! in_array($form->status, $answered, true)) {
+            return 'pending';
+        }
+
+        return match ($form->consent_choice) {
+            HealthConsentForm::CONSENT_DENY => 'declined',
+            HealthConsentForm::CONSENT_SPECIFIC => 'partial',
+            default => 'approved',
+        };
     }
 
     /**

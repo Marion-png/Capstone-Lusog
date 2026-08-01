@@ -3,9 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\HealthConsentForm;
+use App\Models\ParentalConsentForm;
+use App\Models\StudentHealthRecord;
 use App\Support\StudentRosterSync;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class HealthConsentFormController extends Controller
@@ -31,12 +35,137 @@ class HealthConsentFormController extends Controller
             ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
             ->count();
 
+        $uploads = $this->uploadedConsentsByLrn($request, $students->pluck('lrn')->filter()->values());
+
+        // One row per learner, combining the e-signature workflow with any
+        // scanned Sulat-Pahibalo that was uploaded for them.
+        $rows = $students->map(function (array $student) use ($forms, $uploads) {
+            $form = $forms->get($student['lrn']);
+            $upload = $uploads->get($student['lrn']);
+
+            return [
+                'lrn' => $student['lrn'],
+                'name' => $student['name'],
+                'parent_guardian' => $student['parent_guardian'],
+                'form' => $form,
+                'upload' => $upload,
+                'status' => $this->deriveConsentStatus($form, $upload),
+                'dated_at' => $upload?->created_at?->toDateString()
+                    ?? $form?->signed_at?->toDateString(),
+                'has_form_file' => $upload !== null && $upload->file_path !== null,
+                'has_med_cert' => (bool) $upload?->medical_cert_attached,
+                // The adviser's own remark, falling back to the reason recorded
+                // against a partial or declined consent.
+                'notes' => $upload?->notes
+                    ?: ($upload?->partial_exception ?: ($upload?->refused_reason ?: null)),
+                'file_name' => $upload?->file_original_name,
+                'med_cert_name' => $upload?->med_cert_original_name,
+                // Surfaced so a record awaiting its scan still shows what the
+                // parent answered, without that answer being read as consent.
+                'recorded_response' => $this->recordedResponseLabel($upload),
+            ];
+        })->values();
+
+        $counts = $rows->countBy('status');
+        $withConsent = ($counts['approved'] ?? 0) + ($counts['partial'] ?? 0);
+
         return view('consent-forms.index', [
             'students' => $students,
             'forms' => $forms,
             'schoolYear' => $schoolYear,
             'unreadCount' => $unreadCount,
+            'rows' => $rows,
+            'stats' => [
+                'approved' => $counts['approved'] ?? 0,
+                'partial' => $counts['partial'] ?? 0,
+                'declined' => $counts['declined'] ?? 0,
+                'pending' => $counts['pending'] ?? 0,
+                'total' => $rows->count(),
+                'with_consent' => $withConsent,
+                'rate' => $rows->count() > 0 ? (int) round(($withConsent / $rows->count()) * 100) : 0,
+            ],
         ]);
+    }
+
+    /**
+     * Latest uploaded consent scan per learner for the current school year,
+     * keyed by LRN. parental_consent_forms hangs off student_health_records,
+     * so the join goes through the plain student_id column.
+     */
+    private function uploadedConsentsByLrn(Request $request, Collection $lrns): Collection
+    {
+        if ($lrns->isEmpty() || ! Schema::hasTable('parental_consent_forms')) {
+            return collect();
+        }
+
+        $records = StudentHealthRecord::query()
+            ->when(
+                $request->session()->get('active_institution_id'),
+                fn ($q, $id) => $q->where('institution_id', $id)
+            )
+            ->whereIn('student_id', $lrns)
+            ->forCurrentSchoolYear()
+            ->get();
+
+        if ($records->isEmpty()) {
+            return collect();
+        }
+
+        $lrnByRecordId = $records->pluck('student_id', 'id');
+
+        // Sorted oldest-first so keyBy leaves the most recent upload per learner.
+        return ParentalConsentForm::whereIn('student_health_record_id', $records->pluck('id'))
+            ->where('school_year', ParentalConsentForm::currentSchoolYear())
+            ->get()
+            ->sortBy('created_at')
+            ->keyBy(fn (ParentalConsentForm $upload) => (string) ($lrnByRecordId[$upload->student_health_record_id] ?? ''));
+    }
+
+    /**
+     * A consent status is only reported once there is a document behind it.
+     *
+     * A parent-signed online form carries its own e-signature, so it stands on
+     * its own. An uploaded record does not: the signed scan is its evidence,
+     * and `consent` is nullable on upload, so a record can exist carrying an
+     * answer with no file attached. Reporting that answer as Approved would
+     * claim consent the school cannot produce — those stay Pending Upload.
+     *
+     * consent_choice and consent_type are both encrypted, so this compares
+     * decrypted values in PHP.
+     */
+    private function deriveConsentStatus(?HealthConsentForm $form, ?ParentalConsentForm $upload): string
+    {
+        $signed = [HealthConsentForm::STATUS_SIGNED, HealthConsentForm::STATUS_REVIEWED];
+
+        if ($form !== null && in_array($form->status, $signed, true)) {
+            return match ($form->consent_choice) {
+                HealthConsentForm::CONSENT_DENY => 'declined',
+                HealthConsentForm::CONSENT_SPECIFIC => 'partial',
+                default => 'approved',
+            };
+        }
+
+        if ($upload !== null && $upload->file_path !== null) {
+            return match ($upload->consent_type) {
+                'refused' => 'declined',
+                'partial' => 'partial',
+                'full' => 'approved',
+                default => 'pending',
+            };
+        }
+
+        return 'pending';
+    }
+
+    /** How the adviser recorded the parent's answer, whether or not the scan is in. */
+    private function recordedResponseLabel(?ParentalConsentForm $upload): ?string
+    {
+        return match ($upload?->consent_type) {
+            'full' => 'Full Consent',
+            'partial' => 'Partial Consent',
+            'refused' => 'Declined',
+            default => null,
+        };
     }
 
     /** Adviser: open (or create as draft) the form for one student. */

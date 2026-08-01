@@ -39,7 +39,9 @@ class ParentalConsentFormController extends Controller
             'has_other_illness' => ['nullable', 'boolean'],
             'other_illness_detail' => ['nullable', 'string', 'max:255'],
             'medical_cert_attached' => ['nullable', 'boolean'],
+            'notes' => ['nullable', 'string', 'max:1000'],
             'consent' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'medical_certificate' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
         ]);
 
         $advisedGrade = (string) $request->session()->get('assigned_grade_level', '');
@@ -71,6 +73,15 @@ class ParentalConsentFormController extends Controller
             $path = EncryptedFileStorage::store($file, 'parental-consents/'.$record->id);
         }
 
+        $medCertPath = null;
+        $medCertOriginalName = null;
+
+        if ($request->hasFile('medical_certificate')) {
+            $medCert = $request->file('medical_certificate');
+            $medCertOriginalName = $medCert->getClientOriginalName();
+            $medCertPath = EncryptedFileStorage::store($medCert, 'parental-consents/'.$record->id.'/med-cert');
+        }
+
         ParentalConsentForm::create([
             'student_health_record_id' => $record->id,
             'program_type' => 'Deworming',
@@ -86,7 +97,12 @@ class ParentalConsentFormController extends Controller
             'prev_immunization_detail' => $validated['prev_immunization_detail'] ?? null,
             'has_other_illness' => ! empty($validated['has_other_illness']),
             'other_illness_detail' => $validated['other_illness_detail'] ?? null,
-            'medical_cert_attached' => ! empty($validated['medical_cert_attached']),
+            // Uploading a certificate is itself proof one was attached, so the
+            // flag is set either by the file or by the explicit checkbox.
+            'medical_cert_attached' => $medCertPath !== null || ! empty($validated['medical_cert_attached']),
+            'med_cert_path' => $medCertPath,
+            'med_cert_original_name' => $medCertOriginalName,
+            'notes' => $validated['notes'] ?? null,
             'file_path' => $path,
             'file_original_name' => $originalName,
             'uploaded_by_name' => (string) $request->session()->get('active_name', 'Class Adviser'),
