@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -25,7 +25,7 @@
                 <h1 class="h4 mb-3">Record submitted to School Nurse.</h1>
                 <p class="muted">The student info and adviser measurements are now stored in session for prototype workflow testing.</p>
                 <div style="margin-top:12px;display:flex;gap:8px;">
-                    <a href="{{ route('adviser.create') }}" class="btn">Add Another Student</a>
+                    <a href="{{ route('adviser.create') }}" class="btn">Enroll Another Student</a>
                     <a href="{{ route('nurse.index') }}" class="btn btn-secondary">Open Nurse Dashboard</a>
                 </div>
             </div>

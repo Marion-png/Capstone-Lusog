@@ -60,7 +60,7 @@ class AdviserRedesignedPagesTest extends TestCase
         $inst = Institution::create(['name' => 'Sta. Ana NHS', 'status' => 'active']);
         $session = $this->adviserSession($inst);
 
-        $this->withSession($session)
+        $response = $this->withSession($session)
             ->post('/adviser/store', [
                 'last_name' => 'Reyes', 'first_name' => 'Maria', 'middle_name' => '',
                 'lrn' => '999999999999', 'birth_month' => 1, 'birth_day' => 1, 'birth_year' => 2012,
@@ -69,6 +69,14 @@ class AdviserRedesignedPagesTest extends TestCase
                 'height_cm' => 140, 'weight_kg' => 35, 'grade_level' => 'Grade 10', 'section' => 'Dalton',
             ]);
 
-        $this->withSession($session)->get('/adviser/success')->assertStatus(200);
+        // Enrolling a student now continues straight into Sheet 2 (Health
+        // Assessment) for that same student instead of a separate success page.
+        $response->assertRedirect('/dashboard/class-adviser?tab=form&sheet=2&lrn=999999999999');
+
+        $this->withSession($session)
+            ->get('/dashboard/class-adviser?tab=form&sheet=2&lrn=999999999999')
+            ->assertStatus(200)
+            ->assertSee('Reyes, Maria')
+            ->assertSee('id="healthAssessmentForm"', false);
     }
 }

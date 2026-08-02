@@ -114,6 +114,25 @@ class StudentHealthRecordController extends Controller
             ->unique()
             ->values();
 
+<<<<<<< Updated upstream
+=======
+        $gradeSection = trim("{$grade} / {$section}", ' /') ?: 'Not Assigned';
+        $lrns = $roster->pluck('lrn')->filter()->values();
+
+        $empty = [
+            'grade_section' => $gradeSection,
+            'total' => 0,
+            'complete' => 0,
+            'pending' => 0,
+            'needs_followup' => 0,
+            'needs_attention' => collect(),
+            'needs_attention_remaining' => 0,
+            'needs_attention_ok_count' => 0,
+            'recent_activity' => collect(),
+            'recent_activity_remaining' => 0,
+        ];
+
+>>>>>>> Stashed changes
         if ($lrns->isEmpty()) {
             return [];
         }
@@ -289,15 +308,28 @@ class StudentHealthRecordController extends Controller
             }
         }
 
+        $needsAttentionSorted = $needsAttention->sortByDesc('updated_at')->values();
+        $activitySorted = $activity->sortByDesc('at')->values();
+        $attentionLimit = 4;
+        $activityLimit = 5;
+
         return [
             'grade_section' => $ctx['grade_section'],
             'total' => $roster->count(),
             'complete' => $complete,
             'pending' => max(0, $roster->count() - $complete),
             'needs_followup' => $needsFollowup,
+<<<<<<< Updated upstream
             'needs_attention' => $needsAttention->sortByDesc('updated_at')->values()->take(6),
             'recent_activity' => $this->buildRecentActivity($ctx),
             'activity_stamp' => $this->activityStamp($request),
+=======
+            'needs_attention' => $needsAttentionSorted->take($attentionLimit),
+            'needs_attention_remaining' => max(0, $needsAttentionSorted->count() - $attentionLimit),
+            'needs_attention_ok_count' => max(0, $roster->count() - $needsAttentionSorted->count()),
+            'recent_activity' => $activitySorted->take($activityLimit),
+            'recent_activity_remaining' => max(0, $activitySorted->count() - $activityLimit),
+>>>>>>> Stashed changes
         ];
     }
 
@@ -731,6 +763,7 @@ class StudentHealthRecordController extends Controller
 
         return view('adviser-dashboard.feeding-status', [
             'students' => $students,
+<<<<<<< Updated upstream
             'gradeSection' => trim("{$grade} / {$section}", ' /') ?: 'Not Assigned',
             'schoolYear' => StudentHealthRecord::currentSchoolYear(),
             'stats' => [
@@ -746,6 +779,8 @@ class StudentHealthRecordController extends Controller
                     ? (int) round(($totalAttended / $totalSessions) * 100)
                     : 0,
             ],
+=======
+>>>>>>> Stashed changes
         ]);
     }
 

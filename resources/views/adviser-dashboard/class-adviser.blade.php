@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -28,17 +28,22 @@
         @php
             $assignedGradeLevel = session('assigned_grade_level');
             $assignedSection = session('assigned_section');
-            $assignedSchoolName = session('assigned_school_name') ?? session('active_school_name');
             $assignedClassLabel = ($assignedGradeLevel && $assignedSection)
                 ? ($assignedGradeLevel . ' / ' . $assignedSection)
                 : 'Not Assigned';
         @endphp
+<<<<<<< Updated upstream
         @if (session('success'))
             <div class="toast-success" id="successToast" role="status" aria-live="polite">
                 <span>{{ session('success') }}</span>
                 <button type="button" class="toast-close" id="toastClose" aria-label="Close">x</button>
             </div>
         @endif
+=======
+        <h1 class="title">Class Adviser <i>Encoding Workspace</i></h1>
+        <p class="sub">School Health Card prototype workflow for adviser submission and Clinical Teacher follow-up.</p>
+
+>>>>>>> Stashed changes
         @if ($errors->any())
             <div class="flash flash-err">{{ $errors->first() }}</div>
         @endif
@@ -224,6 +229,17 @@
                     @empty
                         <p class="muted" style="padding:8px 0;font-size:.82rem;">Nothing needs attention right now.</p>
                     @endforelse
+                    @if ($ov['needs_attention_remaining'] > 0)
+                        <div class="panel-footer-note">
+                            +{{ $ov['needs_attention_remaining'] }} more student{{ $ov['needs_attention_remaining'] > 1 ? 's' : '' }} need attention &middot;
+                            <a href="{{ route('dashboard.class-adviser', ['tab' => 'saved']) }}">view all</a>
+                        </div>
+                    @elseif ($ov['needs_attention_ok_count'] > 0 && $ov['needs_attention']->isNotEmpty())
+                        <div class="panel-footer-note positive">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                            {{ $ov['needs_attention_ok_count'] }} other student{{ $ov['needs_attention_ok_count'] > 1 ? 's have' : ' has' }} no pending issues
+                        </div>
+                    @endif
                 </article>
 
                 <article class="card section">
@@ -257,10 +273,26 @@
                                     </div>
                                 </div>
                             </div>
+<<<<<<< Updated upstream
                         @empty
                             <p class="muted ra-empty" style="padding:8px 0;font-size:.82rem;">No recent activity yet.</p>
                         @endforelse
                     </div>
+=======
+                            <div class="ra-body">
+                                <div class="ra-text">{!! $event['text'] !!}</div>
+                                <div class="ra-meta"><span class="ra-badge">{{ $event['badge'] }}</span> {{ $event['at']->diffForHumans() }}</div>
+                            </div>
+                        </div>
+                    @empty
+                        <p class="muted" style="padding:8px 0;font-size:.82rem;">No recent activity yet.</p>
+                    @endforelse
+                    @if ($ov['recent_activity_remaining'] > 0)
+                        <div class="panel-footer-note">
+                            {{ $ov['recent_activity_remaining'] }} older update{{ $ov['recent_activity_remaining'] > 1 ? 's' : '' }} not shown
+                        </div>
+                    @endif
+>>>>>>> Stashed changes
                 </article>
             </div>
 
@@ -289,6 +321,7 @@
         </section>
 
         <section id="prototype-saved-panel" class="section-panel {{ $adviserTab === 'saved' ? 'active' : '' }}" style="margin-top:12px;">
+<<<<<<< Updated upstream
             @php
                 $needsFollowupTotal = $prototypeRecords->filter(function ($row) use ($rosterMeta) {
                     $status = strtolower((string) ($row['nutritional_status_bmi_for_age'] ?? ''));
@@ -377,6 +410,64 @@
                                 <th>Health Status</th>
                                 <th>Profile Status</th>
                                 <th>Consent</th>
+=======
+            <article class="card my-students-card">
+                <div class="my-students-head">
+                    <div>
+                        <h3 class="my-students-title">My Students</h3>
+                        <p class="my-students-sub">View all students in your class</p>
+                    </div>
+                    <div class="my-students-right">
+                        <span id="myStudentsDate">-</span>
+                        <button type="button" class="btn" data-target="prototype-form-panel" id="openAddStudentBtn">+ Enroll Student</button>
+                    </div>
+                </div>
+
+                <div class="my-students-stats">
+                    <div class="my-stat-box box-total">
+                        <div class="my-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+                        <div><b>{{ $studentsTotal }}</b><span>Total Students</span></div>
+                    </div>
+                    <div class="my-stat-box box-pending">
+                        <div class="my-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+                        <div><b>{{ $pendingReviewTotal }}</b><span>Pending Clinical Teacher Review</span></div>
+                    </div>
+                    <div class="my-stat-box box-complete">
+                        <div class="my-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+                        <div><b>{{ $completeRecordsTotal }}</b><span>Complete Records</span></div>
+                    </div>
+                    <div class="my-stat-box box-wasted">
+                        <div class="my-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+                        <div><b>{{ $wastedStudentsTotal }}</b><span>Wasted Students</span></div>
+                    </div>
+                </div>
+
+                <div class="my-students-tools">
+                    <div class="ms-search-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input id="studentsSearch" type="text" placeholder="Search by name or LRN...">
+                    </div>
+                    <select id="studentsStatusFilter">
+                        <option value="all">All Status</option>
+                        <option value="pending">Pending Clinical Teacher Review</option>
+                        <option value="cert">Clinical Teacher Reviewed</option>
+                        <option value="complete">Complete</option>
+                    </select>
+                    <button type="button" class="btn btn-secondary" id="studentsClearBtn">Clear</button>
+                </div>
+
+                <div class="my-students-table-wrap">
+                    <table class="my-students-table">
+                        <thead>
+                            <tr>
+                                <th><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>LRN</th>
+                                <th><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Student Name</th>
+                                <th>Sex</th>
+                                <th>Age</th>
+                                <th>BMI</th>
+                                <th>Nutritional Status</th>
+                                <th>Profile Status</th>
+>>>>>>> Stashed changes
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -389,6 +480,7 @@
                                     $rowLrn = (string) ($prototypeRecord['lrn'] ?? '');
                                     $meta = $rosterMeta[$rowLrn] ?? ['has_assessment' => false, 'consent' => 'pending', 'at_risk' => false];
                                     $isExamined = !empty($prototypeRecord['examination']);
+<<<<<<< Updated upstream
                                     $profileKey = $meta['has_assessment'] ? 'complete' : ($isExamined ? 'partial' : 'pending');
                                     $consentKey = $meta['consent'];
                                     $healthStatus = trim((string) ($prototypeRecord['nutritional_status_bmi_for_age'] ?? ''));
@@ -419,10 +511,53 @@
                                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M14.5 18.5c1-1.5 2-1.5 3 0s2 1.5 3 0"/><path d="M12 16c1.5-3.5 3-5 4-3.5s-1 3.5-2 5"/></svg>
                                                 </button>
                                             </form>
+=======
+                                    $rowLrn = $prototypeRecord['lrn'] ?? '';
+                                    $hasCert = isset($lrnsWithCertificates[$rowLrn]);
+                                    $isComplete = $isExamined && $hasCert;
+                                    $statusKey = $isComplete ? 'complete' : ($isExamined ? 'cert' : 'pending');
+                                    $genderValue = $prototypeRecord['gender'] ?? '-';
+
+                                    $rowAge = '-';
+                                    $by = (int) ($prototypeRecord['birth_year'] ?? 0);
+                                    $bm = (int) ($prototypeRecord['birth_month'] ?? 0);
+                                    $bd = (int) ($prototypeRecord['birth_day'] ?? 0);
+                                    if ($by && $bm && $bd) {
+                                        try {
+                                            $rowAge = \Carbon\Carbon::createFromDate($by, $bm, $bd)->age;
+                                        } catch (\Throwable $e) {
+                                            $rowAge = '-';
+                                        }
+                                    }
+                                @endphp
+                                <tr class="js-student-row" data-name="{{ strtolower($fullName) }}" data-lrn="{{ strtolower((string) ($prototypeRecord['lrn'] ?? '')) }}" data-status="{{ $statusKey }}">
+                                    <td>{{ $prototypeRecord['lrn'] ?? '-' }}</td>
+                                    <td>{{ $fullName }}</td>
+                                    <td>{{ $genderValue }}</td>
+                                    <td>{{ $rowAge }}</td>
+                                    <td>{{ $prototypeRecord['bmi_value'] ?? '-' }}</td>
+                                    <td>{{ $prototypeRecord['nutritional_status_bmi_for_age'] ?? '-' }}</td>
+                                    <td>
+                                        @if ($isComplete || $isExamined)
+                                            <span class="my-status-badge status-complete">Clinical Teacher Reviewed</span>
+                                        @else
+                                            <span class="my-status-badge status-pending">Pending Clinical Teacher Review</span>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        <div class="ms-action-btns">
+                                            <button type="button" class="ms-action-btn ms-action-view js-profile-open" data-route="{{ route('nurse.examine', $index) }}" data-record='@json($prototypeRecord)' title="View Profile" aria-label="View Profile">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                            </button>
+                                            <a href="{{ route('consent-forms.index') }}" class="ms-action-btn ms-action-consent" title="Parent's Consent" aria-label="Parent's Consent">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
+                                            </a>
+>>>>>>> Stashed changes
                                         </div>
                                     </td>
                                 </tr>
                             @empty
+<<<<<<< Updated upstream
                                 <tr class="js-students-empty">
                                     <td colspan="8">
                                         <div class="ms-empty-state">
@@ -433,6 +568,9 @@
                                         </div>
                                     </td>
                                 </tr>
+=======
+                                <tr><td colspan="8" class="muted">No School Health Card prototype submissions yet for your assigned class.</td></tr>
+>>>>>>> Stashed changes
                             @endforelse
                             <tr class="js-students-nomatch" hidden>
                                 <td colspan="8">
@@ -446,6 +584,7 @@
                         </tbody>
                     </table>
                 </div>
+<<<<<<< Updated upstream
 
                 <div class="ms-table-footer">
                     <div class="ms-footer-info">
@@ -453,6 +592,9 @@
                     </div>
                     <div class="ms-pagination" id="msPagination"></div>
                 </div>
+=======
+                <div class="my-students-foot">Showing <strong>{{ $studentsTotal }}</strong> student{{ $studentsTotal === 1 ? '' : 's' }} in {{ $assignedClassLabel }}</div>
+>>>>>>> Stashed changes
             </article>
         </section>
 
@@ -463,8 +605,13 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
                     </a>
                     <div>
+<<<<<<< Updated upstream
                         <h3 class="add-title" id="enrolFormTitle">Enroll Student</h3>
                         <p class="add-sub" id="enrolFormSub">Mandatory Learner's Health Assessment. Both sheets are open &mdash; fill them in any order.</p>
+=======
+                        <h3 class="add-title">Enroll New Student</h3>
+                        <p class="add-sub">Enter basic information, weight, and height. BMI and nutritional status will be auto-calculated.</p>
+>>>>>>> Stashed changes
                     </div>
                 </div>
                 <div class="add-date" id="currentDate">-</div>
@@ -475,15 +622,33 @@
                 <div class="class-box-note">Students will be automatically added to this grade and section.</div>
             </div>
 
-            <form id="studentForm" method="POST" action="{{ route('adviser.store') }}" autocomplete="off">
-                @csrf
-                <input id="proto_birth_month" name="birth_month" type="hidden" value="{{ old('birth_month') }}">
-                <input id="proto_birth_day" name="birth_day" type="hidden" value="{{ old('birth_day') }}">
-                <input id="proto_birth_year" name="birth_year" type="hidden" value="{{ old('birth_year') }}">
-                <input id="proto_height_cm" name="height_cm" type="hidden" value="{{ old('height_cm') }}">
-                <input type="hidden" name="grade_level" value="{{ $assignedGradeLevel ?? '' }}">
-                <input type="hidden" name="section" value="{{ $assignedSection ?? '' }}">
+            @php
+                $enrollSheet = request('sheet') === '2' ? 'sheet2' : 'sheet1';
+                $sheetLrn = (string) request('lrn', '');
+                $sheetStudentRow = $sheetLrn !== ''
+                    ? $prototypeRecords->first(fn ($row) => (string) ($row['lrn'] ?? '') === $sheetLrn)
+                    : null;
+                $sheetRecord = $sheetStudentRow
+                    ? \App\Models\StudentHealthRecord::currentForStudent($sheetLrn, session('active_institution_id'))
+                    : null;
+                $sheetStudentName = $sheetStudentRow
+                    ? trim(($sheetStudentRow['last_name'] ?? '').', '.($sheetStudentRow['first_name'] ?? ''))
+                    : null;
+            @endphp
+            <div class="sheet-tabs">
+                <button type="button" class="sheet-tab {{ $enrollSheet === 'sheet1' ? 'active' : '' }}" data-sheet="sheet1" onclick="switchEnrollSheet('sheet1')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                    Sheet 1
+                    <span class="sheet-tab-badge">Learner Info &amp; Vital Signs</span>
+                </button>
+                <button type="button" class="sheet-tab {{ $enrollSheet === 'sheet2' ? 'active' : '' }}" data-sheet="sheet2" onclick="switchEnrollSheet('sheet2')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.8 2.3A.3.3 0 1 0 4.2 2.3.3.3 0 1 0 4.8 2.3M19 6v9a5 5 0 0 1-10 0v-9a2 2 0 0 1 4 0v8"/><circle cx="18" cy="6" r="2"/></svg>
+                    Sheet 2
+                    <span class="sheet-tab-badge">Systems Review</span>
+                </button>
+            </div>
 
+<<<<<<< Updated upstream
                 {{-- Both sheets are reachable from the moment the form opens: Sheet 2
                      is never gated behind completing Sheet 1. --}}
                 <div class="sheet-tabs" role="tablist" aria-label="Health assessment sheets">
@@ -608,22 +773,115 @@
                         <div class="field"><label for="temperature">Temp (&deg;C)</label><input id="temperature" name="temperature_c" type="number" step="0.1" min="25" max="45" placeholder="e.g., 36.5" value="{{ old('temperature_c') }}"></div>
                         <div class="field"><label for="pulse">Pulse (BPM)</label><input id="pulse" name="pulse_bpm" type="number" step="1" min="20" max="250" placeholder="e.g., 72" value="{{ old('pulse_bpm') }}"></div>
                         <div class="field"><label for="bloodPressure">BP (mmHg)</label><input id="bloodPressure" name="blood_pressure" type="text" maxlength="20" placeholder="e.g., 110/70" value="{{ old('blood_pressure') }}"></div>
+=======
+            @if ($sheetRecord)
+                {{-- An already-enrolled student, opened from their profile — Sheet 2 is its
+                     own standalone form here (no need to re-submit Sheet 1). --}}
+                <div class="sheet-panel {{ $enrollSheet === 'sheet1' ? 'active' : '' }}" id="enrollSheetPanel1">
+                    <div class="sheet2-info">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        <h4>{{ $sheetStudentName }} is already enrolled</h4>
+                        <p>Switch to Sheet 2 to view or complete their Health Assessment.</p>
+                    </div>
+                </div>
+
+                <div class="sheet-panel {{ $enrollSheet === 'sheet2' ? 'active' : '' }}" id="enrollSheetPanel2">
+                    @php
+                        $sheetAssessment = \App\Models\HealthAssessment::forStudent($sheetRecord->id, \App\Models\HealthAssessment::currentSchoolYear());
+                    @endphp
+                    <div class="class-box" style="margin-bottom:14px;">
+                        <div class="class-box-row"><span>Assessing:</span><span class="class-box-value">{{ $sheetStudentName }} &middot; LRN {{ $sheetLrn }}</span></div>
+                        <div class="class-box-note">{{ $sheetStudentRow['grade_level'] ?? '' }} / {{ $sheetStudentRow['section'] ?? '' }}</div>
+>>>>>>> Stashed changes
                     </div>
 
-                    <div class="calc-box">
-                        <div style="font-size:.78rem;color:#48685a;font-weight:700;">Auto-Calculated Results</div>
-                        <div class="calc-grid">
-                            <div class="calc-item"><div class="label">(Height)^2</div><div class="value" id="heightSquared">-</div></div>
-                            <div class="calc-item"><div class="label">BMI (kg/m^2)</div><div class="value" id="bmiDisplay">-</div></div>
-                            <div class="calc-item"><div class="label">Nutritional Status</div><div class="value" id="nutriStatusDisplay">-</div></div>
-                            <div class="calc-item"><div class="label">Height-for-Age</div><div class="value" id="hfaDisplay">-</div></div>
+                    @if ($sheetAssessment)
+                        <div style="width:100%;background:#f0fdf4;border:1px solid #86efac;border-radius:9px;padding:12px 14px;margin-bottom:14px;">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                                <span style="width:10px;height:10px;border-radius:50%;background:#16a34a;display:inline-block;flex-shrink:0;"></span>
+                                <b style="color:#15803d;font-size:.84rem;">Health Assessment Already on File</b>
+                                <span style="margin-left:auto;font-size:.72rem;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:999px;font-weight:700;">Locked</span>
+                            </div>
+                            <div style="font-size:.76rem;color:#6f8c7a;">
+                                SY {{ $sheetAssessment->school_year }}
+                                @if ($sheetAssessment->date_of_assessment) &mdash; assessed on <b>{{ $sheetAssessment->date_of_assessment->format('M d, Y') }}</b> @endif
+                                @if ($sheetAssessment->submitted_by_name) &mdash; submitted by <b>{{ $sheetAssessment->submitted_by_name }}</b> @endif
+                            </div>
                         </div>
-                        <div style="margin-top:10px;padding-top:8px;border-top:1px solid #dbe9e1;font-size:.71rem;color:#6f8c7a;line-height:1.4;">
-                            <div style="margin-bottom:4px;font-weight:700;">Classification Legend:</div>
-                            <div><b>BMI-for-Age:</b> Normal / Wasted / Severely Wasted / Underweight / Overweight / Obese</div>
-                            <div><b>Height-for-Age:</b> Normal / Stunted / Severely Stunted / Tall</div>
+                    @endif
+
+                    <form id="healthAssessmentForm" method="POST" action="{{ route('health-assessment.store') }}" novalidate @if ($sheetAssessment) style="display:none;" @endif>
+                        @csrf
+                        <input type="hidden" name="lrn" value="{{ $sheetLrn }}">
+                        @include('adviser-dashboard.partials.health-assessment-fields')
+                        <button type="submit" class="btn" style="margin-top:4px;">Save Health Assessment</button>
+                    </form>
+                </div>
+            @else
+                {{-- Fresh enrollment — Sheet 1 and Sheet 2 are one combined form so
+                     Sheet 2 never needs Sheet 1 to be submitted separately first. --}}
+                <form id="studentForm" method="POST" action="{{ route('adviser.store') }}" autocomplete="off">
+                    @csrf
+                    <div class="sheet-panel {{ $enrollSheet === 'sheet1' ? 'active' : '' }}" id="enrollSheetPanel1">
+                        <input id="proto_birth_month" name="birth_month" type="hidden" value="{{ old('birth_month') }}">
+                        <input id="proto_birth_day" name="birth_day" type="hidden" value="{{ old('birth_day') }}">
+                        <input id="proto_birth_year" name="birth_year" type="hidden" value="{{ old('birth_year') }}">
+                        <input id="proto_height_cm" name="height_cm" type="hidden" value="{{ old('height_cm') }}">
+                        <input type="hidden" name="grade_level" value="{{ $assignedGradeLevel ?? '' }}">
+                        <input type="hidden" name="section" value="{{ $assignedSection ?? '' }}">
+
+                        <div class="student-section">
+                            <h4>Student Information</h4>
+                            <div class="student-grid">
+                                <div class="field"><label for="proto_last_name">Last Name <span style="color:#ef4444">*</span></label><input id="proto_last_name" name="last_name" type="text" placeholder="e.g., Dela Cruz" value="{{ old('last_name') }}" required></div>
+                                <div class="field"><label for="proto_first_name">First Name <span style="color:#ef4444">*</span></label><input id="proto_first_name" name="first_name" type="text" placeholder="e.g., Maria" value="{{ old('first_name') }}" required></div>
+                                <div class="field"><label for="proto_middle_name">Middle Name</label><input id="proto_middle_name" name="middle_name" type="text" placeholder="e.g., Santos" value="{{ old('middle_name') }}"></div>
+                                <div class="field"><label for="proto_lrn">LRN <span style="color:#ef4444">*</span></label><input id="proto_lrn" name="lrn" type="text" placeholder="12-digit Learner Reference Number" value="{{ old('lrn') }}" inputmode="numeric" required></div>
+                                <div class="field"><label for="birthDate">Date of Birth <span style="color:#ef4444">*</span></label><input id="birthDate" name="birth_date" type="date" value="{{ old('birth_year') && old('birth_month') && old('birth_day') ? old('birth_year') . '-' . str_pad(old('birth_month'), 2, '0', STR_PAD_LEFT) . '-' . str_pad(old('birth_day'), 2, '0', STR_PAD_LEFT) : '' }}" required></div>
+                                <div class="field"><label for="proto_birthplace">Birthplace</label><input id="proto_birthplace" name="birthplace" type="text" placeholder="City/Municipality of birth" value="{{ old('birthplace') }}" required></div>
+                                <div class="field full"><label for="gender">Gender <span style="color:#ef4444">*</span></label><select id="gender" name="gender" required><option value="">Select Gender</option><option {{ old('gender') === 'Male' ? 'selected' : '' }}>Male</option><option {{ old('gender') === 'Female' ? 'selected' : '' }}>Female</option></select></div>
+                            </div>
+                        </div>
+
+                        <div class="student-section">
+                            <h4>Parent/Guardian Information</h4>
+                            <div class="student-grid">
+                                <div class="field full"><label for="proto_parent_guardian">Parent/Guardian Name</label><input id="proto_parent_guardian" name="parent_guardian" type="text" placeholder="Full name of parent or guardian" value="{{ old('parent_guardian') }}" required></div>
+                                <div class="field"><label for="proto_telephone_no">Contact Number</label><input id="proto_telephone_no" name="telephone_no" type="text" placeholder="e.g., 09171234567" value="{{ old('telephone_no') }}" inputmode="tel" required></div>
+                                <div class="field full"><label for="proto_address">Address</label><textarea id="proto_address" name="address" rows="2" required>{{ old('address') }}</textarea></div>
+                            </div>
+                        </div>
+
+                        <div class="student-section">
+                            <h4>Health Data (Baseline)</h4>
+                            <div class="student-grid" style="margin-bottom:10px;">
+                                <div class="field"><label for="weight">Weight (kg) <span style="color:#ef4444">*</span></label><input id="weight" name="weight_kg" type="number" step="0.1" min="0.1" max="200" placeholder="e.g., 34" value="{{ old('weight_kg') }}" required><div class="muted" style="font-size:.7rem;">Valid range: 0.1 - 200 kg</div></div>
+                                <div class="field"><label for="height">Height (m) <span style="color:#ef4444">*</span></label><input id="height" name="height_m" type="number" step="0.01" min="0.50" max="2.50" placeholder="e.g., 1.27" value="{{ old('height_cm') ? number_format(old('height_cm') / 100, 2, '.', '') : '' }}" required><div class="muted" style="font-size:.7rem;">Convert cm to m: 127 cm = 1.27 m | Valid range: 0.50 - 2.50 m</div></div>
+                            </div>
+
+                            <div class="calc-box">
+                                <div style="font-size:.78rem;color:#48685a;font-weight:700;">Auto-Calculated Results</div>
+                                <div class="calc-grid">
+                                    <div class="calc-item"><div class="label">(Height)^2</div><div class="value" id="heightSquared">-</div></div>
+                                    <div class="calc-item"><div class="label">BMI (kg/m^2)</div><div class="value" id="bmiDisplay">-</div></div>
+                                    <div class="calc-item"><div class="label">Nutritional Status</div><div class="value" id="nutriStatusDisplay">-</div></div>
+                                    <div class="calc-item"><div class="label">Height-for-Age</div><div class="value" id="hfaDisplay">-</div></div>
+                                </div>
+                                <div style="margin-top:10px;padding-top:8px;border-top:1px solid #dbe9e1;font-size:.71rem;color:#6f8c7a;line-height:1.4;">
+                                    <div style="margin-bottom:4px;font-weight:700;">Classification Legend:</div>
+                                    <div><b>BMI-for-Age:</b> Normal / Wasted / Severely Wasted / Underweight / Overweight / Obese</div>
+                                    <div><b>Height-for-Age:</b> Normal / Stunted / Severely Stunted / Tall</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="student-grid" style="display:none;">
+                            <input id="proto_school_id" name="school_id" type="hidden" value="{{ old('school_id', 'DCNHS-001') }}">
+                            <input id="proto_region" name="region" type="hidden" value="{{ old('region', 'NCR') }}">
+                            <input id="proto_division" name="division" type="hidden" value="{{ old('division', 'Quezon City') }}">
                         </div>
                     </div>
+<<<<<<< Updated upstream
                 </div>
                 </div>{{-- end Sheet 1 --}}
 
@@ -769,18 +1027,32 @@
                         </div>
                     </div>
                 </div>{{-- end Sheet 2 --}}
+=======
+>>>>>>> Stashed changes
 
-                <div class="student-grid" style="display:none;">
-                    <input id="proto_school_id" name="school_id" type="hidden" value="{{ old('school_id', 'DCNHS-001') }}">
-                    <input id="proto_region" name="region" type="hidden" value="{{ old('region', 'NCR') }}">
-                    <input id="proto_division" name="division" type="hidden" value="{{ old('division', 'Quezon City') }}">
-                </div>
+                    <div class="sheet-panel {{ $enrollSheet === 'sheet2' ? 'active' : '' }}" id="enrollSheetPanel2">
+                        <div class="sheet2-info" style="text-align:left;padding:0 0 16px;">
+                            <p style="margin:0;">Fill this in now, or come back later from this student's profile &mdash; both sheets save together when you press Review &amp; Submit.</p>
+                        </div>
+                        @include('adviser-dashboard.partials.health-assessment-fields')
+                    </div>
 
+<<<<<<< Updated upstream
                 <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
                     <button type="button" class="btn btn-secondary" id="cancelAddStudent">Cancel</button>
                     <button type="button" class="btn" id="reviewSubmitBtn">Review &amp; Submit</button>
                 </div>
             </form>
+=======
+                    <div class="note-box">After submission, the Clinical Teacher will complete the remaining SHD form fields. You can view complete updates once Clinical Teacher review is done.</div>
+
+                    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
+                        <button type="button" class="btn btn-secondary" id="cancelAddStudent">Cancel</button>
+                        <button type="button" class="btn" id="reviewSubmitBtn">Review &amp; Submit</button>
+                    </div>
+                </form>
+            @endif
+>>>>>>> Stashed changes
         </section>
     </div>
 </div>
@@ -919,6 +1191,7 @@
             </section>
         </div>
 
+<<<<<<< Updated upstream
         <div class="sp-panel" id="vpTabFeeding" role="tabpanel">
             <section class="student-profile-section">
                 <h4>Feeding Status</h4>
@@ -928,6 +1201,27 @@
                     <div><span>Attendance sessions:</span><b id="vpFeedSessions">-</b></div>
                 </div>
                 <div class="sp-note">At-risk is derived from feeding attendance and is maintained by the Feeding Coordinator.</div>
+=======
+            {{-- ── Health Assessment (MLHAT) — the actual form now lives in the
+                 Enroll Student panel's Sheet 2; this is a read-only status
+                 with a link into it for the selected student. ─────────────── --}}
+            <section class="student-profile-section" id="vpHealthAssessmentSection">
+                <h4>Health Assessment <span style="font-size:.72rem;font-weight:400;color:#6f8c7a;">(Mandatory Learner&rsquo;s Health Assessment Tool)</span></h4>
+
+                <div id="vpHaStatus" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:.78rem;color:#7a9e87;">
+                    Select a student to view assessment status.
+                </div>
+
+                <a href="#" id="vpHaLink" class="btn btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    Open Health Assessment &middot; Sheet 2
+                </a>
+            </section>
+
+            <section class="pending-note-box" id="vpPendingBox">
+                <h5>Pending Clinical Teacher Review</h5>
+                <p>This student's health record is pending completion by the Clinical Teacher.</p>
+>>>>>>> Stashed changes
             </section>
         </div>
         </div>
@@ -964,6 +1258,17 @@ window.switchAdviserTab = (targetId) => {
         if (title) title.textContent = label;
         if (current) current.textContent = label;
     }
+};
+
+// Enroll Student form's Sheet 1 / Sheet 2 tabs — Sheet 2 is informational
+// only (systems review happens later in the nurse's Health Assessment), so
+// this just toggles visibility, it doesn't touch form state.
+window.switchEnrollSheet = (sheet) => {
+    document.querySelectorAll('.sheet-tab').forEach((tab) => {
+        tab.classList.toggle('active', tab.dataset.sheet === sheet);
+    });
+    document.getElementById('enrollSheetPanel1')?.classList.toggle('active', sheet === 'sheet1');
+    document.getElementById('enrollSheetPanel2')?.classList.toggle('active', sheet === 'sheet2');
 };
 
 (() => {
@@ -1060,24 +1365,6 @@ window.switchAdviserTab = (targetId) => {
             },
         });
     }
-})();
-
-(() => {
-    const toast = document.getElementById('successToast');
-    if (!toast) {
-        return;
-    }
-
-    const closeBtn = document.getElementById('toastClose');
-    const dismiss = () => {
-        toast.style.display = 'none';
-    };
-
-    if (closeBtn) {
-        closeBtn.addEventListener('click', dismiss);
-    }
-
-    window.setTimeout(dismiss, 3200);
 })();
 
 (() => {
@@ -1483,6 +1770,7 @@ window.showAdviserSheet = (panelId) => {
 };
 
 (() => {
+<<<<<<< Updated upstream
     document.querySelectorAll('.sheet-tab').forEach((tab) => {
         tab.addEventListener('click', () => window.showAdviserSheet(tab.dataset.sheet));
     });
@@ -1570,6 +1858,15 @@ window.showAdviserSheet = (panelId) => {
         ctx.beginPath();
         ctx.moveTo(point.x, point.y);
         event.preventDefault();
+=======
+    document.getElementById('openAddStudentBtn')?.addEventListener('click', () => {
+        window.switchAdviserTab?.('prototype-form-panel');
+        window.switchEnrollSheet?.('sheet1');
+    });
+    document.getElementById('openAddStudentFromDashboard')?.addEventListener('click', () => {
+        window.switchAdviserTab?.('prototype-form-panel');
+        window.switchEnrollSheet?.('sheet1');
+>>>>>>> Stashed changes
     });
 
     canvas.addEventListener('pointermove', (event) => {
@@ -2075,13 +2372,68 @@ window.showAdviserSheet = (panelId) => {
         setText('vpNutri', record.nutritional_status_bmi_for_age || '-');
         setText('vpHfa', record.nutritional_status_height_for_age || '-');
 
+<<<<<<< Updated upstream
         // Always reopen on the first tab.
         showProfileTab('vpTabSheet1');
+=======
+        setText('vpExamDate', exam.date_of_examination || '-');
+        setText('vpExaminedBy', exam.examined_by || '-');
+        setText('vpTempBp', exam.temperature_bp || '-');
+        setText('vpHeartRate', exam.heart_rate || '-');
+        setText('vpPulseRate', exam.pulse_rate || '-');
+        setText('vpRespRate', exam.respiratory_rate || '-');
+        setText('vpExamNutriBmi', exam.nutritional_status_bmi || '-');
+        setText('vpExamNutriHfa', exam.nutritional_status_height_age || '-');
+        setText('vpVision', exam.vision_screening || '-');
+        setText('vpAuditory', exam.auditory_screening || '-');
+        setText('vpSkin', exam.skin_scalp || '-');
+        setText('vpEyesEarsNose', exam.eyes_ears_nose || '-');
+        setText('vpMouthThroatNeck', exam.mouth_throat_neck || '-');
+        setText('vpLungsHeart', exam.lungs_heart || '-');
+        setText('vpAbdomen', exam.abdomen || '-');
+        setText('vpDeformities', exam.deformities || '-');
+        setText('vpIron', exam.iron_supplementation || '-');
+        setText('vpDeworming', exam.deworming || '-');
+        setText('vpImmunization', exam.immunization || '-');
+        setText('vpSbfp', exam.sbfp_beneficiary || '-');
+        setText('vp4ps', exam.four_ps_beneficiary || '-');
+        setText('vpMenarche', exam.menarche || '-');
+        setText('vpOthers', exam.others || '-');
+
+        if (statusBadge) {
+            const statusMap = {
+                complete: ['Complete Record',      'my-status-badge status-complete'],
+                cert:     ['Clinical Teacher Reviewed',       'my-status-badge status-complete'],
+                pending:  ['Pending Clinical Teacher Review', 'my-status-badge status-pending'],
+            };
+            const [badgeText, badgeCls] = statusMap[rowStatus] ?? statusMap.pending;
+            statusBadge.textContent = badgeText;
+            statusBadge.className = badgeCls;
+        }
+
+        if (pendingBox) {
+            pendingBox.style.display = examined ? 'none' : 'block';
+        }
+
+        if (nurseSection) {
+            nurseSection.style.display = examined ? 'block' : 'none';
+        }
+
+        const haLink = document.getElementById('vpHaLink');
+        if (haLink) {
+            haLink.href = record.lrn
+                ? `{{ route('dashboard.class-adviser') }}?tab=form&sheet=2&lrn=${encodeURIComponent(record.lrn)}`
+                : '#';
+        }
+
+        loadHealthAssessmentStatus(record.lrn || '');
+>>>>>>> Stashed changes
 
         backdrop.classList.add('open');
         backdrop.setAttribute('aria-hidden', 'false');
     };
 
+<<<<<<< Updated upstream
     // ── Profile tabs ───────────────────────────────────────────────
     const showProfileTab = (panelId) => {
         document.querySelectorAll('.sp-panel').forEach((panel) => {
@@ -2092,6 +2444,46 @@ window.showAdviserSheet = (panelId) => {
             tab.classList.toggle('active', selected);
             tab.setAttribute('aria-selected', selected ? 'true' : 'false');
         });
+=======
+    // ── Health Assessment status loader — the actual form lives in the
+    // Enroll Student panel's Sheet 2 (linked above); this just previews
+    // whether one is already on file. ────────────────────────────────
+    const loadHealthAssessmentStatus = async (lrn) => {
+        const statusEl = document.getElementById('vpHaStatus');
+        const haLink = document.getElementById('vpHaLink');
+        if (!statusEl) return;
+        if (!lrn) {
+            statusEl.innerHTML = '<span style="color:#7a9e87;">No LRN available.</span>';
+            return;
+        }
+        statusEl.innerHTML = '<span style="color:#7a9e87;">Checking assessment status&hellip;</span>';
+        try {
+            const resp = await fetch('/api/student-health-assessment?lrn=' + encodeURIComponent(lrn), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!resp.ok) { statusEl.innerHTML = '<span style="color:#7a9e87;">Could not check assessment status.</span>'; return; }
+            const d = await resp.json();
+            if (!d.has_assessment) {
+                statusEl.innerHTML = `<span style="width:10px;height:10px;border-radius:50%;background:#dc2626;display:inline-block;flex-shrink:0;margin-right:6px;"></span><b style="color:#b91c1c;">No assessment on file</b> for SY ${d.school_year || '—'}.`;
+                if (haLink) haLink.textContent = '';
+                if (haLink) haLink.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Complete Health Assessment · Sheet 2';
+            } else {
+                const assessedLine = d.date_of_assessment ? ` &mdash; assessed on <b>${d.date_of_assessment}</b>` : '';
+                const submittedLine = d.submitted_by ? ` &mdash; submitted by <b>${d.submitted_by}</b>${d.submitted_at ? ' on ' + d.submitted_at : ''}` : '';
+                statusEl.innerHTML = `
+                    <div style="width:100%;background:#f0fdf4;border:1px solid #86efac;border-radius:9px;padding:12px 14px;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                            <span style="width:10px;height:10px;border-radius:50%;background:#16a34a;display:inline-block;flex-shrink:0;"></span>
+                            <b style="color:#15803d;font-size:.84rem;">Health Assessment Already on File</b>
+                        </div>
+                        <div style="font-size:.76rem;color:#6f8c7a;">SY ${d.school_year || '—'}${assessedLine}${submittedLine}</div>
+                    </div>`;
+                if (haLink) haLink.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> View / Edit Health Assessment · Sheet 2';
+            }
+        } catch (_err) {
+            statusEl.innerHTML = '<span style="color:#7a9e87;">Could not check assessment status.</span>';
+        }
+>>>>>>> Stashed changes
     };
 
     document.querySelectorAll('.sp-tab').forEach((tab) => {

@@ -60,7 +60,7 @@ class AdviserRosterPersistenceTest extends TestCase
                 'grade_level' => 'Grade 1',
                 'section' => 'Sampaguita',
             ])
-            ->assertRedirect(route('dashboard.class-adviser'));
+            ->assertRedirect(route('dashboard.class-adviser', ['tab' => 'form', 'sheet' => 2, 'lrn' => '123456789012']));
     }
 
     /** @test */
