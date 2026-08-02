@@ -1,19 +1,21 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-            --g950: #052e16; --g900: #14532d; --g800: #166534;
-            --g700: #15803d; --g600: #16a34a; --g500: #22c55e;
-            --g400: #4ade80; --g300: #86efac; --g200: #bbf7d0;
-            --g100: #dcfce7; --g50: #f0fdf4;
+            /* Same muted "pine" scale as the class adviser side (class-adviser.css)
+               — g900/g700/g100 match exactly, the rest are interpolated steps. */
+            --g950: #0a2419; --g900: #123a28; --g800: #1a4a32;
+            --g700: #2e7d51; --g600: #359760; --g500: #3fb373;
+            --g400: #5fb584; --g300: #7cc99c; --g200: #a8dfc0;
+            --g100: #e9f3ed; --g50: #f3f8f5;
             --sidebar-w: 248px;
             --sidebar-collapsed-w: 76px;
             --topbar-h: 64px;
-            --cream: #f7f8f5;
+            --cream: #f6f8f7;
             --card: #ffffff;
             --border: #e4ece7;
             --text-1: #0d1f14;
             --text-2: #3d5c47;
-            --text-3: #7a9e87;
+            --text-3: #6f8c7a;
             --red: #ef4444;
             --amber: #f59e0b;
             --blue: #3b82f6;
@@ -222,11 +224,11 @@
         /* ── Clinic header: gradient hero with the four headline metrics ── */
         .clinic-header {
             position: relative; overflow: hidden;
-            background: linear-gradient(135deg, #052e16 0%, #14532d 58%, #1a6b3a 100%);
+            background: linear-gradient(135deg, #0a2419 0%, #123a28 58%, #1a4a32 100%);
             border-radius: var(--radius);
             padding: 26px 30px;
             margin-bottom: 18px;
-            box-shadow: 0 10px 26px rgba(5,46,22,.2);
+            box-shadow: 0 10px 26px rgba(10,36,25,.2);
         }
         .clinic-header::after {
             content: ''; position: absolute; bottom: -70px; right: 60px;

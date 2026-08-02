@@ -62,7 +62,6 @@
                 'none' => 'fs-tone-mute',
             ];
 
-<<<<<<< Updated upstream
             // Only the classifications actually present become filter options,
             // so the dropdown never offers a choice that matches nothing.
             $presentStatusKeys = $students->pluck('status_key')->unique()->sort()->values();
@@ -135,12 +134,6 @@
                             <option value="{{ $key }}">{{ $statusLabels[$key] ?? ucfirst($key) }}</option>
                         @endforeach
                     </select>
-=======
-        <section class="card section" style="margin-top:16px;">
-            @if ($students->isEmpty())
-                <div style="padding:30px;text-align:center;color:var(--muted);font-size:.85rem;">
-                    No students with health records found for your assigned class yet.
->>>>>>> Stashed changes
                 </div>
             </div>
 

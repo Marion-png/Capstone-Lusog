@@ -475,6 +475,9 @@ Route::get('/dashboard/clinic-staff', function () {
 Route::get('/dashboard/class-adviser', [StudentHealthRecordController::class, 'classAdviserDashboard'])
     ->name('dashboard.class-adviser');
 
+Route::get('/dashboard/class-adviser/students/{lrn}', [StudentHealthRecordController::class, 'studentProfile'])
+    ->name('dashboard.class-adviser.student-profile');
+
 Route::get('/dashboard/class-adviser/feeding-status', [StudentHealthRecordController::class, 'feedingStatus'])
     ->name('dashboard.class-adviser.feeding-status');
 

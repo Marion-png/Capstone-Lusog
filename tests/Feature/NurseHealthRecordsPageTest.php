@@ -186,11 +186,17 @@ class NurseHealthRecordsPageTest extends TestCase
     }
 
     #[Test]
-    public function the_profile_uses_the_same_modal_presentation_as_the_adviser(): void
+    public function the_profile_uses_the_same_presentational_building_blocks_as_the_adviser(): void
     {
-        $adviserShell = [
+        // The adviser's profile is now a dedicated full page (not a modal —
+        // it keeps the shared sidebar), so the overlay-specific classes are
+        // nurse-only. The Facebook-profile card/tabs shell is still shared.
+        $nurseModalOnly = [
             'profile-backdrop',            // dimmed overlay
             'student-profile-modal',       // column-flex modal
+        ];
+
+        $sharedShell = [
             'student-profile-topline',     // back arrow + "Student Profile"
             'sp-cover',                    // gradient cover strip
             'sp-identity',                 // identity card
@@ -209,16 +215,16 @@ class NurseHealthRecordsPageTest extends TestCase
             ->get('/dashboard/student-health-records')
             ->assertOk();
 
-        foreach ($adviserShell as $hook) {
+        foreach (array_merge($nurseModalOnly, $sharedShell) as $hook) {
             $nurse->assertSee($hook, false);
         }
 
         $nurse->assertSee('Student Profile')->assertSee('&larr;', false);
 
-        // The same building blocks the adviser's own view-profile is made of.
-        $adviserMarkup = file_get_contents(resource_path('views/adviser-dashboard/class-adviser.blade.php'));
-        foreach ($adviserShell as $hook) {
-            $this->assertStringContainsString($hook, $adviserMarkup, "Adviser profile should also use .{$hook}");
+        // The same building blocks the adviser's own view-profile page is made of.
+        $adviserMarkup = file_get_contents(resource_path('views/adviser-dashboard/student-profile.blade.php'));
+        foreach ($sharedShell as $hook) {
+            $this->assertStringContainsString($hook, $adviserMarkup, "Adviser profile page should also use .{$hook}");
         }
     }
 

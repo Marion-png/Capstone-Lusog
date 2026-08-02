@@ -229,46 +229,69 @@ class AdviserMyStudentsTest extends TestCase
     }
 
     /** @test */
-    public function the_student_profile_view_is_read_only(): void
+    public function view_profile_on_my_students_links_to_the_dedicated_profile_page(): void
+    {
+        $this->enrol();
+
+        $response = $this->flushSession()
+            ->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser', ['tab' => 'saved']));
+
+        $response->assertOk();
+        $response->assertSee(
+            'href="'.route('dashboard.class-adviser.student-profile', '123456789012').'"',
+            false
+        );
+    }
+
+    /** @test */
+    public function the_student_profile_page_is_read_only_and_keeps_the_shared_sidebar(): void
     {
         $this->enrol();
 
         $html = $this->flushSession()
             ->withSession($this->adviserSession())
-            ->get(route('dashboard.class-adviser', ['tab' => 'saved']))
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'))
             ->assertOk()
             ->getContent();
 
-        // Isolate the profile dialog and assert it carries no way to submit.
-        $start = strpos($html, 'id="profileBackdrop"');
+        // The shared adviser chrome is still present — this is a full page,
+        // not a bare fragment.
+        $this->assertStringContainsString('id="asbSearchInput"', $html);
+        $this->assertStringContainsString('class="asb-sidebar"', $html);
+
+        // Isolate the profile card and assert it carries no way to submit.
+        $start = strpos($html, 'class="card student-profile-page"');
         $end = strpos($html, '<script>', $start);
         $this->assertNotFalse($start);
-        $modal = substr($html, $start, $end - $start);
+        $card = substr($html, $start, $end - $start);
 
         foreach (['<form', '<input', '<select', '<textarea'] as $editable) {
             $this->assertStringNotContainsString(
                 $editable,
-                $modal,
+                $card,
                 "The read-only student profile must not contain {$editable}."
             );
         }
 
-        $this->assertStringNotContainsString(route('health-assessment.store'), $modal);
-        $this->assertStringNotContainsString('Save Health Assessment', $modal);
+        $this->assertStringNotContainsString(route('health-assessment.store'), $card);
+        $this->assertStringNotContainsString('Save Health Assessment', $card);
 
-        // Print is the only action offered, and the read-only intent is stated.
-        $this->assertStringContainsString('id="vpPrint"', $modal);
-        $this->assertStringContainsString('View only', $modal);
+        // Print and Edit Profile (which navigates to the real edit form) are
+        // offered, and the read-only intent for clinic-recorded data is stated.
+        $this->assertStringContainsString('id="vpPrint"', $card);
+        $this->assertStringContainsString('id="vpEditProfile"', $html);
+        $this->assertStringContainsString('Read-only', $html);
     }
 
     /** @test */
-    public function the_profile_view_carries_the_tabs_and_their_read_only_data(): void
+    public function the_profile_page_carries_the_tabs_and_their_read_only_data(): void
     {
         $this->enrol(['systems_review' => ['resp_cough' => '1']]);
 
         $response = $this->flushSession()
             ->withSession($this->adviserSession())
-            ->get(route('dashboard.class-adviser', ['tab' => 'saved']));
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'));
 
         $response->assertOk();
         $response->assertSee('data-panel="vpTabSheet1"', false);
@@ -276,9 +299,9 @@ class AdviserMyStudentsTest extends TestCase
         $response->assertSee('data-panel="vpTabConsent"', false);
         $response->assertSee('data-panel="vpTabFeeding"', false);
 
-        // The Consent and Feeding tabs read from the meta the controller
-        // attaches to each View Profile button.
-        $response->assertSee('data-meta=', false);
+        // The Consent and Feeding tabs read from the meta embedded for the
+        // page's own rendering script.
+        $response->assertSee('STUDENT_PROFILE_META', false);
         $response->assertSee('consent_detail', false);
         $response->assertSee('baseline_status', false);
     }
@@ -290,7 +313,7 @@ class AdviserMyStudentsTest extends TestCase
 
         $html = $this->flushSession()
             ->withSession($this->adviserSession())
-            ->get(route('dashboard.class-adviser', ['tab' => 'saved']))
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'))
             ->assertOk()
             ->getContent();
 
@@ -320,6 +343,14 @@ class AdviserMyStudentsTest extends TestCase
                 "'{$foreign}' is not Sheet 1 content and must not appear there."
             );
         }
+    }
+
+    /** @test */
+    public function the_student_profile_page_404s_for_a_learner_outside_the_advisers_roster(): void
+    {
+        $this->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', '999999999999'))
+            ->assertRedirect(route('dashboard.class-adviser', ['tab' => 'saved']));
     }
 
     /** @test */

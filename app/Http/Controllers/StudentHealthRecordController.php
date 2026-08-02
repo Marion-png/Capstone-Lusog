@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Consultation;
 use App\Models\FeedingAttendance;
 use App\Models\HealthAssessment;
 use App\Models\HealthConsentForm;
@@ -97,6 +98,41 @@ class StudentHealthRecordController extends Controller
     }
 
     /**
+     * Full-page, read-only profile for one learner — reached from the View
+     * Profile action on My Students. Keeps the shared adviser sidebar/topbar
+     * rather than a modal overlay.
+     */
+    public function studentProfile(Request $request, string $lrn): View|RedirectResponse
+    {
+        if ($request->session()->get('active_role') !== 'class_adviser') {
+            return redirect()->route('dashboard.class-adviser');
+        }
+
+        StudentRosterSync::syncToSession($request);
+
+        $record = collect($request->session()->get('school_health_card_records', []))
+            ->first(fn ($row) => (string) ($row['lrn'] ?? '') === $lrn);
+
+        if ($record === null) {
+            return redirect()->route('dashboard.class-adviser', ['tab' => 'saved'])
+                ->with('error', 'Student not found in your assigned class.');
+        }
+
+        return view('adviser-dashboard.student-profile', [
+            'prototypeRecord' => $record,
+            'meta' => $this->buildRosterMeta($request)[$lrn] ?? [
+                'has_assessment' => false,
+                'consent' => 'pending',
+                'at_risk' => false,
+                'consent_detail' => [],
+                'feeding' => [],
+                'documents' => collect(),
+                'consultations' => collect(),
+            ],
+        ]);
+    }
+
+    /**
      * Per-learner profile/consent state for the My Students table, keyed by
      * LRN. consent_choice is encrypted, so consent forms are fetched by the
      * plain student_lrn column and classified in PHP.
@@ -107,32 +143,15 @@ class StudentHealthRecordController extends Controller
     {
         $institutionId = $request->session()->get('active_institution_id');
 
-        $lrns = collect($request->session()->get('school_health_card_records', []))
+        $roster = collect($request->session()->get('school_health_card_records', []));
+
+        $lrns = $roster
             ->pluck('lrn')
             ->filter()
             ->map(fn ($lrn) => (string) $lrn)
             ->unique()
             ->values();
 
-<<<<<<< Updated upstream
-=======
-        $gradeSection = trim("{$grade} / {$section}", ' /') ?: 'Not Assigned';
-        $lrns = $roster->pluck('lrn')->filter()->values();
-
-        $empty = [
-            'grade_section' => $gradeSection,
-            'total' => 0,
-            'complete' => 0,
-            'pending' => 0,
-            'needs_followup' => 0,
-            'needs_attention' => collect(),
-            'needs_attention_remaining' => 0,
-            'needs_attention_ok_count' => 0,
-            'recent_activity' => collect(),
-            'recent_activity_remaining' => 0,
-        ];
-
->>>>>>> Stashed changes
         if ($lrns->isEmpty()) {
             return [];
         }
@@ -162,6 +181,34 @@ class StudentHealthRecordController extends Controller
                 ->keyBy('student_lrn')
             : collect();
 
+        // Medical Documents tab — certificates are reliably scoped by LRN via
+        // student_health_conditions, so this is an exact match, unlike consultations.
+        $documentsByLrn = collect();
+        if (Schema::hasTable('student_health_conditions') && Schema::hasTable('medical_certificates')) {
+            $documentsByLrn = StudentHealthCondition::query()
+                ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
+                ->whereIn('student_lrn', $lrns)
+                ->with('certificates')
+                ->get()
+                ->groupBy('student_lrn')
+                ->map(function (Collection $conditions) {
+                    return $conditions->flatMap(function (StudentHealthCondition $condition) {
+                        return $condition->certificates->map(fn (MedicalCertificate $cert) => [
+                            'condition_name' => $condition->condition_name,
+                            'file_name' => $cert->file_original_name,
+                            'doctor_clinic' => $cert->doctor_clinic,
+                            'diagnosis_date' => $cert->diagnosis_date?->toDateString(),
+                            'uploaded_by' => $cert->uploaded_by_name,
+                        ])->values();
+                    })->values();
+                });
+        }
+
+        // Consultation Log tab — the consultations table has no student_id/LRN
+        // column (clinic staff log a free-text name), so matches are best-effort
+        // by decrypted name + grade/section, not a guaranteed exact link.
+        $consultationsByLrn = $this->matchConsultationsToRoster($roster, $lrns, $institutionId);
+
         $meta = [];
         foreach ($lrns as $lrn) {
             $shRecord = $shRecords->get($lrn);
@@ -188,10 +235,82 @@ class StudentHealthRecordController extends Controller
                     'sessions' => (int) ($shRecord?->attendance_sessions_count ?? 0),
                 ],
                 'assessment_date' => $assessment?->date_of_assessment?->toDateString(),
+                'documents' => $documentsByLrn->get($lrn, collect())->values(),
+                'consultations' => $consultationsByLrn->get($lrn, collect())->values(),
             ];
         }
 
         return $meta;
+    }
+
+    /**
+     * Best-effort match of clinic consultation records to this adviser's
+     * roster. The consultations table has no student_id/LRN column — it only
+     * ever captured a free-text name typed by clinic staff — so this compares
+     * decrypted, normalised names rather than an exact foreign key. Two
+     * students with very similar names could theoretically collide; callers
+     * must present this as "matched by name", not as a verified link.
+     *
+     * @param  Collection<int, string>  $lrns
+     * @return Collection<string, Collection<int, array>>
+     */
+    private function matchConsultationsToRoster(Collection $roster, Collection $lrns, ?int $institutionId): Collection
+    {
+        if (! Schema::hasTable('consultations') || $lrns->isEmpty()) {
+            return collect();
+        }
+
+        $consultations = Consultation::query()
+            ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
+            ->orderByDesc('consulted_at')
+            ->get();
+
+        if ($consultations->isEmpty()) {
+            return collect();
+        }
+
+        $students = $roster
+            ->filter(fn ($row) => in_array((string) ($row['lrn'] ?? ''), $lrns->all(), true))
+            ->map(function ($row) {
+                return [
+                    'lrn' => (string) ($row['lrn'] ?? ''),
+                    'last' => $this->normaliseNameForMatching((string) ($row['last_name'] ?? '')),
+                    'first' => $this->normaliseNameForMatching((string) ($row['first_name'] ?? '')),
+                ];
+            })
+            ->filter(fn ($s) => $s['last'] !== '' && $s['first'] !== '')
+            ->values();
+
+        $byLrn = collect();
+        foreach ($consultations as $consultation) {
+            $normalisedName = $this->normaliseNameForMatching((string) $consultation->student_name);
+
+            $match = $students->first(
+                fn ($s) => str_contains($normalisedName, $s['last']) && str_contains($normalisedName, $s['first'])
+            );
+
+            if ($match === null) {
+                continue;
+            }
+
+            $entry = [
+                'consulted_at' => $consultation->consulted_at?->toDateTimeString(),
+                'condition' => $consultation->condition,
+                'treatment_given' => $consultation->treatment_given,
+                'status' => $consultation->status,
+            ];
+
+            $byLrn->put($match['lrn'], $byLrn->get($match['lrn'], collect())->push($entry));
+        }
+
+        return $byLrn;
+    }
+
+    private function normaliseNameForMatching(string $name): string
+    {
+        $stripped = preg_replace('/[^a-z\s]/', ' ', strtolower($name)) ?? '';
+
+        return trim(preg_replace('/\s+/', ' ', $stripped) ?? '');
     }
 
     private function consentChoiceLabel(?string $choice): ?string
@@ -308,28 +427,15 @@ class StudentHealthRecordController extends Controller
             }
         }
 
-        $needsAttentionSorted = $needsAttention->sortByDesc('updated_at')->values();
-        $activitySorted = $activity->sortByDesc('at')->values();
-        $attentionLimit = 4;
-        $activityLimit = 5;
-
         return [
             'grade_section' => $ctx['grade_section'],
             'total' => $roster->count(),
             'complete' => $complete,
             'pending' => max(0, $roster->count() - $complete),
             'needs_followup' => $needsFollowup,
-<<<<<<< Updated upstream
             'needs_attention' => $needsAttention->sortByDesc('updated_at')->values()->take(6),
             'recent_activity' => $this->buildRecentActivity($ctx),
             'activity_stamp' => $this->activityStamp($request),
-=======
-            'needs_attention' => $needsAttentionSorted->take($attentionLimit),
-            'needs_attention_remaining' => max(0, $needsAttentionSorted->count() - $attentionLimit),
-            'needs_attention_ok_count' => max(0, $roster->count() - $needsAttentionSorted->count()),
-            'recent_activity' => $activitySorted->take($activityLimit),
-            'recent_activity_remaining' => max(0, $activitySorted->count() - $activityLimit),
->>>>>>> Stashed changes
         ];
     }
 
@@ -763,7 +869,6 @@ class StudentHealthRecordController extends Controller
 
         return view('adviser-dashboard.feeding-status', [
             'students' => $students,
-<<<<<<< Updated upstream
             'gradeSection' => trim("{$grade} / {$section}", ' /') ?: 'Not Assigned',
             'schoolYear' => StudentHealthRecord::currentSchoolYear(),
             'stats' => [
@@ -779,8 +884,6 @@ class StudentHealthRecordController extends Controller
                     ? (int) round(($totalAttended / $totalSessions) * 100)
                     : 0,
             ],
-=======
->>>>>>> Stashed changes
         ]);
     }
 

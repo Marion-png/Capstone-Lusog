@@ -69,14 +69,13 @@ class AdviserRedesignedPagesTest extends TestCase
                 'height_cm' => 140, 'weight_kg' => 35, 'grade_level' => 'Grade 10', 'section' => 'Dalton',
             ]);
 
-        // Enrolling a student now continues straight into Sheet 2 (Health
-        // Assessment) for that same student instead of a separate success page.
-        $response->assertRedirect('/dashboard/class-adviser?tab=form&sheet=2&lrn=999999999999');
+        // Sheet 1 and Sheet 2 (systems review) are one combined form, so a
+        // single submission is enough — no separate Health Assessment step.
+        $response->assertRedirect(route('dashboard.class-adviser'));
 
         $this->withSession($session)
-            ->get('/dashboard/class-adviser?tab=form&sheet=2&lrn=999999999999')
+            ->get('/dashboard/class-adviser?tab=saved')
             ->assertStatus(200)
-            ->assertSee('Reyes, Maria')
-            ->assertSee('id="healthAssessmentForm"', false);
+            ->assertSee('Reyes, Maria');
     }
 }

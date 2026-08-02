@@ -305,13 +305,8 @@ class AdviserController extends Controller
         }
 
         return redirect()
-<<<<<<< Updated upstream
             ->route('dashboard.class-adviser')
             ->with('success', $existingRecord !== null ? 'Student record updated.' : 'Student enrolled.');
-=======
-            ->route('dashboard.class-adviser', ['tab' => 'form', 'sheet' => 2, 'lrn' => $validated['lrn']])
-            ->with('success', 'Record submitted to Clinical Teacher. Continue with the Health Assessment below.');
->>>>>>> Stashed changes
     }
 
     public function success(): View

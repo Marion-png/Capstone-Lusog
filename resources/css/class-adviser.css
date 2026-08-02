@@ -1,5 +1,4 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-<<<<<<< Updated upstream
 :root{--bg:#f7f8f5;--card:#fff;--border:#e4ece7;--text:#0d1f14;--muted:#6f8c7a;--g900:#14532d;--g700:#15803d;--g300:#86efac;--g100:#dcfce7;--red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;--sidebar:248px;--sidebar-collapsed:76px;--radius-sm:10px;--shadow:0 1px 4px rgba(5,46,22,.06),0 4px 16px rgba(5,46,22,.06)}
 html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
 /* The redesigned .asb-sidebar/.asb-main layout is a normal-flow page (the
@@ -13,14 +12,6 @@ html:has(.asb-main){height:auto;overflow:visible}
 body:has(.asb-main){height:auto;min-height:100%;overflow:visible}
 /* No nested scroller inside the new shell — the page scrolls as one. */
 .asb-main .content{overflow:visible}
-=======
-:root{--bg:#f6f8f7;--card:#fff;--border:#e4ece7;--text:#0d1f14;--muted:#6f8c7a;--g900:#123a28;--g700:#2e7d51;--g300:#5fb584;--g100:#e9f3ed;--red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;--sidebar:248px;--sidebar-collapsed:76px;--radius-sm:10px;--shadow:0 1px 4px rgba(5,46,22,.06),0 4px 16px rgba(5,46,22,.06)}
-/* Every page that loads this stylesheet now uses the .asb-sidebar/.asb-main
-   shell (normal document flow, fixed sidebar, un-clamped content), not the
-   old .sidebar/.main app-shell that scrolled only inside .content — so the
-   page itself must be allowed to scroll normally. */
-html,body{min-height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text)}
->>>>>>> Stashed changes
 .sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-collapsed);background:var(--g900);display:flex;flex-direction:column;overflow:hidden;transition:width .26s ease;box-shadow:inset -1px 0 0 rgba(255,255,255,.04)}
 .sidebar:hover, .sidebar.sb-pin {width:var(--sidebar)}
 .sb-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(134,239,172,.05) 1px, transparent 1px),linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);background-size:28px 28px;pointer-events:none}
@@ -104,10 +95,7 @@ html,body{min-height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);
 .stat{padding:14px 18px}
 .stat b{font-family:'DM Serif Display',serif;font-size:1.5rem;display:block}
 .stat span{font-size:.72rem;color:var(--muted)}
-<<<<<<< Updated upstream
 
-=======
->>>>>>> Stashed changes
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .section{padding:16px 18px}
 .section h3{font-size:.82rem;color:#3d5c47;margin-bottom:10px;text-transform:uppercase;letter-spacing:.08em}
@@ -227,41 +215,11 @@ tbody tr:hover td{background:#f7fbf8}
 .summary-v{color:#1c3429;font-weight:600}
 .confirm-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
 
-<<<<<<< Updated upstream
-=======
-.my-students-card{padding:0;overflow:hidden}
-.my-students-head{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;padding:18px 20px;border-bottom:1px solid var(--border)}
-.my-students-title{font-size:1.5rem;font-weight:800;color:var(--g900);letter-spacing:-.01em}
-.my-students-sub{font-size:.84rem;color:var(--muted);margin-top:3px}
-.my-students-right{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:.82rem}
-.my-students-right .btn{display:inline-flex;align-items:center;gap:6px}
-
-.my-students-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:16px 20px;border-bottom:1px solid var(--border)}
-.my-stat-box{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow);display:flex;align-items:center;gap:12px;transition:box-shadow .18s ease,transform .18s ease}
-.my-stat-box:hover{box-shadow:0 4px 14px rgba(5,46,22,.1);transform:translateY(-1px)}
-.my-stat-icon{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;flex-shrink:0}
-.my-stat-icon svg{width:17px;height:17px}
-.my-stat-box b{display:block;font-size:1.4rem;font-weight:800;line-height:1.1;color:var(--g900)}
-.my-stat-box span{display:block;font-size:.72rem;color:var(--muted);margin-top:1px}
-.box-total .my-stat-icon{background:var(--g100);color:var(--g700)}
-.box-pending .my-stat-icon{background:#fef3c7;color:#b45309}
-.box-complete .my-stat-icon{background:#dcfce7;color:#16a34a}
-.box-wasted .my-stat-icon{background:#fee2e2;color:#dc2626}
-
-.my-students-tools{display:grid;grid-template-columns:1fr 210px auto;gap:8px;padding:12px 20px;border-bottom:1px solid var(--border)}
-.ms-search-wrap{position:relative;display:flex;align-items:center}
-.ms-search-wrap svg{position:absolute;left:14px;width:14px;height:14px;color:var(--muted);pointer-events:none}
-.my-students-tools input,.my-students-tools select{height:38px;border:1px solid var(--border);border-radius:999px;padding:0 14px;font:inherit;font-size:.82rem;color:#28463a;background:#fff}
-.my-students-tools input{width:100%;padding-left:36px}
-.my-students-tools input:focus,.my-students-tools select:focus{outline:none;border-color:var(--g700);box-shadow:0 0 0 3px rgba(46,125,81,.12)}
-.my-students-table-wrap{padding:10px 20px 18px}
->>>>>>> Stashed changes
 .my-students-table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid var(--border);border-radius:12px}
 .my-students-table th{background:#f7faf8;color:var(--muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;padding:12px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
 .my-students-table th svg{width:11px;height:11px;color:#a8bdb2;vertical-align:-1px;margin-right:3px}
 .my-students-table td{padding:12px 14px;border-bottom:1px solid var(--border);font-size:.86rem}
 .my-students-table tr:last-child td{border-bottom:none}
-<<<<<<< Updated upstream
 
 /* ══════════════════════════════════════════════════════════════════════
    My Students — page header, stat bar, records table with client-side
@@ -475,11 +433,13 @@ tbody tr:hover td{background:#f7fbf8}
    ══════════════════════════════════════════════════════════════════════ */
 /* Type scale here matches the rest of the adviser UI (~.72–.85rem body). The
    learner's name is the only deliberately larger element. */
-.sp-cover{height:64px;background:linear-gradient(120deg,#0d2b1e,#1f6a54);margin:0 16px;border-radius:12px 12px 0 0}
-.sp-identity{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;margin:0 16px;padding:0 16px 14px;background:var(--card);border:1px solid var(--border);border-top:none;border-radius:0 0 12px 12px}
-.sp-avatar{width:60px;height:60px;margin-top:-22px;border-radius:50%;background:var(--g900);color:#fff;display:grid;place-items:center;font-size:1rem;font-weight:800;letter-spacing:.02em;border:3px solid var(--card);flex-shrink:0}
-.sp-identity-body{flex:1;min-width:220px;padding-top:10px}
-.sp-name{font-family:'DM Serif Display',serif;font-size:1.15rem;color:var(--g900);line-height:1.2}
+.sp-readonly-banner{display:flex;align-items:flex-start;gap:9px;margin:0 16px 12px;padding:10px 14px;background:var(--g100);color:#1d4b36;border:1px solid #cfe8db;border-radius:10px;font-size:.76rem;line-height:1.5}
+.sp-readonly-banner svg{width:16px;height:16px;color:var(--g700);flex-shrink:0;margin-top:1px}
+.sp-cover{height:110px;background:linear-gradient(120deg,#0d2b1e,#1f6a54);margin:0 16px;border-radius:12px 12px 0 0}
+.sp-identity{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:0 16px;padding:0 16px 16px;background:var(--card);border:1px solid var(--border);border-top:none;border-radius:0 0 12px 12px}
+.sp-avatar{width:88px;height:88px;margin-top:-36px;border-radius:50%;background:var(--g900);color:#fff;display:grid;place-items:center;font-size:1.5rem;font-weight:800;letter-spacing:.02em;border:4px solid var(--card);flex-shrink:0;box-shadow:var(--shadow)}
+.sp-identity-body{flex:1;min-width:220px;padding-top:12px}
+.sp-name{font-family:'DM Serif Display',serif;font-size:1.4rem;color:var(--g900);line-height:1.2}
 .sp-class{font-size:.75rem;color:var(--muted);margin-top:1px}
 .sp-meta{display:flex;flex-wrap:wrap;gap:5px 16px;margin-top:8px}
 .sp-meta span{display:inline-flex;align-items:center;gap:5px;font-size:.74rem;color:var(--muted)}
@@ -505,30 +465,34 @@ tbody tr:hover td{background:#f7fbf8}
 .sp-review-item{font-size:.72rem;color:var(--muted);background:#f2f5f3;border:1px solid var(--border);border-radius:999px;padding:3px 10px}
 .sp-review-item.on{background:#dcfce7;border-color:#86efac;color:#15803d;font-weight:600}
 
+.sp-list-row{padding:10px 0;border-top:1px solid var(--border)}
+.sp-list-row:first-child{border-top:none;padding-top:0}
+.sp-list-row-title{font-size:.82rem;font-weight:700;color:#14321f}
+.sp-list-row-meta{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:3px}
+.sp-list-row-meta span{font-size:.72rem;color:var(--muted)}
+
 /* Print the whole profile — every tab, no chrome, no buttons. */
 @media print{
     body:has(.profile-backdrop.open) > *:not(.profile-backdrop){display:none !important}
     .profile-backdrop.open{position:static;display:block;background:none;padding:0;overflow:visible}
     .profile-backdrop.open .student-profile-modal{max-height:none;width:100%;box-shadow:none;border:none}
-    .student-profile-topline,.sp-tabs,.sp-identity-actions,.sp-cover{display:none !important}
+    .student-profile-topline,.sp-tabs,.sp-identity-actions,.sp-cover,.sp-readonly-banner{display:none !important}
     .sp-panel{display:block !important;break-inside:avoid}
     .student-profile-body{overflow:visible !important}
+
+    /* The adviser's dedicated student-profile page prints the same way:
+       every tab, no sidebar/topbar/chrome, no buttons. */
+    body:has(.student-profile-page) > *:not(.asb-main){display:none !important}
+    body:has(.student-profile-page) .asb-topbar,
+    body:has(.student-profile-page) .content > .student-profile-topline{display:none !important}
+    .student-profile-page{box-shadow:none !important;border:none !important}
 }
-=======
-.my-status-badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;font-size:.74rem;font-weight:700}
-.status-pending{background:#fef3c7;color:#b45309}
-.status-cert{background:#dbeafe;color:#1e40af}
-.status-complete{background:#dcfce7;color:#166534}
-.ms-action-btns{display:flex;gap:6px}
-.ms-action-btn{width:30px;height:30px;border-radius:8px;border:none;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s ease,color .15s ease;text-decoration:none}
-.ms-action-btn svg{width:14px;height:14px}
-.ms-action-view{background:var(--g100);color:var(--g700)}
-.ms-action-view:hover{background:var(--g700);color:#fff}
-.ms-action-consent{background:#e9f3ed;color:#1d4ed8}
-.ms-action-consent:hover{background:#1d4ed8;color:#fff}
-.my-students-foot{padding:11px 20px;border-top:1px solid var(--border);font-size:.78rem;color:var(--muted);background:#f7faf8}
-.my-students-foot strong{color:#1d3c31}
->>>>>>> Stashed changes
+
+/* Adviser student-profile page — the Facebook-profile card sits directly in
+   the page flow instead of a fixed-position modal, so it must not inherit
+   the modal's viewport-height cap or inner scrollbar. */
+.student-profile-page{max-height:none}
+.student-profile-page .student-profile-body{overflow:visible}
 
 .student-profile-modal{max-height:94vh;display:flex;flex-direction:column}
 .student-profile-topline{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border)}
@@ -601,7 +565,11 @@ tbody tr:hover td{background:#f3fbf6}
    and partials/adviser-topbar.blade.php.
    ══════════════════════════════════════════════════════════════════════ */
 :root{--asb-w:264px}
-.asb-sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--asb-w);background:var(--g900);display:flex;flex-direction:column;overflow-y:auto;z-index:40}
+/* Scoped to match the nurse dashboard's sidebar tone (school-nurse.css
+   :root) exactly — the shared --g900/--g700/--g300/--g100 above are still
+   the older, brighter pine used by the rest of this file's brand accents,
+   so this is overridden locally rather than globally. */
+.asb-sidebar{--g900:#123a28;--g700:#2e7d51;--g300:#7cc99c;--g100:#e9f3ed;position:fixed;left:0;top:0;bottom:0;width:var(--asb-w);background:var(--g900);display:flex;flex-direction:column;overflow-y:auto;z-index:40}
 .asb-logo{display:flex;align-items:center;gap:11px;padding:20px 18px;border-bottom:1px solid rgba(255,255,255,.1)}
 .asb-logo-icon{width:34px;height:34px;border-radius:9px;background:rgba(134,239,172,.16);display:grid;place-items:center;color:var(--g300);flex-shrink:0}
 .asb-logo-icon svg{width:19px;height:19px}
@@ -676,7 +644,7 @@ tbody tr:hover td{background:#f3fbf6}
 @media (max-width:640px){.asb-toast{left:16px;right:16px;bottom:16px;max-width:unset;min-width:unset}}
 
 /* ── Dashboard redesign: hero banner, stat cards, needs attention / activity, quick actions ── */
-.hero-banner{background:linear-gradient(135deg,#14532d,#1a6b3a);border-radius:14px;padding:26px 28px;color:#fff;box-shadow:0 10px 24px rgba(20,83,45,.18)}
+.hero-banner{background:linear-gradient(135deg,#0d2b1e,#1a4a32);border-radius:14px;padding:26px 28px;color:#fff;box-shadow:0 10px 24px rgba(13,43,30,.18)}
 .hero-title{font-family:'DM Serif Display',serif;font-size:1.55rem;margin-bottom:6px}
 .hero-sub{font-size:.86rem;color:#d7f7e6;margin-bottom:16px}
 .hero-stats{display:flex;flex-wrap:wrap;gap:20px;padding-top:14px;border-top:1px solid rgba(255,255,255,.18);font-size:.82rem;font-weight:600}
