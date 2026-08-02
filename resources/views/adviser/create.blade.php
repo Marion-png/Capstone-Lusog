@@ -21,7 +21,7 @@
     @include('partials.adviser-topbar', ['breadcrumb' => 'School Health Card'])
     <div class="content">
         <h1 class="title">School Health Card</h1>
-        <p class="sub">Fill the form below to submit a student health record to the Clinical Teacher.</p>
+        <p class="sub">Fill the form below to submit a student health record to the School Nurse.</p>
 
         <section class="card section" style="margin-top:12px;">
             <div class="section">
@@ -137,7 +137,7 @@
                     </div>
 
                     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
-                        <button type="submit" class="btn">Submit to Clinical Teacher</button>
+                        <button type="submit" class="btn">Submit to School Nurse</button>
                     </div>
                 </form>
             </div>

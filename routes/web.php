@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdviserController;
 use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\ClinicNoteController;
 use App\Http\Controllers\ConditionController;
 use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\EventController;
@@ -127,7 +128,7 @@ Route::post('/account-request', function (Request $request) {
         ->with('success', 'Account request submitted. Please wait for System Admin approval.');
 })->name('account.request.submit');
 
-// Prototype flow: Class Adviser -> Clinical Teacher (Session-based, no database)
+// Prototype flow: Class Adviser -> School Nurse (Session-based, no database)
 Route::get('/adviser/create', [AdviserController::class, 'create'])
     ->name('adviser.create');
 
@@ -196,15 +197,20 @@ Route::get('/dashboard/school-nurse', function (Request $request) {
             ->limit(8)
             ->get();
 
+        // `condition` is encrypted at rest, so this month's rows are fetched
+        // and tallied in PHP — a SQL GROUP BY would group ciphertext, giving
+        // one "condition" per row.
         $topConditions = Consultation::query()
             ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
             ->whereMonth('consulted_at', now()->month)
             ->whereYear('consulted_at', now()->year)
-            ->selectRaw('LOWER(condition) as condition_name, COUNT(*) as total')
-            ->groupBy('condition_name')
-            ->orderByDesc('total')
-            ->limit(4)
-            ->get();
+            ->get()
+            ->groupBy(fn (Consultation $c) => strtolower(trim((string) $c->condition)))
+            ->reject(fn ($group, $name) => $name === '')
+            ->map(fn ($group, $name) => ['name' => $name, 'total' => $group->count()])
+            ->sortByDesc('total')
+            ->values()
+            ->take(4);
     }
 
     if (Schema::hasTable('medicines')) {
@@ -285,7 +291,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/{decision}', function
     $allowedReviewerRoles = ['school_nurse', 'school nurse', 'clinic_staff', 'clinic staff', 'nurse'];
 
     if (! in_array($activeRole, $allowedReviewerRoles, true)) {
-        return redirect()->route('dashboard.school-nurse')->with('error', 'Only Clinical Teacher can review deworming requests.');
+        return redirect()->route('dashboard.school-nurse')->with('error', 'Only School Nurse can review deworming requests.');
     }
 
     if (Schema::hasTable('deworming_requests')) {
@@ -306,7 +312,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/{decision}', function
             ->update([
                 'status' => 'approved',
                 'reviewed_at' => now(),
-                'reviewed_by' => (string) $request->session()->get('active_name', 'Clinical Teacher'),
+                'reviewed_by' => (string) $request->session()->get('active_name', 'School Nurse'),
                 'released_date' => now()->toDateString(),
                 'updated_at' => now(),
             ]);
@@ -320,7 +326,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/{decision}', function
 
         $requests[$index]['status'] = 'approved';
         $requests[$index]['reviewed_at'] = now()->toIso8601String();
-        $requests[$index]['reviewed_by'] = (string) $request->session()->get('active_name', 'Clinical Teacher');
+        $requests[$index]['reviewed_by'] = (string) $request->session()->get('active_name', 'School Nurse');
         $requests[$index]['released_date'] = now()->toDateString();
 
         $request->session()->put('deworming_requests', $requests->values()->all());
@@ -334,7 +340,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/comment', function (R
     $allowedReviewerRoles = ['school_nurse', 'school nurse', 'clinic_staff', 'clinic staff', 'nurse'];
 
     if (! in_array($activeRole, $allowedReviewerRoles, true)) {
-        return redirect()->route('dashboard.school-nurse')->with('error', 'Only Clinical Teacher can add comments to deworming requests.');
+        return redirect()->route('dashboard.school-nurse')->with('error', 'Only School Nurse can add comments to deworming requests.');
     }
 
     $validated = $request->validate([
@@ -360,7 +366,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/comment', function (R
                 'status' => 'commented',
                 'nurse_comment' => trim((string) $validated['nurse_comment']),
                 'commented_at' => now(),
-                'reviewed_by' => (string) $request->session()->get('active_name', 'Clinical Teacher'),
+                'reviewed_by' => (string) $request->session()->get('active_name', 'School Nurse'),
                 'released_date' => null,
                 'updated_at' => now(),
             ]);
@@ -375,7 +381,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/comment', function (R
         $requests[$index]['status'] = 'commented';
         $requests[$index]['nurse_comment'] = trim((string) $validated['nurse_comment']);
         $requests[$index]['commented_at'] = now()->toIso8601String();
-        $requests[$index]['reviewed_by'] = (string) $request->session()->get('active_name', 'Clinical Teacher');
+        $requests[$index]['reviewed_by'] = (string) $request->session()->get('active_name', 'School Nurse');
         $requests[$index]['released_date'] = null;
 
         $request->session()->put('deworming_requests', $requests->values()->all());
@@ -587,6 +593,14 @@ Route::get('/api/student-health-assessment', [HealthAssessmentController::class,
 Route::get('/api/student-health-history', [StudentHealthRecordController::class, 'history'])
     ->name('api.student-health-history');
 
+// Clinic Notes + the per-learner consultation log on the student profile.
+Route::get('/api/student-clinic-notes', [ClinicNoteController::class, 'index'])
+    ->name('api.student-clinic-notes');
+Route::post('/api/student-clinic-notes', [ClinicNoteController::class, 'store'])
+    ->name('api.student-clinic-notes.store');
+Route::get('/api/student-consultations', [ClinicNoteController::class, 'consultations'])
+    ->name('api.student-consultations');
+
 // Dashboard announcements — post/remove restricted to Announcement::POSTER_ROLES (school_nurse for now)
 Route::post('/announcements', [AnnouncementController::class, 'store'])
     ->name('announcements.store');
@@ -607,7 +621,7 @@ Route::get('/dashboard/feedingcor-program', function (Request $request) {
     if ($activeRole === 'school_nurse') {
         return redirect()
             ->route('dashboard.school-nurse.feeding-program')
-            ->with('error', 'Clinical Teacher has view-only access to Feeding Program.');
+            ->with('error', 'School Nurse has view-only access to Feeding Program.');
     }
 
     return app(FeedingProgramController::class)->index($request);

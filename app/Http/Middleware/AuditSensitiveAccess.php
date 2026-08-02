@@ -30,6 +30,9 @@ class AuditSensitiveAccess
         'api/student-conditions',
         'api/student-consent-status',
         'api/student-health-assessment',
+        'api/student-health-history',
+        'api/student-clinic-notes',
+        'api/student-consultations',
     ];
 
     /**

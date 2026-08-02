@@ -164,7 +164,7 @@
                         <label for="role">Role</label>
                         <select id="role" name="role" required>
                             <option value="" disabled {{ old('role') ? '' : 'selected' }}>Select role</option>
-                            <option value="school_nurse" {{ old('role') === 'school_nurse' ? 'selected' : '' }}>Clinical Teacher</option>
+                            <option value="school_nurse" {{ old('role') === 'school_nurse' ? 'selected' : '' }}>School Nurse</option>
                             <option value="clinic_staff" {{ old('role') === 'clinic_staff' ? 'selected' : '' }}>Clinic Staff</option>
                             <option value="class_adviser" {{ old('role') === 'class_adviser' ? 'selected' : '' }}>Class Adviser</option>
                             <option value="school_head" {{ old('role') === 'school_head' ? 'selected' : '' }}>School Head</option>

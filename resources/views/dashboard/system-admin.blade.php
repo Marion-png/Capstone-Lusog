@@ -136,7 +136,7 @@
                     <tbody>
                         @php
                             $roleLabel = [
-                                'school_nurse' => 'Clinical Teacher',
+                                'school_nurse' => 'School Nurse',
                                 'clinic_staff' => 'Clinic Staff',
                                 'class_adviser' => 'Class Adviser',
                                 'school_head' => 'School Head',

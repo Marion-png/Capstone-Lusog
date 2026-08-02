@@ -21,26 +21,7 @@ class NurseController extends Controller
 
         StudentRosterSync::syncToSession($request);
 
-        $rawRecords = $request->session()->get('school_health_card_records', []);
-
-        // Deduplicate by LRN — prefer the entry that already has exam data, otherwise keep first.
-        $seen = [];
-        $records = [];
-        foreach ($rawRecords as $r) {
-            $lrn = (string) ($r['lrn'] ?? '');
-            if ($lrn === '') {
-                $records[] = $r;
-
-                continue;
-            }
-            if (! isset($seen[$lrn])) {
-                $seen[$lrn] = count($records);
-                $records[] = $r;
-            } elseif (! empty($r['examination']) && empty($records[$seen[$lrn]]['examination'])) {
-                $records[$seen[$lrn]] = $r; // replace with the examined copy
-            }
-        }
-        $records = array_values($records);
+        $records = self::dedupedRoster($request->session()->get('school_health_card_records', []));
 
         $consentByLrn = [];
 
@@ -73,6 +54,56 @@ class NurseController extends Controller
             'records' => $records,
             'consentByLrn' => $consentByLrn,
         ]);
+    }
+
+    /**
+     * The roster deduplicated by LRN, keyed by each surviving row's index in
+     * the raw session array.
+     *
+     * Examination links carry that raw index, and saveExamination() writes
+     * back to the raw array at the same index — so re-indexing the deduplicated
+     * list (as this used to do) pointed "Fill Medical Record" at a different
+     * learner than the row it was rendered on, for every roster holding a
+     * duplicate LRN.
+     *
+     * @param  array<int, array<string, mixed>>  $rawRecords
+     * @return array<int, array<string, mixed>>
+     */
+    public static function dedupedRoster(array $rawRecords): array
+    {
+        $rawIndexByLrn = [];
+        $kept = [];
+
+        foreach ($rawRecords as $rawIndex => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $lrn = (string) ($row['lrn'] ?? '');
+
+            if ($lrn === '') {
+                $kept[$rawIndex] = $row;
+
+                continue;
+            }
+
+            if (! isset($rawIndexByLrn[$lrn])) {
+                $rawIndexByLrn[$lrn] = $rawIndex;
+                $kept[$rawIndex] = $row;
+
+                continue;
+            }
+
+            // A later duplicate that carries the examination supersedes the first.
+            $firstIndex = $rawIndexByLrn[$lrn];
+            if (! empty($row['examination']) && empty($kept[$firstIndex]['examination'])) {
+                unset($kept[$firstIndex]);
+                $rawIndexByLrn[$lrn] = $rawIndex;
+                $kept[$rawIndex] = $row;
+            }
+        }
+
+        return $kept;
     }
 
     public function examine(Request $request, int $index): View|RedirectResponse

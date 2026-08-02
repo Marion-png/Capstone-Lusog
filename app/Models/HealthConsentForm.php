@@ -155,7 +155,7 @@ class HealthConsentForm extends Model
             self::STATUS_DRAFT => ['label' => 'Draft', 'bg' => '#f1f5f9', 'fg' => '#475569'],
             self::STATUS_SENT => ['label' => 'Awaiting Parent Response', 'bg' => '#fef3c7', 'fg' => '#92400e'],
             self::STATUS_SIGNED => ['label' => 'Signed by Parent', 'bg' => '#dbeafe', 'fg' => '#1e40af'],
-            self::STATUS_REVIEWED => ['label' => 'Reviewed — Available to Clinical Teacher', 'bg' => '#dcfce7', 'fg' => '#166534'],
+            self::STATUS_REVIEWED => ['label' => 'Reviewed — Available to School Nurse', 'bg' => '#dcfce7', 'fg' => '#166534'],
         ];
     }
 

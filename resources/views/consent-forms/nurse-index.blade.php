@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
-    <title>Consent Forms - Clinical Teacher - SIGLA</title>
+    <title>Consent Forms - School Nurse - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     @php $cfCss = resource_path('css/consent-form.css'); @endphp
@@ -17,7 +17,7 @@
     <img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA">
     <div>
         <div class="cf-topbar-title">Health Services Consent Forms</div>
-        <div class="cf-topbar-sub">Clinical Teacher &middot; read-only access</div>
+        <div class="cf-topbar-sub">School Nurse &middot; read-only access</div>
     </div>
     <a href="{{ route('dashboard.school-nurse') }}" class="cf-back">&larr; Back to Dashboard</a>
 </header>

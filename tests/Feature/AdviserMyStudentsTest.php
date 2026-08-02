@@ -307,12 +307,12 @@ class AdviserMyStudentsTest extends TestCase
         $this->assertStringContainsString('Vital Signs', $sheetOne);
 
         foreach ([
-            'Clinical Teacher Examination',
+            'School Nurse Examination',
             'Health Assessment',
             'Systems Review',
             'Vision Screening',
             'Deworming',
-            'Pending Clinical Teacher Review',
+            'Pending School Nurse Review',
         ] as $foreign) {
             $this->assertStringNotContainsString(
                 $foreign,

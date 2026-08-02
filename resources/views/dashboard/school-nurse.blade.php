@@ -14,180 +14,87 @@
     @endif
 </head>
 <body>
-<aside class="sidebar">
-    <div class="sb-grid"></div>
-    <div class="sb-logo">
-        <img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA Logo" class="sb-logo-full">
-    </div>
-    <nav class="sb-nav">
-        <div class="sb-section-label">Main</div>
-        <a href="{{ route('dashboard.school-nurse') }}" class="sb-link active">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-            Dashboard
-        </a>
-        <a href="{{ route('nurse.index') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
-            Review Queue
-        </a>
-        @php
-            $pendingHealthCards = collect(session('school_health_card_records', []))->filter(fn($r) => empty($r['examination']))->count();
-        @endphp
-        <a href="{{ route('dashboard.student-health-records') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            Health Records
-            @if($pendingHealthCards > 0)<span class="badge">{{ $pendingHealthCards }}</span>@endif
-        </a>
-        <a href="{{ route('dashboard.consultation-log') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
-            Consultation Log
-        </a>
-        <div class="sb-section-label">Health Programs</div>
-        <a href="{{ route('dashboard.school-nurse.feeding-program') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
-            Feeding Program
-        </a>
-        <a href="{{ route('dashboard.school-nurse.deworming') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 3-7-3"/><path d="M3 9v6l7 3 7-3V9"/><polyline points="3 9 12 6 21 9"/></svg>
-            Deworming Program
-        </a>
-        <a href="{{ route('consent-forms.nurse-index') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
-            Consent Forms
-        </a>
-        <a href="{{ route('health-assessments.nurse-index') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-            Health Assessments
-        </a>
-        <div class="sb-section-label">Inventory</div>
-        <a href="{{ route('dashboard.medicine-inventory') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="2" width="18" height="20" rx="2"/><path d="M9 2v4h6V2"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-            Medicine Inventory
-        </a>
-        <a href="#" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Dispensing Log
-        </a>
-        <div class="sb-section-label">Reports</div>
-        <a href="{{ route('dashboard.data-visualization') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-            Data Visualization
-        </a>
-        <a href="#" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Generate Reports
-        </a>
-    </nav>
-    <div class="sb-user">
-        <div class="sb-avatar">{{ substr(session('active_name', 'Clinical Teacher'), 0, 2) }}</div>
-        <div class="sb-user-meta">
-            <div class="sb-user-name">{{ session('active_name', 'Clinical Teacher') }}</div>
-            <div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
-        </div>
-        <form method="POST" action="{{ route('logout') }}">
-            @csrf
-            <button type="submit" class="sb-logout" title="Sign out">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            </button>
-        </form>
-    </div>
-</aside>
+@include('partials.nurse-sidebar', ['active' => 'dashboard'])
 
 <div class="main">
+    @php
+        $nurseName = session('active_name', 'School Nurse');
+        $schoolName = session('active_school_name', 'No school assigned');
+        $schoolYear = \App\Models\StudentHealthRecord::currentSchoolYear();
+        $greetHour = (int) now()->format('G');
+        $greeting = $greetHour < 12 ? 'Good morning' : ($greetHour < 18 ? 'Good afternoon' : 'Good evening');
+    @endphp
+
     <header class="topbar">
-        <div class="topbar-breadcrumb">
-            <a href="{{ route('dashboard.school-nurse') }}" class="bc-home">Dashboard</a>
-            <span class="bc-sep">&rsaquo;</span>
-            <span class="bc-current">Overview</span>
+        <div class="topbar-title-block">
+            <div class="topbar-eyebrow">SIGLA &nbsp;/&nbsp; Clinic</div>
+            <div class="topbar-heading">Dashboard</div>
         </div>
-        <div class="topbar-chip"><div class="dot"></div>DCNHS - SY 2025-2026</div>
+        <div class="topbar-chip"><div class="dot"></div>{{ $schoolName }} &middot; SY {{ $schoolYear }}</div>
         @include('partials.live-clock')
     </header>
 
     <div class="content">
-        <div class="page-header">
-            <div>
-                <div class="page-eyebrow">Clinical Teacher Dashboard</div>
-                <h1 class="page-title">Daily Clinic <span>Operations Overview</span></h1>
-                <p class="page-sub">Track consultations, at-risk learners, and medicine inventory from one dashboard.</p>
+        <section class="clinic-header">
+            <div class="ch-top">
+                <div>
+                    <div class="ch-greeting">{{ $greeting }}, School Nurse</div>
+                    <h1 class="ch-name">{{ $nurseName }}</h1>
+                    <p class="ch-sub">{{ $schoolName }} &middot; School Year {{ $schoolYear }}</p>
+                </div>
+                <div class="ch-status">
+                    <div><span class="ch-status-dot"></span><span class="ch-status-text">Clinic Open</span></div>
+                    <span class="ch-status-sub">Operational</span>
+                </div>
             </div>
-            <div class="page-header-actions">
-                <a href="{{ route('dashboard.consultation-log') }}" class="btn btn-ghost">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Consultation Log
-                </a>
-                <a href="{{ route('dashboard.student-health-records') }}" class="btn btn-primary">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    Open Health Records
-                </a>
+            <div class="ch-metrics">
+                <div class="ch-metric">
+                    <div class="ch-metric-val">{{ number_format($totalRecords) }}</div>
+                    <div class="ch-metric-label">Total Records</div>
+                </div>
+                <div class="ch-metric">
+                    <div class="ch-metric-val">{{ number_format($consultationsToday) }}</div>
+                    <div class="ch-metric-label">Consultations Today</div>
+                </div>
+                <div class="ch-metric is-alert">
+                    <div class="ch-metric-val">{{ number_format($atRiskCount) }}</div>
+                    <div class="ch-metric-label">At-Risk Learners</div>
+                </div>
+                <div class="ch-metric is-warn">
+                    <div class="ch-metric-val">{{ number_format($lowStockCount) }}</div>
+                    <div class="ch-metric-label">Low Stock Medicines</div>
+                </div>
             </div>
-        </div>
+        </section>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;">
+        <div class="board-row">
             @include('partials.announcements')
             @include('partials.upcoming-events')
-        </div>
-
-        <div class="mini-stats">
-            <div class="mini-stat">
-                <div class="mini-stat-icon" style="background:var(--g100);color:var(--g700)">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                </div>
-                <div>
-                    <div class="mini-stat-val">{{ number_format($totalRecords) }}</div>
-                    <div class="mini-stat-label">Total Records</div>
-                </div>
-            </div>
-            <div class="mini-stat">
-                <div class="mini-stat-icon" style="background:#dbeafe;color:#1d4ed8">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                </div>
-                <div>
-                    <div class="mini-stat-val">{{ $consultationsToday }}</div>
-                    <div class="mini-stat-label">Consultations Today</div>
-                </div>
-            </div>
-            <div class="mini-stat">
-                <div class="mini-stat-icon" style="background:#fee2e2;color:var(--red)">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
-                </div>
-                <div>
-                    <div class="mini-stat-val">{{ $atRiskCount }}</div>
-                    <div class="mini-stat-label">At-Risk Learners</div>
-                </div>
-            </div>
-            <div class="mini-stat">
-                <div class="mini-stat-icon" style="background:#fef3c7;color:#92400e">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                </div>
-                <div>
-                    <div class="mini-stat-val">{{ $lowStockCount }}</div>
-                    <div class="mini-stat-label">Low Stock Medicines</div>
-                </div>
-            </div>
         </div>
 
         <div class="filter-bar">
             <div class="search-wrap">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" class="search-input" placeholder="Search learner, complaint, section...">
+                <input type="text" class="search-input" id="consultSearch" placeholder="Search learner, complaint, section..." autocomplete="off">
             </div>
-            <select class="filter-select">
-                <option>Today</option>
-                <option>This Week</option>
-                <option>This Month</option>
+            <select class="filter-select" id="consultDateFilter" aria-label="Filter consultations by date">
+                <option value="all">All Dates</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
             </select>
-            <select class="filter-select">
-                <option>All Levels</option>
-                <option>Junior High</option>
-                <option>Senior High</option>
-                <option>Personnel</option>
+            <select class="filter-select" id="consultLevelFilter" aria-label="Filter consultations by level">
+                <option value="all">All Levels</option>
+                <option value="junior">Junior High</option>
+                <option value="senior">Senior High</option>
+                <option value="personnel">Personnel</option>
             </select>
         </div>
 
         <div class="table-card">
             <div class="table-head-bar">
                 <span class="table-head-label">Recent Consultations</span>
-                <span class="table-count">Showing {{ $recentConsultations->count() }} latest {{ Str::plural('entry', $recentConsultations->count()) }}</span>
+                <span class="table-count" id="consultCount">{{ $recentConsultations->count() }} {{ Str::plural('entry', $recentConsultations->count()) }}</span>
             </div>
 
             <table>
@@ -201,23 +108,50 @@
                         <th>Status</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="consultTableBody">
                     @forelse($recentConsultations as $c)
                     @php
-                        $nameParts = explode(' ', trim($c->student_name));
-                        $initials  = strtoupper(substr($nameParts[0], 0, 1) . substr(end($nameParts), 0, 1));
+                        $studentName = trim((string) $c->student_name);
+                        $gradeSection = trim((string) $c->grade_section);
+                        $condition = trim((string) $c->condition);
+                        $treatment = trim((string) $c->treatment_given);
+
+                        $nameParts = array_values(array_filter(explode(' ', $studentName)));
+                        $initials = $nameParts === []
+                            ? '?'
+                            : strtoupper(substr($nameParts[0], 0, 1).substr(end($nameParts), 0, 1));
+
+                        // grade_section is encrypted, so the level bucket is derived
+                        // here in PHP from the decrypted label rather than in SQL.
+                        preg_match('/\d{1,2}/', $gradeSection, $gradeMatch);
+                        $gradeNumber = isset($gradeMatch[0]) ? (int) $gradeMatch[0] : null;
+                        $level = match (true) {
+                            $gradeNumber !== null && $gradeNumber >= 7 && $gradeNumber <= 10 => 'junior',
+                            $gradeNumber !== null && $gradeNumber >= 11 && $gradeNumber <= 12 => 'senior',
+                            default => 'personnel',
+                        };
+
+                        $consultedAt = $c->consulted_at;
+                        $isToday = $consultedAt?->isToday() ?? false;
+                        $isThisWeek = $consultedAt?->isSameWeek(now()) ?? false;
+                        $isThisMonth = $consultedAt?->isSameMonth(now()) ?? false;
                     @endphp
-                    <tr>
+                    <tr class="js-consult-row"
+                        data-search="{{ strtolower($studentName.' '.$gradeSection.' '.$condition.' '.$treatment) }}"
+                        data-level="{{ $level }}"
+                        data-today="{{ $isToday ? '1' : '0' }}"
+                        data-week="{{ $isThisWeek ? '1' : '0' }}"
+                        data-month="{{ $isThisMonth ? '1' : '0' }}">
                         <td>
                             <div class="td-person">
                                 <div class="td-avatar">{{ $initials }}</div>
-                                <div><div class="td-name">{{ $c->student_name }}</div></div>
+                                <div><div class="td-name">{{ $studentName !== '' ? $studentName : '—' }}</div></div>
                             </div>
                         </td>
-                        <td>{{ $c->grade_section }}</td>
-                        <td>{{ $c->consulted_at->format('M j, Y') }}</td>
-                        <td>{{ $c->condition }}</td>
-                        <td>{{ $c->treatment_given ?: '—' }}</td>
+                        <td>{{ $gradeSection !== '' ? $gradeSection : '—' }}</td>
+                        <td>{{ $consultedAt?->format('M j, Y') ?? '—' }}</td>
+                        <td>{{ $condition !== '' ? $condition : '—' }}</td>
+                        <td>{{ $treatment !== '' ? $treatment : '—' }}</td>
                         <td>
                             @if($c->status === 'referred')
                                 <span class="badge-pill bp-amber"><span class="dot" style="background:var(--amber)"></span>Referred</span>
@@ -233,6 +167,11 @@
                         </td>
                     </tr>
                     @endforelse
+                    <tr id="consultNoMatch" hidden>
+                        <td colspan="6" style="text-align:center;padding:2rem;color:var(--text-3);font-size:.9rem">
+                            No consultations match your search or filters.
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -243,9 +182,9 @@
                 @php $maxConditionCount = $topConditions->max('total') ?: 1; @endphp
                 @forelse($topConditions as $cond)
                 <div class="trend-row">
-                    <div class="trend-label">{{ ucfirst($cond->condition_name) }}</div>
-                    <div class="trend-track"><div class="trend-fill" style="width:{{ round($cond->total / $maxConditionCount * 100) }}%;background:var(--blue)"></div></div>
-                    <div class="trend-value">{{ $cond->total }}</div>
+                    <div class="trend-label">{{ Str::ucfirst($cond['name']) }}</div>
+                    <div class="trend-track"><div class="trend-fill" style="width:{{ round($cond['total'] / $maxConditionCount * 100) }}%;background:var(--blue)"></div></div>
+                    <div class="trend-value">{{ $cond['total'] }}</div>
                 </div>
                 @empty
                 <p style="color:var(--text-3);font-size:.85rem;text-align:center;padding:1.5rem 0">No consultations this month.</p>
@@ -271,8 +210,98 @@
                 @endforelse
             </div>
         </div>
+
+        <div class="quick-access">
+            <a href="{{ route('dashboard.student-health-records') }}" class="qa-card">
+                <div class="qa-icon" style="background:var(--g100);color:var(--g700)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div>
+                    <div class="qa-title">Health Records</div>
+                    <div class="qa-desc">Review and examine learner health cards</div>
+                </div>
+            </a>
+            <a href="{{ route('dashboard.consultation-log') }}" class="qa-card">
+                <div class="qa-icon" style="background:#dbeafe;color:#1d4ed8">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
+                </div>
+                <div>
+                    <div class="qa-title">Consultation Log</div>
+                    <div class="qa-desc">Record and track clinic consultations</div>
+                </div>
+            </a>
+            <a href="{{ route('dashboard.medicine-inventory') }}" class="qa-card">
+                <div class="qa-icon" style="background:#fef3c7;color:#92400e">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="2" width="18" height="20" rx="2"/><path d="M9 2v4h6V2"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                </div>
+                <div>
+                    <div class="qa-title">Medicine Inventory</div>
+                    <div class="qa-desc">Monitor stock levels and dispensing</div>
+                </div>
+            </a>
+            <a href="{{ route('consent-forms.nurse-index') }}" class="qa-card">
+                <div class="qa-icon" style="background:#f3e8ff;color:#7e22ce">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
+                </div>
+                <div>
+                    <div class="qa-title">Consent Forms</div>
+                    <div class="qa-desc">Read released parent consent forms</div>
+                </div>
+            </a>
+        </div>
     </div>
 </div>
-@include('partials.sidebar-hover-pin')
+
+<script>
+// Recent Consultations: search + date/level filters over the rendered rows.
+(() => {
+    const search = document.getElementById('consultSearch');
+    const dateFilter = document.getElementById('consultDateFilter');
+    const levelFilter = document.getElementById('consultLevelFilter');
+    const tbody = document.getElementById('consultTableBody');
+
+    if (!search || !dateFilter || !levelFilter || !tbody) {
+        return;
+    }
+
+    const rows = Array.from(tbody.querySelectorAll('.js-consult-row'));
+    const noMatch = document.getElementById('consultNoMatch');
+    const count = document.getElementById('consultCount');
+
+    // Each row is stamped server-side with today/week/month flags, so the
+    // date buckets never depend on the browser's clock or timezone.
+    const apply = () => {
+        const keyword = search.value.trim().toLowerCase();
+        const period = dateFilter.value;
+        const level = levelFilter.value;
+        let visible = 0;
+
+        rows.forEach((row) => {
+            const haystack = row.dataset.search || '';
+            const matchesKeyword = !keyword || haystack.includes(keyword);
+            const matchesPeriod = period === 'all' || row.dataset[period] === '1';
+            const matchesLevel = level === 'all' || (row.dataset.level || '') === level;
+            const show = matchesKeyword && matchesPeriod && matchesLevel;
+
+            row.hidden = !show;
+            if (show) {
+                visible += 1;
+            }
+        });
+
+        if (noMatch) {
+            noMatch.hidden = rows.length === 0 || visible > 0;
+        }
+        if (count) {
+            count.textContent = visible + (visible === 1 ? ' entry' : ' entries');
+        }
+    };
+
+    search.addEventListener('input', apply);
+    dateFilter.addEventListener('change', apply);
+    levelFilter.addEventListener('change', apply);
+    apply();
+})();
+</script>
 </body>
 </html>

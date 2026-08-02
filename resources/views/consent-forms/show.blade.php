@@ -47,7 +47,7 @@
                 @elseif ($form->status === HealthConsentForm::STATUS_SIGNED)
                     <form method="POST" action="{{ route('consent-forms.review', $form) }}">
                         @csrf
-                        <button type="submit" class="cf-btn cf-btn-primary">Mark as Reviewed &mdash; Release to Clinical Teacher</button>
+                        <button type="submit" class="cf-btn cf-btn-primary">Mark as Reviewed &mdash; Release to School Nurse</button>
                     </form>
                 @endif
                 <a href="{{ route('consent-forms.print', $form) }}" target="_blank" class="cf-btn cf-btn-ghost">Print / Export PDF</a>

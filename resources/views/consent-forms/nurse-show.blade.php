@@ -31,7 +31,7 @@
         <div class="cf-card-body">
             <div class="cf-actions">
                 <a href="{{ route('consent-forms.print', $form) }}" target="_blank" class="cf-btn cf-btn-ghost">Print / Export PDF</a>
-                <span style="font-size:.76rem; color:var(--muted);">Consent information is read-only for the Clinical Teacher.</span>
+                <span style="font-size:.76rem; color:var(--muted);">Consent information is read-only for the School Nurse.</span>
             </div>
         </div>
     </div>

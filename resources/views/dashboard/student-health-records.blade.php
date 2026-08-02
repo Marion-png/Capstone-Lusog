@@ -15,93 +15,34 @@
 </head>
 <body>
 @php
-    $rawRecords = session('school_health_card_records', []);
-    $seenLrns = [];
-    $records = [];
-    foreach ($rawRecords as $r) {
-        $lrn = (string) ($r['lrn'] ?? '');
-        if ($lrn === '') { $records[] = $r; continue; }
-        if (!isset($seenLrns[$lrn])) { $seenLrns[$lrn] = count($records); $records[] = $r; }
-        elseif (!empty($r['examination']) && empty($records[$seenLrns[$lrn]]['examination'])) { $records[$seenLrns[$lrn]] = $r; }
-    }
-    $records = array_values($records);
-    $pendingCount = collect($records)->filter(fn($row) => empty($row['examination']))->count();
-    $doneCount = collect($records)->filter(fn($row) => !empty($row['examination']))->count();
+    // Keyed by raw session index so "Fill Medical Record" always opens the
+    // learner whose row it was rendered on (see NurseController::dedupedRoster).
+    $records = \App\Http\Controllers\NurseController::dedupedRoster(session('school_health_card_records', []));
+
+    $pendingCount = collect($records)->filter(fn ($row) => empty($row['examination']))->count();
+    $doneCount = collect($records)->filter(fn ($row) => ! empty($row['examination']))->count();
+
+    // Filter chips are built from what is actually on the roster, so no chip
+    // can ever match zero learners.
+    $gradeOptions = collect($records)
+        ->map(fn ($row) => trim((string) ($row['grade_level'] ?? '')))
+        ->filter()
+        ->countBy()
+        ->sortKeys();
+
+    $sectionOptions = collect($records)
+        ->map(fn ($row) => trim((string) ($row['section'] ?? '')))
+        ->filter()
+        ->countBy()
+        ->sortKeys();
+
+    $sexOptions = collect($records)
+        ->map(fn ($row) => trim((string) ($row['gender'] ?? '')))
+        ->filter()
+        ->countBy()
+        ->sortKeys();
 @endphp
-<aside class="sidebar">
-    <div class="sb-grid"></div>
-    <div class="sb-logo"><img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA Logo"></div>
-    <nav class="sb-nav">
-        <div class="sb-section-label">Main</div>
-        <a href="{{ route('dashboard.school-nurse') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-            Dashboard
-        </a>
-        <a href="{{ route('nurse.index') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
-            Review Queue
-        </a>
-        <a href="{{ route('dashboard.student-health-records') }}" class="sb-link active">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            Health Records
-            @if($pendingCount > 0)
-            <span class="badge">{{ $pendingCount }}</span>
-            @endif
-        </a>
-        <a href="{{ route('dashboard.consultation-log') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
-            Consultation Log
-        </a>
-        <div class="sb-section-label">Health Programs</div>
-        <a href="{{ route('dashboard.school-nurse.feeding-program') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
-            Feeding Program
-        </a>
-        <a href="{{ route('dashboard.school-nurse.deworming') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 9l-7 3-7-3"/><path d="M3 9v6l7 3 7-3V9"/><polyline points="3 9 12 6 21 9"/></svg>
-            Deworming Program
-        </a>
-        <a href="{{ route('consent-forms.nurse-index') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
-            Consent Forms
-        </a>
-        <a href="{{ route('health-assessments.nurse-index') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-            Health Assessments
-        </a>
-        <div class="sb-section-label">Inventory</div>
-        <a href="{{ route('dashboard.medicine-inventory') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="2" width="18" height="20" rx="2"/><path d="M9 2v4h6V2"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-            Medicine Inventory
-        </a>
-        <a href="#" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Dispensing Log
-        </a>
-        <div class="sb-section-label">Reports</div>
-        <a href="{{ route('dashboard.data-visualization') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-            Data Visualization
-        </a>
-        <a href="#" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Generate Reports
-        </a>
-    </nav>
-    <div class="sb-user">
-        <div class="sb-avatar">{{ strtoupper(substr(session('active_name', 'SN'), 0, 2)) }}</div>
-        <div class="sb-user-meta">
-            <div class="sb-user-name">{{ session('active_name', 'Clinical Teacher') }}</div>
-            <div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
-        </div>
-        <form method="POST" action="{{ route('logout') }}">
-            @csrf
-            <button type="submit" class="sb-logout" title="Sign out" aria-label="Sign out">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            </button>
-        </form>
-    </div>
-</aside>
+@include('partials.nurse-sidebar', ['active' => 'records'])
 
 <div class="main">
     <header class="topbar">
@@ -110,74 +51,212 @@
             <span class="bc-sep">&rsaquo;</span>
             <span class="bc-current">Health Records</span>
         </div>
-        <div class="topbar-chip"><div class="dot"></div>Clinical Teacher</div>
+        <div class="topbar-chip"><div class="dot"></div>School Nurse</div>
         @include('partials.live-clock')
     </header>
 
     <div class="content">
-        <div class="page-eyebrow">School Health Card Workflow</div>
-        <h1 class="page-title">Class Adviser <span>Submitted Forms</span></h1>
-        <p class="page-sub">This page displays submitted adviser forms. Consultation records are handled in Consultation Log.</p>
+        {{-- ── List view ─────────────────────────────────────────────── --}}
+        <div id="recordsListView">
+            <div class="page-eyebrow">School Health Card Workflow</div>
+            <h1 class="page-title">Student <span>Health Profiles</span></h1>
+            <p class="page-sub">This page displays submitted adviser forms. Consultation records are handled in Consultation Log.</p>
 
-        <div class="cards">
-            <div class="mini-card"><div class="val">{{ count($records) }}</div><div class="lbl">Total Submissions</div></div>
-            <div class="mini-card"><div class="val">{{ $pendingCount }}</div><div class="lbl">Pending Clinical Teacher Examination</div></div>
-            <div class="mini-card"><div class="val">{{ $doneCount }}</div><div class="lbl">Examined by Clinical Teacher</div></div>
-        </div>
-
-        <div class="record-grid">
-            @forelse ($records as $index => $record)
-                @php
-                    $middle = trim((string) ($record['middle_name'] ?? ''));
-                    $middleInitial = $middle !== '' ? (' ' . strtoupper(substr($middle, 0, 1)) . '.') : '';
-                    $fullName = trim(($record['last_name'] ?? '') . ', ' . ($record['first_name'] ?? '') . $middleInitial);
-                    $examined = !empty($record['examination']);
-                    $statusLabel = $examined ? 'Examined' : 'Pending';
-                @endphp
-                <article class="record-card {{ $examined ? 'done' : 'pending' }} js-record-card" data-index="{{ $index }}" data-route="{{ route('nurse.examine', $index) }}" data-record='@json($record)'>
-                    <div class="record-top">
-                        <div class="record-name">{{ $fullName }}</div>
-                        <div class="record-status {{ $examined ? 'done' : 'pending' }}">{{ $statusLabel }}</div>
-                    </div>
-                    <div class="record-sub">LRN: {{ $record['lrn'] ?? '-' }}</div>
-                    <div class="record-sub">{{ $record['grade_level'] ?? '-' }}</div>
-                    <div class="record-chips">
-                        <span class="chip">Ht: {{ $record['height_cm'] ?? '-' }} cm</span>
-                        <span class="chip">Wt: {{ $record['weight_kg'] ?? '-' }} kg</span>
-                    </div>
-                </article>
-            @empty
-                <div class="table-card" style="padding:14px;color:var(--text-3);">No adviser submissions yet.</div>
-            @endforelse
-        </div>
-    </div>
-</div>
-
-<div class="profile-backdrop" id="profileBackdrop" aria-hidden="true">
-    <div class="profile-modal" role="dialog" aria-modal="true" aria-label="Student Health Record Preview">
-        <div class="profile-head">
-            <div>
-                <div class="profile-title" id="pName">-</div>
-                <div class="profile-meta" id="pLrn">LRN: -</div>
+            <div class="cards">
+                <div class="mini-card"><div class="val">{{ count($records) }}</div><div class="lbl">Total Submissions</div></div>
+                <div class="mini-card"><div class="val">{{ $pendingCount }}</div><div class="lbl">Pending School Nurse Examination</div></div>
+                <div class="mini-card"><div class="val">{{ $doneCount }}</div><div class="lbl">Examined by School Nurse</div></div>
             </div>
-            <div class="profile-right">Grade &amp; Section<b id="pGrade">-</b></div>
+
+            <section class="shr-filter">
+                <div class="shr-filter-head">
+                    <div class="shr-filter-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
+                        Filter Students
+                        <span class="shr-filter-total" id="shrTotalLabel">{{ count($records) }} {{ Str::plural('student', count($records)) }}</span>
+                    </div>
+                    <div class="shr-search">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="shrSearch" placeholder="Search by name or LRN..." autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="shr-filter-row">
+                    <div class="shr-filter-group">
+                        <span class="shr-filter-label">Grade Level</span>
+                        <div class="shr-filter-btns" id="shrGradeBtns">
+                            <button type="button" class="shr-fbtn active" data-filter="grade" data-value="all">All</button>
+                            @foreach ($gradeOptions as $grade => $count)
+                                <button type="button" class="shr-fbtn" data-filter="grade" data-value="{{ $grade }}">
+                                    {{ $grade }}<span class="shr-count">{{ $count }}</span>
+                                </button>
+                            @endforeach
+                        </div>
+                    </div>
+
+                    <div class="shr-filter-group">
+                        <span class="shr-filter-label">Sex</span>
+                        <div class="shr-filter-btns" id="shrSexBtns">
+                            <button type="button" class="shr-fbtn active" data-filter="sex" data-value="all">All</button>
+                            @foreach ($sexOptions as $sex => $count)
+                                <button type="button" class="shr-fbtn {{ strtolower($sex) === 'male' ? 'is-male' : (strtolower($sex) === 'female' ? 'is-female' : '') }}" data-filter="sex" data-value="{{ strtolower($sex) }}">
+                                    {{ $sex }}<span class="shr-count">{{ $count }}</span>
+                                </button>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+
+                <div class="shr-sections" id="shrSectionBtns">
+                    <button type="button" class="shr-sbtn active" data-filter="section" data-value="all">All Sections</button>
+                    @foreach ($sectionOptions as $section => $count)
+                        <button type="button" class="shr-sbtn" data-filter="section" data-value="{{ strtolower($section) }}">
+                            {{ $section }}<span class="shr-count">{{ $count }}</span>
+                        </button>
+                    @endforeach
+                </div>
+            </section>
+
+            <article class="shr-table-card">
+                <div class="shr-table-head">
+                    <h4>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                        Student Records
+                        <span class="shr-count-badge" id="shrCountBadge">{{ count($records) }}</span>
+                    </h4>
+                    <div class="shr-showing">Showing: <b id="shrShowingLabel">All Students</b></div>
+                </div>
+
+                <div class="shr-scroll">
+                    <table class="shr-table">
+                        <thead>
+                            <tr>
+                                <th>LRN</th>
+                                <th>Student Name</th>
+                                <th>Sex</th>
+                                <th>Age</th>
+                                <th>Section</th>
+                                <th>Health Status</th>
+                                <th>Profile</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="shrTableBody">
+                            @forelse ($records as $index => $record)
+                                @php
+                                    $middle = trim((string) ($record['middle_name'] ?? ''));
+                                    $middleInitial = $middle !== '' ? (' ' . strtoupper(substr($middle, 0, 1)) . '.') : '';
+                                    $fullName = trim(trim(($record['last_name'] ?? '') . ', ' . ($record['first_name'] ?? '') . $middleInitial), ', ');
+                                    $rowLrn = trim((string) ($record['lrn'] ?? ''));
+                                    $rowGrade = trim((string) ($record['grade_level'] ?? ''));
+                                    $rowSection = trim((string) ($record['section'] ?? ''));
+                                    $rowSex = trim((string) ($record['gender'] ?? ''));
+                                    $rowHealth = trim((string) ($record['nutritional_status_bmi_for_age'] ?? ''));
+                                    $examined = ! empty($record['examination']);
+                                @endphp
+                                <tr class="js-record-row"
+                                    data-record='@json($record, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP)'
+                                    data-route="{{ route('nurse.examine', $index) }}"
+                                    data-search="{{ strtolower($fullName . ' ' . $rowLrn) }}"
+                                    data-grade="{{ $rowGrade }}"
+                                    data-section="{{ strtolower($rowSection) }}"
+                                    data-sex="{{ strtolower($rowSex) }}">
+                                    <td><strong>{{ $rowLrn !== '' ? $rowLrn : '-' }}</strong></td>
+                                    <td class="shr-name">{{ $fullName !== '' ? $fullName : '-' }}</td>
+                                    <td>{{ $rowSex !== '' ? $rowSex : '-' }}</td>
+                                    <td>{{ $record['age'] ?? '-' }}</td>
+                                    <td>{{ $rowSection !== '' ? $rowSection : '-' }}</td>
+                                    <td>{{ $rowHealth !== '' ? $rowHealth : 'Not assessed' }}</td>
+                                    <td>
+                                        <span class="shr-status {{ $examined ? 'is-done' : 'is-pending' }}">{{ $examined ? 'Examined' : 'Pending' }}</span>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="shr-action js-view-profile">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                            View Profile
+                                        </button>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr class="js-records-empty">
+                                    <td colspan="8">
+                                        <div class="shr-empty">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                                            <h4>No Adviser Submissions Yet</h4>
+                                            <p>Learner health cards appear here once a Class Adviser submits them.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endforelse
+                            <tr class="js-records-nomatch" hidden>
+                                <td colspan="8">
+                                    <div class="shr-empty">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                        <h4>No Students Found</h4>
+                                        <p>No learners match your current grade, sex, section, or search filters.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </article>
         </div>
-        <div class="profile-tabs">
-            <button type="button" class="profile-tab active" data-panel="p-demographics">Demographics</button>
-            <button type="button" class="profile-tab" data-panel="p-shd">SHD Form 2</button>
-            <button type="button" class="profile-tab" data-panel="p-growth">Growth &amp; Nutrition</button>
-            <button type="button" class="profile-tab" data-panel="p-alerts">Medical Alerts</button>
-            <button type="button" class="profile-tab" data-panel="p-consent">Parental Consent</button>
-            <button type="button" class="profile-tab" data-panel="p-health-assessment">Health Assessment</button>
-            <button type="button" class="profile-tab" data-panel="p-history">Health History</button>
-            @if(session('active_role') === 'clinic_staff')
-            <button type="button" class="profile-tab" data-panel="p-conditions">Health Conditions</button>
-            @endif
+
+    </div>{{-- /.content --}}
+</div>{{-- /.main --}}
+
+{{-- ── Student profile — same modal presentation as the Class Adviser's
+     view-profile, so one learner reads the same way in both roles. ── --}}
+<div class="profile-backdrop" id="profileBackdrop" aria-hidden="true">
+    <div class="profile-modal student-profile-modal" role="dialog" aria-modal="true" aria-label="Student Profile">
+        <div class="student-profile-topline">
+            <button type="button" class="student-profile-back" id="profileClose" aria-label="Back to student list">&larr;</button>
+            <div>
+                <div class="student-profile-titleline">Student Profile</div>
+                <div class="student-profile-subline">View only &mdash; use Fill Medical Record to record an examination</div>
+            </div>
         </div>
-        <div class="profile-body">
-            <section id="p-demographics" class="profile-panel active">
+
+        <div class="sp-cover"></div>
+
+        <div class="sp-identity">
+            <div class="sp-avatar" id="pAvatar">&ndash;</div>
+            <div class="sp-identity-body">
+                <div class="sp-name" id="pName">-</div>
+                <div class="sp-class" id="pGrade">-</div>
+                <div class="sp-meta">
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="8.5" cy="10" r="2"/><path d="M5 17c.7-1.7 2-2.5 3.5-2.5S11.3 15.3 12 17"/><line x1="15" y1="9" x2="19" y2="9"/><line x1="15" y1="13" x2="19" y2="13"/></svg>LRN: <b id="pLrn">-</b></span>
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="14" r="5"/><path d="M19 5l-5.4 5.4M15 5h4v4"/></svg>Sex: <b id="pSex">-</b></span>
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Age: <b id="pAge">-</b></span>
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>DOB: <b id="pDob">-</b></span>
+                </div>
+            </div>
+            {{-- The nurse also records the examination, so Print sits beside it. --}}
+            <div class="sp-identity-actions">
+                <button type="button" class="btn btn-secondary" id="profilePrint">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                    Print
+                </button>
+                <a href="#" id="profileFillLink" class="btn btn-primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+                    Fill Medical Record
+                </a>
+            </div>
+        </div>
+
+        <div class="sp-tabs" role="tablist" aria-label="Student profile sections">
+            <button type="button" class="sp-tab active" role="tab" aria-selected="true" data-panel="p-sheet1">Sheet 1 <span class="sp-tab-badge">Learner Info</span></button>
+            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-sheet2">Sheet 2 <span class="sp-tab-badge">Systems Review</span></button>
+            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-consultation">Consultation <span class="sp-tab-badge" id="pConsultBadge">Log</span></button>
+            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-clinic-notes">Clinic Notes <span class="sp-tab-badge" id="pNotesBadge">0</span></button>
+            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-consent">Consent <span class="sp-tab-badge" id="pConsentBadge">&ndash;</span></button>
+            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-documents">Documents <span class="sp-tab-badge" id="pDocsBadge">0</span></button>
+        </div>
+        <div class="student-profile-body">
+            <section id="p-sheet1" class="sp-panel active">
                 <div class="profile-grid">
-                    <div class="profile-block">
+                    <div class="student-profile-section">
                         <h4>Personal Information</h4>
                         <div class="kv"><div class="k">Full Name:</div><div class="v" id="pdName">-</div></div>
                         <div class="kv"><div class="k">LRN:</div><div class="v" id="pdLrn">-</div></div>
@@ -185,7 +264,7 @@
                         <div class="kv"><div class="k">Birthplace:</div><div class="v" id="pdBirthplace">-</div></div>
                         <div class="kv"><div class="k">Address:</div><div class="v" id="pdAddress">-</div></div>
                     </div>
-                    <div class="profile-block">
+                    <div class="student-profile-section">
                         <h4>Parent/Guardian Information</h4>
                         <div class="kv"><div class="k">Parent/Guardian:</div><div class="v" id="pdGuardian">-</div></div>
                         <div class="kv"><div class="k">Contact Number:</div><div class="v" id="pdContact">-</div></div>
@@ -193,16 +272,20 @@
                         <div class="kv"><div class="k">Region/Division:</div><div class="v" id="pdRegionDivision">-</div></div>
                     </div>
                 </div>
-            </section>
-            <section id="p-shd" class="profile-panel">
-                <div class="profile-block">
+
+                <div class="student-profile-section">
+                    <h4>Medical &amp; Family History</h4>
+                    <div id="pdHealthHistory"></div>
+                </div>
+
+                <div class="student-profile-section">
                     <h4>SHD Form 2 Snapshot</h4>
                     <div class="kv"><div class="k">Grade Level:</div><div class="v" id="psGrade">-</div></div>
-                    <div class="kv"><div class="k">Status:</div><div class="v" id="psStatus">-</div></div>
+                    <div class="kv"><div class="k">Examination:</div><div class="v" id="psStatus">-</div></div>
+                    <div class="kv"><div class="k">Medical Alerts:</div><div class="v" id="paStatus">Pending School Nurse review.</div></div>
                 </div>
-            </section>
-            <section id="p-growth" class="profile-panel">
-                <div class="profile-block">
+
+                <div class="student-profile-section">
                     <h4>Growth &amp; Nutrition</h4>
                     <div class="kv"><div class="k">Height:</div><div class="v" id="pgHeight">-</div></div>
                     <div class="kv"><div class="k">Weight:</div><div class="v" id="pgWeight">-</div></div>
@@ -214,7 +297,7 @@
 
                         <div class="growth-empty" id="pgAwaitingExam" style="display:none;">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-                            <p>Baseline measurement recorded. A growth comparison will appear here once the Clinical Teacher completes an endline examination.</p>
+                            <p>Baseline measurement recorded. A growth comparison will appear here once the School Nurse completes an endline examination.</p>
                         </div>
 
                         <div id="pgChartBody">
@@ -246,69 +329,100 @@
                     </div>
                 </div>
             </section>
-            <section id="p-alerts" class="profile-panel">
-                <div class="profile-block">
-                    <h4>Medical Alerts</h4>
-                    <div class="kv"><div class="k">Current Note:</div><div class="v" id="paStatus">Pending Clinical Teacher review.</div></div>
-                </div>
-            </section>
-            <section id="p-consent" class="profile-panel">
-                <div class="profile-block">
-                    <h4>Parental Consent &mdash; Health Services (Sulat-Pahibalo)</h4>
-                    <div id="pcConsentStatus">
-                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view consent status.</div></div>
-                    </div>
-                </div>
-            </section>
-            <section id="p-health-assessment" class="profile-panel">
-                <div class="profile-block">
-                    <h4>Health Assessment <span style="font-size:.72rem;font-weight:400;color:var(--text-3);">(MLHAT)</span></h4>
-                    <div id="phaStatus">
-                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view assessment.</div></div>
-                    </div>
-                </div>
-            </section>
-            <section id="p-history" class="profile-panel">
-                <div class="profile-block">
+                <div class="student-profile-section">
                     <h4>Health History <span style="font-size:.72rem;font-weight:400;color:var(--text-3);">(across school years)</span></h4>
                     <div id="pHistoryList">
                         <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view history.</div></div>
                     </div>
                 </div>
             </section>
-            @if(session('active_role') === 'clinic_staff')
-            <section id="p-conditions" class="profile-panel">
-                <div class="profile-block">
-                    <h4>Health Conditions</h4>
-                    <div id="shcConditionsList">
-                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>
+
+            <section id="p-sheet2" class="sp-panel">
+                <div class="student-profile-section">
+                    <h4>Systems Review</h4>
+                    <div id="pdSystemsReview"></div>
+                </div>
+                <div class="student-profile-section">
+                    <h4>Health Assessment <span style="font-size:.72rem;font-weight:400;color:var(--text-3);">(MLHAT)</span></h4>
+                    <div id="phaStatus">
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view assessment.</div></div>
                     </div>
                 </div>
             </section>
-            @endif
-        </div>
-        <div class="profile-actions">
-            <a href="#" id="profileFillLink" class="btn btn-primary" style="display:none;">Fill Medical Record</a>
-            <button type="button" class="btn btn-secondary" id="profileClose">Close</button>
-        </div>
-    </div>
-</div>
+
+            <section id="p-consultation" class="sp-panel">
+                <div class="student-profile-section">
+                    <h4>Consultation Log</h4>
+                    <div id="pConsultList">
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view consultations.</div></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="p-clinic-notes" class="sp-panel">
+                <div class="student-profile-section">
+                    <h4>Add Clinic Note</h4>
+                    <form id="clinicNoteForm" class="cn-form" autocomplete="off">
+                        @csrf
+                        <input type="hidden" name="lrn" id="cnLrn" value="">
+                        <label class="cn-label" for="cnNote">Note <span style="color:var(--red);">*</span></label>
+                        <textarea id="cnNote" name="note" rows="3" maxlength="5000" required placeholder="Clinical observation, follow-up, or recommendation"></textarea>
+                        <div class="cn-row">
+                            <div>
+                                <label class="cn-label" for="cnFollowUp">Follow-up Date</label>
+                                <input type="date" id="cnFollowUp" name="follow_up_date">
+                            </div>
+                            <div>
+                                <label class="cn-label" for="cnAuthor">Recorded By</label>
+                                <input type="text" id="cnAuthor" name="author_name" maxlength="255" value="{{ session('active_name', 'School Nurse') }}">
+                            </div>
+                        </div>
+                        <div class="cn-actions">
+                            <span class="cn-feedback" id="cnFeedback" role="status" aria-live="polite"></span>
+                            <button type="submit" class="btn btn-primary" id="cnSubmit">Add Note</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="student-profile-section">
+                    <h4>Note History</h4>
+                    <div id="pNotesList">
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view notes.</div></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="p-consent" class="sp-panel">
+                <div class="student-profile-section">
+                    <h4>Parental Consent &mdash; Health Services (Sulat-Pahibalo)</h4>
+                    <div id="pcConsentStatus">
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view consent status.</div></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="p-documents" class="sp-panel">
+                <div class="student-profile-section">
+                    <h4>Medical Documents <span style="font-size:.72rem;font-weight:400;color:var(--text-3);">(conditions &amp; certificates)</span></h4>
+                    <div id="shcConditionsList">
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view documents.</div></div>
+                    </div>
+                </div>
+            </section>
+        </div>{{-- /.student-profile-body --}}
+    </div>{{-- /.student-profile-modal --}}
+</div>{{-- /.profile-backdrop --}}
 
 <script>
 (() => {
-    const cards = Array.from(document.querySelectorAll('.js-record-card'));
     const backdrop = document.getElementById('profileBackdrop');
+    const rows = Array.from(document.querySelectorAll('.js-record-row'));
     const closeBtn = document.getElementById('profileClose');
+    const printBtn = document.getElementById('profilePrint');
     const fillLink = document.getElementById('profileFillLink');
-    if (!cards.length || !backdrop || !closeBtn) {
+
+    if (!backdrop) {
         return;
     }
-
-    const FILL_PANELS = new Set(['p-shd', 'p-growth', 'p-alerts']);
-    const updateFillLinkVisibility = (panelId) => {
-        if (!fillLink) return;
-        fillLink.style.display = FILL_PANELS.has(panelId) ? '' : 'none';
-    };
 
     const setText = (id, value) => {
         const node = document.getElementById(id);
@@ -316,6 +430,131 @@
             node.textContent = value && String(value).trim() !== '' ? String(value) : '-';
         }
     };
+
+    const setBadge = (id, value) => {
+        const node = document.getElementById(id);
+        if (node) {
+            node.textContent = String(value);
+        }
+    };
+
+    // ── Sheet 1 / Sheet 2 read-only rendering, mirroring the adviser's
+    //    view-profile so the same learner reads the same way in both roles.
+    //    Built from DOM nodes, never innerHTML: every value is free text
+    //    typed by an adviser.
+    const REVIEW_GROUPS = {
+        history: [
+            ['Medical History', [['med_asthma', 'Asthma'], ['med_diabetes', 'Diabetes'], ['med_seizure', 'Seizure Disorder'], ['med_infections', 'Frequent Infections'], ['med_heart', 'Heart Condition'], ['med_tuberculosis', 'Tuberculosis'], ['med_allergies', 'Allergies'], ['med_hospitalization', 'Hospitalization / Surgery']]],
+            ['Family History', [['fam_hypertension', 'Hypertension'], ['fam_diabetes', 'Diabetes'], ['fam_heart', 'Heart Disease'], ['fam_cancer', 'Cancer'], ['fam_mental', 'Mental Health Conditions']]],
+        ],
+        systems: [
+            ['Skin / Integumentary', [['skin_normal', 'Normal'], ['skin_lesions', 'Lesions / Rashes'], ['skin_pallor', 'Pallor']]],
+            ['HEENT', [['heent_normal', 'Normal'], ['heent_abnormal', 'Abnormal']]],
+            ['Respiratory', [['resp_clear', 'Clear breath sounds'], ['resp_cough', 'Cough']]],
+            ['Cardiovascular', [['cardio_regular', 'Regular rhythm'], ['cardio_irregular', 'Irregular']]],
+            ['Abdomen / GI', [['abdo_soft', 'Soft, non-tender'], ['abdo_pain', 'Pain']]],
+            ['Neurologic', [['neuro_alert', 'Alert, oriented'], ['neuro_reflexes', 'Reflexes normal'], ['neuro_abnormal', 'Abnormal']]],
+            ['Dental', [['dental_good', 'Good'], ['dental_fair', 'Fair'], ['dental_poor', 'Poor'], ['dental_caries', 'Dental caries'], ['dental_gum', 'Gum inflammation'], ['dental_referral', 'Referral to dentist']]],
+            ['Immunization', [['immun_complete', 'Complete'], ['immun_incomplete', 'Incomplete'], ['immun_not_available', 'Not available']]],
+        ],
+    };
+
+    const REVIEW_TEXT = {
+        history: [
+            ['allergies_detail', 'Allergy details'], ['hospitalization_detail', 'Hospitalization / Surgery'],
+            ['current_medications', 'Current Medications'], ['other_conditions', 'Other Conditions'],
+            ['genetic_disorders', 'Genetic / Hereditary Disorders'],
+            ['consciousness', 'Level of Consciousness'], ['posture', 'Posture / Gait'], ['hygiene', 'Hygiene / Grooming'],
+        ],
+        systems: [
+            ['right_eye', 'Right Eye'], ['left_eye', 'Left Eye'], ['immun_date', 'Date Record Reviewed'],
+            ['notes', 'Notes / Details'], ['summary', 'Summary of Findings'],
+            ['recommendations', 'Recommendations / Referrals'],
+            ['examiner_name', 'Examiner Name'], ['examiner_date', 'Date'],
+        ],
+    };
+
+    const renderReview = (hostId, data, kind, emptyMessage) => {
+        const host = document.getElementById(hostId);
+        if (!host) {
+            return;
+        }
+
+        host.textContent = '';
+
+        if (!data || typeof data !== 'object' || Object.keys(data).length === 0) {
+            const empty = document.createElement('p');
+            empty.className = 'sp-note';
+            empty.textContent = emptyMessage;
+            host.appendChild(empty);
+
+            return;
+        }
+
+        REVIEW_GROUPS[kind].forEach(([title, items]) => {
+            const block = document.createElement('div');
+            block.className = 'sp-review-block';
+
+            const heading = document.createElement('span');
+            heading.className = 'sp-review-title';
+            heading.textContent = title;
+            block.appendChild(heading);
+
+            const list = document.createElement('div');
+            list.className = 'sp-review-items';
+            items.forEach(([key, label]) => {
+                const on = Boolean(data[key]);
+                const item = document.createElement('span');
+                item.className = on ? 'sp-review-item on' : 'sp-review-item';
+                item.textContent = (on ? '✓ ' : '– ') + label;
+                list.appendChild(item);
+            });
+            block.appendChild(list);
+            host.appendChild(block);
+        });
+
+        const values = { ...data };
+        // The roster carries a flag rather than the signature image itself.
+        if (values.examiner_signature_present) {
+            values.examiner_signature_present = 'Signed';
+        }
+
+        const notes = REVIEW_TEXT[kind]
+            .concat(values.examiner_signature_present ? [['examiner_signature_present', 'Examiner Signature']] : [])
+            .filter(([key]) => {
+                const value = values[key];
+                return value !== null && value !== undefined && String(value).trim() !== '';
+            });
+
+        if (notes.length) {
+            const grid = document.createElement('div');
+            grid.className = 'student-profile-grid';
+            grid.style.marginTop = '12px';
+            notes.forEach(([key, label]) => {
+                const cell = document.createElement('div');
+                if (['notes', 'summary', 'recommendations'].includes(key)) {
+                    cell.className = 'full';
+                }
+                const k = document.createElement('span');
+                k.textContent = label + ':';
+                const v = document.createElement('b');
+                v.textContent = String(values[key]);
+                cell.append(k, v);
+                grid.appendChild(cell);
+            });
+            host.appendChild(grid);
+        }
+    };
+
+    const renderHealthHistory = (history) => renderReview(
+        'pdHealthHistory', history, 'history',
+        'No medical or family history was recorded for this learner.'
+    );
+
+    const renderSystemsReview = (review) => renderReview(
+        'pdSystemsReview', review, 'systems',
+        'No systems review was recorded for this learner.'
+    );
 
     const drawGrowthTrend = (record) => {
         const toNum = (value) => {
@@ -327,7 +566,7 @@
         const chartBodyEl = document.getElementById('pgChartBody');
         const deltaEl = document.getElementById('pgDelta');
 
-        // Until the Clinical Teacher records an endline measurement, "current" has no
+        // Until the School Nurse records an endline measurement, "current" has no
         // real value of its own — show a clear waiting state instead of a
         // chart that plots the baseline against itself.
         const hasEndlineData = Boolean(
@@ -428,7 +667,6 @@
     const openProfile = (record, route) => {
         if (fillLink) {
             fillLink.setAttribute('href', route || '#');
-            fillLink.style.display = 'none';
         }
         const fullName = [record.last_name, ',', record.first_name, record.middle_name ? (' ' + String(record.middle_name).charAt(0).toUpperCase() + '.') : '']
             .join(' ')
@@ -438,9 +676,14 @@
         const dob = [record.birth_year, record.birth_month, record.birth_day].filter(Boolean).join('-');
         const examined = record.examination && Object.keys(record.examination).length > 0;
 
+        const initials = ((record.first_name || '').charAt(0) + (record.last_name || '').charAt(0)).toUpperCase();
+        setText('pAvatar', initials || '?');
         setText('pName', fullName || '-');
-        setText('pLrn', 'LRN: ' + (record.lrn || '-'));
-        setText('pGrade', record.grade_level || '-');
+        setText('pLrn', record.lrn || '-');
+        setText('pSex', record.gender || '-');
+        setText('pAge', record.age || '-');
+        setText('pDob', dob || '-');
+        setText('pGrade', [record.grade_level, record.section].filter(Boolean).join(' - ') || '-');
 
         setText('pdName', fullName || '-');
         setText('pdLrn', record.lrn || '-');
@@ -453,20 +696,35 @@
         setText('pdRegionDivision', [record.region, record.division].filter(Boolean).join(' / ') || '-');
 
         setText('psGrade', record.grade_level || '-');
-        setText('psStatus', examined ? 'Examined by Clinical Teacher' : 'Pending Clinical Teacher Examination');
+        setText('psStatus', examined ? 'Examined by School Nurse' : 'Pending School Nurse Examination');
 
         setText('pgHeight', (record.height_cm || '-') + ' cm');
         setText('pgWeight', (record.weight_kg || '-') + ' kg');
         drawGrowthTrend(record);
-        setText('paStatus', examined ? 'Clinical Teacher examination details are available.' : 'Pending Clinical Teacher review.');
+        setText('paStatus', examined ? 'School Nurse examination details are available.' : 'Pending School Nurse review.');
 
-        @if(session('active_role') === 'clinic_staff')
-        loadConditionsForClinicStaff(record.lrn || '');
-        @endif
+        renderHealthHistory(record.health_history);
+        renderSystemsReview(record.systems_review);
 
-        loadConsentStatus(record.lrn || '');
-        loadHealthAssessment(record.lrn || '');
-        loadHealthHistory(record.lrn || '');
+        const lrn = record.lrn || '';
+        const lrnField = document.getElementById('cnLrn');
+        if (lrnField) {
+            lrnField.value = lrn;
+        }
+
+        loadDocuments(lrn);
+        loadConsentStatus(lrn);
+        loadHealthAssessment(lrn);
+        loadHealthHistory(lrn);
+        loadConsultations(lrn);
+        loadClinicNotes(lrn);
+
+        // Each learner opens on the first tab, scrolled to the top.
+        resetTabs();
+        const body = document.querySelector('.student-profile-body');
+        if (body) {
+            body.scrollTop = 0;
+        }
 
         backdrop.classList.add('open');
         backdrop.setAttribute('aria-hidden', 'false');
@@ -478,11 +736,13 @@
         if (!statusEl) return;
 
         if (!lrn) {
+            setBadge('pConsentBadge', '–');
             statusEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No LRN available.</div></div>';
             return;
         }
 
         statusEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>';
+        setBadge('pConsentBadge', '…');
 
         try {
             const resp = await fetch('/api/student-consent-status?lrn=' + encodeURIComponent(lrn), {
@@ -497,6 +757,10 @@
             const data = await resp.json();
 
             if (data.has_consent) {
+                setBadge('pConsentBadge', data.consent_type === 'refused'
+                    ? 'Declined'
+                    : (data.consent_type === 'partial' ? 'Partial' : 'Approved'));
+
                 // Status banner colour by consent_type
                 const bannerStyle = data.consent_type === 'refused'
                     ? 'background:#f3f4f6;border:1px solid #d1d5db;color:#374151;'
@@ -577,6 +841,7 @@
                     ${viewBtn}`;
 
             } else {
+                setBadge('pConsentBadge', 'Pending');
                 statusEl.innerHTML = `
                     <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;font-size:.82rem;font-weight:700;color:#991b1b;margin-bottom:12px;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
@@ -743,10 +1008,217 @@
         }
     };
 
-    @if(session('active_role') === 'clinic_staff')
-    const loadConditionsForClinicStaff = async (lrn) => {
+    // ── Consultation log for this learner ──────────────────────────
+    const loadConsultations = async (lrn) => {
+        const el = document.getElementById('pConsultList');
+        if (!el) return;
+
+        setBadge('pConsultBadge', 'Log');
+
+        if (!lrn) {
+            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No LRN available.</div></div>';
+            return;
+        }
+
+        el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>';
+
+        try {
+            const resp = await fetch('/api/student-consultations?lrn=' + encodeURIComponent(lrn), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!resp.ok) {
+                el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load consultations.</div></div>';
+                return;
+            }
+
+            const rows = (await resp.json()).consultations || [];
+            setBadge('pConsultBadge', rows.length);
+
+            if (!rows.length) {
+                el.innerHTML = '<p class="sp-note">No clinic consultations logged for this learner yet.</p>';
+                return;
+            }
+
+            el.textContent = '';
+            rows.forEach((row) => {
+                const card = document.createElement('div');
+                card.className = 'cn-entry';
+
+                const head = document.createElement('div');
+                head.className = 'cn-entry-head';
+                const when = document.createElement('span');
+                when.className = 'cn-entry-date';
+                when.textContent = row.date || '—';
+                const status = document.createElement('span');
+                status.className = row.status === 'referred' ? 'cn-pill is-warn' : 'cn-pill';
+                status.textContent = row.status === 'referred' ? 'Referred' : 'Treated';
+                head.append(when, status);
+
+                const grid = document.createElement('div');
+                grid.className = 'student-profile-grid';
+                [['Condition', row.condition], ['Treatment', row.treatment], ['Grade / Section', row.grade_section]]
+                    .filter(([, value]) => value && String(value).trim() !== '')
+                    .forEach(([label, value]) => {
+                        const cell = document.createElement('div');
+                        const k = document.createElement('span');
+                        k.textContent = label + ':';
+                        const v = document.createElement('b');
+                        v.textContent = String(value);
+                        cell.append(k, v);
+                        grid.appendChild(cell);
+                    });
+
+                card.append(head, grid);
+                el.appendChild(card);
+            });
+        } catch (_err) {
+            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load consultations.</div></div>';
+        }
+    };
+
+    // ── Clinic notes ───────────────────────────────────────────────
+    const renderClinicNotes = (notes) => {
+        const el = document.getElementById('pNotesList');
+        if (!el) return;
+
+        setBadge('pNotesBadge', notes.length);
+
+        if (!notes.length) {
+            el.innerHTML = '<p class="sp-note">No clinic notes recorded for this learner yet.</p>';
+            return;
+        }
+
+        el.textContent = '';
+        notes.forEach((note) => {
+            const card = document.createElement('div');
+            card.className = 'cn-entry';
+
+            const head = document.createElement('div');
+            head.className = 'cn-entry-head';
+            const when = document.createElement('span');
+            when.className = 'cn-entry-date';
+            when.textContent = note.recorded_at || '—';
+            const author = document.createElement('span');
+            author.className = 'cn-entry-author';
+            author.textContent = note.author || '—';
+            head.append(when, author);
+
+            const body = document.createElement('p');
+            body.className = 'cn-entry-body';
+            body.textContent = note.note || '';
+
+            card.append(head, body);
+
+            if (note.follow_up_date) {
+                const followUp = document.createElement('span');
+                followUp.className = 'cn-pill is-followup';
+                followUp.textContent = 'Follow-up: ' + note.follow_up_date;
+                card.appendChild(followUp);
+            }
+
+            el.appendChild(card);
+        });
+    };
+
+    const loadClinicNotes = async (lrn) => {
+        const el = document.getElementById('pNotesList');
+        if (!el) return;
+
+        setBadge('pNotesBadge', 0);
+
+        if (!lrn) {
+            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No LRN available.</div></div>';
+            return;
+        }
+
+        el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>';
+
+        try {
+            const resp = await fetch('/api/student-clinic-notes?lrn=' + encodeURIComponent(lrn), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!resp.ok) {
+                el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load clinic notes.</div></div>';
+                return;
+            }
+
+            renderClinicNotes((await resp.json()).notes || []);
+        } catch (_err) {
+            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load clinic notes.</div></div>';
+        }
+    };
+
+    const noteForm = document.getElementById('clinicNoteForm');
+    if (noteForm) {
+        noteForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const feedback = document.getElementById('cnFeedback');
+            const submit = document.getElementById('cnSubmit');
+            const lrn = (document.getElementById('cnLrn') || {}).value || '';
+            const noteText = (document.getElementById('cnNote') || {}).value || '';
+
+            if (!lrn || noteText.trim() === '') {
+                if (feedback) {
+                    feedback.textContent = 'Enter a note first.';
+                    feedback.className = 'cn-feedback is-error';
+                }
+                return;
+            }
+
+            if (submit) submit.disabled = true;
+            if (feedback) {
+                feedback.textContent = 'Saving…';
+                feedback.className = 'cn-feedback';
+            }
+
+            try {
+                const resp = await fetch('/api/student-clinic-notes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        lrn,
+                        note: noteText,
+                        follow_up_date: (document.getElementById('cnFollowUp') || {}).value || null,
+                        author_name: (document.getElementById('cnAuthor') || {}).value || null,
+                    }),
+                });
+
+                if (!resp.ok) {
+                    if (feedback) {
+                        feedback.textContent = resp.status === 404
+                            ? 'No health record on file for this learner.'
+                            : 'Could not save the note.';
+                        feedback.className = 'cn-feedback is-error';
+                    }
+                    return;
+                }
+
+                document.getElementById('cnNote').value = '';
+                document.getElementById('cnFollowUp').value = '';
+                if (feedback) {
+                    feedback.textContent = 'Note saved.';
+                    feedback.className = 'cn-feedback is-ok';
+                }
+                await loadClinicNotes(lrn);
+            } catch (_err) {
+                if (feedback) {
+                    feedback.textContent = 'Could not save the note.';
+                    feedback.className = 'cn-feedback is-error';
+                }
+            } finally {
+                if (submit) submit.disabled = false;
+            }
+        });
+    }
+
+    const loadDocuments = async (lrn) => {
         const listEl = document.getElementById('shcConditionsList');
         if (!listEl) return;
+
+        setBadge('pDocsBadge', 0);
 
         if (!lrn) {
             listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">No LRN available for this record.</div>';
@@ -767,6 +1239,8 @@
 
             const data = await resp.json();
             const conditions = data.conditions || [];
+            // The badge counts attached certificates — the documents themselves.
+            setBadge('pDocsBadge', conditions.reduce((n, c) => n + ((c.certificates || []).length), 0));
 
             if (!conditions.length) {
                 listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">No health conditions on file for this student.</div>';
@@ -799,52 +1273,143 @@
                 </div>`;
             }).join('');
         } catch (_err) {
-            listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">Could not load conditions.</div>';
+            listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">Could not load documents.</div>';
         }
     };
-    @endif
 
     const closeProfile = () => {
         backdrop.classList.remove('open');
         backdrop.setAttribute('aria-hidden', 'true');
     };
 
-    cards.forEach((card) => {
-        card.addEventListener('click', () => {
+    const tabs = Array.from(document.querySelectorAll('.sp-tab'));
+    const panels = Array.from(document.querySelectorAll('.sp-panel'));
+
+    const activateTab = (tab) => {
+        const target = tab.getAttribute('data-panel');
+        tabs.forEach((t) => {
+            t.classList.remove('active');
+            t.setAttribute('aria-selected', 'false');
+        });
+        panels.forEach((p) => p.classList.remove('active'));
+        tab.classList.add('active');
+        tab.setAttribute('aria-selected', 'true');
+        const panel = document.getElementById(target || '');
+        if (panel) {
+            panel.classList.add('active');
+        }
+    };
+
+    function resetTabs() {
+        if (tabs.length) {
+            activateTab(tabs[0]);
+        }
+    }
+
+    tabs.forEach((tab) => tab.addEventListener('click', () => activateTab(tab)));
+
+    rows.forEach((row) => {
+        const open = () => {
             let record = {};
             try {
-                record = JSON.parse(card.getAttribute('data-record') || '{}');
+                record = JSON.parse(row.getAttribute('data-record') || '{}');
             } catch (_e) {
                 record = {};
             }
-            openProfile(record, card.getAttribute('data-route') || '#');
-        });
+            openProfile(record, row.getAttribute('data-route') || '#');
+        };
+
+        const button = row.querySelector('.js-view-profile');
+        if (button) {
+            button.addEventListener('click', (event) => {
+                event.stopPropagation();
+                open();
+            });
+        }
+        row.addEventListener('click', open);
     });
 
-    closeBtn.addEventListener('click', closeProfile);
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeProfile);
+    }
+    if (printBtn) {
+        printBtn.addEventListener('click', () => window.print());
+    }
     backdrop.addEventListener('click', (event) => {
         if (event.target === backdrop) {
             closeProfile();
         }
     });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && backdrop.classList.contains('open')) {
+            closeProfile();
+        }
+    });
 
-    const tabs = Array.from(document.querySelectorAll('.profile-tab'));
-    const panels = Array.from(document.querySelectorAll('.profile-panel'));
-    tabs.forEach((tab) => {
-        tab.addEventListener('click', () => {
-            const target = tab.getAttribute('data-panel');
-            tabs.forEach((t) => t.classList.remove('active'));
-            panels.forEach((p) => p.classList.remove('active'));
-            tab.classList.add('active');
-            const panel = document.getElementById(target || '');
-            if (panel) {
-                panel.classList.add('active');
+    // ── Grade / sex / section chips + search over the rendered rows ──
+    const search = document.getElementById('shrSearch');
+    const noMatchRow = document.querySelector('.js-records-nomatch');
+    const countBadge = document.getElementById('shrCountBadge');
+    const totalLabel = document.getElementById('shrTotalLabel');
+    const showingLabel = document.getElementById('shrShowingLabel');
+    const filters = { grade: 'all', sex: 'all', section: 'all' };
+
+    const applyFilters = () => {
+        const keyword = search ? search.value.trim().toLowerCase() : '';
+        let visible = 0;
+
+        rows.forEach((row) => {
+            const matches = (!keyword || (row.dataset.search || '').includes(keyword))
+                && (filters.grade === 'all' || (row.dataset.grade || '') === filters.grade)
+                && (filters.sex === 'all' || (row.dataset.sex || '') === filters.sex)
+                && (filters.section === 'all' || (row.dataset.section || '') === filters.section);
+
+            row.hidden = !matches;
+            if (matches) {
+                visible += 1;
             }
-            updateFillLinkVisibility(target || '');
+        });
+
+        if (noMatchRow) {
+            noMatchRow.hidden = rows.length === 0 || visible > 0;
+        }
+        if (countBadge) {
+            countBadge.textContent = String(visible);
+        }
+        if (totalLabel) {
+            totalLabel.textContent = visible + (visible === 1 ? ' student' : ' students');
+        }
+        if (showingLabel) {
+            const parts = [];
+            if (filters.grade !== 'all') parts.push(filters.grade);
+            if (filters.sex !== 'all') parts.push(filters.sex.charAt(0).toUpperCase() + filters.sex.slice(1));
+            if (filters.section !== 'all') parts.push(filters.section.charAt(0).toUpperCase() + filters.section.slice(1));
+            if (keyword) parts.push('"' + keyword + '"');
+            showingLabel.textContent = parts.length ? parts.join(' · ') : 'All Students';
+        }
+    };
+
+    document.querySelectorAll('[data-filter]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const group = button.dataset.filter;
+            if (!(group in filters)) {
+                return;
+            }
+
+            filters[group] = button.dataset.value || 'all';
+            button.parentElement.querySelectorAll('[data-filter="' + group + '"]').forEach((sibling) => {
+                sibling.classList.toggle('active', sibling === button);
+            });
+            applyFilters();
         });
     });
+
+    if (search) {
+        search.addEventListener('input', applyFilters);
+    }
+
+    applyFilters();
 })();
 </script>
-@include('partials.sidebar-hover-pin')
 </body>
 </html>

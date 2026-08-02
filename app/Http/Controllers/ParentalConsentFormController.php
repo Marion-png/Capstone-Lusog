@@ -191,7 +191,7 @@ class ParentalConsentFormController extends Controller
         abort_unless(
             in_array($request->session()->get('active_role'), ['clinic_staff', 'school_nurse'], true),
             403,
-            'Only Clinic Staff or Clinical Teacher may download consent forms.'
+            'Only Clinic Staff or School Nurse may download consent forms.'
         );
 
         $form = ParentalConsentForm::with('studentHealthRecord')->find($id);

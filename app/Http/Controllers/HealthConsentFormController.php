@@ -360,10 +360,10 @@ class HealthConsentFormController extends Controller
         $form->save();
 
         return redirect()->route('consent-forms.show', $form)
-            ->with('success', 'Form marked as reviewed and released to the Clinical Teacher.');
+            ->with('success', 'Form marked as reviewed and released to the School Nurse.');
     }
 
-    /** Clinical Teacher: read-only list of completed consent forms for the school. */
+    /** School Nurse: read-only list of completed consent forms for the school. */
     public function nurseIndex(Request $request)
     {
         if ($redirect = $this->requireRole($request, ['school_nurse', 'clinic_staff'])) {
@@ -381,7 +381,7 @@ class HealthConsentFormController extends Controller
         return view('consent-forms.nurse-index', ['forms' => $forms]);
     }
 
-    /** Clinical Teacher: read-only view of one completed form. */
+    /** School Nurse: read-only view of one completed form. */
     public function nurseShow(Request $request, HealthConsentForm $form)
     {
         if ($redirect = $this->requireRole($request, ['school_nurse', 'clinic_staff'])) {
@@ -395,7 +395,7 @@ class HealthConsentFormController extends Controller
                 ->with('error', 'This form is not yet available.');
         }
 
-        $form->addAudit('Viewed by Clinical Teacher', (string) $request->session()->get('active_role'), (string) $request->session()->get('active_name', 'Clinical Teacher'));
+        $form->addAudit('Viewed by School Nurse', (string) $request->session()->get('active_role'), (string) $request->session()->get('active_name', 'School Nurse'));
         $form->save();
 
         return view('consent-forms.nurse-show', ['form' => $form]);

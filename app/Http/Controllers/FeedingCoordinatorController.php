@@ -61,7 +61,7 @@ class FeedingCoordinatorController extends Controller
     }
 
     /**
-     * The Clinical Teacher registered to this coordinator's school, used to
+     * The School Nurse registered to this coordinator's school, used to
      * pre-fill the "Prepared by" signatory on the BMI reports. Matched on the
      * same institution (falling back to the plain school name), so a nurse from
      * another school is never pulled in.
