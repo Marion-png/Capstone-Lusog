@@ -412,7 +412,11 @@ class AdviserConsentPageTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('asb-sidebar', false);
+        $response->assertSee('My Students');
         $response->assertSee('Feeding Status');
-        $response->assertSee('Deworming Request');
+
+        // Same page header as Feeding Status: class + school year.
+        $response->assertSee('ms-page-title', false);
+        $response->assertSee('Grade 1 / Sampaguita &middot; School Year '.HealthConsentForm::currentSchoolYear(), false);
     }
 }

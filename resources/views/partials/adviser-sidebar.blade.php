@@ -1,7 +1,7 @@
 {{--
     Shared Class Adviser sidebar. Used by every adviser-side page so the nav
     only exists in one place — pass $active to highlight the current item:
-    'dashboard' | 'students' | 'consent' | 'feeding' | 'deworming'.
+    'dashboard' | 'students' | 'consent' | 'feeding'.
     The enrolment form has no nav entry of its own — it opens from the Enroll
     Student button on My Students, so ?tab=form highlights 'students'.
 --}}
@@ -42,10 +42,6 @@
         <a href="{{ route('dashboard.class-adviser.feeding-status') }}" class="asb-link {{ $active === 'feeding' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
             Feeding Status
-        </a>
-        <a href="{{ route('dashboard.class-adviser.deworming') }}" class="asb-link {{ $active === 'deworming' ? 'active' : '' }}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.5 6.5l7 7a2.12 2.12 0 1 1-3 3l-7-7a2.12 2.12 0 0 1 3-3z"/><path d="M8.5 8.5l-3 3"/></svg>
-            Deworming Request
         </a>
         <div class="asb-nav-label">System</div>
         <a href="#" class="asb-link">

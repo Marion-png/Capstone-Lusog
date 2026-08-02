@@ -40,8 +40,18 @@ class AdviserRedesignedPagesTest extends TestCase
 
         $this->withSession($session)->get('/dashboard/class-adviser')->assertStatus(200)->assertSee('Good');
         $this->withSession($session)->get('/dashboard/class-adviser/feeding-status')->assertStatus(200);
-        $this->withSession($session)->get('/dashboard/class-adviser/deworming')->assertStatus(200);
         $this->withSession($session)->get('/adviser/create')->assertStatus(200);
+    }
+
+    #[Test]
+    public function the_deworming_request_page_is_gone_from_the_adviser_side(): void
+    {
+        $inst = Institution::create(['name' => 'Sta. Ana NHS', 'status' => 'active']);
+        $session = $this->adviserSession($inst);
+
+        $this->withSession($session)->get('/dashboard/class-adviser/deworming')->assertNotFound();
+        $this->withSession($session)->post('/dashboard/class-adviser/deworming')->assertNotFound();
+        $this->withSession($session)->get('/dashboard/class-adviser')->assertDontSee('Deworming Request');
     }
 
     #[Test]

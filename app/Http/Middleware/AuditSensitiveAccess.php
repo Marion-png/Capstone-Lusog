@@ -32,6 +32,17 @@ class AuditSensitiveAccess
         'api/student-health-assessment',
     ];
 
+    /**
+     * Change-detection endpoints that return no personal information — only a
+     * hashed row-count/timestamp fingerprint. Dashboard panels poll these on a
+     * timer, so auditing them would bury real access records in noise without
+     * recording any access to personal data. Never exempt a path that returns
+     * personal information.
+     */
+    private const NON_SENSITIVE_PATTERNS = [
+        'dashboard/class-adviser/activity/pulse',
+    ];
+
     public function handle(Request $request, Closure $next): Response
     {
         if ($this->shouldAudit($request)) {
@@ -61,6 +72,10 @@ class AuditSensitiveAccess
 
     private function shouldAudit(Request $request): bool
     {
+        if ($request->is(...self::NON_SENSITIVE_PATTERNS)) {
+            return false;
+        }
+
         if (! $request->is(...self::SENSITIVE_PATTERNS)) {
             return false;
         }

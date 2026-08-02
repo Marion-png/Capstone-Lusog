@@ -621,6 +621,8 @@ tbody tr:hover td{background:#f3fbf6}
 .ra-icon-profile{background:#dcfce7;color:#16a34a}
 .ra-icon-consent{background:#dcfce7;color:#16a34a}
 .ra-icon-declined{background:#fee2e2;color:#dc2626}
+.ra-icon-student{background:var(--g100);color:var(--g900)}
+.ra-icon-certificate{background:#dbeafe;color:#1e40af}
 .ra-body{min-width:0;flex:1}
 .ra-text{font-size:.82rem;color:#1d3c31;line-height:1.4}
 .ra-text b{font-weight:700}
@@ -644,3 +646,27 @@ tbody tr:hover td{background:#f3fbf6}
     .dashboard-stat-row{grid-template-columns:1fr}
     .hero-stats{gap:12px}
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Feeding Status — nutrition badge tones, attendance progress bars.
+   The banner, stat bar and table reuse .pc-* / .ms-* so every adviser
+   page reads as one design.
+   ══════════════════════════════════════════════════════════════════════ */
+.fs-tone-ok{background:#dcfce7;color:#15803d}
+.fs-tone-warn{background:#fef3c7;color:#b45309}
+.fs-tone-bad{background:#fee2e2;color:#b91c1c}
+.fs-tone-info{background:#dbeafe;color:#1e40af}
+.fs-tone-mute{background:#e6efe9;color:#3f6350}
+
+.fs-metric{font-weight:700;color:var(--g900)}
+.fs-sub{display:block;font-size:.7rem;font-weight:400;color:var(--muted);margin-top:1px}
+
+.fs-progress{display:flex;align-items:center;gap:9px}
+.fs-progress-val{font-size:.74rem;font-weight:700;color:#1b3f2f;min-width:34px}
+.fs-progress-bar{display:block;width:88px;height:7px;border-radius:999px;background:#e2efe8;overflow:hidden;flex-shrink:0}
+.fs-progress-bar span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#1e7a4f,#14532d)}
+.fs-progress-bar.is-warn span{background:linear-gradient(90deg,#fbbf24,#f59e0b)}
+.fs-progress-bar.is-bad span{background:linear-gradient(90deg,#f87171,#dc2626)}
+.fs-progress-bar.is-empty span{background:#cbd9d1}
+
+.fs-badge-stack{display:flex;flex-wrap:wrap;align-items:center;gap:5px}

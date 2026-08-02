@@ -230,23 +230,37 @@
                     <div class="panel-head">
                         <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;color:#15803d;vertical-align:-2px;"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> Recent Activity</h3>
                     </div>
-                    @forelse ($ov['recent_activity'] as $event)
-                        <div class="ra-row">
-                            <div class="ra-icon ra-icon-{{ $event['icon'] }}">
-                                @if ($event['icon'] === 'declined')
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-                                @else
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                                @endif
+                    {{-- Server-rendered first paint; the panel then keeps itself
+                         current from the activity feed (see recentActivityLive). --}}
+                    <div id="recentActivityList"
+                         data-feed-url="{{ route('dashboard.class-adviser.activity') }}"
+                         data-pulse-url="{{ route('dashboard.class-adviser.activity.pulse') }}"
+                         data-stamp="{{ $ov['activity_stamp'] }}">
+                        @forelse ($ov['recent_activity'] as $event)
+                            <div class="ra-row" data-activity-id="{{ $event['id'] }}">
+                                <div class="ra-icon ra-icon-{{ $event['icon'] }}">
+                                    @if ($event['icon'] === 'declined')
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                                    @elseif ($event['icon'] === 'student')
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                                    @elseif ($event['icon'] === 'certificate')
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                    @else
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                    @endif
+                                </div>
+                                <div class="ra-body">
+                                    <div class="ra-text">{{ $event['text'] }}</div>
+                                    <div class="ra-meta">
+                                        <span class="ra-badge">{{ $event['badge'] }}</span>
+                                        <time class="ra-ago" datetime="{{ $event['at']->toIso8601String() }}">{{ $event['at']->diffForHumans() }}</time>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="ra-body">
-                                <div class="ra-text">{!! $event['text'] !!}</div>
-                                <div class="ra-meta"><span class="ra-badge">{{ $event['badge'] }}</span> {{ $event['at']->diffForHumans() }}</div>
-                            </div>
-                        </div>
-                    @empty
-                        <p class="muted" style="padding:8px 0;font-size:.82rem;">No recent activity yet.</p>
-                    @endforelse
+                        @empty
+                            <p class="muted ra-empty" style="padding:8px 0;font-size:.82rem;">No recent activity yet.</p>
+                        @endforelse
+                    </div>
                 </article>
             </div>
 
@@ -2165,6 +2179,183 @@ window.showAdviserSheet = (panelId) => {
                 postureDetail.style.display = (radio.value === 'Abnormal' && radio.checked) ? 'inline-block' : 'none';
             }
         });
+    });
+})();
+</script>
+
+<script>
+// Recent Activity, live: relative timestamps tick locally every 30s, and a
+// no-PII pulse endpoint is polled so the list is only re-fetched when
+// something in the class actually changed.
+(() => {
+    const list = document.getElementById('recentActivityList');
+    if (!list) {
+        return;
+    }
+
+    const feedUrl = list.dataset.feedUrl;
+    const pulseUrl = list.dataset.pulseUrl;
+    const PULSE_MS = 20000;
+    const TICK_MS = 30000;
+
+    const icons = {
+        declined: '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>',
+        student: '<path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
+        certificate: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+        default: '<polyline points="20 6 9 17 4 12"/>',
+    };
+
+    // Mirrors Carbon's diffForHumans closely enough to keep the server's first
+    // paint and the client's ticking from disagreeing.
+    const humanize = (iso) => {
+        const then = new Date(iso).getTime();
+        if (Number.isNaN(then)) {
+            return '';
+        }
+
+        const seconds = Math.round((Date.now() - then) / 1000);
+        if (seconds < 0) {
+            return 'just now';
+        }
+
+        const units = [
+            [31536000, 'year'],
+            [2592000, 'month'],
+            [604800, 'week'],
+            [86400, 'day'],
+            [3600, 'hour'],
+            [60, 'minute'],
+        ];
+
+        for (const [size, label] of units) {
+            if (seconds >= size) {
+                const value = Math.floor(seconds / size);
+                return `${value} ${label}${value === 1 ? '' : 's'} ago`;
+            }
+        }
+
+        return seconds < 10 ? 'just now' : `${seconds} seconds ago`;
+    };
+
+    const tick = () => {
+        list.querySelectorAll('.ra-ago').forEach((el) => {
+            const iso = el.getAttribute('datetime');
+            if (iso) {
+                el.textContent = humanize(iso);
+            }
+        });
+    };
+
+    const buildRow = (item) => {
+        const row = document.createElement('div');
+        row.className = 'ra-row';
+        row.dataset.activityId = item.id;
+
+        const icon = document.createElement('div');
+        icon.className = `ra-icon ra-icon-${item.icon}`;
+        // Icon glyphs come from the map above, never from the response.
+        icon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${icons[item.icon] || icons.default}</svg>`;
+
+        const body = document.createElement('div');
+        body.className = 'ra-body';
+
+        const text = document.createElement('div');
+        text.className = 'ra-text';
+        text.textContent = item.text;
+
+        const meta = document.createElement('div');
+        meta.className = 'ra-meta';
+
+        const badge = document.createElement('span');
+        badge.className = 'ra-badge';
+        badge.textContent = item.badge;
+
+        const ago = document.createElement('time');
+        ago.className = 'ra-ago';
+        ago.setAttribute('datetime', item.at);
+        ago.textContent = humanize(item.at) || item.ago;
+
+        meta.append(badge, ago);
+        body.append(text, meta);
+        row.append(icon, body);
+
+        return row;
+    };
+
+    const paint = (items) => {
+        list.textContent = '';
+
+        if (!items.length) {
+            const empty = document.createElement('p');
+            empty.className = 'muted ra-empty';
+            empty.style.padding = '8px 0';
+            empty.style.fontSize = '.82rem';
+            empty.textContent = 'No recent activity yet.';
+            list.append(empty);
+
+            return;
+        }
+
+        items.forEach((item) => list.append(buildRow(item)));
+    };
+
+    let inFlight = false;
+
+    const refresh = async () => {
+        if (inFlight) {
+            return;
+        }
+
+        inFlight = true;
+        try {
+            const response = await fetch(feedUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+            if (!response.ok) {
+                return;
+            }
+
+            const payload = await response.json();
+            if (Array.isArray(payload.items)) {
+                paint(payload.items);
+            }
+            if (payload.stamp) {
+                list.dataset.stamp = payload.stamp;
+            }
+        } catch (error) {
+            // Offline or a dropped request: keep what is on screen and retry
+            // on the next pulse.
+        } finally {
+            inFlight = false;
+        }
+    };
+
+    const pulse = async () => {
+        if (document.hidden) {
+            return;
+        }
+
+        try {
+            const response = await fetch(pulseUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+            if (!response.ok) {
+                return;
+            }
+
+            const payload = await response.json();
+            if (payload.stamp && payload.stamp !== list.dataset.stamp) {
+                list.dataset.stamp = payload.stamp;
+                await refresh();
+            }
+        } catch (error) {
+            // Ignored — the next pulse retries.
+        }
+    };
+
+    setInterval(tick, TICK_MS);
+    setInterval(pulse, PULSE_MS);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            tick();
+            pulse();
+        }
     });
 })();
 </script>
