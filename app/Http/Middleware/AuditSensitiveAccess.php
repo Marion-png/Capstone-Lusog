@@ -44,6 +44,7 @@ class AuditSensitiveAccess
      */
     private const NON_SENSITIVE_PATTERNS = [
         'dashboard/class-adviser/activity/pulse',
+        'health-records/students/*/documents/pulse',
     ];
 
     public function handle(Request $request, Closure $next): Response

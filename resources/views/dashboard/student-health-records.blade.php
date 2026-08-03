@@ -248,9 +248,9 @@
         <div class="sp-tabs" role="tablist" aria-label="Student profile sections">
             <button type="button" class="sp-tab active" role="tab" aria-selected="true" data-panel="p-sheet1">Sheet 1 <span class="sp-tab-badge">Learner Info</span></button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-sheet2">Sheet 2 <span class="sp-tab-badge">Systems Review</span></button>
-            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-consultation">Consultation <span class="sp-tab-badge" id="pConsultBadge">Log</span></button>
-            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-clinic-notes">Clinic Notes <span class="sp-tab-badge" id="pNotesBadge">0</span></button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-consent">Consent <span class="sp-tab-badge" id="pConsentBadge">&ndash;</span></button>
+            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-clinic-notes">Clinic Notes <span class="sp-tab-badge" id="pNotesBadge">0</span></button>
+            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-consultation">Consultation Log <span class="sp-tab-badge" id="pConsultBadge">0</span></button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-documents">Documents <span class="sp-tab-badge" id="pDocsBadge">0</span></button>
         </div>
         <div class="student-profile-body">
@@ -350,11 +350,11 @@
                 </div>
             </section>
 
-            <section id="p-consultation" class="sp-panel">
+            <section id="p-consent" class="sp-panel">
                 <div class="student-profile-section">
-                    <h4>Consultation Log</h4>
-                    <div id="pConsultList">
-                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view consultations.</div></div>
+                    <h4>Parental Consent &mdash; Health Services (Sulat-Pahibalo)</h4>
+                    <div id="pcConsentStatus">
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view consent status.</div></div>
                     </div>
                 </div>
             </section>
@@ -391,26 +391,33 @@
                 </div>
             </section>
 
-            <section id="p-consent" class="sp-panel">
+            <section id="p-consultation" class="sp-panel">
                 <div class="student-profile-section">
-                    <h4>Parental Consent &mdash; Health Services (Sulat-Pahibalo)</h4>
-                    <div id="pcConsentStatus">
-                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view consent status.</div></div>
+                    <h4>Consultation Log</h4>
+                    <div id="pConsultList">
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view consultations.</div></div>
                     </div>
                 </div>
             </section>
 
             <section id="p-documents" class="sp-panel">
+                {{-- The same component the class adviser uses: one list of the
+                     learner's documents, whichever desk filed them. --}}
                 <div class="student-profile-section">
-                    <h4>Medical Documents <span style="font-size:.72rem;font-weight:400;color:var(--text-3);">(conditions &amp; certificates)</span></h4>
+                    @include('partials.student-documents-panel')
+                </div>
+                <div class="student-profile-section">
+                    <h4>Health Conditions</h4>
                     <div id="shcConditionsList">
-                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view documents.</div></div>
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view conditions.</div></div>
                     </div>
                 </div>
             </section>
         </div>{{-- /.student-profile-body --}}
     </div>{{-- /.student-profile-modal --}}
 </div>{{-- /.profile-backdrop --}}
+
+@include('partials.student-documents-script')
 
 <script>
 (() => {
@@ -712,7 +719,8 @@
             lrnField.value = lrn;
         }
 
-        loadDocuments(lrn);
+        StudentDocuments.load(lrn);
+        loadConditions(lrn);
         loadConsentStatus(lrn);
         loadHealthAssessment(lrn);
         loadHealthHistory(lrn);
@@ -1013,7 +1021,7 @@
         const el = document.getElementById('pConsultList');
         if (!el) return;
 
-        setBadge('pConsultBadge', 'Log');
+        setBadge('pConsultBadge', 0);
 
         if (!lrn) {
             el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No LRN available.</div></div>';
@@ -1214,11 +1222,16 @@
         });
     }
 
-    const loadDocuments = async (lrn) => {
+    /**
+     * Health Conditions list. The certificates attached to a condition are no
+     * longer listed here — every document for the learner, whichever desk filed
+     * it, is in the Medical Documents component above, with working preview and
+     * download links. This block keeps what that list cannot show: a condition
+     * on file that has no document backing it yet.
+     */
+    const loadConditions = async (lrn) => {
         const listEl = document.getElementById('shcConditionsList');
         if (!listEl) return;
-
-        setBadge('pDocsBadge', 0);
 
         if (!lrn) {
             listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">No LRN available for this record.</div>';
@@ -1237,10 +1250,7 @@
                 return;
             }
 
-            const data = await resp.json();
-            const conditions = data.conditions || [];
-            // The badge counts attached certificates — the documents themselves.
-            setBadge('pDocsBadge', conditions.reduce((n, c) => n + ((c.certificates || []).length), 0));
+            const conditions = (await resp.json()).conditions || [];
 
             if (!conditions.length) {
                 listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">No health conditions on file for this student.</div>';
@@ -1252,28 +1262,15 @@
                     ? '<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#dcfce7;color:#15803d;margin-left:6px;">Verified / Diagnosed</span>'
                     : '<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#fef3c7;color:#92400e;margin-left:6px;">Self-reported</span>';
 
-                const certRows = (c.certificates || []).map(cert => {
-                    const dl = '';
-                    const doctor = cert.doctor_clinic ? ` &mdash; ${cert.doctor_clinic}` : '';
-                    const date = cert.diagnosis_date ? ` (${cert.diagnosis_date})` : '';
-                    return `<div style="display:flex;align-items:center;gap:4px;padding:4px 0 4px 12px;font-size:.76rem;color:#3d5c47;">
-                        <span style="color:#7a9e87;">&#8226;</span>
-                        <span>${cert.original_name}${doctor}${date}</span>
-                        <span style="font-size:.7rem;color:#7a9e87;">&mdash; uploaded by ${cert.uploaded_by} on ${cert.uploaded_at}</span>
-                        ${dl}
-                    </div>`;
-                }).join('');
-
                 return `<div style="border-bottom:1px solid #edf5ef;padding:8px 0;">
                     <div style="display:flex;align-items:center;gap:4px;">
                         <span style="font-size:.88rem;font-weight:700;color:#1d3c31;">${c.condition_name}</span>
                         ${badge}
                     </div>
-                    ${certRows || '<div style="font-size:.72rem;color:#7a9e87;padding:4px 0 0 12px;">No certificates on file.</div>'}
                 </div>`;
             }).join('');
         } catch (_err) {
-            listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">Could not load documents.</div>';
+            listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">Could not load conditions.</div>';
         }
     };
 
@@ -1307,6 +1304,12 @@
     }
 
     tabs.forEach((tab) => tab.addEventListener('click', () => activateTab(tab)));
+
+    // Medical Documents is the same component the class adviser's profile uses,
+    // reading and writing the same list; the tab badge counts what it holds.
+    StudentDocuments.init({
+        onCount: (count) => setBadge('pDocsBadge', count),
+    });
 
     rows.forEach((row) => {
         const open = () => {

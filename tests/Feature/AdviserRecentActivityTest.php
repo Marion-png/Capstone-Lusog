@@ -133,6 +133,8 @@ class AdviserRecentActivityTest extends TestCase
         ]);
 
         $certificate = MedicalCertificate::create([
+            'student_lrn' => 'LRN001',
+            'institution_id' => $this->inst->id,
             'student_health_condition_id' => $condition->id,
             'file_path' => 'private/cert.pdf',
             'file_original_name' => 'cert.pdf',

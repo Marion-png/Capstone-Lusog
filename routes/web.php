@@ -18,6 +18,7 @@ use App\Http\Controllers\NutritionCoordinatorController;
 use App\Http\Controllers\ParentalConsentFormController;
 use App\Http\Controllers\SchoolHeadController;
 use App\Http\Controllers\StudentHealthRecordController;
+use App\Http\Controllers\StudentMedicalDocumentController;
 use App\Models\AuditLog;
 use App\Models\Consultation;
 use App\Models\Institution;
@@ -541,6 +542,26 @@ Route::get('/medical-certificate/{id}/download', [MedicalCertificateController::
 // API: fetch health conditions for a student by LRN (class_adviser or clinic_staff)
 Route::get('/api/student-conditions', [MedicalCertificateController::class, 'getConditions'])
     ->name('api.student-conditions');
+
+// Medical documents on a learner's student profile — upload, list, preview,
+// download, delete. Shared by the class adviser, school nurse, and clinic
+// staff (roles and own-school scope enforced in the controller), so the path
+// is deliberately role-neutral: an /adviser/* URL would make the prototype
+// session middleware switch a nurse's session over to class_adviser.
+Route::get('/health-records/students/{lrn}/documents', [StudentMedicalDocumentController::class, 'index'])
+    ->name('student-documents.index');
+Route::post('/health-records/students/{lrn}/documents', [StudentMedicalDocumentController::class, 'store'])
+    ->name('student-documents.store');
+// No-PII change signal an open panel polls, so each desk sees what the others
+// filed without a reload. Exempt from the audit trail in AuditSensitiveAccess.
+Route::get('/health-records/students/{lrn}/documents/pulse', [StudentMedicalDocumentController::class, 'pulse'])
+    ->name('student-documents.pulse');
+Route::get('/health-records/student-documents/{id}/view', [StudentMedicalDocumentController::class, 'view'])
+    ->whereNumber('id')->name('student-documents.view');
+Route::get('/health-records/student-documents/{id}/download', [StudentMedicalDocumentController::class, 'download'])
+    ->whereNumber('id')->name('student-documents.download');
+Route::delete('/health-records/student-documents/{id}', [StudentMedicalDocumentController::class, 'destroy'])
+    ->whereNumber('id')->name('student-documents.destroy');
 
 // Parental consent form upload (class_adviser only, own class enforced in controller)
 Route::post('/adviser/parental-consent', [ParentalConsentFormController::class, 'store'])

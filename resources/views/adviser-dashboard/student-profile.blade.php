@@ -35,11 +35,9 @@
             </div>
         </div>
 
-        <div class="sp-readonly-banner">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-            <span><b>Read-only:</b> Clinic notes, consultations, and documents below are recorded by the School Nurse/Clinic Staff. You can view them but cannot add or edit them.</span>
-        </div>
-
+        {{-- The read-only notice lives inside the Clinic Notes and Consultation
+             Log panels it applies to, not above the whole page: Medical
+             Documents is the adviser's own to fill. --}}
         <div class="card student-profile-page">
             <div class="sp-cover"></div>
 
@@ -72,8 +70,9 @@
                 <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabSheet2">Sheet 2 <span class="sp-tab-badge">Systems Review</span></button>
                 <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabConsent">Consent <span class="sp-tab-badge" id="vpConsentTabBadge">&ndash;</span></button>
                 <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabFeeding">Feeding Status <span class="sp-tab-badge" id="vpFeedingTabBadge">&ndash;</span></button>
-                <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabDocuments">Medical Documents <span class="sp-tab-badge" id="vpDocumentsTabBadge">0</span></button>
+                <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabNotes">Clinic Notes <span class="sp-tab-badge" id="vpNotesTabBadge">0</span></button>
                 <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabConsultations">Consultation Log <span class="sp-tab-badge" id="vpConsultationsTabBadge">0</span></button>
+                <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabDocuments">Medical Documents <span class="sp-tab-badge" id="vpDocumentsTabBadge">0</span></button>
             </div>
 
             <div class="student-profile-body">
@@ -165,19 +164,50 @@
                 </section>
             </div>
 
-            <div class="sp-panel" id="vpTabDocuments" role="tabpanel">
+            <div class="sp-panel" id="vpTabNotes" role="tabpanel">
                 <section class="student-profile-section">
-                    <h4>Medical Documents</h4>
-                    <div id="vpDocumentsList"></div>
-                    <div class="sp-note">Uploaded by the School Nurse/Clinic Staff when a medical certificate is attached to a health condition. Downloading is restricted to Clinic Staff/School Nurse.</div>
+                    <div class="sp-panel-head">
+                        <h4>Clinic Notes</h4>
+                        <span class="sp-panel-count" id="vpNotesCount">0 notes</span>
+                    </div>
+
+                    <div class="sp-readonly-banner">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        <span><b>Read-Only:</b> Clinic notes are added by the school nurse or clinic staff. As a Class Adviser, you can view these notes but cannot edit or add new ones.</span>
+                    </div>
+
+                    <div class="sp-subhead">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+                        Note History
+                    </div>
+                    <div id="vpNotesList"></div>
                 </section>
             </div>
 
             <div class="sp-panel" id="vpTabConsultations" role="tabpanel">
                 <section class="student-profile-section">
-                    <h4>Consultation Log</h4>
+                    <div class="sp-panel-head">
+                        <h4>Consultation Log</h4>
+                        <span class="sp-panel-count" id="vpConsultationsCount">0 consultations</span>
+                    </div>
+
+                    <div class="sp-readonly-banner">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        <span><b>Read-Only:</b> Consultation records are added by the school nurse or clinic staff. As a Class Adviser, you can view these records but cannot add or edit them.</span>
+                    </div>
+
+                    <div class="sp-subhead">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+                        Consultation History
+                    </div>
                     <div id="vpConsultationsList"></div>
                     <div class="sp-note">Matched by learner name &mdash; the clinic's consultation log does not record an LRN, so entries for very similar names could occasionally be mismatched.</div>
+                </section>
+            </div>
+
+            <div class="sp-panel" id="vpTabDocuments" role="tabpanel">
+                <section class="student-profile-section">
+                    @include('partials.student-documents-panel')
                 </section>
             </div>
             </div>
@@ -185,9 +215,12 @@
     </div>
 </div>
 
+@include('partials.student-documents-script')
+
 <script>
 const STUDENT_PROFILE_RECORD = @json($prototypeRecord);
 const STUDENT_PROFILE_META = @json($meta);
+const STUDENT_PROFILE_LRN = @json($lrn);
 
 (() => {
     const setText = (id, value) => {
@@ -374,50 +407,100 @@ const STUDENT_PROFILE_META = @json($meta);
         }
     };
 
-    const renderDocumentsList = (documents) => {
-        const host = document.getElementById('vpDocumentsList');
+    // Small inline icons for the read-only clinic panels below. The markup is
+    // a fixed string, never record data — values are written with textContent.
+    const metaIcon = (paths) => {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '2');
+        svg.innerHTML = paths;
+        return svg;
+    };
+
+    const ICONS = {
+        date: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+        person: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    };
+
+
+    // ── Clinic Notes (read-only) ───────────────────────────────────
+    // Written by the school nurse / clinic staff; the adviser only reads them,
+    // so this panel renders values and offers no control that writes.
+    const renderClinicNotesList = (notes) => {
+        const host = document.getElementById('vpNotesList');
         if (!host) {
             return;
         }
         host.textContent = '';
-        const list = Array.isArray(documents) ? documents : [];
-        setText('vpDocumentsTabBadge', String(list.length));
+        const list = Array.isArray(notes) ? notes : [];
+        setText('vpNotesTabBadge', String(list.length));
+        setText('vpNotesCount', `${list.length} ${list.length === 1 ? 'note' : 'notes'}`);
 
         if (!list.length) {
             const empty = document.createElement('p');
-            empty.className = 'sp-note';
-            empty.textContent = 'No medical documents on file for this learner.';
+            empty.className = 'sp-empty';
+            empty.textContent = 'No clinic notes recorded for this learner yet.';
             host.appendChild(empty);
             return;
         }
 
-        list.forEach((doc) => {
-            const row = document.createElement('div');
-            row.className = 'sp-list-row';
+        const timeline = document.createElement('div');
+        timeline.className = 'cnote-timeline';
 
-            const title = document.createElement('div');
-            title.className = 'sp-list-row-title';
-            title.textContent = doc.file_name || 'Untitled document';
-            row.appendChild(title);
+        list.forEach((note) => {
+            const item = document.createElement('div');
+            item.className = 'cnote-item';
 
-            const meta = document.createElement('div');
-            meta.className = 'sp-list-row-meta';
-            [
-                ['Condition', doc.condition_name],
-                ['Doctor/Clinic', doc.doctor_clinic],
-                ['Diagnosis date', doc.diagnosis_date],
-                ['Uploaded by', doc.uploaded_by],
-            ].forEach(([label, value]) => {
-                const span = document.createElement('span');
-                span.textContent = `${label}: ${value || '-'}`;
-                meta.appendChild(span);
-            });
-            row.appendChild(meta);
+            const dot = document.createElement('span');
+            dot.className = 'cnote-dot';
+            item.appendChild(dot);
 
-            host.appendChild(row);
+            const card = document.createElement('div');
+            card.className = 'cnote-card';
+
+            const head = document.createElement('div');
+            head.className = 'cnote-head';
+
+            const when = document.createElement('span');
+            when.className = 'cnote-date';
+            when.textContent = note.recorded_at || '—';
+            head.appendChild(when);
+
+            if (note.author) {
+                const author = document.createElement('span');
+                author.className = 'cnote-author';
+                author.appendChild(metaIcon(ICONS.person));
+                author.appendChild(document.createTextNode(note.author));
+                head.appendChild(author);
+            }
+            card.appendChild(head);
+
+            const body = document.createElement('p');
+            body.className = 'cnote-body';
+            body.textContent = note.note || '';
+            card.appendChild(body);
+
+            if (note.follow_up_date) {
+                const followUp = document.createElement('span');
+                followUp.className = 'cnote-followup';
+                followUp.appendChild(metaIcon(ICONS.date));
+                followUp.appendChild(document.createTextNode(`Follow-up: ${note.follow_up_date}`));
+                card.appendChild(followUp);
+            }
+
+            item.appendChild(card);
+            timeline.appendChild(item);
         });
+
+        host.appendChild(timeline);
     };
 
+    // ── Consultation Log (read-only) ───────────────────────────────
+    // Rows carry only what clinic staff actually record for a visit —
+    // condition, treatment given, and whether the learner was treated or
+    // referred — so a field with no value is left out rather than shown blank.
     const renderConsultationsList = (consultations) => {
         const host = document.getElementById('vpConsultationsList');
         if (!host) {
@@ -426,38 +509,60 @@ const STUDENT_PROFILE_META = @json($meta);
         host.textContent = '';
         const list = Array.isArray(consultations) ? consultations : [];
         setText('vpConsultationsTabBadge', String(list.length));
+        setText('vpConsultationsCount', `${list.length} ${list.length === 1 ? 'consultation' : 'consultations'}`);
 
         if (!list.length) {
             const empty = document.createElement('p');
-            empty.className = 'sp-note';
+            empty.className = 'sp-empty';
             empty.textContent = 'No consultation records matched to this learner\'s name yet.';
             host.appendChild(empty);
             return;
         }
 
         list.forEach((visit) => {
-            const row = document.createElement('div');
-            row.className = 'sp-list-row';
+            const card = document.createElement('div');
+            card.className = 'clog-card';
 
-            const title = document.createElement('div');
-            title.className = 'sp-list-row-title';
-            title.textContent = visit.condition || 'Consultation';
-            row.appendChild(title);
+            const head = document.createElement('div');
+            head.className = 'clog-head';
 
-            const meta = document.createElement('div');
-            meta.className = 'sp-list-row-meta';
+            const when = document.createElement('span');
+            when.className = 'clog-date';
+            when.textContent = visit.consulted_at_label || visit.consulted_at || '—';
+            head.appendChild(when);
+
+            if (visit.grade_section) {
+                const where = document.createElement('span');
+                where.className = 'clog-by';
+                where.textContent = visit.grade_section;
+                head.appendChild(where);
+            }
+            card.appendChild(head);
+
             [
-                ['Date', visit.consulted_at],
-                ['Treatment given', visit.treatment_given],
+                ['Condition', visit.condition],
+                ['Treatment Given', visit.treatment_given],
                 ['Status', visit.status],
             ].forEach(([label, value]) => {
-                const span = document.createElement('span');
-                span.textContent = `${label}: ${value || '-'}`;
-                meta.appendChild(span);
-            });
-            row.appendChild(meta);
+                if (!value) {
+                    return;
+                }
+                const row = document.createElement('div');
+                row.className = 'clog-row';
 
-            host.appendChild(row);
+                const key = document.createElement('span');
+                key.className = 'clog-label';
+                key.textContent = `${label}:`;
+
+                const val = document.createElement('span');
+                val.className = 'clog-value';
+                val.textContent = String(value);
+
+                row.append(key, val);
+                card.appendChild(row);
+            });
+
+            host.appendChild(card);
         });
     };
 
@@ -531,7 +636,10 @@ const STUDENT_PROFILE_META = @json($meta);
         setText('vpFeedEndline', feeding.endline_status || '-');
         setText('vpFeedSessions', feeding.sessions ? String(feeding.sessions) : '0');
 
-        renderDocumentsList(meta.documents);
+        // The shared Medical Documents component renders the list the page was
+        // served with; opening the tab re-reads it from the server.
+        StudentDocuments.render(meta.documents, STUDENT_PROFILE_LRN);
+        renderClinicNotesList(meta.clinic_notes);
         renderConsultationsList(meta.consultations);
 
         setText('vpGuardian', record.parent_guardian || '-');
@@ -556,6 +664,13 @@ const STUDENT_PROFILE_META = @json($meta);
             tab.classList.toggle('active', selected);
             tab.setAttribute('aria-selected', selected ? 'true' : 'false');
         });
+
+        // The page was served with the documents it had on load; opening the
+        // tab re-reads them, so a file the nurse or clinic staff added in the
+        // meantime shows up without a refresh.
+        if (panelId === 'vpTabDocuments') {
+            StudentDocuments.load(STUDENT_PROFILE_LRN);
+        }
     };
 
     document.querySelectorAll('.sp-tab').forEach((tab) => {
@@ -564,6 +679,9 @@ const STUDENT_PROFILE_META = @json($meta);
 
     document.getElementById('vpPrint')?.addEventListener('click', () => window.print());
 
+    StudentDocuments.init({
+        onCount: (count) => setText('vpDocumentsTabBadge', String(count)),
+    });
     renderProfile(STUDENT_PROFILE_RECORD, STUDENT_PROFILE_META);
 })();
 </script>

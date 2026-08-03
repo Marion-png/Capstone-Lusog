@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ClinicNote;
 use App\Models\Consultation;
 use App\Models\FeedingAttendance;
 use App\Models\HealthAssessment;
 use App\Models\HealthConsentForm;
 use App\Models\MedicalCertificate;
-use App\Models\StudentHealthCondition;
 use App\Models\StudentHealthRecord;
+use App\Support\StudentMedicalDocuments;
 use App\Support\StudentRosterSync;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -69,15 +70,17 @@ class StudentHealthRecordController extends Controller
             })
             ->count();
 
+        // Any uploaded document counts — a certificate filed against a
+        // condition and one uploaded straight from the student profile alike.
         $lrnsWithCertificates = [];
-        if (Schema::hasTable('student_health_conditions') && Schema::hasTable('medical_certificates')) {
+        if (Schema::hasTable('medical_certificates')) {
             $lrnsWithCertificates = array_flip(
-                StudentHealthCondition::query()
+                MedicalCertificate::query()
                     ->when(
                         $request->session()->get('active_institution_id'),
                         fn ($q, $id) => $q->where('institution_id', $id)
                     )
-                    ->whereHas('certificates')
+                    ->whereNotNull('student_lrn')
                     ->pluck('student_lrn')
                     ->unique()
                     ->toArray()
@@ -128,6 +131,7 @@ class StudentHealthRecordController extends Controller
                 'feeding' => [],
                 'documents' => collect(),
                 'consultations' => collect(),
+                'clinic_notes' => collect(),
             ],
         ]);
     }
@@ -181,33 +185,18 @@ class StudentHealthRecordController extends Controller
                 ->keyBy('student_lrn')
             : collect();
 
-        // Medical Documents tab — certificates are reliably scoped by LRN via
-        // student_health_conditions, so this is an exact match, unlike consultations.
-        $documentsByLrn = collect();
-        if (Schema::hasTable('student_health_conditions') && Schema::hasTable('medical_certificates')) {
-            $documentsByLrn = StudentHealthCondition::query()
-                ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
-                ->whereIn('student_lrn', $lrns)
-                ->with('certificates')
-                ->get()
-                ->groupBy('student_lrn')
-                ->map(function (Collection $conditions) {
-                    return $conditions->flatMap(function (StudentHealthCondition $condition) {
-                        return $condition->certificates->map(fn (MedicalCertificate $cert) => [
-                            'condition_name' => $condition->condition_name,
-                            'file_name' => $cert->file_original_name,
-                            'doctor_clinic' => $cert->doctor_clinic,
-                            'diagnosis_date' => $cert->diagnosis_date?->toDateString(),
-                            'uploaded_by' => $cert->uploaded_by_name,
-                        ])->values();
-                    })->values();
-                });
-        }
+        // Medical Documents tab — documents are keyed by LRN + institution on
+        // the document row itself, so this is an exact match, unlike consultations.
+        $documentsByLrn = StudentMedicalDocuments::forLearners($lrns, $institutionId);
 
         // Consultation Log tab — the consultations table has no student_id/LRN
         // column (clinic staff log a free-text name), so matches are best-effort
         // by decrypted name + grade/section, not a guaranteed exact link.
         $consultationsByLrn = $this->matchConsultationsToRoster($roster, $lrns, $institutionId);
+
+        // Clinic Notes tab — read-only for the adviser; the nurse and clinic
+        // staff are the only roles that may write them.
+        $clinicNotesByLrn = $this->clinicNotesForRoster($lrns, $institutionId);
 
         $meta = [];
         foreach ($lrns as $lrn) {
@@ -237,6 +226,7 @@ class StudentHealthRecordController extends Controller
                 'assessment_date' => $assessment?->date_of_assessment?->toDateString(),
                 'documents' => $documentsByLrn->get($lrn, collect())->values(),
                 'consultations' => $consultationsByLrn->get($lrn, collect())->values(),
+                'clinic_notes' => $clinicNotesByLrn->get($lrn, collect())->values(),
             ];
         }
 
@@ -295,15 +285,56 @@ class StudentHealthRecordController extends Controller
 
             $entry = [
                 'consulted_at' => $consultation->consulted_at?->toDateTimeString(),
+                'consulted_at_label' => $consultation->consulted_at?->format('M j, Y \a\t g:i A'),
+                'grade_section' => $consultation->grade_section,
                 'condition' => $consultation->condition,
                 'treatment_given' => $consultation->treatment_given,
-                'status' => $consultation->status,
+                'status' => $this->consultationStatusLabel($consultation->status),
             ];
 
             $byLrn->put($match['lrn'], $byLrn->get($match['lrn'], collect())->push($entry));
         }
 
         return $byLrn;
+    }
+
+    /**
+     * Clinic notes for this class's learners, newest first and keyed by LRN.
+     * student_lrn / institution_id are the plain lookup columns; the note and
+     * its author are encrypted, so they are only read back here in PHP.
+     *
+     * @param  Collection<int, string>  $lrns
+     * @return Collection<string, Collection<int, array<string, mixed>>>
+     */
+    private function clinicNotesForRoster(Collection $lrns, ?int $institutionId): Collection
+    {
+        if (! Schema::hasTable('clinic_notes') || $lrns->isEmpty()) {
+            return collect();
+        }
+
+        return ClinicNote::query()
+            ->whereIn('student_lrn', $lrns)
+            ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get()
+            ->groupBy('student_lrn')
+            ->map(fn (Collection $notes) => $notes->map(fn (ClinicNote $note) => [
+                'recorded_at' => $note->created_at?->format('M j, Y \a\t g:i A'),
+                'author' => (string) $note->author_name,
+                'note' => (string) $note->note,
+                'follow_up_date' => $note->follow_up_date?->format('M j, Y'),
+            ])->values());
+    }
+
+    /** "treated"/"referred" as the clinic log itself labels them. */
+    private function consultationStatusLabel(?string $status): ?string
+    {
+        return match ($status) {
+            'treated' => 'Treated',
+            'referred' => 'Referred',
+            default => $status,
+        };
     }
 
     private function normaliseNameForMatching(string $name): string
@@ -636,7 +667,7 @@ class StudentHealthRecordController extends Controller
         }
 
         foreach ($this->recentCertificates($ctx, $limit) as $certificate) {
-            $lrn = (string) $certificate->condition?->student_lrn;
+            $lrn = (string) $certificate->student_lrn;
             $activity->push([
                 'id' => "certificate-{$certificate->id}",
                 'icon' => 'certificate',
@@ -655,8 +686,9 @@ class StudentHealthRecordController extends Controller
     }
 
     /**
-     * Medical certificates attached to this class's learners. Scoped through
-     * student_health_conditions, whose student_lrn / institution_id are the
+     * Medical documents filed for this class's learners — both certificates
+     * attached to a condition and documents uploaded straight from the student
+     * profile. Scoped by the document's own student_lrn / institution_id, the
      * plain lookup columns.
      *
      * @param  array<string, mixed>  $ctx  from loadAdviserContext()
@@ -664,15 +696,13 @@ class StudentHealthRecordController extends Controller
      */
     private function recentCertificates(array $ctx, int $limit): Collection
     {
-        if (! Schema::hasTable('medical_certificates') || ! Schema::hasTable('student_health_conditions')) {
+        if (! Schema::hasTable('medical_certificates')) {
             return collect();
         }
 
         return MedicalCertificate::query()
-            ->with('condition')
-            ->whereHas('condition', fn ($q) => $q
-                ->whereIn('student_lrn', $ctx['lrns'])
-                ->when($ctx['institution_id'], fn ($q, $id) => $q->where('institution_id', $id)))
+            ->whereIn('student_lrn', $ctx['lrns'])
+            ->when($ctx['institution_id'], fn ($q, $id) => $q->where('institution_id', $id))
             ->latest('created_at')
             ->limit($limit)
             ->get();

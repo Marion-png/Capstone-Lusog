@@ -471,6 +471,45 @@ tbody tr:hover td{background:#f7fbf8}
 .sp-list-row-meta{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:3px}
 .sp-list-row-meta span{font-size:.72rem;color:var(--muted)}
 
+/* ── Student profile — shared panel chrome ────────────────────── */
+.sp-panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:10px}
+.sp-panel-head h4{margin-bottom:0}
+.sp-panel-count{font-size:.72rem;font-weight:600;color:var(--muted)}
+.sp-subhead{display:flex;align-items:center;gap:7px;margin:16px 0 10px;font-size:.78rem;font-weight:700;color:#1d3c31;letter-spacing:.02em}
+.sp-subhead svg{width:14px;height:14px;color:var(--g700)}
+.sp-empty{padding:14px 0;font-size:.75rem;color:var(--muted)}
+/* Panel-level notices sit inside the section, so they need their own spacing. */
+.student-profile-section .sp-readonly-banner{margin:0}
+
+/* The Medical Documents panel is styled in resources/css/student-documents.css
+   and inlined by its own partial, so the adviser and the nurse render it
+   identically. Nothing about it belongs here. */
+
+/* ── Student profile — Clinic Notes (read-only timeline) ───────── */
+.cnote-timeline{position:relative;padding-left:22px}
+.cnote-timeline::before{content:"";position:absolute;left:6px;top:6px;bottom:6px;width:2px;background:#d8e6de}
+.cnote-item{position:relative;margin-bottom:10px}
+.cnote-item:last-child{margin-bottom:0}
+.cnote-dot{position:absolute;left:-22px;top:12px;width:14px;height:14px;border-radius:50%;background:#fff;border:3px solid var(--g700)}
+.cnote-card{background:#f7faf8;border:1px solid var(--border);border-left:3px solid var(--g700);border-radius:10px;padding:10px 13px}
+.cnote-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:5px}
+.cnote-date{font-size:.75rem;font-weight:600;color:#4b6b8a}
+.cnote-author{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:600;color:var(--g700)}
+.cnote-author svg{width:12px;height:12px;flex-shrink:0}
+.cnote-body{font-size:.8rem;color:#24402f;line-height:1.55;white-space:pre-line;overflow-wrap:anywhere}
+.cnote-followup{display:inline-flex;align-items:center;gap:5px;margin-top:7px;font-size:.72rem;font-weight:700;color:var(--g700)}
+.cnote-followup svg{width:12px;height:12px;flex-shrink:0}
+
+/* ── Student profile — Consultation Log (read-only cards) ──────── */
+.clog-card{background:#f7faf8;border:1px solid var(--border);border-left:3px solid var(--g900);border-radius:10px;padding:11px 14px;margin-bottom:9px}
+.clog-card:last-of-type{margin-bottom:0}
+.clog-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.clog-date{font-size:.83rem;font-weight:700;color:#14321f}
+.clog-by{font-size:.72rem;color:var(--muted)}
+.clog-row{display:flex;flex-wrap:wrap;gap:6px;font-size:.78rem;line-height:1.5}
+.clog-label{font-weight:700;color:#24402f}
+.clog-value{color:#3f7a5c;overflow-wrap:anywhere}
+
 /* Print the whole profile — every tab, no chrome, no buttons. */
 @media print{
     body:has(.profile-backdrop.open) > *:not(.profile-backdrop){display:none !important}

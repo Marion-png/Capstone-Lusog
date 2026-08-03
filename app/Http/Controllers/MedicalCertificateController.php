@@ -86,13 +86,20 @@ class MedicalCertificateController extends Controller
         $originalName = $file->getClientOriginalName();
         $path = EncryptedFileStorage::store($file, 'medical-certificates/'.$record->id);
 
+        // student_lrn / institution_id are stamped on the certificate itself so
+        // the learner's Medical Documents list reads it without joining through
+        // the condition — the same columns the profile uploader writes.
         MedicalCertificate::create([
+            'student_lrn' => $validated['lrn'],
+            'institution_id' => $institutionId,
             'student_health_condition_id' => $condition->id,
             'file_path' => $path,
             'file_original_name' => $originalName,
+            'file_size' => $file->getSize(),
             'doctor_clinic' => $validated['doctor_clinic'] ?? null,
             'diagnosis_date' => $validated['diagnosis_date'] ?? null,
             'uploaded_by_name' => (string) $request->session()->get('active_name', 'Class Adviser'),
+            'uploaded_by_role' => 'class_adviser',
         ]);
 
         return back()->with('cert_success', "Certificate for \"{$condition->condition_name}\" uploaded successfully.");

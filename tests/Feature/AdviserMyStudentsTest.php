@@ -260,13 +260,14 @@ class AdviserMyStudentsTest extends TestCase
         $this->assertStringContainsString('id="asbSearchInput"', $html);
         $this->assertStringContainsString('class="asb-sidebar"', $html);
 
-        // Isolate the profile card and assert it carries no way to submit.
+        // Isolate the profile card and assert it carries no way to edit the
+        // learner's record — changes go through Edit Profile, not this page.
         $start = strpos($html, 'class="card student-profile-page"');
         $end = strpos($html, '<script>', $start);
         $this->assertNotFalse($start);
         $card = substr($html, $start, $end - $start);
 
-        foreach (['<form', '<input', '<select', '<textarea'] as $editable) {
+        foreach (['<form', '<select', '<textarea'] as $editable) {
             $this->assertStringNotContainsString(
                 $editable,
                 $card,
@@ -274,14 +275,19 @@ class AdviserMyStudentsTest extends TestCase
             );
         }
 
+        // The one exception is the Medical Documents file picker: the adviser
+        // files documents here, but no health field is editable.
+        $this->assertSame(1, substr_count($card, '<input'), 'The only input on the profile is the document picker.');
+        $this->assertStringContainsString('id="sdInput"', $card);
+
         $this->assertStringNotContainsString(route('health-assessment.store'), $card);
         $this->assertStringNotContainsString('Save Health Assessment', $card);
 
         // Print and Edit Profile (which navigates to the real edit form) are
-        // offered, and the read-only intent for clinic-recorded data is stated.
+        // offered, and each clinic-recorded panel states its read-only intent.
         $this->assertStringContainsString('id="vpPrint"', $card);
         $this->assertStringContainsString('id="vpEditProfile"', $html);
-        $this->assertStringContainsString('Read-only', $html);
+        $this->assertSame(2, substr_count($html, '<b>Read-Only:</b>'), 'Clinic Notes and Consultation Log each carry the read-only notice.');
     }
 
     /** @test */
@@ -304,6 +310,31 @@ class AdviserMyStudentsTest extends TestCase
         $response->assertSee('STUDENT_PROFILE_META', false);
         $response->assertSee('consent_detail', false);
         $response->assertSee('baseline_status', false);
+    }
+
+    /** @test */
+    public function the_profile_tabs_read_in_the_order_the_school_asked_for(): void
+    {
+        $this->enrol();
+
+        $html = $this->flushSession()
+            ->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'))
+            ->assertOk()
+            ->getContent();
+
+        $expected = [
+            'vpTabSheet1', 'vpTabSheet2', 'vpTabConsent', 'vpTabFeeding',
+            'vpTabNotes', 'vpTabConsultations', 'vpTabDocuments',
+        ];
+
+        preg_match_all('/data-panel="([^"]+)"/', $html, $tabs);
+        $this->assertSame($expected, $tabs[1]);
+
+        // The panels follow the same order, so a printed profile — which lays
+        // every panel out in DOM order — reads the way the tabs do.
+        preg_match_all('/class="sp-panel[^"]*" id="(vpTab[A-Za-z0-9]+)"/', $html, $panels);
+        $this->assertSame($expected, $panels[1]);
     }
 
     /** @test */

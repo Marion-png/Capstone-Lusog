@@ -161,7 +161,7 @@ class NurseHealthRecordsPageTest extends TestCase
     }
 
     #[Test]
-    public function the_profile_tabs_match_the_requested_set_with_badges(): void
+    public function the_profile_tabs_match_the_requested_set_and_order(): void
     {
         $response = $this->withSession($this->nurseSession([$this->learner()]))
             ->get('/dashboard/student-health-records')
@@ -170,18 +170,53 @@ class NurseHealthRecordsPageTest extends TestCase
         foreach ([
             'Sheet 1' => 'Learner Info',
             'Sheet 2' => 'Systems Review',
-            'Consultation' => 'Log',
         ] as $tab => $badge) {
             $response->assertSee($tab)->assertSee($badge);
         }
 
         $response->assertSee('Clinic Notes')
+            ->assertSee('Consultation Log')
             ->assertSee('Consent')
             ->assertSee('Documents');
 
         // Live badge targets the scripts fill in.
         foreach (['pConsultBadge', 'pNotesBadge', 'pConsentBadge', 'pDocsBadge'] as $badgeId) {
             $response->assertSee('id="'.$badgeId.'"', false);
+        }
+
+        // The tab strip reads in the order the school asked for, and the panels
+        // are laid out in the same order so a printed profile follows the tabs.
+        $html = $response->getContent();
+        $expected = ['p-sheet1', 'p-sheet2', 'p-consent', 'p-clinic-notes', 'p-consultation', 'p-documents'];
+
+        preg_match_all('/data-panel="([^"]+)"/', $html, $tabs);
+        $this->assertSame($expected, $tabs[1]);
+
+        preg_match_all('/<section id="(p-[a-z0-9-]+)" class="sp-panel/', $html, $panels);
+        $this->assertSame($expected, $panels[1]);
+    }
+
+    #[Test]
+    public function the_documents_tab_carries_the_same_uploader_the_adviser_has(): void
+    {
+        $html = $this->withSession($this->nurseSession([$this->learner()]))
+            ->get('/dashboard/student-health-records')
+            ->assertOk()
+            ->getContent();
+
+        // The shared component, not a nurse-only copy of it.
+        foreach (['id="sdDrop"', 'id="sdInput"', 'id="sdList"', 'window.StudentDocuments'] as $hook) {
+            $this->assertStringContainsString($hook, $html);
+        }
+
+        $this->assertStringContainsString('Drag and drop medical documents here, or click to browse', $html);
+        $this->assertStringContainsString('Supported formats: PDF, JPG, PNG, DOC, XLS (Max 10MB)', $html);
+        $this->assertStringContainsString('Uploaded Documents', $html);
+
+        // Both profiles include the very same partials.
+        $adviserMarkup = file_get_contents(resource_path('views/adviser-dashboard/student-profile.blade.php'));
+        foreach (['partials.student-documents-panel', 'partials.student-documents-script'] as $partial) {
+            $this->assertStringContainsString($partial, $adviserMarkup);
         }
     }
 

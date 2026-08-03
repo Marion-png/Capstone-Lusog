@@ -1,0 +1,53 @@
+/* Medical Documents panel — shared by the class adviser's student profile and
+   the school nurse's. Both roles file documents against the same learner and
+   see the same list, so the panel is styled once, here, and inlined by
+   partials/student-documents-panel.blade.php.
+
+   Colours are literals rather than the pages' custom properties: the two host
+   stylesheets define overlapping but not identical variable sets. */
+.sd-panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:10px}
+.sd-panel-head h4{margin-bottom:0;font-size:.8rem;font-weight:700;color:#284b3e;text-transform:uppercase;letter-spacing:.06em}
+.sd-count{font-size:.72rem;font-weight:600;color:#6f8c7a}
+
+.doc-drop{display:flex;flex-direction:column;align-items:center;text-align:center;padding:22px 16px;background:#f7faf8;border:2px dashed #c7d8cf;border-radius:12px;cursor:pointer;transition:background .18s ease,border-color .18s ease,opacity .18s ease}
+.doc-drop:hover,.doc-drop:focus-visible{background:#dcfce7;border-color:#86efac;outline:none}
+.doc-drop.is-dragging{background:#dcfce7;border-color:#15803d}
+.doc-drop.is-busy{opacity:.6;pointer-events:none}
+.doc-drop.is-disabled{opacity:.55;pointer-events:none}
+.doc-drop > svg{width:40px;height:40px;color:#b9cec3;margin-bottom:9px}
+.doc-drop-main{font-size:.82rem;color:#6f8c7a}
+.doc-drop-sub{font-size:.72rem;color:#9db3a7;margin-top:3px}
+.doc-drop-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;margin-top:14px;padding:10px 18px;border:none;border-radius:8px;background:#14532d;color:#fff;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;transition:background .18s ease}
+.doc-drop-btn svg{width:14px;height:14px;flex-shrink:0}
+.doc-drop-btn:hover{background:#0f3d21}
+.doc-drop-btn:disabled{cursor:not-allowed;opacity:.7}
+.doc-feedback{display:none;margin-top:9px;font-size:.74rem;font-weight:600;color:#15803d}
+.doc-feedback.is-shown{display:block}
+.doc-feedback.is-error{color:#b91c1c}
+
+.doc-list-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:18px 0 4px;font-size:.78rem;font-weight:700;color:#1d3c31;letter-spacing:.02em}
+.doc-empty{padding:14px 0;font-size:.75rem;color:#6f8c7a}
+.doc-row{display:flex;align-items:center;gap:12px;padding:11px 12px;margin-top:8px;background:#f7faf8;border:1px solid #e4ece7;border-radius:12px}
+.doc-icon{flex-shrink:0;width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-size:.6rem;font-weight:700;letter-spacing:.03em;background:#e2ebe6;color:#4b6b5c}
+.doc-icon.pdf{background:#fee2e2;color:#dc2626}
+.doc-icon.img{background:#dbeafe;color:#1d4ed8}
+.doc-icon.doc{background:#e0e7ff;color:#4338ca}
+.doc-icon.xls{background:#dcfce7;color:#15803d}
+.doc-body{flex:1;min-width:0}
+.doc-name{font-size:.83rem;font-weight:700;color:#14321f;overflow-wrap:anywhere}
+.doc-meta{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:3px}
+.doc-meta span{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;color:#6f8c7a}
+.doc-meta svg{width:12px;height:12px;flex-shrink:0}
+.doc-role{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 8px;border-radius:999px;background:#e2ebe6;color:#3f6b53}
+.doc-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.doc-action{width:32px;height:32px;display:grid;place-items:center;border-radius:9px;border:1px solid transparent;background:none;cursor:pointer;transition:filter .18s ease}
+.doc-action:hover{filter:brightness(.94)}
+.doc-action svg{width:15px;height:15px}
+.doc-action.view{background:#e0f2fe;border-color:#bae6fd;color:#0369a1}
+.doc-action.download{background:#dcfce7;border-color:#86efac;color:#15803d}
+.doc-action.delete{background:#fee2e2;border-color:#fecaca;color:#dc2626}
+
+/* A printed profile is a record, not a workspace. */
+@media print{
+    .doc-drop,.doc-feedback,.doc-actions{display:none !important}
+}
