@@ -7,7 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 
 class Institution extends Model
 {
-    protected $fillable = ['name', 'address', 'status'];
+    protected $fillable = ['name', 'address', 'status', 'database_name', 'provisioned_at'];
+
+    protected $casts = ['provisioned_at' => 'datetime'];
 
     public const DEFAULT_SCHOOLS = [
         'A. L. Navarro National High School',
@@ -74,6 +76,19 @@ class Institution extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('status', 'active');
+    }
+
+    /**
+     * Schools whose private database has not been built yet.
+     */
+    public function scopeUnprovisioned(Builder $query): Builder
+    {
+        return $query->whereNull('provisioned_at');
+    }
+
+    public function isProvisioned(): bool
+    {
+        return $this->provisioned_at !== null;
     }
 
     public static function seedDefaults(): void

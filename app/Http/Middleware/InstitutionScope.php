@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Tenancy;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -23,6 +24,11 @@ class InstitutionScope
 
     public function handle(Request $request, Closure $next): Response
     {
+        // A tenant connection left bound from a previous request in the same
+        // worker would silently serve the wrong school, so start every request
+        // with nothing bound and re-derive it from this session.
+        Tenancy::forget();
+
         if (! $request->session()->has('active_role')) {
             return $next($request);
         }
@@ -40,6 +46,10 @@ class InstitutionScope
 
                 return redirect()->route('login')
                     ->with('error', 'Your account has no school assigned. Contact the System Admin.');
+            }
+
+            if ($institutionId) {
+                Tenancy::bind((int) $institutionId);
             }
         }
 

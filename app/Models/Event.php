@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\TenantConnection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class Event extends Model
 {
+    use TenantConnection;
+
     /**
      * Roles allowed to create events. Currently only the School Nurse —
      * kept as a list (not a single hardcoded check) for the same reason

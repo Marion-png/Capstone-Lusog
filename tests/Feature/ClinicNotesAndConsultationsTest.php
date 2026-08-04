@@ -105,7 +105,7 @@ class ClinicNotesAndConsultationsTest extends TestCase
             ->assertCreated();
 
         $this->assertTrue(
-            AuditLog::where('auditable_type', 'ClinicNote')->orWhere('action', 'created')->exists(),
+            AuditLog::where('subject_type', 'ClinicNote')->where('action', 'created')->exists(),
             'Creating a clinic note must leave an audit entry.'
         );
     }

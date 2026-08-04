@@ -681,6 +681,7 @@
             <p class="footer">
                 Forgot your password? Contact your system administrator.<br>
                 <a href="{{ route('account.request') }}" style="color:#6e7b78;text-decoration:underline;">Create Account</a><br>
+                <a href="{{ route('institution.request') }}" style="color:#6e7b78;text-decoration:underline;">Register School</a><br>
                 SIGLA v1.0 | School-Based Information Governance for Life Care Administration
             </p>
         </form>

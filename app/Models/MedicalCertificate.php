@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\TenantConnection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class MedicalCertificate extends Model
 {
     use Auditable;
+    use TenantConnection;
 
     protected $fillable = [
         'student_lrn',

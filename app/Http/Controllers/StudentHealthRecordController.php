@@ -11,6 +11,7 @@ use App\Models\MedicalCertificate;
 use App\Models\StudentHealthRecord;
 use App\Support\StudentMedicalDocuments;
 use App\Support\StudentRosterSync;
+use App\Support\Tenancy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -759,17 +760,19 @@ class StudentHealthRecordController extends Controller
         $institutionId = $request->session()->get('active_institution_id');
         $parts = [];
 
+        // All four are school-owned, so they are read from the institution's own
+        // database via Tenancy — DB::table() would query the central one.
         foreach (['student_health_records', 'health_consent_forms', 'health_assessments', 'medical_certificates'] as $table) {
-            if (! Schema::hasTable($table)) {
+            if (! Tenancy::schema()->hasTable($table)) {
                 $parts[] = '-';
 
                 continue;
             }
 
-            $query = DB::table($table);
+            $query = Tenancy::table($table);
             // health_assessments and medical_certificates inherit their school
             // scope from the parent record, so only the owning tables filter.
-            if ($institutionId && Schema::hasColumn($table, 'institution_id')) {
+            if ($institutionId && Tenancy::schema()->hasColumn($table, 'institution_id')) {
                 $query->where('institution_id', $institutionId);
             }
 

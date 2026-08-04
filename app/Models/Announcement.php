@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\TenantConnection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class Announcement extends Model
 {
+    use TenantConnection;
+
     /**
      * Roles allowed to post announcements. Currently only the School Nurse —
      * kept as a list (not a single hardcoded check) so opening this up to

@@ -22,9 +22,12 @@ use App\Http\Controllers\StudentMedicalDocumentController;
 use App\Models\AuditLog;
 use App\Models\Consultation;
 use App\Models\Institution;
+use App\Models\InstitutionRequest;
 use App\Models\Medicine;
 use App\Models\StudentHealthRecord;
 use App\Support\AuditTrail;
+use App\Support\InstitutionProvisioner;
+use App\Support\Tenancy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -128,6 +131,53 @@ Route::post('/account-request', function (Request $request) {
         ->route('account.request')
         ->with('success', 'Account request submitted. Please wait for System Admin approval.');
 })->name('account.request.submit');
+
+// A school applying to join. Approval provisions its private database — see
+// the Per-Institution Database Isolation invariant in CLAUDE.md.
+Route::get('/institution-request', function () {
+    return view('auth.institution-request');
+})->name('institution.request');
+
+Route::post('/institution-request', function (Request $request) {
+    $validated = $request->validate([
+        'name' => ['required', 'string', 'max:255'],
+        'address' => ['nullable', 'string', 'max:255'],
+        'division' => ['nullable', 'string', 'max:255'],
+        'contact_person' => ['required', 'string', 'max:255'],
+        'contact_email' => ['required', 'email', 'max:255'],
+        'contact_number' => ['nullable', 'string', 'max:50'],
+    ]);
+
+    $name = trim($validated['name']);
+
+    $alreadyRegistered = Institution::whereRaw('LOWER(TRIM(name)) = ?', [strtolower($name)])->exists();
+
+    $alreadyPending = InstitutionRequest::pending()
+        ->whereRaw('LOWER(TRIM(name)) = ?', [strtolower($name)])
+        ->exists();
+
+    if ($alreadyRegistered || $alreadyPending) {
+        return back()
+            ->withErrors(['name' => 'This school is already registered or has a pending registration.'])
+            ->withInput();
+    }
+
+    InstitutionRequest::create([
+        'name' => $name,
+        'address' => $validated['address'] ?? null,
+        'division' => $validated['division'] ?? null,
+        'contact_person' => $validated['contact_person'],
+        'contact_email' => $validated['contact_email'],
+        'contact_number' => $validated['contact_number'] ?? null,
+        'status' => 'pending',
+    ]);
+
+    AuditTrail::record('created', 'InstitutionRequest', null, "School registration submitted for '{$name}'");
+
+    return redirect()
+        ->route('institution.request')
+        ->with('success', 'School registration submitted. Please wait for System Admin approval.');
+})->name('institution.request.submit');
 
 // Prototype flow: Class Adviser -> School Nurse (Session-based, no database)
 Route::get('/adviser/create', [AdviserController::class, 'create'])
@@ -267,8 +317,8 @@ Route::get('/dashboard/school-nurse/deworming', function (Request $request) {
 
     $institutionId = $request->session()->get('active_institution_id');
 
-    if (Schema::hasTable('deworming_requests')) {
-        $q = DB::table('deworming_requests');
+    if (Tenancy::schema()->hasTable('deworming_requests')) {
+        $q = Tenancy::table('deworming_requests');
         if ($institutionId) {
             $q->where('institution_id', $institutionId);
         }
@@ -295,10 +345,10 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/{decision}', function
         return redirect()->route('dashboard.school-nurse')->with('error', 'Only School Nurse can review deworming requests.');
     }
 
-    if (Schema::hasTable('deworming_requests')) {
+    if (Tenancy::schema()->hasTable('deworming_requests')) {
         $institutionId = $request->session()->get('active_institution_id');
 
-        $exists = DB::table('deworming_requests')
+        $exists = Tenancy::table('deworming_requests')
             ->where('id', $requestId)
             ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
             ->exists();
@@ -307,7 +357,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/{decision}', function
             return back()->with('error', 'Deworming request not found.');
         }
 
-        DB::table('deworming_requests')
+        Tenancy::table('deworming_requests')
             ->where('id', $requestId)
             ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
             ->update([
@@ -348,10 +398,10 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/comment', function (R
         'nurse_comment' => ['required', 'string', 'max:500'],
     ]);
 
-    if (Schema::hasTable('deworming_requests')) {
+    if (Tenancy::schema()->hasTable('deworming_requests')) {
         $institutionId = $request->session()->get('active_institution_id');
 
-        $exists = DB::table('deworming_requests')
+        $exists = Tenancy::table('deworming_requests')
             ->where('id', $requestId)
             ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
             ->exists();
@@ -360,7 +410,7 @@ Route::post('/dashboard/school-nurse/deworming/{requestId}/comment', function (R
             return back()->with('error', 'Deworming request not found.');
         }
 
-        DB::table('deworming_requests')
+        Tenancy::table('deworming_requests')
             ->where('id', $requestId)
             ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
             ->update([
@@ -696,10 +746,20 @@ Route::get('/dashboard/system-admin', function () {
         ? DB::table('account_requests')->whereIn('status', ['accepted', 'declined'])->orderByDesc('decided_at')->get()->map(fn ($r) => array_merge((array) $r, ['submitted_at' => $r->created_at]))->values()->all()
         : [];
 
+    $pendingInstitutionRequests = Schema::hasTable('institution_requests')
+        ? InstitutionRequest::pending()->orderByDesc('created_at')->get()
+        : collect();
+
+    $institutions = Schema::hasTable('institutions')
+        ? Institution::orderBy('name')->get()
+        : collect();
+
     return view('dashboard.system-admin', [
         'accounts' => $accounts,
         'pendingRequests' => $pendingRequests,
         'requestHistory' => $requestHistory,
+        'pendingInstitutionRequests' => $pendingInstitutionRequests,
+        'institutions' => $institutions,
     ]);
 })->name('dashboard.system-admin');
 
@@ -796,6 +856,77 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
 
     return back()->with('success', 'User account created successfully.');
 })->name('dashboard.system-admin.accounts.store');
+
+Route::post('/dashboard/system-admin/institution-requests/{requestId}/approve', function (Request $request, string $requestId) {
+    if ($request->session()->get('active_role') !== 'system_admin') {
+        return redirect()
+            ->route('login')
+            ->with('error', 'Only System Admin can approve school registrations.');
+    }
+
+    $target = InstitutionRequest::find($requestId);
+
+    if (! $target || $target->status !== 'pending') {
+        return back()->with('error', 'School registration not found.');
+    }
+
+    $institution = Institution::create([
+        'name' => $target->name,
+        'address' => $target->address,
+        'status' => 'active',
+    ]);
+
+    // Provisioning issues CREATE DATABASE, which Postgres refuses inside a
+    // transaction, so this deliberately runs unwrapped. If it throws, the
+    // institution row stays unprovisioned and `institutions:provision` can
+    // finish the job without the school having to register again.
+    try {
+        InstitutionProvisioner::provision($institution);
+    } catch (Throwable $e) {
+        report($e);
+
+        return back()->with('error', 'School approved but its database could not be created. Run: php artisan institutions:provision --institution='.$institution->id);
+    }
+
+    $target->forceFill([
+        'status' => 'approved',
+        'institution_id' => $institution->id,
+        'reviewed_at' => now(),
+    ])->save();
+
+    AuditTrail::record(
+        'approved',
+        'InstitutionRequest',
+        $institution->id,
+        "Approved school '{$institution->name}' and provisioned database '".Tenancy::databaseFor($institution->id)."'",
+    );
+
+    return back()->with('success', "School approved. Private database created for {$institution->name}.");
+})->name('dashboard.system-admin.institution-requests.approve');
+
+Route::post('/dashboard/system-admin/institution-requests/{requestId}/decline', function (Request $request, string $requestId) {
+    if ($request->session()->get('active_role') !== 'system_admin') {
+        return redirect()
+            ->route('login')
+            ->with('error', 'Only System Admin can decline school registrations.');
+    }
+
+    $target = InstitutionRequest::find($requestId);
+
+    if (! $target || $target->status !== 'pending') {
+        return back()->with('error', 'School registration not found.');
+    }
+
+    $target->forceFill([
+        'status' => 'declined',
+        'decline_reason' => $request->input('decline_reason'),
+        'reviewed_at' => now(),
+    ])->save();
+
+    AuditTrail::record('declined', 'InstitutionRequest', null, "Declined school registration for '{$target->name}'");
+
+    return back()->with('success', 'School registration declined.');
+})->name('dashboard.system-admin.institution-requests.decline');
 
 Route::post('/dashboard/system-admin/requests/{requestId}/approve', function (Request $request, string $requestId) {
     if ($request->session()->get('active_role') !== 'system_admin') {
@@ -997,10 +1128,30 @@ Route::post('/admin-login', function (Request $request) {
         'password' => ['required', 'string'],
     ]);
 
-    $expectedUsername = (string) env('SYSTEM_ADMIN_USERNAME', 'systemadmin');
-    $expectedPassword = (string) env('SYSTEM_ADMIN_PASSWORD', 'admin123');
+    // Read through config, never the environment directly — config/system_admin.php
+    // explains why that distinction matters once the config is cached.
+    $expectedUsername = (string) config('system_admin.username');
+    $expectedHash = (string) config('system_admin.password_hash');
 
-    if ($validated['username'] !== $expectedUsername || $validated['password'] !== $expectedPassword) {
+    $expectedPassword = (string) config('system_admin.password');
+
+    // Fail closed. A blank SYSTEM_ADMIN_PASSWORD in .env would otherwise leave
+    // the comparison matching against an empty secret.
+    if ($expectedUsername === '' || ($expectedHash === '' && $expectedPassword === '')) {
+        AuditTrail::record('login_failed', null, null, 'System Admin login attempted with no credentials configured');
+
+        return back()
+            ->withInput(['username' => $validated['username']])
+            ->with('error', 'System Admin credentials are not configured. Set SYSTEM_ADMIN_PASSWORD_HASH in .env.');
+    }
+
+    $usernameMatches = hash_equals($expectedUsername, (string) $validated['username']);
+
+    $passwordMatches = $expectedHash !== ''
+        ? Hash::check((string) $validated['password'], $expectedHash)
+        : hash_equals($expectedPassword, (string) $validated['password']);
+
+    if (! $usernameMatches || ! $passwordMatches) {
         AuditTrail::record('login_failed', null, null, "Failed System Admin login attempt for username '{$validated['username']}'");
 
         return back()
@@ -1008,10 +1159,19 @@ Route::post('/admin-login', function (Request $request) {
             ->with('error', 'Invalid System Admin credentials.');
     }
 
+    // The System Admin is unscoped. Any school scope left over from a previous
+    // session on this browser must go, or admin pages would carry that
+    // institution's binding — see the Multi-School Data Separation invariant.
+    $request->session()->forget([
+        'assigned_grade_level', 'assigned_section', 'assigned_school_name',
+        'active_institution_id', 'active_school_name',
+    ]);
+
+    Tenancy::forget();
+
     $request->session()->put('active_role', 'system_admin');
     $request->session()->put('active_name', 'System Admin');
     $request->session()->put('active_username', $validated['username']);
-    $request->session()->forget(['assigned_grade_level', 'assigned_section']);
 
     AuditTrail::record('login', null, null, 'System Admin logged in');
 

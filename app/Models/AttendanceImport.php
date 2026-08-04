@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Casts\EncryptedArray;
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\TenantConnection;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -19,6 +20,7 @@ use Illuminate\Database\Eloquent\Model;
 class AttendanceImport extends Model
 {
     use Auditable;
+    use TenantConnection;
 
     protected $fillable = [
         'institution_id',

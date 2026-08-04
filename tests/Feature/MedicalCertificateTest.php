@@ -404,7 +404,7 @@ class MedicalCertificateTest extends TestCase
             'institution_id' => $record->institution_id,
             'condition_name' => 'Asthma',
         ]);
-        MedicalCertificate::create([
+        $certificate = MedicalCertificate::create([
             'student_health_condition_id' => $condition->id,
             'file_path' => 'medical-certificates/1/cert.pdf',
             'file_original_name' => 'cert.pdf',
@@ -417,7 +417,7 @@ class MedicalCertificateTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('conditions.0.condition_name', 'Asthma')
             ->assertJsonPath('conditions.0.is_verified', true)
-            ->assertJsonPath('conditions.0.certificates.0.download_url', route('medical-certificate.download', 1));
+            ->assertJsonPath('conditions.0.certificates.0.download_url', route('medical-certificate.download', $certificate->id));
     }
 
     /** @test */
@@ -429,7 +429,7 @@ class MedicalCertificateTest extends TestCase
             'institution_id' => $record->institution_id,
             'condition_name' => 'Asthma',
         ]);
-        MedicalCertificate::create([
+        $certificate = MedicalCertificate::create([
             'student_health_condition_id' => $condition->id,
             'file_path' => 'medical-certificates/1/cert.pdf',
             'file_original_name' => 'cert.pdf',
@@ -439,13 +439,13 @@ class MedicalCertificateTest extends TestCase
         // Clinic staff gets download_url
         $this->withSession($this->clinicSession())
             ->getJson(route('api.student-conditions', ['lrn' => 'LRN001']))
-            ->assertJsonPath('conditions.0.certificates.0.download_url', route('medical-certificate.download', 1));
+            ->assertJsonPath('conditions.0.certificates.0.download_url', route('medical-certificate.download', $certificate->id));
 
         // Class adviser also receives download_url (download route itself enforces the 403)
         $this->withSession($this->adviserSession())
             ->getJson(route('api.student-conditions', ['lrn' => 'LRN001']))
             ->assertOk()
-            ->assertJsonPath('conditions.0.certificates.0.download_url', route('medical-certificate.download', 1));
+            ->assertJsonPath('conditions.0.certificates.0.download_url', route('medical-certificate.download', $certificate->id));
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

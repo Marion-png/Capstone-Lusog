@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\TenantConnection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -17,6 +18,7 @@ class ClinicNote extends Model
 {
     use Auditable;
     use HasFactory;
+    use TenantConnection;
 
     /** Roles allowed to read and write clinic notes. */
     public const CLINIC_ROLES = ['school_nurse', 'clinic_staff'];

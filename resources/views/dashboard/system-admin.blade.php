@@ -203,6 +203,57 @@
                         @endforelse
                     </tbody>
                 </table>
+
+                <h3 id="school-registrations" style="margin-top:16px">Incoming School Registrations</h3>
+                <table>
+                    <thead><tr><th>School</th><th>Division</th><th>Contact</th><th>Submitted</th><th>Action</th></tr></thead>
+                    <tbody>
+                        @forelse(($pendingInstitutionRequests ?? collect()) as $schoolRequest)
+                            <tr>
+                                <td>{{ $schoolRequest->name }}<br><span style="color:#6f8c7a;font-size:0.8rem;">{{ $schoolRequest->address ?: '-' }}</span></td>
+                                <td>{{ $schoolRequest->division ?: '-' }}</td>
+                                <td>{{ $schoolRequest->contact_person }}<br><span style="color:#6f8c7a;font-size:0.8rem;">{{ $schoolRequest->contact_email }}</span></td>
+                                <td>{{ $schoolRequest->created_at?->format('M d, Y h:i A') ?? '-' }}</td>
+                                <td>
+                                    <div style="display:flex;gap:6px;align-items:center;">
+                                        <form method="POST" action="{{ route('dashboard.system-admin.institution-requests.approve', $schoolRequest->id) }}">
+                                            @csrf
+                                            <button type="submit" class="btn">Approve</button>
+                                        </form>
+                                        <form method="POST" action="{{ route('dashboard.system-admin.institution-requests.decline', $schoolRequest->id) }}">
+                                            @csrf
+                                            <button type="submit" class="btn btn-danger">Decline</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="5" style="color:#6f8c7a;">No pending school registrations.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+
+                <h3 id="school-databases" style="margin-top:16px">Schools</h3>
+                <table>
+                    <thead><tr><th>School</th><th>Database</th><th>Status</th></tr></thead>
+                    <tbody>
+                        @forelse(($institutions ?? collect()) as $school)
+                            <tr>
+                                <td>{{ $school->name }}</td>
+                                <td>{{ $school->database_name ?: '-' }}</td>
+                                <td>
+                                    @if ($school->isProvisioned())
+                                        <span class="tag ok">Provisioned</span>
+                                    @else
+                                        <span class="tag">Not provisioned</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="3" style="color:#6f8c7a;">No schools yet.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
             </article>
 
             <article class="card section" id="account-history">

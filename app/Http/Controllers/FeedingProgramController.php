@@ -516,7 +516,7 @@ class FeedingProgramController extends Controller
                 StudentHealthRecord::query()->where('institution_id', $institutionId)->select('id')
             ))
             ->whereDate('session_date', '<=', $todayDate)
-            ->selectRaw('student_health_record_id, COUNT(*) as total_sessions, SUM(CASE WHEN is_present = 1 THEN 1 ELSE 0 END) as present_count')
+            ->selectRaw('student_health_record_id, COUNT(*) as total_sessions, SUM(CASE WHEN is_present THEN 1 ELSE 0 END) as present_count')
             ->groupBy('student_health_record_id')
             ->get()
             ->keyBy('student_health_record_id');

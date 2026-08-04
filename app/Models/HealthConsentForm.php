@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Casts\EncryptedArray;
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\TenantConnection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -12,6 +13,7 @@ class HealthConsentForm extends Model
 {
     use Auditable;
     use HasFactory;
+    use TenantConnection;
 
     // Workflow statuses
     public const STATUS_DRAFT = 'draft';

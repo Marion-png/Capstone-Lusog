@@ -6,11 +6,10 @@ use App\Models\MedicalCertificate;
 use App\Models\StudentHealthRecord;
 use App\Support\EncryptedFileStorage;
 use App\Support\StudentMedicalDocuments;
+use App\Support\Tenancy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -86,11 +85,13 @@ class StudentMedicalDocumentController extends Controller
      */
     private static function documentStamp(?string $lrn, ?int $institutionId = null): string
     {
-        if ($lrn === null || ! Schema::hasTable('medical_certificates')) {
+        if ($lrn === null || ! Tenancy::schema()->hasTable('medical_certificates')) {
             return md5('-');
         }
 
-        $row = DB::table('medical_certificates')
+        // Certificates live in the institution's own database, so this has to
+        // run on the tenant connection — DB::table() would hit the central one.
+        $row = Tenancy::table('medical_certificates')
             ->where('student_lrn', $lrn)
             ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
             ->selectRaw('COUNT(*) as row_count, MAX(updated_at) as last_touched')

@@ -6,6 +6,7 @@ use App\Casts\EncryptedArray;
 use App\Casts\EncryptedBoolean;
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\TenantConnection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Schema;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Schema;
 class HealthAssessment extends Model
 {
     use Auditable;
+    use TenantConnection;
 
     /**
      * Section F of the paper MLHAT: body systems and their checkable

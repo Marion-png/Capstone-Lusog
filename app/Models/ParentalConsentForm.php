@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Casts\EncryptedBoolean;
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\TenantConnection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,6 +14,7 @@ class ParentalConsentForm extends Model
 {
     use Auditable;
     use HasFactory;
+    use TenantConnection;
 
     protected $fillable = [
         'student_health_record_id',
