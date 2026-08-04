@@ -268,7 +268,6 @@
                         <h4>Parent/Guardian Information</h4>
                         <div class="kv"><div class="k">Parent/Guardian:</div><div class="v" id="pdGuardian">-</div></div>
                         <div class="kv"><div class="k">Contact Number:</div><div class="v" id="pdContact">-</div></div>
-                        <div class="kv"><div class="k">School ID:</div><div class="v" id="pdSchoolId">-</div></div>
                         <div class="kv"><div class="k">Region/Division:</div><div class="v" id="pdRegionDivision">-</div></div>
                     </div>
                 </div>
@@ -699,7 +698,6 @@
         setText('pdAddress', record.address || '-');
         setText('pdGuardian', record.parent_guardian || '-');
         setText('pdContact', record.telephone_no || '-');
-        setText('pdSchoolId', record.school_id || '-');
         setText('pdRegionDivision', [record.region, record.division].filter(Boolean).join(' / ') || '-');
 
         setText('psGrade', record.grade_level || '-');

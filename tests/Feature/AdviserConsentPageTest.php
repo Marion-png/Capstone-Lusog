@@ -48,7 +48,7 @@ class AdviserConsentPageTest extends TestCase
                 'last_name' => $lastName, 'first_name' => 'Juan', 'middle_name' => 'A',
                 'lrn' => $lrn, 'birth_date' => '2015-06-01', 'birthplace' => 'Davao City',
                 'parent_guardian' => 'Maria Dela Cruz', 'address' => '123 Mabini St.',
-                'school_id' => 'SCH-001', 'region' => 'XI', 'division' => 'Davao City',
+                'region' => 'XI', 'division' => 'Davao City',
                 'telephone_no' => '09171234567', 'gender' => 'Male',
                 'height_cm' => 110, 'weight_kg' => 18.5,
                 'grade_level' => 'Grade 1', 'section' => 'Sampaguita',

@@ -52,7 +52,6 @@ class AdviserMyStudentsTest extends TestCase
                 'birthplace' => 'Davao City',
                 'parent_guardian' => 'Maria Dela Cruz',
                 'address' => '123 Mabini St., Davao City',
-                'school_id' => 'SCH-001',
                 'region' => 'XI',
                 'division' => 'Davao City',
                 'telephone_no' => '09171234567',
@@ -87,6 +86,32 @@ class AdviserMyStudentsTest extends TestCase
         // Rows carry the metadata the client-side search/filter reads.
         $response->assertSee('data-status="pending"', false);
         $response->assertSee('data-lrn="123456789012"', false);
+    }
+
+    /**
+     * The School Health Card form renders no School ID, Region or Division
+     * input, so requiring them server-side made every submission bounce back.
+     *
+     * @test
+     */
+    public function the_form_enrols_a_learner_without_any_school_level_identifier(): void
+    {
+        $response = $this->withSession($this->adviserSession())
+            ->post(route('adviser.store'), [
+                'last_name' => 'Dela Cruz', 'first_name' => 'Juan', 'middle_name' => 'A',
+                'lrn' => '123456789012', 'birth_date' => '2015-06-01',
+                'birthplace' => 'Davao City', 'parent_guardian' => 'Maria Dela Cruz',
+                'address' => '123 Mabini St.', 'telephone_no' => '09171234567',
+                'gender' => 'Male', 'height_cm' => 110, 'weight_kg' => 18.5,
+                'grade_level' => 'Grade 1', 'section' => 'Sampaguita',
+            ]);
+
+        $response->assertSessionHasNoErrors();
+        $response->assertRedirect(route('dashboard.class-adviser'));
+
+        $record = StudentHealthRecord::query()->where('student_id', '123456789012')->first();
+        $this->assertNotNull($record);
+        $this->assertArrayNotHasKey('school_id', $record->student_details);
     }
 
     /** @test */
@@ -434,7 +459,7 @@ class AdviserMyStudentsTest extends TestCase
             'last_name' => 'Dela Cruz', 'first_name' => 'Juan', 'middle_name' => 'A',
             'lrn' => '123456789012', 'birth_date' => '2015-06-01', 'birthplace' => 'Davao City',
             'parent_guardian' => 'Maria Dela Cruz', 'address' => 'Edited address',
-            'school_id' => 'SCH-001', 'region' => 'XI', 'division' => 'Davao City',
+            'region' => 'XI', 'division' => 'Davao City',
             'telephone_no' => '09171234567', 'gender' => 'Male', 'height_cm' => 112,
             'weight_kg' => 19.0, 'grade_level' => 'Grade 1', 'section' => 'Sampaguita',
         ])->assertRedirect(route('dashboard.class-adviser'));
@@ -554,7 +579,7 @@ class AdviserMyStudentsTest extends TestCase
                 'last_name' => 'Dela Cruz', 'first_name' => 'Juan',
                 'lrn' => '123456789012', 'birth_date' => '2015-06-01',
                 'birthplace' => 'Davao City', 'parent_guardian' => 'Maria Dela Cruz',
-                'address' => '123 Mabini St.', 'school_id' => 'SCH-001', 'region' => 'XI',
+                'address' => '123 Mabini St.', 'region' => 'XI',
                 'division' => 'Davao City', 'telephone_no' => '09171234567', 'gender' => 'Male',
                 'height_cm' => 110, 'weight_kg' => 18.5,
                 'grade_level' => 'Grade 1', 'section' => 'Sampaguita',
@@ -643,7 +668,7 @@ class AdviserMyStudentsTest extends TestCase
                 'last_name' => 'Dela Cruz', 'first_name' => 'Juan',
                 'lrn' => '123456789012', 'birth_date' => '2015-06-01',
                 'birthplace' => 'Davao City', 'parent_guardian' => 'Maria Dela Cruz',
-                'address' => '123 Mabini St.', 'school_id' => 'SCH-001', 'region' => 'XI',
+                'address' => '123 Mabini St.', 'region' => 'XI',
                 'division' => 'Davao City', 'telephone_no' => '09171234567', 'gender' => 'Male',
                 'height_cm' => 110, 'weight_kg' => 18.5,
                 'grade_level' => 'Grade 1', 'section' => 'Sampaguita',

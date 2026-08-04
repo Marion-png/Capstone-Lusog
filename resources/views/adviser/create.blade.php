@@ -72,10 +72,6 @@
                             <input type="text" name="address" required>
                         </div>
                         <div class="field">
-                            <label>School ID</label>
-                            <input type="text" name="school_id" required>
-                        </div>
-                        <div class="field">
                             <label>Region</label>
                             <input type="text" name="region" required>
                         </div>

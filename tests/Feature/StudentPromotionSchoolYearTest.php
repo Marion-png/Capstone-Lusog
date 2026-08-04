@@ -66,7 +66,6 @@ class StudentPromotionSchoolYearTest extends TestCase
             'birthplace' => 'Davao City',
             'parent_guardian' => 'Pedro Dela Cruz',
             'address' => '123 Damaso Suazo St., Davao City',
-            'school_id' => '123456',
             'region' => 'Region XI',
             'division' => 'DAVAO CITY',
             'telephone_no' => '09171234567',

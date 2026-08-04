@@ -50,7 +50,6 @@ class AdviserRosterPersistenceTest extends TestCase
                 'birthplace' => 'Davao City',
                 'parent_guardian' => 'Maria Dela Cruz',
                 'address' => '123 Mabini St., Davao City',
-                'school_id' => 'SCH-001',
                 'region' => 'XI',
                 'division' => 'Davao City',
                 'telephone_no' => '09171234567',

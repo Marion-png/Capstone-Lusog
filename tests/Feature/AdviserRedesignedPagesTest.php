@@ -65,7 +65,7 @@ class AdviserRedesignedPagesTest extends TestCase
                 'last_name' => 'Reyes', 'first_name' => 'Maria', 'middle_name' => '',
                 'lrn' => '999999999999', 'birth_month' => 1, 'birth_day' => 1, 'birth_year' => 2012,
                 'birthplace' => 'Davao', 'parent_guardian' => 'Pedro Reyes', 'address' => '123 St',
-                'school_id' => '1', 'region' => 'XI', 'division' => 'Davao', 'telephone_no' => '0912',
+                'region' => 'XI', 'division' => 'Davao', 'telephone_no' => '0912',
                 'height_cm' => 140, 'weight_kg' => 35, 'grade_level' => 'Grade 10', 'section' => 'Dalton',
             ]);
 
