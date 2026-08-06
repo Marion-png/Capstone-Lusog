@@ -68,21 +68,6 @@
     if (!sidebar) return;
     const still = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-    // Browsers do not re-apply :hover until the mouse moves, so a page opened
-    // from a sidebar link would snap shut under a cursor that never left.
-    // Pin it open for that first paint (no animation), then hand back to :hover.
-    try {
-        if (sessionStorage.getItem('fcSbPin') === '1') {
-            sessionStorage.removeItem('fcSbPin');
-            sidebar.classList.add('asb-pin', 'asb-no-anim');
-            requestAnimationFrame(() => requestAnimationFrame(() => sidebar.classList.remove('asb-no-anim')));
-            document.addEventListener('mousemove', function unpin() {
-                sidebar.classList.remove('asb-pin');
-                document.removeEventListener('mousemove', unpin);
-            });
-        }
-    } catch (err) { /* sessionStorage blocked — fall back to plain :hover */ }
-
     sidebar.querySelectorAll('.asb-link').forEach((link) => {
         link.addEventListener('pointerdown', (e) => {
             if (still.matches) return;
@@ -103,7 +88,6 @@
             if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
             // Purely visual — the page's own transition handler owns navigation.
             link.classList.add('is-navigating');
-            try { sessionStorage.setItem('fcSbPin', '1'); } catch (err) { /* ignore */ }
         });
     });
 })();

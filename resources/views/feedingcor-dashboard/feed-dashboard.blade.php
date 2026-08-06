@@ -71,16 +71,41 @@
 						? ($plot['right'] - $plot['left']) / (count($chartMonths) - 1)
 						: ($plot['right'] - $plot['left']);
 				@endphp
-				<svg class="chart-svg bmi-chart-svg" viewBox="0 0 {{ ($plot['right'] ?? 900) + 20 }} 250" role="img" aria-label="Average BMI progress line chart">
+				<svg class="chart-svg bmi-chart-svg" viewBox="0 0 {{ ($plot['right'] ?? 900) + 20 }} 238" role="img" aria-label="Average BMI progress line chart">
+					{{-- One vertical gradient feeds the line, the fill and every marker
+					     ring, so a point's colour is the WHO band it sits in. Stops are
+					     positioned by buildBmiChart at the real 18.5 / 25 boundaries. --}}
+					<defs>
+						<linearGradient id="bmiZoneGrad" gradientUnits="userSpaceOnUse" x1="0" y1="{{ $plot['top'] }}" x2="0" y2="{{ $plot['bottom'] }}">
+							@foreach (($bmiChart['gradient_stops'] ?? []) as $stop)
+								<stop class="grad-{{ $stop['zone'] }}" offset="{{ $stop['offset'] }}"></stop>
+							@endforeach
+						</linearGradient>
+						{{-- Fades the fill downward so colour is densest under the curve
+						     and clears out before it reaches the axis labels. --}}
+						<linearGradient id="bmiFadeGrad" gradientUnits="userSpaceOnUse" x1="0" y1="{{ $plot['top'] }}" x2="0" y2="{{ $plot['bottom'] }}">
+							<stop offset="0" stop-color="#ffffff" stop-opacity=".85"></stop>
+							<stop offset=".5" stop-color="#ffffff" stop-opacity=".3"></stop>
+							<stop offset=".9" stop-color="#ffffff" stop-opacity="0"></stop>
+						</linearGradient>
+						<mask id="bmiFadeMask">
+							<rect x="0" y="0" width="{{ ($plot['right'] ?? 900) + 20 }}" height="238" fill="url(#bmiFadeGrad)"></rect>
+						</mask>
+					</defs>
+
 					@foreach (($bmiChart['bands'] ?? []) as $band)
 						<rect class="bmi-band band-{{ $band['class'] }}" x="{{ $plot['left'] }}" y="{{ $band['y'] }}" width="{{ $plot['right'] - $plot['left'] }}" height="{{ $band['height'] }}"></rect>
+					@endforeach
+
+					@foreach (($bmiChart['grid_lines'] ?? []) as $gridY)
+						<line class="grid-line" x1="{{ $plot['left'] }}" y1="{{ $gridY }}" x2="{{ $plot['right'] }}" y2="{{ $gridY }}"></line>
 					@endforeach
 
 					@foreach (($bmiChart['zone_lines'] ?? []) as $zoneY)
 						<line class="zone-line" x1="{{ $plot['left'] }}" y1="{{ $zoneY }}" x2="{{ $plot['right'] }}" y2="{{ $zoneY }}"></line>
 					@endforeach
 
-					<path class="area-fill" d="{{ $bmiChart['area_path'] ?? '' }}"></path>
+					<path class="area-fill" d="{{ $bmiChart['area_path'] ?? '' }}" mask="url(#bmiFadeMask)"></path>
 					<path class="line-main" d="{{ $bmiChart['line_path'] ?? '' }}"></path>
 
 					{{-- Zone labels paint last so the line and area fill can never sit on top of them. --}}
@@ -92,15 +117,15 @@
 						<g class="bmi-point" data-index="{{ $month['index'] }}" tabindex="0" role="button"
 							aria-label="{{ $month['full'] }}@if ($month['has_data']) — average BMI {{ $month['avg_bmi'] }}, {{ $month['band'] }}, {{ $month['count'] }} learners @else — no measurements @endif">
 							<rect class="bmi-hit" x="{{ round($month['x'] - $hitWidth / 2, 1) }}" y="{{ $plot['top'] }}" width="{{ round($hitWidth, 1) }}" height="{{ $plot['bottom'] - $plot['top'] }}"></rect>
-							<circle class="bmi-dot{{ $month['is_current'] ? ' is-current' : '' }}{{ $month['has_data'] ? '' : ' no-data' }}" cx="{{ $month['x'] }}" cy="{{ $month['y'] }}" r="{{ $month['is_current'] ? 6 : 4.5 }}"></circle>
+							<circle class="bmi-dot{{ $month['is_current'] ? ' is-current' : '' }}{{ $month['has_data'] ? '' : ' no-data' }}" cx="{{ $month['x'] }}" cy="{{ $month['y'] }}" r="{{ $month['is_current'] ? 4.5 : 4 }}"></circle>
 						</g>
 					@endforeach
 
 					@foreach ($yTicks as $tick)
-						<text class="axis-txt" x="{{ $plot['left'] - 10 }}" y="{{ $tick['y'] + 4 }}" text-anchor="end">{{ $tick['label'] }}</text>
+						<text class="axis-txt axis-y" x="{{ $plot['left'] - 12 }}" y="{{ $tick['y'] + 4 }}" text-anchor="end">{{ $tick['label'] }}</text>
 					@endforeach
 					@foreach ($chartMonths as $month)
-						<text class="axis-txt" x="{{ $month['x'] }}" y="{{ $plot['bottom'] + 24 }}" text-anchor="middle">{{ $month['label'] }}</text>
+						<text class="axis-txt axis-x" x="{{ $month['x'] }}" y="{{ $plot['bottom'] + 26 }}" text-anchor="middle">{{ $month['label'] }}</text>
 					@endforeach
 				</svg>
 				<div class="bmi-card" id="bmiMonthSummary" role="status" data-default="{{ $bmiChart['default_index'] ?? 0 }}"></div>

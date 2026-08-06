@@ -44,6 +44,20 @@ class EncryptedFileStorage
         ]);
     }
 
+    /**
+     * Removes a stored file. Used where retention is deliberately bounded —
+     * a scanned attendance photo is deleted once every mark on it has been
+     * confirmed. Returns false when the file was already gone.
+     */
+    public static function delete(string $path): bool
+    {
+        if ($path === '' || ! Storage::disk('local')->exists($path)) {
+            return false;
+        }
+
+        return Storage::disk('local')->delete($path);
+    }
+
     private static function mimeFromName(string $name): string
     {
         return match (strtolower(pathinfo($name, PATHINFO_EXTENSION))) {

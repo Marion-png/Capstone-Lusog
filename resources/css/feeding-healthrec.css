@@ -61,5 +61,22 @@
 
         .section-title{margin-top:18px;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2)}
 
+        /* Grade level + section filters. One row above the table, so the control
+           and the thing it controls stay in the same glance. */
+        .filter-bar{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-top:12px;padding:12px 14px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-card)}
+        .filter-field{display:flex;flex-direction:column;gap:5px}
+        .filter-field label{font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-3)}
+        .filter-field select{font-family:inherit;font-size:.76rem;color:var(--text-1);background:#fff;border:1px solid var(--border);border-radius:8px;padding:7px 10px;min-width:170px;cursor:pointer}
+        .filter-field select:focus-visible{outline:2px solid #15803d;outline-offset:1px}
+        .filter-apply{font-family:inherit;font-size:.74rem;font-weight:700;color:#fff;background:#15803d;border:none;border-radius:8px;padding:8px 15px;cursor:pointer;transition:background .16s ease}
+        .filter-apply:hover{background:#126733}
+        .filter-clear{font-size:.74rem;font-weight:600;color:var(--text-3);text-decoration:none;padding:8px 4px}
+        .filter-clear:hover{color:#c81e1e;text-decoration:underline}
+        .filter-count{margin-left:auto;font-size:.72rem;color:var(--text-3)}
+        /* With JS the selects submit themselves, so the button is redundant —
+           it stays in the markup as the no-JS path. */
+        html.js .filter-apply{display:none}
+
         @media (max-width:1024px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
-        @media (max-width:780px){.sidebar{display:none}.main{margin-left:0}.cards{grid-template-columns:1fr}}
+        @media (max-width:780px){.sidebar{display:none}.main{margin-left:0}.cards{grid-template-columns:1fr}
+            .filter-bar{align-items:stretch}.filter-field select{width:100%}.filter-count{margin-left:0}}

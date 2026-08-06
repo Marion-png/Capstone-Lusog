@@ -35,4 +35,14 @@ return [
         ],
     ],
 
+    /*
+     * Claude vision, used to read a photographed feeding-attendance sheet.
+     * The key is never committed — set ANTHROPIC_API_KEY in .env. With no key
+     * the photo-scan route is disabled and the CSV/XLSX import still works.
+     */
+    'anthropic' => [
+        'key' => env('ANTHROPIC_API_KEY'),
+        'model' => env('ANTHROPIC_MODEL', 'claude-opus-5'),
+    ],
+
 ];

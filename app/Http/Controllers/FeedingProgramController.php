@@ -7,19 +7,26 @@ use App\Models\Consultation;
 use App\Models\FeedingAttendance;
 use App\Models\StudentHealthRecord;
 use App\Support\AttendanceSheetParser;
+use App\Support\AttendanceSheetScanner;
+use App\Support\AuditTrail;
 use App\Support\EncryptedFileStorage;
+use App\Support\FeedingAtRiskRule;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
+use Throwable;
 
 class FeedingProgramController extends Controller
 {
     private const PROGRAM_DURATION_DAYS = 120;
 
     private const AT_RISK_THRESHOLD_PERCENT = 75;
+
+    /** Memoized per request — see hasReviewColumns(). */
+    private ?bool $hasReviewColumns = null;
 
     public function index(Request $request): View
     {
@@ -159,7 +166,48 @@ class FeedingProgramController extends Controller
             'gradeOptions' => $gradeOptions,
             'selectedGrade' => $selectedGrade,
             'hasGradeFilter' => $gradeOptions->isNotEmpty(),
+            'scanningEnabled' => ! $isReadOnly
+                && config('feeding.scanning.enabled')
+                && AttendanceSheetScanner::isConfigured(),
+            'pendingReviewCount' => $this->pendingReviewCount($institutionId),
         ]);
+    }
+
+    /**
+     * Whether the photo-scan/review migration has been applied here.
+     *
+     * The whole review layer is additive, so a database that has not run the
+     * migration must keep working exactly as it did before — spreadsheet import,
+     * at-risk recomputation and the program page all still function, with
+     * scanning simply unavailable. Guarding the columns (not just the table)
+     * follows the same Schema::hasTable pattern used across these controllers.
+     * Memoized because it is consulted on every attendance write.
+     */
+    private function hasReviewColumns(): bool
+    {
+        // Cached on the instance, not in a static: the controller is built per
+        // request, so this stays a single lookup per request without pinning a
+        // schema fact for the lifetime of the process.
+        return $this->hasReviewColumns ??= Schema::hasTable('feeding_attendances')
+            && Schema::hasColumn('feeding_attendances', 'needs_review');
+    }
+
+    /** Scanned marks in this school still waiting on a human decision. */
+    private function pendingReviewCount(?int $institutionId): int
+    {
+        if (! $this->hasReviewColumns()) {
+            return 0;
+        }
+
+        return FeedingAttendance::query()
+            ->awaitingReview()
+            ->whereIn(
+                'student_health_record_id',
+                StudentHealthRecord::query()
+                    ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+                    ->select('id')
+            )
+            ->count();
     }
 
     /**
@@ -195,7 +243,7 @@ class FeedingProgramController extends Controller
 
         try {
             $parsed = (new AttendanceSheetParser)->parse($file);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             return back()->with('error', 'Could not read the uploaded file. Make sure it is a valid CSV or Excel sheet. ('.$e->getMessage().')');
         }
 
@@ -229,16 +277,26 @@ class FeedingProgramController extends Controller
         }
 
         $now = now();
+        $hasReviewColumns = $this->hasReviewColumns();
         $upserts = [];
         foreach ($matched as $recordId => $present) {
             foreach ($parsed['sessions'] as $index => $session) {
-                $upserts[] = [
+                $row = [
                     'student_health_record_id' => $recordId,
                     'session_date' => $session['date'],
                     'is_present' => (bool) ($present[$index] ?? false),
                     'created_at' => $now,
                     'updated_at' => $now,
                 ];
+
+                if ($hasReviewColumns) {
+                    // A spreadsheet cell is an explicit human entry, so it is
+                    // confirmed on arrival — only scanned marks await review.
+                    $row['source'] = FeedingAttendance::SOURCE_SPREADSHEET;
+                    $row['needs_review'] = false;
+                }
+
+                $upserts[] = $row;
             }
         }
 
@@ -246,11 +304,15 @@ class FeedingProgramController extends Controller
         // leaves a half-written period (no silent partial write). The batch
         // record is created here too, so "attendance uploaded for this period"
         // is only ever true once the whole import succeeded.
-        DB::transaction(function () use ($upserts, $institutionId, $file, $matched, $parsed, $unmatched, $request): void {
+        DB::transaction(function () use ($upserts, $institutionId, $file, $matched, $parsed, $unmatched, $request, $hasReviewColumns): void {
+            // A re-uploaded spreadsheet supersedes a pending scanned mark for
+            // the same session, and clears its review flag along with it.
             FeedingAttendance::query()->upsert(
                 $upserts,
                 ['student_health_record_id', 'session_date'],
-                ['is_present', 'updated_at']
+                $hasReviewColumns
+                    ? ['is_present', 'source', 'needs_review', 'updated_at']
+                    : ['is_present', 'updated_at']
             );
 
             $this->refreshAttendanceRiskFlags($institutionId);
@@ -287,6 +349,318 @@ class FeedingProgramController extends Controller
         }
 
         return $redirect;
+    }
+
+    /**
+     * The coordinator photographs the physically-marked attendance sheet for one
+     * session; Claude reads it against the known roster (see
+     * AttendanceSheetScanner) and every mark it could not read confidently lands
+     * in the review queue instead of being guessed.
+     *
+     * Nothing is written unless the whole scan succeeds, and the photo is kept
+     * (encrypted) only while marks from it are still unconfirmed — a reviewer
+     * cannot resolve a "?" without seeing the sheet.
+     */
+    public function scanAttendancePhoto(Request $request, AttendanceSheetScanner $scanner): RedirectResponse
+    {
+        if (! $this->isFeedingCoordinator($request)) {
+            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can upload attendance sheets.');
+        }
+
+        if (! config('feeding.scanning.enabled') || ! AttendanceSheetScanner::isConfigured()) {
+            return back()->with('error', 'Attendance photo scanning is not configured on this server.');
+        }
+
+        if (! $this->hasReviewColumns()) {
+            return back()->with('error', 'Attendance scanning is not ready on this database. Run migrations first.');
+        }
+
+        $request->validate([
+            'attendance_photo' => ['required', 'file', 'image', 'mimes:jpeg,jpg,png,webp', 'max:'.(int) config('feeding.scanning.max_upload_kb', 10240)],
+            'session_date' => ['required', 'date', 'before_or_equal:today'],
+            'grade' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if (! Schema::hasTable('student_health_records') || ! Schema::hasTable('feeding_attendances')) {
+            return back()->with('error', 'Attendance tracking tables are not ready. Run migrations first.');
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+        $sessionDate = Carbon::parse((string) $request->input('session_date'))->toDateString();
+        $selectedGrade = trim((string) $request->input('grade', 'all')) ?: 'all';
+        $photo = $request->file('attendance_photo');
+
+        $roster = $this->buildScanRoster($institutionId);
+        if ($roster === []) {
+            return back()->with('error', 'No learners are on file for this school yet, so there is nothing to match the sheet against.');
+        }
+
+        try {
+            $result = $scanner->scan($photo, $roster, $sessionDate);
+        } catch (Throwable $e) {
+            // Deliberately no partial write: a failed scan leaves the period
+            // exactly as it was.
+            return back()->with('error', 'Could not read the attendance photo. '.$e->getMessage());
+        }
+
+        // A scan that reports the sheet unreadable is not trusted for any mark,
+        // even if it also returned some. Enforced here, at the point of write,
+        // rather than only inside the scanner — a contradictory result must not
+        // be able to put an unread mark into a learner's record.
+        if ($result['unreadable']) {
+            $result['marks'] = array_fill_keys(
+                array_keys($result['marks']) ?: array_column($roster, 'id'),
+                AttendanceSheetScanner::MARK_UNCLEAR
+            );
+        }
+
+        $counts = ['present' => 0, 'absent' => 0, 'unclear' => 0];
+        foreach ($result['marks'] as $mark) {
+            $counts[match ($mark) {
+                AttendanceSheetScanner::MARK_PRESENT => 'present',
+                AttendanceSheetScanner::MARK_ABSENT => 'absent',
+                default => 'unclear',
+            }]++;
+        }
+
+        $import = DB::transaction(function () use ($result, $roster, $sessionDate, $institutionId, $photo, $request, $counts): AttendanceImport {
+            $now = now();
+            $storedPath = EncryptedFileStorage::store($photo, 'feeding-attendance-photos/'.($institutionId ?? 'unscoped'));
+
+            $import = AttendanceImport::create([
+                'institution_id' => $institutionId,
+                'school_year' => StudentHealthRecord::currentSchoolYear(),
+                'uploaded_by_name' => (string) $request->session()->get('active_name', 'Feeding Coordinator'),
+                'original_filename' => $photo->getClientOriginalName(),
+                'stored_path' => $storedPath,
+                'kind' => AttendanceImport::KIND_PHOTO,
+                'session_date' => $sessionDate,
+                'sessions_count' => 1,
+                'matched_count' => $counts['present'] + $counts['absent'],
+                'unmatched_count' => 0,
+                'unclear_count' => $counts['unclear'],
+                'row_errors' => $result['note'] !== '' ? [$result['note']] : [],
+            ]);
+
+            $upserts = [];
+            foreach ($roster as $entry) {
+                $mark = $result['marks'][$entry['id']] ?? AttendanceSheetScanner::MARK_UNCLEAR;
+                $unclear = $mark === AttendanceSheetScanner::MARK_UNCLEAR;
+
+                $upserts[] = [
+                    'student_health_record_id' => $entry['record_id'],
+                    'session_date' => $sessionDate,
+                    // NULL, not false — an unread mark is not an absence.
+                    'is_present' => $unclear ? null : ($mark === AttendanceSheetScanner::MARK_PRESENT),
+                    'needs_review' => $unclear,
+                    'source' => FeedingAttendance::SOURCE_PHOTO_SCAN,
+                    'attendance_import_id' => $import->id,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+
+            FeedingAttendance::query()->upsert(
+                $upserts,
+                ['student_health_record_id', 'session_date'],
+                ['is_present', 'needs_review', 'source', 'attendance_import_id', 'updated_at']
+            );
+
+            $this->refreshAttendanceRiskFlags($institutionId);
+
+            return $import;
+        });
+
+        AuditTrail::record(
+            'created',
+            'AttendanceImport',
+            $import->id,
+            "Attendance photo scanned for {$sessionDate}: {$counts['present']} present, {$counts['absent']} absent, {$counts['unclear']} needing review"
+        );
+
+        // Nothing pending means nothing to look at the photo for.
+        $this->purgeScanPhotoIfReviewed($import);
+
+        $redirect = redirect()->route('dashboard.feedingcor-program', ['grade' => $selectedGrade]);
+
+        if ($result['unreadable']) {
+            return $redirect->with('error', 'The photo could not be read — every mark for '.$sessionDate.' is waiting for review. '.$result['note']);
+        }
+
+        $redirect->with('success', 'Sheet scanned for '.$sessionDate.': '.$counts['present'].' present, '.$counts['absent'].' absent.');
+
+        if ($counts['unclear'] > 0) {
+            $redirect->with('error', $counts['unclear'].' mark(s) could not be read confidently and are waiting for your review — they do not count either way until you confirm them.');
+        }
+
+        return $redirect;
+    }
+
+    /** The queue of scanned marks no human has confirmed yet. */
+    public function attendanceReviewQueue(Request $request): View
+    {
+        $institutionId = $request->session()->get('active_institution_id');
+
+        $pending = collect();
+        if ($this->hasReviewColumns()) {
+            $pending = FeedingAttendance::query()
+                ->awaitingReview()
+                ->whereIn(
+                    'student_health_record_id',
+                    StudentHealthRecord::query()
+                        ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+                        ->select('id')
+                )
+                ->with('studentHealthRecord')
+                ->orderBy('session_date')
+                ->get()
+                ->map(fn (FeedingAttendance $row) => [
+                    'id' => $row->id,
+                    'student_name' => (string) ($row->studentHealthRecord->student_name ?? 'Unknown learner'),
+                    'section' => (string) ($row->studentHealthRecord->section ?? ''),
+                    'session_date' => optional($row->session_date)->toDateString(),
+                    'import_id' => $row->attendance_import_id,
+                ])
+                ->values();
+        }
+
+        return view('feedingcor-dashboard.attendance-review', [
+            'pending' => $pending,
+            'ruleDescription' => FeedingAtRiskRule::fromConfig()->describe(),
+        ]);
+    }
+
+    /**
+     * A human confirms one unreadable mark. This is the only path that turns a
+     * NULL into a real attendance value, and it is always attributed and logged
+     * — no mark a machine was unsure about changes a learner's flag silently.
+     */
+    public function resolveAttendanceReview(Request $request, int $attendance): RedirectResponse
+    {
+        if (! $this->isFeedingCoordinator($request)) {
+            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can confirm attendance marks.');
+        }
+
+        $request->validate(['mark' => ['required', 'in:present,absent']]);
+
+        if (! $this->hasReviewColumns()) {
+            return back()->with('error', 'Attendance review is not ready on this database. Run migrations first.');
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+
+        $row = FeedingAttendance::query()
+            ->where('id', $attendance)
+            ->whereIn(
+                'student_health_record_id',
+                StudentHealthRecord::query()
+                    ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+                    ->select('id')
+            )
+            ->first();
+
+        if (! $row) {
+            return back()->with('error', 'That attendance mark is not available for this school.');
+        }
+
+        $isPresent = $request->input('mark') === 'present';
+        $reviewer = (string) $request->session()->get('active_name', 'Feeding Coordinator');
+
+        DB::transaction(function () use ($row, $isPresent, $reviewer, $institutionId): void {
+            $row->update([
+                'is_present' => $isPresent,
+                'needs_review' => false,
+                'source' => FeedingAttendance::SOURCE_MANUAL_REVIEW,
+                'reviewed_by_name' => $reviewer,
+                'reviewed_at' => now(),
+            ]);
+
+            $this->refreshAttendanceRiskFlags($institutionId);
+        });
+
+        AuditTrail::record(
+            'updated',
+            'FeedingAttendance',
+            $row->id,
+            'Unclear scanned mark for '.optional($row->session_date)->toDateString()
+                .' confirmed as '.($isPresent ? 'present' : 'absent').' by '.$reviewer
+        );
+
+        if ($row->attendanceImport) {
+            $this->purgeScanPhotoIfReviewed($row->attendanceImport);
+        }
+
+        return back()->with('success', 'Mark confirmed as '.($isPresent ? 'present' : 'absent').'.');
+    }
+
+    /**
+     * Deletes the scanned image once every mark from it is confirmed. Holding it
+     * any longer serves no purpose — the sheet is a photograph of children's
+     * records, so the retention window is exactly "while a human still needs to
+     * look at it".
+     */
+    private function purgeScanPhotoIfReviewed(AttendanceImport $import): void
+    {
+        if (! config('feeding.scanning.purge_photo_after_review', true)) {
+            return;
+        }
+
+        if ($import->kind !== AttendanceImport::KIND_PHOTO || blank($import->stored_path) || $import->photo_purged_at) {
+            return;
+        }
+
+        if ($import->pendingReviewCount() > 0) {
+            return;
+        }
+
+        EncryptedFileStorage::delete((string) $import->stored_path);
+
+        $import->update(['stored_path' => null, 'photo_purged_at' => now()]);
+
+        AuditTrail::record(
+            'deleted',
+            'AttendanceImport',
+            $import->id,
+            'Scanned attendance photo purged after all marks were confirmed'
+        );
+    }
+
+    /**
+     * The roster handed to the model: real names, so it matches rather than
+     * transcribes. `id` is a per-request index, not a database key — the model
+     * never sees an internal identifier.
+     *
+     * @return list<array{id:int,record_id:int,name:string,grade:string,section:string}>
+     */
+    private function buildScanRoster(?int $institutionId): array
+    {
+        $roster = [];
+        $index = 1;
+
+        StudentHealthRecord::query()
+            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+            ->forCurrentSchoolYear()
+            ->get()
+            ->each(function (StudentHealthRecord $record) use (&$roster, &$index): void {
+                [$grade, $section] = $this->splitGradeSection((string) $record->section);
+
+                $roster[] = [
+                    'id' => $index++,
+                    'record_id' => $record->id,
+                    'name' => (string) $record->student_name,
+                    'grade' => $grade,
+                    'section' => $section,
+                ];
+            });
+
+        return $roster;
+    }
+
+    private function isFeedingCoordinator(Request $request): bool
+    {
+        $role = strtolower(trim((string) $request->session()->get('active_role', '')));
+
+        return in_array($role, ['feeding_coor', 'feedingcoor', 'feeding_coordinator', 'feeding coordinator'], true);
     }
 
     /**
@@ -501,41 +875,69 @@ class FeedingProgramController extends Controller
     }
 
     /**
-     * At-risk is driven purely by feeding-session attendance now — a learner is
-     * never auto-flagged just for being wasted/severely wasted. For each student
-     * with attendance on file, at-risk = attended below the threshold percentage
-     * of the sessions recorded for them. No attendance yet ⇒ not at-risk.
+     * At-risk is driven purely by feeding-session attendance — a learner is
+     * never auto-flagged just for being wasted/severely wasted. The rule itself
+     * (rate threshold vs consecutive absences) lives in FeedingAtRiskRule and is
+     * config-driven; this method only feeds it each learner's marks in date
+     * order and writes the verdict.
+     *
+     * Marks awaiting human review are passed through as NULL and the rule
+     * excludes them, so an unread scan can neither flag nor unflag anyone.
+     * Every change of flag is written to the audit log.
      */
     private function refreshAttendanceRiskFlags(?int $institutionId = null): void
     {
+        $rule = FeedingAtRiskRule::fromConfig();
         $todayDate = now()->toDateString();
 
-        $stats = FeedingAttendance::query()
+        // Fetched, not aggregated in SQL: NULL marks must survive to the rule,
+        // and a SUM(CASE ...) would silently fold them into "absent".
+        $marksByRecord = FeedingAttendance::query()
             ->when($institutionId, fn ($q) => $q->whereIn(
                 'student_health_record_id',
                 StudentHealthRecord::query()->where('institution_id', $institutionId)->select('id')
             ))
             ->whereDate('session_date', '<=', $todayDate)
-            ->selectRaw('student_health_record_id, COUNT(*) as total_sessions, SUM(CASE WHEN is_present = 1 THEN 1 ELSE 0 END) as present_count')
+            ->orderBy('session_date')
+            ->get(array_merge(
+                ['student_health_record_id', 'session_date', 'is_present'],
+                $this->hasReviewColumns() ? ['needs_review'] : []
+            ))
             ->groupBy('student_health_record_id')
-            ->get()
-            ->keyBy('student_health_record_id');
+            ->map(fn ($rows) => $rows
+                // Before the review migration every mark is confirmed by
+                // definition, so nothing is excluded.
+                ->map(fn ($row) => ($row->needs_review ?? false) ? null : $row->is_present)
+                ->values()
+                ->all());
+
+        $changed = 0;
 
         StudentHealthRecord::query()
             ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
             ->forCurrentSchoolYear()
-            ->each(function (StudentHealthRecord $record) use ($stats): void {
-                $stat = $stats->get($record->id);
-                $totalSessions = (int) ($stat->total_sessions ?? 0);
-                $presentCount = (int) ($stat->present_count ?? 0);
+            ->each(function (StudentHealthRecord $record) use ($marksByRecord, $rule, &$changed): void {
+                $marks = $marksByRecord->get($record->id, []);
+                $isAtRisk = $rule->isAtRisk($marks);
+                $presentCount = $rule->presentCount($marks);
 
-                $isAtRisk = $totalSessions > 0
-                    && (($presentCount / $totalSessions) * 100) < self::AT_RISK_THRESHOLD_PERCENT;
+                if ((bool) $record->is_at_risk !== $isAtRisk) {
+                    $changed++;
+                }
 
                 $record->update([
                     'attendance_sessions_count' => $presentCount,
                     'is_at_risk' => $isAtRisk,
                 ]);
             });
+
+        if ($changed > 0) {
+            AuditTrail::record(
+                'updated',
+                'StudentHealthRecord',
+                null,
+                "At-risk recomputed ({$rule->describe()}): {$changed} learner flag(s) changed"
+            );
+        }
     }
 }

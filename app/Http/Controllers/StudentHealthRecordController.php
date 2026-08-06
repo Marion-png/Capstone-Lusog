@@ -1194,6 +1194,58 @@ class StudentHealthRecordController extends Controller
 
         $records = $records->concat($sessionAtRiskRecords)->values();
 
+        // `section` holds "Grade 7 / Section A" (see StudentRosterSync). Split it
+        // so grade level and section can be filtered independently, and flatten
+        // both sources to one shape the view can read without special-casing.
+        $records = $records->map(function ($record): object {
+            $raw = trim((string) ($record->section ?? ''));
+            $parts = array_map('trim', explode('/', $raw, 2));
+            $grade = ($parts[0] ?? '') !== '' ? $parts[0] : 'Unassigned';
+            $section = ($parts[1] ?? '') !== '' ? $parts[1] : 'Unassigned';
+
+            return (object) [
+                'student_name' => $record->student_name,
+                'grade_level' => $grade,
+                'section_name' => $section,
+                'section' => $raw !== '' ? $raw : 'Unassigned',
+                'baseline_bmi_value' => $record->baseline_bmi_value,
+                'baseline_nutritional_status' => $record->baseline_nutritional_status,
+                'endline_bmi_value' => $record->endline_bmi_value,
+                'endline_nutritional_status' => $record->endline_nutritional_status,
+                'nutritional_status' => $record->nutritional_status,
+            ];
+        });
+
+        // Grade options always come from the unfiltered set, so a filter can
+        // never hide its own way out. Section options narrow to the chosen
+        // grade — offering Grade 8's sections while Grade 7 is selected would
+        // only ever return nothing.
+        $gradeLevels = $records->pluck('grade_level')->unique()->sort(SORT_NATURAL)->values();
+
+        $gradeFilter = trim((string) $request->query('grade_level', ''));
+        if (! $gradeLevels->contains($gradeFilter)) {
+            $gradeFilter = '';
+        }
+
+        $sections = $records
+            ->when($gradeFilter !== '', fn ($rows) => $rows->where('grade_level', $gradeFilter))
+            ->pluck('section_name')->unique()->sort(SORT_NATURAL)->values();
+
+        $sectionFilter = trim((string) $request->query('section', ''));
+        if (! $sections->contains($sectionFilter)) {
+            $sectionFilter = '';
+        }
+
+        $totalBeforeFilters = $records->count();
+
+        if ($gradeFilter !== '') {
+            $records = $records->where('grade_level', $gradeFilter);
+        }
+        if ($sectionFilter !== '') {
+            $records = $records->where('section_name', $sectionFilter);
+        }
+        $records = $records->values();
+
         $statusCounts = [
             'severely_wasted' => 0,
             'wasted' => 0,
@@ -1232,6 +1284,10 @@ class StudentHealthRecordController extends Controller
             'records' => $records,
             'statusCounts' => $statusCounts,
             'sectionSummary' => $sectionSummary,
+            'gradeLevels' => $gradeLevels,
+            'sections' => $sections,
+            'filters' => ['grade_level' => $gradeFilter, 'section' => $sectionFilter],
+            'totalBeforeFilters' => $totalBeforeFilters,
         ]);
     }
 

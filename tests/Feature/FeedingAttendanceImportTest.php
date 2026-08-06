@@ -63,7 +63,7 @@ class FeedingAttendanceImportTest extends TestCase
         $cruz = $this->makeStudent('Cruz, Bianca L.');
         $delos = $this->makeStudent('Delos Reyes, Carlo P.');
 
-        $csv = <<<CSV
+        $csv = <<<'CSV'
         No.,NAME,GRADE,SECTION,"Oct 8, 2025","Oct 9, 2025","Oct 10, 2025"
         1,"Bautista, Andrei M.",7,Sampaguita,A,A,A
         2,"Cruz, Bianca L.",7,Sampaguita,P,P,P
@@ -94,7 +94,7 @@ class FeedingAttendanceImportTest extends TestCase
         // Proves nutritional status alone never flags a learner.
         $student = $this->makeStudent('Santos, Maria L.', 'Severely Wasted');
 
-        $csv = <<<CSV
+        $csv = <<<'CSV'
         No.,NAME,GRADE,SECTION,"Oct 8, 2025","Oct 9, 2025"
         1,"Santos, Maria L.",7,Sampaguita,P,P
         CSV;
@@ -112,7 +112,7 @@ class FeedingAttendanceImportTest extends TestCase
         $student = $this->makeStudent('Bautista, Andrei M.');
 
         // Uploaded as "First Middle Last" — must still match "Last, First M.".
-        $csv = <<<CSV
+        $csv = <<<'CSV'
         No.,NAME,GRADE,SECTION,"Oct 8, 2025"
         1,Andrei Bautista,7,Sampaguita,A
         CSV;
@@ -130,7 +130,7 @@ class FeedingAttendanceImportTest extends TestCase
     {
         $this->makeStudent('Bautista, Andrei M.');
 
-        $csv = <<<CSV
+        $csv = <<<'CSV'
         No.,NAME,GRADE,SECTION,"Oct 8, 2025"
         1,"Nonexistent, Person Q.",7,Sampaguita,A
         CSV;
@@ -167,7 +167,7 @@ class FeedingAttendanceImportTest extends TestCase
         $absent = $this->makeStudent('Bautista, Andrei M.');
         $present = $this->makeStudent('Cruz, Bianca L.');
 
-        $csv = <<<CSV
+        $csv = <<<'CSV'
         No.,NAME,GRADE,SECTION,1,2,3
         1,"Bautista, Andrei M.",7,Sampaguita,A,A,A
         2,"Cruz, Bianca L.",7,Sampaguita,P,P,P
@@ -187,7 +187,7 @@ class FeedingAttendanceImportTest extends TestCase
     {
         $student = $this->makeStudent('Bautista, Andrei M.');
 
-        $csv = <<<CSV
+        $csv = <<<'CSV'
         No.,NAME,GRADE,SECTION,"Oct 8, 2025","Oct 9, 2025"
         1,"Bautista, Andrei M.",7,Sampaguita,,
         CSV;
@@ -206,7 +206,7 @@ class FeedingAttendanceImportTest extends TestCase
         $student = $this->makeStudent('Bautista, Andrei M.');
 
         // One real dated session plus a free-text "Remarks" column.
-        $csv = <<<CSV
+        $csv = <<<'CSV'
         No.,NAME,GRADE,SECTION,"Oct 8, 2025",Remarks
         1,"Bautista, Andrei M.",7,Sampaguita,P,Transferred
         CSV;
@@ -226,7 +226,7 @@ class FeedingAttendanceImportTest extends TestCase
         $this->makeStudent('Bautista, Andrei M.');
 
         // "Prepared by:" sits in the No. column, not under NAME.
-        $csv = <<<CSV
+        $csv = <<<'CSV'
         No.,NAME,GRADE,SECTION,"Oct 8, 2025"
         1,"Bautista, Andrei M.",7,Sampaguita,A
         Prepared by:,Vanessa Mae Villegas,,,

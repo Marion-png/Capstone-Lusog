@@ -44,11 +44,44 @@
         </div>
 
         <div class="section-title">Per Beneficiary Comparison</div>
+
+        @php
+            $activeFilters = ($filters['grade_level'] ?? '') !== '' || ($filters['section'] ?? '') !== '';
+        @endphp
+        <form method="GET" class="filter-bar" id="recordFilters">
+            <div class="filter-field">
+                <label for="filterGrade">Grade Level</label>
+                <select name="grade_level" id="filterGrade">
+                    <option value="">All grade levels</option>
+                    @foreach (($gradeLevels ?? collect()) as $grade)
+                        <option value="{{ $grade }}" @selected(($filters['grade_level'] ?? '') === $grade)>{{ $grade }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="filter-field">
+                <label for="filterSection">Section</label>
+                <select name="section" id="filterSection">
+                    <option value="">All sections</option>
+                    @foreach (($sections ?? collect()) as $section)
+                        <option value="{{ $section }}" @selected(($filters['section'] ?? '') === $section)>{{ $section }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <button type="submit" class="filter-apply">Apply</button>
+            @if ($activeFilters)
+                <a class="filter-clear" href="{{ url()->current() }}">Clear</a>
+            @endif
+            <span class="filter-count">
+                Showing {{ $total }} of {{ $totalBeforeFilters ?? $total }} {{ ($totalBeforeFilters ?? $total) === 1 ? 'beneficiary' : 'beneficiaries' }}
+            </span>
+        </form>
+
         <div class="table-card">
             <table>
                 <thead>
                     <tr>
                         <th>Student</th>
+                        <th>Grade Level</th>
                         <th>Section</th>
                         <th>Baseline BMI</th>
                         <th>Baseline Status</th>
@@ -90,7 +123,8 @@
                         @endphp
                         <tr>
                             <td>{{ $record->student_name }}</td>
-                            <td>{{ $record->section }}</td>
+                            <td>{{ $record->grade_level }}</td>
+                            <td>{{ $record->section_name }}</td>
                             <td>{{ !is_null($baselineBmi) ? number_format((float) $baselineBmi, 2) : '-' }}</td>
                             <td><span class="status {{ $statusClass($baselineStatus) }}">{{ $baselineStatus ?: '-' }}</span></td>
                             <td>{{ !is_null($endlineBmi) ? number_format((float) $endlineBmi, 2) : '-' }}</td>
@@ -98,7 +132,7 @@
                             <td><span class="{{ $deltaClass }}">{{ $deltaLabel }}</span></td>
                         </tr>
                     @empty
-                        <tr><td colspan="7">No records available yet.</td></tr>
+                        <tr><td colspan="8">{{ $activeFilters ? 'No beneficiaries match this grade level and section.' : 'No records available yet.' }}</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -136,5 +170,21 @@
     </div>
 </div>
 @include('partials.feedingcor-page-transition')
+<script>
+(() => {
+    const form = document.getElementById('recordFilters');
+    if (!form) return;
+    const grade = document.getElementById('filterGrade');
+
+    form.querySelectorAll('select').forEach((select) => {
+        select.addEventListener('change', () => {
+            // Sections belong to a grade, so a new grade invalidates the section
+            // already chosen. The server rebuilds the list for the new grade.
+            if (select === grade) form.querySelector('#filterSection').value = '';
+            form.submit();
+        });
+    });
+})();
+</script>
 </body>
 </html>

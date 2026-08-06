@@ -87,10 +87,6 @@ html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--cream);c
 .designation-input:focus,.cell-input:focus{outline:none;border-color:#166534;box-shadow:0 0 0 2px rgba(22,101,52,.12)}
 .cell-input[readonly]{background:#f3f4f6;color:#334155;font-weight:700}
 
-.form7a-block{margin-bottom:14px}
-.form7a-block:last-child{margin-bottom:0}
-.form7a-block-title{font-size:.8rem;font-weight:700;color:#1f3b34;margin-bottom:8px}
-
 .report-head{padding:14px 12px 12px;border-bottom:1px solid #111827;text-align:center}
 .report-school{font-size:1.05rem;font-weight:700;letter-spacing:.01em;color:#0f172a;text-transform:uppercase}
 .report-addr-input{display:block;margin:4px auto 0;width:min(420px,90%);border:none;border-bottom:1px dashed #9ca3af;padding:3px 2px;font-size:.76rem;color:#0f172a;text-align:center;background:transparent}

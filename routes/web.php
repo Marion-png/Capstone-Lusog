@@ -657,6 +657,18 @@ Route::get('/dashboard/school-nurse/feeding-program', [FeedingProgramController:
 Route::post('/dashboard/feedingcor-program/attendance/import', [FeedingProgramController::class, 'importAttendance'])
     ->name('feedingcor-program.attendance.import');
 
+// Photographed sheet → Claude vision → marks, with anything unreadable landing
+// in the review queue below rather than being guessed.
+Route::post('/dashboard/feedingcor-program/attendance/scan', [FeedingProgramController::class, 'scanAttendancePhoto'])
+    ->name('feedingcor-program.attendance.scan');
+
+Route::get('/dashboard/feedingcor-program/attendance/review', [FeedingProgramController::class, 'attendanceReviewQueue'])
+    ->name('feedingcor-program.attendance.review');
+
+Route::post('/dashboard/feedingcor-program/attendance/review/{attendance}', [FeedingProgramController::class, 'resolveAttendanceReview'])
+    ->whereNumber('attendance')
+    ->name('feedingcor-program.attendance.review.resolve');
+
 Route::post('/dashboard/school-head/approvals/{approval}/{decision}', [SchoolHeadController::class, 'decide'])
     ->whereIn('decision', ['approve', 'decline'])
     ->name('dashboard.school-head.approvals.decide');

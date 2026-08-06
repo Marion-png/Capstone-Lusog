@@ -373,6 +373,34 @@
 				<button type="submit" class="btn btn-primary">Upload &amp; Process</button>
 			</div>
 		</form>
+
+		@if (! empty($scanningEnabled))
+			<div class="scan-divider"><span>or</span></div>
+			<form method="POST" action="{{ route('feedingcor-program.attendance.scan') }}" enctype="multipart/form-data" id="scanAttendanceForm">
+				@csrf
+				<input type="hidden" name="grade" value="{{ $selectedGrade ?? 'all' }}">
+				<div class="modal-body">
+					<div class="weight-item">
+						<div class="weight-label">Photo of the marked sheet <span>(.jpg, .png)</span></div>
+						<div class="weight-field-wrap">
+							<input type="file" name="attendance_photo" accept="image/jpeg,image/png,image/webp" required class="weight-input">
+						</div>
+					</div>
+					<div class="weight-item">
+						<div class="weight-label">Session date</div>
+						<div class="weight-field-wrap">
+							<input type="date" name="session_date" max="{{ now()->toDateString() }}" required class="weight-input">
+						</div>
+					</div>
+				</div>
+				<div class="modal-foot">
+					@if (! empty($pendingReviewCount))
+						<a class="btn btn-ghost" href="{{ route('feedingcor-program.attendance.review') }}">Review ({{ $pendingReviewCount }})</a>
+					@endif
+					<button type="submit" class="btn btn-primary">Scan Photo</button>
+				</div>
+			</form>
+		@endif
 	</div>
 </div>
 

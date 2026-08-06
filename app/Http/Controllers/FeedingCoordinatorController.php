@@ -601,6 +601,10 @@ class FeedingCoordinatorController extends Controller
         $dataValues = $monthsData->where('has_data', true)->pluck('value')->map(fn ($v) => (float) $v)->all();
         $min = min((count($dataValues) ? min($dataValues) : 18.5) - 1, 16.0);
         $max = max((count($dataValues) ? max($dataValues) : 22.0) + 1, 26.0);
+        // Snap the ends to even BMI units so the axis reads 28, not 27.4, and
+        // the 2-unit grid below lands on whole numbers.
+        $min = floor($min / 2) * 2;
+        $max = ceil($max / 2) * 2;
         $y = fn (float $v): float => round($bottom - ((max($min, min($max, $v)) - $min) / ($max - $min)) * ($bottom - $top), 1);
 
         // Outlier = month whose average is far from the median of the real
@@ -671,6 +675,34 @@ class FeedingCoordinatorController extends Controller
             ];
         }, $bands);
 
+        // Zone-keyed gradient. The line, its fill and every marker ring draw
+        // their colour from this one vertical gradient, so a reading's colour
+        // is its WHO band: rose above 25, cyan through the healthy range,
+        // indigo below 18.5. Stops sit on the real boundaries (with a short
+        // blend either side) so the colour turns over exactly at 18.5 / 25
+        // rather than at some arbitrary point along the curve.
+        $span = $bottom - $top;
+        $offsetOf = fn (float $v): float => $span > 0 ? round(($y($v) - $top) / $span, 4) : 0.0;
+        $blend = 0.035;
+        $overOffset = $offsetOf($overweight);
+        $underOffset = $offsetOf($underweight);
+
+        $gradientStops = [
+            ['offset' => 0.0, 'zone' => 'over'],
+            ['offset' => max(0.0, round($overOffset - $blend, 4)), 'zone' => 'over'],
+            ['offset' => min(1.0, round($overOffset + $blend, 4)), 'zone' => 'healthy'],
+            ['offset' => max(0.0, round($underOffset - $blend, 4)), 'zone' => 'healthy'],
+            ['offset' => min(1.0, round($underOffset + $blend, 4)), 'zone' => 'under'],
+            ['offset' => 1.0, 'zone' => 'under'],
+        ];
+
+        // Light horizontal rules every 2 BMI units, so the eye can read a
+        // height off the plot without the band tints having to carry it.
+        $gridLines = [];
+        for ($v = $min; $v <= $max; $v += 2) {
+            $gridLines[] = $y((float) $v);
+        }
+
         $line = $monthsData->map(fn (array $m) => $m['x'].','.$m['y'])->implode(' ');
         $points = $monthsData->map(fn (array $m) => [(float) $m['x'], (float) $m['y']])->all();
         $linePath = $this->smoothPath($points);
@@ -685,8 +717,11 @@ class FeedingCoordinatorController extends Controller
             'plot' => ['left' => $left, 'right' => $right, 'top' => $top, 'bottom' => $bottom],
             'bands' => $bands,
             'y_ticks' => array_map(fn (float $v) => ['label' => rtrim(rtrim(number_format($v, 1), '0'), '.'), 'y' => $y($v)], [$max, $overweight, $underweight, $min]),
-            // Hairlines are drawn only where a zone changes — no full grid.
+            // Dashed hairlines mark where a zone changes; the plain grid below
+            // is the readable-height scale and stays recessive behind them.
             'zone_lines' => array_map(fn (float $v) => $y($v), [$overweight, $underweight]),
+            'grid_lines' => $gridLines,
+            'gradient_stops' => $gradientStops,
             'line' => $line,
             'line_path' => $linePath,
             'area' => $left.','.$bottom.' '.$line.' '.$right.','.$bottom,

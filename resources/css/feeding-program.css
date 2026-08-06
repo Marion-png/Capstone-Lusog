@@ -508,6 +508,9 @@
 		.weight-input { width: 100%; padding: 10px 12px; border: 1px solid #d8e1de; border-radius: 10px; font-size: .82rem; font-family: 'DM Sans', sans-serif; color: #27423b; }
 		.weight-unit { font-size: .78rem; color: #5f736d; }
 		.modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--border); }
+		/* Separates the spreadsheet upload from the photo scan in the same modal. */
+		.scan-divider { display: flex; align-items: center; gap: 10px; padding: 0 16px; color: var(--text-3); font-size: .7rem; text-transform: uppercase; letter-spacing: .1em; }
+		.scan-divider::before, .scan-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 		#encodeFormForm .modal-foot {
 			background: #fff;
 			position: sticky;

@@ -1,0 +1,209 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Institution;
+use App\Models\StudentHealthRecord;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
+
+/**
+ * Guards the grade level / section filters on the coordinator's Student Health
+ * Records page. The learner's grade and section live together in one plain
+ * `section` column as "Grade 7 / Section A", so both filters are derived by
+ * splitting that string and applied in PHP — never in SQL, since the rest of
+ * the row (names, BMI, statuses) is encrypted at rest.
+ */
+class FeedingHealthRecordFilterTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private Institution $institution;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->institution = Institution::create(['name' => 'Test School', 'status' => 'active']);
+    }
+
+    private function coordinatorSession(): array
+    {
+        return [
+            'active_role' => 'feeding_coor',
+            'active_name' => 'Test Coordinator',
+            'active_username' => 'feedcor.test',
+            'active_school_name' => 'Test School',
+            'active_institution_id' => $this->institution->id,
+        ];
+    }
+
+    private function makeStudent(string $name, string $section): StudentHealthRecord
+    {
+        return StudentHealthRecord::create([
+            'institution_id' => $this->institution->id,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'student_name' => $name,
+            'student_id' => 'LRN'.random_int(100000, 999999),
+            'school_name' => 'Test School',
+            'section' => $section,
+            'weight' => 30,
+            'bmi_value' => 17.2,
+            'nutritional_status' => 'Wasted',
+            'baseline_nutritional_status' => 'Wasted',
+            'student_details' => ['gender' => 'Male'],
+        ]);
+    }
+
+    private function seedThreeSections(): void
+    {
+        $this->makeStudent('Alpha Learner', 'Grade 7 / Rizal');
+        $this->makeStudent('Bravo Learner', 'Grade 7 / Bonifacio');
+        $this->makeStudent('Charlie Learner', 'Grade 8 / Mabini');
+    }
+
+    #[Test]
+    public function unfiltered_page_lists_every_beneficiary(): void
+    {
+        $this->seedThreeSections();
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records');
+
+        $response->assertOk()
+            ->assertSee('Alpha Learner')
+            ->assertSee('Bravo Learner')
+            ->assertSee('Charlie Learner');
+    }
+
+    #[Test]
+    public function grade_level_filter_keeps_only_that_grade(): void
+    {
+        $this->seedThreeSections();
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records?grade_level=Grade+7');
+
+        $response->assertOk()
+            ->assertSee('Alpha Learner')
+            ->assertSee('Bravo Learner')
+            ->assertDontSee('Charlie Learner');
+    }
+
+    #[Test]
+    public function section_filter_narrows_to_a_single_section(): void
+    {
+        $this->seedThreeSections();
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records?grade_level=Grade+7&section=Rizal');
+
+        $response->assertOk()
+            ->assertSee('Alpha Learner')
+            ->assertDontSee('Bravo Learner')
+            ->assertDontSee('Charlie Learner');
+    }
+
+    #[Test]
+    public function grade_and_section_are_shown_as_separate_columns(): void
+    {
+        $this->makeStudent('Alpha Learner', 'Grade 7 / Rizal');
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records');
+
+        $response->assertOk()
+            ->assertSee('Grade Level')
+            ->assertSee('<td>Grade 7</td>', false)
+            ->assertSee('<td>Rizal</td>', false);
+    }
+
+    #[Test]
+    public function section_filter_is_dropped_when_it_does_not_belong_to_the_chosen_grade(): void
+    {
+        $this->seedThreeSections();
+
+        // Rizal is a Grade 7 section; asking for it under Grade 8 must fall back
+        // to "all sections of Grade 8" rather than returning an empty table.
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records?grade_level=Grade+8&section=Rizal');
+
+        $response->assertOk()
+            ->assertSee('Charlie Learner')
+            ->assertDontSee('Alpha Learner');
+    }
+
+    #[Test]
+    public function an_unknown_grade_level_is_ignored_rather_than_emptying_the_page(): void
+    {
+        $this->seedThreeSections();
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records?grade_level=Grade+99');
+
+        $response->assertOk()
+            ->assertSee('Alpha Learner')
+            ->assertSee('Charlie Learner');
+    }
+
+    #[Test]
+    public function filter_options_are_offered_for_every_grade_and_the_chosen_grades_sections(): void
+    {
+        $this->seedThreeSections();
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records?grade_level=Grade+7');
+
+        // Both grades stay selectable so the filter can always be undone, while
+        // sections list only the ones inside Grade 7.
+        $response->assertOk()
+            ->assertSee('value="Grade 7" selected', false)
+            ->assertSee('value="Grade 8"', false)
+            ->assertSee('value="Rizal"', false)
+            ->assertSee('value="Bonifacio"', false)
+            ->assertDontSee('value="Mabini"', false);
+    }
+
+    #[Test]
+    public function summary_cards_and_consolidated_report_follow_the_filter(): void
+    {
+        $this->seedThreeSections();
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records?grade_level=Grade+8');
+
+        // One Grade 8 learner out of three overall.
+        $response->assertOk()
+            ->assertSee('Showing 1 of 3 beneficiaries')
+            ->assertSee('Grade 8 / Mabini')
+            ->assertDontSee('Grade 7 / Rizal');
+    }
+
+    #[Test]
+    public function records_stay_scoped_to_the_active_school(): void
+    {
+        $other = Institution::create(['name' => 'Other School', 'status' => 'active']);
+        $this->makeStudent('Alpha Learner', 'Grade 7 / Rizal');
+
+        StudentHealthRecord::create([
+            'institution_id' => $other->id,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'student_name' => 'Outsider Learner',
+            'student_id' => 'LRN999999',
+            'school_name' => 'Other School',
+            'section' => 'Grade 7 / Rizal',
+            'weight' => 30,
+            'bmi_value' => 17.2,
+            'nutritional_status' => 'Wasted',
+            'baseline_nutritional_status' => 'Wasted',
+            'student_details' => ['gender' => 'Male'],
+        ]);
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records?grade_level=Grade+7');
+
+        $response->assertOk()
+            ->assertSee('Alpha Learner')
+            ->assertDontSee('Outsider Learner');
+    }
+}

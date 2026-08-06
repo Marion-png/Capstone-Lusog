@@ -1,62 +1,36 @@
 /* ══════════════════════════════════════════════════════════════════════
    Feeding Coordinator sidebar — Class Adviser look (.asb-* in
-   class-adviser.css) on a rail that stays collapsed to icons until the
-   cursor enters it, then eases open. Loaded after the page stylesheet so
-   it overrides the older .sidebar / .main rules still in feeding-*.css.
+   class-adviser.css) on a panel that stays open at a fixed width. Loaded
+   after the page stylesheet so it overrides the older .sidebar / .main
+   rules still in feeding-*.css.
 
-   One shared easing + duration drives the width, the content margin and
-   every label, so the whole panel moves as a single piece.
+   The panel does NOT open or close on hover: its width, the content
+   margin and every label are static, so nothing moves when the cursor
+   crosses the rail. Hover styling survives only on individual controls
+   (a link, the logout button) where it is ordinary affordance, never a
+   change of the panel's size.
    ══════════════════════════════════════════════════════════════════════ */
 :root{
 	--asb-w:264px;
-	--asb-rail:76px;
 	--asb-ease:cubic-bezier(.22,.61,.36,1);
 	--asb-speed:.3s;
-	/* Neither direction is instant: the rail waits a moment before opening
-	   (so brushing past it does nothing) and longer before closing (so
-	   leaving it briefly, or cutting a corner, does not snap it shut).
-	   Every opening rule below carries the first delay, every closing rule
-	   the second. */
-	--asb-open-delay:.16s;
-	--asb-close-delay:.3s;
 }
-.asb-sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--asb-rail);background:#14532d;display:flex;flex-direction:column;overflow-x:hidden;overflow-y:auto;z-index:100;transition:width var(--asb-speed) var(--asb-ease) var(--asb-close-delay);will-change:width}
-.asb-sidebar:hover,.asb-sidebar.asb-pin{width:var(--asb-w);transition-delay:var(--asb-open-delay)}
-/* Labels fade a beat after the panel starts opening, and leave quickly
-   on close so text never spills past the rail edge. */
-.asb-logo-text,.asb-link-text,.asb-user-meta,.asb-logout-form{opacity:1;transition:opacity .2s ease calc(var(--asb-open-delay) + .09s)}
-.asb-sidebar:not(:hover):not(.asb-pin) .asb-logo-text,
-.asb-sidebar:not(:hover):not(.asb-pin) .asb-link-text,
-.asb-sidebar:not(:hover):not(.asb-pin) .asb-user-meta,
-.asb-sidebar:not(:hover):not(.asb-pin) .asb-logout-form{opacity:0;transition:opacity .12s ease var(--asb-close-delay)}
-/* Suppressed for the first paint after a sidebar navigation (see the partial):
-   the rail must appear already open, not slide open. The content keeps its
-   opacity/transform transition so the incoming page still fades in — only the
-   margin is frozen, since it is already where it belongs. */
-.asb-sidebar.asb-no-anim,.asb-sidebar.asb-no-anim *{transition:none!important}
-.asb-sidebar.asb-no-anim ~ .main{transition-property:opacity,transform!important}
+.asb-sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--asb-w);background:#14532d;display:flex;flex-direction:column;overflow-x:hidden;overflow-y:auto;z-index:100}
+.asb-logo-text,.asb-link-text,.asb-user-meta,.asb-logout-form{opacity:1}
 
 /* ── Logo ── */
-.asb-logo{display:flex;align-items:center;gap:11px;padding:20px 18px;border-bottom:1px solid rgba(255,255,255,.1);transition:padding var(--asb-speed) var(--asb-ease) var(--asb-open-delay)}
-.asb-sidebar:not(:hover):not(.asb-pin) .asb-logo{padding:20px 21px;transition-delay:var(--asb-close-delay)}
-.asb-logo-icon{width:34px;height:34px;border-radius:9px;background:rgba(134,239,172,.16);display:grid;place-items:center;color:#86efac;flex:0 0 auto;transition:background .3s var(--asb-ease) var(--asb-close-delay),transform .35s var(--asb-ease) var(--asb-close-delay),box-shadow .3s var(--asb-ease) var(--asb-close-delay)}
+.asb-logo{display:flex;align-items:center;gap:11px;padding:20px 18px;border-bottom:1px solid rgba(255,255,255,.1)}
+.asb-logo-icon{width:34px;height:34px;border-radius:9px;background:rgba(134,239,172,.16);display:grid;place-items:center;color:#86efac;flex:0 0 auto}
 .asb-logo-icon svg{width:19px;height:19px;transition:transform .35s var(--asb-ease)}
 .asb-logo-text{flex:0 0 auto;white-space:nowrap}
 .asb-logo-title{color:#fff;font-weight:800;font-size:.98rem;letter-spacing:.02em;line-height:1.15}
 .asb-logo-sub{color:rgba(255,255,255,.55);font-size:.66rem;font-weight:600}
-.asb-sidebar:hover .asb-logo-icon,.asb-sidebar.asb-pin .asb-logo-icon{background:rgba(134,239,172,.26);transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,.22);transition-delay:var(--asb-open-delay)}
-.asb-sidebar:hover .asb-logo-icon svg{transform:scale(1.08)}
-.asb-logo-icon:hover svg{animation:asbPulse 1.1s var(--asb-ease) infinite}
 
 /* ── Nav ── */
-.asb-nav{flex:1;padding:14px 12px;transition:padding var(--asb-speed) var(--asb-ease) var(--asb-open-delay)}
-.asb-nav-label{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:rgba(134,239,172,.55);padding:0 8px;margin:16px 0 6px;max-height:18px;overflow:hidden;white-space:nowrap;transition:max-height var(--asb-speed) var(--asb-ease) var(--asb-open-delay),margin var(--asb-speed) var(--asb-ease) var(--asb-open-delay),opacity .2s ease calc(var(--asb-open-delay) + .09s)}
+.asb-nav{flex:1;padding:14px 12px}
+.asb-nav-label{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:rgba(134,239,172,.55);padding:0 8px;margin:16px 0 6px;white-space:nowrap}
 .asb-nav-label:first-child{margin-top:0}
-.asb-sidebar:not(:hover):not(.asb-pin) .asb-nav-label{max-height:0;margin-top:0;margin-bottom:0;opacity:0;transition:max-height var(--asb-speed) var(--asb-ease) var(--asb-close-delay),margin var(--asb-speed) var(--asb-ease) var(--asb-close-delay),opacity .12s ease var(--asb-close-delay)}
-/* Hover shifts padding rather than transform: the staggered entry animation
-   below fills `transform`, which would otherwise beat a hover transform. */
-.asb-link{position:relative;overflow:hidden;display:flex;align-items:center;gap:11px;color:rgba(255,255,255,.72);text-decoration:none;font-size:.82rem;font-weight:600;padding:9px 10px;border-radius:9px;margin-bottom:2px;transition:background .22s var(--asb-ease),color .22s var(--asb-ease),padding var(--asb-speed) var(--asb-ease) var(--asb-open-delay)}
-.asb-sidebar:not(:hover):not(.asb-pin) .asb-link{padding-left:18px;padding-right:18px;transition-delay:var(--asb-close-delay)}
+.asb-link{position:relative;overflow:hidden;display:flex;align-items:center;gap:11px;color:rgba(255,255,255,.72);text-decoration:none;font-size:.82rem;font-weight:600;padding:9px 10px;border-radius:9px;margin-bottom:2px;transition:background .22s var(--asb-ease),color .22s var(--asb-ease),padding .22s var(--asb-ease)}
 .asb-link svg{width:16px;height:16px;flex:0 0 auto;transition:transform .28s var(--asb-ease)}
 .asb-link-text{flex:0 0 auto;white-space:nowrap}
 /* left accent bar grows in on hover, stays put on the active tab */
@@ -81,45 +55,37 @@
 .asb-nav > *:nth-child(5){animation-delay:.14s}
 
 /* ── User footer ── */
-.asb-user{display:flex;align-items:center;gap:9px;padding:14px 16px;border-top:1px solid rgba(255,255,255,.1);transition:padding var(--asb-speed) var(--asb-ease) var(--asb-open-delay)}
-.asb-sidebar:not(:hover):not(.asb-pin) .asb-user{padding-left:22px;padding-right:22px;transition-delay:var(--asb-close-delay)}
-.asb-avatar{width:32px;height:32px;border-radius:50%;background:#16a34a;color:#fff;display:grid;place-items:center;font-weight:700;font-size:.72rem;flex:0 0 auto;transition:transform .28s var(--asb-ease) var(--asb-close-delay),box-shadow .28s var(--asb-ease) var(--asb-close-delay)}
-.asb-sidebar:hover .asb-avatar,.asb-sidebar.asb-pin .asb-avatar{transform:scale(1.06);box-shadow:0 0 0 3px rgba(134,239,172,.18);transition-delay:var(--asb-open-delay)}
+.asb-user{display:flex;align-items:center;gap:9px;padding:14px 16px;border-top:1px solid rgba(255,255,255,.1)}
+.asb-avatar{width:32px;height:32px;border-radius:50%;background:#16a34a;color:#fff;display:grid;place-items:center;font-weight:700;font-size:.72rem;flex:0 0 auto}
 .asb-user-meta{min-width:0;flex:1;white-space:nowrap}
 .asb-user-name{color:#fff;font-size:.78rem;font-weight:700;overflow:hidden;text-overflow:ellipsis}
 .asb-user-role{color:#86efac;font-size:.66rem;overflow:hidden;text-overflow:ellipsis}
 .asb-logout-form{flex:0 0 auto}
-.asb-sidebar:not(:hover):not(.asb-pin) .asb-logout-form{pointer-events:none}
 .asb-logout{background:none;border:none;color:rgba(255,255,255,.55);cursor:pointer;border-radius:7px;width:28px;height:28px;display:grid;place-items:center;transition:background .2s var(--asb-ease),color .2s var(--asb-ease),transform .2s var(--asb-ease)}
 .asb-logout svg{width:15px;height:15px}
 .asb-logout:hover{background:rgba(239,68,68,.16);color:#fecaca;transform:translateX(2px)}
 .asb-logout:active{transform:scale(.92)}
 
-/* ── Content shifts with the rail, on the same delay ── */
-.asb-sidebar ~ .main{margin-left:var(--asb-rail);transition:margin-left var(--asb-speed) var(--asb-ease) var(--asb-close-delay)}
-.asb-sidebar:hover ~ .main,.asb-sidebar.asb-pin ~ .main{margin-left:var(--asb-w);transition-delay:var(--asb-open-delay)}
+/* ── Content clears the panel at its one fixed width ── */
+.asb-sidebar ~ .main{margin-left:var(--asb-w)}
 
 /* ── Page swap: content eases out when a tab is picked, eases back in on the
    next page. Scoped through .asb-sidebar so it outranks the margin rule above
    (and the plainer `html.js .main` copies in feeding-dashboard/-program.css).
-   Delays are per-property: the margin keeps the rail's open/close delay while
-   the fade runs on its own timing. --asb-page-out must stay in step with the
-   navigation timeout in partials/feedingcor-page-transition.blade.php. ── */
+   --asb-page-out must stay in step with the navigation timeout in
+   partials/feedingcor-page-transition.blade.php. ── */
 :root{--asb-page-out:.34s;--asb-page-in:.42s;--asb-page-in-delay:.08s}
-html.js .asb-sidebar ~ .main{opacity:0;transform:translateY(12px);transition:opacity var(--asb-page-out) var(--asb-ease),transform var(--asb-page-out) var(--asb-ease),margin-left var(--asb-speed) var(--asb-ease);transition-delay:0s,0s,var(--asb-close-delay)}
-html.js .asb-sidebar:hover ~ .main,html.js .asb-sidebar.asb-pin ~ .main{transition-delay:0s,0s,var(--asb-open-delay)}
+html.js .asb-sidebar ~ .main{opacity:0;transform:translateY(12px);transition:opacity var(--asb-page-out) var(--asb-ease),transform var(--asb-page-out) var(--asb-ease)}
 /* Incoming page: slower and slightly delayed, so it settles instead of popping. */
-html.js .asb-sidebar ~ .main.page-ready{opacity:1;transform:translateY(0);transition:opacity var(--asb-page-in) var(--asb-ease),transform var(--asb-page-in) var(--asb-ease),margin-left var(--asb-speed) var(--asb-ease);transition-delay:var(--asb-page-in-delay),var(--asb-page-in-delay),var(--asb-close-delay)}
-html.js .asb-sidebar:hover ~ .main.page-ready,html.js .asb-sidebar.asb-pin ~ .main.page-ready{transition-delay:var(--asb-page-in-delay),var(--asb-page-in-delay),var(--asb-open-delay)}
+html.js .asb-sidebar ~ .main.page-ready{opacity:1;transform:translateY(0);transition:opacity var(--asb-page-in) var(--asb-ease) var(--asb-page-in-delay),transform var(--asb-page-in) var(--asb-ease) var(--asb-page-in-delay)}
 html.js .asb-sidebar ~ .main.page-exit{opacity:0;transform:translateY(12px)}
 
 @keyframes asbRipple{to{transform:scale(2.6);opacity:0}}
 @keyframes asbSlideIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
-@keyframes asbPulse{0%,100%{transform:scale(1.08)}50%{transform:scale(1.22)}}
 
 @media (max-width:900px){
 	.asb-sidebar{display:none}
-	.asb-sidebar ~ .main,.asb-sidebar:hover ~ .main{margin-left:0}
+	.asb-sidebar ~ .main{margin-left:0}
 }
 
 @media print{

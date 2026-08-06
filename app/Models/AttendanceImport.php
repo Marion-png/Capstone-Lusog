@@ -30,6 +30,10 @@ class AttendanceImport extends Model
         'matched_count',
         'unmatched_count',
         'row_errors',
+        'kind',
+        'session_date',
+        'unclear_count',
+        'photo_purged_at',
     ];
 
     protected $casts = [
@@ -38,7 +42,23 @@ class AttendanceImport extends Model
         'sessions_count' => 'integer',
         'matched_count' => 'integer',
         'unmatched_count' => 'integer',
+        'unclear_count' => 'integer',
+        'session_date' => 'date',
+        'photo_purged_at' => 'datetime',
     ];
+
+    public const KIND_SPREADSHEET = 'spreadsheet';
+
+    public const KIND_PHOTO = 'photo_scan';
+
+    /** Marks this batch produced that no human has confirmed yet. */
+    public function pendingReviewCount(): int
+    {
+        return FeedingAttendance::query()
+            ->where('attendance_import_id', $this->id)
+            ->where('needs_review', true)
+            ->count();
+    }
 
     /**
      * Whether attendance has been uploaded for the given institution + period.
