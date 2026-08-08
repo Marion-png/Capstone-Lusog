@@ -494,6 +494,14 @@ Route::get('/dashboard/school-head', [SchoolHeadController::class, 'index'])
 Route::get('/dashboard/school-head/reports', [SchoolHeadController::class, 'reports'])
     ->name('dashboard.school-head.reports');
 
+// Keeps the school head's dashboard current without a reload: the page polls
+// the pulse (a stamp, no data) and only re-reads the metrics when it moves.
+Route::get('/dashboard/school-head/metrics', [SchoolHeadController::class, 'metrics'])
+    ->name('dashboard.school-head.metrics');
+
+Route::get('/dashboard/school-head/metrics/pulse', [SchoolHeadController::class, 'pulse'])
+    ->name('dashboard.school-head.metrics.pulse');
+
 Route::get('/dashboard/feedingcor-dashboard', [FeedingCoordinatorController::class, 'dashboard'])
     ->name('dashboard.feedingcor-dashboard');
 

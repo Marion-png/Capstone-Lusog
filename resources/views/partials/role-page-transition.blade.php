@@ -21,7 +21,7 @@
 			event.preventDefault();
 			main.classList.remove('page-ready');
 			main.classList.add('page-exit');
-			// Matches --asb-page-out in feedingcor-sidebar.css.
+			// Matches --asb-page-out in role-sidebar.css.
 			window.setTimeout(() => { window.location.href = href; }, 340);
 		});
 	});

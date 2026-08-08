@@ -1,8 +1,10 @@
 /* ══════════════════════════════════════════════════════════════════════
-   Feeding Coordinator sidebar — Class Adviser look (.asb-* in
-   class-adviser.css) on a panel that stays open at a fixed width. Loaded
-   after the page stylesheet so it overrides the older .sidebar / .main
-   rules still in feeding-*.css.
+   Shared role sidebar — Class Adviser look (.asb-* in class-adviser.css)
+   on a panel that stays open at a fixed width. Used by the Feeding
+   Coordinator (partials/feedingcor-sidebar) and the School Head
+   (partials/schoolhead-sidebar), so every role's rail reads the same.
+   Loaded after the page stylesheet so it overrides the older
+   .sidebar / .main rules still in feeding-*.css.
 
    The panel does NOT open or close on hover: its width, the content
    margin and every label are static, so nothing moves when the cursor
@@ -73,7 +75,7 @@
    next page. Scoped through .asb-sidebar so it outranks the margin rule above
    (and the plainer `html.js .main` copies in feeding-dashboard/-program.css).
    --asb-page-out must stay in step with the navigation timeout in
-   partials/feedingcor-page-transition.blade.php. ── */
+   partials/role-page-transition.blade.php. ── */
 :root{--asb-page-out:.34s;--asb-page-in:.42s;--asb-page-in-delay:.08s}
 html.js .asb-sidebar ~ .main{opacity:0;transform:translateY(12px);transition:opacity var(--asb-page-out) var(--asb-ease),transform var(--asb-page-out) var(--asb-ease)}
 /* Incoming page: slower and slightly delayed, so it settles instead of popping. */

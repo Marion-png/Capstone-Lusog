@@ -14,7 +14,7 @@
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
-    <style>{!! file_get_contents(resource_path('css/feedingcor-sidebar.css')) !!}</style>
+    <style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
 </head>
 <body>
 @include('partials.feedingcor-sidebar', ['active' => 'dashboard'])
@@ -330,7 +330,7 @@
 			event.preventDefault();
 			main.classList.remove('page-ready');
 			main.classList.add('page-exit');
-			// Matches --asb-page-out in feedingcor-sidebar.css.
+			// Matches --asb-page-out in role-sidebar.css.
 			window.setTimeout(() => {
 				window.location.href = href;
 			}, 340);

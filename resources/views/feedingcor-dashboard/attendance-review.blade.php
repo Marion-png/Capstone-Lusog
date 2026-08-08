@@ -14,7 +14,7 @@
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
-    <style>{!! file_get_contents(resource_path('css/feedingcor-sidebar.css')) !!}</style>
+    <style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
     <style>
         .review-actions{display:flex;gap:8px}
         .review-btn{font-family:inherit;font-size:.72rem;font-weight:700;border:none;border-radius:8px;padding:6px 13px;cursor:pointer;transition:background .16s ease}
@@ -91,6 +91,6 @@
         </div>
     </div>
 </div>
-@include('partials.feedingcor-page-transition')
+@include('partials.role-page-transition')
 </body>
 </html>

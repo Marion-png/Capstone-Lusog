@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -13,10 +13,6 @@
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         :root {
-            --g900: #14532d;
-            --g300: #86efac;
-            --sidebar-w: 252px;
-            --sidebar-collapsed-w: 78px;
             --topbar-h: 68px;
             --cream: #f5f8f4;
             --card: #ffffff;
@@ -30,68 +26,21 @@
             --shadow-card: 0 1px 3px rgba(5,46,22,.05), 0 10px 22px rgba(5,46,22,.06);
             --radius: 16px;
             --radius-sm: 10px;
+
+            /* Chart series. Validated as a pair against the card surface:
+               CVD separation ΔE 20.9 (protan), normal-vision ΔE 30.2. The amber
+               sits below 3:1 against white, which is why the chart ships direct
+               totals and a table view rather than relying on the fill alone. */
+            --series-healthy: #166534;
+            --series-risk: #ea8c0a;
+            --grid-line: #e4eee8;
         }
 
         html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: radial-gradient(circle at 5% -10%, #e7f7ec 0%, var(--cream) 50%); color: var(--text-1); overflow: hidden; }
 
-        .sidebar {
-            position: fixed; left: 0; top: 0; bottom: 0;
-            width: var(--sidebar-collapsed-w); background: var(--g900);
-            display: flex; flex-direction: column; z-index: 100; overflow: hidden;
-            box-shadow: 8px 0 28px rgba(6, 46, 26, .18);
-            transition: width .26s ease;
-        }
-.sidebar:hover, .sidebar.sb-pin { width: var(--sidebar-w); }
-        .sidebar::after {
-            content: ''; position: absolute; inset: 0;
-            background: radial-gradient(ellipse 120% 40% at 50% 100%, rgba(34,197,94,.18) 0%, transparent 70%),
-                        radial-gradient(ellipse 80% 30% at 80% 0%, rgba(74,222,128,.12) 0%, transparent 60%);
-            pointer-events: none;
-        }
-        .sb-grid {
-            position: absolute; inset: 0;
-            background-image: linear-gradient(rgba(134,239,172,.05) 1px, transparent 1px),
-                              linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);
-            background-size: 28px 28px;
-            pointer-events: none;
-        }
-        .sb-logo { padding: 21px 20px 18px; position: relative; z-index: 2; border-bottom: 1px solid rgba(255,255,255,.09); display: flex; justify-content: center; transition: padding .24s ease; }
-        .sb-logo-full { width: 176px; max-width: 100%; height: auto; display: block; transition: width .24s ease; }
-        .sidebar:not(:hover):not(.sb-pin) .sb-logo { padding: 14px 10px; }
-        .sidebar:not(:hover):not(.sb-pin) .sb-logo-full { width: 48px; }
-        .sb-nav { flex: 1; overflow-y: auto; padding: 16px 12px; position: relative; z-index: 2; transition: padding .24s ease; }
-        .sidebar:not(:hover):not(.sb-pin) .sb-nav { padding: 12px 8px; }
-        .sb-section-label { font-size: .6rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: rgba(134,239,172,.58); padding: 0 8px; margin: 9px 0; max-height: 20px; opacity: 1; transform: translateX(0); transition: max-height .24s ease, opacity .18s ease, transform .24s ease, margin .24s ease; overflow: hidden; }
-        .sidebar:not(:hover):not(.sb-pin) .sb-section-label { max-height: 0; opacity: 0; transform: translateX(-6px); margin: 0; }
-        .sb-link { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); text-decoration: none; color: rgba(255,255,255,.66); font-size: .83rem; font-weight: 500; transition: background .15s, color .15s, transform .15s, padding .24s ease, gap .24s ease, font-size .24s ease; margin-bottom: 2px; white-space: nowrap; overflow: hidden; }
-        .sb-link:hover { background: rgba(255,255,255,.1); color: rgba(255,255,255,.94); transform: translateX(2px); }
-        .sb-link.active { background: rgba(34,197,94,.2); color: var(--g300); box-shadow: inset 0 0 0 1px rgba(134,239,172,.22); }
-        .sb-link svg { width: 16px; height: 16px; flex-shrink: 0; transition: width .24s ease, height .24s ease; }
-        .sidebar:not(:hover):not(.sb-pin) .sb-link { font-size: 0; padding: 10px 22px; gap: 0; }
-        .sidebar:not(:hover):not(.sb-pin) .sb-link svg { width: 18px; height: 18px; }
-        .sb-user { padding: 14px 16px; border-top: 1px solid rgba(255,255,255,.09); display: flex; align-items: center; gap: 11px; position: relative; z-index: 2; transition: padding .24s ease, gap .24s ease; }
-        .sb-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(145deg, #22c55e, #15803d); display: grid; place-items: center; font-size: .8rem; font-weight: 700; color: white; flex-shrink: 0; }
-        .sb-user-name { font-size: .8rem; font-weight: 600; color: white; line-height: 1.2; }
-        .sb-user-role { font-size: .68rem; color: var(--g300); }
-        .sb-user > div:nth-child(2) { max-width: 180px; opacity: 1; transform: translateX(0); overflow: hidden; transition: max-width .24s ease, opacity .18s ease, transform .24s ease; }
-        .sidebar:not(:hover):not(.sb-pin) .sb-user { padding: 10px 22px; gap: 0; }
-        .sidebar:not(:hover):not(.sb-pin) .sb-user > div:nth-child(2) { max-width: 0; opacity: 0; transform: translateX(-6px); }
-        .sb-logout { margin-left: auto; background: none; border: none; color: rgba(255,255,255,.4); cursor: pointer; padding: 4px; border-radius: 6px; transition: color .15s, background .15s, max-width .24s ease, padding .24s ease, opacity .18s ease; display: grid; place-items: center; max-width: 30px; overflow: hidden; }
-        .sb-logout:hover { color: #fecaca; background: rgba(239,68,68,.14); }
-        .sb-logout svg { width: 15px; height: 15px; }
-        .sb-user form { max-width: 40px; overflow: hidden; transition: max-width .24s ease, opacity .18s ease; }
-        .sidebar:not(:hover):not(.sb-pin) .sb-user form { max-width: 0; opacity: 0; }
-        .sidebar:not(:hover):not(.sb-pin) .sb-logout { max-width: 0; padding: 0; opacity: 0; }
-
-        .main { margin-left: var(--sidebar-collapsed-w); height: 100vh; display: flex; flex-direction: column; overflow: hidden; transition: margin-left .26s ease; }
-.sidebar:hover ~ .main, .sidebar.sb-pin ~ .main { margin-left: var(--sidebar-w); }
-        html.js .main { opacity: 0; transform: translateY(10px); transition: opacity .26s ease, transform .3s ease; }
-        html.js .main.page-ready { opacity: 1; transform: translateY(0); }
-        html.js .main.page-exit { opacity: 0; transform: translateY(10px); }
+        .main { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         .topbar { height: var(--topbar-h); border-bottom: 1px solid var(--border); background: rgba(255,255,255,.82); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
         .topbar-bc { font-size: .76rem; color: var(--text-3); display: flex; gap: 6px; align-items: center; }
-        .topbar-chip { font-size: .72rem; border: 1px solid #bbf7d0; color: #166534; background: #f0fdf4; border-radius: 999px; padding: 5px 11px; display: flex; align-items: center; gap: 7px; font-weight: 600; }
-        .topbar-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
 
         .content { overflow: auto; padding: 20px; }
         .content-inner { max-width: 1240px; margin: 0 auto; }
@@ -127,88 +76,101 @@
 
         .table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
         table { width: 100%; border-collapse: collapse; background: #fff; }
-        th, td { font-size: .74rem; text-align: left; padding: 11px 9px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        th, td { font-size: .74rem; text-align: left; padding: 9px; border-bottom: 1px solid var(--border); white-space: nowrap; font-variant-numeric: tabular-nums; }
+        tbody tr:last-child td { border-bottom: none; }
         tbody tr:hover { background: #f8fbf8; }
         th { color: var(--text-3); font-weight: 700; font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; background: #f9fdf9; }
-        .request-type {
-            border-radius: 999px;
-            border: 1px solid #d1fae5;
-            background: #f0fdf4;
-            color: #166534;
-            font-weight: 700;
-            padding: 3px 8px;
-            font-size: .64rem;
-            display: inline-block;
-        }
-        .action-cell { display: flex; align-items: center; gap: 8px; }
-        .action-form { display: inline; }
-        .btn {
-            appearance: none; border: 1px solid transparent; border-radius: 8px; padding: 5px 10px;
-            font-size: .69rem; font-weight: 700; cursor: pointer; transition: .15s ease;
-        }
-        .btn-approve { background: #15803d; color: #fff; }
-        .btn-approve:hover { background: #166534; transform: translateY(-1px); }
-        .btn-decline { background: #fff; color: #64748b; border-color: #d1d5db; }
-        .btn-decline:hover { background: #f8fafc; color: #334155; }
-        .empty-state { font-size: .75rem; color: var(--text-3); padding: 14px 0; }
 
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1.15fr; gap: 12px; }
         .program-item { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--border); padding: 10px 0; }
         .program-item:last-child { border-bottom: none; }
         .program-label { font-size: .75rem; color: var(--text-2); font-weight: 700; }
         .program-sub { font-size: .67rem; color: var(--text-3); margin-top: 2px; }
-        .pill { border-radius: 999px; padding: 3px 8px; font-size: .63rem; font-weight: 700; align-self: center; }
+        .program-note { font-size: .65rem; color: #b45309; margin-top: 3px; font-weight: 600; }
+        .pill { border-radius: 999px; padding: 3px 8px; font-size: .63rem; font-weight: 700; align-self: center; white-space: nowrap; }
         .pill-ok { background: #dcfce7; color: #166534; }
         .pill-warn { background: #fef3c7; color: #92400e; }
+        .pill-idle { background: #f1f5f4; color: #64748b; }
 
-        .chart-wrap { padding-top: 4px; }
-        .chart-legend { display: flex; align-items: center; gap: 14px; font-size: .64rem; color: var(--text-3); margin-bottom: 8px; }
-        .chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
-        .dot-legend { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-        .dot-healthy { background: #16a34a; }
-        .dot-risk { background: #d97706; }
-        .chart { height: 196px; display: flex; align-items: end; gap: 9px; }
-        .bar-col { flex: 1; min-width: 0; }
-        .chart.is-animating .bar-col { opacity: 0; transform: translateY(8px); animation: barColIn .45s ease forwards; }
-        .chart.is-animating .bar-col:nth-child(1) { animation-delay: .03s; }
-        .chart.is-animating .bar-col:nth-child(2) { animation-delay: .07s; }
-        .chart.is-animating .bar-col:nth-child(3) { animation-delay: .11s; }
-        .chart.is-animating .bar-col:nth-child(4) { animation-delay: .15s; }
-        .chart.is-animating .bar-col:nth-child(5) { animation-delay: .19s; }
-        .chart.is-animating .bar-col:nth-child(6) { animation-delay: .23s; }
-        .bar-stack { width: 100%; height: 154px; border-radius: 8px 8px 3px 3px; overflow: hidden; border: 1px solid var(--border); background: #f8fafc; display: flex; flex-direction: column-reverse; }
-        .bar-healthy,
-        .bar-risk { transform-origin: bottom; }
-        .chart.is-animating .bar-healthy,
-        .chart.is-animating .bar-risk {
-            transform: scaleY(0);
-            animation: growBar .65s cubic-bezier(.22,.61,.36,1) forwards;
-        }
-        .bar-healthy { background: #16a34a; }
-        .bar-risk { background: #d97706; }
-        .chart.is-animating .bar-healthy { animation-delay: .18s; }
-        .chart.is-animating .bar-risk { animation-delay: .06s; }
-        .bar-label { margin-top: 5px; font-size: .62rem; color: var(--text-3); text-align: center; }
-        .chart-empty { flex: 1; display: grid; place-items: center; height: 154px; font-size: .74rem; color: var(--text-3); }
+        /* ── Nutritional status chart ──────────────────────────────────────
+           Thin columns on a hairline grid: the data is the only loud thing.
+           Marks stay ≤ 24px wide with a 4px cap and a square baseline. */
+        .chart-legend { display: flex; align-items: center; gap: 16px; font-size: .68rem; color: var(--text-3); margin-bottom: 12px; }
+        .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+        .legend-item b { color: var(--text-2); font-variant-numeric: tabular-nums; }
+        .legend-dot { width: 9px; height: 9px; border-radius: 3px; display: inline-block; flex: 0 0 auto; }
+        .legend-healthy { background: var(--series-healthy); }
+        .legend-risk { background: var(--series-risk); }
 
-        @keyframes growBar {
-            from { transform: scaleY(0); }
-            to { transform: scaleY(1); }
-        }
+        /* The top margin is the cap labels' room: a column at the axis maximum
+           reaches the top gridline, and its total is drawn above that. */
+        .chart-figure { display: grid; grid-template-columns: 30px minmax(0, 1fr); grid-template-rows: 196px auto; column-gap: 10px; row-gap: 7px; margin-top: 14px; }
+        .chart-axis { grid-column: 1; grid-row: 1; position: relative; }
+        .axis-tick { position: absolute; right: 0; transform: translateY(50%); font-size: .62rem; color: var(--text-3); font-variant-numeric: tabular-nums; line-height: 1; }
+        .chart-axis-title { grid-column: 1; grid-row: 2; font-size: .6rem; color: var(--text-3); text-align: right; }
+        .chart-plot { grid-column: 2; grid-row: 1; position: relative; }
+        .chart-grid { position: absolute; inset: 0; }
+        .grid-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--grid-line); }
+        .chart-cols, .chart-labels { display: flex; align-items: flex-end; gap: 8px; height: 100%; }
+        .chart-labels { grid-column: 2; grid-row: 2; height: auto; }
+        .col-label { flex: 1 1 0; min-width: 0; text-align: center; font-size: .64rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
 
-        @keyframes barColIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
+        .chart-col { flex: 1 1 0; min-width: 0; height: 100%; position: relative; display: flex; align-items: flex-end; justify-content: center; outline: none; }
+        .col-stack { width: min(24px, 70%); height: 100%; display: flex; flex-direction: column-reverse; justify-content: flex-start; }
+        .col-seg { width: 100%; transform-origin: bottom; }
+        /* Column-reverse puts the last child on top — that is the data end, so
+           it carries the 4px cap while the baseline stays square. */
+        .col-seg:last-child { border-radius: 4px 4px 0 0; }
+        /* A 2px gap in the surface colour, never a stroke, separates the fills. */
+        .col-seg + .col-seg { margin-bottom: 2px; }
+        .seg-healthy { background: var(--series-healthy); }
+        .seg-risk { background: var(--series-risk); }
+        .col-cap { position: absolute; left: 50%; transform: translateX(-50%); font-size: .66rem; font-weight: 700; color: var(--text-2); font-variant-numeric: tabular-nums; line-height: 1; }
+
+        .chart-col::after { content: ''; position: absolute; inset: 0 -4px; }
+        /* The card is the tooltip's ceiling: each column sets its own `bottom`
+           from its height, capped so a full-height column drops the card into
+           the plot instead of pushing it out over the section title. */
+        .chart-tip {
+            position: absolute; bottom: 60%; left: 50%; transform: translateX(-50%) translateY(4px);
+            min-width: 132px; padding: 8px 10px; border-radius: 9px; z-index: 5;
+            background: #0d1f14; color: #fff; box-shadow: 0 8px 20px rgba(5,46,22,.22);
+            opacity: 0; pointer-events: none; transition: opacity .14s ease, transform .14s ease;
         }
+        .chart-col:hover .chart-tip, .chart-col:focus-visible .chart-tip { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .chart-col:focus-visible .col-stack { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #15803d; border-radius: 5px; }
+        .chart-col:first-child .chart-tip { left: 0; transform: translateX(0) translateY(4px); }
+        .chart-col:first-child:hover .chart-tip, .chart-col:first-child:focus-visible .chart-tip { transform: translateX(0) translateY(0); }
+        .chart-col:last-child .chart-tip { left: auto; right: 0; transform: translateX(0) translateY(4px); }
+        .chart-col:last-child:hover .chart-tip, .chart-col:last-child:focus-visible .chart-tip { transform: translateX(0) translateY(0); }
+        .tip-head { font-size: .7rem; font-weight: 700; margin-bottom: 5px; }
+        .tip-row { display: flex; align-items: center; gap: 6px; font-size: .66rem; color: rgba(255,255,255,.76); margin-top: 2px; }
+        .tip-row b { margin-left: auto; color: #fff; font-variant-numeric: tabular-nums; }
+        .tip-total { margin-top: 6px; padding-top: 5px; border-top: 1px solid rgba(255,255,255,.16); font-size: .63rem; color: rgba(255,255,255,.66); }
+
+        .chart-table { margin-top: 12px; }
+        .chart-table summary { font-size: .68rem; color: var(--text-3); cursor: pointer; font-weight: 600; padding: 4px 0; width: fit-content; }
+        .chart-table summary:hover { color: var(--text-2); }
+        .chart-table .table-wrap { margin-top: 7px; }
+        .chart-empty { display: grid; place-items: center; min-height: 196px; font-size: .74rem; color: var(--text-3); text-align: center; padding: 0 20px; }
+
+        /* Refetch holds the previous render at reduced opacity — never a
+           skeleton flash, never a layout jump. */
+        .live-pane { transition: opacity .18s ease; }
+        .live-pane.is-refreshing { opacity: .55; }
+
+        .chart.is-animating .col-seg { transform: scaleY(0); animation: growBar .6s cubic-bezier(.22,.61,.36,1) forwards; }
+        .chart.is-animating .seg-risk { animation-delay: .05s; }
+        .chart.is-animating .seg-healthy { animation-delay: .14s; }
+        .chart.is-animating .col-cap { opacity: 0; animation: capIn .4s ease .5s forwards; }
+
+        @keyframes growBar { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+        @keyframes capIn { from { opacity: 0; transform: translateX(-50%) translateY(4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 
         @media (prefers-reduced-motion: reduce) {
-            .chart.is-animating .bar-col,
-            .chart.is-animating .bar-healthy,
-            .chart.is-animating .bar-risk {
-                animation: none;
-                transform: none;
-                opacity: 1;
-            }
+            .chart.is-animating .col-seg, .chart.is-animating .col-cap { animation: none; transform: none; opacity: 1; }
+            .chart.is-animating .col-cap { transform: translateX(-50%); }
+            .live-pane { transition: none; }
         }
 
         @media (max-width: 1050px) {
@@ -217,57 +179,30 @@
         }
 
         @media (max-width: 780px) {
-            .sidebar { display: none; }
-            .main { margin-left: 0; }
             .topbar { padding: 0 14px; }
             .content { padding: 14px; }
             .page-header { padding: 14px; }
             .stats { grid-template-columns: 1fr; }
-            .action-cell { flex-wrap: wrap; }
         }
     </style>
+    {{-- The shared role sidebar panel — loaded last so its .main offset wins. --}}
+    <style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
 </head>
 <body>
-<aside class="sidebar">
-    <div class="sb-grid"></div>
-    <div class="sb-logo">
-        <img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA Logo" class="sb-logo-full">
-    </div>
-    <nav class="sb-nav">
-        <div class="sb-section-label">Main</div>
-        <a href="{{ route('dashboard.school-head') }}" class="sb-link active">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-            Dashboard
-        </a>
-        <div class="sb-section-label">Reports</div>
-        <a href="{{ route('dashboard.school-head.reports') }}" class="sb-link">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-            Reports
-        </a>
-    </nav>
-    <div class="sb-user">
-        <div class="sb-avatar">{{ strtoupper(substr(session('active_name', 'SH'), 0, 2)) }}</div>
-        <div>
-            <div class="sb-user-name">{{ session('active_name', 'School Head') }}</div>
-            <div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
-        </div>
-        <form method="POST" action="{{ route('logout') }}">
-            @csrf
-            <button type="submit" class="sb-logout" title="Sign out">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            </button>
-        </form>
-    </div>
-</aside>
+@include('partials.schoolhead-sidebar', ['active' => 'dashboard'])
+
 <div class="main">
     <header class="topbar">
         <div class="topbar-bc"><span>Dashboard</span><span>&rsaquo;</span><span>School Head</span></div>
-        <div class="topbar-chip"><div class="dot"></div>Strategic Oversight</div>
         @include('partials.live-clock')
     </header>
 
     <div class="content">
-        <div class="content-inner">
+        <div class="content-inner"
+             id="sh-dashboard"
+             data-stamp="{{ $stamp }}"
+             data-metrics-url="{{ route('dashboard.school-head.metrics') }}"
+             data-pulse-url="{{ route('dashboard.school-head.metrics.pulse') }}">
         <div class="page-header">
             <div class="page-eyebrow">School Head Dashboard</div>
             <h1 class="page-title">School Head <span>Decision Dashboard</span></h1>
@@ -284,64 +219,28 @@
 
         @include('partials.announcements')
 
-        <section class="stats">
-            <article class="card stat">
-                <div class="label">Total Students</div>
-                <div class="num">{{ $stats['total_students'] ?? 0 }}</div>
-                <div class="hint">Enrolled this AY</div>
-            </article>
-            <article class="card stat">
-                <div class="label">Active Programs</div>
-                <div class="num">{{ $stats['active_programs'] ?? 0 }}</div>
-                <div class="hint">Feeding & Deworming</div>
-            </article>
-            <article class="card stat">
-                <div class="label">Wasted Rate</div>
-                <div class="num">{{ $stats['wasted_rate'] ?? '0%' }}</div>
-                <div class="hint">{{ $stats['wasted_count'] ?? 0 }} of {{ $stats['total_students'] ?? 0 }} students</div>
-            </article>
+        <section class="stats live-pane" id="sh-stats">
+            @include('schoolhead-dashboard.partials.stat-cards')
         </section>
 
         <section class="grid-2">
             <article class="card section">
-                <h2 class="section-title">Program Overview</h2>
-                <div class="program-item">
-                    <div>
-                        <div class="program-label">Feeding Program</div>
-                        <div class="program-sub">Day 67 / 120</div>
-                    </div>
-                    <span class="pill pill-ok">Active</span>
+                <div class="section-head">
+                    <h2 class="section-title">Program Overview</h2>
+                    <div class="section-meta">Updated <span id="sh-updated">{{ $generatedAt }}</span></div>
                 </div>
-                <div class="program-item">
-                    <div>
-                        <div class="program-label">Deworming</div>
-                        <div class="program-sub">Scheduled Apr 15</div>
-                    </div>
-                    <span class="pill pill-warn">Upcoming</span>
-                </div>
-                <div class="program-item">
-                    <div>
-                        <div class="program-label">Health Screening</div>
-                        <div class="program-sub">389 / 389</div>
-                    </div>
-                    <span class="pill pill-ok">Completed</span>
+                <div class="live-pane" id="sh-programs">
+                    @include('schoolhead-dashboard.partials.program-overview')
                 </div>
             </article>
 
             <article class="card section">
-                <h2 class="section-title">Nutritional Status by Grade</h2>
-                <div class="chart-wrap">
-                    <div class="chart-legend">
-                        <span><i class="dot-legend dot-healthy"></i>Healthy</span>
-                        <span><i class="dot-legend dot-risk"></i>At Risk</span>
-                    </div>
-                    <div class="chart">
-                        @forelse ($gradeChart ?? [] as $col)
-                        <div class="bar-col"><div class="bar-stack"><div class="bar-healthy" style="height: {{ $col['healthy_pct'] }}%" title="{{ $col['healthy'] }} healthy"></div><div class="bar-risk" style="height: {{ $col['risk_pct'] }}%" title="{{ $col['risk'] }} at risk"></div></div><div class="bar-label">{{ $col['label'] }}</div></div>
-                        @empty
-                        <div class="chart-empty">No student data yet.</div>
-                        @endforelse
-                    </div>
+                <div class="section-head">
+                    <h2 class="section-title">Nutritional Status by Grade</h2>
+                    <div class="section-meta">{{ \App\Models\StudentHealthRecord::currentSchoolYear() }}</div>
+                </div>
+                <div class="chart live-pane" id="sh-chart">
+                    @include('schoolhead-dashboard.partials.status-chart')
                 </div>
             </article>
         </section>
@@ -350,62 +249,108 @@
 </div>
 <script>
     (function () {
-        const main = document.querySelector('.main');
-        const chart = document.querySelector('.chart');
-
-        if (main) {
-            requestAnimationFrame(function () {
-                main.classList.add('page-ready');
-            });
-
-            window.addEventListener('pageshow', function () {
-                main.classList.add('page-ready');
-            });
-
-            document.querySelectorAll('.sb-link[href]').forEach(function (link) {
-                link.addEventListener('click', function (event) {
-                    const href = link.getAttribute('href');
-                    if (!href || link.classList.contains('active')) {
-                        return;
-                    }
-                    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
-                        return;
-                    }
-
-                    event.preventDefault();
-                    main.classList.remove('page-ready');
-                    main.classList.add('page-exit');
-                    window.setTimeout(function () {
-                        window.location.href = href;
-                    }, 220);
-                });
-            });
-        }
-
-        if (!chart) {
+        const root = document.getElementById('sh-dashboard');
+        if (!root) {
             return;
         }
 
-        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (prefersReducedMotion) {
-            return;
-        }
+        const chart = document.getElementById('sh-chart');
+        const stats = document.getElementById('sh-stats');
+        const programs = document.getElementById('sh-programs');
+        const updated = document.getElementById('sh-updated');
+        const metricsUrl = root.dataset.metricsUrl;
+        const pulseUrl = root.dataset.pulseUrl;
+        const stillMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-        const restartChartAnimation = () => {
+        // Cheap enough to ask often; the answer is a stamp, and the expensive
+        // rebuild only runs when the stamp actually moves.
+        const PULSE_MS = 20000;
+
+        const animateChart = function () {
+            if (!chart || stillMotion.matches) {
+                return;
+            }
             chart.classList.remove('is-animating');
             void chart.offsetWidth;
             chart.classList.add('is-animating');
         };
 
-        window.addEventListener('load', restartChartAnimation);
-        window.addEventListener('pageshow', restartChartAnimation);
+        const panes = [stats, programs, chart].filter(Boolean);
+        const setRefreshing = function (on) {
+            panes.forEach(function (pane) { pane.classList.toggle('is-refreshing', on); });
+        };
+
+        let inFlight = false;
+
+        const refresh = async function () {
+            if (inFlight) {
+                return;
+            }
+
+            inFlight = true;
+            setRefreshing(true);
+            try {
+                const response = await fetch(metricsUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+                if (!response.ok) {
+                    return;
+                }
+
+                const payload = await response.json();
+                if (!payload.html) {
+                    return;
+                }
+
+                // The server renders the same Blade partials the first paint
+                // used, so the live view can never drift from it.
+                if (stats && typeof payload.html.stats === 'string') { stats.innerHTML = payload.html.stats; }
+                if (programs && typeof payload.html.programs === 'string') { programs.innerHTML = payload.html.programs; }
+                if (chart && typeof payload.html.chart === 'string') { chart.innerHTML = payload.html.chart; animateChart(); }
+                if (updated && payload.generatedAt) { updated.textContent = payload.generatedAt; }
+                if (payload.stamp) { root.dataset.stamp = payload.stamp; }
+            } catch (error) {
+                // Offline or a dropped request: keep what is on screen and try
+                // again on the next pulse.
+            } finally {
+                inFlight = false;
+                setRefreshing(false);
+            }
+        };
+
+        const pulse = async function () {
+            if (document.hidden || inFlight) {
+                return;
+            }
+
+            try {
+                const response = await fetch(pulseUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+                if (!response.ok) {
+                    return;
+                }
+
+                const payload = await response.json();
+                if (payload.stamp && payload.stamp !== root.dataset.stamp) {
+                    root.dataset.stamp = payload.stamp;
+                    await refresh();
+                }
+            } catch (error) {
+                // Ignored — the next pulse retries.
+            }
+        };
+
+        window.addEventListener('load', animateChart);
+        window.addEventListener('pageshow', animateChart);
+
+        // First pulse seeds the stamp; from then on it only fires a rebuild
+        // when the underlying records have actually changed.
+        pulse();
+        window.setInterval(pulse, PULSE_MS);
         document.addEventListener('visibilitychange', function () {
             if (!document.hidden) {
-                restartChartAnimation();
+                pulse();
             }
         });
     })();
 </script>
-@include('partials.sidebar-hover-pin')
+@include('partials.role-page-transition')
 </body>
 </html>

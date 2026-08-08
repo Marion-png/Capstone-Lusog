@@ -13,10 +13,6 @@
 	<style>
 		*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 		:root {
-			--g900: #14532d;
-			--g300: #86efac;
-			--sidebar-w: 252px;
-			--sidebar-collapsed-w: 78px;
 			--topbar-h: 68px;
 			--cream: #f5f8f4;
 			--card: #ffffff;
@@ -31,57 +27,7 @@
 
 		html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: radial-gradient(circle at 5% -10%, #e7f7ec 0%, var(--cream) 50%); color: var(--text-1); overflow: hidden; }
 
-		.sidebar {
-			position: fixed; left: 0; top: 0; bottom: 0;
-			width: var(--sidebar-collapsed-w); background: var(--g900);
-			display: flex; flex-direction: column; z-index: 100; overflow: hidden;
-			box-shadow: 8px 0 28px rgba(6, 46, 26, .18);
-			transition: width .26s ease;
-		}
-.sidebar:hover, .sidebar.sb-pin { width: var(--sidebar-w); }
-		.sidebar::after {
-			content: ''; position: absolute; inset: 0;
-			background: radial-gradient(ellipse 120% 40% at 50% 100%, rgba(34,197,94,.18) 0%, transparent 70%),
-						radial-gradient(ellipse 80% 30% at 80% 0%, rgba(74,222,128,.1) 0%, transparent 60%);
-			pointer-events: none;
-		}
-		.sb-grid {
-			position: absolute; inset: 0;
-			background-image: linear-gradient(rgba(134,239,172,.05) 1px, transparent 1px),
-							  linear-gradient(90deg, rgba(134,239,172,.05) 1px, transparent 1px);
-			background-size: 28px 28px;
-			pointer-events: none;
-		}
-		.sb-logo { padding: 21px 20px 18px; position: relative; z-index: 2; border-bottom: 1px solid rgba(255,255,255,.09); display: flex; justify-content: center; transition: padding .24s ease; }
-		.sb-logo-full { width: 176px; max-width: 100%; height: auto; display: block; transition: width .24s ease; }
-		.sidebar:not(:hover):not(.sb-pin) .sb-logo { padding: 14px 10px; }
-		.sidebar:not(:hover):not(.sb-pin) .sb-logo-full { width: 48px; }
-		.sb-nav { flex: 1; overflow-y: auto; padding: 16px 12px; position: relative; z-index: 2; transition: padding .24s ease; }
-		.sidebar:not(:hover):not(.sb-pin) .sb-nav { padding: 12px 8px; }
-		.sb-section-label { font-size: .6rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: rgba(134,239,172,.58); padding: 0 8px; margin: 9px 0; max-height: 20px; opacity: 1; transform: translateX(0); transition: max-height .24s ease, opacity .18s ease, transform .24s ease, margin .24s ease; overflow: hidden; }
-		.sidebar:not(:hover):not(.sb-pin) .sb-section-label { max-height: 0; opacity: 0; transform: translateX(-6px); margin: 0; }
-		.sb-link { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); text-decoration: none; color: rgba(255,255,255,.66); font-size: .83rem; font-weight: 500; transition: background .15s, color .15s, transform .15s, padding .24s ease, gap .24s ease, font-size .24s ease; margin-bottom: 2px; white-space: nowrap; overflow: hidden; }
-		.sb-link:hover { background: rgba(255,255,255,.1); color: rgba(255,255,255,.94); transform: translateX(2px); }
-		.sb-link.active { background: rgba(34,197,94,.2); color: var(--g300); box-shadow: inset 0 0 0 1px rgba(134,239,172,.22); }
-		.sb-link svg { width: 16px; height: 16px; flex-shrink: 0; transition: width .24s ease, height .24s ease; }
-		.sidebar:not(:hover):not(.sb-pin) .sb-link { font-size: 0; padding: 10px 22px; gap: 0; }
-		.sidebar:not(:hover):not(.sb-pin) .sb-link svg { width: 18px; height: 18px; }
-		.sb-user { padding: 14px 16px; border-top: 1px solid rgba(255,255,255,.09); display: flex; align-items: center; gap: 11px; position: relative; z-index: 2; transition: padding .24s ease, gap .24s ease; }
-		.sb-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(145deg, #22c55e, #15803d); display: grid; place-items: center; font-size: .8rem; font-weight: 700; color: white; }
-		.sb-user-name { font-size: .8rem; font-weight: 600; color: white; line-height: 1.2; }
-		.sb-user-role { font-size: .68rem; color: var(--g300); }
-		.sb-user > div:nth-child(2) { max-width: 180px; opacity: 1; transform: translateX(0); overflow: hidden; transition: max-width .24s ease, opacity .18s ease, transform .24s ease; }
-		.sidebar:not(:hover):not(.sb-pin) .sb-user { padding: 10px; gap: 0; }
-		.sidebar:not(:hover):not(.sb-pin) .sb-user > div:nth-child(2) { max-width: 0; opacity: 0; transform: translateX(-6px); }
-		.sb-logout { margin-left: auto; background: none; border: none; color: rgba(255,255,255,.4); cursor: pointer; padding: 4px; border-radius: 6px; transition: color .15s, background .15s; display: grid; place-items: center; }
-		.sb-logout:hover { color: #fecaca; background: rgba(239,68,68,.14); }
-		.sb-logout svg { width: 15px; height: 15px; }
-
-		.main { margin-left: var(--sidebar-collapsed-w); height: 100vh; display: flex; flex-direction: column; overflow: hidden; transition: margin-left .26s ease; }
-.sidebar:hover ~ .main, .sidebar.sb-pin ~ .main { margin-left: var(--sidebar-w); }
-		html.js .main { opacity: 0; transform: translateY(10px); transition: opacity .26s ease, transform .3s ease; }
-		html.js .main.page-ready { opacity: 1; transform: translateY(0); }
-		html.js .main.page-exit { opacity: 0; transform: translateY(10px); }
+		.main { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 		.topbar { height: var(--topbar-h); border-bottom: 1px solid var(--border); background: rgba(255,255,255,.82); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
 		.topbar-bc { font-size: .76rem; color: var(--text-3); display: flex; gap: 6px; align-items: center; }
 		.topbar-chip { font-size: .72rem; border: 1px solid #bbf7d0; color: #166534; background: #f0fdf4; border-radius: 999px; padding: 5px 11px; display: flex; align-items: center; gap: 7px; font-weight: 600; }
@@ -125,47 +71,17 @@
 
 		@media (max-width: 1050px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 		@media (max-width: 780px) {
-			.sidebar { display: none; }
-			.main { margin-left: 0; }
 			.topbar { padding: 0 14px; }
 			.content { padding: 14px; }
 			.page-header { padding: 14px; }
 			.stats { grid-template-columns: 1fr; }
 		}
 	</style>
+	{{-- The shared role sidebar panel — loaded last so its .main offset wins. --}}
+	<style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
 </head>
 <body>
-<aside class="sidebar">
-	<div class="sb-grid"></div>
-	<div class="sb-logo">
-		<img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA Logo" class="sb-logo-full">
-	</div>
-	<nav class="sb-nav">
-		<div class="sb-section-label">Main</div>
-		<a href="{{ route('dashboard.school-head') }}" class="sb-link">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-			Dashboard
-		</a>
-		<div class="sb-section-label">Reports</div>
-		<a href="{{ route('dashboard.school-head.reports') }}" class="sb-link active">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-			Reports
-		</a>
-	</nav>
-	<div class="sb-user">
-		<div class="sb-avatar">{{ strtoupper(substr(session('active_name', 'SH'), 0, 2)) }}</div>
-		<div>
-			<div class="sb-user-name">{{ session('active_name', 'School Head') }}</div>
-			<div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
-		</div>
-		<form method="POST" action="{{ route('logout') }}">
-			@csrf
-			<button type="submit" class="sb-logout" title="Sign out">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-			</button>
-		</form>
-	</div>
-</aside>
+@include('partials.schoolhead-sidebar', ['active' => 'reports'])
 
 <div class="main">
 	<header class="topbar">
@@ -242,41 +158,6 @@
 		</div>
 	</div>
 </div>
-<script>
-	(() => {
-		const main = document.querySelector('.main');
-		if (!main) {
-			return;
-		}
-
-		requestAnimationFrame(() => {
-			main.classList.add('page-ready');
-		});
-
-		window.addEventListener('pageshow', () => {
-			main.classList.add('page-ready');
-		});
-
-		document.querySelectorAll('.sb-link[href]').forEach((link) => {
-			link.addEventListener('click', (event) => {
-				const href = link.getAttribute('href');
-				if (!href || link.classList.contains('active')) {
-					return;
-				}
-				if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
-					return;
-				}
-
-				event.preventDefault();
-				main.classList.remove('page-ready');
-				main.classList.add('page-exit');
-				window.setTimeout(() => {
-					window.location.href = href;
-				}, 220);
-			});
-		});
-	})();
-</script>
-@include('partials.sidebar-hover-pin')
+@include('partials.role-page-transition')
 </body>
 </html>

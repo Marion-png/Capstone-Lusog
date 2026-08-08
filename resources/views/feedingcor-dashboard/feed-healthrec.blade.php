@@ -14,7 +14,7 @@
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
-    <style>{!! file_get_contents(resource_path('css/feedingcor-sidebar.css')) !!}</style>
+    <style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
 </head>
 <body>
 @include('partials.feedingcor-sidebar', ['active' => 'records'])
@@ -169,7 +169,7 @@
         </div>
     </div>
 </div>
-@include('partials.feedingcor-page-transition')
+@include('partials.role-page-transition')
 <script>
 (() => {
     const form = document.getElementById('recordFilters');

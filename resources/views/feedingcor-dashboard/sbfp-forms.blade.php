@@ -14,7 +14,7 @@
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
-	<style>{!! file_get_contents(resource_path('css/feedingcor-sidebar.css')) !!}</style>
+	<style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
 	<style id="printPageStyle">@page{size:A4 portrait;margin:10mm}</style>
 </head>
 <body>
@@ -647,6 +647,6 @@
 	syncSelectedTemplate();
 })();
 </script>
-@include('partials.feedingcor-page-transition')
+@include('partials.role-page-transition')
 </body>
 </html>

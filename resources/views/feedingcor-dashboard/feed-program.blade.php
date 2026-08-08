@@ -15,7 +15,7 @@
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
     @unless ((bool) ($isReadOnly ?? (session('active_role') === 'school_nurse')))
-        <style>{!! file_get_contents(resource_path('css/feedingcor-sidebar.css')) !!}</style>
+        <style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
     @endunless
 </head>
 <body>
@@ -1376,7 +1376,7 @@
 				event.preventDefault();
 				main.classList.remove('page-ready');
 				main.classList.add('page-exit');
-				// Coordinator fade is --asb-page-out in feedingcor-sidebar.css;
+				// Coordinator fade is --asb-page-out in role-sidebar.css;
 				// the nurse keeps this page's own shorter transition.
 				window.setTimeout(() => {
 					window.location.href = href;
