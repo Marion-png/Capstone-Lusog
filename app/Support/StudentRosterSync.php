@@ -4,7 +4,6 @@ namespace App\Support;
 
 use App\Models\StudentHealthRecord;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Rebuilds the session roster (`school_health_card_records`) from the
@@ -19,7 +18,7 @@ class StudentRosterSync
     {
         $institutionId = $request->session()->get('active_institution_id');
 
-        if (! $institutionId || ! Schema::hasTable('student_health_records')) {
+        if (! $institutionId || ! SchemaCache::hasTable('student_health_records')) {
             return;
         }
 
@@ -30,10 +29,7 @@ class StudentRosterSync
             ->map(fn ($v) => (string) $v)
             ->flip();
 
-        $dbRecords = StudentHealthRecord::query()
-            ->where('institution_id', $institutionId)
-            ->forCurrentSchoolYear()
-            ->get();
+        $dbRecords = StudentHealthRecord::currentYearForInstitution($institutionId);
 
         $toAdd = [];
         foreach ($dbRecords as $record) {

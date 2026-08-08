@@ -314,7 +314,24 @@
 		.risk-alert span { color: #9a3412; font-size: .72rem; }
 
 		.risk-section { margin-top: 14px; }
-		.risk-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+		.risk-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+		.risk-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+		.risk-search { position: relative; display: flex; align-items: center; }
+		.risk-search svg { position: absolute; left: 10px; width: 13px; height: 13px; color: #7d918c; pointer-events: none; }
+		.risk-search input {
+			padding: 8px 10px 8px 30px;
+			border: 1px solid #d6e5de;
+			border-radius: 10px;
+			background: #fff;
+			font: inherit;
+			font-size: .74rem;
+			font-weight: 600;
+			color: #2b4c43;
+			outline: none;
+			min-width: 190px;
+		}
+		.risk-search input::placeholder { color: #93a5a0; font-weight: 500; }
+		.risk-search input:focus, .risk-filter:focus { border-color: #0d9488; }
 		.risk-filter {
 			appearance: none;
 			padding: 8px 30px 8px 10px;
@@ -329,9 +346,76 @@
 			background-size: 5px 5px, 5px 5px;
 			background-repeat: no-repeat;
 		}
-		.risk-pill { font-size: .62rem; font-weight: 700; border-radius: 999px; padding: 3px 8px; display: inline-block; }
-		.risk-high { background: #fee2e2; color: #b91c1c; }
-		.risk-mid { background: #fef3c7; color: #92400e; }
+		/* File pickers read as a drop target, not a bare "Choose File" button. */
+		.dropzone {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+			padding: 22px 16px;
+			text-align: center;
+			background: #f8fafc;
+			border: 1.5px dashed #cbd5e1;
+			border-radius: 12px;
+			cursor: pointer;
+			transition: border-color .15s ease, background .15s ease;
+		}
+		.dropzone:hover, .dropzone.is-dragging { border-color: #0d9488; background: #f0fdfa; }
+		.dropzone.is-filled { border-style: solid; border-color: #0d9488; background: #f0fdfa; }
+		.dropzone-input {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			padding: 0;
+			margin: -1px;
+			overflow: hidden;
+			clip: rect(0 0 0 0);
+			white-space: nowrap;
+			border: 0;
+		}
+		.dropzone-input:focus-visible + .dropzone-icon { outline: 2px solid #0d9488; outline-offset: 3px; border-radius: 4px; }
+		.dropzone-icon { width: 30px; height: 30px; color: #0d9488; }
+		.dropzone-text { font-size: .78rem; font-weight: 600; color: #2b4c43; word-break: break-word; }
+
+		.attendance-section { margin-top: 14px; padding: 16px; }
+		.attendance-head {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 10px;
+			flex-wrap: wrap;
+			margin-bottom: 10px;
+		}
+		.attendance-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+		.attendance-empty {
+			padding: 22px 12px;
+			text-align: center;
+			font-size: .78rem;
+			color: #6b7f7a;
+			background: #f8fafc;
+			border: 1px dashed #d6e5de;
+			border-radius: 12px;
+		}
+		.roster-meta {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 6px 16px;
+			margin-bottom: 8px;
+			font-size: .72rem;
+			color: #5f736d;
+		}
+		.roster-meta strong { color: #2b4c43; font-weight: 700; }
+		.roster-pending {
+			display: inline-block;
+			margin-left: 6px;
+			padding: 2px 7px;
+			border-radius: 999px;
+			background: #fef3c7;
+			color: #92400e;
+			font-size: .62rem;
+			font-weight: 700;
+		}
 		.session-chip {
 			display: inline-flex;
 			align-items: center;
@@ -627,6 +711,9 @@
 			.btn { flex: 1; }
 			.school-filter-form { flex-direction: column; align-items: stretch; }
 			.school-filter-select { width: 100%; min-width: 0; }
+			.risk-filters, .attendance-actions { width: 100%; }
+			.risk-search, .risk-search input, .risk-filter { width: 100%; min-width: 0; }
+			.attendance-actions .btn { width: 100%; }
 			.table-card { overflow-x: auto; }
 			table { min-width: 760px; }
 			.encode-grid { min-width: 760px; }

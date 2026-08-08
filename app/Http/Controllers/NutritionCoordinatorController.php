@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
+use App\Support\SchemaCache;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class NutritionCoordinatorController extends Controller
@@ -91,7 +91,7 @@ class NutritionCoordinatorController extends Controller
 
     private function records(): Collection
     {
-        if (! Schema::hasTable('student_health_records')) {
+        if (! SchemaCache::hasTable('student_health_records')) {
             return collect();
         }
 

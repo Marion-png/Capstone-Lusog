@@ -7,7 +7,7 @@
 @php
     use App\Models\Event;
     $canCreateEvent = Event::canCreate(session('active_role'));
-    $upcomingEvents = \Illuminate\Support\Facades\Schema::hasTable('events')
+    $upcomingEvents = \App\Support\SchemaCache::hasTable('events')
         ? Event::forActiveInstitution()->upcoming()->limit(6)->get()
         : collect();
 @endphp

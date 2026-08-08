@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
+use App\Support\SchemaCache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class SchoolHeadController extends Controller
@@ -34,7 +34,7 @@ class SchoolHeadController extends Controller
         $wastedCount = 0;
         $gradeBuckets = []; // grade number => ['healthy' => int, 'risk' => int]
 
-        if (Schema::hasTable('student_health_records') && ($institutionId || $schoolName)) {
+        if (SchemaCache::hasTable('student_health_records') && ($institutionId || $schoolName)) {
             $query = StudentHealthRecord::query();
 
             if ($institutionId) {

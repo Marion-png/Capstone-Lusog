@@ -4,10 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\HealthAssessment;
 use App\Models\StudentHealthRecord;
+use App\Support\SchemaCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 
 class HealthAssessmentController extends Controller
 {
@@ -174,7 +174,7 @@ class HealthAssessmentController extends Controller
             'Access denied.'
         );
 
-        if (! Schema::hasTable('health_assessments')) {
+        if (! SchemaCache::hasTable('health_assessments')) {
             return response()->json(['has_assessment' => false]);
         }
 
@@ -277,7 +277,7 @@ class HealthAssessmentController extends Controller
         $students = $this->assignedStudents($request);
         $schoolYear = HealthAssessment::currentSchoolYear();
 
-        $records = Schema::hasTable('student_health_records')
+        $records = SchemaCache::hasTable('student_health_records')
             ? StudentHealthRecord::when(
                 $request->session()->get('active_institution_id'),
                 fn ($q, $id) => $q->where('institution_id', $id)
@@ -288,7 +288,7 @@ class HealthAssessmentController extends Controller
                 ->keyBy('student_id')
             : collect();
 
-        $assessments = Schema::hasTable('health_assessments')
+        $assessments = SchemaCache::hasTable('health_assessments')
             ? HealthAssessment::whereIn('student_health_record_id', $records->pluck('id'))
                 ->where('school_year', $schoolYear)
                 ->get()
@@ -359,7 +359,7 @@ class HealthAssessmentController extends Controller
 
         $institutionId = $request->session()->get('active_institution_id');
 
-        $assessments = Schema::hasTable('health_assessments')
+        $assessments = SchemaCache::hasTable('health_assessments')
             ? HealthAssessment::with('studentHealthRecord')
                 ->where('school_year', HealthAssessment::currentSchoolYear())
                 ->when($institutionId, fn ($q) => $q->whereHas(

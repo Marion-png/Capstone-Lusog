@@ -4,7 +4,6 @@ namespace App\Support;
 
 use App\Models\MedicalCertificate;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Builds the Medical Documents list shown on a learner's profile — the one
@@ -32,10 +31,24 @@ class StudentMedicalDocuments
     {
         $lrns = collect($lrns)->filter()->map(fn ($lrn) => (string) $lrn)->unique()->values();
 
-        if ($lrns->isEmpty() || ! Schema::hasTable('medical_certificates')) {
+        if ($lrns->isEmpty() || ! SchemaCache::hasTable('medical_certificates')) {
             return collect();
         }
 
+        // The adviser dashboard asks for the same learners twice in one render
+        // (roster table and overview); one read serves both.
+        return RequestMemo::remember(
+            'documents:'.$institutionId.':'.md5($lrns->sort()->implode(',')),
+            fn () => self::query($lrns, $institutionId)
+        );
+    }
+
+    /**
+     * @param  Collection<int, string>  $lrns
+     * @return Collection<string, Collection<int, array<string, mixed>>>
+     */
+    private static function query(Collection $lrns, ?int $institutionId): Collection
+    {
         return MedicalCertificate::query()
             ->whereIn('student_lrn', $lrns)
             ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))

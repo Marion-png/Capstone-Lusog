@@ -9,6 +9,8 @@ use App\Models\HealthAssessment;
 use App\Models\HealthConsentForm;
 use App\Models\MedicalCertificate;
 use App\Models\StudentHealthRecord;
+use App\Support\RequestMemo;
+use App\Support\SchemaCache;
 use App\Support\StudentMedicalDocuments;
 use App\Support\StudentRosterSync;
 use Illuminate\Http\JsonResponse;
@@ -16,11 +18,30 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class StudentHealthRecordController extends Controller
 {
+    /**
+     * Per-request memo for this page's repeated reads.
+     *
+     * The adviser dashboard builds two things from the same underlying data —
+     * the overview panel and the My Students table — and each used to fetch the
+     * learners, their consent forms, and their assessments for itself. Against
+     * a hosted database, where a round trip costs the better part of a second,
+     * that doubling was enough to push the page past PHP's execution limit and
+     * fail it outright.
+     *
+     * @template TValue
+     *
+     * @param  \Closure(): TValue  $resolve
+     * @return TValue
+     */
+    private function memo(string $key, \Closure $resolve): mixed
+    {
+        return RequestMemo::remember($key, $resolve);
+    }
+
     public function classAdviserDashboard(Request $request): View|RedirectResponse
     {
         if ($request->session()->get('active_role') !== 'class_adviser') {
@@ -47,13 +68,12 @@ class StudentHealthRecordController extends Controller
 
         $records = collect();
 
-        if (Schema::hasTable('student_health_records')) {
-            $q = StudentHealthRecord::query();
-            $institutionId = $request->session()->get('active_institution_id');
-            if ($institutionId) {
-                $q->where('institution_id', $institutionId);
-            }
-            $records = $q->forCurrentSchoolYear()->orderByDesc('updated_at')->get();
+        if (SchemaCache::hasTable('student_health_records')) {
+            // Shares the roster sync's read of the same rows; sorting a handful
+            // of already-loaded models costs nothing next to a second query.
+            $records = StudentHealthRecord::currentYearForInstitution(
+                $request->session()->get('active_institution_id')
+            )->sortByDesc('updated_at')->values();
         }
 
         $todayCount = $records
@@ -73,7 +93,7 @@ class StudentHealthRecordController extends Controller
         // Any uploaded document counts — a certificate filed against a
         // condition and one uploaded straight from the student profile alike.
         $lrnsWithCertificates = [];
-        if (Schema::hasTable('medical_certificates')) {
+        if (SchemaCache::hasTable('medical_certificates')) {
             $lrnsWithCertificates = array_flip(
                 MedicalCertificate::query()
                     ->when(
@@ -160,30 +180,9 @@ class StudentHealthRecordController extends Controller
             return [];
         }
 
-        $shRecords = Schema::hasTable('student_health_records')
-            ? StudentHealthRecord::query()
-                ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
-                ->whereIn('student_id', $lrns)
-                ->forCurrentSchoolYear()
-                ->get()
-                ->keyBy('student_id')
-            : collect();
-
-        $assessments = collect();
-        if (Schema::hasTable('health_assessments') && $shRecords->isNotEmpty()) {
-            $assessments = HealthAssessment::whereIn('student_health_record_id', $shRecords->pluck('id'))
-                ->where('school_year', HealthAssessment::currentSchoolYear())
-                ->get()
-                ->keyBy('student_health_record_id');
-        }
-
-        $consentForms = Schema::hasTable('health_consent_forms')
-            ? HealthConsentForm::where('school_year', HealthConsentForm::currentSchoolYear())
-                ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
-                ->whereIn('student_lrn', $lrns)
-                ->get()
-                ->keyBy('student_lrn')
-            : collect();
+        $shRecords = $this->recordsByLrn($lrns, $institutionId);
+        $assessments = $this->assessmentsForRecords($shRecords);
+        $consentForms = $this->consentsByLrn($lrns, $institutionId);
 
         // Medical Documents tab — documents are keyed by LRN + institution on
         // the document row itself, so this is an exact match, unlike consultations.
@@ -246,7 +245,7 @@ class StudentHealthRecordController extends Controller
      */
     private function matchConsultationsToRoster(Collection $roster, Collection $lrns, ?int $institutionId): Collection
     {
-        if (! Schema::hasTable('consultations') || $lrns->isEmpty()) {
+        if (! SchemaCache::hasTable('consultations') || $lrns->isEmpty()) {
             return collect();
         }
 
@@ -308,7 +307,7 @@ class StudentHealthRecordController extends Controller
      */
     private function clinicNotesForRoster(Collection $lrns, ?int $institutionId): Collection
     {
-        if (! Schema::hasTable('clinic_notes') || $lrns->isEmpty()) {
+        if (! SchemaCache::hasTable('clinic_notes') || $lrns->isEmpty()) {
             return collect();
         }
 
@@ -520,31 +519,58 @@ class StudentHealthRecordController extends Controller
             return $ctx;
         }
 
-        if (Schema::hasTable('student_health_records')) {
-            $ctx['records'] = StudentHealthRecord::query()
-                ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
-                ->whereIn('student_id', $lrns)
-                ->forCurrentSchoolYear()
-                ->get()
-                ->keyBy('student_id');
-        }
-
-        if (Schema::hasTable('health_consent_forms')) {
-            $ctx['consents'] = HealthConsentForm::where('school_year', HealthConsentForm::currentSchoolYear())
-                ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
-                ->whereIn('student_lrn', $lrns)
-                ->get()
-                ->keyBy('student_lrn');
-        }
-
-        if (Schema::hasTable('health_assessments') && $ctx['records']->isNotEmpty()) {
-            $ctx['assessments'] = HealthAssessment::whereIn('student_health_record_id', $ctx['records']->pluck('id'))
-                ->where('school_year', HealthAssessment::currentSchoolYear())
-                ->get()
-                ->keyBy('student_health_record_id');
-        }
+        $ctx['records'] = $this->recordsByLrn($lrns, $institutionId);
+        $ctx['consents'] = $this->consentsByLrn($lrns, $institutionId);
+        $ctx['assessments'] = $this->assessmentsForRecords($ctx['records']);
 
         return $ctx;
+    }
+
+    /**
+     * The learners behind a set of LRNs, keyed by LRN. Memoized per request —
+     * the overview and the roster table both ask for the same set.
+     */
+    private function recordsByLrn(Collection $lrns, mixed $institutionId): Collection
+    {
+        if ($lrns->isEmpty() || ! SchemaCache::hasTable('student_health_records')) {
+            return collect();
+        }
+
+        return $this->memo('records:'.$institutionId.':'.md5($lrns->sort()->implode(',')), fn () => StudentHealthRecord::query()
+            ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
+            ->whereIn('student_id', $lrns)
+            ->forCurrentSchoolYear()
+            ->get()
+            ->keyBy('student_id'));
+    }
+
+    /** This year's consent forms for a set of LRNs, keyed by LRN. */
+    private function consentsByLrn(Collection $lrns, mixed $institutionId): Collection
+    {
+        if ($lrns->isEmpty() || ! SchemaCache::hasTable('health_consent_forms')) {
+            return collect();
+        }
+
+        return $this->memo('consents:'.$institutionId.':'.md5($lrns->sort()->implode(',')), fn () => HealthConsentForm::where('school_year', HealthConsentForm::currentSchoolYear())
+            ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
+            ->whereIn('student_lrn', $lrns)
+            ->get()
+            ->keyBy('student_lrn'));
+    }
+
+    /** This year's health assessments for a set of records, keyed by record id. */
+    private function assessmentsForRecords(Collection $records): Collection
+    {
+        if ($records->isEmpty() || ! SchemaCache::hasTable('health_assessments')) {
+            return collect();
+        }
+
+        $ids = $records->pluck('id')->sort()->values();
+
+        return $this->memo('assessments:'.md5($ids->implode(',')), fn () => HealthAssessment::whereIn('student_health_record_id', $ids)
+            ->where('school_year', HealthAssessment::currentSchoolYear())
+            ->get()
+            ->keyBy('student_health_record_id'));
     }
 
     /**
@@ -696,7 +722,7 @@ class StudentHealthRecordController extends Controller
      */
     private function recentCertificates(array $ctx, int $limit): Collection
     {
-        if (! Schema::hasTable('medical_certificates')) {
+        if (! SchemaCache::hasTable('medical_certificates')) {
             return collect();
         }
 
@@ -757,27 +783,32 @@ class StudentHealthRecordController extends Controller
     private function activityStamp(Request $request): string
     {
         $institutionId = $request->session()->get('active_institution_id');
-        $parts = [];
 
-        foreach (['student_health_records', 'health_consent_forms', 'health_assessments', 'medical_certificates'] as $table) {
-            if (! Schema::hasTable($table)) {
-                $parts[] = '-';
+        // One stamp costs four aggregate queries, and the overview asks for it
+        // on both its empty and its populated path — compute it once per request.
+        return $this->memo('stamp:'.$institutionId, function () use ($institutionId): string {
+            $parts = [];
 
-                continue;
+            foreach (['student_health_records', 'health_consent_forms', 'health_assessments', 'medical_certificates'] as $table) {
+                if (! SchemaCache::hasTable($table)) {
+                    $parts[] = '-';
+
+                    continue;
+                }
+
+                $query = DB::table($table);
+                // health_assessments and medical_certificates inherit their school
+                // scope from the parent record, so only the owning tables filter.
+                if ($institutionId && SchemaCache::hasColumn($table, 'institution_id')) {
+                    $query->where('institution_id', $institutionId);
+                }
+
+                $row = $query->selectRaw('COUNT(*) as row_count, MAX(updated_at) as last_touched')->first();
+                $parts[] = ((int) ($row->row_count ?? 0)).'@'.((string) ($row->last_touched ?? ''));
             }
 
-            $query = DB::table($table);
-            // health_assessments and medical_certificates inherit their school
-            // scope from the parent record, so only the owning tables filter.
-            if ($institutionId && Schema::hasColumn($table, 'institution_id')) {
-                $query->where('institution_id', $institutionId);
-            }
-
-            $row = $query->selectRaw('COUNT(*) as row_count, MAX(updated_at) as last_touched')->first();
-            $parts[] = ((int) ($row->row_count ?? 0)).'@'.((string) ($row->last_touched ?? ''));
-        }
-
-        return md5(implode('|', $parts));
+            return md5(implode('|', $parts));
+        });
     }
 
     /**
@@ -815,7 +846,7 @@ class StudentHealthRecordController extends Controller
             ->values();
 
         $records = collect();
-        if (Schema::hasTable('student_health_records') && $lrns->isNotEmpty()) {
+        if (SchemaCache::hasTable('student_health_records') && $lrns->isNotEmpty()) {
             $records = StudentHealthRecord::query()
                 ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
                 ->whereIn('student_id', $lrns)
@@ -826,7 +857,7 @@ class StudentHealthRecordController extends Controller
         // attendance_sessions_count holds sessions *attended*; the denominator
         // is how many sessions were recorded for that learner.
         $sessionTotals = collect();
-        if ($records->isNotEmpty() && Schema::hasTable('feeding_attendances')) {
+        if ($records->isNotEmpty() && SchemaCache::hasTable('feeding_attendances')) {
             $sessionTotals = FeedingAttendance::query()
                 ->whereIn('student_health_record_id', $records->pluck('id')->all())
                 ->selectRaw('student_health_record_id, COUNT(*) as total_sessions')
@@ -969,7 +1000,7 @@ class StudentHealthRecordController extends Controller
 
         $schoolName = $request->session()->get('active_school_name');
 
-        if ($schoolName === null && Schema::hasTable('accounts')) {
+        if ($schoolName === null && SchemaCache::hasTable('accounts')) {
             $username = strtolower((string) $request->session()->get('active_username', ''));
             if ($username !== '') {
                 $account = DB::table('accounts')
@@ -1001,7 +1032,7 @@ class StudentHealthRecordController extends Controller
         );
 
         $lrn = (string) $request->query('lrn', '');
-        if ($lrn === '' || ! Schema::hasTable('student_health_records')) {
+        if ($lrn === '' || ! SchemaCache::hasTable('student_health_records')) {
             return response()->json(['years' => []]);
         }
 
@@ -1140,11 +1171,26 @@ class StudentHealthRecordController extends Controller
         return back()->with('success', 'Endline record saved. BMI comparison is now available.');
     }
 
+    /**
+     * One learner, one key. Names and sections reach this page from two places
+     * — a decrypted database column and a session roster row assembled from
+     * separate fields — so they agree on the learner without agreeing on the
+     * spacing or the case.
+     */
+    private function learnerKey(string $name, string $section): string
+    {
+        $normalize = fn (string $value): string => strtolower(
+            preg_replace('/\s+/', ' ', trim(str_replace(['.', ','], ' ', $value))) ?? ''
+        );
+
+        return $normalize($name).'|'.$normalize($section);
+    }
+
     public function feedingHealthRecords(Request $request): View
     {
         $records = collect();
 
-        if (Schema::hasTable('student_health_records')) {
+        if (SchemaCache::hasTable('student_health_records')) {
             $q = StudentHealthRecord::query();
             $institutionId = $request->session()->get('active_institution_id');
             if ($institutionId) {
@@ -1182,6 +1228,7 @@ class StudentHealthRecordController extends Controller
                 }
 
                 return (object) [
+                    'lrn' => trim((string) ($row['lrn'] ?? '')),
                     'student_name' => $fullName !== '' ? $fullName : ((string) ($row['first_name'] ?? 'Unknown Student')),
                     'section' => trim((string) ($row['grade_level'] ?? '').' / '.(string) ($row['section'] ?? '')),
                     'baseline_bmi_value' => $baselineBmi,
@@ -1192,7 +1239,35 @@ class StudentHealthRecordController extends Controller
                 ];
             });
 
-        $records = $records->concat($sessionAtRiskRecords)->values();
+        // The session roster is a working copy of these same rows — StudentRosterSync
+        // rebuilds it from the database — so appending it wholesale drew every
+        // learner twice. It is kept only as a fallback for a learner the adviser
+        // has entered but whose row this query cannot see, and a learner the
+        // database already accounts for is dropped from it here.
+        $lrnsOnFile = $records
+            ->pluck('student_id')
+            ->map(fn ($lrn): string => trim((string) $lrn))
+            ->filter()
+            ->flip();
+
+        $namesOnFile = $records
+            ->map(fn (StudentHealthRecord $record): string => $this->learnerKey(
+                (string) $record->student_name,
+                (string) $record->section
+            ))
+            ->flip();
+
+        $records = $records
+            ->concat($sessionAtRiskRecords->reject(function (object $row) use ($lrnsOnFile, $namesOnFile): bool {
+                // The LRN is the learner's identity; the name and section are
+                // the fallback for a roster row saved before LRNs were kept.
+                if ($row->lrn !== '' && $lrnsOnFile->has($row->lrn)) {
+                    return true;
+                }
+
+                return $namesOnFile->has($this->learnerKey((string) $row->student_name, (string) $row->section));
+            }))
+            ->values();
 
         // `section` holds "Grade 7 / Section A" (see StudentRosterSync). Split it
         // so grade level and section can be filtered independently, and flatten

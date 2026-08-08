@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\AuditSensitiveAccess;
 use App\Http\Middleware\EnsureActiveSession;
+use App\Http\Middleware\FreshRequestState;
 use App\Http\Middleware\InstitutionScope;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -16,6 +17,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // First in, so nothing downstream reads a cache left over from the
+        // previous request.
+        $middleware->prepend(FreshRequestState::class);
         $middleware->appendToGroup('web', EnsureActiveSession::class);
         $middleware->appendToGroup('web', InstitutionScope::class);
         $middleware->appendToGroup('web', AuditSensitiveAccess::class);

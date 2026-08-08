@@ -4,11 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
+use App\Support\SchemaCache;
 use App\Support\StudentRosterSync;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class NurseController extends Controller
@@ -251,7 +251,7 @@ class NurseController extends Controller
         // and server restarts. Only update records that already exist in the DB
         // (i.e. real students submitted by an adviser) to avoid creating orphans.
         $lrn = (string) ($records[$index]['lrn'] ?? '');
-        if ($lrn !== '' && Schema::hasTable('student_health_records')) {
+        if ($lrn !== '' && SchemaCache::hasTable('student_health_records')) {
             $studentRecord = StudentHealthRecord::currentForStudent($lrn, $request->session()->get('active_institution_id'));
 
             if ($studentRecord !== null) {

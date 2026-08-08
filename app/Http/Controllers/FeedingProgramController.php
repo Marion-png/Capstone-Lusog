@@ -11,9 +11,11 @@ use App\Support\AttendanceSheetScanner;
 use App\Support\AuditTrail;
 use App\Support\EncryptedFileStorage;
 use App\Support\FeedingAtRiskRule;
+use App\Support\SchemaCache;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
@@ -47,7 +49,7 @@ class FeedingProgramController extends Controller
         }
 
         $eligibleStudents = collect();
-        if (Schema::hasTable('student_health_records')) {
+        if (SchemaCache::hasTable('student_health_records')) {
             $studentsQuery = StudentHealthRecord::query();
             if ($institutionId) {
                 $studentsQuery->where('institution_id', $institutionId);
@@ -117,10 +119,14 @@ class FeedingProgramController extends Controller
                 ? (int) round(($attendanceCount / $expectedAttendance) * 100)
                 : 0;
 
+            $details = is_array($record->student_details) ? $record->student_details : [];
+
             return [
                 'id' => $record->id,
                 'student_name' => $record->student_name,
                 'section' => $record->section,
+                'grade_level' => $this->resolveGradeLevel((string) $record->section),
+                'gender' => $this->resolveGenderLabel((string) ($details['gender'] ?? '')),
                 'baseline_weight' => number_format($baselineWeight, 1),
                 'current_weight' => number_format($currentWeight, 1),
                 'bmi_range' => number_format($bmiBaseline, 1).' - '.number_format($bmiCurrent, 1),
@@ -149,6 +155,10 @@ class FeedingProgramController extends Controller
             ->filter(fn (array $student): bool => (bool) ($student['is_at_risk'] ?? false))
             ->values();
 
+        $latestImport = SchemaCache::hasTable('attendance_imports')
+            ? AttendanceImport::latestForPeriod($institutionId)
+            : null;
+
         return view('feedingcor-dashboard.feed-program', [
             'isReadOnly' => $isReadOnly,
             'programStats' => [
@@ -170,7 +180,101 @@ class FeedingProgramController extends Controller
                 && config('feeding.scanning.enabled')
                 && AttendanceSheetScanner::isConfigured(),
             'pendingReviewCount' => $this->pendingReviewCount($institutionId),
+            'attendanceRoster' => $this->buildAttendanceRoster($studentRows),
+            'latestImport' => $latestImport,
         ]);
+    }
+
+    /**
+     * The one list of beneficiaries this page renders: every eligible learner
+     * exactly once, carrying both their measurements and their attendance.
+     *
+     * There used to be two tables — a beneficiaries table and an attendance
+     * table — so every learner was drawn twice, with grade, section and
+     * attendance repeated between them. One learner is one row.
+     *
+     * A learner no sheet has covered yet still appears, with their attendance
+     * figures left null for the view to render as "—". Absence from an
+     * attendance sheet is not a fact about the learner, and dropping them from
+     * the list would hide a beneficiary the coordinator is responsible for.
+     *
+     * Attendance is counted in PHP rather than with a SUM(CASE WHEN is_present
+     * ...): a NULL mark is one no human has confirmed, and it must stay out of
+     * both the numerator and the denominator (see FeedingAtRiskRule).
+     *
+     * @param  Collection<int, array<string, mixed>>  $studentRows
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function buildAttendanceRoster(Collection $studentRows): Collection
+    {
+        if ($studentRows->isEmpty()) {
+            return collect();
+        }
+
+        // Every recorded session counts here, including one dated ahead of
+        // today. This table reports what the uploaded sheets say about each
+        // learner, so it has to add up to the file the coordinator just
+        // uploaded — a sheet covering three days that showed one absence read
+        // as the upload having failed. The at-risk flag is a separate question
+        // and keeps its own, stricter rule: refreshAttendanceRiskFlags() still
+        // ignores sessions that have not happened, so nobody is flagged for
+        // missing a feeding day that is still in the future.
+        $marksByRecord = SchemaCache::hasTable('feeding_attendances')
+            ? FeedingAttendance::query()
+                ->whereIn('student_health_record_id', $studentRows->pluck('id')->all())
+                ->orderBy('session_date')
+                ->get(array_merge(
+                    ['student_health_record_id', 'session_date', 'is_present'],
+                    $this->hasReviewColumns() ? ['needs_review'] : []
+                ))
+                ->groupBy('student_health_record_id')
+            : collect();
+
+        return $studentRows
+            ->map(function (array $student) use ($marksByRecord): array {
+                $baselineWeight = (float) ($student['baseline_weight'] ?? 0);
+                $currentWeight = (float) ($student['current_weight'] ?? 0);
+
+                $row = [
+                    'student_name' => $student['student_name'],
+                    'section' => $student['section'],
+                    'grade_level' => $student['grade_level'],
+                    'gender' => $student['gender'],
+                    'nutritional_status' => $student['nutritional_status'],
+                    'baseline_weight' => $baselineWeight,
+                    'current_weight' => $currentWeight,
+                    'weight_change' => round($currentWeight - $baselineWeight, 1),
+                    'is_at_risk' => (bool) ($student['is_at_risk'] ?? false),
+                    'sessions' => 0,
+                    'present' => 0,
+                    'absent' => 0,
+                    'pending' => 0,
+                    'rate' => null,
+                    'last_session' => null,
+                ];
+
+                $marks = $marksByRecord->get($student['id']);
+
+                if ($marks === null || $marks->isEmpty()) {
+                    return $row; // On no sheet yet — listed, with nothing claimed.
+                }
+
+                $isPending = fn ($mark): bool => (bool) ($mark->needs_review ?? false) || $mark->is_present === null;
+                $pending = $marks->filter($isPending);
+                $present = $marks->reject($isPending)->filter(fn ($mark): bool => $mark->is_present === true);
+                $absent = $marks->reject($isPending)->filter(fn ($mark): bool => $mark->is_present === false);
+                $confirmed = $present->count() + $absent->count();
+
+                return array_merge($row, [
+                    'sessions' => $marks->count(),
+                    'present' => $present->count(),
+                    'absent' => $absent->count(),
+                    'pending' => $pending->count(),
+                    'rate' => $confirmed > 0 ? (int) round(($present->count() / $confirmed) * 100) : null,
+                    'last_session' => optional($marks->last())->session_date,
+                ]);
+            })
+            ->values();
     }
 
     /**
@@ -188,8 +292,8 @@ class FeedingProgramController extends Controller
         // Cached on the instance, not in a static: the controller is built per
         // request, so this stays a single lookup per request without pinning a
         // schema fact for the lifetime of the process.
-        return $this->hasReviewColumns ??= Schema::hasTable('feeding_attendances')
-            && Schema::hasColumn('feeding_attendances', 'needs_review');
+        return $this->hasReviewColumns ??= SchemaCache::hasTable('feeding_attendances')
+            && SchemaCache::hasColumn('feeding_attendances', 'needs_review');
     }
 
     /** Scanned marks in this school still waiting on a human decision. */
@@ -229,7 +333,7 @@ class FeedingProgramController extends Controller
             'grade' => ['nullable', 'string', 'max:255'],
         ]);
 
-        if (! Schema::hasTable('student_health_records') || ! Schema::hasTable('feeding_attendances')) {
+        if (! SchemaCache::hasTable('student_health_records') || ! SchemaCache::hasTable('feeding_attendances')) {
             return back()->with('error', 'Attendance tracking tables are not ready. Run migrations first.');
         }
 
@@ -332,20 +436,17 @@ class FeedingProgramController extends Controller
             ]);
         });
 
-        $atRiskCount = StudentHealthRecord::query()
-            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-            ->forCurrentSchoolYear()
-            ->where('is_at_risk', true)
-            ->count();
-
-        $redirect = redirect()
-            ->route('dashboard.feedingcor-program', ['grade' => $selectedGrade])
-            ->with('success', 'Attendance sheet processed: matched '.count($matched).' learner(s) across '.count($parsed['sessions']).' session(s). '.$atRiskCount.' learner(s) now flagged at-risk (attendance below '.self::AT_RISK_THRESHOLD_PERCENT.'%).');
+        // No success banner: the page the coordinator lands on already shows the
+        // result — the learners, their attendance, and who is flagged at-risk.
+        // Only problems worth acting on are reported below.
+        $redirect = redirect()->route('dashboard.feedingcor-program', ['grade' => $selectedGrade]);
 
         if (! empty($unmatched)) {
-            $shown = array_slice($unmatched, 0, 10);
-            $more = count($unmatched) > 10 ? ' (+'.(count($unmatched) - 10).' more)' : '';
-            $redirect->with('error', count($unmatched).' row(s) did not match a learner and were skipped: '.implode('; ', $shown).$more);
+            // The names themselves are deliberately not echoed back: a row that
+            // matched nobody is not a learner of this school, and an unverified
+            // name off an uploaded sheet has no business being rendered as one.
+            // The batch keeps them in its encrypted row_errors for the audit.
+            $redirect->with('error', count($unmatched).' row(s) were skipped because they are not on the adviser records for this school.');
         }
 
         return $redirect;
@@ -377,16 +478,21 @@ class FeedingProgramController extends Controller
 
         $request->validate([
             'attendance_photo' => ['required', 'file', 'image', 'mimes:jpeg,jpg,png,webp', 'max:'.(int) config('feeding.scanning.max_upload_kb', 10240)],
-            'session_date' => ['required', 'date', 'before_or_equal:today'],
+            // Optional: the sheet's own column headers are the source of truth
+            // for dates. This only anchors a partial header ("8", "Oct 8") and
+            // stands in for a single column whose header cannot be read.
+            'session_date' => ['nullable', 'date', 'before_or_equal:today'],
             'grade' => ['nullable', 'string', 'max:255'],
         ]);
 
-        if (! Schema::hasTable('student_health_records') || ! Schema::hasTable('feeding_attendances')) {
+        if (! SchemaCache::hasTable('student_health_records') || ! SchemaCache::hasTable('feeding_attendances')) {
             return back()->with('error', 'Attendance tracking tables are not ready. Run migrations first.');
         }
 
         $institutionId = $request->session()->get('active_institution_id');
-        $sessionDate = Carbon::parse((string) $request->input('session_date'))->toDateString();
+        $anchorDate = filled($request->input('session_date'))
+            ? Carbon::parse((string) $request->input('session_date'))->toDateString()
+            : null;
         $selectedGrade = trim((string) $request->input('grade', 'all')) ?: 'all';
         $photo = $request->file('attendance_photo');
 
@@ -396,34 +502,37 @@ class FeedingProgramController extends Controller
         }
 
         try {
-            $result = $scanner->scan($photo, $roster, $sessionDate);
+            $result = $scanner->scan($photo, $roster, $anchorDate);
         } catch (Throwable $e) {
             // Deliberately no partial write: a failed scan leaves the period
             // exactly as it was.
             return back()->with('error', 'Could not read the attendance photo. '.$e->getMessage());
         }
 
-        // A scan that reports the sheet unreadable is not trusted for any mark,
-        // even if it also returned some. Enforced here, at the point of write,
-        // rather than only inside the scanner — a contradictory result must not
-        // be able to put an unread mark into a learner's record.
-        if ($result['unreadable']) {
-            $result['marks'] = array_fill_keys(
-                array_keys($result['marks']) ?: array_column($roster, 'id'),
-                AttendanceSheetScanner::MARK_UNCLEAR
-            );
+        $sessions = $this->normalizeScannedSessions($result, $roster);
+
+        if ($sessions === []) {
+            return back()->with('error', 'No dated attendance column could be read from that photo, so nothing was recorded. '.$result['note']);
         }
 
         $counts = ['present' => 0, 'absent' => 0, 'unclear' => 0];
-        foreach ($result['marks'] as $mark) {
-            $counts[match ($mark) {
-                AttendanceSheetScanner::MARK_PRESENT => 'present',
-                AttendanceSheetScanner::MARK_ABSENT => 'absent',
-                default => 'unclear',
-            }]++;
+        foreach ($sessions as $session) {
+            foreach ($session['marks'] as $mark) {
+                $counts[match ($mark) {
+                    AttendanceSheetScanner::MARK_PRESENT => 'present',
+                    AttendanceSheetScanner::MARK_ABSENT => 'absent',
+                    default => 'unclear',
+                }]++;
+            }
         }
 
-        $import = DB::transaction(function () use ($result, $roster, $sessionDate, $institutionId, $photo, $request, $counts): AttendanceImport {
+        $sessionDates = array_column($sessions, 'date');
+        sort($sessionDates);
+        $dateSummary = count($sessionDates) === 1
+            ? $sessionDates[0]
+            : count($sessionDates).' sessions ('.$sessionDates[0].' to '.end($sessionDates).')';
+
+        $import = DB::transaction(function () use ($result, $roster, $sessions, $sessionDates, $institutionId, $photo, $request, $counts): AttendanceImport {
             $now = now();
             $storedPath = EncryptedFileStorage::store($photo, 'feeding-attendance-photos/'.($institutionId ?? 'unscoped'));
 
@@ -434,8 +543,10 @@ class FeedingProgramController extends Controller
                 'original_filename' => $photo->getClientOriginalName(),
                 'stored_path' => $storedPath,
                 'kind' => AttendanceImport::KIND_PHOTO,
-                'session_date' => $sessionDate,
-                'sessions_count' => 1,
+                // The batch is stamped with its latest session; the individual
+                // dates live on the attendance rows themselves.
+                'session_date' => end($sessionDates),
+                'sessions_count' => count($sessions),
                 'matched_count' => $counts['present'] + $counts['absent'],
                 'unmatched_count' => 0,
                 'unclear_count' => $counts['unclear'],
@@ -443,21 +554,23 @@ class FeedingProgramController extends Controller
             ]);
 
             $upserts = [];
-            foreach ($roster as $entry) {
-                $mark = $result['marks'][$entry['id']] ?? AttendanceSheetScanner::MARK_UNCLEAR;
-                $unclear = $mark === AttendanceSheetScanner::MARK_UNCLEAR;
+            foreach ($sessions as $session) {
+                foreach ($roster as $entry) {
+                    $mark = $session['marks'][$entry['id']] ?? AttendanceSheetScanner::MARK_UNCLEAR;
+                    $unclear = $mark === AttendanceSheetScanner::MARK_UNCLEAR;
 
-                $upserts[] = [
-                    'student_health_record_id' => $entry['record_id'],
-                    'session_date' => $sessionDate,
-                    // NULL, not false — an unread mark is not an absence.
-                    'is_present' => $unclear ? null : ($mark === AttendanceSheetScanner::MARK_PRESENT),
-                    'needs_review' => $unclear,
-                    'source' => FeedingAttendance::SOURCE_PHOTO_SCAN,
-                    'attendance_import_id' => $import->id,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
+                    $upserts[] = [
+                        'student_health_record_id' => $entry['record_id'],
+                        'session_date' => $session['date'],
+                        // NULL, not false — an unread mark is not an absence.
+                        'is_present' => $unclear ? null : ($mark === AttendanceSheetScanner::MARK_PRESENT),
+                        'needs_review' => $unclear,
+                        'source' => FeedingAttendance::SOURCE_PHOTO_SCAN,
+                        'attendance_import_id' => $import->id,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
             }
 
             FeedingAttendance::query()->upsert(
@@ -475,7 +588,7 @@ class FeedingProgramController extends Controller
             'created',
             'AttendanceImport',
             $import->id,
-            "Attendance photo scanned for {$sessionDate}: {$counts['present']} present, {$counts['absent']} absent, {$counts['unclear']} needing review"
+            "Attendance photo scanned for {$dateSummary}: {$counts['present']} present, {$counts['absent']} absent, {$counts['unclear']} needing review"
         );
 
         // Nothing pending means nothing to look at the photo for.
@@ -484,16 +597,68 @@ class FeedingProgramController extends Controller
         $redirect = redirect()->route('dashboard.feedingcor-program', ['grade' => $selectedGrade]);
 
         if ($result['unreadable']) {
-            return $redirect->with('error', 'The photo could not be read — every mark for '.$sessionDate.' is waiting for review. '.$result['note']);
+            return $redirect->with('error', 'The photo could not be read — every mark for '.$dateSummary.' is waiting for review. '.$result['note']);
         }
 
-        $redirect->with('success', 'Sheet scanned for '.$sessionDate.': '.$counts['present'].' present, '.$counts['absent'].' absent.');
+        $redirect->with('success', 'Sheet scanned for '.$dateSummary.': '.$counts['present'].' present, '.$counts['absent'].' absent.');
 
         if ($counts['unclear'] > 0) {
             $redirect->with('error', $counts['unclear'].' mark(s) could not be read confidently and are waiting for your review — they do not count either way until you confirm them.');
         }
 
         return $redirect;
+    }
+
+    /**
+     * Turns a scan result into the sessions we are willing to write.
+     *
+     * Two rules are enforced here, at the point of write, rather than trusting
+     * the scanner alone — a contradictory result must never be able to put an
+     * unread mark into a learner's record:
+     *
+     * 1. A scan that calls the sheet unreadable is not trusted for any mark,
+     *    even the ones it returned confidently.
+     * 2. Every session needs a real, non-future date. A column we cannot date is
+     *    dropped rather than filed under a guess.
+     *
+     * @param  array{sessions?: mixed, unreadable: bool, note: string}  $result
+     * @param  list<array{id:int,record_id:int,name:string,grade:string,section:string}>  $roster
+     * @return list<array{date: string, marks: array<int,string>}>
+     */
+    private function normalizeScannedSessions(array $result, array $roster): array
+    {
+        $rosterIds = array_column($roster, 'id');
+        $today = now()->toDateString();
+        $sessions = [];
+        $seen = [];
+
+        foreach ((array) ($result['sessions'] ?? []) as $session) {
+            if (! is_array($session)) {
+                continue;
+            }
+
+            $date = trim((string) ($session['date'] ?? ''));
+            if ($date === '' || $date > $today || ! strtotime($date)) {
+                continue;
+            }
+
+            $date = Carbon::parse($date)->toDateString();
+            if (isset($seen[$date])) {
+                continue;
+            }
+
+            $seen[$date] = true;
+            $marks = is_array($session['marks'] ?? null) ? $session['marks'] : [];
+
+            $sessions[] = [
+                'date' => $date,
+                'marks' => $result['unreadable']
+                    ? array_fill_keys($rosterIds, AttendanceSheetScanner::MARK_UNCLEAR)
+                    : $marks,
+            ];
+        }
+
+        return $sessions;
     }
 
     /** The queue of scanned marks no human has confirmed yet. */
@@ -690,6 +855,22 @@ class FeedingProgramController extends Controller
     }
 
     /**
+     * Resolves one uploaded row to a learner the adviser has actually
+     * registered, or to nothing at all.
+     *
+     * The bar is deliberately high, because the failure this guards against is
+     * silent: a name nobody enrolled quietly becoming attendance on a real
+     * learner's record. Only two shapes count as the same person —
+     *
+     *   - the name tokens are identical ("Bautista, Andrei M." ≡ "Andrei Bautista"),
+     *   - or one name's tokens are wholly contained in the other's, which is what
+     *     a dropped middle name or a missing suffix looks like.
+     *
+     * A partial overlap ("Juan Dela Cruz" against "Juan Cruz Reyes") is not a
+     * match, and a tie no section can settle is not a match either. Both come
+     * back as null, and the caller skips the row rather than guessing which
+     * child it belongs to.
+     *
      * @param  list<array{id: int, tokens: list<string>, grade_num: string|null, section: string, matched: bool}>  $pool
      */
     private function matchStudent(array $pool, string $name, string $grade, string $section): ?int
@@ -711,15 +892,14 @@ class FeedingProgramController extends Controller
             }
 
             if ($entry['tokens'] === $tokens) {
-                $candidates[] = ['index' => $index, 'score' => 3];
+                $candidates[] = ['index' => $index, 'score' => 2];
 
                 continue;
             }
 
+            // One name fully inside the other: a dropped middle name or suffix.
             $overlap = count(array_intersect($tokens, $entry['tokens']));
             if ($overlap >= 2 && ($overlap === count($tokens) || $overlap === count($entry['tokens']))) {
-                $candidates[] = ['index' => $index, 'score' => 2];
-            } elseif ($overlap >= 2) {
                 $candidates[] = ['index' => $index, 'score' => 1];
             }
         }
@@ -736,14 +916,20 @@ class FeedingProgramController extends Controller
             return $top[0]['index'];
         }
 
-        // Tie-break by section when the upload provides one.
-        foreach ($top as $candidate) {
-            if ($sectionUpper !== '' && $pool[$candidate['index']]['section'] === $sectionUpper) {
-                return $candidate['index'];
+        // Namesakes: the section decides, and only when it picks out exactly one.
+        if ($sectionUpper !== '') {
+            $bySection = array_values(array_filter(
+                $top,
+                fn (array $candidate): bool => $pool[$candidate['index']]['section'] === $sectionUpper
+            ));
+
+            if (count($bySection) === 1) {
+                return $bySection[0]['index'];
             }
         }
 
-        return $top[0]['index'];
+        // Still ambiguous — refuse rather than attach the row to a coin flip.
+        return null;
     }
 
     /**
@@ -794,6 +980,26 @@ class FeedingProgramController extends Controller
         $grade = trim(explode(' / ', $section, 2)[0]);
 
         return $grade !== '' ? $grade : 'Unassigned';
+    }
+
+    /**
+     * Gender is adviser-entered free text inside the encrypted student_details
+     * blob, so it is normalised to the two labels the filter offers; anything
+     * else (blank, "prefer not to say") stays unlabelled rather than guessed.
+     */
+    private function resolveGenderLabel(string $gender): string
+    {
+        $value = strtolower(trim($gender));
+
+        if (str_starts_with($value, 'm')) {
+            return 'Male';
+        }
+
+        if (str_starts_with($value, 'f')) {
+            return 'Female';
+        }
+
+        return '';
     }
 
     private function isAttendanceEligible(?string $nutritionalStatus): bool
@@ -849,7 +1055,7 @@ class FeedingProgramController extends Controller
         $programDay = 0;
         $todayDate = now()->toDateString();
 
-        if (Schema::hasTable('feeding_attendances')) {
+        if (SchemaCache::hasTable('feeding_attendances')) {
             $firstAttendanceDate = FeedingAttendance::query()
                 ->when($institutionId, fn ($q) => $q->whereIn(
                     'student_health_record_id',
@@ -862,7 +1068,7 @@ class FeedingProgramController extends Controller
             }
         }
 
-        if ($programDay === 0 && Schema::hasTable('consultations')) {
+        if ($programDay === 0 && SchemaCache::hasTable('consultations')) {
             $firstFeedingDate = Consultation::query()
                 ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
                 ->min('consulted_at');

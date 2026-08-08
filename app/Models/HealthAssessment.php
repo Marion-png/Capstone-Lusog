@@ -6,9 +6,9 @@ use App\Casts\EncryptedArray;
 use App\Casts\EncryptedBoolean;
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
+use App\Support\SchemaCache;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Schema;
 
 class HealthAssessment extends Model
 {
@@ -151,7 +151,7 @@ class HealthAssessment extends Model
 
     public static function forStudent(int $studentHealthRecordId, string $schoolYear): ?self
     {
-        if (! Schema::hasTable('health_assessments')) {
+        if (! SchemaCache::hasTable('health_assessments')) {
             return null;
         }
 

@@ -3,9 +3,9 @@
 namespace App\Http\Middleware;
 
 use App\Models\Institution;
+use App\Support\SchemaCache;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureActiveSession
@@ -92,7 +92,7 @@ class EnsureActiveSession
 
     private function prototypeInstitution(): ?Institution
     {
-        if (! Schema::hasTable('institutions')) {
+        if (! SchemaCache::hasTable('institutions')) {
             return null;
         }
 

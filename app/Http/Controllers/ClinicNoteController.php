@@ -5,10 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\ClinicNote;
 use App\Models\Consultation;
 use App\Models\StudentHealthRecord;
+use App\Support\SchemaCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Clinic Notes and the per-learner Consultation log behind the School Nurse's
@@ -29,7 +29,7 @@ class ClinicNoteController extends Controller
             return response()->json(['notes' => []]);
         }
 
-        $notes = Schema::hasTable('clinic_notes')
+        $notes = SchemaCache::hasTable('clinic_notes')
             ? ClinicNote::forActiveInstitution()
                 ->where('student_lrn', (string) $record->student_id)
                 ->latest('created_at')
@@ -106,7 +106,7 @@ class ClinicNoteController extends Controller
         }
 
         $record = $this->resolveLearner($request);
-        if ($record === null || ! Schema::hasTable('consultations')) {
+        if ($record === null || ! SchemaCache::hasTable('consultations')) {
             return response()->json(['consultations' => []]);
         }
 
@@ -146,7 +146,7 @@ class ClinicNoteController extends Controller
     {
         $lrn = trim($lrn ?? (string) $request->query('lrn', ''));
 
-        if ($lrn === '' || ! Schema::hasTable('student_health_records')) {
+        if ($lrn === '' || ! SchemaCache::hasTable('student_health_records')) {
             return null;
         }
 

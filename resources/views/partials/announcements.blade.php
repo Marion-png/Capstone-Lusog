@@ -7,7 +7,7 @@
 @php
     use App\Models\Announcement;
     $canPostAnnouncement = Announcement::canPost(session('active_role'));
-    $announcements = \Illuminate\Support\Facades\Schema::hasTable('announcements')
+    $announcements = \App\Support\SchemaCache::hasTable('announcements')
         ? Announcement::forActiveInstitution()->latest()->limit(6)->get()
         : collect();
 @endphp

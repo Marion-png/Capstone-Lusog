@@ -5,11 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\HealthConsentForm;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
+use App\Support\SchemaCache;
 use App\Support\StudentRosterSync;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class HealthConsentFormController extends Controller
@@ -94,7 +94,7 @@ class HealthConsentFormController extends Controller
      */
     private function uploadedConsentsByLrn(Request $request, Collection $lrns): Collection
     {
-        if ($lrns->isEmpty() || ! Schema::hasTable('parental_consent_forms')) {
+        if ($lrns->isEmpty() || ! SchemaCache::hasTable('parental_consent_forms')) {
             return collect();
         }
 

@@ -4,11 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Consultation;
 use App\Models\StudentHealthRecord;
+use App\Support\SchemaCache;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class FeedingCoordinatorController extends Controller
@@ -18,7 +18,7 @@ class FeedingCoordinatorController extends Controller
         $institutionId = $request->session()->get('active_institution_id');
 
         $records = collect();
-        if (Schema::hasTable('student_health_records')) {
+        if (SchemaCache::hasTable('student_health_records')) {
             $query = StudentHealthRecord::query();
             if ($institutionId) {
                 $query->where('institution_id', $institutionId);
@@ -68,7 +68,7 @@ class FeedingCoordinatorController extends Controller
      */
     private function resolveSchoolNurseName(?int $institutionId, string $schoolName): string
     {
-        if (! Schema::hasTable('accounts')) {
+        if (! SchemaCache::hasTable('accounts')) {
             return '';
         }
 
@@ -373,7 +373,7 @@ class FeedingCoordinatorController extends Controller
         $institutionId = session('active_institution_id');
 
         $students = collect();
-        if (Schema::hasTable('student_health_records')) {
+        if (SchemaCache::hasTable('student_health_records')) {
             $q = StudentHealthRecord::query();
             if ($institutionId) {
                 $q->where('institution_id', $institutionId);
@@ -834,7 +834,7 @@ class FeedingCoordinatorController extends Controller
 
     private function buildWeeklyBars(int $totalStudents, ?int $institutionId = null): array
     {
-        $hasConsultationTable = Schema::hasTable('consultations');
+        $hasConsultationTable = SchemaCache::hasTable('consultations');
 
         return collect(range(4, 0))
             ->map(function (int $offset) use ($hasConsultationTable, $totalStudents, $institutionId): array {

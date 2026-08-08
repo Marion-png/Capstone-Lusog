@@ -7,7 +7,7 @@
 --}}
 @php
     $active = $active ?? 'dashboard';
-    $cfUnread = \Illuminate\Support\Facades\Schema::hasTable('health_consent_forms')
+    $cfUnread = \App\Support\SchemaCache::hasTable('health_consent_forms')
         ? \App\Models\HealthConsentForm::where('adviser_unread', true)
             ->when(session('active_institution_id'), fn ($q, $id) => $q->where('institution_id', $id))
             ->count()

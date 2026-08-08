@@ -26,6 +26,8 @@ class FeedingAttendanceScanTest extends TestCase
 {
     use RefreshDatabase;
 
+    private const DEFAULT_DATE = '2026-08-05';
+
     private Institution $institution;
 
     protected function setUp(): void
@@ -65,23 +67,43 @@ class FeedingAttendanceScanTest extends TestCase
         ]);
     }
 
-    /** Swaps in a scanner that returns fixed marks without calling the API. */
-    private function fakeScanner(array $marksByIndex, bool $unreadable = false, string $note = ''): void
+    /**
+     * Swaps in a scanner that reads one dated column, without calling the API.
+     *
+     * @param  array<int, string>  $marksByIndex  roster_id => mark
+     */
+    private function fakeScanner(array $marksByIndex, string $date = self::DEFAULT_DATE, bool $unreadable = false, string $note = ''): void
     {
-        $this->swap(AttendanceSheetScanner::class, new class($marksByIndex, $unreadable, $note) extends AttendanceSheetScanner
+        $this->fakeMultiSessionScanner([$date => $marksByIndex], $unreadable, $note);
+    }
+
+    /**
+     * Swaps in a scanner that reads a whole grid — one entry per dated column,
+     * which is what a photographed DMIRIE sheet actually contains.
+     *
+     * @param  array<string, array<int, string>>  $marksByDate  date => [roster_id => mark]
+     */
+    private function fakeMultiSessionScanner(array $marksByDate, bool $unreadable = false, string $note = ''): void
+    {
+        $sessions = [];
+        foreach ($marksByDate as $date => $marks) {
+            $sessions[] = ['date' => $date, 'label' => $date, 'marks' => $marks];
+        }
+
+        $this->swap(AttendanceSheetScanner::class, new class($sessions, $unreadable, $note) extends AttendanceSheetScanner
         {
             public function __construct(
-                private readonly array $marksByIndex,
+                private readonly array $sessions,
                 private readonly bool $unreadable,
                 private readonly string $note,
             ) {
                 parent::__construct();
             }
 
-            public function scan(UploadedFile $photo, array $roster, string $sessionDate): array
+            public function scan(UploadedFile $photo, array $roster, ?string $anchorDate = null): array
             {
                 return [
-                    'marks' => $this->marksByIndex,
+                    'sessions' => $this->sessions,
                     'unreadable' => $this->unreadable,
                     'note' => $this->note,
                 ];
@@ -98,7 +120,7 @@ class FeedingAttendanceScanTest extends TestCase
                 parent::__construct();
             }
 
-            public function scan(UploadedFile $photo, array $roster, string $sessionDate): array
+            public function scan(UploadedFile $photo, array $roster, ?string $anchorDate = null): array
             {
                 throw new \RuntimeException($this->message);
             }
@@ -115,7 +137,7 @@ class FeedingAttendanceScanTest extends TestCase
         return UploadedFile::fake()->create('sheet.jpg', 120, 'image/jpeg');
     }
 
-    private function postScan(string $date = '2026-08-05')
+    private function postScan(string $date = self::DEFAULT_DATE)
     {
         return $this->withSession($this->coordinatorSession())
             ->post('/dashboard/feedingcor-program/attendance/scan', [
@@ -140,6 +162,69 @@ class FeedingAttendanceScanTest extends TestCase
             FeedingAttendance::where('student_health_record_id', $bravo->id)->first()->is_present
         );
         $this->assertSame(0, FeedingAttendance::awaitingReview()->count());
+    }
+
+    #[Test]
+    public function every_dated_column_on_the_sheet_becomes_its_own_session(): void
+    {
+        $alpha = $this->makeStudent('Alpha Learner');
+        $bravo = $this->makeStudent('Bravo Learner');
+
+        // One photo, three dated columns — the sheet's own headers decide the
+        // dates, not the one typed into the form.
+        $this->fakeMultiSessionScanner([
+            '2026-08-03' => [1 => 'P', 2 => 'P'],
+            '2026-08-04' => [1 => 'P', 2 => 'A'],
+            '2026-08-05' => [1 => 'A', 2 => 'P'],
+        ]);
+
+        $this->postScan()->assertRedirect();
+
+        $this->assertSame(3, FeedingAttendance::where('student_health_record_id', $alpha->id)->count());
+        $this->assertSame(3, FeedingAttendance::where('student_health_record_id', $bravo->id)->count());
+
+        $alphaMarks = FeedingAttendance::where('student_health_record_id', $alpha->id)
+            ->orderBy('session_date')
+            ->pluck('is_present')
+            ->all();
+        $this->assertSame([true, true, false], $alphaMarks);
+
+        $import = AttendanceImport::first();
+        $this->assertSame(3, $import->sessions_count);
+        // The batch is stamped with its latest session.
+        $this->assertSame('2026-08-05', $import->session_date->toDateString());
+    }
+
+    #[Test]
+    public function a_column_with_no_readable_date_is_dropped_rather_than_guessed(): void
+    {
+        $alpha = $this->makeStudent('Alpha Learner');
+
+        // A dateless column would otherwise have to be filed under an invented
+        // day — it is skipped, and the dated one still lands.
+        $this->fakeMultiSessionScanner([
+            '2026-08-04' => [1 => 'P'],
+            '' => [1 => 'A'],
+        ]);
+
+        $this->postScan()->assertRedirect();
+
+        $rows = FeedingAttendance::where('student_health_record_id', $alpha->id)->get();
+        $this->assertCount(1, $rows);
+        $this->assertSame('2026-08-04', $rows->first()->session_date->toDateString());
+        $this->assertTrue($rows->first()->is_present);
+    }
+
+    #[Test]
+    public function a_scan_with_no_dateable_column_writes_nothing(): void
+    {
+        $this->makeStudent('Alpha Learner');
+
+        $this->fakeMultiSessionScanner(['' => [1 => 'P']]);
+        $this->postScan()->assertRedirect();
+
+        $this->assertSame(0, FeedingAttendance::count());
+        $this->assertSame(0, AttendanceImport::count());
     }
 
     #[Test]
@@ -202,12 +287,12 @@ class FeedingAttendanceScanTest extends TestCase
         $alpha = $this->makeStudent('Alpha Learner');
 
         // Three confirmed absences plus one unclear: 0% of 3 confirmed → flagged.
-        $this->fakeScanner([1 => 'A']);
-        $this->postScan('2026-08-01');
-        $this->postScan('2026-08-02');
-        $this->postScan('2026-08-03');
+        foreach (['2026-08-01', '2026-08-02', '2026-08-03'] as $date) {
+            $this->fakeScanner([1 => 'A'], $date);
+            $this->postScan($date);
+        }
 
-        $this->fakeScanner([1 => '?']);
+        $this->fakeScanner([1 => '?'], '2026-08-04');
         $this->postScan('2026-08-04');
 
         $pending = FeedingAttendance::awaitingReview()->first();

@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
+use App\Support\SchemaCache;
 use App\Support\StudentRosterSync;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class AdviserController extends Controller
@@ -156,7 +156,7 @@ class AdviserController extends Controller
 
         $records = $request->session()->get('school_health_card_records', []);
 
-        $existingRecord = Schema::hasTable('student_health_records')
+        $existingRecord = SchemaCache::hasTable('student_health_records')
             ? StudentHealthRecord::query()
                 ->where('student_id', (string) $validated['lrn'])
                 ->where('institution_id', $request->session()->get('active_institution_id'))
@@ -249,7 +249,7 @@ class AdviserController extends Controller
 
         $request->session()->put('school_health_card_records', $records);
 
-        if (Schema::hasTable('student_health_records')) {
+        if (SchemaCache::hasTable('student_health_records')) {
             $studentName = $this->buildStudentName(
                 (string) $validated['last_name'],
                 (string) $validated['first_name'],
@@ -286,22 +286,25 @@ class AdviserController extends Controller
                 'baseline_recorded_at' => now()->toDateString(),
             ];
 
-            if (Schema::hasColumn('student_health_records', 'school_name')) {
+            if (SchemaCache::hasColumn('student_health_records', 'school_name')) {
                 $payload['school_name'] = $schoolName !== '' ? $schoolName : null;
             }
 
             // Keep compatibility with databases that have not run newer migrations yet.
-            $existingColumns = array_flip(Schema::getColumnListing('student_health_records'));
+            $existingColumns = array_flip(SchemaCache::columns('student_health_records'));
             $payload = array_intersect_key($payload, $existingColumns);
 
-            StudentHealthRecord::query()->updateOrCreate(
-                [
+            // updateOrCreate() would re-run the lookup we already did above —
+            // a wasted round trip, and a slow one against a hosted database.
+            if ($existingRecord !== null) {
+                $existingRecord->fill($payload)->save();
+            } else {
+                StudentHealthRecord::query()->create($payload + [
                     'student_id' => (string) $validated['lrn'],
                     'institution_id' => $request->session()->get('active_institution_id'),
                     'school_year' => StudentHealthRecord::currentSchoolYear(),
-                ],
-                $payload
-            );
+                ]);
+            }
         }
 
         return redirect()

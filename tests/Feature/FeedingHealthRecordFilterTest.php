@@ -62,6 +62,103 @@ class FeedingHealthRecordFilterTest extends TestCase
         $this->makeStudent('Charlie Learner', 'Grade 8 / Mabini');
     }
 
+    /**
+     * The session roster row the adviser's entry leaves behind for this learner.
+     * StudentRosterSync rebuilds it from the database, so in real use the page
+     * always sees both copies of the same learner at once.
+     *
+     * @return array<string, mixed>
+     */
+    private function rosterRow(StudentHealthRecord $record, string $last, string $first, string $middle = ''): array
+    {
+        [$grade, $section] = array_pad(explode(' / ', $record->section, 2), 2, '');
+
+        return [
+            'lrn' => $record->student_id,
+            'last_name' => $last,
+            'first_name' => $first,
+            'middle_name' => $middle,
+            'grade_level' => $grade,
+            'section' => $section,
+            'bmi_value' => 17.2,
+            'nutritional_status_bmi_for_age' => 'Wasted',
+            'height_cm' => 140,
+        ];
+    }
+
+    /** How many table rows on the page name this learner. */
+    private function rowsNaming(string $name, array $session): int
+    {
+        $html = $this->withSession($session)
+            ->get('/dashboard/feedingcor-health-records')
+            ->assertOk()
+            ->getContent();
+
+        preg_match_all('#<tr[^>]*>.*?</tr>#s', $html, $rows);
+
+        return collect($rows[0])->filter(fn (string $row): bool => str_contains($row, e($name)))->count();
+    }
+
+    #[Test]
+    public function a_learner_held_in_both_the_database_and_the_session_is_listed_once(): void
+    {
+        // Exactly the shape that duplicated every learner on this page: the row
+        // is in the database, and the adviser's session roster carries a working
+        // copy of the same learner.
+        $record = $this->makeStudent('Nailes, Stephen C.', 'Grade 11 / BSIT - 4B');
+
+        $session = $this->coordinatorSession() + [
+            'school_health_card_records' => [$this->rosterRow($record, 'Nailes', 'Stephen', 'Cruz')],
+        ];
+
+        // Both copies render the same learner under the same name — which is
+        // exactly why the page drew the row twice.
+        $this->assertSame(1, $this->rowsNaming('Nailes, Stephen C.', $session));
+    }
+
+    #[Test]
+    public function a_learner_only_the_session_knows_about_is_still_listed(): void
+    {
+        // The session copy is a fallback, not dead weight — a learner with no
+        // row this query can see must not vanish from the page.
+        $session = $this->coordinatorSession() + [
+            'school_health_card_records' => [[
+                'lrn' => 'LRN424242',
+                'last_name' => 'Solano',
+                'first_name' => 'Rita',
+                'middle_name' => 'B',
+                'grade_level' => 'Grade 9',
+                'section' => 'Narra',
+                'bmi_value' => 13.4,
+                'nutritional_status_bmi_for_age' => 'Severely Wasted',
+                'height_cm' => 138,
+            ]],
+        ];
+
+        $this->assertSame(1, $this->rowsNaming('Solano, Rita B.', $session));
+    }
+
+    #[Test]
+    public function the_beneficiary_count_is_not_inflated_by_the_session_copy(): void
+    {
+        $first = $this->makeStudent('Alpha Learner', 'Grade 7 / Rizal');
+        $second = $this->makeStudent('Bravo Learner', 'Grade 7 / Rizal');
+
+        $session = $this->coordinatorSession() + [
+            'school_health_card_records' => [
+                $this->rosterRow($first, 'Alpha', 'Learner'),
+                $this->rosterRow($second, 'Bravo', 'Learner'),
+            ],
+        ];
+
+        // Two learners on file — the summary cards and the consolidated report
+        // both read off this same collection, so a doubled list doubled them too.
+        $this->withSession($session)
+            ->get('/dashboard/feedingcor-health-records')
+            ->assertOk()
+            ->assertSee('Showing 2 of 2 beneficiaries');
+    }
+
     #[Test]
     public function unfiltered_page_lists_every_beneficiary(): void
     {

@@ -5,7 +5,9 @@ namespace App\Models;
 use App\Casts\EncryptedArray;
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
+use App\Support\RequestMemo;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -124,5 +126,26 @@ class StudentHealthRecord extends Model
             ->forCurrentSchoolYear($schoolYear)
             ->latest('id')
             ->first();
+    }
+
+    /**
+     * A school's learners for the current year, read once per request.
+     *
+     * The roster sync and the adviser dashboard both want this exact set, and
+     * on a hosted database a second identical read is most of a second spent
+     * for nothing. Unordered by design — callers that need an order sort the
+     * collection, which is free.
+     *
+     * @return Collection<int, self>
+     */
+    public static function currentYearForInstitution(?int $institutionId)
+    {
+        return RequestMemo::remember(
+            'student_health_records:'.($institutionId ?? 'all'),
+            fn () => static::query()
+                ->when($institutionId, fn (Builder $q, $id) => $q->where('institution_id', $id))
+                ->forCurrentSchoolYear()
+                ->get()
+        );
     }
 }

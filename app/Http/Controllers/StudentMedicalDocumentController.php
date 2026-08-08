@@ -5,12 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\MedicalCertificate;
 use App\Models\StudentHealthRecord;
 use App\Support\EncryptedFileStorage;
+use App\Support\SchemaCache;
 use App\Support\StudentMedicalDocuments;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -86,7 +86,7 @@ class StudentMedicalDocumentController extends Controller
      */
     private static function documentStamp(?string $lrn, ?int $institutionId = null): string
     {
-        if ($lrn === null || ! Schema::hasTable('medical_certificates')) {
+        if ($lrn === null || ! SchemaCache::hasTable('medical_certificates')) {
             return md5('-');
         }
 

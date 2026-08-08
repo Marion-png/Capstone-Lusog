@@ -200,15 +200,40 @@
 		</section>
 
 		<section class="risk-section" id="atRiskSection">
+			@php
+				$atRiskGradeOptions = ($atRiskStudents ?? collect())
+					->pluck('grade_level')
+					->filter(fn ($grade) => filled($grade))
+					->unique()
+					->sortBy(fn ($grade) => (int) (preg_match('/(\d+)/', (string) $grade, $m) ? $m[1] : 99))
+					->values();
+			@endphp
 			<div class="risk-head">
 				<h2 class="section-title">At-Risk Beneficiaries</h2>
-				<select class="risk-filter" id="riskFilter" aria-label="Filter at-risk list by nutritional status">
-					<option value="all">All Nutritional Status</option>
-					<option value="severe">Severely Wasted</option>
-					<option value="wasted">Wasted</option>
-					<option value="normal">Normal</option>
-					<option value="over">Overweight</option>
-				</select>
+				<div class="risk-filters">
+					<div class="risk-search">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+						<input type="text" id="riskSearch" placeholder="Search" autocomplete="off" aria-label="Search at-risk list by name or section">
+					</div>
+					<select class="risk-filter" id="riskGradeFilter" aria-label="Filter at-risk list by grade level">
+						<option value="all">Grade</option>
+						@foreach ($atRiskGradeOptions as $gradeOption)
+							<option value="{{ strtolower($gradeOption) }}">{{ $gradeOption }}</option>
+						@endforeach
+					</select>
+					<select class="risk-filter" id="riskGenderFilter" aria-label="Filter at-risk list by gender">
+						<option value="all">Gender</option>
+						<option value="male">Male</option>
+						<option value="female">Female</option>
+					</select>
+					<select class="risk-filter" id="riskFilter" aria-label="Filter at-risk list by nutritional status">
+						<option value="all">All Nutritional Status</option>
+						<option value="severe">Severely Wasted</option>
+						<option value="wasted">Wasted</option>
+						<option value="normal">Normal</option>
+						<option value="over">Overweight</option>
+					</select>
+				</div>
 			</div>
 			<div class="table-card">
 				<table id="riskTable">
@@ -218,26 +243,28 @@
 							<th>Section</th>
 							<th>Attendance</th>
 							<th>Nutritional Status</th>
-							<th>Risk Level</th>
 						</tr>
 					</thead>
 					<tbody>
 						@forelse (($atRiskStudents ?? collect()) as $student)
 							@php
 								$status = strtolower((string) ($student['nutritional_status'] ?? ''));
-								$riskClass = ($student['attendance_percent'] ?? 0) < 50 ? 'risk-high' : 'risk-mid';
-								$riskLabel = ($student['attendance_percent'] ?? 0) < 50 ? 'High' : 'Moderate';
 							@endphp
-							<tr data-risk-status="{{ $status }}">
+							<tr data-risk-status="{{ $status }}"
+								data-risk-grade="{{ strtolower((string) ($student['grade_level'] ?? '')) }}"
+								data-risk-gender="{{ strtolower((string) ($student['gender'] ?? '')) }}"
+								data-risk-search="{{ strtolower(trim(($student['student_name'] ?? '').' '.($student['section'] ?? ''))) }}">
 								<td><strong>{{ $student['student_name'] }}</strong></td>
 								<td>{{ $student['section'] }}</td>
 								<td>{{ $student['attendance'] }} ({{ $student['attendance_percent'] }}%)</td>
 								<td>{{ $student['nutritional_status'] }}</td>
-								<td><span class="risk-pill {{ $riskClass }}">{{ $riskLabel }}</span></td>
 							</tr>
 						@empty
-							<tr><td colspan="5">No at-risk beneficiaries right now.</td></tr>
+							<tr><td colspan="4">No at-risk beneficiaries right now.</td></tr>
 						@endforelse
+						@if (($atRiskStudents ?? collect())->isNotEmpty())
+							<tr id="riskNoMatchRow" style="display:none;"><td colspan="4">No beneficiaries match these filters.</td></tr>
+						@endif
 					</tbody>
 				</table>
 			</div>
@@ -248,68 +275,98 @@
 			$lowAttendanceCount = $studentCollection->filter(fn ($student) => (float) ($student['attendance_percent'] ?? 0) < 70)->count();
 		@endphp
 
-		<section class="card section" style="margin-top: 14px; padding: 16px;">
-			<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px;">
-				<h2 class="section-title" style="margin-bottom:0;">Feeding Session Attendance</h2>
-				<span class="muted" style="font-size:.72rem;font-weight:500;">{{ now()->format('F d, Y') }}</span>
-			</div>
-			@if (!$isReadOnly)
-			<button type="button" id="uploadAttendanceBtn" style="width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:26px 16px;background:#f8fafc;border:1.5px dashed #cbd5e1;border-radius:12px;cursor:pointer;">
-				<svg viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="1.6" style="width:34px;height:34px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-				<span class="student-name" style="font-size:.92rem;">Upload the feeding attendance sheet</span>
-				<span class="muted" style="font-size:.74rem;max-width:440px;">Attendance and at-risk learners are updated automatically from the sheet you upload (CSV or Excel). Learners attending below {{ $programStats['at_risk_threshold'] ?? 75 }}% of the sessions are flagged at-risk.</span>
-				<span class="btn btn-primary" style="pointer-events:none;">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-					Upload Attendance Sheet
-				</span>
-			</button>
-			@else
-			<div style="padding:10px 12px;background:#f0fdf4;border:1px solid #dcfce7;border-radius:10px;">
-				<div class="muted" style="font-size:.74rem;">View-only: the feeding attendance sheet is uploaded by the Feeding Coordinator.</div>
-			</div>
-			@endif
-		</section>
+		@php
+			$attendanceRosterRows = ($attendanceRoster ?? collect());
+			$rosterGradeOptions = $attendanceRosterRows
+				->pluck('grade_level')
+				->filter(fn ($grade) => filled($grade))
+				->unique()
+				->sortBy(fn ($grade) => (int) (preg_match('/(\d+)/', (string) $grade, $m) ? $m[1] : 99))
+				->values();
+		@endphp
 
-		<section class="table-section" style="margin-top:16px;">
-			<h2 class="table-title">Feeding Program Beneficiaries</h2>
-			<div class="table-card">
-				<table>
-					<thead>
-						<tr>
-							<th>Student Name</th>
-							<th>Grade &amp; Section</th>
-							<th>Baseline</th>
-							<th>Current</th>
-							<th>Weight Change</th>
-							<th>Attendance</th>
-							<th>Status</th>
-						</tr>
-					</thead>
-					<tbody>
-						@forelse ($studentCollection as $student)
-							@php
-								$baselineWeight = (float) ($student['baseline_weight'] ?? 0);
-								$currentWeight = (float) ($student['current_weight'] ?? 0);
-								$weightChange = round($currentWeight - $baselineWeight, 1);
-								$attendancePercent = (float) ($student['attendance_percent'] ?? 0);
-								$statusClass = $weightChange > 1 ? 't-improving' : ($weightChange < 0 ? 't-regressing' : 't-stable');
-								$statusLabel = $weightChange > 1 ? 'improved' : ($weightChange < 0 ? 'declined' : 'no change');
-							@endphp
-							<tr>
-								<td><div class="student-name">{{ $student['student_name'] ?? '-' }}</div></td>
-								<td>{{ $student['section'] ?? '-' }}</td>
-								<td>{{ number_format($baselineWeight, 1) }} kg</td>
-								<td><strong>{{ number_format($currentWeight, 1) }} kg</strong></td>
-								<td class="{{ $weightChange > 0 ? 'bmi-up' : ($weightChange < 0 ? 'bmi-down' : 'muted') }}">{{ $weightChange > 0 ? '+' : '' }}{{ number_format($weightChange, 1) }} kg</td>
-								<td>{{ number_format($attendancePercent, 0) }}%</td>
-								<td><span class="trend {{ $statusClass }}">{{ $statusLabel }}</span></td>
-							</tr>
-						@empty
-							<tr><td colspan="7">No beneficiaries available.</td></tr>
-						@endforelse
-					</tbody>
-				</table>
+		<section class="card section attendance-section" id="attendanceRosterSection">
+			<div class="attendance-head">
+				<h2 class="section-title" style="margin-bottom:0;">Feeding Program Beneficiaries</h2>
+				<div class="attendance-actions">
+					@if ($attendanceRosterRows->isNotEmpty())
+						<div class="risk-search">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+							<input type="text" id="rosterSearch" placeholder="Search" autocomplete="off" aria-label="Search recorded attendance by name or section">
+						</div>
+						<select class="risk-filter" id="rosterGradeFilter" aria-label="Filter recorded attendance by grade level">
+							<option value="all">Grade</option>
+							@foreach ($rosterGradeOptions as $gradeOption)
+								<option value="{{ strtolower($gradeOption) }}">{{ $gradeOption }}</option>
+							@endforeach
+						</select>
+					@endif
+					@if (!$isReadOnly)
+						<button type="button" class="btn btn-primary" id="uploadAttendanceBtn">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+							Upload Attendance Sheet
+						</button>
+					@endif
+				</div>
 			</div>
+
+			@if ($attendanceRosterRows->isNotEmpty())
+				@if ($latestImport ?? null)
+					<div class="roster-meta">
+						<span><strong>{{ $latestImport->original_filename ?: 'Attendance sheet' }}</strong></span>
+						<span>{{ $latestImport->created_at?->format('M d, Y') }}</span>
+						<span>{{ $latestImport->uploaded_by_name }}</span>
+						<span>{{ $attendanceRosterRows->count() }} learners</span>
+					</div>
+				@endif
+				<div class="table-card">
+					<table id="rosterTable">
+						<thead>
+							<tr>
+								<th>Student</th>
+								<th>Grade &amp; Section</th>
+								<th>Baseline</th>
+								<th>Current</th>
+								<th>Weight Change</th>
+								<th>Present</th>
+								<th>Absent</th>
+								<th>Attendance</th>
+								<th>Status</th>
+							</tr>
+						</thead>
+						<tbody>
+							@foreach ($attendanceRosterRows as $row)
+								@php
+									$weightChange = (float) ($row['weight_change'] ?? 0);
+									$hasAttendance = $row['sessions'] > 0;
+									$statusClass = $weightChange > 1 ? 't-improving' : ($weightChange < 0 ? 't-regressing' : 't-stable');
+									$statusLabel = $weightChange > 1 ? 'improved' : ($weightChange < 0 ? 'declined' : 'no change');
+								@endphp
+								<tr data-roster-grade="{{ strtolower((string) ($row['grade_level'] ?? '')) }}"
+									data-roster-search="{{ strtolower(trim(($row['student_name'] ?? '').' '.($row['section'] ?? ''))) }}">
+									<td><strong>{{ $row['student_name'] }}</strong></td>
+									<td>{{ $row['section'] }}</td>
+									<td>{{ number_format((float) $row['baseline_weight'], 1) }} kg</td>
+									<td><strong>{{ number_format((float) $row['current_weight'], 1) }} kg</strong></td>
+									<td class="{{ $weightChange > 0 ? 'bmi-up' : ($weightChange < 0 ? 'bmi-down' : 'muted') }}">{{ $weightChange > 0 ? '+' : '' }}{{ number_format($weightChange, 1) }} kg</td>
+									<td>
+										{{ $hasAttendance ? $row['present'] : '—' }}
+										@if ($row['pending'] > 0)
+											<span class="roster-pending">{{ $row['pending'] }} awaiting review</span>
+										@endif
+									</td>
+									<td>{{ $hasAttendance ? $row['absent'] : '—' }}</td>
+									<td>{{ $row['rate'] === null ? '—' : $row['rate'].'%' }}</td>
+									<td><span class="trend {{ $statusClass }}">{{ $statusLabel }}</span></td>
+								</tr>
+							@endforeach
+							<tr id="rosterNoMatchRow" style="display:none;"><td colspan="9">No learners match these filters.</td></tr>
+						</tbody>
+					</table>
+				</div>
+			@else
+				<div class="attendance-empty">No feeding beneficiaries on file yet.</div>
+			@endif
 		</section>
 
 		@if ($lowAttendanceCount > 0)
@@ -363,9 +420,11 @@
 			<div class="modal-body">
 				<div class="weight-item">
 					<div class="weight-label">Attendance file <span>(.csv, .xlsx)</span></div>
-					<div class="weight-field-wrap">
-						<input type="file" name="attendance_file" accept=".csv,.txt,.xlsx,.xls" required class="weight-input">
-					</div>
+					<label class="dropzone" for="attendanceFileInput">
+						<input type="file" id="attendanceFileInput" name="attendance_file" accept=".csv,.txt,.xlsx,.xls" required class="dropzone-input" data-placeholder="Drop the sheet here or click to browse">
+						<svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+						<span class="dropzone-text">Drop the sheet here or click to browse</span>
+					</label>
 				</div>
 			</div>
 			<div class="modal-foot">
@@ -382,14 +441,16 @@
 				<div class="modal-body">
 					<div class="weight-item">
 						<div class="weight-label">Photo of the marked sheet <span>(.jpg, .png)</span></div>
-						<div class="weight-field-wrap">
-							<input type="file" name="attendance_photo" accept="image/jpeg,image/png,image/webp" required class="weight-input">
-						</div>
+						<label class="dropzone" for="attendancePhotoInput">
+							<input type="file" id="attendancePhotoInput" name="attendance_photo" accept="image/jpeg,image/png,image/webp" required class="dropzone-input" data-placeholder="Drop the photo here or click to browse">
+							<svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><polyline points="21 15 16 10 5 19"/></svg>
+							<span class="dropzone-text">Drop the photo here or click to browse</span>
+						</label>
 					</div>
 					<div class="weight-item">
-						<div class="weight-label">Session date</div>
+						<div class="weight-label">Session date <span>(optional)</span></div>
 						<div class="weight-field-wrap">
-							<input type="date" name="session_date" max="{{ now()->toDateString() }}" required class="weight-input">
+							<input type="date" name="session_date" max="{{ now()->toDateString() }}" class="weight-input">
 						</div>
 					</div>
 				</div>
@@ -520,7 +581,15 @@
 	const focusAtRiskBtn = document.getElementById('focusAtRiskBtn');
 	const atRiskSection = document.getElementById('atRiskSection');
 	const riskFilter = document.getElementById('riskFilter');
+	const riskSearch = document.getElementById('riskSearch');
+	const riskGradeFilter = document.getElementById('riskGradeFilter');
+	const riskGenderFilter = document.getElementById('riskGenderFilter');
+	const riskNoMatchRow = document.getElementById('riskNoMatchRow');
 	const riskRows = Array.from(document.querySelectorAll('#riskTable tbody tr[data-risk-status]'));
+	const rosterSearch = document.getElementById('rosterSearch');
+	const rosterGradeFilter = document.getElementById('rosterGradeFilter');
+	const rosterNoMatchRow = document.getElementById('rosterNoMatchRow');
+	const rosterRows = Array.from(document.querySelectorAll('#rosterTable tbody tr[data-roster-search]'));
 	const backdrop = document.getElementById('weightsModalBackdrop');
 	const closeBtn = document.getElementById('closeWeightsModal');
 	const cancelBtn = document.getElementById('cancelWeightsModal');
@@ -1393,15 +1462,110 @@
 		});
 	}
 
-	if (riskFilter && riskRows.length > 0) {
-		riskFilter.addEventListener('change', () => {
-			const selected = String(riskFilter.value || 'all').toLowerCase();
+	if (riskRows.length > 0) {
+		const riskControls = [riskSearch, riskGradeFilter, riskGenderFilter, riskFilter].filter(Boolean);
+
+		const applyRiskFilters = () => {
+			const term = riskSearch ? String(riskSearch.value || '').trim().toLowerCase() : '';
+			const grade = riskGradeFilter ? String(riskGradeFilter.value || 'all').toLowerCase() : 'all';
+			const gender = riskGenderFilter ? String(riskGenderFilter.value || 'all').toLowerCase() : 'all';
+			const status = riskFilter ? String(riskFilter.value || 'all').toLowerCase() : 'all';
+			let matches = 0;
+
 			riskRows.forEach((row) => {
-				const rowStatus = String(row.getAttribute('data-risk-status') || '').toLowerCase();
-				const visible = selected === 'all' || rowStatus.includes(selected);
+				const attr = (name) => String(row.getAttribute(name) || '').toLowerCase();
+				const visible = (term === '' || attr('data-risk-search').includes(term))
+					&& (grade === 'all' || attr('data-risk-grade') === grade)
+					&& (gender === 'all' || attr('data-risk-gender') === gender)
+					&& (status === 'all' || attr('data-risk-status').includes(status));
+
 				row.style.display = visible ? '' : 'none';
+				if (visible) {
+					matches += 1;
+				}
+			});
+
+			if (riskNoMatchRow) {
+				riskNoMatchRow.style.display = matches === 0 ? '' : 'none';
+			}
+		};
+
+		riskControls.forEach((control) => {
+			control.addEventListener(control === riskSearch ? 'input' : 'change', applyRiskFilters);
+		});
+	}
+
+	// Drop targets: clicking is handled by the wrapping <label>, so this only
+	// adds the drag path and swaps the prompt for the chosen filename.
+	document.querySelectorAll('.dropzone').forEach((zone) => {
+		const input = zone.querySelector('.dropzone-input');
+		const text = zone.querySelector('.dropzone-text');
+		if (!input || !text) {
+			return;
+		}
+
+		const placeholder = input.getAttribute('data-placeholder') || text.textContent;
+
+		const render = () => {
+			const file = input.files && input.files[0];
+			text.textContent = file ? file.name : placeholder;
+			zone.classList.toggle('is-filled', Boolean(file));
+		};
+
+		input.addEventListener('change', render);
+
+		['dragenter', 'dragover'].forEach((name) => {
+			zone.addEventListener(name, (event) => {
+				event.preventDefault();
+				zone.classList.add('is-dragging');
 			});
 		});
+
+		['dragleave', 'drop'].forEach((name) => {
+			zone.addEventListener(name, () => zone.classList.remove('is-dragging'));
+		});
+
+		zone.addEventListener('drop', (event) => {
+			event.preventDefault();
+			const dropped = event.dataTransfer && event.dataTransfer.files;
+			if (dropped && dropped.length > 0) {
+				input.files = dropped;
+				render();
+			}
+		});
+
+		render();
+	});
+
+	if (rosterRows.length > 0) {
+		const applyRosterFilters = () => {
+			const term = rosterSearch ? String(rosterSearch.value || '').trim().toLowerCase() : '';
+			const grade = rosterGradeFilter ? String(rosterGradeFilter.value || 'all').toLowerCase() : 'all';
+			let matches = 0;
+
+			rosterRows.forEach((row) => {
+				const attr = (name) => String(row.getAttribute(name) || '').toLowerCase();
+				const visible = (term === '' || attr('data-roster-search').includes(term))
+					&& (grade === 'all' || attr('data-roster-grade') === grade);
+
+				row.style.display = visible ? '' : 'none';
+				if (visible) {
+					matches += 1;
+				}
+			});
+
+			if (rosterNoMatchRow) {
+				rosterNoMatchRow.style.display = matches === 0 ? '' : 'none';
+			}
+		};
+
+		if (rosterSearch) {
+			rosterSearch.addEventListener('input', applyRosterFilters);
+		}
+
+		if (rosterGradeFilter) {
+			rosterGradeFilter.addEventListener('change', applyRosterFilters);
+		}
 	}
 
 	if (closeEncodeFormModal) {

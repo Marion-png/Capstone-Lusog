@@ -3,7 +3,6 @@
 namespace App\Support;
 
 use App\Models\AuditLog;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Records who accessed, created, modified, or deleted personal and
@@ -21,7 +20,7 @@ class AuditTrail
         ?array $details = null,
     ): void {
         try {
-            if (! Schema::hasTable('audit_logs')) {
+            if (! SchemaCache::hasTable('audit_logs')) {
                 return;
             }
 
