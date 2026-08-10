@@ -557,6 +557,9 @@
                 onerror="this.style.display='none';document.getElementById('logoFallback').style.display='block';"
             >
             <div class="brand-fallback" id="logoFallback">SIGLA</div>
+            {{-- What the acronym stands for. Sits under the mark so the first
+                 thing a new user reads is what the system actually is. --}}
+            <p class="brand-tag">School-Based Information Governance<br>for Life Care Administration</p>
         </div>
     </section>
 

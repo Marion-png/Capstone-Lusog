@@ -8,8 +8,9 @@
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
-	<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+	<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
 	<script>document.documentElement.classList.add('js');</script>
+	<style>{!! file_get_contents(resource_path('css/lusog-theme.css')) !!}</style>
 	@php $pageCssPath = resource_path('css/feeding-dashboard.css'); @endphp
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
@@ -21,45 +22,64 @@
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>Dashboard</span><span>&rsaquo;</span><span>Feeding Program</span></div>
+		<div class="topbar-bc"><span>Dashboard</span><span class="bc-sep">&rsaquo;</span><span>Feeding Program</span></div>
 	    @include('partials.live-clock')
 	</header>
 
 	<div class="content">
 		<div class="page-header" id="dashboard">
-			<div class="page-eyebrow">Feeding Program</div>
 			<h1 class="page-title">Dashboard <span>Feeding Program</span></h1>
 			<p class="page-sub">Monitor JHS/SHS participation, nutritional outcomes, and weekly check-ins at a glance.</p>
 		</div>
 
 		@include('partials.announcements')
 
-		<section class="stats">
-			<article class="card stat">
-				<div class="label">Enrolled Students</div>
-				<div class="num">{{ $dashboardStats['total_students'] ?? 0 }}</div>
-				<div class="hint">JHS: {{ $dashboardStats['jhs_count'] ?? 0 }} | SHS: {{ $dashboardStats['shs_count'] ?? 0 }}</div>
+		{{-- Four white cards, one semantic accent each: brand green for the
+		     headcount, amber for programme progress, fresh green for the
+		     positive outcome, teal for the neutral participation measure. --}}
+		<section class="kpi-grid">
+			<article class="card kpi accent-brand">
+				<div class="kpi-top">
+					<div class="kpi-label">Enrolled Students</div>
+					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+				</div>
+				<div class="kpi-value">{{ $dashboardStats['total_students'] ?? 0 }}</div>
+				<div class="kpi-hint">JHS {{ $dashboardStats['jhs_count'] ?? 0 }} &middot; SHS {{ $dashboardStats['shs_count'] ?? 0 }}</div>
 			</article>
-			<article class="card stat">
-				<div class="label">Program Day</div>
-				<div class="num">{{ $dashboardStats['program_day'] ?? 0 }}</div>
-				<div class="hint">of 120 day cycle</div>
+			<article class="card kpi accent-amber">
+				<div class="kpi-top">
+					<div class="kpi-label">Program Day</div>
+					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/></svg></div>
+				</div>
+				<div class="kpi-value">{{ $dashboardStats['program_day'] ?? 0 }}</div>
+				<div class="kpi-hint">of 120 day cycle</div>
 			</article>
-			<article class="card stat">
-				<div class="label">Improving</div>
-				<div class="num">{{ $dashboardStats['improving_rate'] ?? 0 }}%</div>
-				<div class="hint">{{ $dashboardStats['improving_count'] ?? 0 }} of {{ $dashboardStats['total_students'] ?? 0 }} students</div>
+			<article class="card kpi accent-success">
+				<div class="kpi-top">
+					<div class="kpi-label">Improving</div>
+					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></div>
+				</div>
+				<div class="kpi-value">{{ $dashboardStats['improving_rate'] ?? 0 }}%</div>
+				<div class="kpi-hint">{{ $dashboardStats['improving_count'] ?? 0 }} of {{ $dashboardStats['total_students'] ?? 0 }} students</div>
 			</article>
-			<article class="card stat">
-				<div class="label">Avg Check-ins</div>
-				<div class="num">{{ $dashboardStats['avg_attendance'] ?? 0 }}%</div>
-				<div class="hint">Last 5 weeks</div>
+			<article class="card kpi accent-info">
+				<div class="kpi-top">
+					<div class="kpi-label">Avg Check-ins</div>
+					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></div>
+				</div>
+				<div class="kpi-value">{{ $dashboardStats['avg_attendance'] ?? 0 }}%</div>
+				<div class="kpi-hint">Last 5 weeks</div>
 			</article>
 		</section>
 
 		<section class="dash-stack" id="feeding-program">
-			<article class="card chart-card full-chart">
-				<h2 class="chart-title">Avg BMI Progress Over Time</h2>
+			<article class="card chart-card">
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Avg BMI Progress Over Time</h2>
+						<p class="card-sub">Track average BMI trends across the feeding program cycle.</p>
+					</div>
+				</div>
 				<div class="chart-surface">
 				@php
 					$plot = $bmiChart['plot'] ?? ['left' => 48, 'right' => 900, 'top' => 24, 'bottom' => 196];
@@ -238,11 +258,16 @@
 			</article>
 
 			<article class="card roster-card">
-				<h2 class="chart-title">Student Roster</h2>
+				<div class="card-head">
+					<div>
+						<h2 class="card-title">Student Roster</h2>
+						<p class="card-sub">BMI change since baseline.</p>
+					</div>
+				</div>
 				<div class="roster-chips">
-					<span class="rchip rchip-improving">Improving {{ $roster['improving'] }}</span>
-					<span class="rchip rchip-stable">Stable {{ $roster['stable'] }}</span>
-					<span class="rchip rchip-attention">Needs attention {{ $roster['attention'] }}</span>
+					<span class="badge badge-normal">Improving {{ $roster['improving'] }}</span>
+					<span class="badge badge-neutral">Stable {{ $roster['stable'] }}</span>
+					<span class="badge badge-risk">Needs attention {{ $roster['attention'] }}</span>
 				</div>
 				<div class="roster-list">
 					@forelse ($roster['students'] as $s)
@@ -267,9 +292,17 @@
 			</article>
 		</section>
 
-		<section class="card checkins-card full-chart">
-			<h2 class="chart-title">Weight &amp; BMI Log</h2>
-			@php $statusLabels = ['improving' => 'Improving', 'stable' => 'Stable', 'attention' => 'Needs attention']; @endphp
+		<section class="card checkins-card">
+			<div class="card-head">
+				<div>
+					<h2 class="card-title">Weight &amp; BMI Log</h2>
+					<p class="card-sub">Latest recorded measurement per beneficiary.</p>
+				</div>
+			</div>
+			@php
+				$statusLabels = ['improving' => 'Improving', 'stable' => 'Stable', 'attention' => 'Needs attention'];
+				$statusBadges = ['improving' => 'badge-normal', 'stable' => 'badge-neutral', 'attention' => 'badge-risk'];
+			@endphp
 			<div class="table-scroll">
 				<table class="checkins-table">
 					<thead>
@@ -279,21 +312,21 @@
 							<th class="ta-r">Weight</th>
 							<th class="ta-r">BMI</th>
 							<th class="ta-r">Change</th>
-							<th class="ta-r">Status</th>
+							<th>Status</th>
 						</tr>
 					</thead>
 					<tbody>
 						@forelse ($roster['students'] as $s)
 							<tr>
-								<td class="ci-name">{{ $s['name'] }}</td>
-								<td class="ci-grade">{{ $s['grade'] }}</td>
-								<td class="ta-r ci-mono">{{ $s['weight'] }} kg</td>
-								<td class="ta-r ci-mono">{{ $s['bmi'] }}</td>
-								<td class="ta-r ci-mono {{ $s['trend'] }}">{{ $s['trend'] === 'up' ? '+' : '' }}{{ number_format($s['change'], 1) }}</td>
-								<td class="ta-r"><span class="status-chip status-{{ $s['status'] }}">{{ $statusLabels[$s['status']] }}</span></td>
+								<td><strong>{{ $s['name'] }}</strong></td>
+								<td>{{ $s['grade'] }}</td>
+								<td class="ta-r">{{ $s['weight'] }} kg</td>
+								<td class="ta-r">{{ $s['bmi'] }}</td>
+								<td class="ta-r {{ $s['trend'] }}">{{ $s['trend'] === 'up' ? '+' : '' }}{{ number_format($s['change'], 1) }}</td>
+								<td><span class="badge {{ $statusBadges[$s['status']] }}">{{ $statusLabels[$s['status']] }}</span></td>
 							</tr>
 						@empty
-							<tr><td colspan="6" class="ci-empty">No check-ins recorded yet.</td></tr>
+							<tr><td colspan="6" class="table-empty">No check-ins recorded yet.</td></tr>
 						@endforelse
 					</tbody>
 				</table>

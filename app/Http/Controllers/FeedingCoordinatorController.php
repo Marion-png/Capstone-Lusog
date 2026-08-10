@@ -96,7 +96,7 @@ class FeedingCoordinatorController extends Controller
 
     /**
      * Tabulates adviser-entered learners into the DepEd BMI report grids —
-     * Grades 7-10 plus Overall — for both the Baseline (prefix "bmib") and the
+     * Grades 7-12 plus Overall — for both the Baseline (prefix "bmib") and the
      * Final/endline (prefix "bmif") assessments. Every cell is derived here (in
      * PHP, since names/statuses are encrypted at rest) and rendered read-only,
      * so the reports always mirror the current roster with no hand-keying.
@@ -106,7 +106,7 @@ class FeedingCoordinatorController extends Controller
      */
     private function buildBmiValues(Collection $records): array
     {
-        $gradeKeys = ['g7', 'g8', 'g9', 'g10'];
+        $gradeKeys = ['g7', 'g8', 'g9', 'g10', 'g11', 'g12'];
         $sexes = ['male', 'female'];
         $nsCols = ['sw', 'w', 'n', 'ow', 'ob'];
         $hfaCols = ['ss', 'st', 'hn', 't'];
@@ -127,7 +127,7 @@ class FeedingCoordinatorController extends Controller
             [$gradeLabel] = $this->splitSection((string) $record->section);
             $gk = $this->bmiGradeKey($gradeLabel);
             if ($gk === null) {
-                continue; // Report only covers Grades 7-10.
+                continue; // Report only covers Grades 7-12.
             }
 
             $details = is_array($record->student_details) ? $record->student_details : [];
@@ -218,12 +218,15 @@ class FeedingCoordinatorController extends Controller
         }
     }
 
-    /** "Grade 7" → "g7"; only Grades 7-10 are on the report. */
+    /**
+     * "Grade 7" → "g7"; the report covers Grades 7-12 (JHS 7-10 plus SHS
+     * 11-12), so anything outside that range is left off the grids.
+     */
     private function bmiGradeKey(string $gradeLabel): ?string
     {
         if (preg_match('/(\d{1,2})/', $gradeLabel, $m)) {
             $grade = (int) $m[1];
-            if ($grade >= 7 && $grade <= 10) {
+            if ($grade >= 7 && $grade <= 12) {
                 return 'g'.$grade;
             }
         }

@@ -1,82 +1,74 @@
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-        :root{--g900:#14532d;--g700:#15803d;--g300:#86efac;--cream:#f7f8f5;--card:#fff;--border:#e4ece7;--text-1:#0d1f14;--text-2:#3d5c47;--text-3:#7a9e87;--red:#e34848;--sidebar-w:248px;--sidebar-collapsed-w:76px;--topbar-h:64px;--radius-sm:10px;--shadow-card:0 1px 4px rgba(5,46,22,.06),0 4px 16px rgba(5,46,22,.06)}
-        html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--text-1);overflow:hidden}
+/* ══════════════════════════════════════════════════════════════════════
+   Feeding Coordinator — Student Health Records (and Attendance Review,
+   which shares this sheet). Page-specific styles only; tokens, shell,
+   KPI cards, tables and the status scale come from feeding-theme.css.
+   ══════════════════════════════════════════════════════════════════════ */
 
-        .sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-collapsed-w);background:var(--g900);display:flex;flex-direction:column;z-index:100;overflow:hidden;transition:width .24s ease}
-.sidebar:hover, .sidebar.sb-pin {width:var(--sidebar-w)}
-        .sb-logo{padding:20px 20px 18px;position:relative;z-index:2;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:center;transition:padding .24s ease}
-        .sb-logo img{width:176px;max-width:100%;height:auto;display:block;transition:width .24s ease}
-        .sidebar:not(:hover):not(.sb-pin) .sb-logo{padding:14px 10px}
-        .sidebar:not(:hover):not(.sb-pin) .sb-logo img{width:48px}
-        .sb-nav{flex:1;overflow-y:auto;padding:16px 12px; transition: padding .24s ease; }
-        .sb-link{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);text-decoration:none;color:rgba(255,255,255,.62);font-size:.83rem;font-weight:500;margin-bottom:2px;white-space:nowrap;overflow:hidden; transition: background .15s, color .15s, padding .24s ease, gap .24s ease, font-size .24s ease; }
-        .sb-link.active{background:rgba(34,197,94,.18);color:var(--g300)}
-        .sb-link svg{width:16px;height:16px;flex-shrink:0; transition: width .24s ease, height .24s ease; }
-        .sidebar:not(:hover):not(.sb-pin) .sb-link { font-size: 0; padding: 10px 17px; gap: 0; }
-        .sidebar:not(:hover):not(.sb-pin) .sb-link svg{width:18px;height:18px}
-        .sb-user{padding:14px 16px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:11px; transition: padding .24s ease, gap .24s ease; }
-        .sb-avatar{width:34px;height:34px;border-radius:50%;background:#16a34a;display:grid;place-items:center;font-size:.8rem;font-weight:700;color:#fff;flex-shrink:0}
-        .sb-user-meta{min-width:0;max-width:170px;overflow:hidden; white-space: nowrap; transition: max-width .24s ease, opacity .18s ease; }
-        .sb-user-name{font-size:.8rem;font-weight:600;color:#fff;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .sb-user-role{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .sb-user form{margin-left:auto;display:flex;align-items:center; max-width: 40px; overflow: hidden; transition: max-width .24s ease, opacity .18s ease; }
-        .sb-logout{background:none;border:none;color:rgba(255,255,255,.62);cursor:pointer;border-radius:8px;width:30px;height:30px;display:grid;place-items:center;transition:background .15s,color .15s}
-        .sb-logout:hover{background:rgba(239,68,68,.14);color:#fecaca}
-        .sb-logout svg{width:16px;height:16px}
-        .sidebar:not(:hover):not(.sb-pin) .sb-user { gap: 0; }
-.sidebar:not(:hover):not(.sb-pin) .sb-user-meta { max-width: 0; opacity: 0; }
-        .sidebar:not(:hover):not(.sb-pin) .sb-user form { max-width: 0; opacity: 0; }
+.records-section { margin-top: 24px; }
 
-        .main{margin-left:var(--sidebar-collapsed-w);height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:margin-left .24s ease}
-.sidebar:hover ~ .main, .sidebar.sb-pin ~ .main {margin-left:var(--sidebar-w)}
-        .topbar{height:var(--topbar-h);border-bottom:1px solid var(--border);background:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 28px}
-        .topbar-bc{font-size:.76rem;color:var(--text-3);display:flex;gap:6px;align-items:center}
-        .topbar-chip{font-size:.72rem;border:1px solid #bbf7d0;color:#15803d;background:#f0fdf4;border-radius:999px;padding:5px 11px}
+/* Sortable column head: the whole cell is the control, the caret only
+   appears on the column actually driving the sort. */
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable:hover { color: var(--lg-emerald); }
+th.sortable::after {
+	content: '';
+	display: inline-block;
+	width: 0;
+	height: 0;
+	margin-left: 6px;
+	vertical-align: middle;
+	border-left: 4px solid transparent;
+	border-right: 4px solid transparent;
+	opacity: 0;
+}
+th.sortable[data-dir="asc"]::after { border-bottom: 5px solid var(--lg-emerald); opacity: 1; }
+th.sortable[data-dir="desc"]::after { border-top: 5px solid var(--lg-emerald); opacity: 1; }
+th.sortable:focus-visible { outline: 2px solid var(--lg-emerald); outline-offset: -2px; }
 
-        .content{overflow:auto;padding:24px 28px 40px}
-        .page-eyebrow{font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#15803d;margin-bottom:6px}
-        .page-title{font-family:'DM Serif Display',serif;font-size:1.75rem;line-height:1.15}
-        .page-title span{font-style:italic;color:#15803d}
-        .page-sub{margin-top:5px;font-size:.8rem;color:var(--text-3)}
+/* Baseline → endline movement. Green for a gain, coral for a loss, grey
+   while endline is still outstanding; every one carries its own words. */
+.delta { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.delta-up { color: var(--lg-success-ink); }
+.delta-down { color: var(--lg-danger-ink); }
+.delta-none { color: var(--lg-ink-soft); font-weight: 500; }
 
-        .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
-        .mini-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow-card)}
-        .mini-card .val{font-family:'DM Serif Display',serif;font-size:1.4rem}
-        .mini-card .lbl{font-size:.72rem;color:var(--text-3)}
+/* Consolidated per-section counts: the numbers are the point, so they sit
+   right-aligned and tabular under a plain head. */
+.summary-table td.count { text-align: right; font-variant-numeric: tabular-nums; }
+.summary-table th.count { text-align: right; }
 
-        .table-card{margin-top:14px;background:#fff;border:1px solid var(--border);border-radius:10px;overflow:auto;box-shadow:var(--shadow-card)}
-        table{width:100%;border-collapse:collapse}
-        th{padding:11px 14px;border-bottom:1px solid #edf2f1;font-size:.72rem;text-align:left;color:#7a8f8a;background:#f9fbfa;font-weight:700}
-        td{padding:13px 14px;border-bottom:1px solid #edf2f1;font-size:.72rem;text-align:left}
-        tr:last-child td{border-bottom:none}
+/* ── Attendance Review ── */
+.rule-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	font-size: .74rem;
+	font-weight: 500;
+	color: var(--lg-info-ink);
+	background: var(--lg-info-tint);
+	border: 1px solid #C6DEE5;
+	border-radius: var(--lg-r-pill);
+	padding: 5px 12px;
+	margin-top: 14px;
+}
+.rule-chip svg { width: 13px; height: 13px; }
+.review-actions { display: flex; gap: 8px; }
+.review-btn {
+	font: inherit;
+	font-size: .74rem;
+	font-weight: 600;
+	border: 1px solid transparent;
+	border-radius: var(--lg-r-btn);
+	padding: 6px 13px;
+	cursor: pointer;
+	transition: background .16s ease;
+}
+.review-present { background: var(--lg-mint); color: var(--lg-success-ink); border-color: #C4E4D0; }
+.review-present:hover { background: #D6ECDE; }
+.review-absent { background: var(--lg-danger-tint); color: var(--lg-danger-ink); border-color: #F2C9C9; }
+.review-absent:hover { background: #F8DEDE; }
 
-        .status{font-size:.62rem;font-weight:700;border-radius:999px;padding:3px 8px;display:inline-block}
-        .s-severe{background:#fee2e2;color:#c81e1e}
-        .s-wasted{background:#fef3c7;color:#92400e}
-        .s-normal{background:#dcfce7;color:#15803d}
-        .s-over{background:#dbeafe;color:#1e40af}
-        .delta-up{color:#15803d;font-weight:700}
-        .delta-down{color:#c81e1e;font-weight:700}
-        .delta-none{color:#64748b;font-weight:700}
-
-        .section-title{margin-top:18px;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-2)}
-
-        /* Grade level + section filters. One row above the table, so the control
-           and the thing it controls stay in the same glance. */
-        .filter-bar{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-top:12px;padding:12px 14px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-card)}
-        .filter-field{display:flex;flex-direction:column;gap:5px}
-        .filter-field label{font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-3)}
-        .filter-field select{font-family:inherit;font-size:.76rem;color:var(--text-1);background:#fff;border:1px solid var(--border);border-radius:8px;padding:7px 10px;min-width:170px;cursor:pointer}
-        .filter-field select:focus-visible{outline:2px solid #15803d;outline-offset:1px}
-        .filter-apply{font-family:inherit;font-size:.74rem;font-weight:700;color:#fff;background:#15803d;border:none;border-radius:8px;padding:8px 15px;cursor:pointer;transition:background .16s ease}
-        .filter-apply:hover{background:#126733}
-        .filter-clear{font-size:.74rem;font-weight:600;color:var(--text-3);text-decoration:none;padding:8px 4px}
-        .filter-clear:hover{color:#c81e1e;text-decoration:underline}
-        .filter-count{margin-left:auto;font-size:.72rem;color:var(--text-3)}
-        /* With JS the selects submit themselves, so the button is redundant —
-           it stays in the markup as the no-JS path. */
-        html.js .filter-apply{display:none}
-
-        @media (max-width:1024px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
-        @media (max-width:780px){.sidebar{display:none}.main{margin-left:0}.cards{grid-template-columns:1fr}
-            .filter-bar{align-items:stretch}.filter-field select{width:100%}.filter-count{margin-left:0}}
+@media (max-width: 900px) {
+	.table-card { overflow-x: auto; }
+	.table-card table { min-width: 760px; }
+}

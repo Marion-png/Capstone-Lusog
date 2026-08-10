@@ -1,0 +1,139 @@
+/* ══════════════════════════════════════════════════════════════════════
+   School Head — Dashboard & Reports
+   Page-specific styles only. Tokens, shell, KPI cards, buttons, tables,
+   the .badge status scale and the alert/flash components come from
+   lusog-theme.css, which is loaded first — so this role reads as the same
+   product as the Feeding Coordinator rather than a second design.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* The head reads summaries, not rows of data, so the column is capped —
+   a 2000px-wide table of three numbers is harder to scan, not easier. */
+.content-inner { max-width: 1280px; margin: 0 auto; }
+
+.section { padding: var(--lg-pad-card); }
+.section-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 16px;
+	flex-wrap: wrap;
+	margin-bottom: 14px;
+}
+.section-head .section-title { margin-bottom: 0; }
+.section-meta { font-size: .76rem; color: var(--lg-ink-soft); }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1.15fr; gap: 16px; align-items: start; }
+.grid-2 > .card { min-width: 0; }
+
+/* ── Program overview ──────────────────────────────────────────────── */
+
+.program-item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 14px;
+	border-bottom: 1px solid var(--lg-border);
+	padding: 13px 0;
+}
+.program-item:first-child { padding-top: 0; }
+.program-item:last-child { border-bottom: none; padding-bottom: 0; }
+.program-label { font-size: .86rem; font-weight: 600; color: var(--lg-ink); }
+.program-sub { font-size: .76rem; color: var(--lg-ink-soft); margin-top: 3px; }
+/* A programme that needs the head's attention says so in words; the amber
+   is the second signal, never the only one. */
+.program-note { font-size: .74rem; color: var(--lg-amber-ink); margin-top: 4px; font-weight: 500; }
+
+/* ── Nutritional status by grade ───────────────────────────────────
+   Thin columns on a hairline grid: the data is the only loud thing.
+   Marks stay <= 24px wide with a 4px cap and a square baseline.
+
+   The two series are the brand emerald and the system's watch amber —
+   validated as a pair against the card surface with the dataviz
+   validator: CVD separation dE 12.6 (protan) / 29.4 (tritan),
+   normal-vision dE 25.6, and both at or above 3:1 contrast. Re-run that
+   check before changing either. ── */
+
+.chart-legend { display: flex; align-items: center; gap: 18px; font-size: .76rem; color: var(--lg-ink-soft); margin-bottom: 4px; flex-wrap: wrap; }
+.legend-item { display: inline-flex; align-items: center; gap: 7px; }
+.legend-item b { color: var(--lg-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.legend-dot { width: 9px; height: 9px; border-radius: 3px; display: inline-block; flex: 0 0 auto; }
+.legend-healthy { background: var(--series-healthy); }
+.legend-risk { background: var(--series-risk); }
+
+/* The top margin is the cap labels' room: a column at the axis maximum
+   reaches the top gridline, and its total is drawn above that. */
+.chart-figure { display: grid; grid-template-columns: 32px minmax(0, 1fr); grid-template-rows: 196px auto; column-gap: 10px; row-gap: 8px; margin-top: 16px; }
+.chart-axis { grid-column: 1; grid-row: 1; position: relative; }
+.axis-tick { position: absolute; right: 0; transform: translateY(50%); font-size: .68rem; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; line-height: 1; }
+.chart-axis-title { grid-column: 1; grid-row: 2; font-size: .66rem; color: var(--lg-ink-soft); text-align: right; }
+.chart-plot { grid-column: 2; grid-row: 1; position: relative; }
+.chart-grid { position: absolute; inset: 0; }
+.grid-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--lg-border); }
+.chart-cols, .chart-labels { display: flex; align-items: flex-end; gap: 8px; height: 100%; }
+.chart-labels { grid-column: 2; grid-row: 2; height: auto; }
+.col-label { flex: 1 1 0; min-width: 0; text-align: center; font-size: .7rem; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; }
+
+.chart-col { flex: 1 1 0; min-width: 0; height: 100%; position: relative; display: flex; align-items: flex-end; justify-content: center; outline: none; }
+.col-stack { width: min(24px, 70%); height: 100%; display: flex; flex-direction: column-reverse; justify-content: flex-start; }
+.col-seg { width: 100%; transform-origin: bottom; }
+/* Column-reverse puts the last child on top — that is the data end, so
+   it carries the 4px cap while the baseline stays square. */
+.col-seg:last-child { border-radius: 4px 4px 0 0; }
+/* A 2px gap in the surface colour, never a stroke, separates the fills. */
+.col-seg + .col-seg { margin-bottom: 2px; }
+.seg-healthy { background: var(--series-healthy); }
+.seg-risk { background: var(--series-risk); }
+.col-cap { position: absolute; left: 50%; transform: translateX(-50%); font-size: .72rem; font-weight: 600; color: var(--lg-ink); font-variant-numeric: tabular-nums; line-height: 1; }
+
+.chart-col::after { content: ''; position: absolute; inset: 0 -4px; }
+/* The card is the tooltip's ceiling: each column sets its own `bottom`
+   from its height, capped so a full-height column drops the card into
+   the plot instead of pushing it out over the section title. */
+.chart-tip {
+	position: absolute; bottom: 60%; left: 50%; transform: translateX(-50%) translateY(4px);
+	min-width: 140px; padding: 10px 12px; border-radius: var(--lg-r-btn); z-index: 5;
+	background: var(--lg-ink); color: #fff; box-shadow: var(--lg-shadow-pop);
+	opacity: 0; pointer-events: none; transition: opacity .14s ease, transform .14s ease;
+}
+.chart-col:hover .chart-tip, .chart-col:focus-visible .chart-tip { opacity: 1; transform: translateX(-50%) translateY(0); }
+.chart-col:focus-visible .col-stack { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--lg-emerald); border-radius: 5px; }
+.chart-col:first-child .chart-tip { left: 0; transform: translateX(0) translateY(4px); }
+.chart-col:first-child:hover .chart-tip, .chart-col:first-child:focus-visible .chart-tip { transform: translateX(0) translateY(0); }
+.chart-col:last-child .chart-tip { left: auto; right: 0; transform: translateX(0) translateY(4px); }
+.chart-col:last-child:hover .chart-tip, .chart-col:last-child:focus-visible .chart-tip { transform: translateX(0) translateY(0); }
+.tip-head { font-size: .76rem; font-weight: 600; margin-bottom: 6px; }
+.tip-row { display: flex; align-items: center; gap: 7px; font-size: .72rem; color: rgba(255,255,255,.78); margin-top: 3px; }
+.tip-row b { margin-left: auto; color: #fff; font-variant-numeric: tabular-nums; }
+.tip-total { margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.18); font-size: .7rem; color: rgba(255,255,255,.7); }
+
+.chart-table { margin-top: 16px; }
+.chart-table summary { font-size: .76rem; color: var(--lg-ink-soft); cursor: pointer; font-weight: 500; padding: 4px 0; width: fit-content; }
+.chart-table summary:hover { color: var(--lg-emerald); }
+.chart-table .table-card { margin-top: 10px; }
+.chart-empty { display: grid; place-items: center; min-height: 196px; font-size: .82rem; color: var(--lg-ink-soft); text-align: center; padding: 0 20px; }
+
+/* Refetch holds the previous render at reduced opacity — never a
+   skeleton flash, never a layout jump. */
+.live-pane { transition: opacity .18s ease; }
+.live-pane.is-refreshing { opacity: .55; }
+
+.chart.is-animating .col-seg { transform: scaleY(0); animation: growBar .6s cubic-bezier(.22,.61,.36,1) forwards; }
+.chart.is-animating .seg-risk { animation-delay: .05s; }
+.chart.is-animating .seg-healthy { animation-delay: .14s; }
+.chart.is-animating .col-cap { opacity: 0; animation: capIn .4s ease .5s forwards; }
+
+@keyframes growBar { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes capIn { from { opacity: 0; transform: translateX(-50%) translateY(4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+	.chart.is-animating .col-seg, .chart.is-animating .col-cap { animation: none; transform: none; opacity: 1; }
+	.chart.is-animating .col-cap { transform: translateX(-50%); }
+	.live-pane { transition: none; }
+}
+
+@media (max-width: 1180px) {
+	.grid-2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+	.table-card { overflow-x: auto; }
+}

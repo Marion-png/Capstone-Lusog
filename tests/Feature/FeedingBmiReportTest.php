@@ -104,6 +104,41 @@ class FeedingBmiReportTest extends TestCase
     }
 
     #[Test]
+    public function senior_high_grades_11_and_12_get_their_own_grids(): void
+    {
+        $this->makeStudent('Grade 11 / Humss', 'Male', 'Wasted', 'Stunted');
+        $this->makeStudent('Grade 12 / Stem', 'Female', 'Normal', 'Normal Height-for-Age');
+        // Grade 13 does not exist — anything outside 7-12 stays off the report.
+        $this->makeStudent('Grade 13 / Ghost', 'Male', 'Wasted', 'Stunted');
+
+        $v = $this->bmiValues();
+
+        $this->assertSame(1, $v['bmib_g11_male_w']);
+        $this->assertSame(1, $v['bmib_g11_male_st']);
+        $this->assertSame(1, $v['bmib_g11_total_nst']);
+        $this->assertSame(1, $v['bmib_g12_female_n']);
+        $this->assertSame(1, $v['bmib_g12_total_nst']);
+
+        // Both senior-high grades roll into Overall; the Grade 13 row does not.
+        $this->assertSame(2, $v['bmib_overall_total_nst']);
+    }
+
+    #[Test]
+    public function both_reports_render_a_grid_for_every_grade_7_to_12(): void
+    {
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms');
+        $response->assertOk();
+
+        foreach (range(7, 12) as $grade) {
+            $response->assertSee('GRADE '.$grade.' BMI', false);
+            // One cell from each phase is enough to prove the grid was built.
+            $response->assertSee('bmib_g'.$grade.'_male_sw', false);
+            $response->assertSee('bmif_g'.$grade.'_male_sw', false);
+        }
+    }
+
+    #[Test]
     public function underweight_is_grouped_under_wasted(): void
     {
         // The adviser classifier emits "Underweight", which the DepEd sheet lacks.

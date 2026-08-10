@@ -8,8 +8,9 @@
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
-		<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+		<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
 		<script>document.documentElement.classList.add('js');</script>
+	<style>{!! file_get_contents(resource_path('css/lusog-theme.css')) !!}</style>
 	@php $pageCssPath = resource_path('css/feeding-program.css'); @endphp
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
@@ -124,7 +125,7 @@
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>{{ $isReadOnly ? 'School Nurse' : 'Dashboard' }}</span><span>&rsaquo;</span><span>Feeding Program</span></div>
+		<div class="topbar-bc"><span>{{ $isReadOnly ? 'School Nurse' : 'Dashboard' }}</span><span class="bc-sep">&rsaquo;</span><span>Feeding Program</span></div>
 	    @include('partials.live-clock')
 	</header>
 
@@ -136,18 +137,17 @@
 			<div class="flash err">{{ session('error') }}</div>
 		@endif
 		@if ($isReadOnly)
-			<div class="flash">View-only mode: School Nurse can review feeding data but cannot submit attendance.</div>
+			<div class="flash info">View-only mode: School Nurse can review feeding data but cannot submit attendance.</div>
 		@endif
 
-		<div class="head-row">
+		<div class="head-row page-header">
 			<div>
-				<div class="page-eyebrow">Feeding Program</div>
 				<h1 class="page-title">Feeding <span>Program</span></h1>
-				<p class="page-sub">120-Day Supplementary Feeding Program tracking.</p>
+				<p class="page-sub">Participation, attendance and nutritional movement across the Supplementary Feeding Program.</p>
 				@if ($hasGradeFilter ?? false)
 					<form method="GET" action="{{ route($programRouteName) }}" class="school-filter-form">
-						<label for="gradeFilterSelect" class="school-filter-label">Grade Level:</label>
-						<select id="gradeFilterSelect" name="grade" class="school-filter-select" onchange="this.form.submit()">
+						<label for="gradeFilterSelect" class="school-filter-label">Grade Level</label>
+						<select id="gradeFilterSelect" name="grade" class="select school-filter-select" onchange="this.form.submit()">
 							<option value="all" {{ ($selectedGrade ?? 'all') === 'all' ? 'selected' : '' }}>All Grade Levels</option>
 							@foreach (($gradeOptions ?? collect()) as $gradeOption)
 								<option value="{{ $gradeOption }}" {{ ($selectedGrade ?? 'all') === $gradeOption ? 'selected' : '' }}>{{ $gradeOption }}</option>
@@ -159,32 +159,50 @@
 		</div>
 
 		@if (($programStats['at_risk_count'] ?? 0) > 0)
-			<div class="risk-alert">
-				<div>
-					<strong>{{ $programStats['at_risk_count'] }} at-risk beneficiaries detected</strong><br>
-					<span>Attendance below {{ $programStats['at_risk_threshold'] ?? 75 }}% of expected sessions ({{ $programStats['at_risk_threshold_count'] ?? 0 }} required by current program day).</span>
+			<div class="alert-bar">
+				<div class="alert-body">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+					<div>
+						<strong>{{ $programStats['at_risk_count'] }} at-risk beneficiaries detected</strong>
+						<span>Attendance below {{ $programStats['at_risk_threshold'] ?? 75 }}% of expected sessions ({{ $programStats['at_risk_threshold_count'] ?? 0 }} required by current program day).</span>
+					</div>
 				</div>
-				<button type="button" class="btn btn-ghost" id="focusAtRiskBtn">Review List</button>
+				<button type="button" class="btn btn-secondary" id="focusAtRiskBtn">Review List</button>
 			</div>
 		@endif
 
-		<section class="stats">
-			<article class="card stat">
-				<div class="label">Enrolled Students</div>
-				<div class="num" id="enrolledStudentsValue">{{ $programStats['enrolled_students'] ?? 0 }}</div>
+		<section class="kpi-grid">
+			<article class="card kpi accent-brand">
+				<div class="kpi-top">
+					<div class="kpi-label">Enrolled Students</div>
+					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+				</div>
+				<div class="kpi-value" id="enrolledStudentsValue">{{ $programStats['enrolled_students'] ?? 0 }}</div>
+				<div class="kpi-hint">Active beneficiaries</div>
 			</article>
-			<article class="card stat">
-				<div class="label">Program Day</div>
-				<div class="num">{{ $programStats['program_day'] ?? '0/120' }}</div>
+			<article class="card kpi accent-amber">
+				<div class="kpi-top">
+					<div class="kpi-label">Program Day</div>
+					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/></svg></div>
+				</div>
+				<div class="kpi-value">{{ $programStats['program_day'] ?? '0/120' }}</div>
+				<div class="kpi-hint">Feeding days served</div>
 			</article>
-			<article class="card stat">
-				<div class="label">Avg. Attendance</div>
-				<div class="num" id="avgAttendanceValue">{{ $programStats['avg_attendance'] ?? '0%' }}</div>
+			<article class="card kpi accent-info">
+				<div class="kpi-top">
+					<div class="kpi-label">Avg. Attendance</div>
+					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></div>
+				</div>
+				<div class="kpi-value" id="avgAttendanceValue">{{ $programStats['avg_attendance'] ?? '0%' }}</div>
+				<div class="kpi-hint">Confirmed marks only</div>
 			</article>
-			<article class="card stat">
-				<div class="label">Improving</div>
-				<div class="num">{{ $programStats['improving_rate'] ?? '0%' }}</div>
-				<div class="hint">{{ $programStats['improving_hint'] ?? '0 of 0 students' }}</div>
+			<article class="card kpi accent-success">
+				<div class="kpi-top">
+					<div class="kpi-label">Improving</div>
+					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></div>
+				</div>
+				<div class="kpi-value">{{ $programStats['improving_rate'] ?? '0%' }}</div>
+				<div class="kpi-hint">{{ $programStats['improving_hint'] ?? '0 of 0 students' }}</div>
 			</article>
 		</section>
 
@@ -194,9 +212,9 @@
 				$progressPercent = max(0, min(100, ($programDayValue / 120) * 100));
 			@endphp
 			<h2 class="section-title">Program Progress</h2>
-			<div class="prog-track"><div class="prog-fill" style="width: {{ $progressPercent }}%;"></div><div class="prog-marker" style="left: {{ $progressPercent }}%;"></div></div>
-			<div class="prog-day">Day {{ $programDayValue }} of 120</div>
-			<div class="prog-labels"><span>Baseline (Day 1)</span><span>Endline(Day 120)</span></div>
+			<div class="prog-track" role="img" aria-label="Day {{ $programDayValue }} of 120 in the feeding cycle"><div class="prog-fill" style="width: {{ $progressPercent }}%;"></div><div class="prog-marker" style="left: {{ $progressPercent }}%;"></div></div>
+			<div class="prog-day">Day {{ $programDayValue }} of 120 &middot; {{ round($progressPercent) }}% complete</div>
+			<div class="prog-labels"><span>Baseline (Day 1)</span><span>Endline (Day 120)</span></div>
 		</section>
 
 		<section class="risk-section" id="atRiskSection">
@@ -211,22 +229,22 @@
 			<div class="risk-head">
 				<h2 class="section-title">At-Risk Beneficiaries</h2>
 				<div class="risk-filters">
-					<div class="risk-search">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-						<input type="text" id="riskSearch" placeholder="Search" autocomplete="off" aria-label="Search at-risk list by name or section">
+					<div class="lg-search risk-search">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+						<input type="search" id="riskSearch" placeholder="Search" autocomplete="off" aria-label="Search at-risk list by name or section">
 					</div>
-					<select class="risk-filter" id="riskGradeFilter" aria-label="Filter at-risk list by grade level">
+					<select class="select risk-filter" id="riskGradeFilter" aria-label="Filter at-risk list by grade level">
 						<option value="all">Grade</option>
 						@foreach ($atRiskGradeOptions as $gradeOption)
 							<option value="{{ strtolower($gradeOption) }}">{{ $gradeOption }}</option>
 						@endforeach
 					</select>
-					<select class="risk-filter" id="riskGenderFilter" aria-label="Filter at-risk list by gender">
+					<select class="select risk-filter" id="riskGenderFilter" aria-label="Filter at-risk list by gender">
 						<option value="all">Gender</option>
 						<option value="male">Male</option>
 						<option value="female">Female</option>
 					</select>
-					<select class="risk-filter" id="riskFilter" aria-label="Filter at-risk list by nutritional status">
+					<select class="select risk-filter" id="riskFilter" aria-label="Filter at-risk list by nutritional status">
 						<option value="all">All Nutritional Status</option>
 						<option value="severe">Severely Wasted</option>
 						<option value="wasted">Wasted</option>
@@ -236,6 +254,7 @@
 				</div>
 			</div>
 			<div class="table-card">
+				<div class="table-scroll">
 				<table id="riskTable">
 					<thead>
 						<tr>
@@ -249,6 +268,12 @@
 						@forelse (($atRiskStudents ?? collect()) as $student)
 							@php
 								$status = strtolower((string) ($student['nutritional_status'] ?? ''));
+								// Same scale as everywhere else: severe is critical, any
+								// wasting is at-risk, overweight needs monitoring.
+								$statusBadge = str_contains($status, 'severe') ? 'badge-critical'
+									: ((str_contains($status, 'wast') || str_contains($status, 'underweight')) ? 'badge-risk'
+									: ((str_contains($status, 'over') || str_contains($status, 'obese')) ? 'badge-monitor'
+									: ($status === '' ? 'badge-neutral' : 'badge-normal')));
 							@endphp
 							<tr data-risk-status="{{ $status }}"
 								data-risk-grade="{{ strtolower((string) ($student['grade_level'] ?? '')) }}"
@@ -256,17 +281,18 @@
 								data-risk-search="{{ strtolower(trim(($student['student_name'] ?? '').' '.($student['section'] ?? ''))) }}">
 								<td><strong>{{ $student['student_name'] }}</strong></td>
 								<td>{{ $student['section'] }}</td>
-								<td>{{ $student['attendance'] }} ({{ $student['attendance_percent'] }}%)</td>
-								<td>{{ $student['nutritional_status'] }}</td>
+								<td class="tnum">{{ $student['attendance'] }} ({{ $student['attendance_percent'] }}%)</td>
+								<td><span class="badge {{ $statusBadge }}">{{ $student['nutritional_status'] ?: 'Not set' }}</span></td>
 							</tr>
 						@empty
-							<tr><td colspan="4">No at-risk beneficiaries right now.</td></tr>
+							<tr><td colspan="4" class="table-empty">No at-risk beneficiaries right now.</td></tr>
 						@endforelse
 						@if (($atRiskStudents ?? collect())->isNotEmpty())
-							<tr id="riskNoMatchRow" style="display:none;"><td colspan="4">No beneficiaries match these filters.</td></tr>
+							<tr id="riskNoMatchRow" style="display:none;"><td colspan="4" class="table-empty">No beneficiaries match these filters.</td></tr>
 						@endif
 					</tbody>
 				</table>
+				</div>
 			</div>
 		</section>
 
@@ -287,14 +313,14 @@
 
 		<section class="card section attendance-section" id="attendanceRosterSection">
 			<div class="attendance-head">
-				<h2 class="section-title" style="margin-bottom:0;">Feeding Program Beneficiaries</h2>
+				<h2 class="section-title">Feeding Program Beneficiaries</h2>
 				<div class="attendance-actions">
 					@if ($attendanceRosterRows->isNotEmpty())
-						<div class="risk-search">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-							<input type="text" id="rosterSearch" placeholder="Search" autocomplete="off" aria-label="Search recorded attendance by name or section">
+						<div class="lg-search risk-search">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+							<input type="search" id="rosterSearch" placeholder="Search" autocomplete="off" aria-label="Search recorded attendance by name or section">
 						</div>
-						<select class="risk-filter" id="rosterGradeFilter" aria-label="Filter recorded attendance by grade level">
+						<select class="select risk-filter" id="rosterGradeFilter" aria-label="Filter recorded attendance by grade level">
 							<option value="all">Grade</option>
 							@foreach ($rosterGradeOptions as $gradeOption)
 								<option value="{{ strtolower($gradeOption) }}">{{ $gradeOption }}</option>
@@ -303,7 +329,7 @@
 					@endif
 					@if (!$isReadOnly)
 						<button type="button" class="btn btn-primary" id="uploadAttendanceBtn">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
 							Upload Attendance Sheet
 						</button>
 					@endif
@@ -320,17 +346,18 @@
 					</div>
 				@endif
 				<div class="table-card">
+					<div class="table-scroll">
 					<table id="rosterTable">
 						<thead>
 							<tr>
 								<th>Student</th>
 								<th>Grade &amp; Section</th>
-								<th>Baseline</th>
-								<th>Current</th>
-								<th>Weight Change</th>
-								<th>Present</th>
-								<th>Absent</th>
-								<th>Attendance</th>
+								<th class="num">Baseline</th>
+								<th class="num">Current</th>
+								<th class="num">Weight Change</th>
+								<th class="num">Present</th>
+								<th class="num">Absent</th>
+								<th class="num">Attendance</th>
 								<th>Status</th>
 							</tr>
 						</thead>
@@ -339,41 +366,45 @@
 								@php
 									$weightChange = (float) ($row['weight_change'] ?? 0);
 									$hasAttendance = $row['sessions'] > 0;
-									$statusClass = $weightChange > 1 ? 't-improving' : ($weightChange < 0 ? 't-regressing' : 't-stable');
-									$statusLabel = $weightChange > 1 ? 'improved' : ($weightChange < 0 ? 'declined' : 'no change');
+									$statusBadge = $weightChange > 1 ? 'badge-normal' : ($weightChange < 0 ? 'badge-risk' : 'badge-neutral');
+									$statusLabel = $weightChange > 1 ? 'Improved' : ($weightChange < 0 ? 'Declined' : 'No change');
 								@endphp
 								<tr data-roster-grade="{{ strtolower((string) ($row['grade_level'] ?? '')) }}"
 									data-roster-search="{{ strtolower(trim(($row['student_name'] ?? '').' '.($row['section'] ?? ''))) }}">
 									<td><strong>{{ $row['student_name'] }}</strong></td>
 									<td>{{ $row['section'] }}</td>
-									<td>{{ number_format((float) $row['baseline_weight'], 1) }} kg</td>
-									<td><strong>{{ number_format((float) $row['current_weight'], 1) }} kg</strong></td>
-									<td class="{{ $weightChange > 0 ? 'bmi-up' : ($weightChange < 0 ? 'bmi-down' : 'muted') }}">{{ $weightChange > 0 ? '+' : '' }}{{ number_format($weightChange, 1) }} kg</td>
-									<td>
+									<td class="num">{{ number_format((float) $row['baseline_weight'], 1) }} kg</td>
+									<td class="num"><strong>{{ number_format((float) $row['current_weight'], 1) }} kg</strong></td>
+									<td class="num {{ $weightChange > 0 ? 'bmi-up' : ($weightChange < 0 ? 'bmi-down' : 'muted') }}">{{ $weightChange > 0 ? '+' : '' }}{{ number_format($weightChange, 1) }} kg</td>
+									<td class="num">
 										{{ $hasAttendance ? $row['present'] : '—' }}
 										@if ($row['pending'] > 0)
 											<span class="roster-pending">{{ $row['pending'] }} awaiting review</span>
 										@endif
 									</td>
-									<td>{{ $hasAttendance ? $row['absent'] : '—' }}</td>
-									<td>{{ $row['rate'] === null ? '—' : $row['rate'].'%' }}</td>
-									<td><span class="trend {{ $statusClass }}">{{ $statusLabel }}</span></td>
+									<td class="num">{{ $hasAttendance ? $row['absent'] : '—' }}</td>
+									<td class="num">{{ $row['rate'] === null ? '—' : $row['rate'].'%' }}</td>
+									<td><span class="badge {{ $statusBadge }}">{{ $statusLabel }}</span></td>
 								</tr>
 							@endforeach
-							<tr id="rosterNoMatchRow" style="display:none;"><td colspan="9">No learners match these filters.</td></tr>
+							<tr id="rosterNoMatchRow" style="display:none;"><td colspan="9" class="table-empty">No learners match these filters.</td></tr>
 						</tbody>
 					</table>
+					</div>
 				</div>
 			@else
-				<div class="attendance-empty">No feeding beneficiaries on file yet.</div>
+				<div class="empty-panel attendance-empty">No feeding beneficiaries on file yet.</div>
 			@endif
 		</section>
 
 		@if ($lowAttendanceCount > 0)
-			<div class="risk-alert" style="margin-top:16px;">
-				<div>
-					<strong>Follow-up Required</strong><br>
-					<span>{{ $lowAttendanceCount }} students have attendance below 70%. Please coordinate with advisers and parents.</span>
+			<div class="alert-bar" style="margin-top:24px;">
+				<div class="alert-body">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+					<div>
+						<strong>Follow-up Required</strong>
+						<span>{{ $lowAttendanceCount }} students have attendance below 70%. Please coordinate with advisers and parents.</span>
+					</div>
 				</div>
 			</div>
 		@endif

@@ -80,18 +80,18 @@
          readable as text, so nothing is gated behind hover or hue. --}}
     <details class="chart-table">
         <summary>Table view</summary>
-        <div class="table-wrap">
+        <div class="table-card">
             <table>
                 <thead>
-                    <tr><th>Grade</th><th>Healthy</th><th>At risk</th><th>Total</th></tr>
+                    <tr><th>Grade</th><th class="num">Healthy</th><th class="num">At risk</th><th class="num">Total</th></tr>
                 </thead>
                 <tbody>
                     @foreach ($gradeChart as $col)
                         <tr>
-                            <td>{{ $col['label'] }}</td>
-                            <td>{{ $col['healthy'] }}</td>
-                            <td>{{ $col['risk'] }}</td>
-                            <td>{{ $col['total'] }}</td>
+                            <td><strong>{{ $col['label'] }}</strong></td>
+                            <td class="num">{{ $col['healthy'] }}</td>
+                            <td class="num">{{ $col['risk'] }}</td>
+                            <td class="num">{{ $col['total'] }}</td>
                         </tr>
                     @endforeach
                 </tbody>

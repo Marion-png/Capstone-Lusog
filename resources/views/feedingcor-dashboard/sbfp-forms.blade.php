@@ -8,8 +8,9 @@
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
-	<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+	<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
 	<script>document.documentElement.classList.add('js');</script>
+	<style>{!! file_get_contents(resource_path('css/lusog-theme.css')) !!}</style>
 	@php $pageCssPath = resource_path('css/feeding-sbfp-forms.css'); @endphp
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
@@ -21,36 +22,48 @@
 @include('partials.feedingcor-sidebar', ['active' => 'forms'])
 
 <div class="main">
+	<header class="topbar">
+		<div class="topbar-bc"><span>Dashboard</span><span class="bc-sep">&rsaquo;</span><span>SBFP Forms</span></div>
+		@include('partials.live-clock')
+	</header>
+
 	<div class="content">
-		<div class="page-eyebrow">Feeding Program</div>
-		<h1 class="page-title">SBFP <span>Forms</span></h1>
-		<p class="page-sub">Select a form template, then encode the required fields in a clean sheet view.</p>
+		<div class="page-header">
+			<h1 class="page-title">SBFP <span>Forms</span></h1>
+			<p class="page-sub">Select a form template, then encode the required fields in a clean sheet view.</p>
+		</div>
 
 		<section class="selector-wrap">
-			<div class="selector-row">
-				<label class="selector-label" for="formTemplateSelect">Select Form Template:</label>
-				<select id="formTemplateSelect" class="selector-input" aria-label="Select SBFP form template">
-					<option value="">Choose a form...</option>
-					<option value="bmi-baseline">BMI Report - Baseline Nutritional Assessment (Grades 7-10)</option>
-					<option value="bmi-final">BMI Report - Final Nutritional Assessment (Grades 7-10)</option>
-					<option value="feeding-narrative">Feeding Program - Narrative Report</option>
-					<option value="feeding-masterlist">Feeding Program - Masterlist of Qualified Recipients</option>
-				</select>
-			</div>
-			<div class="selector-row">
-				<label class="selector-label" for="gradeLevelSelect">Grade Level (auto-fill from adviser records):</label>
-				<select id="gradeLevelSelect" class="selector-input" aria-label="Select grade level to auto-fill">
-					<option value="">All Grade Level</option>
-					@forelse (($gradeOptions ?? []) as $gradeOption)
-						<option value="{{ $gradeOption }}">{{ $gradeOption }}</option>
-					@empty
-						<option value="" disabled>No students on file yet</option>
-					@endforelse
-				</select>
+			<div class="selector-grid">
+				<div>
+					<label class="selector-label" for="formTemplateSelect">Form Template</label>
+					<select id="formTemplateSelect" class="select selector-input" aria-label="Select SBFP form template">
+						<option value="">Choose a form...</option>
+						<optgroup label="Reports (auto-tabulated)">
+							<option value="bmi-baseline">BMI Report - Baseline Nutritional Assessment (Grades 7-12)</option>
+							<option value="bmi-final">BMI Report - Final Nutritional Assessment (Grades 7-12)</option>
+						</optgroup>
+						<optgroup label="Feeding Program (hand-encoded)">
+							<option value="feeding-narrative">Feeding Program - Narrative Report</option>
+							<option value="feeding-masterlist">Feeding Program - Masterlist of Qualified Recipients</option>
+						</optgroup>
+					</select>
+				</div>
+				<div>
+					<label class="selector-label" for="gradeLevelSelect">Grade Level <span class="muted">(auto-fill from adviser records)</span></label>
+					<select id="gradeLevelSelect" class="select selector-input" aria-label="Select grade level to auto-fill">
+						<option value="">All Grade Level</option>
+						@forelse (($gradeOptions ?? []) as $gradeOption)
+							<option value="{{ $gradeOption }}">{{ $gradeOption }}</option>
+						@empty
+							<option value="" disabled>No students on file yet</option>
+						@endforelse
+					</select>
+				</div>
 			</div>
 		</section>
 
-		<div class="placeholder-panel" id="emptyStatePanel">
+		<div class="empty-panel placeholder-panel" id="emptyStatePanel">
 			Please select a form template to open the encoder.
 		</div>
 
@@ -71,7 +84,7 @@
 					</div>
 
 					<div class="report-body">
-						@foreach ([7, 8, 9, 10] as $grade)
+						@foreach ([7, 8, 9, 10, 11, 12] as $grade)
 							<div class="bmi-grade-block" data-grade="{{ $grade }}">
 								<div class="grade-title">GRADE {{ $grade }} BMI</div>
 								@include('feedingcor-dashboard.partials.bmi-table', ['prefix' => 'bmib_g' . $grade, 'editable' => false, 'values' => $bmiValues])
@@ -122,7 +135,7 @@
 					</div>
 
 					<div class="report-body">
-						@foreach ([7, 8, 9, 10] as $grade)
+						@foreach ([7, 8, 9, 10, 11, 12] as $grade)
 							<div class="bmi-grade-block" data-grade="{{ $grade }}">
 								<div class="grade-title">GRADE {{ $grade }} BMI</div>
 								@include('feedingcor-dashboard.partials.bmi-table', ['prefix' => 'bmif_g' . $grade, 'editable' => false, 'values' => $bmiValues])

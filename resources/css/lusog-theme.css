@@ -1,0 +1,511 @@
+/* ══════════════════════════════════════════════════════════════════════
+   LUSOG — Feeding Coordinator design system
+   ──────────────────────────────────────────────────────────────────────
+   One stylesheet for the tokens and shared components behind every
+   Feeding Coordinator page (dashboard, health records, feeding program,
+   SBFP forms, attendance review). Page stylesheets are loaded AFTER this
+   one and carry only what is unique to their page.
+
+   Green is the brand and the "healthy" signal; amber, orange, coral and
+   teal are reserved for monitoring, risk, critical and neutral
+   information respectively. A component is never painted green just to
+   look on-brand — see the status scale at the bottom.
+   ══════════════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+	/* ── Brand ── */
+	--lg-emerald-deep: #126B3A;   /* sidebar, headings, brand */
+	--lg-emerald: #1F8A4C;        /* primary action, active state */
+	--lg-emerald-dark: #0E5730;   /* primary hover */
+	--lg-green: #43A866;          /* healthy / positive */
+	--lg-mint: #E7F5EC;           /* success tint, selected rows */
+
+	/* ── Surfaces & ink ── */
+	--lg-page: #F6F9F7;
+	--lg-card: #FFFFFF;
+	--lg-ink: #1F2D25;
+	--lg-ink-soft: #6B7C72;
+	--lg-border: #DCE8E0;
+	--lg-border-strong: #C7DCCE;
+	--lg-rail: #EEF4F0;           /* zebra / table head fill */
+
+	/* ── Semantic ── */
+	--lg-amber: #F2B84B;          /* needs monitoring, program milestones */
+	--lg-amber-ink: #8A5A06;
+	--lg-amber-tint: #FDF4E2;
+	--lg-orange: #E58A3A;         /* at risk */
+	--lg-orange-ink: #9A4E10;
+	--lg-orange-tint: #FDF0E4;
+	--lg-danger: #D95C5C;         /* critical */
+	--lg-danger-ink: #A32B2B;
+	--lg-danger-tint: #FCECEC;
+	--lg-info: #3D8FA3;           /* neutral information */
+	--lg-info-ink: #1F5F70;
+	--lg-info-tint: #E8F2F5;
+	--lg-success-ink: #14653C;
+
+	/* ── Chart series ──
+	   The two-series default: brand emerald for the healthy/expected side,
+	   the system's watch amber for the side that needs attention. Validated
+	   as a pair on a white surface with the dataviz validator — CVD ΔE 12.6
+	   (protan) / 29.4 (tritan), normal-vision ΔE 25.6, both ≥ 3:1 contrast.
+	   The same amber is the BMI chart's "underweight watch", so a reader
+	   learns one meaning for the colour across the whole product. Re-run the
+	   validator before changing either. ── */
+	--series-healthy: #126B3A;
+	--series-risk: #C97A1A;
+
+	/* ── Geometry (8px system) ── */
+	--lg-r-card: 12px;
+	--lg-r-btn: 9px;
+	--lg-r-input: 8px;
+	--lg-r-pill: 999px;
+	--lg-topbar-h: 64px;
+	--lg-pad-card: 20px;
+	--lg-shadow: 0 2px 8px rgba(31, 45, 37, .06);
+	--lg-shadow-lift: 0 4px 14px rgba(31, 45, 37, .09);
+	--lg-shadow-pop: 0 10px 26px rgba(31, 45, 37, .14);
+	--lg-focus: 0 0 0 3px rgba(31, 138, 76, .28);
+
+	/* ── Sidebar tokens consumed by role-sidebar.css ──
+	   Only defined here, so the School Head keeps its own palette. ── */
+	--asb-width: 252px;
+	--asb-bg: #126B3A;
+	--asb-mark-bg: rgba(255, 255, 255, .14);
+	--asb-mark-ink: #FFFFFF;
+	--asb-sub-ink: rgba(231, 245, 236, .72);
+	--asb-label-ink: rgba(191, 227, 204, .78);
+	--asb-ink: #BFE3CC;
+	--asb-ink-strong: #FFFFFF;
+	--asb-hover-bg: rgba(255, 255, 255, .1);
+	--asb-active-bg: #1F8A4C;
+	--asb-active-ink: #FFFFFF;
+	--asb-press-bg: #239755;
+	--asb-accent: #FFFFFF;
+	--asb-avatar-bg: #1F8A4C;
+	--asb-role-ink: #BFE3CC;
+
+	/* ── Shared partials (announcements, live clock) ── */
+	--ann-radius: 12px;
+	--ann-border: var(--lg-border);
+	--ann-shadow: var(--lg-shadow);
+	--ann-icon: var(--lg-emerald-deep);
+	--ann-title: var(--lg-ink);
+	--ann-sub: var(--lg-ink-soft);
+	--ann-body: #3E5348;
+	--ann-btn-bg: var(--lg-emerald);
+	--ann-btn-bg-hover: var(--lg-emerald-deep);
+	--ann-empty: var(--lg-ink-soft);
+	--clock-bg: #FFFFFF;
+	--clock-border: var(--lg-border);
+	--clock-ink: var(--lg-ink);
+	--clock-muted: var(--lg-ink-soft);
+	--clock-icon: var(--lg-emerald);
+}
+
+html, body {
+	height: 100%;
+	font-family: 'Inter', 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	font-size: 15px;
+	background: var(--lg-page);
+	color: var(--lg-ink);
+	overflow: hidden;
+	-webkit-font-smoothing: antialiased;
+	font-feature-settings: 'cv05' 1, 'ss01' 1;
+}
+
+/* ══ App shell ══════════════════════════════════════════════════════ */
+
+.main {
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.topbar {
+	height: var(--lg-topbar-h);
+	flex: 0 0 auto;
+	border-bottom: 1px solid var(--lg-border);
+	background: var(--lg-card);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 0 28px;
+	z-index: 20;
+}
+
+/* Breadcrumb: the trail is muted, the page you are on is not. */
+.topbar-bc {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: .78rem;
+	font-weight: 500;
+	color: var(--lg-ink-soft);
+	min-width: 0;
+}
+.topbar-bc span { white-space: nowrap; }
+.topbar-bc span:last-child { color: var(--lg-ink); font-weight: 600; }
+.topbar-bc .bc-sep { color: var(--lg-border-strong); }
+
+.content { flex: 1 1 auto; overflow: auto; padding: 24px 28px 48px; }
+
+/* ══ Page header ════════════════════════════════════════════════════ */
+
+.page-header { margin-bottom: 20px; }
+.page-eyebrow {
+	font-size: .68rem;
+	font-weight: 700;
+	letter-spacing: .12em;
+	text-transform: uppercase;
+	color: var(--lg-emerald);
+	margin-bottom: 8px;
+}
+/* One line, two voices: the subject in upright charcoal serif, the section
+   it belongs to in italic emerald straight after it. The serif is used for
+   page titles ONLY — every other surface stays on Inter, so the display
+   face reads as the masthead of the page rather than as body styling. */
+.page-title {
+	font-family: 'DM Serif Display', Georgia, serif;
+	font-size: 1.9rem;
+	font-weight: 400;
+	letter-spacing: -.01em;
+	line-height: 1.2;
+	color: var(--lg-ink);
+}
+.page-title span { color: var(--lg-emerald-deep); font-style: italic; }
+.page-sub { margin-top: 8px; font-size: .84rem; line-height: 1.5; color: var(--lg-ink-soft); max-width: 68ch; }
+
+.section-title {
+	font-size: 1.05rem;
+	font-weight: 600;
+	letter-spacing: -.01em;
+	color: var(--lg-ink);
+	margin-bottom: 12px;
+}
+.section-title.compact { font-size: .82rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--lg-ink-soft); }
+.muted { color: var(--lg-ink-soft); }
+
+/* ══ Cards ══════════════════════════════════════════════════════════ */
+
+.card {
+	background: var(--lg-card);
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-card);
+	box-shadow: var(--lg-shadow);
+	transition: box-shadow .18s ease, border-color .18s ease;
+}
+.card:hover { box-shadow: var(--lg-shadow-lift); border-color: var(--lg-border-strong); }
+.card-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	flex-wrap: wrap;
+	margin-bottom: 16px;
+}
+.card-title { font-size: .95rem; font-weight: 600; color: var(--lg-ink); letter-spacing: -.005em; }
+.card-sub { margin-top: 4px; font-size: .78rem; color: var(--lg-ink-soft); }
+
+/* ══ KPI cards ══════════════════════════════════════════════════════
+   White card, one semantic accent. The accent lives in the icon chip and
+   a 3px top rule — never as a flood fill, so four cards side by side stay
+   readable and the numbers, not the colour, carry the comparison. ══ */
+
+.kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+/* A role with three headline numbers gets three full-width columns rather
+   than three-quarters of a four-column row and a hole. */
+.kpi-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.kpi-grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.kpi {
+	position: relative;
+	padding: 18px 20px;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.kpi::before {
+	content: '';
+	position: absolute;
+	inset: 0 0 auto 0;
+	height: 3px;
+	background: var(--kpi-accent, var(--lg-emerald));
+}
+.kpi-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.kpi-label {
+	font-size: .74rem;
+	font-weight: 600;
+	letter-spacing: .02em;
+	color: var(--lg-ink-soft);
+	line-height: 1.35;
+}
+.kpi-icon {
+	width: 34px;
+	height: 34px;
+	flex: 0 0 auto;
+	border-radius: 9px;
+	display: grid;
+	place-items: center;
+	background: var(--kpi-tint, var(--lg-mint));
+	color: var(--kpi-accent, var(--lg-emerald));
+}
+.kpi-icon svg { width: 17px; height: 17px; }
+.kpi-value {
+	font-size: 2rem;
+	font-weight: 700;
+	line-height: 1;
+	letter-spacing: -.03em;
+	color: var(--lg-ink);
+	font-variant-numeric: tabular-nums;
+}
+.kpi-hint { font-size: .76rem; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; }
+
+.kpi.accent-brand   { --kpi-accent: var(--lg-emerald-deep); --kpi-tint: var(--lg-mint); }
+.kpi.accent-success { --kpi-accent: var(--lg-green);        --kpi-tint: var(--lg-mint); }
+.kpi.accent-amber   { --kpi-accent: var(--lg-amber);        --kpi-tint: var(--lg-amber-tint); }
+.kpi.accent-orange  { --kpi-accent: var(--lg-orange);       --kpi-tint: var(--lg-orange-tint); }
+.kpi.accent-danger  { --kpi-accent: var(--lg-danger);       --kpi-tint: var(--lg-danger-tint); }
+.kpi.accent-info    { --kpi-accent: var(--lg-info);         --kpi-tint: var(--lg-info-tint); }
+/* Amber on white is a tint, not a text colour — darken the chip glyph. */
+.kpi.accent-amber .kpi-icon { color: var(--lg-amber-ink); }
+
+/* ══ Buttons ════════════════════════════════════════════════════════ */
+
+.btn {
+	appearance: none;
+	font: inherit;
+	border: 1px solid transparent;
+	border-radius: var(--lg-r-btn);
+	padding: 9px 14px;
+	font-size: .78rem;
+	font-weight: 600;
+	line-height: 1.2;
+	cursor: pointer;
+	text-decoration: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+	white-space: nowrap;
+	transition: background .16s ease, color .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.btn svg { width: 15px; height: 15px; flex: 0 0 auto; }
+.btn:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+.btn-primary { background: var(--lg-emerald); color: #fff; }
+.btn-primary:hover { background: var(--lg-emerald-deep); }
+.btn-secondary, .btn-ghost {
+	background: var(--lg-card);
+	border-color: var(--lg-border);
+	color: var(--lg-ink);
+}
+.btn-secondary:hover, .btn-ghost:hover { background: var(--lg-mint); border-color: var(--lg-border-strong); }
+.btn-danger { background: var(--lg-danger); color: #fff; }
+.btn-danger:hover { background: var(--lg-danger-ink); }
+.btn-warn { background: var(--lg-amber-tint); border-color: #EBD3A0; color: var(--lg-amber-ink); }
+.btn-warn:hover { background: #FBEACB; }
+.btn[disabled], .btn.disabled { opacity: .5; cursor: not-allowed; }
+
+/* ══ Inputs ═════════════════════════════════════════════════════════ */
+
+.field-label {
+	display: block;
+	font-size: .7rem;
+	font-weight: 700;
+	letter-spacing: .07em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft);
+	margin-bottom: 6px;
+}
+.input, .select, input[type="text"].input, .lg-search input {
+	font: inherit;
+	font-size: .8rem;
+	color: var(--lg-ink);
+	background: var(--lg-card);
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-input);
+	padding: 9px 12px;
+	width: 100%;
+}
+.input::placeholder, .lg-search input::placeholder { color: #9AAEA4; }
+.input:focus-visible, .select:focus-visible, .lg-search input:focus {
+	outline: none;
+	border-color: var(--lg-emerald);
+	box-shadow: var(--lg-focus);
+}
+.select {
+	appearance: none;
+	cursor: pointer;
+	padding-right: 32px;
+	background-image:
+		linear-gradient(45deg, transparent 50%, var(--lg-ink-soft) 50%),
+		linear-gradient(135deg, var(--lg-ink-soft) 50%, transparent 50%);
+	background-position: calc(100% - 17px) 53%, calc(100% - 12px) 53%;
+	background-size: 5px 5px, 5px 5px;
+	background-repeat: no-repeat;
+}
+/* Search field with a leading glyph. */
+.lg-search { position: relative; display: flex; align-items: center; }
+.lg-search svg { position: absolute; left: 11px; width: 14px; height: 14px; color: var(--lg-ink-soft); pointer-events: none; }
+.lg-search input { padding-left: 32px; min-width: 200px; }
+
+/* Toolbar above a table: search, filters and the count in one row. */
+.toolbar {
+	display: flex;
+	align-items: flex-end;
+	gap: 12px;
+	flex-wrap: wrap;
+	margin-bottom: 14px;
+}
+.toolbar > div { min-width: 180px; }
+.toolbar .spacer { margin-left: auto; }
+.toolbar-count { font-size: .78rem; color: var(--lg-ink-soft); padding-bottom: 9px; }
+
+/* ══ Tables ═════════════════════════════════════════════════════════
+   Dense enough for administrative work: 11px vertical padding, a quiet
+   uppercase head, hairline row rules and a mint hover. ══ */
+
+.table-card {
+	background: var(--lg-card);
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-card);
+	box-shadow: var(--lg-shadow);
+	overflow: hidden;
+}
+.table-scroll { overflow-x: auto; }
+.table-card > table, .table-scroll > table { min-width: 100%; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 11px 14px; font-size: .78rem; text-align: left; vertical-align: middle; }
+th {
+	font-size: .68rem;
+	font-weight: 700;
+	letter-spacing: .07em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft);
+	background: var(--lg-rail);
+	border-bottom: 1px solid var(--lg-border);
+	white-space: nowrap;
+}
+td { border-bottom: 1px solid var(--lg-border); color: #3E5348; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr { transition: background .12s ease; }
+tbody tr:hover td { background: var(--lg-mint); }
+td strong { color: var(--lg-ink); font-weight: 600; }
+.num, .ta-r { text-align: right; font-variant-numeric: tabular-nums; }
+.tnum { font-variant-numeric: tabular-nums; }
+.table-empty { padding: 28px 14px; text-align: center; color: var(--lg-ink-soft); font-size: .82rem; }
+
+/* ══ Status scale ═══════════════════════════════════════════════════
+   One scale for every badge in the system. Colour never travels alone:
+   each badge carries its label, and the leading mark changes SHAPE with
+   severity (disc → diamond → square) so the scale survives greyscale,
+   colour-vision deficiency and a bad projector. ══ */
+
+.badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: .72rem;
+	font-weight: 600;
+	line-height: 1.3;
+	border-radius: var(--lg-r-pill);
+	padding: 4px 10px;
+	white-space: nowrap;
+	border: 1px solid transparent;
+}
+.badge::before {
+	content: '';
+	width: 7px;
+	height: 7px;
+	flex: 0 0 auto;
+	border-radius: 50%;
+	background: currentColor;
+}
+.badge-normal   { background: var(--lg-mint);        color: var(--lg-success-ink); border-color: #C4E4D0; }
+.badge-monitor  { background: var(--lg-amber-tint);  color: var(--lg-amber-ink);   border-color: #EFDCB2; }
+.badge-risk     { background: var(--lg-orange-tint); color: var(--lg-orange-ink);  border-color: #F0D3B6; }
+.badge-critical { background: var(--lg-danger-tint); color: var(--lg-danger-ink);  border-color: #F2C9C9; }
+.badge-info     { background: var(--lg-info-tint);   color: var(--lg-info-ink);    border-color: #C6DEE5; }
+.badge-neutral  { background: #EEF1EF;               color: #55645C;               border-color: #DDE3DF; }
+/* Shape shift by severity. */
+.badge-monitor::before, .badge-risk::before { border-radius: 1px; transform: rotate(45deg); }
+.badge-critical::before { border-radius: 1px; }
+
+/* ══ Alerts & flashes ═══════════════════════════════════════════════ */
+
+.flash {
+	margin-bottom: 16px;
+	padding: 11px 14px;
+	border-radius: var(--lg-r-btn);
+	font-size: .8rem;
+	font-weight: 500;
+	border: 1px solid transparent;
+}
+.flash.ok  { background: var(--lg-mint);       color: var(--lg-success-ink); border-color: #C4E4D0; }
+.flash.err { background: var(--lg-danger-tint); color: var(--lg-danger-ink); border-color: #F2C9C9; }
+.flash.info, .flash:not(.ok):not(.err) { background: var(--lg-info-tint); color: var(--lg-info-ink); border-color: #C6DEE5; }
+
+/* Attention banner — orange left rule, not a full orange card. */
+.alert-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	flex-wrap: wrap;
+	margin-bottom: 16px;
+	padding: 13px 16px;
+	background: var(--lg-card);
+	border: 1px solid var(--lg-border);
+	border-left: 4px solid var(--lg-orange);
+	border-radius: var(--lg-r-card);
+	box-shadow: var(--lg-shadow);
+}
+.alert-bar .alert-body { display: flex; align-items: flex-start; gap: 11px; min-width: 0; }
+.alert-bar svg { width: 18px; height: 18px; flex: 0 0 auto; color: var(--lg-orange); margin-top: 1px; }
+.alert-bar strong { display: block; font-size: .84rem; font-weight: 600; color: var(--lg-ink); }
+.alert-bar span { font-size: .78rem; color: var(--lg-ink-soft); }
+.alert-bar.is-critical { border-left-color: var(--lg-danger); }
+.alert-bar.is-critical svg { color: var(--lg-danger); }
+.alert-bar.is-info { border-left-color: var(--lg-info); }
+.alert-bar.is-info svg { color: var(--lg-info); }
+
+/* ══ Panel / empty state ════════════════════════════════════════════ */
+
+.empty-panel {
+	padding: 32px 20px;
+	text-align: center;
+	font-size: .82rem;
+	color: var(--lg-ink-soft);
+	background: var(--lg-page);
+	border: 1px dashed var(--lg-border-strong);
+	border-radius: var(--lg-r-card);
+}
+
+/* ══ Responsive ═════════════════════════════════════════════════════
+   Not a shrink of the desktop layout: the KPI row re-flows to 2-up then
+   1-up, tables gain their own horizontal scroll rather than squeezing
+   columns, and the toolbar stacks so filters stay full-width targets. ══ */
+
+@media (max-width: 1180px) {
+	.kpi-grid, .kpi-grid.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+	.content { padding: 20px 18px 40px; }
+	.topbar { padding: 0 18px; }
+	.page-title { font-size: 1.6rem; }
+}
+@media (max-width: 620px) {
+	.kpi-grid, .kpi-grid.cols-3, .kpi-grid.cols-2 { grid-template-columns: 1fr; }
+	.toolbar { align-items: stretch; flex-direction: column; }
+	.toolbar .spacer { margin-left: 0; }
+	.lg-search input, .select { width: 100%; min-width: 0; }
+	.table-card { overflow-x: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.card, .btn, tbody tr { transition: none !important; }
+}
