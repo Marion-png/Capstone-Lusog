@@ -83,6 +83,9 @@
         .btn-secondary { background: #fff; color: #2f5b4d; border: 1px solid #c8d9d1; }
         .hint { margin-top: 10px; font-size: 0.72rem; color: #88a099; }
     </style>
+    {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
+         last so it overrides this page's own :root colours. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
 <body>
     <div class="card">

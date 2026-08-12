@@ -68,7 +68,7 @@
     .condition-search-field label {
         font-size: 0.78rem;
         font-weight: 700;
-        color: #3d5c47;
+        color: #3E5348;
     }
 
     .condition-search-container {
@@ -78,7 +78,7 @@
 
     .condition-search-input {
         width: 100%;
-        border: 1px solid #e4ece7;
+        border: 1px solid #DCE8E0;
         border-radius: 10px;
         padding: 10px 12px;
         font: inherit;
@@ -87,7 +87,7 @@
 
     .condition-search-input:focus {
         outline: none;
-        border-color: #166534;
+        border-color: #14653C;
         box-shadow: 0 0 0 3px rgba(22, 101, 52, 0.1);
     }
 
@@ -110,7 +110,7 @@
     .condition-spinner svg {
         width: 100%;
         height: 100%;
-        color: #166534;
+        color: #14653C;
     }
 
     @keyframes spin {
@@ -125,7 +125,7 @@
         right: 0;
         margin-top: 4px;
         background: white;
-        border: 1px solid #e4ece7;
+        border: 1px solid #DCE8E0;
         border-radius: 10px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         z-index: 10;
@@ -146,9 +146,9 @@
     }
 
     .condition-option-add {
-        color: #166534;
+        color: #14653C;
         font-weight: 500;
-        border-top: 1px solid #e4ece7;
+        border-top: 1px solid #DCE8E0;
     }
 
     .condition-option-add .add-icon {
@@ -157,7 +157,7 @@
     }
 
     .condition-option-empty {
-        color: #7a9e87;
+        color: #6B7C72;
         text-align: center;
         padding: 16px 12px;
         font-style: italic;
@@ -175,7 +175,7 @@
         align-items: center;
         gap: 6px;
         background: #e8f3ed;
-        color: #166534;
+        color: #14653C;
         padding: 6px 10px;
         border-radius: 20px;
         font-size: 0.84rem;
@@ -185,7 +185,7 @@
     .tag-remove {
         background: none;
         border: none;
-        color: #166534;
+        color: #14653C;
         cursor: pointer;
         font-size: 1.2rem;
         padding: 0;

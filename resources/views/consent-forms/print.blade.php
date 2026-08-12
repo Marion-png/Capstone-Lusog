@@ -13,6 +13,9 @@
             .print-bar { position: sticky; top: 0; background: var(--g900); color: #fff; padding: 10px 20px; display: flex; gap: 12px; align-items: center; font-family: 'DM Sans', sans-serif; font-size: .84rem; }
         }
     </style>
+    {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
+         last so it overrides this page's own :root colours. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
 <body onload="window.print()">
 <div class="print-bar no-print">

@@ -1,0 +1,40 @@
+/* ══════════════════════════════════════════════════════════════════════
+   School Nurse — Review Queue (adviser submissions)
+   ──────────────────────────────────────────────────────────────────────
+   Page sheet. Loaded AFTER css/lusog-theme.css, which owns the shell, KPI
+   cards, tables, badges and buttons. This page is almost entirely theme
+   components, so only the LRN cell, the inline consent link and the
+   illustrated empty state live here.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* LRNs are compared digit by digit, so they get a monospaced cell. */
+.td-lrn {
+	font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+	font-size: .74rem;
+	color: var(--lg-ink-soft);
+}
+
+/* Consent cell: badge plus an optional link to the signed scan. */
+.consent-cell { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn-view-consent {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	border: 1px solid var(--lg-border-strong);
+	border-radius: var(--lg-r-pill);
+	background: var(--lg-card);
+	color: var(--lg-emerald-deep);
+	font-size: .7rem;
+	font-weight: 600;
+	text-decoration: none;
+	transition: background .15s ease, border-color .15s ease;
+}
+.btn-view-consent:hover { background: var(--lg-mint); border-color: var(--lg-emerald); }
+.btn-view-consent:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+.btn-view-consent svg { width: 11px; height: 11px; }
+
+/* Empty queue — a settled state, not a failure, so it stays quiet. */
+.queue-empty { text-align: center; padding: 52px 20px; color: var(--lg-ink-soft); }
+.queue-empty svg { width: 42px; height: 42px; margin-bottom: 12px; opacity: .35; }
+.queue-empty p { font-size: .84rem; max-width: 46ch; margin: 0 auto; line-height: 1.55; }

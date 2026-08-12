@@ -24,7 +24,7 @@
 
 {{-- ── Enrolment summary cards ──────────────────────────────────────────── --}}
 <div class="grid-3" style="margin-bottom:14px;">
-    <div class="card stat" style="border-left-color:#15803d;">
+    <div class="card stat" style="border-left-color:#1F8A4C;">
         <div class="label">Total Students Assessed</div>
         <div class="num">{{ number_format($totalStudents) }}</div>
         <div class="hint">With at least one baseline or endline record</div>
@@ -52,7 +52,7 @@
 {{-- ── School-wide status summary table ───────────────────────────────────── --}}
 <div class="card" style="margin-bottom:14px;">
     <div class="card-head">
-        <i class="fas fa-chart-bar" style="margin-right:6px;color:#15803d;"></i>
+        <i class="fas fa-chart-bar" style="margin-right:6px;color:#1F8A4C;"></i>
         Nutritional Status Summary — School-Wide
     </div>
     <div class="card-body" style="padding:0;">
@@ -61,20 +61,20 @@
                 <thead>
                     <tr>
                         <th rowspan="2" style="width:200px;vertical-align:bottom;">Nutritional Status</th>
-                        <th colspan="2" style="text-align:center;background:#eff6ff;color:#1d4ed8;">
+                        <th colspan="2" style="text-align:center;background:#eff6ff;color:#1F5F70;">
                             Baseline &nbsp;<span style="font-weight:400;font-size:.65rem;">(n={{ number_format($baselineTotal) }})</span>
                         </th>
                         <th colspan="2" style="text-align:center;background:#faf5ff;color:#6d28d9;">
                             Endline &nbsp;<span style="font-weight:400;font-size:.65rem;">(n={{ number_format($endlineTotal) }})</span>
                         </th>
-                        <th style="text-align:center;width:90px;background:#f0fdf4;color:#166534;">Change</th>
+                        <th style="text-align:center;width:90px;background:#F2FAF5;color:#14653C;">Change</th>
                     </tr>
                     <tr>
-                        <th style="background:#eff6ff;color:#1d4ed8;text-align:right;">No.</th>
-                        <th style="background:#eff6ff;color:#1d4ed8;text-align:right;">%</th>
+                        <th style="background:#eff6ff;color:#1F5F70;text-align:right;">No.</th>
+                        <th style="background:#eff6ff;color:#1F5F70;text-align:right;">%</th>
                         <th style="background:#faf5ff;color:#6d28d9;text-align:right;">No.</th>
                         <th style="background:#faf5ff;color:#6d28d9;text-align:right;">%</th>
-                        <th style="background:#f0fdf4;color:#166534;text-align:center;">±</th>
+                        <th style="background:#F2FAF5;color:#14653C;text-align:center;">±</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -103,7 +103,7 @@
                                 @if ($diff > 0)
                                     <span style="color:#dc2626;font-weight:700;">+{{ $diff }}</span>
                                 @elseif ($diff < 0)
-                                    <span style="color:#16a34a;font-weight:700;">{{ $diff }}</span>
+                                    <span style="color:#1F8A4C;font-weight:700;">{{ $diff }}</span>
                                 @else
                                     <span style="color:#9ca3af;">—</span>
                                 @endif
@@ -130,7 +130,7 @@
 @if ($sectionBreakdown->isNotEmpty())
 <div class="card">
     <div class="card-head">
-        <i class="fas fa-layer-group" style="margin-right:6px;color:#15803d;"></i>
+        <i class="fas fa-layer-group" style="margin-right:6px;color:#1F8A4C;"></i>
         Breakdown by Grade Level / Section
     </div>
     <div class="card-body" style="padding:0;">
@@ -142,7 +142,7 @@
                         <th rowspan="2" style="text-align:right;vertical-align:bottom;">Enrolled</th>
                         {{-- Baseline sub-headers --}}
                         @foreach ($categories as $cat)
-                            <th style="text-align:right;background:#eff6ff;color:#1d4ed8;font-size:.62rem;white-space:nowrap;">
+                            <th style="text-align:right;background:#eff6ff;color:#1F5F70;font-size:.62rem;white-space:nowrap;">
                                 {{ $cat }}<br><span style="font-weight:400;">(BL)</span>
                             </th>
                         @endforeach

@@ -13,6 +13,9 @@
     @if (file_exists($classAdviserCssPath))
         <style>{!! file_get_contents($classAdviserCssPath) !!}</style>
     @endif
+    {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
+         last so it overrides this page's own :root colours. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
 <body>
 @php
@@ -67,7 +70,7 @@
                     <div class="calc-grid" style="grid-template-columns:1fr;max-width:220px;">
                         <div class="calc-item"><div class="label">Requested Tablets</div><div class="value" id="tabletsRequested">{{ old('consenting_students', 0) }}</div></div>
                     </div>
-                    <div style="font-size:.72rem;color:#6f8c7a;margin-top:6px;">One tablet per consenting student.</div>
+                    <div style="font-size:.72rem;color:#6B7C72;margin-top:6px;">One tablet per consenting student.</div>
                 </div>
 
                 <div style="display:flex;justify-content:flex-end;gap:8px;">

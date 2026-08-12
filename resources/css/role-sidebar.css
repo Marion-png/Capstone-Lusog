@@ -22,12 +22,22 @@
 	--asb-ease:cubic-bezier(.22,.61,.36,1);
 	--asb-speed:.3s;
 }
-.asb-sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--asb-w);background:var(--asb-bg,#14532d);display:flex;flex-direction:column;overflow-x:hidden;overflow-y:auto;z-index:100}
+/* Scrolls so a short viewport can still reach the footer, but the native
+   scrollbar is hidden — left visible it draws a grey gutter down the brand
+   panel and reads as a second, draggable edge beside the content's own bar.
+   Wheel, trackpad, touch and keyboard scrolling are unaffected. Matches the
+   School Nurse rail in css/nurse-sidebar.css. */
+.asb-sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--asb-w);background:var(--asb-bg,#126B3A);display:flex;flex-direction:column;overflow-x:hidden;overflow-y:auto;z-index:100;scrollbar-width:none;-ms-overflow-style:none}
+.asb-sidebar::-webkit-scrollbar{width:0;height:0}
 .asb-logo-text,.asb-link-text,.asb-user-meta,.asb-logout-form{opacity:1}
 
-/* ── Logo ── */
-.asb-logo{display:flex;align-items:center;gap:11px;padding:20px 18px;border-bottom:1px solid rgba(255,255,255,.1)}
-.asb-logo-icon{width:34px;height:34px;border-radius:9px;background:var(--asb-mark-bg,rgba(134,239,172,.16));display:grid;place-items:center;color:var(--asb-mark-ink,#86efac);flex:0 0 auto}
+/* ── Logo ──
+   The full LUSOG mark, matching the School Nurse rail. Every role shows the
+   same lockup so the product reads as one system; the old icon + wordmark
+   pair is kept below only for any rail that has not been moved over. */
+.asb-logo{display:flex;align-items:center;justify-content:center;gap:11px;padding:18px 20px;border-bottom:1px solid rgba(255,255,255,.1)}
+.asb-logo-full{width:168px;max-width:100%;height:auto;display:block}
+.asb-logo-icon{width:34px;height:34px;border-radius:9px;background:var(--asb-mark-bg,rgba(134,239,172,.16));display:grid;place-items:center;color:var(--asb-mark-ink,#BFE3CC);flex:0 0 auto}
 .asb-logo-icon svg{width:19px;height:19px;transition:transform .35s var(--asb-ease)}
 .asb-logo-text{flex:0 0 auto;white-space:nowrap}
 .asb-logo-title{color:#fff;font-weight:800;font-size:.98rem;letter-spacing:.02em;line-height:1.15}
@@ -41,16 +51,16 @@
 .asb-link svg{width:16px;height:16px;flex:0 0 auto;transition:transform .28s var(--asb-ease)}
 .asb-link-text{flex:0 0 auto;white-space:nowrap}
 /* left accent bar grows in on hover, stays put on the active tab */
-.asb-link::before{content:"";position:absolute;left:0;top:50%;width:3px;height:0;border-radius:0 3px 3px 0;background:var(--asb-accent,#86efac);transform:translateY(-50%);transition:height .26s var(--asb-ease)}
+.asb-link::before{content:"";position:absolute;left:0;top:50%;width:3px;height:0;border-radius:0 3px 3px 0;background:var(--asb-accent,#BFE3CC);transform:translateY(-50%);transition:height .26s var(--asb-ease)}
 .asb-link:hover{background:var(--asb-hover-bg,rgba(255,255,255,.08));color:var(--asb-ink-strong,#fff);padding-left:14px}
 .asb-link:hover::before{height:56%}
 .asb-link:hover svg{transform:scale(1.12)}
 .asb-link:active{background:rgba(255,255,255,.14)}
-.asb-link.active{background:var(--asb-active-bg,rgba(34,197,94,.2));color:var(--asb-active-ink,#86efac)}
+.asb-link.active{background:var(--asb-active-bg,rgba(34,197,94,.2));color:var(--asb-active-ink,#BFE3CC)}
 .asb-link.active::before{height:62%}
 .asb-link.active svg{transform:none}
 /* click feedback: the tapped tab lights up while the page swaps out */
-.asb-link.is-navigating{background:var(--asb-press-bg,rgba(34,197,94,.28));color:var(--asb-active-ink,#86efac);padding-left:14px}
+.asb-link.is-navigating{background:var(--asb-press-bg,rgba(34,197,94,.28));color:var(--asb-active-ink,#BFE3CC);padding-left:14px}
 .asb-link.is-navigating::before{height:70%}
 .asb-ripple{position:absolute;border-radius:50%;background:rgba(255,255,255,.28);transform:scale(0);pointer-events:none;animation:asbRipple .55s var(--asb-ease) forwards}
 /* nav items ease in on load, one after another */
@@ -63,10 +73,10 @@
 
 /* ── User footer ── */
 .asb-user{display:flex;align-items:center;gap:9px;padding:14px 16px;border-top:1px solid rgba(255,255,255,.1)}
-.asb-avatar{width:32px;height:32px;border-radius:50%;background:var(--asb-avatar-bg,#16a34a);color:#fff;display:grid;place-items:center;font-weight:700;font-size:.72rem;flex:0 0 auto}
+.asb-avatar{width:32px;height:32px;border-radius:50%;background:var(--asb-avatar-bg,#1F8A4C);color:#fff;display:grid;place-items:center;font-weight:700;font-size:.72rem;flex:0 0 auto}
 .asb-user-meta{min-width:0;flex:1;white-space:nowrap}
 .asb-user-name{color:#fff;font-size:.78rem;font-weight:700;overflow:hidden;text-overflow:ellipsis}
-.asb-user-role{color:var(--asb-role-ink,#86efac);font-size:.66rem;overflow:hidden;text-overflow:ellipsis}
+.asb-user-role{color:var(--asb-role-ink,#BFE3CC);font-size:.66rem;overflow:hidden;text-overflow:ellipsis}
 .asb-logout-form{flex:0 0 auto}
 .asb-logout{background:none;border:none;color:rgba(255,255,255,.55);cursor:pointer;border-radius:7px;width:28px;height:28px;display:grid;place-items:center;transition:background .2s var(--asb-ease),color .2s var(--asb-ease),transform .2s var(--asb-ease)}
 .asb-logout svg{width:15px;height:15px}

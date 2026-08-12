@@ -169,26 +169,53 @@ class SchoolNurseDashboardTest extends TestCase
     #[Test]
     public function every_nurse_page_uses_the_shared_sidebar_with_the_right_item_active(): void
     {
-        $pages = [
+        // Moved onto the LUSOG design system: partials/nurse-lusog-sidebar.
+        $lusogPages = [
             '/dashboard/school-nurse' => 'dashboard.school-nurse',
             '/nurse' => 'nurse.index',
             '/dashboard/student-health-records' => 'dashboard.student-health-records',
             '/dashboard/consultation-log' => 'dashboard.consultation-log',
             '/dashboard/medicine-inventory' => 'dashboard.medicine-inventory',
+        ];
+
+        // Still on the older .nsb-* rail. Move each entry up to $lusogPages
+        // as it is converted; the list is expected to reach zero.
+        $legacyPages = [
             '/dashboard/school-nurse/deworming' => 'dashboard.school-nurse.deworming',
             '/dashboard/data-visualization' => 'dashboard.data-visualization',
         ];
 
-        foreach ($pages as $url => $activeRoute) {
+        foreach ($lusogPages as $url => $activeRoute) {
+            $html = $this->withSession($this->nurseSession())->get($url)->assertOk()->getContent();
+
+            $this->assertStringContainsString('class="sidebar"', $html, "{$url} must render the shared nurse rail.");
+            $this->assertStringContainsString(
+                'href="'.route($activeRoute).'" class="sb-link active"',
+                $html,
+                "{$url} must highlight its own nav item."
+            );
+        }
+
+        foreach ($legacyPages as $url => $activeRoute) {
             $html = $this->withSession($this->nurseSession())->get($url)->assertOk()->getContent();
 
             $this->assertStringContainsString('class="nsb"', $html, "{$url} must render the shared nurse sidebar.");
-            // The old per-page collapsed sidebar is gone everywhere.
-            $this->assertStringNotContainsString('<aside class="sidebar">', $html, "{$url} still has its own sidebar.");
             $this->assertStringContainsString(
                 'href="'.route($activeRoute).'" class="nsb-item active"',
                 $html,
                 "{$url} must highlight its own nav item."
+            );
+        }
+
+        // Whichever rail a page is on, it comes from a shared partial: no
+        // page may inline a second <aside> of its own.
+        foreach (array_keys($lusogPages + $legacyPages) as $url) {
+            $html = $this->withSession($this->nurseSession())->get($url)->assertOk()->getContent();
+
+            $this->assertSame(
+                1,
+                substr_count($html, '<aside'),
+                "{$url} must render exactly one sidebar."
             );
         }
     }
@@ -200,11 +227,13 @@ class SchoolNurseDashboardTest extends TestCase
             ->get('/dashboard/school-nurse')
             ->assertOk();
 
-        foreach (['nsb-brand', 'nsb-label', 'nsb-item', 'nsb-footer', 'nsb-user', 'nsb-avatar'] as $hook) {
+        foreach (['sb-logo', 'sb-section-label', 'sb-link', 'sb-user', 'sb-avatar'] as $hook) {
             $nurse->assertSee($hook, false);
         }
 
-        foreach (['Clinic', 'Health Programs', 'Inventory', 'Reports', 'System'] as $section) {
+        // The LUSOG rail ends at Reports — the retired "System" group held
+        // only a dead Settings link, and signing out moved to the user card.
+        foreach (['Main', 'Health Programs', 'Inventory', 'Reports'] as $section) {
             $nurse->assertSee($section);
         }
 
@@ -212,7 +241,9 @@ class SchoolNurseDashboardTest extends TestCase
             ->assertSee('Sta. Ana NHS')
             ->assertSee('Review Queue')
             ->assertSee('Medicine Inventory')
-            ->assertSee('AN');
+            // The avatar carries one initial per name part, as everywhere
+            // else in the LUSOG system — "Ana Reyes" reads AR.
+            ->assertSee('<div class="sb-avatar">AR</div>', false);
     }
 
     #[Test]
@@ -251,7 +282,7 @@ class SchoolNurseDashboardTest extends TestCase
         $html = $this->withSession($session)->get('/dashboard/school-nurse')->assertOk()->getContent();
 
         // Two learners still awaiting examination.
-        $this->assertStringContainsString('<span class="nsb-badge alert">2</span>', $html);
+        $this->assertStringContainsString('<span class="sb-count alert">2</span>', $html);
     }
 
     #[Test]

@@ -275,65 +275,6 @@
 	.forms-grid, .form1-meta { grid-template-columns: 1fr; }
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   School Nurse read-only variant — its own rail, since role-sidebar.css
-   is not loaded on that render. Scoped to `.sidebar ~` so none of it can
-   reach the Feeding Coordinator's shared panel.
-   ══════════════════════════════════════════════════════════════════════ */
-
-.sidebar {
-	position: fixed;
-	left: 0; top: 0; bottom: 0;
-	width: 252px;
-	background: var(--lg-emerald-deep);
-	display: flex;
-	flex-direction: column;
-	z-index: 100;
-	overflow-x: hidden;
-	overflow-y: auto;
-}
-.sb-grid { display: none; }
-.sb-logo { padding: 18px 20px; border-bottom: 1px solid rgba(255, 255, 255, .12); display: flex; justify-content: center; }
-.sb-logo-full { width: 168px; max-width: 100%; height: auto; display: block; }
-.sb-nav { flex: 1; padding: 14px 12px; }
-.sb-section-label { font-size: .64rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: rgba(191, 227, 204, .78); padding: 0 8px; margin: 16px 0 6px; }
-.sb-section-label:first-child { margin-top: 0; }
-.sb-link {
-	display: flex;
-	align-items: center;
-	gap: 11px;
-	padding: 9px 10px;
-	border-radius: 9px;
-	text-decoration: none;
-	color: #BFE3CC;
-	font-size: .82rem;
-	font-weight: 600;
-	margin-bottom: 2px;
-	white-space: nowrap;
-	transition: background .18s ease, color .18s ease;
-}
-.sb-link:hover { background: rgba(255, 255, 255, .1); color: #fff; }
-.sb-link.active { background: var(--lg-emerald); color: #fff; }
-.sb-link svg { width: 16px; height: 16px; flex-shrink: 0; }
-.sb-user { padding: 14px 16px; border-top: 1px solid rgba(255, 255, 255, .12); display: flex; align-items: center; gap: 10px; }
-.sb-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--lg-emerald); display: grid; place-items: center; font-size: .72rem; font-weight: 700; color: #fff; flex-shrink: 0; }
-.sb-user-meta { min-width: 0; flex: 1; white-space: nowrap; }
-.sb-user-name { font-size: .78rem; font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; }
-.sb-user-role { font-size: .66rem; color: #BFE3CC; overflow: hidden; text-overflow: ellipsis; }
-.sb-user form { margin-left: auto; display: flex; align-items: center; }
-.sb-logout { background: none; border: none; color: rgba(255, 255, 255, .6); cursor: pointer; border-radius: 7px; width: 28px; height: 28px; display: grid; place-items: center; }
-.sb-logout:hover { background: rgba(217, 92, 92, .22); color: #FEE2E2; }
-.sb-logout svg { width: 15px; height: 15px; }
-
-.sidebar ~ .main { margin-left: 252px; }
-html.js .sidebar ~ .main { opacity: 0; transform: translateY(12px); transition: opacity .3s ease, transform .3s ease; }
-html.js .sidebar ~ .main.page-ready { opacity: 1; transform: translateY(0); }
-html.js .sidebar ~ .main.page-exit { opacity: 0; transform: translateY(12px); }
-
-@media (max-width: 900px) {
-	.sidebar { display: none; }
-	.sidebar ~ .main { margin-left: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-	html.js .sidebar ~ .main { transition-duration: .01ms !important; }
-}
+/* The School Nurse read-only variant's rail used to be restated here. It
+   now lives in css/nurse-sidebar.css, shared with every other nurse page,
+   and this template loads that sheet instead when $isReadOnly. */

@@ -11,12 +11,12 @@
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         :root {
-            --g950: #052e16; --g900: #14532d; --g800: #166534;
-            --g700: #15803d; --g600: #16a34a; --g500: #22c55e;
-            --g300: #86efac; --g200: #bbf7d0; --g100: #dcfce7; --g50: #f0fdf4;
-            --bg: #f7f8f5; --card: #ffffff; --border: #e4ece7;
-            --text-1: #0d1f14; --text-2: #3d5c47; --text-3: #7a9e87;
-            --red: #ef4444; --amber: #f59e0b;
+            --g950: #0A3D22; --g900: #126B3A; --g800: #14653C;
+            --g700: #1F8A4C; --g600: #1F8A4C; --g500: #43A866;
+            --g300: #BFE3CC; --g200: #C4E4D0; --g100: #E7F5EC; --g50: #F2FAF5;
+            --bg: #F6F9F7; --card: #ffffff; --border: #DCE8E0;
+            --text-1: #1F2D25; --text-2: #3E5348; --text-3: #6B7C72;
+            --red: #D95C5C; --amber: #F2B84B;
             --shadow: 0 1px 4px rgba(5,46,22,.06), 0 4px 16px rgba(5,46,22,.06);
             --radius: 14px; --radius-sm: 10px;
         }
@@ -105,6 +105,9 @@
         @media (max-width: 900px) { .form-grid, .form-grid-4 { grid-template-columns: 1fr 1fr; } }
         @media (max-width: 600px) { .form-grid, .form-grid-2, .form-grid-4 { grid-template-columns: 1fr; } body { padding: 16px; } }
     </style>
+    {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
+         last so it overrides this page's own :root colours. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
 <body>
 @php
@@ -249,13 +252,13 @@
             <div class="section-divider" style="margin-top:24px;">Supplementation &amp; Programs</div>
 
             @error('deworming')
-                <div style="background:#fee2e2;border:1px solid #fca5a5;color:#b91c1c;border-radius:8px;padding:10px 14px;font-size:.8rem;font-weight:600;margin-bottom:12px;">
+                <div style="background:#FCECEC;border:1px solid #fca5a5;color:#b91c1c;border-radius:8px;padding:10px 14px;font-size:.8rem;font-weight:600;margin-bottom:12px;">
                     {{ $message }}
                 </div>
             @enderror
 
             @if($consentForm === null)
-                <div style="background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;">
+                <div style="background:#FDF4E2;border:1px solid #fcd34d;color:#8A5A06;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;">
                     No signed parental consent on file for this student for SY {{ $consentSchoolYear }}.
                     Deworming cannot be marked as given until the Class Adviser records a consent form.
                 </div>
@@ -271,24 +274,24 @@
                     @endif
                 </div>
             @elseif($consentForm->consent_type === 'partial')
-                <div style="background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                <div style="background:#FDF4E2;border:1px solid #fcd34d;color:#8A5A06;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
                     <span>Partial consent on file for SY {{ $consentSchoolYear }}@if($consentForm->partial_exception) &mdash; Except: {{ $consentForm->partial_exception }}@endif. Verify that deworming is included before recording.</span>
                     @if($consentForm->file_path !== null)
                         <a href="{{ route('parental-consent.download', $consentForm->id) }}" target="_blank" rel="noopener noreferrer"
-                           style="display:inline-flex;align-items:center;gap:5px;background:#92400e;color:#fff;border-radius:6px;padding:5px 11px;font-size:.74rem;font-weight:700;text-decoration:none;flex-shrink:0;">
+                           style="display:inline-flex;align-items:center;gap:5px;background:#8A5A06;color:#fff;border-radius:6px;padding:5px 11px;font-size:.74rem;font-weight:700;text-decoration:none;flex-shrink:0;">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                             View Consent Form
                         </a>
                     @endif
                 </div>
             @else
-                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;background:#dcfce7;border:1px solid #86efac;color:#15803d;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;background:#E7F5EC;border:1px solid #BFE3CC;color:#1F8A4C;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;">
                     <span>Full parental consent on file for SY {{ $consentSchoolYear }}. Deworming may be recorded.</span>
                     @if($consentForm->file_path !== null)
                         <a href="{{ route('parental-consent.download', $consentForm->id) }}"
                            target="_blank"
                            rel="noopener noreferrer"
-                           style="display:inline-flex;align-items:center;gap:5px;background:#15803d;color:#fff;border-radius:6px;padding:5px 11px;font-size:.74rem;font-weight:700;text-decoration:none;flex-shrink:0;">
+                           style="display:inline-flex;align-items:center;gap:5px;background:#1F8A4C;color:#fff;border-radius:6px;padding:5px 11px;font-size:.74rem;font-weight:700;text-decoration:none;flex-shrink:0;">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                             View Consent Form
                         </a>

@@ -15,20 +15,20 @@
             --text: #0f2f1b;
             --muted: #5b7b68;
             --line: #dbe9df;
-            --green: #15803d;
-            --green-dark: #14532d;
-            --danger-bg: #fee2e2;
-            --danger-text: #991b1b;
-            --ok-bg: #dcfce7;
-            --ok-text: #166534;
+            --green: #1F8A4C;
+            --green-dark: #126B3A;
+            --danger-bg: #FCECEC;
+            --danger-text: #A32B2B;
+            --ok-bg: #E7F5EC;
+            --ok-text: #14653C;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             min-height: 100vh;
             font-family: 'DM Sans', sans-serif;
             background:
-                radial-gradient(circle at 10% -10%, #86efac 0, transparent 45%),
-                radial-gradient(circle at 90% 110%, #bbf7d0 0, transparent 40%),
+                radial-gradient(circle at 10% -10%, #BFE3CC 0, transparent 45%),
+                radial-gradient(circle at 90% 110%, #C4E4D0 0, transparent 40%),
                 var(--bg);
             color: var(--text);
             display: grid;
@@ -44,7 +44,7 @@
             overflow: hidden;
         }
         .head {
-            background: linear-gradient(135deg, #14532d, #15803d);
+            background: linear-gradient(135deg, #126B3A, #1F8A4C);
             color: #fff;
             padding: 22px;
         }
@@ -55,7 +55,7 @@
         }
         .head p {
             margin-top: 6px;
-            color: #dcfce7;
+            color: #E7F5EC;
             font-size: 0.9rem;
         }
         .body { padding: 22px; }
@@ -65,7 +65,7 @@
             font-size: 0.86rem;
             margin-bottom: 12px;
         }
-        .flash-ok { background: var(--ok-bg); color: var(--ok-text); border: 1px solid #86efac; }
+        .flash-ok { background: var(--ok-bg); color: var(--ok-text); border: 1px solid #BFE3CC; }
         .flash-err { background: var(--danger-bg); color: var(--danger-text); border: 1px solid #fecaca; }
         .grid {
             display: grid;
@@ -91,8 +91,8 @@
             background: #fff;
         }
         input:focus, select:focus {
-            outline: 2px solid #bbf7d0;
-            border-color: #22c55e;
+            outline: 2px solid #C4E4D0;
+            border-color: #43A866;
         }
         .hint {
             grid-column: 1 / -1;
@@ -108,7 +108,7 @@
             flex-wrap: wrap;
         }
         .link {
-            color: #166534;
+            color: #14653C;
             text-decoration: underline;
             font-size: 0.86rem;
         }
@@ -126,6 +126,9 @@
             .grid { grid-template-columns: 1fr; }
         }
     </style>
+    {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
+         last so it overrides this page's own :root colours. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
 <body>
     <section class="card">

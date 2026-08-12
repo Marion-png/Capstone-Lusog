@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Audit Trail | SIGLA</title>
     <style>
-        :root{--bg:#f7f8f5;--card:#fff;--border:#e4ece7;--text:#0d1f14;--muted:#6f8c7a;--g900:#14532d;--g700:#15803d;--g300:#86efac;--g100:#dcfce7;--g50:#f0fdf4;--red:#ef4444}
+        :root{--bg:#F6F9F7;--card:#fff;--border:#DCE8E0;--text:#1F2D25;--muted:#6B7C72;--g900:#126B3A;--g700:#1F8A4C;--g300:#BFE3CC;--g100:#E7F5EC;--g50:#F2FAF5;--red:#D95C5C}
         *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',system-ui,sans-serif}
         body{background:var(--bg);color:var(--text);min-height:100vh}
         .topbar{background:var(--g900);color:#fff;padding:14px 28px;display:flex;align-items:center;gap:14px}
@@ -23,12 +23,15 @@
         td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;color:#1d3c31}
         tr:last-child td{border-bottom:none}
         .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.7rem;font-weight:700;background:var(--g100);color:var(--g900);white-space:nowrap}
-        .pill.warn{background:#fee2e2;color:#991b1b}
+        .pill.warn{background:#FCECEC;color:#A32B2B}
         .muted{color:var(--muted)}
         details summary{cursor:pointer;color:var(--g700);font-size:.74rem}
         details pre{margin-top:6px;background:var(--g50);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:.7rem;white-space:pre-wrap;word-break:break-all;max-width:420px;max-height:220px;overflow:auto}
         .empty{padding:34px;text-align:center;color:var(--muted);font-size:.85rem}
     </style>
+    {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
+         last so it overrides this page's own :root colours. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
 <body>
     <header class="topbar">

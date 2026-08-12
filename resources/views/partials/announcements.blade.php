@@ -17,30 +17,30 @@
     Coordinator does, in lusog-theme.css) without changing it anywhere else.
 --}}
 <style>
-    .ann-board { background: #fff; border: 1px solid var(--ann-border, #e4ece7); border-radius: var(--ann-radius, 12px); box-shadow: var(--ann-shadow, 0 1px 4px rgba(5,46,22,.06)); margin-bottom: 18px; }
-    .ann-board-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--ann-border, #e4ece7); }
-    .ann-board-head svg { width: 17px; height: 17px; color: var(--ann-icon, #15803d); flex-shrink: 0; }
-    .ann-board-title { font-size: .82rem; font-weight: 700; color: var(--ann-title, #0d1f14); letter-spacing: .01em; }
-    .ann-board-sub { font-size: .72rem; color: var(--ann-sub, #6f8c7a); margin-left: 4px; }
-    .ann-post-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; background: var(--ann-btn-bg, #14532d); color: #fff; border: none; border-radius: 8px; padding: 7px 13px; font-size: .76rem; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .ann-board { background: #fff; border: 1px solid var(--ann-border, #DCE8E0); border-radius: var(--ann-radius, 12px); box-shadow: var(--ann-shadow, 0 1px 4px rgba(5,46,22,.06)); margin-bottom: 18px; }
+    .ann-board-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--ann-border, #DCE8E0); }
+    .ann-board-head svg { width: 17px; height: 17px; color: var(--ann-icon, #1F8A4C); flex-shrink: 0; }
+    .ann-board-title { font-size: .82rem; font-weight: 700; color: var(--ann-title, #1F2D25); letter-spacing: .01em; }
+    .ann-board-sub { font-size: .72rem; color: var(--ann-sub, #6B7C72); margin-left: 4px; }
+    .ann-post-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; background: var(--ann-btn-bg, #126B3A); color: #fff; border: none; border-radius: 8px; padding: 7px 13px; font-size: .76rem; font-weight: 600; cursor: pointer; font-family: inherit; }
     .ann-post-toggle:hover { background: var(--ann-btn-bg-hover, #0d3d20); }
-    .ann-post-form { display: none; padding: 14px 18px; border-bottom: 1px solid #e4ece7; background: #f7faf8; }
+    .ann-post-form { display: none; padding: 14px 18px; border-bottom: 1px solid #DCE8E0; background: #f7faf8; }
     .ann-post-form.open { display: block; }
     .ann-post-form input, .ann-post-form textarea { width: 100%; border: 1px solid #d1dbd5; border-radius: 8px; padding: 8px 10px; font-family: inherit; font-size: .82rem; color: #1d3c31; margin-bottom: 8px; box-sizing: border-box; }
     .ann-post-form textarea { min-height: 64px; resize: vertical; }
     .ann-post-form .ann-form-actions { display: flex; gap: 8px; }
-    .ann-btn-primary { background: #15803d; color: #fff; border: none; border-radius: 8px; padding: 7px 14px; font-size: .78rem; font-weight: 600; cursor: pointer; font-family: inherit; }
-    .ann-btn-ghost { background: #eef3f0; color: #3d5c47; border: none; border-radius: 8px; padding: 7px 14px; font-size: .78rem; font-weight: 600; cursor: pointer; font-family: inherit; }
-    .ann-flash { margin: 10px 18px 0; padding: 8px 12px; border-radius: 8px; font-size: .78rem; background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .ann-btn-primary { background: #1F8A4C; color: #fff; border: none; border-radius: 8px; padding: 7px 14px; font-size: .78rem; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .ann-btn-ghost { background: #eef3f0; color: #3E5348; border: none; border-radius: 8px; padding: 7px 14px; font-size: .78rem; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .ann-flash { margin: 10px 18px 0; padding: 8px 12px; border-radius: 8px; font-size: .78rem; background: #E7F5EC; color: #14653C; border: 1px solid #BFE3CC; }
     .ann-list { max-height: 320px; overflow-y: auto; }
     .ann-item { padding: 12px 18px; border-bottom: 1px solid var(--ann-border, #eef3f0); }
     .ann-item:last-child { border-bottom: none; }
     .ann-item-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
     .ann-item-title { font-size: .84rem; font-weight: 700; color: var(--ann-title, #14321f); }
     .ann-item-time { font-size: .68rem; color: var(--ann-sub, #94a3b8); margin-left: auto; white-space: nowrap; }
-    .ann-item-body { font-size: .8rem; color: var(--ann-body, #3d5c47); line-height: 1.5; white-space: pre-line; }
+    .ann-item-body { font-size: .8rem; color: var(--ann-body, #3E5348); line-height: 1.5; white-space: pre-line; }
     .ann-item-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
-    .ann-item-by { font-size: .7rem; color: var(--ann-sub, #7a9e87); }
+    .ann-item-by { font-size: .7rem; color: var(--ann-sub, #6B7C72); }
     .ann-item-delete-form { margin-left: auto; }
     .ann-item-delete-btn { background: none; border: none; color: #b91c1c; font-size: .7rem; font-weight: 600; cursor: pointer; font-family: inherit; padding: 2px 6px; }
     .ann-item-delete-btn:hover { text-decoration: underline; }

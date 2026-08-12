@@ -8,14 +8,14 @@
        in lusog-theme.css); every other role keeps the fallbacks. */
     .live-clock-pill {
         display: inline-flex; align-items: center; gap: 7px;
-        font-size: .74rem; font-weight: 600; color: var(--clock-ink, #166534);
-        background: var(--clock-bg, #f0fdf4); border: 1px solid var(--clock-border, #bbf7d0); border-radius: 999px;
+        font-size: .74rem; font-weight: 600; color: var(--clock-ink, #14653C);
+        background: var(--clock-bg, #F2FAF5); border: 1px solid var(--clock-border, #C4E4D0); border-radius: 999px;
         padding: 6px 13px; white-space: nowrap; line-height: 1.2; margin-left: auto;
         font-variant-numeric: tabular-nums;
     }
     .live-clock-pill svg { width: 13px; height: 13px; flex-shrink: 0; color: var(--clock-icon, currentColor); }
     .live-clock-pill .live-clock-date { color: var(--clock-muted, #4ba374); font-weight: 500; }
-    .live-clock-pill .live-clock-sep { color: var(--clock-border, #bbf7d0); }
+    .live-clock-pill .live-clock-sep { color: var(--clock-border, #C4E4D0); }
 </style>
 <div class="live-clock-pill" id="liveClockPill">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">

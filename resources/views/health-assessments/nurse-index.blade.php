@@ -10,6 +10,9 @@
     @php $cfCss = resource_path('css/consent-form.css'); $haCss = resource_path('css/mlhat.css'); @endphp
     @if (file_exists($cfCss)) <style>{!! file_get_contents($cfCss) !!}</style> @endif
     @if (file_exists($haCss)) <style>{!! file_get_contents($haCss) !!}</style> @endif
+    {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
+         last so it overrides this page's own :root colours. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
 <body>
 <header class="cf-topbar">

@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-        :root{--bg:#f7f8f5;--card:#fff;--border:#e4ece7;--text:#0d1f14;--muted:#6f8c7a;--g950:#052e16;--g900:#14532d;--g800:#166534;--g700:#15803d;--g600:#16a34a;--g500:#22c55e;--g300:#86efac;--g200:#bbf7d0;--g100:#dcfce7;--g50:#f0fdf4;--red:#ef4444;--sidebar-w:248px;--sidebar-collapsed-w:76px;--topbar-h:64px;--shadow:0 1px 4px rgba(5,46,22,.06),0 4px 16px rgba(5,46,22,.06)}
+        :root{--bg:#F6F9F7;--card:#fff;--border:#DCE8E0;--text:#1F2D25;--muted:#6B7C72;--g950:#0A3D22;--g900:#126B3A;--g800:#14653C;--g700:#1F8A4C;--g600:#1F8A4C;--g500:#43A866;--g300:#BFE3CC;--g200:#C4E4D0;--g100:#E7F5EC;--g50:#F2FAF5;--red:#D95C5C;--sidebar-w:248px;--sidebar-collapsed-w:76px;--topbar-h:64px;--shadow:0 1px 4px rgba(5,46,22,.06),0 4px 16px rgba(5,46,22,.06)}
         html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
         .sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-collapsed-w);background:var(--g900);display:flex;flex-direction:column;z-index:100;overflow:hidden;transition:width .24s ease}
 .sidebar:hover, .sidebar.sb-pin {width:var(--sidebar-w)}
@@ -45,27 +45,30 @@
         .main{margin-left:var(--sidebar-collapsed-w);height:100vh;display:flex;flex-direction:column;overflow:hidden;transition:margin-left .24s ease}
 .sidebar:hover ~ .main, .sidebar.sb-pin ~ .main {margin-left:var(--sidebar-w)}
         .topbar{height:var(--topbar-h);background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px}
-        .topbar-breadcrumb{font-size:.82rem;color:#6f8c7a}
-        .topbar-chip{font-size:.75rem;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;padding:6px 12px;border-radius:999px}
+        .topbar-breadcrumb{font-size:.82rem;color:#6B7C72}
+        .topbar-chip{font-size:.75rem;background:#F2FAF5;border:1px solid #C4E4D0;color:#1F8A4C;padding:6px 12px;border-radius:999px}
         .content{padding:24px;overflow:auto}
-        .title{font-family:'DM Serif Display',serif;font-size:1.7rem}.title i{color:#15803d}
+        .title{font-family:'DM Serif Display',serif;font-size:1.7rem}.title i{color:#1F8A4C}
         .sub{color:var(--muted);font-size:.85rem;margin-top:4px}
         .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}
         .card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
         .stat{padding:14px}.stat b{font-family:'DM Serif Display',serif;font-size:1.5rem;display:block}.stat span{font-size:.72rem;color:var(--muted)}
         .grid{display:grid;grid-template-columns:1.1fr 1fr;gap:12px}
-        .section{padding:14px}.section h3{font-size:.82rem;color:#3d5c47;margin-bottom:10px;text-transform:uppercase;letter-spacing:.08em}
+        .section{padding:14px}.section h3{font-size:.82rem;color:#3E5348;margin-bottom:10px;text-transform:uppercase;letter-spacing:.08em}
         table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid var(--border);font-size:.78rem;text-align:left}th{font-size:.67rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:#f7faf8}
-        .tag{display:inline-block;padding:3px 8px;border-radius:999px;font-size:.67rem;font-weight:700}.ok{background:var(--g100);color:#166534}.warn{background:#fef3c7;color:#92400e}.bad{background:#fee2e2;color:var(--red)}
+        .tag{display:inline-block;padding:3px 8px;border-radius:999px;font-size:.67rem;font-weight:700}.ok{background:var(--g100);color:#14653C}.warn{background:#FDF4E2;color:#8A5A06}.bad{background:#FCECEC;color:var(--red)}
         .row{display:flex;justify-content:space-between;align-items:center;padding:10px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;font-size:.8rem}
         .btn{font-size:.72rem;background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:#2f4f42}
         .btn-danger{background:#fff;color:#b91c1c;border:1px solid #fecaca}
         .flash{padding:10px 12px;border-radius:10px;font-size:.8rem;margin-top:12px}
-        .flash-ok{background:#dcfce7;color:#166534;border:1px solid #86efac}
-        .flash-err{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
+        .flash-ok{background:#E7F5EC;color:#14653C;border:1px solid #BFE3CC}
+        .flash-err{background:#FCECEC;color:#A32B2B;border:1px solid #fecaca}
         @media (max-width:980px){.stats{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}
         @media (max-width:780px){:root{--sidebar-w:0px;--sidebar-collapsed-w:0px}.sidebar{display:none}.main{margin-left:0}}
     </style>
+    {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
+         last so it overrides this page's own :root colours. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
 <body>
 <aside class="sidebar">
@@ -161,7 +164,7 @@
                                 <td><span class="tag ok">Active</span></td>
                             </tr>
                         @empty
-                            <tr><td colspan="5" style="color:#6f8c7a;">No created accounts yet.</td></tr>
+                            <tr><td colspan="5" style="color:#6B7C72;">No created accounts yet.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -199,7 +202,7 @@
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" style="color:#6f8c7a;">No pending account requests.</td></tr>
+                            <tr><td colspan="6" style="color:#6B7C72;">No pending account requests.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -235,7 +238,7 @@
                                 <td>{{ isset($history['decided_at']) ? \Illuminate\Support\Carbon::parse($history['decided_at'])->format('M d, Y h:i A') : '-' }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="7" style="color:#6f8c7a;">No processed account requests yet.</td></tr>
+                            <tr><td colspan="7" style="color:#6B7C72;">No processed account requests yet.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

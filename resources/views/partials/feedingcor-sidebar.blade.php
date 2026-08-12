@@ -20,15 +20,9 @@
 @endphp
 <aside class="asb-sidebar">
     <div class="asb-logo">
-        {{-- Health-in-a-shield: wellness under institutional care, rather than a
-             generic corporate glyph. --}}
-        <div class="asb-logo-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M8.5 11.5h2l1.2-2.4 1.6 4 1.2-1.6h1.5"/></svg>
-        </div>
-        <div class="asb-logo-text">
-            <div class="asb-logo-title">LUSOG</div>
-            <div class="asb-logo-sub">DepEd Clinic Management</div>
-        </div>
+        {{-- The full LUSOG mark, same as the School Nurse rail, so every role
+             opens on the same lockup. --}}
+        <img src="{{ asset('images/lusog-logo.png') }}" alt="LUSOG" class="asb-logo-full">
     </div>
 
     <nav class="asb-nav">

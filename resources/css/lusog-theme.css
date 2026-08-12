@@ -154,6 +154,54 @@ html, body {
 
 .content { flex: 1 1 auto; overflow: auto; padding: 24px 28px 48px; }
 
+/* ══ Scrollbars ═════════════════════════════════════════════════════
+   The browser default is a wide grey bar that reads as part of the OS
+   rather than part of the page. Every scrolling surface here gets the
+   same quiet treatment instead: a thin bar, no track, a thumb in the
+   system's border tone that picks up brand green only while the pointer
+   is over the surface. Rails hide their bar outright (nurse-sidebar.css,
+   role-sidebar.css) because a grey gutter down the brand panel reads as
+   a draggable second edge. ══ */
+
+.content, .table-scroll, .profile-body, .student-profile-body, .modal-body {
+	scrollbar-width: thin;
+	scrollbar-color: var(--lg-border-strong) transparent;
+	scroll-behavior: smooth;
+}
+.content::-webkit-scrollbar,
+.table-scroll::-webkit-scrollbar,
+.profile-body::-webkit-scrollbar,
+.student-profile-body::-webkit-scrollbar,
+.modal-body::-webkit-scrollbar { width: 8px; height: 8px; }
+
+.content::-webkit-scrollbar-track,
+.table-scroll::-webkit-scrollbar-track,
+.profile-body::-webkit-scrollbar-track,
+.student-profile-body::-webkit-scrollbar-track,
+.modal-body::-webkit-scrollbar-track { background: transparent; }
+
+.content::-webkit-scrollbar-thumb,
+.table-scroll::-webkit-scrollbar-thumb,
+.profile-body::-webkit-scrollbar-thumb,
+.student-profile-body::-webkit-scrollbar-thumb,
+.modal-body::-webkit-scrollbar-thumb {
+	background: var(--lg-border-strong);
+	border-radius: var(--lg-r-pill);
+	/* Inset the thumb so it floats clear of the content edge instead of
+	   sitting hard against it. */
+	border: 2px solid transparent;
+	background-clip: content-box;
+}
+.content:hover::-webkit-scrollbar-thumb,
+.table-scroll:hover::-webkit-scrollbar-thumb,
+.profile-body:hover::-webkit-scrollbar-thumb,
+.student-profile-body:hover::-webkit-scrollbar-thumb,
+.modal-body:hover::-webkit-scrollbar-thumb { background: var(--lg-green); background-clip: content-box; }
+
+@media (prefers-reduced-motion: reduce) {
+	.content, .table-scroll, .profile-body, .student-profile-body, .modal-body { scroll-behavior: auto; }
+}
+
 /* ══ Page header ════════════════════════════════════════════════════ */
 
 .page-header { margin-bottom: 20px; }
@@ -221,6 +269,9 @@ html, body {
    than three-quarters of a four-column row and a hole. */
 .kpi-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .kpi-grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Five headline numbers (the consultation log's period breakdown) would
+   otherwise wrap one card onto a second row and read as a new group. */
+.kpi-grid.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .kpi {
 	position: relative;
 	padding: 18px 20px;
@@ -490,8 +541,11 @@ td strong { color: var(--lg-ink); font-weight: 600; }
    1-up, tables gain their own horizontal scroll rather than squeezing
    columns, and the toolbar stacks so filters stay full-width targets. ══ */
 
+@media (max-width: 1320px) {
+	.kpi-grid.cols-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 @media (max-width: 1180px) {
-	.kpi-grid, .kpi-grid.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.kpi-grid, .kpi-grid.cols-3, .kpi-grid.cols-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {
 	.content { padding: 20px 18px 40px; }
@@ -499,7 +553,7 @@ td strong { color: var(--lg-ink); font-weight: 600; }
 	.page-title { font-size: 1.6rem; }
 }
 @media (max-width: 620px) {
-	.kpi-grid, .kpi-grid.cols-3, .kpi-grid.cols-2 { grid-template-columns: 1fr; }
+	.kpi-grid, .kpi-grid.cols-3, .kpi-grid.cols-2, .kpi-grid.cols-5 { grid-template-columns: 1fr; }
 	.toolbar { align-items: stretch; flex-direction: column; }
 	.toolbar .spacer { margin-left: 0; }
 	.lg-search input, .select { width: 100%; min-width: 0; }

@@ -14,12 +14,12 @@ At-Risk <span>Learners</span>
         <div class="num">{{ number_format($riskCounts['high']) }}</div>
         <div class="hint">Urgent case review</div>
     </article>
-    <article class="card stat" style="border-left-color:#f59e0b;">
+    <article class="card stat" style="border-left-color:#F2B84B;">
         <div class="label">Medium Risk</div>
         <div class="num">{{ number_format($riskCounts['medium']) }}</div>
         <div class="hint">Needs close monitoring</div>
     </article>
-    <article class="card stat" style="border-left-color:#16a34a;">
+    <article class="card stat" style="border-left-color:#1F8A4C;">
         <div class="label">Low Risk</div>
         <div class="num">{{ number_format($riskCounts['low']) }}</div>
         <div class="hint">Stable progression</div>

@@ -28,7 +28,7 @@ Nutritional Coordinator <span>Dashboard</span>
         <div class="num">{{ number_format($summary['priority_1']) }}</div>
         <div class="hint">Severely wasted learners</div>
     </article>
-    <article class="card stat" style="border-left-color:#f59e0b;">
+    <article class="card stat" style="border-left-color:#F2B84B;">
         <div class="label">Priority 2</div>
         <div class="num">{{ number_format($summary['priority_2']) }}</div>
         <div class="hint">Wasted or underweight</div>

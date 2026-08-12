@@ -55,12 +55,12 @@ Nutritional <span>Analytics</span>
         <div class="num">{{ number_format($summary['baseline_counts']['severely_wasted']) }}</div>
         <div class="hint">Immediate intervention needed</div>
     </article>
-    <article class="card stat" style="border-left-color:#f59e0b;">
+    <article class="card stat" style="border-left-color:#F2B84B;">
         <div class="label">Wasted/Underweight</div>
         <div class="num">{{ number_format($summary['baseline_counts']['wasted'] + $summary['baseline_counts']['underweight']) }}</div>
         <div class="hint">Close monitoring required</div>
     </article>
-    <article class="card stat" style="border-left-color:#16a34a;">
+    <article class="card stat" style="border-left-color:#1F8A4C;">
         <div class="label">Normal/Healthy</div>
         <div class="num">{{ number_format($summary['baseline_counts']['normal']) }}</div>
         <div class="hint">On-track beneficiaries</div>

@@ -12,35 +12,35 @@
         : collect();
 @endphp
 <style>
-    .evt-board { background: #fff; border: 1px solid #e4ece7; border-radius: 12px; box-shadow: 0 1px 4px rgba(5,46,22,.06); margin-bottom: 18px; }
-    .evt-board-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #e4ece7; }
-    .evt-board-head svg { width: 17px; height: 17px; color: #15803d; flex-shrink: 0; }
-    .evt-board-title { font-size: .82rem; font-weight: 700; color: #0d1f14; }
-    .evt-board-sub { font-size: .72rem; color: #6f8c7a; margin-left: 4px; }
-    .evt-add-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; background: #14532d; color: #fff; border: none; border-radius: 8px; padding: 7px 13px; font-size: .76rem; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .evt-board { background: #fff; border: 1px solid #DCE8E0; border-radius: 12px; box-shadow: 0 1px 4px rgba(5,46,22,.06); margin-bottom: 18px; }
+    .evt-board-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #DCE8E0; }
+    .evt-board-head svg { width: 17px; height: 17px; color: #1F8A4C; flex-shrink: 0; }
+    .evt-board-title { font-size: .82rem; font-weight: 700; color: #1F2D25; }
+    .evt-board-sub { font-size: .72rem; color: #6B7C72; margin-left: 4px; }
+    .evt-add-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; background: #126B3A; color: #fff; border: none; border-radius: 8px; padding: 7px 13px; font-size: .76rem; font-weight: 600; cursor: pointer; font-family: inherit; }
     .evt-add-toggle:hover { background: #0d3d20; }
-    .evt-add-form { display: none; padding: 14px 18px; border-bottom: 1px solid #e4ece7; background: #f7faf8; }
+    .evt-add-form { display: none; padding: 14px 18px; border-bottom: 1px solid #DCE8E0; background: #f7faf8; }
     .evt-add-form.open { display: block; }
     .evt-add-form input, .evt-add-form select, .evt-add-form textarea { width: 100%; border: 1px solid #d1dbd5; border-radius: 8px; padding: 8px 10px; font-family: inherit; font-size: .82rem; color: #1d3c31; margin-bottom: 8px; box-sizing: border-box; }
     .evt-add-form textarea { min-height: 54px; resize: vertical; }
     .evt-add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .evt-form-actions { display: flex; gap: 8px; }
-    .evt-btn-primary { background: #15803d; color: #fff; border: none; border-radius: 8px; padding: 7px 14px; font-size: .78rem; font-weight: 600; cursor: pointer; font-family: inherit; }
-    .evt-btn-ghost { background: #eef3f0; color: #3d5c47; border: none; border-radius: 8px; padding: 7px 14px; font-size: .78rem; font-weight: 600; cursor: pointer; font-family: inherit; }
-    .evt-flash { margin: 10px 18px 0; padding: 8px 12px; border-radius: 8px; font-size: .78rem; background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .evt-btn-primary { background: #1F8A4C; color: #fff; border: none; border-radius: 8px; padding: 7px 14px; font-size: .78rem; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .evt-btn-ghost { background: #eef3f0; color: #3E5348; border: none; border-radius: 8px; padding: 7px 14px; font-size: .78rem; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .evt-flash { margin: 10px 18px 0; padding: 8px 12px; border-radius: 8px; font-size: .78rem; background: #E7F5EC; color: #14653C; border: 1px solid #BFE3CC; }
     .evt-list { max-height: 340px; overflow-y: auto; }
     .evt-item { display: flex; gap: 12px; padding: 12px 18px; border-bottom: 1px solid #eef3f0; }
     .evt-item:last-child { border-bottom: none; }
-    .evt-date-badge { flex-shrink: 0; width: 52px; text-align: center; background: #f0fdf4; border: 1px solid #d3ecdd; border-radius: 9px; padding: 5px 0; }
-    .evt-date-month { font-size: .62rem; font-weight: 700; color: #15803d; text-transform: uppercase; letter-spacing: .04em; }
-    .evt-date-day { font-size: 1.05rem; font-weight: 800; color: #0d1f14; line-height: 1.1; }
+    .evt-date-badge { flex-shrink: 0; width: 52px; text-align: center; background: #F2FAF5; border: 1px solid #d3ecdd; border-radius: 9px; padding: 5px 0; }
+    .evt-date-month { font-size: .62rem; font-weight: 700; color: #1F8A4C; text-transform: uppercase; letter-spacing: .04em; }
+    .evt-date-day { font-size: 1.05rem; font-weight: 800; color: #1F2D25; line-height: 1.1; }
     .evt-item-body { flex: 1; min-width: 0; }
     .evt-item-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .evt-item-title { font-size: .84rem; font-weight: 700; color: #14321f; }
     .evt-cat-badge { font-size: .62rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; }
-    .evt-cat-deadline { background: #fee2e2; color: #b91c1c; }
-    .evt-cat-program { background: #dcfce7; color: #166534; }
-    .evt-item-desc { font-size: .78rem; color: #6f8c7a; margin-top: 3px; }
+    .evt-cat-deadline { background: #FCECEC; color: #b91c1c; }
+    .evt-cat-program { background: #E7F5EC; color: #14653C; }
+    .evt-item-desc { font-size: .78rem; color: #6B7C72; margin-top: 3px; }
     .evt-item-delete-form { margin-left: auto; flex-shrink: 0; }
     .evt-item-delete-btn { background: none; border: none; color: #b91c1c; font-size: .7rem; font-weight: 600; cursor: pointer; font-family: inherit; padding: 2px 6px; white-space: nowrap; }
     .evt-item-delete-btn:hover { text-decoration: underline; }

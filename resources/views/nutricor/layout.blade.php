@@ -13,14 +13,14 @@
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         :root {
-            --g900: #14532d;
-            --g800: #166534;
-            --g700: #15803d;
-            --g600: #16a34a;
-            --g300: #86efac;
-            --cream: #f7f8f5;
+            --g900: #126B3A;
+            --g800: #14653C;
+            --g700: #1F8A4C;
+            --g600: #1F8A4C;
+            --g300: #BFE3CC;
+            --cream: #F6F9F7;
             --card: #ffffff;
-            --border: #e4ece7;
+            --border: #DCE8E0;
             --text-1: #102217;
             --text-2: #385746;
             --text-3: #6f8f7d;
@@ -165,7 +165,7 @@
             height: 28px;
             border-radius: 6px;
         }
-        .sb-logout:hover { color: #ef4444; background: rgba(239,68,68,.12); }
+        .sb-logout:hover { color: #D95C5C; background: rgba(239,68,68,.12); }
         .sidebar:not(:hover):not(.sb-pin) .sb-user { padding: 10px 21px; gap: 0; }
         .sidebar:not(:hover):not(.sb-pin) .sb-user-meta { max-width: 0; opacity: 0; transform: translateX(-6px); }
         .sb-user form { max-width: 40px; overflow: hidden; transition: max-width .24s ease, opacity .18s ease; }
@@ -202,11 +202,11 @@
             padding: 5px 11px;
             border-radius: 999px;
             font-size: .72rem;
-            background: #f0fdf4;
-            color: #15803d;
-            border: 1px solid #bbf7d0;
+            background: #F2FAF5;
+            color: #1F8A4C;
+            border: 1px solid #C4E4D0;
         }
-        .dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
+        .dot { width: 6px; height: 6px; border-radius: 50%; background: #43A866; }
 
         .content { overflow: auto; padding: 18px; }
         .page-header { margin-bottom: 14px; }
@@ -215,7 +215,7 @@
             font-weight: 700;
             letter-spacing: .14em;
             text-transform: uppercase;
-            color: #15803d;
+            color: #1F8A4C;
             margin-bottom: 6px;
         }
         .page-title {
@@ -224,7 +224,7 @@
             line-height: 1.15;
             color: var(--text-1);
         }
-        .page-title span { color: #15803d; font-style: italic; }
+        .page-title span { color: #1F8A4C; font-style: italic; }
         .page-sub { margin-top: 6px; color: var(--text-3); font-size: .8rem; }
 
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -294,9 +294,9 @@
             font-size: .64rem;
             font-weight: 700;
         }
-        .ok { background: #dcfce7; color: #166534; }
-        .warn { background: #fef3c7; color: #92400e; }
-        .bad { background: #fee2e2; color: #991b1b; }
+        .ok { background: #E7F5EC; color: #14653C; }
+        .warn { background: #FDF4E2; color: #8A5A06; }
+        .bad { background: #FCECEC; color: #A32B2B; }
 
         .btn {
             border: 1px solid transparent;
@@ -330,6 +330,9 @@
             .content { padding: 12px; }
         }
     </style>
+    {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
+         last so it overrides this page's own :root colours. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
 <body>
 <aside class="sidebar">

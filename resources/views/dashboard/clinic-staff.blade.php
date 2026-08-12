@@ -10,17 +10,17 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-        :root{--bg:#f7f8f5;--card:#fff;--border:#e4ece7;--text:#0d1f14;--muted:#6f8c7a;--g900:#14532d;--g700:#15803d;--g500:#22c55e;--g100:#dcfce7;--red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;--sidebar:248px;--shadow:0 1px 4px rgba(5,46,22,.06),0 4px 16px rgba(5,46,22,.06)}
+        :root{--bg:#F6F9F7;--card:#fff;--border:#DCE8E0;--text:#1F2D25;--muted:#6B7C72;--g900:#126B3A;--g700:#1F8A4C;--g500:#43A866;--g100:#E7F5EC;--red:#D95C5C;--amber:#F2B84B;--blue:#3D8FA3;--sidebar:248px;--shadow:0 1px 4px rgba(5,46,22,.06),0 4px 16px rgba(5,46,22,.06)}
         html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
         .sidebar{position:fixed;inset:0 auto 0 0;width:var(--sidebar);background:var(--g900);padding:20px 12px;display:flex;flex-direction:column}
         .logo{display:flex;align-items:center;gap:10px;padding:4px 8px 16px;border-bottom:1px solid rgba(255,255,255,.1)}
         .logo b{color:#fff;font-family:'DM Serif Display',serif;font-size:1.2rem}
-        .logo span{color:#86efac;font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;display:block}
+        .logo span{color:#BFE3CC;font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;display:block}
         .nav{padding-top:14px;flex:1}
         .nav a{display:flex;align-items:center;gap:8px;color:rgba(255,255,255,.72);text-decoration:none;font-size:.83rem;padding:10px;border-radius:10px;margin-bottom:4px}
-        .nav a.active,.nav a:hover{background:rgba(34,197,94,.18);color:#dcfce7}
+        .nav a.active,.nav a:hover{background:rgba(34,197,94,.18);color:#E7F5EC}
         .user{padding:12px 8px;border-top:1px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:8px;color:#fff}
-        .avatar{width:32px;height:32px;border-radius:50%;background:#16a34a;display:grid;place-items:center;font-weight:700;font-size:.75rem}
+        .avatar{width:32px;height:32px;border-radius:50%;background:#1F8A4C;display:grid;place-items:center;font-weight:700;font-size:.75rem}
         .logout-form{margin-left:auto;display:flex;align-items:center}
         .logout-btn{background:none;border:none;color:rgba(255,255,255,.62);cursor:pointer;border-radius:8px;width:30px;height:30px;display:grid;place-items:center;transition:background .15s,color .15s}
         .logout-btn:hover{background:rgba(239,68,68,.14);color:#fecaca}
@@ -31,11 +31,11 @@
         .bc-home{color:var(--muted);text-decoration:none}.bc-home:hover{color:var(--g700)}
         .bc-sep{color:var(--muted);font-size:.9rem}
         .bc-current{color:var(--text);font-weight:500}
-        .chip{display:flex;align-items:center;gap:7px;font-size:.75rem;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;padding:6px 12px;border-radius:999px}
-        .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0}
+        .chip{display:flex;align-items:center;gap:7px;font-size:.75rem;background:#F2FAF5;border:1px solid #C4E4D0;color:#1F8A4C;padding:6px 12px;border-radius:999px}
+        .dot{width:7px;height:7px;border-radius:50%;background:#43A866;flex-shrink:0}
         .content{padding:24px;overflow:auto}
         .title{font-family:'DM Serif Display',serif;font-size:1.7rem}
-        .title i{color:#15803d}
+        .title i{color:#1F8A4C}
         .sub{color:var(--muted);font-size:.85rem;margin-top:4px}
         .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}
         .card{background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow)}
@@ -44,12 +44,12 @@
         .stat span{font-size:.72rem;color:var(--muted)}
         .grid{display:grid;grid-template-columns:1.2fr 1fr;gap:12px}
         .section{padding:14px}
-        .section h3{font-size:.82rem;color:#3d5c47;margin-bottom:10px;text-transform:uppercase;letter-spacing:.08em}
+        .section h3{font-size:.82rem;color:#3E5348;margin-bottom:10px;text-transform:uppercase;letter-spacing:.08em}
         table{width:100%;border-collapse:collapse}
         th,td{padding:10px;border-bottom:1px solid var(--border);font-size:.78rem;text-align:left}
         th{font-size:.67rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:#f7faf8}
         .pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:.68rem;font-weight:700}
-        .ok{background:var(--g100);color:#166534}.warn{background:#fef3c7;color:#92400e}.bad{background:#fee2e2;color:var(--red)}
+        .ok{background:var(--g100);color:#14653C}.warn{background:#FDF4E2;color:#8A5A06}.bad{background:#FCECEC;color:var(--red)}
         .row{display:flex;justify-content:space-between;align-items:center;margin:8px 0;font-size:.8rem}
         .bar{height:8px;background:#edf5ef;border-radius:999px;overflow:hidden}
         .fill{height:100%}
@@ -61,6 +61,9 @@
         @media (max-width:980px){.stats{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}
         @media (max-width:780px){.sidebar{display:none}.main{margin-left:0}}
     </style>
+    {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
+         last so it overrides this page's own :root colours. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
 <body>
 <aside class="sidebar">
@@ -129,13 +132,13 @@
             <article class="card section">
                 <h3>Medicine Issuance Snapshot</h3>
                 <div class="row"><span>Paracetamol</span><span>78 tablets left</span></div>
-                <div class="bar"><div class="fill" style="width:44%;background:#f59e0b"></div></div>
+                <div class="bar"><div class="fill" style="width:44%;background:#F2B84B"></div></div>
                 <div class="row"><span>Antihistamine</span><span>42 tabs left</span></div>
-                <div class="bar"><div class="fill" style="width:22%;background:#ef4444"></div></div>
+                <div class="bar"><div class="fill" style="width:22%;background:#D95C5C"></div></div>
                 <div class="row"><span>Bandages</span><span>120 pcs left</span></div>
-                <div class="bar"><div class="fill" style="width:61%;background:#22c55e"></div></div>
+                <div class="bar"><div class="fill" style="width:61%;background:#43A866"></div></div>
                 <div class="row"><span>ORS</span><span>35 sachets left</span></div>
-                <div class="bar"><div class="fill" style="width:33%;background:#3b82f6"></div></div>
+                <div class="bar"><div class="fill" style="width:33%;background:#3D8FA3"></div></div>
             </article>
         </section>
 

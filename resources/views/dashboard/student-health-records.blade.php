@@ -7,11 +7,16 @@
     <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
     <title>Health Records - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
-        @php $pageCssPath = resource_path('css/school-nurse-student-health-records.css'); @endphp
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <script>document.documentElement.classList.add('js');</script>
+    {{-- LUSOG order: theme, then this page's sheet, then the nurse rail. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-theme.css')) !!}</style>
+    @php $pageCssPath = resource_path('css/school-nurse-student-health-records.css'); @endphp
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
+    <style>{!! file_get_contents(resource_path('css/nurse-sidebar.css')) !!}</style>
 </head>
 <body>
 @php
@@ -42,30 +47,63 @@
         ->countBy()
         ->sortKeys();
 @endphp
-@include('partials.nurse-sidebar', ['active' => 'records'])
+@include('partials.nurse-lusog-sidebar', ['active' => 'records'])
+
+@php
+    $schoolName = session('active_school_name', 'No school assigned');
+    $schoolYear = \App\Models\StudentHealthRecord::currentSchoolYear();
+@endphp
 
 <div class="main">
     <header class="topbar">
-        <div class="topbar-breadcrumb">
-            <a href="{{ route('dashboard.school-nurse') }}" class="bc-home">Dashboard</a>
-            <span class="bc-sep">&rsaquo;</span>
-            <span class="bc-current">Health Records</span>
-        </div>
-        <div class="topbar-chip"><div class="dot"></div>School Nurse</div>
+        <div class="topbar-bc"><span>School Nurse</span><span class="bc-sep">&rsaquo;</span><span>Health Records</span></div>
+        <div class="topbar-spacer"></div>
+        <div class="topbar-chip"><span class="dot"></span>{{ $schoolName }} &middot; SY {{ $schoolYear }}</div>
         @include('partials.live-clock')
     </header>
 
     <div class="content">
         {{-- ── List view ─────────────────────────────────────────────── --}}
         <div id="recordsListView">
-            <div class="page-eyebrow">School Health Card Workflow</div>
-            <h1 class="page-title">Student <span>Health Profiles</span></h1>
-            <p class="page-sub">This page displays submitted adviser forms. Consultation records are handled in Consultation Log.</p>
+            <div class="page-header">
+                <div class="page-eyebrow">School Health Card Workflow</div>
+                <h1 class="page-title">Student <span>Health Profiles</span></h1>
+                <p class="page-sub">This page displays submitted adviser forms. Consultation records are handled in Consultation Log.</p>
+            </div>
 
-            <div class="cards">
-                <div class="mini-card"><div class="val">{{ count($records) }}</div><div class="lbl">Total Submissions</div></div>
-                <div class="mini-card"><div class="val">{{ $pendingCount }}</div><div class="lbl">Pending School Nurse Examination</div></div>
-                <div class="mini-card"><div class="val">{{ $doneCount }}</div><div class="lbl">Examined by School Nurse</div></div>
+            <div class="kpi-grid cols-3">
+                <div class="card kpi accent-brand">
+                    <div class="kpi-top">
+                        <div class="kpi-label">Total Submissions</div>
+                        <div class="kpi-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        </div>
+                    </div>
+                    <div class="kpi-value">{{ count($records) }}</div>
+                    <div class="kpi-hint">Adviser forms on the roster</div>
+                </div>
+
+                <div class="card kpi accent-amber">
+                    <div class="kpi-top">
+                        <div class="kpi-label">Pending Examination</div>
+                        <div class="kpi-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        </div>
+                    </div>
+                    <div class="kpi-value">{{ $pendingCount }}</div>
+                    <div class="kpi-hint">Waiting on the school nurse</div>
+                </div>
+
+                <div class="card kpi accent-success">
+                    <div class="kpi-top">
+                        <div class="kpi-label">Examined</div>
+                        <div class="kpi-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>
+                        </div>
+                    </div>
+                    <div class="kpi-value">{{ $doneCount }}</div>
+                    <div class="kpi-hint">Medical record completed</div>
+                </div>
             </div>
 
             <section class="shr-filter">
@@ -331,7 +369,7 @@
                 <div class="student-profile-section">
                     <h4>Health History <span style="font-size:.72rem;font-weight:400;color:var(--text-3);">(across school years)</span></h4>
                     <div id="pHistoryList">
-                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view history.</div></div>
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Select a student to view history.</div></div>
                     </div>
                 </div>
             </section>
@@ -344,7 +382,7 @@
                 <div class="student-profile-section">
                     <h4>Health Assessment <span style="font-size:.72rem;font-weight:400;color:var(--text-3);">(MLHAT)</span></h4>
                     <div id="phaStatus">
-                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view assessment.</div></div>
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Select a student to view assessment.</div></div>
                     </div>
                 </div>
             </section>
@@ -353,7 +391,7 @@
                 <div class="student-profile-section">
                     <h4>Parental Consent &mdash; Health Services (Sulat-Pahibalo)</h4>
                     <div id="pcConsentStatus">
-                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view consent status.</div></div>
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Select a student to view consent status.</div></div>
                     </div>
                 </div>
             </section>
@@ -385,7 +423,7 @@
                 <div class="student-profile-section">
                     <h4>Note History</h4>
                     <div id="pNotesList">
-                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view notes.</div></div>
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Select a student to view notes.</div></div>
                     </div>
                 </div>
             </section>
@@ -394,7 +432,7 @@
                 <div class="student-profile-section">
                     <h4>Consultation Log</h4>
                     <div id="pConsultList">
-                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view consultations.</div></div>
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Select a student to view consultations.</div></div>
                     </div>
                 </div>
             </section>
@@ -408,7 +446,7 @@
                 <div class="student-profile-section">
                     <h4>Health Conditions</h4>
                     <div id="shcConditionsList">
-                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Select a student to view conditions.</div></div>
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Select a student to view conditions.</div></div>
                     </div>
                 </div>
             </section>
@@ -743,11 +781,11 @@
 
         if (!lrn) {
             setBadge('pConsentBadge', '–');
-            statusEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No LRN available.</div></div>';
+            statusEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">No LRN available.</div></div>';
             return;
         }
 
-        statusEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>';
+        statusEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Loading&hellip;</div></div>';
         setBadge('pConsentBadge', '…');
 
         try {
@@ -756,7 +794,7 @@
             });
 
             if (!resp.ok) {
-                statusEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not check consent status.</div></div>';
+                statusEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not check consent status.</div></div>';
                 return;
             }
 
@@ -771,8 +809,8 @@
                 const bannerStyle = data.consent_type === 'refused'
                     ? 'background:#f3f4f6;border:1px solid #d1d5db;color:#374151;'
                     : data.consent_type === 'partial'
-                        ? 'background:#fef3c7;border:1px solid #fcd34d;color:#92400e;'
-                        : 'background:#dcfce7;border:1px solid #86efac;color:#166534;';
+                        ? 'background:#FDF4E2;border:1px solid #fcd34d;color:#8A5A06;'
+                        : 'background:#E7F5EC;border:1px solid #BFE3CC;color:#14653C;';
 
                 const consentLabel = data.consent_type === 'refused'
                     ? 'Consent Refused'
@@ -823,7 +861,7 @@
                 const viewBtn = data.has_file && data.consent_id
                     ? `<div style="margin-top:14px;">
                            <a href="/parental-consent/${data.consent_id}/download" target="_blank" rel="noopener noreferrer"
-                              style="display:inline-flex;align-items:center;gap:6px;background:#15803d;color:#fff;border-radius:7px;padding:7px 14px;font-size:.78rem;font-weight:700;text-decoration:none;">
+                              style="display:inline-flex;align-items:center;gap:6px;background:#1F8A4C;color:#fff;border-radius:7px;padding:7px 14px;font-size:.78rem;font-weight:700;text-decoration:none;">
                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                                View Consent Form
                            </a>
@@ -841,7 +879,7 @@
                     ${allergySection}
                     ${otherIllnessRow}
                     ${medCertRow}
-                    <div class="kv" style="margin-top:8px;border-top:1px solid #e4ece7;padding-top:8px;"><div class="k">School Year:</div><div class="v">${data.school_year || '—'}</div></div>
+                    <div class="kv" style="margin-top:8px;border-top:1px solid #DCE8E0;padding-top:8px;"><div class="k">School Year:</div><div class="v">${data.school_year || '—'}</div></div>
                     <div class="kv"><div class="k">Submitted By:</div><div class="v">${data.uploaded_by || '—'}</div></div>
                     <div class="kv"><div class="k">Submitted On:</div><div class="v">${data.uploaded_at || '—'}</div></div>
                     ${viewBtn}`;
@@ -849,42 +887,42 @@
             } else {
                 setBadge('pConsentBadge', 'Pending');
                 statusEl.innerHTML = `
-                    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;font-size:.82rem;font-weight:700;color:#991b1b;margin-bottom:12px;">
+                    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#FCECEC;border:1px solid #fca5a5;border-radius:8px;font-size:.82rem;font-weight:700;color:#A32B2B;margin-bottom:12px;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                         No consent on file for SY ${data.school_year || '—'}
                     </div>
                     <div class="kv"><div class="k">School Year:</div><div class="v">${data.school_year || '—'}</div></div>
-                    <div style="margin-top:10px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:.78rem;color:#92400e;line-height:1.5;">
+                    <div style="margin-top:10px;padding:10px 12px;background:#FDF4E2;border:1px solid #fcd34d;border-radius:8px;font-size:.78rem;color:#8A5A06;line-height:1.5;">
                         The Class Adviser has not yet submitted a parental consent record for this student.
                     </div>`;
             }
         } catch (_err) {
-            statusEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load consent status.</div></div>';
+            statusEl.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load consent status.</div></div>';
         }
     };
 
     const loadHealthAssessment = async (lrn) => {
         const el = document.getElementById('phaStatus');
         if (!el) return;
-        if (!lrn) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No LRN available.</div></div>'; return; }
-        el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>';
+        if (!lrn) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">No LRN available.</div></div>'; return; }
+        el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Loading&hellip;</div></div>';
         try {
             const resp = await fetch('/api/student-health-assessment?lrn=' + encodeURIComponent(lrn), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-            if (!resp.ok) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load assessment.</div></div>'; return; }
+            if (!resp.ok) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load assessment.</div></div>'; return; }
             const d = await resp.json();
             if (!d.has_assessment) {
                 el.innerHTML = `
-                    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;font-size:.82rem;font-weight:700;color:#991b1b;margin-bottom:12px;">
+                    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#FCECEC;border:1px solid #fca5a5;border-radius:8px;font-size:.82rem;font-weight:700;color:#A32B2B;margin-bottom:12px;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                         No health assessment on file for SY ${d.school_year || '—'}
                     </div>
-                    <div style="padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:.78rem;color:#92400e;">
+                    <div style="padding:10px 12px;background:#FDF4E2;border:1px solid #fcd34d;border-radius:8px;font-size:.78rem;color:#8A5A06;">
                         The Class Adviser has not yet submitted an MLHAT health assessment for this student.
                     </div>`;
                 return;
             }
 
-            const bool = (v, yes = 'Yes', no = 'No') => v ? `<span style="color:#15803d;font-weight:600;">${yes}</span>` : no;
+            const bool = (v, yes = 'Yes', no = 'No') => v ? `<span style="color:#1F8A4C;font-weight:600;">${yes}</span>` : no;
             const row = (k, v) => v ? `<div class="kv"><div class="k">${k}:</div><div class="v">${v}</div></div>` : '';
             const section = (title, html) => `<div style="margin-bottom:12px;padding:10px 12px;background:#f7faf8;border-radius:8px;border:1px solid #d1dbd5;">
                 <div style="font-size:.68rem;font-weight:700;color:#334a3f;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">${title}</div>${html}</div>`;
@@ -899,7 +937,7 @@
             ].filter(Boolean);
             const medHistHtml = medItems.length
                 ? `<div style="font-size:.8rem;color:#1d3c31;">${medItems.join(', ')}</div>` + (d.med_current_medications ? row('Current Medications', d.med_current_medications) : '') + (d.med_other_conditions ? row('Other Conditions', d.med_other_conditions) : '')
-                : '<div class="kv"><div class="k">Findings:</div><div class="v" style="color:#7a9e87;">None reported</div></div>';
+                : '<div class="kv"><div class="k">Findings:</div><div class="v" style="color:#6B7C72;">None reported</div></div>';
 
             // Family history
             const famItems = [
@@ -907,7 +945,7 @@
                 d.fam_heart_disease && 'Heart Disease', d.fam_cancer && 'Cancer',
                 d.fam_mental_health && 'Mental Health Conditions',
             ].filter(Boolean);
-            const famHistHtml = (famItems.length ? `<div style="font-size:.8rem;color:#1d3c31;">${famItems.join(', ')}</div>` : '<div class="kv"><div class="k">Findings:</div><div class="v" style="color:#7a9e87;">None reported</div></div>') +
+            const famHistHtml = (famItems.length ? `<div style="font-size:.8rem;color:#1d3c31;">${famItems.join(', ')}</div>` : '<div class="kv"><div class="k">Findings:</div><div class="v" style="color:#6B7C72;">None reported</div></div>') +
                 (d.fam_genetic_hereditary ? row('Genetic/Hereditary', d.fam_genetic_hereditary) : '');
 
             // Vital signs
@@ -933,14 +971,14 @@
                 const findings = (val.findings || []).join(', ');
                 const notes = val.notes || '';
                 if (!findings && !notes) return '';
-                return row(label, findings + (notes ? ` <span style="color:#7a9e87;font-size:.76rem;">(${notes})</span>` : ''));
+                return row(label, findings + (notes ? ` <span style="color:#6B7C72;font-size:.76rem;">(${notes})</span>` : ''));
             }).filter(Boolean).join('');
 
             // Oral health
             const teethStr = (d.teeth_condition || []).join(', ');
 
             el.innerHTML = `
-                <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#dcfce7;border:1px solid #86efac;border-radius:8px;font-size:.82rem;font-weight:700;color:#166534;margin-bottom:12px;">
+                <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#E7F5EC;border:1px solid #BFE3CC;border-radius:8px;font-size:.82rem;font-weight:700;color:#14653C;margin-bottom:12px;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                     Health Assessment on file &mdash; SY ${d.school_year || '—'}
                 </div>
@@ -962,55 +1000,55 @@
                 ${d.summary_of_findings || d.recommendations ? section('J. Summary & Recommendations',
                     row('Summary of Findings', d.summary_of_findings) + row('Recommendations', d.recommendations) + row('Examiner Signature', d.examiner_signature)) : ''}`;
         } catch (_err) {
-            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load assessment.</div></div>';
+            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load assessment.</div></div>';
         }
     };
 
     const loadHealthHistory = async (lrn) => {
         const el = document.getElementById('pHistoryList');
         if (!el) return;
-        if (!lrn) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No LRN available.</div></div>'; return; }
-        el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>';
+        if (!lrn) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">No LRN available.</div></div>'; return; }
+        el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Loading&hellip;</div></div>';
         try {
             const resp = await fetch('/api/student-health-history?lrn=' + encodeURIComponent(lrn), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-            if (!resp.ok) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load history.</div></div>'; return; }
+            if (!resp.ok) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load history.</div></div>'; return; }
             const d = await resp.json();
             const years = d.years || [];
 
             if (!years.length) {
-                el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No records on file for this student yet.</div></div>';
+                el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">No records on file for this student yet.</div></div>';
                 return;
             }
 
             const fmt = (v, unit) => (v === null || v === undefined || v === '') ? '—' : (v + (unit || ''));
 
             el.innerHTML = `
-                <div style="font-size:.76rem;color:#3d5c47;margin-bottom:10px;">
+                <div style="font-size:.76rem;color:#3E5348;margin-bottom:10px;">
                     ${years.length} school year${years.length > 1 ? 's' : ''} on file for this student. Each year's data is preserved separately — promoting a student to a new grade never overwrites prior years.
                 </div>
             ` + years.slice().reverse().map(y => `
-                <div style="border:1px solid ${y.is_current ? '#86efac' : '#e4ece7'};background:${y.is_current ? '#f0fdf4' : '#fff'};border-radius:10px;padding:10px 12px;margin-bottom:10px;">
+                <div style="border:1px solid ${y.is_current ? '#BFE3CC' : '#DCE8E0'};background:${y.is_current ? '#F2FAF5' : '#fff'};border-radius:10px;padding:10px 12px;margin-bottom:10px;">
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
                         <span style="font-size:.86rem;font-weight:700;color:#1d3c31;">SY ${y.school_year}</span>
-                        ${y.is_current ? '<span style="font-size:.66rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#15803d;color:#fff;">Current</span>' : ''}
-                        <span style="font-size:.76rem;color:#7a9e87;">&mdash; ${y.section || '—'}</span>
+                        ${y.is_current ? '<span style="font-size:.66rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#1F8A4C;color:#fff;">Current</span>' : ''}
+                        <span style="font-size:.76rem;color:#6B7C72;">&mdash; ${y.section || '—'}</span>
                     </div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                         <div>
-                            <div style="font-size:.66rem;font-weight:700;color:#7a9e87;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;">Baseline (${fmt(y.baseline.recorded_at)})</div>
+                            <div style="font-size:.66rem;font-weight:700;color:#6B7C72;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;">Baseline (${fmt(y.baseline.recorded_at)})</div>
                             <div style="font-size:.78rem;color:#1d3c31;">Ht ${fmt(y.baseline.height_cm, ' cm')} &middot; Wt ${fmt(y.baseline.weight_kg, ' kg')} &middot; BMI ${fmt(y.baseline.bmi)}</div>
-                            <div style="font-size:.76rem;color:#3d5c47;">${fmt(y.baseline.status)}</div>
+                            <div style="font-size:.76rem;color:#3E5348;">${fmt(y.baseline.status)}</div>
                         </div>
                         <div>
-                            <div style="font-size:.66rem;font-weight:700;color:#7a9e87;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;">Endline (${fmt(y.endline.recorded_at)})</div>
+                            <div style="font-size:.66rem;font-weight:700;color:#6B7C72;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;">Endline (${fmt(y.endline.recorded_at)})</div>
                             <div style="font-size:.78rem;color:#1d3c31;">Ht ${fmt(y.endline.height_cm, ' cm')} &middot; Wt ${fmt(y.endline.weight_kg, ' kg')} &middot; BMI ${fmt(y.endline.bmi)}</div>
-                            <div style="font-size:.76rem;color:#3d5c47;">${fmt(y.endline.status)}</div>
+                            <div style="font-size:.76rem;color:#3E5348;">${fmt(y.endline.status)}</div>
                         </div>
                     </div>
                 </div>
             `).join('');
         } catch (_err) {
-            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load history.</div></div>';
+            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load history.</div></div>';
         }
     };
 
@@ -1022,16 +1060,16 @@
         setBadge('pConsultBadge', 0);
 
         if (!lrn) {
-            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No LRN available.</div></div>';
+            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">No LRN available.</div></div>';
             return;
         }
 
-        el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>';
+        el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Loading&hellip;</div></div>';
 
         try {
             const resp = await fetch('/api/student-consultations?lrn=' + encodeURIComponent(lrn), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             if (!resp.ok) {
-                el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load consultations.</div></div>';
+                el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load consultations.</div></div>';
                 return;
             }
 
@@ -1076,7 +1114,7 @@
                 el.appendChild(card);
             });
         } catch (_err) {
-            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load consultations.</div></div>';
+            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load consultations.</div></div>';
         }
     };
 
@@ -1131,22 +1169,22 @@
         setBadge('pNotesBadge', 0);
 
         if (!lrn) {
-            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">No LRN available.</div></div>';
+            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">No LRN available.</div></div>';
             return;
         }
 
-        el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Loading&hellip;</div></div>';
+        el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Loading&hellip;</div></div>';
 
         try {
             const resp = await fetch('/api/student-clinic-notes?lrn=' + encodeURIComponent(lrn), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             if (!resp.ok) {
-                el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load clinic notes.</div></div>';
+                el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load clinic notes.</div></div>';
                 return;
             }
 
             renderClinicNotes((await resp.json()).notes || []);
         } catch (_err) {
-            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#7a9e87;">Could not load clinic notes.</div></div>';
+            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load clinic notes.</div></div>';
         }
     };
 
@@ -1232,11 +1270,11 @@
         if (!listEl) return;
 
         if (!lrn) {
-            listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">No LRN available for this record.</div>';
+            listEl.innerHTML = '<div style="font-size:.78rem;color:#6B7C72;">No LRN available for this record.</div>';
             return;
         }
 
-        listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">Loading&hellip;</div>';
+        listEl.innerHTML = '<div style="font-size:.78rem;color:#6B7C72;">Loading&hellip;</div>';
 
         try {
             const resp = await fetch('/api/student-conditions?lrn=' + encodeURIComponent(lrn), {
@@ -1244,21 +1282,21 @@
             });
 
             if (!resp.ok) {
-                listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">No conditions recorded.</div>';
+                listEl.innerHTML = '<div style="font-size:.78rem;color:#6B7C72;">No conditions recorded.</div>';
                 return;
             }
 
             const conditions = (await resp.json()).conditions || [];
 
             if (!conditions.length) {
-                listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">No health conditions on file for this student.</div>';
+                listEl.innerHTML = '<div style="font-size:.78rem;color:#6B7C72;">No health conditions on file for this student.</div>';
                 return;
             }
 
             listEl.innerHTML = conditions.map(c => {
                 const badge = c.is_verified
-                    ? '<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#dcfce7;color:#15803d;margin-left:6px;">Verified / Diagnosed</span>'
-                    : '<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#fef3c7;color:#92400e;margin-left:6px;">Self-reported</span>';
+                    ? '<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#E7F5EC;color:#1F8A4C;margin-left:6px;">Verified / Diagnosed</span>'
+                    : '<span style="font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#FDF4E2;color:#8A5A06;margin-left:6px;">Self-reported</span>';
 
                 return `<div style="border-bottom:1px solid #edf5ef;padding:8px 0;">
                     <div style="display:flex;align-items:center;gap:4px;">
@@ -1268,7 +1306,7 @@
                 </div>`;
             }).join('');
         } catch (_err) {
-            listEl.innerHTML = '<div style="font-size:.78rem;color:#7a9e87;">Could not load conditions.</div>';
+            listEl.innerHTML = '<div style="font-size:.78rem;color:#6B7C72;">Could not load conditions.</div>';
         }
     };
 
@@ -1412,5 +1450,7 @@
     applyFilters();
 })();
 </script>
+
+@include('partials.nurse-page-transition')
 </body>
 </html>

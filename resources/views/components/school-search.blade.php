@@ -87,7 +87,7 @@
 .sdd-input:focus {
     outline: none;
     cursor: text;
-    border-color: #22c55e;
+    border-color: #43A866;
     box-shadow: 0 0 0 3px rgba(34,197,94,.15);
 }
 
@@ -178,8 +178,8 @@
 }
 
 .sdd-opt.selected {
-    background: #dcfce7;
-    color: #14532d;
+    background: #E7F5EC;
+    color: #126B3A;
     font-weight: 600;
 }
 

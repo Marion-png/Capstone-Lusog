@@ -1,8 +1,8 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-    --g900: #14532d; --g700: #15803d; --g300: #86efac; --g100: #dcfce7;
-    --bg: #f7f8f5; --card: #fff; --border: #e4ece7; --text: #0d1f14; --muted: #6f8c7a;
-    --red: #ef4444; --amber: #f59e0b; --blue: #3b82f6;
+    --g900: #126B3A; --g700: #1F8A4C; --g300: #BFE3CC; --g100: #E7F5EC;
+    --bg: #F6F9F7; --card: #fff; --border: #DCE8E0; --text: #1F2D25; --muted: #6B7C72;
+    --red: #D95C5C; --amber: #F2B84B; --blue: #3D8FA3;
     --radius: 12px; --shadow: 0 1px 4px rgba(5,46,22,.06), 0 4px 16px rgba(5,46,22,.06);
 }
 html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100%; }
@@ -21,12 +21,12 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
 /* ── Cards, badges, alerts ───────────────────────────────────── */
 .cf-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 16px; }
 .cf-card-head { padding: 13px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.cf-card-head h2 { font-size: .82rem; text-transform: uppercase; letter-spacing: .08em; color: #3d5c47; }
+.cf-card-head h2 { font-size: .82rem; text-transform: uppercase; letter-spacing: .08em; color: #3E5348; }
 .cf-card-body { padding: 18px; }
 .cf-badge { display: inline-block; font-size: .7rem; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
 .cf-flash { margin-bottom: 14px; padding: 11px 14px; border-radius: 10px; font-size: .84rem; }
-.cf-flash-ok { background: var(--g100); color: #166534; border: 1px solid var(--g300); }
-.cf-flash-err { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+.cf-flash-ok { background: var(--g100); color: #14653C; border: 1px solid var(--g300); }
+.cf-flash-err { background: #FCECEC; color: #A32B2B; border: 1px solid #fecaca; }
 
 /* ── Student list table ──────────────────────────────────────── */
 .cf-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
@@ -47,7 +47,7 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
 .cf-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
 /* ── Parent share link box ───────────────────────────────────── */
-.cf-share { display: flex; gap: 8px; align-items: center; background: #f0fdf4; border: 1px dashed var(--g300); border-radius: 10px; padding: 10px 12px; margin-top: 12px; flex-wrap: wrap; }
+.cf-share { display: flex; gap: 8px; align-items: center; background: #F2FAF5; border: 1px dashed var(--g300); border-radius: 10px; padding: 10px 12px; margin-top: 12px; flex-wrap: wrap; }
 .cf-share input { flex: 1; min-width: 200px; border: none; background: transparent; font-size: .78rem; color: var(--g900); font-family: monospace; }
 .cf-share input:focus { outline: none; }
 
@@ -82,7 +82,7 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
 .doc-consent-option input[type="radio"] { width: 16px; height: 16px; margin-top: 3px; accent-color: var(--g700); flex-shrink: 0; cursor: pointer; }
 .doc-consent-option label { cursor: pointer; }
 .doc-writein { width: 100%; border: none; border-bottom: 1px solid #111; font-family: inherit; font-size: .9rem; padding: 2px 4px; background: #fbfdf9; margin-top: 4px; }
-.doc-writein:focus { outline: none; background: #f0fdf4; }
+.doc-writein:focus { outline: none; background: #F2FAF5; }
 .doc-writein[readonly] { background: transparent; }
 .doc-allergy-note { font-style: italic; font-size: .85rem; margin-top: 10px; }
 
@@ -115,6 +115,37 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
     .cf-table thead { display: none; }
     .cf-table tr { display: block; border-bottom: 1px solid var(--border); padding: 8px 0; }
     .cf-table td { display: block; border: none; padding: 4px 12px; }
+}
+
+/* ── Page enter: rise ────────────────────────────────────────────
+   Opening Consent Forms from the nurse rail plays as one movement: the
+   previous page slides down and out (partials/nurse-page-transition),
+   then this one rises into its place. The topbar leads and the content
+   follows a beat later, so the page assembles rather than sliding as a
+   single slab.
+
+   Opt-in via `.cf-rise` on <body> — this sheet is shared with the parent
+   consent form and the print/PDF view, which must not animate. The
+   @media screen wrapper is the second guard on that: even if the class
+   were added to a printable page, the print sheet below cannot inherit
+   an animation that only exists on screen.
+
+   Pure CSS with `both` fill, deliberately: a JS-driven reveal that fails
+   to run leaves the page invisible, which is how the nurse rail's
+   .page-ready trap works. An animation cannot fail that way.
+   ─────────────────────────────────────────────────────────────── */
+@media screen {
+    @keyframes cf-rise-in {
+        from { opacity: 0; transform: translateY(16px); }
+        to   { opacity: 1; transform: none; }
+    }
+
+    .cf-rise .cf-topbar { animation: cf-rise-in .34s cubic-bezier(.22, .61, .36, 1) both; }
+    .cf-rise .cf-wrap   { animation: cf-rise-in .42s cubic-bezier(.22, .61, .36, 1) .05s both; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cf-rise .cf-topbar, .cf-rise .cf-wrap { animation: none; }
 }
 
 /* ── Print / Export as PDF ───────────────────────────────────── */

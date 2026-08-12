@@ -1,0 +1,209 @@
+/* ══════════════════════════════════════════════════════════════════════
+   LUSOG — shared palette
+   ──────────────────────────────────────────────────────────────────────
+   One colour source for the pages that are NOT yet on css/lusog-theme.css
+   (class adviser, nutrition coordinator, clinic staff, system admin, the
+   consent-form and health-assessment sheets, and the remaining nurse
+   tabs). Those pages each grew their own private green ramp, so the same
+   product shipped several different greens.
+
+   How to use it: inline this file into the page head AFTER the page's own
+   styles, using the same file_get_contents pattern the other sheets use.
+   It re-declares custom properties on :root and nothing else — with one
+   deliberate exception, the scrollbar treatment at the bottom, which is
+   pure chrome (no layout, spacing or typography) and has to reach every
+   page to stop each surface inventing its own bar. Coming last is what
+   lets both win over the page's own rules.
+
+   NOTE FOR EDITORS: this file is inlined inside a style element, so it
+   must never contain the character sequence that closes one. An HTML
+   parser does not read CSS comments — it ends the style element at that
+   sequence wherever it appears, and every rule after it spills onto the
+   page as visible text. That is why the usage example above is described
+   rather than written out.
+
+   Pages already on lusog-theme.css must NOT load this — the theme is the
+   authority there and defines the same tokens itself.
+
+   Green is the brand and the "healthy" signal only. Amber is monitoring,
+   orange at-risk, coral critical, teal neutral information.
+   ══════════════════════════════════════════════════════════════════════ */
+
+:root {
+	/* ── LUSOG tokens (mirrors css/lusog-theme.css) ── */
+	--lg-emerald-deep: #126B3A;
+	--lg-emerald: #1F8A4C;
+	--lg-emerald-dark: #0E5730;
+	--lg-green: #43A866;
+	--lg-mint: #E7F5EC;
+
+	--lg-page: #F6F9F7;
+	--lg-card: #FFFFFF;
+	--lg-ink: #1F2D25;
+	--lg-ink-soft: #6B7C72;
+	--lg-border: #DCE8E0;
+	--lg-border-strong: #C7DCCE;
+	--lg-rail: #EEF4F0;
+
+	--lg-amber: #F2B84B;
+	--lg-amber-ink: #8A5A06;
+	--lg-amber-tint: #FDF4E2;
+	--lg-orange: #E58A3A;
+	--lg-orange-ink: #9A4E10;
+	--lg-orange-tint: #FDF0E4;
+	--lg-danger: #D95C5C;
+	--lg-danger-ink: #A32B2B;
+	--lg-danger-tint: #FCECEC;
+	--lg-info: #3D8FA3;
+	--lg-info-ink: #1F5F70;
+	--lg-info-tint: #E8F2F5;
+	--lg-success-ink: #14653C;
+
+	--series-healthy: #126B3A;
+	--series-risk: #C97A1A;
+
+	/* ── Shared rail (role-sidebar.css reads these) ──
+	   Without them that sheet falls back to its old #14532d green, which
+	   is why the adviser and school head rails did not match the nurse. ── */
+	--asb-width: 252px;
+	--asb-bg: #126B3A;
+	--asb-mark-bg: rgba(255, 255, 255, .14);
+	--asb-mark-ink: #FFFFFF;
+	--asb-sub-ink: rgba(231, 245, 236, .72);
+	--asb-label-ink: rgba(191, 227, 204, .78);
+	--asb-ink: #BFE3CC;
+	--asb-ink-strong: #FFFFFF;
+	--asb-hover-bg: rgba(255, 255, 255, .1);
+	--asb-active-bg: #1F8A4C;
+	--asb-active-ink: #FFFFFF;
+	--asb-press-bg: #239755;
+	--asb-accent: #FFFFFF;
+	--asb-avatar-bg: #1F8A4C;
+	--asb-role-ink: #BFE3CC;
+
+	/* ── Announcements board and live-clock pill ── */
+	--ann-radius: 12px;
+	--ann-border: #DCE8E0;
+	--ann-shadow: 0 2px 8px rgba(31, 45, 37, .06);
+	--ann-icon: #126B3A;
+	--ann-title: #1F2D25;
+	--ann-sub: #6B7C72;
+	--ann-body: #3E5348;
+	--ann-btn-bg: #1F8A4C;
+	--ann-btn-bg-hover: #126B3A;
+	--ann-empty: #6B7C72;
+	--clock-bg: #FFFFFF;
+	--clock-border: #DCE8E0;
+	--clock-ink: #1F2D25;
+	--clock-muted: #6B7C72;
+	--clock-icon: #1F8A4C;
+
+	/* ── Legacy ramp bridge ──
+	   The old sheets address colour as --g950 (darkest) … --g50 (lightest).
+	   These re-point that ramp at LUSOG while preserving its lightness
+	   order — a light step must stay light, or a page that uses --g100 as
+	   a panel fill and --g700 as the text on it would invert and become
+	   unreadable. Add NEW rules against --lg-* directly; this block is a
+	   migration aid and should shrink as pages move onto the theme. ── */
+	--g950: #0A3D22;
+	--g900: #0E5730;
+	--g800: #126B3A;
+	--g700: #1F8A4C;
+	--g600: #1F8A4C;
+	--g500: #43A866;
+	--g400: #6BC08C;
+	--g300: #A9DCBE;
+	--g200: #C4E4D0;
+	--g100: #E7F5EC;
+	--g50: #F2FAF5;
+
+	/* ── Legacy neutrals and semantics ── */
+	--cream: #F6F9F7;
+	--card: #FFFFFF;
+	--border: #DCE8E0;
+	--text-1: #1F2D25;
+	--text-2: #3E5348;
+	--text-3: #6B7C72;
+	--muted: #6B7C72;
+
+	--red: #D95C5C;
+	--amber: #F2B84B;
+	/* The old sheets' --blue was decoration, not a fourth status. It maps
+	   to the system's teal, which is what "neutral information" means
+	   here — nothing in LUSOG is blue. */
+	--blue: #3D8FA3;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Scrollbars — the one exception to "tokens only"
+   ──────────────────────────────────────────────────────────────────────
+   Identical to the block in css/lusog-theme.css, repeated here because
+   the legacy pages never load that file and would otherwise each keep
+   the browser's default grey bar (or, in three sheets, their own
+   slightly different thin one). Chrome only: no layout, spacing or
+   typography. Keep the two copies in step.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Rails hide their bar outright — a grey gutter down the brand panel
+   reads as a draggable second edge next to the content's own bar. */
+.sidebar, .asb-sidebar, .sb-nav, .asb-nav {
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+}
+.sidebar::-webkit-scrollbar,
+.asb-sidebar::-webkit-scrollbar,
+.sb-nav::-webkit-scrollbar,
+.asb-nav::-webkit-scrollbar { width: 0; height: 0; }
+
+/* Content surfaces keep a bar, but a quiet one: thin, no track, a thumb
+   in the border tone that picks up brand green while the pointer is over
+   the surface.
+
+   `html` is in the list because the consent-form, health-assessment and
+   sign-in pages have no fixed shell — they scroll the document itself,
+   so styling only .content would leave them on the browser default. */
+html, .content, .table-scroll, .profile-body, .student-profile-body, .modal-body {
+	scrollbar-width: thin;
+	scrollbar-color: var(--lg-border-strong) transparent;
+	scroll-behavior: smooth;
+}
+html::-webkit-scrollbar { width: 10px; height: 10px; }
+html::-webkit-scrollbar-track { background: transparent; }
+html::-webkit-scrollbar-thumb {
+	background: var(--lg-border-strong);
+	border-radius: 999px;
+	border: 2px solid transparent;
+	background-clip: content-box;
+}
+html::-webkit-scrollbar-thumb:hover { background: var(--lg-green); background-clip: content-box; }
+.content::-webkit-scrollbar,
+.table-scroll::-webkit-scrollbar,
+.profile-body::-webkit-scrollbar,
+.student-profile-body::-webkit-scrollbar,
+.modal-body::-webkit-scrollbar { width: 8px; height: 8px; }
+
+.content::-webkit-scrollbar-track,
+.table-scroll::-webkit-scrollbar-track,
+.profile-body::-webkit-scrollbar-track,
+.student-profile-body::-webkit-scrollbar-track,
+.modal-body::-webkit-scrollbar-track { background: transparent; }
+
+.content::-webkit-scrollbar-thumb,
+.table-scroll::-webkit-scrollbar-thumb,
+.profile-body::-webkit-scrollbar-thumb,
+.student-profile-body::-webkit-scrollbar-thumb,
+.modal-body::-webkit-scrollbar-thumb {
+	background: var(--lg-border-strong);
+	border-radius: 999px;
+	border: 2px solid transparent;
+	background-clip: content-box;
+}
+.content:hover::-webkit-scrollbar-thumb,
+.table-scroll:hover::-webkit-scrollbar-thumb,
+.profile-body:hover::-webkit-scrollbar-thumb,
+.student-profile-body:hover::-webkit-scrollbar-thumb,
+.modal-body:hover::-webkit-scrollbar-thumb { background: var(--lg-green); background-clip: content-box; }
+
+@media (prefers-reduced-motion: reduce) {
+	html, .content, .table-scroll, .profile-body, .student-profile-body, .modal-body { scroll-behavior: auto; }
+}

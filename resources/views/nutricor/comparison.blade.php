@@ -14,7 +14,7 @@ Baseline and Endline <span>Comparison</span>
 </div>
 
 <section class="grid-4" style="margin-bottom:12px;">
-    <article class="card stat" style="border-left-color:#16a34a;">
+    <article class="card stat" style="border-left-color:#1F8A4C;">
         <div class="label">Students Improved</div>
         <div class="num">{{ number_format($summary['improved']) }}</div>
         <div class="hint">Moved to better status</div>
@@ -29,7 +29,7 @@ Baseline and Endline <span>Comparison</span>
         <div class="num">{{ number_format($summary['no_change']) }}</div>
         <div class="hint">Maintain support</div>
     </article>
-    <article class="card stat" style="border-left-color:#15803d;">
+    <article class="card stat" style="border-left-color:#1F8A4C;">
         <div class="label">Improvement Rate</div>
         <div class="num">{{ number_format($summary['improvement_rate'], 1) }}%</div>
         <div class="hint">Across all tracked learners</div>

@@ -15,9 +15,13 @@
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
-    @unless ((bool) ($isReadOnly ?? (session('active_role') === 'school_nurse')))
+    {{-- Two rails share this page: the coordinator's .asb-* panel, and the
+         nurse's logo-led .sb-* rail when they open it read-only. --}}
+    @if ((bool) ($isReadOnly ?? (session('active_role') === 'school_nurse')))
+        <style>{!! file_get_contents(resource_path('css/nurse-sidebar.css')) !!}</style>
+    @else
         <style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
-    @endunless
+    @endif
 </head>
 <body>
 @php

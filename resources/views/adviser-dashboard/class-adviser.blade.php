@@ -14,6 +14,9 @@
     @if (file_exists($classAdviserCssPath))
         <style>{!! file_get_contents($classAdviserCssPath) !!}</style>
     @endif
+    {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
+         last so it overrides this page's own :root colours. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
 <body>
 @include('partials.adviser-sidebar', ['active' => in_array(request('tab'), ['saved', 'form'], true) ? 'students' : 'dashboard'])
@@ -227,7 +230,7 @@
 
                 <article class="card section">
                     <div class="panel-head">
-                        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;color:#15803d;vertical-align:-2px;"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> Recent Activity</h3>
+                        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;color:#1F8A4C;vertical-align:-2px;"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> Recent Activity</h3>
                     </div>
                     {{-- Server-rendered first paint; the panel then keeps itself
                          current from the activity feed (see recentActivityLive). --}}
@@ -502,13 +505,13 @@
                 <div class="student-section">
                     <h4>Student Information</h4>
                     <div class="student-grid">
-                        <div class="field"><label for="proto_last_name">Last Name <span style="color:#ef4444">*</span></label><input id="proto_last_name" name="last_name" type="text" placeholder="e.g., Dela Cruz" value="{{ old('last_name') }}" required></div>
-                        <div class="field"><label for="proto_first_name">First Name <span style="color:#ef4444">*</span></label><input id="proto_first_name" name="first_name" type="text" placeholder="e.g., Maria" value="{{ old('first_name') }}" required></div>
+                        <div class="field"><label for="proto_last_name">Last Name <span style="color:#D95C5C">*</span></label><input id="proto_last_name" name="last_name" type="text" placeholder="e.g., Dela Cruz" value="{{ old('last_name') }}" required></div>
+                        <div class="field"><label for="proto_first_name">First Name <span style="color:#D95C5C">*</span></label><input id="proto_first_name" name="first_name" type="text" placeholder="e.g., Maria" value="{{ old('first_name') }}" required></div>
                         <div class="field"><label for="proto_middle_name">Middle Name</label><input id="proto_middle_name" name="middle_name" type="text" placeholder="e.g., Santos" value="{{ old('middle_name') }}"></div>
-                        <div class="field"><label for="proto_lrn">LRN <span style="color:#ef4444">*</span></label><input id="proto_lrn" name="lrn" type="text" placeholder="12-digit Learner Reference Number" value="{{ old('lrn') }}" inputmode="numeric" required></div>
-                        <div class="field"><label for="birthDate">Date of Birth <span style="color:#ef4444">*</span></label><input id="birthDate" name="birth_date" type="date" value="{{ old('birth_year') && old('birth_month') && old('birth_day') ? old('birth_year') . '-' . str_pad(old('birth_month'), 2, '0', STR_PAD_LEFT) . '-' . str_pad(old('birth_day'), 2, '0', STR_PAD_LEFT) : '' }}" required></div>
+                        <div class="field"><label for="proto_lrn">LRN <span style="color:#D95C5C">*</span></label><input id="proto_lrn" name="lrn" type="text" placeholder="12-digit Learner Reference Number" value="{{ old('lrn') }}" inputmode="numeric" required></div>
+                        <div class="field"><label for="birthDate">Date of Birth <span style="color:#D95C5C">*</span></label><input id="birthDate" name="birth_date" type="date" value="{{ old('birth_year') && old('birth_month') && old('birth_day') ? old('birth_year') . '-' . str_pad(old('birth_month'), 2, '0', STR_PAD_LEFT) . '-' . str_pad(old('birth_day'), 2, '0', STR_PAD_LEFT) : '' }}" required></div>
                         <div class="field"><label for="proto_birthplace">Birthplace</label><input id="proto_birthplace" name="birthplace" type="text" placeholder="City/Municipality of birth" value="{{ old('birthplace') }}" required></div>
-                        <div class="field full"><label for="gender">Gender <span style="color:#ef4444">*</span></label><select id="gender" name="gender" required><option value="">Select Gender</option><option {{ old('gender') === 'Male' ? 'selected' : '' }}>Male</option><option {{ old('gender') === 'Female' ? 'selected' : '' }}>Female</option></select></div>
+                        <div class="field full"><label for="gender">Gender <span style="color:#D95C5C">*</span></label><select id="gender" name="gender" required><option value="">Select Gender</option><option {{ old('gender') === 'Male' ? 'selected' : '' }}>Male</option><option {{ old('gender') === 'Female' ? 'selected' : '' }}>Female</option></select></div>
                     </div>
                 </div>
 
@@ -602,8 +605,8 @@
                 <div class="student-section">
                     <h4>Vital Signs</h4>
                     <div class="student-grid" style="margin-bottom:10px;">
-                        <div class="field"><label for="weight">Weight (kg) <span style="color:#ef4444">*</span></label><input id="weight" name="weight_kg" type="number" step="0.1" min="0.1" max="200" placeholder="e.g., 34" value="{{ old('weight_kg') }}" required><div class="muted" style="font-size:.7rem;">Valid range: 0.1 - 200 kg</div></div>
-                        <div class="field"><label for="height">Height (m) <span style="color:#ef4444">*</span></label><input id="height" name="height_m" type="number" step="0.01" min="0.50" max="2.50" placeholder="e.g., 1.27" value="{{ old('height_cm') ? number_format(old('height_cm') / 100, 2, '.', '') : '' }}" required><div class="muted" style="font-size:.7rem;">Convert cm to m: 127 cm = 1.27 m | Valid range: 0.50 - 2.50 m</div></div>
+                        <div class="field"><label for="weight">Weight (kg) <span style="color:#D95C5C">*</span></label><input id="weight" name="weight_kg" type="number" step="0.1" min="0.1" max="200" placeholder="e.g., 34" value="{{ old('weight_kg') }}" required><div class="muted" style="font-size:.7rem;">Valid range: 0.1 - 200 kg</div></div>
+                        <div class="field"><label for="height">Height (m) <span style="color:#D95C5C">*</span></label><input id="height" name="height_m" type="number" step="0.01" min="0.50" max="2.50" placeholder="e.g., 1.27" value="{{ old('height_cm') ? number_format(old('height_cm') / 100, 2, '.', '') : '' }}" required><div class="muted" style="font-size:.7rem;">Convert cm to m: 127 cm = 1.27 m | Valid range: 0.50 - 2.50 m</div></div>
                         <div class="field"><label for="temperature">Temp (&deg;C)</label><input id="temperature" name="temperature_c" type="number" step="0.1" min="25" max="45" placeholder="e.g., 36.5" value="{{ old('temperature_c') }}"></div>
                         <div class="field"><label for="pulse">Pulse (BPM)</label><input id="pulse" name="pulse_bpm" type="number" step="1" min="20" max="250" placeholder="e.g., 72" value="{{ old('pulse_bpm') }}"></div>
                         <div class="field"><label for="bloodPressure">BP (mmHg)</label><input id="bloodPressure" name="blood_pressure" type="text" maxlength="20" placeholder="e.g., 110/70" value="{{ old('blood_pressure') }}"></div>
@@ -843,7 +846,7 @@ window.switchAdviserTab = (targetId) => {
                 labels: dashboardNutritionLabels,
                 datasets: [{
                     data: dashboardNutritionValues,
-                    backgroundColor: ['#14532d', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444'],
+                    backgroundColor: ['#126B3A', '#F2B84B', '#10b981', '#3D8FA3', '#8b5cf6', '#D95C5C'],
                     borderWidth: 0,
                     hoverOffset: 8,
                 }],
@@ -873,14 +876,14 @@ window.switchAdviserTab = (targetId) => {
                     {
                         label: `Baseline (${dashboardBaselineMonthLabel})`,
                         data: dashboardBaselineValues,
-                        backgroundColor: '#14532d',
+                        backgroundColor: '#126B3A',
                         borderRadius: 8,
                         yAxisID: 'y',
                     },
                     {
                         label: `Endline (${dashboardEndlineMonthLabel})`,
                         data: dashboardEndlineValues,
-                        backgroundColor: '#3b82f6',
+                        backgroundColor: '#3D8FA3',
                         borderRadius: 8,
                         yAxisID: 'y',
                     },

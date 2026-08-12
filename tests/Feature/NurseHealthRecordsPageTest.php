@@ -309,9 +309,9 @@ class NurseHealthRecordsPageTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $dashboard = strpos($html, route('dashboard.school-nurse').'" class="nsb-item');
-        $records = strpos($html, route('dashboard.student-health-records').'" class="nsb-item');
-        $queue = strpos($html, route('nurse.index').'" class="nsb-item');
+        $dashboard = strpos($html, route('dashboard.school-nurse').'" class="sb-link');
+        $records = strpos($html, route('dashboard.student-health-records').'" class="sb-link');
+        $queue = strpos($html, route('nurse.index').'" class="sb-link');
 
         $this->assertNotFalse($dashboard);
         $this->assertNotFalse($records);

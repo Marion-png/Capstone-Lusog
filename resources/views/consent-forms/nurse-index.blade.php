@@ -9,8 +9,13 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     @php $cfCss = resource_path('css/consent-form.css'); @endphp
     @if (file_exists($cfCss)) <style>{!! file_get_contents($cfCss) !!}</style> @endif
+    {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
+         last so it overrides this page's own :root colours. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
-<body>
+{{-- .cf-rise plays the bottom-up entrance defined in css/consent-form.css,
+     picking up where the nurse rail's exit transition leaves off. --}}
+<body class="cf-rise">
 @php use App\Models\HealthConsentForm; @endphp
 
 <header class="cf-topbar">
@@ -49,9 +54,9 @@
                         @php
                             $badge = $form->statusBadge();
                             $consentLabels = [
-                                HealthConsentForm::CONSENT_ALL => ['Consented to all services', '#166534', '#dcfce7'],
-                                HealthConsentForm::CONSENT_SPECIFIC => ['Consented with exceptions', '#92400e', '#fef3c7'],
-                                HealthConsentForm::CONSENT_DENY => ['Did not consent', '#991b1b', '#fee2e2'],
+                                HealthConsentForm::CONSENT_ALL => ['Consented to all services', '#14653C', '#E7F5EC'],
+                                HealthConsentForm::CONSENT_SPECIFIC => ['Consented with exceptions', '#8A5A06', '#FDF4E2'],
+                                HealthConsentForm::CONSENT_DENY => ['Did not consent', '#A32B2B', '#FCECEC'],
                             ];
                             [$cLabel, $cFg, $cBg] = $consentLabels[$form->consent_choice] ?? ['—', '#475569', '#f1f5f9'];
                         @endphp

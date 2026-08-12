@@ -12,6 +12,9 @@
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
+    {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
+         last so it overrides this page's own :root colours. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
 <body>
 @include('partials.nurse-sidebar', ['active' => 'visualization'])
@@ -37,10 +40,10 @@
                 <div class="viz-body donut-wrap">
                     <div class="donut" aria-hidden="true"></div>
                     <div>
-                        <div class="legend-item"><span class="legend-dot" style="background:#16a34a"></span>Normal - 49%</div>
-                        <div class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>Wasted - 24%</div>
-                        <div class="legend-item"><span class="legend-dot" style="background:#ef4444"></span>Severely Wasted - 14%</div>
-                        <div class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span>Overweight/Obese - 13%</div>
+                        <div class="legend-item"><span class="legend-dot" style="background:#1F8A4C"></span>Normal - 49%</div>
+                        <div class="legend-item"><span class="legend-dot" style="background:#F2B84B"></span>Wasted - 24%</div>
+                        <div class="legend-item"><span class="legend-dot" style="background:#D95C5C"></span>Severely Wasted - 14%</div>
+                        <div class="legend-item"><span class="legend-dot" style="background:#3D8FA3"></span>Overweight/Obese - 13%</div>
                     </div>
                 </div>
             </article>
@@ -63,8 +66,8 @@
                 <div class="viz-head"><div class="viz-title">Consultation Trend Line Chart</div><div class="viz-meta">Source: Consultation Module (dates grouped by month)</div></div>
                 <div class="viz-body">
                     <svg class="line" viewBox="0 0 560 220" preserveAspectRatio="none" aria-label="Monthly consultation trend">
-                        <polyline points="18,166 96,138 174,150 252,112 330,94 408,120 486,78 542,98" fill="none" stroke="#3b82f6" stroke-width="4" />
-                        <circle cx="18" cy="166" r="4" fill="#3b82f6" /><circle cx="96" cy="138" r="4" fill="#3b82f6" /><circle cx="174" cy="150" r="4" fill="#3b82f6" /><circle cx="252" cy="112" r="4" fill="#3b82f6" /><circle cx="330" cy="94" r="4" fill="#3b82f6" /><circle cx="408" cy="120" r="4" fill="#3b82f6" /><circle cx="486" cy="78" r="4" fill="#3b82f6" /><circle cx="542" cy="98" r="4" fill="#3b82f6" />
+                        <polyline points="18,166 96,138 174,150 252,112 330,94 408,120 486,78 542,98" fill="none" stroke="#3D8FA3" stroke-width="4" />
+                        <circle cx="18" cy="166" r="4" fill="#3D8FA3" /><circle cx="96" cy="138" r="4" fill="#3D8FA3" /><circle cx="174" cy="150" r="4" fill="#3D8FA3" /><circle cx="252" cy="112" r="4" fill="#3D8FA3" /><circle cx="330" cy="94" r="4" fill="#3D8FA3" /><circle cx="408" cy="120" r="4" fill="#3D8FA3" /><circle cx="486" cy="78" r="4" fill="#3D8FA3" /><circle cx="542" cy="98" r="4" fill="#3D8FA3" />
                     </svg>
                 </div>
             </article>
@@ -72,10 +75,10 @@
             <article class="viz-card">
                 <div class="viz-head"><div class="viz-title">Medicine Inventory Gauges</div><div class="viz-meta">Source: Medicine Inventory Module (stock quantity vs minimum threshold)</div></div>
                 <div class="viz-body">
-                    <div class="gauge"><div class="gauge-top"><span>Paracetamol</span><span>18% / min 20%</span></div><div class="gauge-bar"><div class="gauge-fill" style="width:18%;background:#ef4444"></div></div></div>
-                    <div class="gauge"><div class="gauge-top"><span>Amoxicillin</span><span>24% / min 20%</span></div><div class="gauge-bar"><div class="gauge-fill" style="width:24%;background:#f59e0b"></div></div></div>
-                    <div class="gauge"><div class="gauge-top"><span>Antihistamine</span><span>34% / min 20%</span></div><div class="gauge-bar"><div class="gauge-fill" style="width:34%;background:#f59e0b"></div></div></div>
-                    <div class="gauge"><div class="gauge-top"><span>Vitamin C</span><span>67% / min 20%</span></div><div class="gauge-bar"><div class="gauge-fill" style="width:67%;background:#16a34a"></div></div></div>
+                    <div class="gauge"><div class="gauge-top"><span>Paracetamol</span><span>18% / min 20%</span></div><div class="gauge-bar"><div class="gauge-fill" style="width:18%;background:#D95C5C"></div></div></div>
+                    <div class="gauge"><div class="gauge-top"><span>Amoxicillin</span><span>24% / min 20%</span></div><div class="gauge-bar"><div class="gauge-fill" style="width:24%;background:#F2B84B"></div></div></div>
+                    <div class="gauge"><div class="gauge-top"><span>Antihistamine</span><span>34% / min 20%</span></div><div class="gauge-bar"><div class="gauge-fill" style="width:34%;background:#F2B84B"></div></div></div>
+                    <div class="gauge"><div class="gauge-top"><span>Vitamin C</span><span>67% / min 20%</span></div><div class="gauge-bar"><div class="gauge-fill" style="width:67%;background:#1F8A4C"></div></div></div>
                 </div>
             </article>
 

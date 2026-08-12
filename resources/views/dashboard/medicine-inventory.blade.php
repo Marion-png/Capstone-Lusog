@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -7,67 +7,112 @@
     <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
     <title>Medicine Inventory - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
-        @php $pageCssPath = resource_path('css/school-nurse-medicine-inventory.css'); @endphp
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <script>document.documentElement.classList.add('js');</script>
+    {{-- LUSOG order: theme, then this page's sheet, then the nurse rail. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-theme.css')) !!}</style>
+    @php $pageCssPath = resource_path('css/school-nurse-medicine-inventory.css'); @endphp
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
+    <style>{!! file_get_contents(resource_path('css/nurse-sidebar.css')) !!}</style>
 </head>
 <body>
-@include('partials.nurse-sidebar', ['active' => 'inventory'])
+@include('partials.nurse-lusog-sidebar', ['active' => 'inventory'])
 
 <div class="main">
+    @php
+        $schoolName = session('active_school_name', 'No school assigned');
+        $schoolYear = \App\Models\StudentHealthRecord::currentSchoolYear();
+    @endphp
+
     <header class="topbar">
-        <div class="topbar-breadcrumb">
-            <a href="{{ route('dashboard.school-nurse') }}" class="bc-home">Dashboard</a>
-            <span class="bc-sep">&rsaquo;</span>
-            <span class="bc-current">Medicine Inventory</span>
-        </div>
+        <div class="topbar-bc"><span>School Nurse</span><span class="bc-sep">&rsaquo;</span><span>Medicine Inventory</span></div>
+        <div class="topbar-spacer"></div>
+        <div class="topbar-chip"><span class="dot"></span>{{ $schoolName }} &middot; SY {{ $schoolYear }}</div>
         @include('partials.live-clock')
     </header>
 
     <div class="content">
-        <h1 class="page-title">Medicine <span>Inventory</span></h1>
-        <p class="page-sub">Track current stock against reorder thresholds and add medicines quickly.</p>
-
-        <div class="page-actions">
-            <a href="{{ route('medicine-inventory.create') }}" class="btn-action">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Add Medicine
-            </a>
-        </div>
-
         @if (session('success'))
-            <div class="flash">{{ session('success') }}</div>
+            <div class="flash ok">{{ session('success') }}</div>
+        @endif
+        @if (session('error'))
+            <div class="flash err">{{ session('error') }}</div>
         @endif
 
-        <section class="stats">
-            <article class="stat"><div class="stat-label">Total Medicines</div><div class="stat-value">{{ $stats['total'] }}</div></article>
-            <article class="stat"><div class="stat-label">Above Threshold</div><div class="stat-value">{{ $stats['good'] }}</div></article>
-            <article class="stat"><div class="stat-label">Low Stock</div><div class="stat-value">{{ $stats['low'] }}</div></article>
-        </section>
+        <div class="page-header">
+            <div class="card-head" style="margin-bottom:0">
+                <div>
+                    <div class="page-eyebrow">Inventory</div>
+                    <h1 class="page-title">Medicine <span>Inventory</span></h1>
+                    <p class="page-sub">Track current stock against reorder thresholds and add medicines quickly.</p>
+                </div>
+                <a href="{{ route('medicine-inventory.create') }}" class="btn btn-primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Add Medicine
+                </a>
+            </div>
+        </div>
 
-        <section class="forecast-card">
+        <div class="kpi-grid cols-3">
+            <div class="card kpi accent-brand">
+                <div class="kpi-top">
+                    <div class="kpi-label">Total Medicines</div>
+                    <div class="kpi-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="2" width="18" height="20" rx="2"/><path d="M9 2v4h6V2"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                    </div>
+                </div>
+                <div class="kpi-value">{{ number_format($stats['total']) }}</div>
+                <div class="kpi-hint">Items on the shelf list</div>
+            </div>
+
+            <div class="card kpi accent-success">
+                <div class="kpi-top">
+                    <div class="kpi-label">Above Threshold</div>
+                    <div class="kpi-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>
+                    </div>
+                </div>
+                <div class="kpi-value">{{ number_format($stats['good']) }}</div>
+                <div class="kpi-hint">Comfortably stocked</div>
+            </div>
+
+            <div class="card kpi accent-amber">
+                <div class="kpi-top">
+                    <div class="kpi-label">Low Stock</div>
+                    <div class="kpi-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    </div>
+                </div>
+                <div class="kpi-value">{{ number_format($stats['low']) }}</div>
+                <div class="kpi-hint">At or below reorder point</div>
+            </div>
+        </div>
+
+        <section class="card forecast-card">
             <div class="forecast-grid">
                 <div class="forecast-main">
-                    <div class="forecast-eyebrow">Predictive Reorder Module</div>
+                    <div class="page-eyebrow">Predictive Reorder Module</div>
                     <h2 class="forecast-title">{{ $prediction['medicine_name'] }} stock tends to spike in January.</h2>
                     <p class="forecast-sub">Based on the latest monthly dispensing pattern, January usage is the highest. The system applies a 20% safety buffer and recommends the next month stock target to reduce stockout risk.</p>
-                    <div class="forecast-kpis">
-                        <div class="kpi">
-                            <div class="kpi-label">Current Stock</div>
-                            <div class="kpi-value">{{ $prediction['current_stock'] }} {{ $prediction['unit'] }}</div>
+                    <div class="fc-stats">
+                        <div class="fc-stat">
+                            <div class="fc-stat-label">Current Stock</div>
+                            <div class="fc-stat-value">{{ $prediction['current_stock'] }} {{ $prediction['unit'] }}</div>
                         </div>
-                        <div class="kpi">
-                            <div class="kpi-label">Target For {{ $prediction['next_month'] }}</div>
-                            <div class="kpi-value">{{ $prediction['recommended_doses'] }} {{ $prediction['unit'] }}</div>
+                        <div class="fc-stat">
+                            <div class="fc-stat-label">Target For {{ $prediction['next_month'] }}</div>
+                            <div class="fc-stat-value">{{ $prediction['recommended_doses'] }} {{ $prediction['unit'] }}</div>
                         </div>
-                        <div class="kpi">
-                            <div class="kpi-label">Recommended Order</div>
-                            <div class="kpi-value {{ $prediction['recommended_order'] > 0 ? 'danger' : '' }}">{{ $prediction['recommended_order'] }} {{ $prediction['unit'] }}</div>
+                        <div class="fc-stat">
+                            <div class="fc-stat-label">Recommended Order</div>
+                            <div class="fc-stat-value {{ $prediction['recommended_order'] > 0 ? 'is-order' : '' }}">{{ $prediction['recommended_order'] }} {{ $prediction['unit'] }}</div>
                         </div>
                     </div>
                 </div>
+
                 <div class="forecast-graph">
                     <div class="graph-title">Monthly Usage Report ({{ $prediction['medicine_name'] }})</div>
                     @php
@@ -123,52 +168,52 @@
             </div>
         </section>
 
-        <section class="grid-single">
-            <article class="card">
-                <div class="card-head">Current Inventory</div>
-                <div class="card-body" style="padding:0;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Medicine</th>
-                                <th>Stock</th>
-                                <th>Minimum</th>
-                                <th>Status</th>
-                                <th>Updated</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        @forelse($medicines as $medicine)
-                            @php
-                                $isCritical = $medicine->stock_quantity === 0;
-                                $isLow = $medicine->stock_quantity > 0 && $medicine->stock_quantity < $medicine->minimum_threshold;
-                            @endphp
-                            <tr>
-                                <td>{{ $medicine->name }}</td>
-                                <td>{{ $medicine->stock_quantity }} {{ $medicine->unit }}</td>
-                                <td>{{ $medicine->minimum_threshold }} {{ $medicine->unit }}</td>
-                                <td>
-                                    @if ($isCritical)
-                                        <span class="pill critical">Out of Stock</span>
-                                    @elseif ($isLow)
-                                        <span class="pill low">Low Stock</span>
-                                    @else
-                                        <span class="pill ok">In Stock</span>
-                                    @endif
-                                </td>
-                                <td>{{ $medicine->updated_at->format('Y-m-d') }}</td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="5">No medicine records yet. Click Add Medicine to create your first item.</td>
-                            </tr>
-                        @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </article>
-        </section>
+        <div class="section-title" style="margin-top:24px">Current Inventory</div>
+        <div class="table-card">
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Medicine</th>
+                            <th class="num">Stock</th>
+                            <th class="num">Minimum</th>
+                            <th>Status</th>
+                            <th>Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @forelse($medicines as $medicine)
+                        @php
+                            $isCritical = $medicine->stock_quantity === 0;
+                            $isLow = $medicine->stock_quantity > 0 && $medicine->stock_quantity < $medicine->minimum_threshold;
+                        @endphp
+                        <tr>
+                            <td><strong>{{ $medicine->name }}</strong></td>
+                            <td class="num">{{ $medicine->stock_quantity }} {{ $medicine->unit }}</td>
+                            <td class="num">{{ $medicine->minimum_threshold }} {{ $medicine->unit }}</td>
+                            <td>
+                                @if ($isCritical)
+                                    <span class="badge badge-critical">Out of Stock</span>
+                                @elseif ($isLow)
+                                    <span class="badge badge-monitor">Low Stock</span>
+                                @else
+                                    <span class="badge badge-normal">In Stock</span>
+                                @endif
+                            </td>
+                            <td class="tnum">{{ $medicine->updated_at?->format('Y-m-d') ?? '—' }}</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="5" class="table-empty">No medicine records yet. Use Add Medicine to create your first item.</td>
+                        </tr>
+                    @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
+
+@include('partials.nurse-page-transition')
 </body>
 </html>

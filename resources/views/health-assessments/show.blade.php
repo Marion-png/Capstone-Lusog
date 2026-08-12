@@ -10,6 +10,9 @@
     @php $cfCss = resource_path('css/consent-form.css'); $haCss = resource_path('css/mlhat.css'); @endphp
     @if (file_exists($cfCss)) <style>{!! file_get_contents($cfCss) !!}</style> @endif
     @if (file_exists($haCss)) <style>{!! file_get_contents($haCss) !!}</style> @endif
+    {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
+         last so it overrides this page's own :root colours. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
 <body>
 @php
@@ -36,7 +39,7 @@
     <div class="cf-card">
         <div class="cf-card-head">
             <h2>Assessment</h2>
-            <span class="cf-badge" style="background:#dcfce7;color:#166534;">Submitted</span>
+            <span class="cf-badge" style="background:#E7F5EC;color:#14653C;">Submitted</span>
         </div>
         <div class="cf-card-body">
             <dl class="ha-kv">
