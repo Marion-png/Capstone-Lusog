@@ -11,6 +11,7 @@ use App\Http\Controllers\FeedingProgramController;
 use App\Http\Controllers\HealthAssessmentController;
 use App\Http\Controllers\HealthConsentFormController;
 use App\Http\Controllers\MedicalCertificateController;
+use App\Http\Controllers\MedicineDispenseController;
 use App\Http\Controllers\MedicineInventoryController;
 use App\Http\Controllers\NurseController;
 use App\Http\Controllers\NutricorController;
@@ -23,6 +24,7 @@ use App\Models\AuditLog;
 use App\Models\Consultation;
 use App\Models\Institution;
 use App\Models\Medicine;
+use App\Models\MedicineDispense;
 use App\Models\StudentHealthRecord;
 use App\Support\AuditTrail;
 use Illuminate\Http\Request;
@@ -446,12 +448,33 @@ Route::get('/dashboard/medicine-inventory/new', [MedicineInventoryController::cl
 Route::post('/dashboard/medicine-inventory', [MedicineInventoryController::class, 'store'])
     ->name('medicine-inventory.store');
 
-Route::get('/dashboard/clinic-staff', function () {
+// Dispensing Log — School Nurse only. Unlike the rest of the clinic
+// section, clinic_staff is not admitted: the guard lives in
+// MedicineDispenseController::requireNurse().
+Route::get('/dashboard/dispensing-log', [MedicineDispenseController::class, 'index'])
+    ->name('dashboard.dispensing-log');
+
+Route::post('/dashboard/dispensing-log', [MedicineDispenseController::class, 'store'])
+    ->name('dispensing-log.store');
+
+Route::get('/dashboard/clinic-staff', function (Request $request) {
+    $role = (string) $request->session()->get('active_role', '');
+    if (! in_array($role, ['clinic_staff', 'school_nurse', 'system_admin'], true)) {
+        $redirectByRole = [
+            'class_adviser' => 'dashboard.class-adviser',
+            'school_head' => 'dashboard.school-head',
+            'feeding_coor' => 'dashboard.feedingcor-dashboard',
+            'nutricor' => 'dashboard.nutricor-dashboard',
+        ];
+
+        return redirect()->route($redirectByRole[$role] ?? 'login');
+    }
+
+    $institutionId = session('active_institution_id');
     $atRiskStudents = collect();
 
     if (Schema::hasTable('student_health_records')) {
         $q = StudentHealthRecord::query()->where('is_at_risk', true);
-        $institutionId = session('active_institution_id');
         if ($institutionId) {
             $q->where('institution_id', $institutionId);
         }
@@ -468,8 +491,48 @@ Route::get('/dashboard/clinic-staff', function () {
             ->values();
     }
 
+    // These four figures used to be hardcoded demo numbers. They are now
+    // read from the same tables the nurse's pages use, so the workspace
+    // reflects the school it is scoped to.
+    $consultations = Schema::hasTable('consultations')
+        ? Consultation::query()
+            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+            ->orderByDesc('consulted_at')
+            ->limit(50)
+            ->get()
+        : collect();
+
+    $dispensedToday = Schema::hasTable('medicine_dispenses')
+        ? (int) MedicineDispense::query()
+            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+            ->whereDate('dispensed_at', now()->toDateString())
+            ->sum('quantity')
+        : 0;
+
+    $medicines = Schema::hasTable('medicines')
+        ? Medicine::query()
+            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+            ->orderBy('name')
+            ->limit(6)
+            ->get()
+        : collect();
+
+    // "Pending endorsements" = adviser cards the nurse has not examined yet,
+    // the same count the nurse rail badges.
+    $pendingEndorsements = collect(session('school_health_card_records', []))
+        ->filter(fn ($row) => empty($row['examination']))
+        ->count();
+
     return view('dashboard.clinic-staff', [
         'atRiskStudents' => $atRiskStudents,
+        'consultations' => $consultations,
+        'medicines' => $medicines,
+        'stats' => [
+            'walk_ins_today' => $consultations->filter(fn ($c) => $c->consulted_at?->isToday() ?? false)->count(),
+            'encoded_total' => $consultations->count(),
+            'dispensed_today' => $dispensedToday,
+            'pending_endorsements' => $pendingEndorsements,
+        ],
     ]);
 })->name('dashboard.clinic-staff');
 

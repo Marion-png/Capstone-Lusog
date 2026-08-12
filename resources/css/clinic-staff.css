@@ -1,0 +1,48 @@
+/* ══════════════════════════════════════════════════════════════════════
+   Clinic Staff — Operations Hub
+   ──────────────────────────────────────────────────────────────────────
+   Page sheet. Loaded AFTER css/lusog-theme.css, which owns the shell, KPI
+   cards, tables, badges and buttons. Only the two-panel row and the stock
+   meters are unique to this page.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.clinic-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+	gap: 16px;
+	margin-top: 20px;
+	align-items: start;
+}
+.clinic-panel { padding: var(--lg-pad-card); }
+/* The tables sit flush inside their panel rather than in their own card. */
+.clinic-panel .table-scroll { margin: 0 calc(var(--lg-pad-card) * -1) calc(var(--lg-pad-card) * -1); }
+.clinic-panel .table-scroll table { width: 100%; }
+
+/* ── Stock meters ──────────────────────────────────────────────────────
+   Severity by colour AND by position on the bar: out of stock is coral,
+   below the reorder point amber, healthy green. ── */
+
+.stock-row { margin-bottom: 13px; }
+.stock-row:last-child { margin-bottom: 0; }
+.stock-meta {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	font-size: .78rem;
+	color: var(--lg-ink-soft);
+	margin-bottom: 5px;
+}
+.stock-meta strong { color: var(--lg-ink); font-weight: 600; }
+.meter-track {
+	height: 8px;
+	border-radius: var(--lg-r-pill);
+	background: var(--lg-rail);
+	overflow: hidden;
+}
+.meter-fill { height: 100%; border-radius: var(--lg-r-pill); background: var(--lg-green); }
+.stock-row.is-low .meter-fill { background: var(--lg-amber); }
+.stock-row.is-out .meter-fill { background: var(--lg-danger); }
+
+@media (max-width: 1020px) {
+	.clinic-grid { grid-template-columns: 1fr; }
+}

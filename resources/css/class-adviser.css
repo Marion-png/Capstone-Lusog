@@ -597,7 +597,9 @@ tbody tr:hover td{background:#f3fbf6}
    shared by every adviser-side page via partials/adviser-sidebar.blade.php
    and partials/adviser-topbar.blade.php.
    ══════════════════════════════════════════════════════════════════════ */
-:root{--asb-w:264px}
+/* Reads the shared --asb-width so the adviser rail is the same width as
+   every other role's; the 264px is only a fallback if nothing sets it. */
+:root{--asb-w:var(--asb-width,264px)}
 /* Scoped to match the nurse dashboard's sidebar tone (school-nurse.css
    :root) exactly — the shared --g900/--g700/--g300/--g100 above are still
    the older, brighter pine used by the rest of this file's brand accents,
@@ -605,7 +607,12 @@ tbody tr:hover td{background:#f3fbf6}
 /* Native scrollbar hidden, as on every other rail — see role-sidebar.css. */
 .asb-sidebar{--g900:#126B3A;--g700:#1F8A4C;--g300:#A9DCBE;--g100:#E7F5EC;position:fixed;left:0;top:0;bottom:0;width:var(--asb-w);background:var(--g900);display:flex;flex-direction:column;overflow-y:auto;z-index:40;scrollbar-width:none;-ms-overflow-style:none}
 .asb-sidebar::-webkit-scrollbar{width:0;height:0}
-.asb-logo{display:flex;align-items:center;gap:11px;padding:20px 18px;border-bottom:1px solid rgba(255,255,255,.1)}
+/* The rail shows the full LUSOG mark. .asb-logo-full MUST carry a width:
+   the adviser pages do not load role-sidebar.css (this sheet has its own
+   copy of the rail), so without it here the image renders at its natural
+   size and overflows the panel. Keep in step with role-sidebar.css. */
+.asb-logo{display:flex;align-items:center;justify-content:center;gap:11px;padding:18px 20px;border-bottom:1px solid rgba(255,255,255,.1)}
+.asb-logo-full{width:168px;max-width:100%;height:auto;display:block}
 .asb-logo-icon{width:34px;height:34px;border-radius:9px;background:rgba(134,239,172,.16);display:grid;place-items:center;color:var(--g300);flex-shrink:0}
 .asb-logo-icon svg{width:19px;height:19px}
 .asb-logo-title{color:#fff;font-weight:800;font-size:.98rem;letter-spacing:.02em;line-height:1.15}

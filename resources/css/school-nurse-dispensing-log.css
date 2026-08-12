@@ -1,0 +1,51 @@
+/* ══════════════════════════════════════════════════════════════════════
+   School Nurse — Dispensing Log
+   ──────────────────────────────────────────────────────────────────────
+   Page sheet. Loaded AFTER css/lusog-theme.css, which owns the shell, KPI
+   cards, toolbar, inputs, tables and badges. Only the record-a-dispense
+   form and the role notice are unique to this page.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.dispense-form-card { padding: var(--lg-pad-card); margin-top: 20px; }
+
+/* Five fields on one line at desk width, collapsing before they get too
+   narrow to read rather than wrapping one field at a time. */
+.dispense-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(0, .8fr) minmax(0, 1.6fr) auto;
+	gap: 12px;
+	align-items: end;
+	margin-top: 14px;
+}
+.dispense-grid .field { min-width: 0; }
+
+/* Stock remaining, shown beside each medicine in the picker. */
+.stock-hint {
+	margin-top: 6px;
+	font-size: .72rem;
+	color: var(--lg-ink-soft);
+	font-variant-numeric: tabular-nums;
+}
+.stock-hint.is-low { color: var(--lg-amber-ink); font-weight: 600; }
+.stock-hint.is-out { color: var(--lg-danger-ink); font-weight: 600; }
+
+/* This module is the nurse's alone — say so rather than leaving Clinic
+   Staff to discover it by being redirected. */
+.role-note {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	margin-top: 6px;
+	font-size: .76rem;
+	line-height: 1.5;
+	color: var(--lg-ink-soft);
+}
+.role-note svg { width: 15px; height: 15px; flex: 0 0 auto; margin-top: 2px; color: var(--lg-info); }
+
+@media (max-width: 1180px) {
+	.dispense-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.dispense-grid .field-submit { grid-column: 1 / -1; }
+}
+@media (max-width: 620px) {
+	.dispense-grid { grid-template-columns: 1fr; }
+}

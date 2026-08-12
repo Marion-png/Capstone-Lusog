@@ -20,7 +20,7 @@
     <style>{!! file_get_contents(resource_path('css/nurse-sidebar.css')) !!}</style>
 </head>
 <body>
-@include('partials.nurse-lusog-sidebar', ['active' => 'consultations'])
+@include('partials.clinic-rail', ['active' => 'consultations'])
 
 <div class="main">
     @php
@@ -29,7 +29,7 @@
     @endphp
 
     <header class="topbar">
-        <div class="topbar-bc"><span>School Nurse</span><span class="bc-sep">&rsaquo;</span><span>Consultation Log</span></div>
+        <div class="topbar-bc"><span>{{ session('active_role') === 'clinic_staff' ? 'Clinic Staff' : 'School Nurse' }}</span><span class="bc-sep">&rsaquo;</span><span>Consultation Log</span></div>
         <div class="topbar-spacer"></div>
         <div class="topbar-chip"><span class="dot"></span>{{ $schoolName }} &middot; SY {{ $schoolYear }}</div>
         @include('partials.live-clock')

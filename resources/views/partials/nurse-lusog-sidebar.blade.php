@@ -57,10 +57,11 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
             Feeding Program
         </a>
-        <a href="{{ route('dashboard.school-nurse.deworming') }}" class="sb-link {{ $active === 'deworming' ? 'active' : '' }}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 9l-7 3-7-3"/><path d="M3 9v6l7 3 7-3V9"/><polyline points="3 9 12 6 21 9"/></svg>
-            Deworming Program
-        </a>
+        {{-- Deworming Program is deliberately not listed. The page, its
+             routes and its data are all still live at
+             dashboard.school-nurse.deworming — only the rail entry is
+             hidden. Deworming also remains a parental-consent service and
+             a field on the medical examination; neither is affected. --}}
         <a href="{{ route('consent-forms.nurse-index') }}" class="sb-link {{ $active === 'consent' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
             Consent Forms
@@ -75,10 +76,9 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="2" width="18" height="20" rx="2"/><path d="M9 2v4h6V2"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
             Medicine Inventory
         </a>
-        {{-- Not built yet: there is no dispensing route, view or table, and
-             MedicineInventoryController still forecasts from dummy figures
-             "until dispensing transactions are persisted". --}}
-        <a href="#" class="sb-link {{ $active === 'dispensing' ? 'active' : '' }}">
+        {{-- School Nurse only — clinic_staff is redirected away. This is the
+             one clinic module the nurse does not share. --}}
+        <a href="{{ route('dashboard.dispensing-log') }}" class="sb-link {{ $active === 'dispensing' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             Dispensing Log
         </a>

@@ -47,7 +47,7 @@
         ->countBy()
         ->sortKeys();
 @endphp
-@include('partials.nurse-lusog-sidebar', ['active' => 'records'])
+@include('partials.clinic-rail', ['active' => 'records'])
 
 @php
     $schoolName = session('active_school_name', 'No school assigned');
@@ -56,7 +56,7 @@
 
 <div class="main">
     <header class="topbar">
-        <div class="topbar-bc"><span>School Nurse</span><span class="bc-sep">&rsaquo;</span><span>Health Records</span></div>
+        <div class="topbar-bc"><span>{{ session('active_role') === 'clinic_staff' ? 'Clinic Staff' : 'School Nurse' }}</span><span class="bc-sep">&rsaquo;</span><span>Health Records</span></div>
         <div class="topbar-spacer"></div>
         <div class="topbar-chip"><span class="dot"></span>{{ $schoolName }} &middot; SY {{ $schoolYear }}</div>
         @include('partials.live-clock')

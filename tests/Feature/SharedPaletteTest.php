@@ -169,6 +169,32 @@ class SharedPaletteTest extends TestCase
         }
     }
 
+    /**
+     * Any sheet that owns the shared rail must also size its logo.
+     *
+     * partials/*-sidebar render <img class="asb-logo-full">. A sheet that
+     * styles .asb-logo but never gives .asb-logo-full a width lets the
+     * image render at its natural size and blow out of the panel — which
+     * is what happened to the Class Adviser, whose pages carry their own
+     * copy of the rail instead of loading role-sidebar.css.
+     */
+    public function test_every_sheet_owning_the_rail_also_sizes_the_logo(): void
+    {
+        foreach (glob(resource_path('css/*.css')) as $sheet) {
+            $css = file_get_contents($sheet);
+
+            if (! str_contains($css, '.asb-logo{') && ! str_contains($css, '.asb-logo {')) {
+                continue;
+            }
+
+            $this->assertMatchesRegularExpression(
+                '/\.asb-logo-full\s*\{[^}]*width\s*:/',
+                $css,
+                basename($sheet).' styles the rail but never sizes .asb-logo-full — the logo will overflow the panel.'
+            );
+        }
+    }
+
     /** Pages on the theme must not double-load the palette. */
     public function test_theme_pages_do_not_also_inline_the_palette(): void
     {

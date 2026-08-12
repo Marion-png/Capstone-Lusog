@@ -181,8 +181,14 @@ class SchoolNurseDashboardTest extends TestCase
         // Still on the older .nsb-* rail. Move each entry up to $lusogPages
         // as it is converted; the list is expected to reach zero.
         $legacyPages = [
-            '/dashboard/school-nurse/deworming' => 'dashboard.school-nurse.deworming',
             '/dashboard/data-visualization' => 'dashboard.data-visualization',
+        ];
+
+        // Reachable and fully working, but deliberately absent from the rail
+        // (see the note in partials/nurse-lusog-sidebar). These still render
+        // the shared sidebar — they simply have no entry to highlight.
+        $unlistedPages = [
+            '/dashboard/school-nurse/deworming',
         ];
 
         foreach ($lusogPages as $url => $activeRoute) {
@@ -207,9 +213,28 @@ class SchoolNurseDashboardTest extends TestCase
             );
         }
 
+        foreach ($unlistedPages as $url) {
+            $html = $this->withSession($this->nurseSession())->get($url)->assertOk()->getContent();
+
+            $this->assertMatchesRegularExpression(
+                '/class="(nsb|sidebar)"/',
+                $html,
+                "{$url} must still render the shared nurse sidebar."
+            );
+            // The page's own heading names the programme, so match the rail
+            // link shape rather than the words.
+            foreach (['sb-link', 'nsb-item'] as $railClass) {
+                $this->assertStringNotContainsString(
+                    'href="'.route('dashboard.school-nurse.deworming').'" class="'.$railClass,
+                    $html,
+                    "{$url} is hidden from the rail, so no {$railClass} may link to it."
+                );
+            }
+        }
+
         // Whichever rail a page is on, it comes from a shared partial: no
         // page may inline a second <aside> of its own.
-        foreach (array_keys($lusogPages + $legacyPages) as $url) {
+        foreach (array_merge(array_keys($lusogPages + $legacyPages), $unlistedPages) as $url) {
             $html = $this->withSession($this->nurseSession())->get($url)->assertOk()->getContent();
 
             $this->assertSame(
