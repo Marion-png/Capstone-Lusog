@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\AttendanceImport;
-use App\Models\Consultation;
 use App\Models\FeedingAttendance;
 use App\Models\StudentHealthRecord;
 use App\Support\AttendanceSheetParser;
@@ -11,19 +10,19 @@ use App\Support\AttendanceSheetScanner;
 use App\Support\AuditTrail;
 use App\Support\EncryptedFileStorage;
 use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Throwable;
 
 class FeedingProgramController extends Controller
 {
-    private const PROGRAM_DURATION_DAYS = 120;
+    private const PROGRAM_DURATION_DAYS = FeedingProgramCycle::DURATION_DAYS;
 
     private const AT_RISK_THRESHOLD_PERCENT = 75;
 
@@ -696,6 +695,199 @@ class FeedingProgramController extends Controller
     }
 
     /**
+     * The fast lane for a coordinator standing at the feeding line: one screen
+     * listing every beneficiary, one tap per learner, one save. The alternative
+     * — opening each learner in turn — is why sessions went unrecorded.
+     *
+     * Marks already on file for the chosen date pre-select their rows, so
+     * re-opening the screen corrects a session instead of starting a blank one.
+     */
+    public function recordAttendanceForm(Request $request): View|RedirectResponse
+    {
+        if (! $this->isFeedingCoordinator($request)) {
+            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can record attendance.');
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+
+        $sessionDate = filled($request->query('date'))
+            ? Carbon::parse((string) $request->query('date'))
+            : now();
+        if ($sessionDate->isFuture()) {
+            $sessionDate = now();
+        }
+        $sessionDate = $sessionDate->toDateString();
+
+        $beneficiaries = collect();
+        if (SchemaCache::hasTable('student_health_records')) {
+            $beneficiaries = StudentHealthRecord::query()
+                ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+                ->forCurrentSchoolYear()
+                ->get()
+                ->filter(fn (StudentHealthRecord $record): bool => $this->isAttendanceEligible($record->nutritional_status))
+                ->values();
+        }
+
+        $existing = collect();
+        if ($beneficiaries->isNotEmpty() && SchemaCache::hasTable('feeding_attendances')) {
+            $existing = FeedingAttendance::query()
+                ->whereIn('student_health_record_id', $beneficiaries->pluck('id'))
+                ->whereDate('session_date', $sessionDate)
+                ->get()
+                ->keyBy('student_health_record_id');
+        }
+
+        // student_name is encrypted at rest, so sorting happens in PHP.
+        $rows = $beneficiaries
+            ->map(function (StudentHealthRecord $record) use ($existing): array {
+                [$grade, $section] = $this->splitGradeSection((string) $record->section);
+                $mark = $existing->get($record->id);
+
+                return [
+                    'id' => $record->id,
+                    'name' => (string) $record->student_name,
+                    'grade' => $grade,
+                    'section' => $section,
+                    // An unconfirmed scanned mark arrives with nothing selected,
+                    // so saving this screen is what confirms it.
+                    'mark' => match (true) {
+                        $mark === null, (bool) ($mark->needs_review ?? false), $mark->is_present === null => '',
+                        (bool) $mark->is_present => 'present',
+                        default => 'absent',
+                    },
+                ];
+            })
+            ->sortBy(fn (array $row) => strtolower($row['name']))
+            ->values();
+
+        return view('feedingcor-dashboard.record-attendance', [
+            'rows' => $rows,
+            'sessionDate' => $sessionDate,
+            'sessionLabel' => Carbon::parse($sessionDate)->format('M d, Y'),
+            'today' => now()->toDateString(),
+            'alreadyRecorded' => $existing->count(),
+        ]);
+    }
+
+    /**
+     * Saves one session's marks in a single transaction.
+     *
+     * A learner left unmarked is written as nothing at all — not as an absence.
+     * The coordinator may have skipped the row; only an explicit present/absent
+     * is evidence, and inventing an absence here would flag a learner nobody
+     * observed missing.
+     */
+    public function storeRecordedAttendance(Request $request): RedirectResponse
+    {
+        if (! $this->isFeedingCoordinator($request)) {
+            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can record attendance.');
+        }
+
+        $request->validate([
+            'session_date' => ['required', 'date', 'before_or_equal:today'],
+            'marks' => ['required', 'array'],
+            'marks.*' => ['nullable', 'in:present,absent'],
+        ]);
+
+        if (! SchemaCache::hasTable('student_health_records') || ! SchemaCache::hasTable('feeding_attendances')) {
+            return back()->with('error', 'Attendance tracking tables are not ready. Run migrations first.');
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+        $sessionDate = Carbon::parse((string) $request->input('session_date'))->toDateString();
+
+        $submitted = collect($request->input('marks', []))
+            ->filter(fn ($mark): bool => in_array($mark, ['present', 'absent'], true));
+
+        if ($submitted->isEmpty()) {
+            return back()->with('error', 'No learner was marked, so nothing was recorded.');
+        }
+
+        // Only this school's eligible learners may be written, whatever the form
+        // posted: the ids come off the wire and are not to be trusted.
+        $allowedIds = StudentHealthRecord::query()
+            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+            ->forCurrentSchoolYear()
+            ->get()
+            ->filter(fn (StudentHealthRecord $record): bool => $this->isAttendanceEligible($record->nutritional_status))
+            ->pluck('id')
+            ->all();
+
+        $marks = $submitted->filter(fn ($mark, $recordId): bool => in_array((int) $recordId, $allowedIds, true));
+
+        if ($marks->isEmpty()) {
+            return back()->with('error', 'None of the submitted learners belong to this school.');
+        }
+
+        $now = now();
+        $hasReviewColumns = $this->hasReviewColumns();
+        $recorder = (string) $request->session()->get('active_name', 'Feeding Coordinator');
+
+        $upserts = $marks->map(function ($mark, $recordId) use ($sessionDate, $now, $hasReviewColumns): array {
+            $row = [
+                'student_health_record_id' => (int) $recordId,
+                'session_date' => $sessionDate,
+                'is_present' => $mark === 'present',
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+
+            if ($hasReviewColumns) {
+                // Typed by the person who was there: confirmed on arrival, and
+                // it supersedes any unread scanned mark for the same session.
+                $row['source'] = FeedingAttendance::SOURCE_MANUAL_ENTRY;
+                $row['needs_review'] = false;
+            }
+
+            return $row;
+        })->values()->all();
+
+        $presentCount = $marks->filter(fn ($mark): bool => $mark === 'present')->count();
+
+        DB::transaction(function () use ($upserts, $hasReviewColumns, $institutionId, $sessionDate, $marks, $recorder): void {
+            FeedingAttendance::query()->upsert(
+                $upserts,
+                ['student_health_record_id', 'session_date'],
+                $hasReviewColumns
+                    ? ['is_present', 'source', 'needs_review', 'updated_at']
+                    : ['is_present', 'updated_at']
+            );
+
+            $this->refreshAttendanceRiskFlags($institutionId);
+
+            // The batch record is what makes "attendance exists for this period"
+            // true, so a hand-recorded session gates the workflow exactly as an
+            // uploaded sheet does.
+            AttendanceImport::create([
+                'institution_id' => $institutionId,
+                'school_year' => StudentHealthRecord::currentSchoolYear(),
+                'uploaded_by_name' => $recorder,
+                'original_filename' => 'Recorded on site',
+                'stored_path' => null,
+                'kind' => AttendanceImport::KIND_MANUAL,
+                'session_date' => $sessionDate,
+                'sessions_count' => 1,
+                'matched_count' => $marks->count(),
+                'unmatched_count' => 0,
+                'unclear_count' => 0,
+                'row_errors' => [],
+            ]);
+        });
+
+        AuditTrail::record(
+            'created',
+            'FeedingAttendance',
+            null,
+            'Attendance for '.$sessionDate.' recorded on site by '.$recorder
+                .': '.$presentCount.' present, '.($marks->count() - $presentCount).' absent'
+        );
+
+        return redirect()
+            ->route('dashboard.feedingcor-dashboard')
+            ->with('success', $marks->count().' mark(s) recorded for '.Carbon::parse($sessionDate)->format('M d, Y').'.');
+    }
+
+    /**
      * A human confirms one unreadable mark. This is the only path that turns a
      * NULL into a real attendance value, and it is always attributed and logged
      * — no mark a machine was unsure about changes a learner's flag silently.
@@ -1052,32 +1244,7 @@ class FeedingProgramController extends Controller
 
     private function resolveProgramDay(?int $institutionId = null): int
     {
-        $programDay = 0;
-        $todayDate = now()->toDateString();
-
-        if (SchemaCache::hasTable('feeding_attendances')) {
-            $firstAttendanceDate = FeedingAttendance::query()
-                ->when($institutionId, fn ($q) => $q->whereIn(
-                    'student_health_record_id',
-                    StudentHealthRecord::query()->where('institution_id', $institutionId)->forCurrentSchoolYear()->select('id')
-                ))
-                ->whereDate('session_date', '<=', $todayDate)
-                ->min('session_date');
-            if ($firstAttendanceDate) {
-                $programDay = min(self::PROGRAM_DURATION_DAYS, Carbon::parse($firstAttendanceDate)->startOfDay()->diffInDays(now()->startOfDay()) + 1);
-            }
-        }
-
-        if ($programDay === 0 && SchemaCache::hasTable('consultations')) {
-            $firstFeedingDate = Consultation::query()
-                ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-                ->min('consulted_at');
-            if ($firstFeedingDate) {
-                $programDay = min(self::PROGRAM_DURATION_DAYS, Carbon::parse($firstFeedingDate)->startOfDay()->diffInDays(now()->startOfDay()) + 1);
-            }
-        }
-
-        return $programDay;
+        return FeedingProgramCycle::forInstitution($institutionId)->day();
     }
 
     /**

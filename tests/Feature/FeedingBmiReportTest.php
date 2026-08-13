@@ -213,36 +213,7 @@ class FeedingBmiReportTest extends TestCase
     }
 
     #[Test]
-    public function dashboard_renders_the_banded_bmi_chart_with_month_summaries(): void
-    {
-        $this->makeStudent('Grade 7 / Sampaguita', 'Male', 'Wasted', 'Stunted');
-        $this->makeStudent('Grade 8 / Ilang', 'Female', 'Normal', 'Normal Height-for-Age');
-
-        $response = $this->withSession($this->coordinatorSession())
-            ->get('/dashboard/feedingcor-dashboard');
-        $response->assertOk();
-
-        $chart = $response->viewData('bmiChart');
-        $this->assertCount(6, $chart['months']);          // last six months
-        $this->assertCount(3, $chart['bands']);           // under / healthy / over
-        $this->assertStringStartsWith('M ', $chart['line_path']);       // smooth spline...
-        $this->assertStringContainsString(' C ', $chart['line_path']);  // ...via cubic beziers
-
-        // Newly recorded learners land in the current month's bucket.
-        $current = collect($chart['months'])->firstWhere('has_data', true);
-        $this->assertNotNull($current);
-        $this->assertSame(2, $current['count']);
-        $this->assertNotEmpty($current['status']);
-
-        // Reference bands + clickable month dots are in the rendered markup.
-        $response->assertSee('bmi-band', false);
-        $response->assertSee('bmi-dot', false);
-        $response->assertSee('Overweight watch', false);
-        $response->assertSee('bmiMonthSummary', false);
-    }
-
-    #[Test]
-    public function dashboard_renders_the_roster_and_weekly_checkins_table(): void
+    public function dashboard_renders_the_weight_and_bmi_log(): void
     {
         $this->makeStudent('Grade 7 / Sampaguita', 'Male', 'Severely Wasted', 'Stunted');
         $this->makeStudent('Grade 8 / Ilang', 'Female', 'Normal', 'Normal Height-for-Age');
@@ -258,8 +229,6 @@ class FeedingBmiReportTest extends TestCase
         $this->assertArrayHasKey('stable', $roster);
         $this->assertSame('flat', $roster['students'][0]['trend']);  // no endline yet -> no change
 
-        $response->assertSee('Student Roster', false);
-        $response->assertSee('roster-list', false);
         $response->assertSee('Weight &amp; BMI Log', false);
         $response->assertSee('checkins-table', false);
         $response->assertSee('Needs attention', false);

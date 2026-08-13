@@ -568,6 +568,15 @@ Route::get('/dashboard/school-head/metrics/pulse', [SchoolHeadController::class,
 Route::get('/dashboard/feedingcor-dashboard', [FeedingCoordinatorController::class, 'dashboard'])
     ->name('dashboard.feedingcor-dashboard');
 
+// Keeps the coordinator's status counts and today's attendance current without
+// a reload: the page polls the pulse (a stamp, no data) and only re-reads the
+// panels when it moves.
+Route::get('/dashboard/feedingcor-dashboard/metrics', [FeedingCoordinatorController::class, 'metrics'])
+    ->name('dashboard.feedingcor.metrics');
+
+Route::get('/dashboard/feedingcor-dashboard/metrics/pulse', [FeedingCoordinatorController::class, 'pulse'])
+    ->name('dashboard.feedingcor.metrics.pulse');
+
 Route::get('/dashboard/nutricor-dashboard', [NutritionCoordinatorController::class, 'dashboard'])
     ->name('dashboard.nutricor-dashboard');
 
@@ -732,6 +741,14 @@ Route::post('/dashboard/feedingcor-program/attendance/import', [FeedingProgramCo
 // in the review queue below rather than being guessed.
 Route::post('/dashboard/feedingcor-program/attendance/scan', [FeedingProgramController::class, 'scanAttendancePhoto'])
     ->name('feedingcor-program.attendance.scan');
+
+// One screen, one tap per learner, one save — the fast path for a session the
+// coordinator watched happen, instead of opening each learner in turn.
+Route::get('/dashboard/feedingcor-program/attendance/record', [FeedingProgramController::class, 'recordAttendanceForm'])
+    ->name('feedingcor-program.attendance.record');
+
+Route::post('/dashboard/feedingcor-program/attendance/record', [FeedingProgramController::class, 'storeRecordedAttendance'])
+    ->name('feedingcor-program.attendance.record.store');
 
 Route::get('/dashboard/feedingcor-program/attendance/review', [FeedingProgramController::class, 'attendanceReviewQueue'])
     ->name('feedingcor-program.attendance.review');

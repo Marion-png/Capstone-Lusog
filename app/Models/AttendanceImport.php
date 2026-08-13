@@ -51,6 +51,9 @@ class AttendanceImport extends Model
 
     public const KIND_PHOTO = 'photo_scan';
 
+    /** One session recorded by hand on the bulk attendance screen — no file. */
+    public const KIND_MANUAL = 'manual_entry';
+
     /** Marks this batch produced that no human has confirmed yet. */
     public function pendingReviewCount(): int
     {

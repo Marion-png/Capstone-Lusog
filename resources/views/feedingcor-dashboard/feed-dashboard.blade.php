@@ -26,268 +26,97 @@
 	    @include('partials.live-clock')
 	</header>
 
-	<div class="content">
-		<div class="page-header" id="dashboard">
-			<h1 class="page-title">Dashboard <span>Feeding Program</span></h1>
-			<p class="page-sub">Monitor JHS/SHS participation, nutritional outcomes, and weekly check-ins at a glance.</p>
+	<div class="content" id="fc-dashboard"
+		data-stamp="{{ $stamp }}"
+		data-metrics-url="{{ route('dashboard.feedingcor.metrics') }}"
+		data-pulse-url="{{ route('dashboard.feedingcor.metrics.pulse') }}">
+		@php
+			$cycle = $programCycle ?? ['school_year' => '', 'day' => 0, 'duration' => 120, 'days_remaining' => 120, 'percent' => 0, 'started' => false, 'start_date' => null];
+			$cycleDuration = (int) $cycle['duration'];
+			$cycleDay = (int) $cycle['day'];
+			// En dash in the school year: it is a range, not a hyphenated word.
+			$cycleYear = str_replace('-', '&ndash;', e((string) $cycle['school_year']));
+		@endphp
+		<div class="page-header sbfp-header" id="dashboard">
+			<div class="sbfp-headline">
+				<div class="sbfp-title-row">
+					<h1 class="page-title">SBFP</h1>
+					<span class="sbfp-year">S.Y. {!! $cycleYear !!}</span>
+				</div>
+				<p class="sbfp-day {{ $cycle['started'] ? '' : 'is-idle' }}">
+					<span class="sbfp-dot" aria-hidden="true"></span>
+					@if ($cycle['started'])
+						Feeding day <strong data-cycle-day>{{ $cycleDay }}</strong> of {{ $cycleDuration }}
+						<span class="sbfp-sep">&middot;</span>
+						<span data-cycle-remaining>{{ $cycle['days_remaining'] }} days remaining</span>
+					@else
+						No feeding session recorded yet
+						<span class="sbfp-sep">&middot;</span>
+						{{ $cycleDuration }}-day cycle
+					@endif
+				</p>
+				{{-- Server-rendered fill; the script below re-reads the calendar so a
+				     page left open overnight still shows today's day. --}}
+				<div class="sbfp-progress" id="sbfpProgress" role="progressbar"
+					aria-valuemin="0" aria-valuemax="{{ $cycleDuration }}" aria-valuenow="{{ $cycleDay }}"
+					aria-valuetext="Feeding day {{ $cycleDay }} of {{ $cycleDuration }}"
+					data-start="{{ $cycle['start_date'] }}" data-duration="{{ $cycleDuration }}">
+					<span class="sbfp-progress-fill" style="width: {{ $cycle['percent'] }}%"></span>
+				</div>
+			</div>
+			<div class="sbfp-actions">
+				<a class="btn btn-primary" href="{{ route('dashboard.feedingcor-program') }}#record-attendance">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>
+					Record attendance
+				</a>
+				<a class="btn btn-secondary" href="{{ route('dashboard.feedingcor-health-records') }}">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+					Enroll beneficiary
+				</a>
+			</div>
 		</div>
+
+		@if (session('success'))
+			<div class="flash ok">{{ session('success') }}</div>
+		@endif
+		@if (session('error'))
+			<div class="flash err">{{ session('error') }}</div>
+		@endif
 
 		@include('partials.announcements')
 
-		{{-- Four white cards, one semantic accent each: brand green for the
-		     headcount, amber for programme progress, fresh green for the
-		     positive outcome, teal for the neutral participation measure. --}}
-		<section class="kpi-grid">
-			<article class="card kpi accent-brand">
-				<div class="kpi-top">
-					<div class="kpi-label">Enrolled Students</div>
-					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-				</div>
-				<div class="kpi-value">{{ $dashboardStats['total_students'] ?? 0 }}</div>
-				<div class="kpi-hint">JHS {{ $dashboardStats['jhs_count'] ?? 0 }} &middot; SHS {{ $dashboardStats['shs_count'] ?? 0 }}</div>
-			</article>
-			<article class="card kpi accent-amber">
-				<div class="kpi-top">
-					<div class="kpi-label">Program Day</div>
-					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/></svg></div>
-				</div>
-				<div class="kpi-value">{{ $dashboardStats['program_day'] ?? 0 }}</div>
-				<div class="kpi-hint">of 120 day cycle</div>
-			</article>
-			<article class="card kpi accent-success">
-				<div class="kpi-top">
-					<div class="kpi-label">Improving</div>
-					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></div>
-				</div>
-				<div class="kpi-value">{{ $dashboardStats['improving_rate'] ?? 0 }}%</div>
-				<div class="kpi-hint">{{ $dashboardStats['improving_count'] ?? 0 }} of {{ $dashboardStats['total_students'] ?? 0 }} students</div>
-			</article>
-			<article class="card kpi accent-info">
-				<div class="kpi-top">
-					<div class="kpi-label">Avg Check-ins</div>
-					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></div>
-				</div>
-				<div class="kpi-value">{{ $dashboardStats['avg_attendance'] ?? 0 }}%</div>
-				<div class="kpi-hint">Last 5 weeks</div>
-			</article>
+		<section class="kpi-grid live-pane" id="fc-cards">
+			@include('feedingcor-dashboard.partials.kpi-cards')
 		</section>
 
 		<section class="dash-stack" id="feeding-program">
-			<article class="card chart-card">
+			{{-- Today's session is the coordinator's working surface, so it takes
+			     the wide column; the status roll sits beside it as reference. --}}
+			<article class="card att-card">
 				<div class="card-head">
 					<div>
-						<h2 class="card-title">Avg BMI Progress Over Time</h2>
-						<p class="card-sub">Track average BMI trends across the feeding program cycle.</p>
+						<h2 class="card-title">Attendance Monitoring</h2>
+						<p class="card-sub">Today&rsquo;s feeding attendance &middot; <span id="fc-updated">{{ $generatedAt }}</span></p>
 					</div>
+					<a class="btn btn-primary" href="{{ route('feedingcor-program.attendance.record') }}">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+						Record Today&rsquo;s Attendance
+					</a>
 				</div>
-				<div class="chart-surface">
-				@php
-					$plot = $bmiChart['plot'] ?? ['left' => 48, 'right' => 900, 'top' => 24, 'bottom' => 196];
-					$chartMonths = $bmiChart['months'] ?? [];
-					$yTicks = $bmiChart['y_ticks'] ?? [];
-					// Hit areas are full-height columns so a data point stays an
-					// easy target on a phone, well past the 44px minimum.
-					$hitWidth = count($chartMonths) > 1
-						? ($plot['right'] - $plot['left']) / (count($chartMonths) - 1)
-						: ($plot['right'] - $plot['left']);
-				@endphp
-				<svg class="chart-svg bmi-chart-svg" viewBox="0 0 {{ ($plot['right'] ?? 900) + 20 }} 238" role="img" aria-label="Average BMI progress line chart">
-					{{-- One vertical gradient feeds the line, the fill and every marker
-					     ring, so a point's colour is the WHO band it sits in. Stops are
-					     positioned by buildBmiChart at the real 18.5 / 25 boundaries. --}}
-					<defs>
-						<linearGradient id="bmiZoneGrad" gradientUnits="userSpaceOnUse" x1="0" y1="{{ $plot['top'] }}" x2="0" y2="{{ $plot['bottom'] }}">
-							@foreach (($bmiChart['gradient_stops'] ?? []) as $stop)
-								<stop class="grad-{{ $stop['zone'] }}" offset="{{ $stop['offset'] }}"></stop>
-							@endforeach
-						</linearGradient>
-						{{-- Fades the fill downward so colour is densest under the curve
-						     and clears out before it reaches the axis labels. --}}
-						<linearGradient id="bmiFadeGrad" gradientUnits="userSpaceOnUse" x1="0" y1="{{ $plot['top'] }}" x2="0" y2="{{ $plot['bottom'] }}">
-							<stop offset="0" stop-color="#ffffff" stop-opacity=".85"></stop>
-							<stop offset=".5" stop-color="#ffffff" stop-opacity=".3"></stop>
-							<stop offset=".9" stop-color="#ffffff" stop-opacity="0"></stop>
-						</linearGradient>
-						<mask id="bmiFadeMask">
-							<rect x="0" y="0" width="{{ ($plot['right'] ?? 900) + 20 }}" height="238" fill="url(#bmiFadeGrad)"></rect>
-						</mask>
-					</defs>
-
-					@foreach (($bmiChart['bands'] ?? []) as $band)
-						<rect class="bmi-band band-{{ $band['class'] }}" x="{{ $plot['left'] }}" y="{{ $band['y'] }}" width="{{ $plot['right'] - $plot['left'] }}" height="{{ $band['height'] }}"></rect>
-					@endforeach
-
-					@foreach (($bmiChart['grid_lines'] ?? []) as $gridY)
-						<line class="grid-line" x1="{{ $plot['left'] }}" y1="{{ $gridY }}" x2="{{ $plot['right'] }}" y2="{{ $gridY }}"></line>
-					@endforeach
-
-					@foreach (($bmiChart['zone_lines'] ?? []) as $zoneY)
-						<line class="zone-line" x1="{{ $plot['left'] }}" y1="{{ $zoneY }}" x2="{{ $plot['right'] }}" y2="{{ $zoneY }}"></line>
-					@endforeach
-
-					<path class="area-fill" d="{{ $bmiChart['area_path'] ?? '' }}" mask="url(#bmiFadeMask)"></path>
-					<path class="line-main" d="{{ $bmiChart['line_path'] ?? '' }}"></path>
-
-					{{-- Zone labels paint last so the line and area fill can never sit on top of them. --}}
-					@foreach (($bmiChart['bands'] ?? []) as $band)
-						<text class="bmi-band-label label-{{ $band['class'] }}" x="{{ $plot['left'] + 10 }}" y="{{ $band['label_y'] }}">{{ $band['label'] }}</text>
-					@endforeach
-
-					@foreach ($chartMonths as $month)
-						<g class="bmi-point" data-index="{{ $month['index'] }}" tabindex="0" role="button"
-							aria-label="{{ $month['full'] }}@if ($month['has_data']) — average BMI {{ $month['avg_bmi'] }}, {{ $month['band'] }}, {{ $month['count'] }} learners @else — no measurements @endif">
-							<rect class="bmi-hit" x="{{ round($month['x'] - $hitWidth / 2, 1) }}" y="{{ $plot['top'] }}" width="{{ round($hitWidth, 1) }}" height="{{ $plot['bottom'] - $plot['top'] }}"></rect>
-							<circle class="bmi-dot{{ $month['is_current'] ? ' is-current' : '' }}{{ $month['has_data'] ? '' : ' no-data' }}" cx="{{ $month['x'] }}" cy="{{ $month['y'] }}" r="{{ $month['is_current'] ? 4.5 : 4 }}"></circle>
-						</g>
-					@endforeach
-
-					@foreach ($yTicks as $tick)
-						<text class="axis-txt axis-y" x="{{ $plot['left'] - 12 }}" y="{{ $tick['y'] + 4 }}" text-anchor="end">{{ $tick['label'] }}</text>
-					@endforeach
-					@foreach ($chartMonths as $month)
-						<text class="axis-txt axis-x" x="{{ $month['x'] }}" y="{{ $plot['bottom'] + 26 }}" text-anchor="middle">{{ $month['label'] }}</text>
-					@endforeach
-				</svg>
-				<div class="bmi-card" id="bmiMonthSummary" role="status" data-default="{{ $bmiChart['default_index'] ?? 0 }}"></div>
+				<div class="live-pane" id="fc-attendance">
+					@include('feedingcor-dashboard.partials.attendance-monitoring')
 				</div>
-				@if (! empty($bmiChart['has_outlier']))
-					<div class="bmi-outlier-banner">&#9888; {{ $bmiChart['outlier_label'] }}'s average is an outlier &mdash; worth verifying against individual records before reporting.</div>
-				@endif
-				<script>
-				(() => {
-					const months = @json($bmiChart['months'] ?? []);
-					const card = document.getElementById('bmiMonthSummary');
-					const surface = document.querySelector('.chart-surface');
-					if (!card || !surface) return;
-
-					const points = Array.from(surface.querySelectorAll('.bmi-point'));
-					const bandClass = (b) => b === 'Overweight watch' ? 'over' : (b === 'Underweight watch' ? 'under' : 'healthy');
-					const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-					let pinned = null;
-
-					const build = (m) => {
-						let h = '<div class="bmi-card-head"><span class="bmi-card-date">' + esc(m.full) + '</span>';
-						if (m.band) h += '<span class="bmi-card-zone ' + bandClass(m.band) + '">' + esc(m.band) + '</span>';
-						h += '</div>';
-						if (m.has_data) {
-							h += '<div class="bmi-card-figure"><span class="bmi-card-value">' + m.avg_bmi + '</span><span class="bmi-card-unit">avg BMI</span>';
-							if (m.delta !== null && m.delta !== undefined) {
-								const dir = m.delta > 0 ? 'up' : (m.delta < 0 ? 'down' : 'flat');
-								const sign = m.delta > 0 ? '+' : '';
-								h += '<span class="bmi-card-delta ' + dir + '">' + sign + m.delta.toFixed(1) + ' vs previous</span>';
-							} else {
-								h += '<span class="bmi-card-delta flat">first reading</span>';
-							}
-							h += '</div>';
-							h += '<div class="bmi-card-meta">' + m.count + ' learner' + (m.count === 1 ? '' : 's') + ' measured</div>';
-							if (m.status && m.status.length) h += '<div class="bmi-card-chips">' + m.status.map((s) => '<span class="bmi-chip">' + esc(s.label) + ': ' + s.count + '</span>').join('') + '</div>';
-							if (m.is_outlier) h += '<div class="bmi-card-flag">Flagged as an outlier &mdash; verify individual records.</div>';
-						} else {
-							h += '<div class="bmi-card-empty">No measurements recorded this month.</div>';
-						}
-						return h;
-					};
-
-					const show = (i) => {
-						const m = months[i];
-						const point = points[i];
-						if (!m || !point) return;
-
-						card.innerHTML = build(m);
-						card.classList.add('show');
-						points.forEach((p) => p.classList.toggle('is-active', p === point));
-
-						// Anchor above the dot, clamped so the card never leaves the surface.
-						const dot = point.querySelector('.bmi-dot').getBoundingClientRect();
-						const box = surface.getBoundingClientRect();
-						const half = card.offsetWidth / 2;
-						const x = Math.max(half + 8, Math.min(box.width - half - 8, dot.left + dot.width / 2 - box.left));
-						const above = dot.top - box.top - 14;
-						card.style.left = x + 'px';
-						card.classList.toggle('below', above < card.offsetHeight);
-						card.style.top = (above < card.offsetHeight ? dot.bottom - box.top + 14 : above) + 'px';
-					};
-
-					const hide = () => {
-						if (pinned !== null) return;
-						card.classList.remove('show');
-						points.forEach((p) => p.classList.remove('is-active'));
-					};
-
-					const togglePin = (i) => {
-						if (pinned === i) {
-							pinned = null;
-							card.classList.remove('is-pinned');
-							hide();
-							return;
-						}
-						pinned = i;
-						card.classList.add('is-pinned');
-						show(i);
-					};
-
-					points.forEach((point, i) => {
-						point.addEventListener('pointerenter', () => { if (pinned === null) show(i); });
-						point.addEventListener('pointerleave', hide);
-						point.addEventListener('focus', () => { if (pinned === null) show(i); });
-						point.addEventListener('blur', hide);
-						point.addEventListener('click', (e) => { e.stopPropagation(); togglePin(i); });
-						point.addEventListener('keydown', (e) => {
-							if (e.key !== 'Enter' && e.key !== ' ') return;
-							e.preventDefault();
-							togglePin(i);
-						});
-					});
-
-					// Clicking away releases the pin.
-					document.addEventListener('click', (e) => {
-						if (pinned === null || e.target.closest('.bmi-point')) return;
-						pinned = null;
-						card.classList.remove('is-pinned');
-						hide();
-					});
-					document.addEventListener('keydown', (e) => {
-						if (e.key !== 'Escape' || pinned === null) return;
-						pinned = null;
-						card.classList.remove('is-pinned');
-						hide();
-					});
-					window.addEventListener('resize', () => { if (pinned !== null) show(pinned); });
-				})();
-				</script>
 			</article>
 
-			<article class="card roster-card">
+			<article class="card ns-card">
 				<div class="card-head">
 					<div>
-						<h2 class="card-title">Student Roster</h2>
-						<p class="card-sub">BMI change since baseline.</p>
+						<h2 class="card-title">Nutritional Status</h2>
+						<p class="card-sub">Beneficiaries by baseline status.</p>
 					</div>
 				</div>
-				<div class="roster-chips">
-					<span class="badge badge-normal">Improving {{ $roster['improving'] }}</span>
-					<span class="badge badge-neutral">Stable {{ $roster['stable'] }}</span>
-					<span class="badge badge-risk">Needs attention {{ $roster['attention'] }}</span>
-				</div>
-				<div class="roster-list">
-					@forelse ($roster['students'] as $s)
-						<div class="roster-row">
-							<div class="roster-avatar">{{ $s['initials'] }}</div>
-							<div class="roster-meta">
-								<div class="roster-name">{{ $s['name'] }}</div>
-								<div class="roster-grade">{{ $s['grade'] }}</div>
-							</div>
-							@if ($s['trend'] === 'up')
-								<div class="roster-change up">&#9650; +{{ number_format($s['change'], 1) }}</div>
-							@elseif ($s['trend'] === 'down')
-								<div class="roster-change down">&#9660; {{ number_format($s['change'], 1) }}</div>
-							@else
-								<div class="roster-change flat">&middot; {{ number_format($s['change'], 1) }}</div>
-							@endif
-						</div>
-					@empty
-						<div class="roster-empty">No students on file yet.</div>
-					@endforelse
+				<div class="live-pane" id="fc-nutrition">
+					@include('feedingcor-dashboard.partials.nutrition-status')
 				</div>
 			</article>
 		</section>
@@ -336,6 +165,137 @@
 	</div>
 </div>
 <script>
+// Feeding-day progress. The bar ships filled from the server; this only keeps
+// it honest on a page nobody reloads — at midnight the day advances by itself.
+(() => {
+	const bar = document.getElementById('sbfpProgress');
+	if (!bar || !bar.dataset.start) {
+		return;
+	}
+
+	const duration = Number(bar.dataset.duration) || 120;
+	const startMs = Date.parse(bar.dataset.start + 'T00:00:00');
+	if (Number.isNaN(startMs)) {
+		return;
+	}
+
+	const fill = bar.querySelector('.sbfp-progress-fill');
+	const dayEl = document.querySelector('[data-cycle-day]');
+	const remainingEl = document.querySelector('[data-cycle-remaining]');
+
+	const tick = () => {
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+		const elapsed = Math.floor((today.getTime() - startMs) / 86400000) + 1;
+		const day = Math.max(0, Math.min(duration, elapsed));
+		const remaining = Math.max(0, duration - day);
+
+		if (fill) fill.style.width = ((day / duration) * 100).toFixed(1) + '%';
+		if (dayEl) dayEl.textContent = String(day);
+		if (remainingEl) remainingEl.textContent = remaining + (remaining === 1 ? ' day remaining' : ' days remaining');
+		bar.setAttribute('aria-valuenow', String(day));
+		bar.setAttribute('aria-valuetext', 'Feeding day ' + day + ' of ' + duration);
+	};
+
+	tick();
+	window.setInterval(tick, 60000);
+	document.addEventListener('visibilitychange', () => {
+		if (!document.hidden) tick();
+	});
+})();
+
+// Live panels. The page asks a cheap pulse (a stamp, no data) on a timer and
+// pays for the rebuild only when the stamp moves — so a mark recorded at the
+// feeding line shows up here without anyone reloading.
+(() => {
+	const root = document.getElementById('fc-dashboard');
+	if (!root) {
+		return;
+	}
+
+	const panes = {
+		cards: document.getElementById('fc-cards'),
+		attendance: document.getElementById('fc-attendance'),
+		nutrition: document.getElementById('fc-nutrition'),
+	};
+	const updated = document.getElementById('fc-updated');
+	const metricsUrl = root.dataset.metricsUrl;
+	const pulseUrl = root.dataset.pulseUrl;
+	const PULSE_MS = 20000;
+
+	let inFlight = false;
+
+	const setRefreshing = (on) => {
+		Object.values(panes).forEach((pane) => {
+			if (pane) pane.classList.toggle('is-refreshing', on);
+		});
+	};
+
+	const refresh = async () => {
+		if (inFlight) {
+			return;
+		}
+
+		inFlight = true;
+		setRefreshing(true);
+		try {
+			const response = await fetch(metricsUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+			if (!response.ok) {
+				return;
+			}
+
+			const payload = await response.json();
+			if (!payload.html) {
+				return;
+			}
+
+			// The server renders the same Blade partials the first paint used,
+			// so the live view can never drift from a reloaded one.
+			Object.keys(panes).forEach((key) => {
+				if (panes[key] && typeof payload.html[key] === 'string') {
+					panes[key].innerHTML = payload.html[key];
+				}
+			});
+			if (updated && payload.generatedAt) {
+				updated.textContent = payload.generatedAt;
+			}
+		} catch (error) {
+			// Offline or a dropped request: keep what is on screen and try again
+			// on the next pulse.
+		} finally {
+			inFlight = false;
+			setRefreshing(false);
+		}
+	};
+
+	const pulse = async () => {
+		if (document.hidden || inFlight) {
+			return;
+		}
+
+		try {
+			const response = await fetch(pulseUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+			if (!response.ok) {
+				return;
+			}
+
+			const payload = await response.json();
+			if (payload.stamp && payload.stamp !== root.dataset.stamp) {
+				root.dataset.stamp = payload.stamp;
+				await refresh();
+			}
+		} catch (error) {
+			// Ignored — the next pulse retries.
+		}
+	};
+
+	pulse();
+	window.setInterval(pulse, PULSE_MS);
+	document.addEventListener('visibilitychange', () => {
+		if (!document.hidden) pulse();
+	});
+})();
+
 (() => {
 	const main = document.querySelector('.main');
 	if (!main) {

@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Consultation;
+use App\Models\FeedingAttendance;
 use App\Models\StudentHealthRecord;
+use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
-use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -371,10 +373,60 @@ class FeedingCoordinatorController extends Controller
             || str_contains($normalized, 'underweight');
     }
 
-    public function dashboard(): View
+    public function dashboard(Request $request): View
     {
-        $institutionId = session('active_institution_id');
+        $institutionId = $request->session()->get('active_institution_id');
 
+        return view(
+            'feedingcor-dashboard.feed-dashboard',
+            $this->buildDashboardMetrics($institutionId) + ['stamp' => $this->metricsStamp($institutionId)]
+        );
+    }
+
+    /**
+     * The live panels, re-read on demand. The first paint and every refresh run
+     * through buildDashboardMetrics and render the same Blade partials, so the
+     * screen a coordinator watches can never drift from a reloaded one.
+     */
+    public function metrics(Request $request): JsonResponse
+    {
+        if (! $this->isCoordinator($request)) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+        $metrics = $this->buildDashboardMetrics($institutionId);
+
+        return response()->json([
+            'stamp' => $this->metricsStamp($institutionId),
+            'generatedAt' => $metrics['generatedAt'],
+            'html' => [
+                'cards' => view('feedingcor-dashboard.partials.kpi-cards', $metrics)->render(),
+                'attendance' => view('feedingcor-dashboard.partials.attendance-monitoring', $metrics)->render(),
+                'nutrition' => view('feedingcor-dashboard.partials.nutrition-status', $metrics)->render(),
+            ],
+        ]);
+    }
+
+    /**
+     * Change-detection only: a hash of row counts and last-touched timestamps.
+     * It carries no personal information, so the dashboard can poll it on a
+     * timer and pay for the (much heavier) rebuild only when it moves.
+     */
+    public function pulse(Request $request): JsonResponse
+    {
+        if (! $this->isCoordinator($request)) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        return response()->json(['stamp' => $this->metricsStamp($request->session()->get('active_institution_id'))]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildDashboardMetrics(?int $institutionId): array
+    {
         $students = collect();
         if (SchemaCache::hasTable('student_health_records')) {
             $q = StudentHealthRecord::query();
@@ -384,67 +436,267 @@ class FeedingCoordinatorController extends Controller
             $students = $q->forCurrentSchoolYear()->get();
         }
 
-        $totalStudents = $students->count();
-        $levelCounts = ['jhs' => 0, 'shs' => 0];
-        $statusCounts = ['severe' => 0, 'wasted' => 0, 'normal' => 0, 'over' => 0];
+        // The feeding cycle the header counts down comes from the school's first
+        // recorded session, so this page and the Feeding Program page never
+        // disagree about which day it is.
+        $cycle = FeedingProgramCycle::forInstitution($institutionId);
+        $programDay = $cycle->day();
 
-        foreach ($students as $student) {
-            $level = $this->resolveLevel((string) $student->section);
-            $levelCounts[$level]++;
+        // nutritional_status is encrypted at rest, so eligibility is decided in
+        // PHP after fetch — the same test the Feeding Program page applies.
+        $beneficiaries = $students
+            ->filter(fn (StudentHealthRecord $record): bool => $this->isQualifiedForFeeding((string) $record->nutritional_status))
+            ->values();
 
-            $status = $this->resolveStatus((string) $student->nutritional_status);
-            $statusCounts[$status]++;
-        }
+        $beneficiaryStats = $this->buildBeneficiaryStats($beneficiaries);
 
-        $programDay = 0;
-        if ($students->isNotEmpty()) {
-            $startDate = $students->min('created_at');
-            $programDay = $startDate
-                ? min(120, Carbon::parse($startDate)->startOfDay()->diffInDays(now()->startOfDay()) + 1)
-                : 0;
-        }
-
-        $bmiChart = $this->buildBmiChart($students);
-        $weeklyBars = $this->buildWeeklyBars($totalStudents, $institutionId);
-        $avgAttendance = $totalStudents > 0
-            ? (int) round((collect($weeklyBars)->avg('present') / max(1, $totalStudents)) * 100)
-            : 0;
-
-        $improvingCount = $statusCounts['normal'];
-        $stableCount = $statusCounts['over'];
-        $regressingCount = $statusCounts['severe'] + $statusCounts['wasted'];
-
-        $progressTotal = max(1, $improvingCount + $stableCount + $regressingCount);
-        $improvingPct = round(($improvingCount / $progressTotal) * 100, 1);
-        $stablePct = round(($stableCount / $progressTotal) * 100, 1);
-
-        return view('feedingcor-dashboard.feed-dashboard', [
+        return [
             'dashboardStats' => [
-                'total_students' => $totalStudents,
+                'total_students' => $students->count(),
                 'program_day' => $programDay,
-                'improving_rate' => $totalStudents > 0 ? (int) round(($improvingCount / $totalStudents) * 100) : 0,
-                'improving_count' => $improvingCount,
-                'avg_attendance' => $avgAttendance,
-                'jhs_count' => $levelCounts['jhs'],
-                'shs_count' => $levelCounts['shs'],
+                'beneficiaries' => $beneficiaryStats['beneficiaries'],
+                'beneficiaries_jhs' => $beneficiaryStats['jhs'],
+                'beneficiaries_shs' => $beneficiaryStats['shs'],
+                'attendance_rate' => $beneficiaryStats['attendance_rate'],
+                'attendance_sessions' => $beneficiaryStats['confirmed_sessions'],
+                'at_risk' => $beneficiaryStats['at_risk'],
+                'at_risk_rule' => $beneficiaryStats['at_risk_rule'],
+                'awaiting_enrollment' => $beneficiaryStats['awaiting_enrollment'],
             ],
-            'statusCounts' => $statusCounts,
-            'progressCounts' => [
-                'improving' => $improvingCount,
-                'stable' => $stableCount,
-                'regressing' => $regressingCount,
-                'donut_style' => sprintf(
-                    'conic-gradient(var(--teal) 0 %.1f%%, var(--blue) %.1f%% %.1f%%, var(--red) %.1f%% 100%%)',
-                    $improvingPct,
-                    $improvingPct,
-                    $improvingPct + $stablePct,
-                    $improvingPct + $stablePct
-                ),
+            'programCycle' => [
+                'school_year' => StudentHealthRecord::currentSchoolYear(),
+                'day' => $programDay,
+                'duration' => FeedingProgramCycle::DURATION_DAYS,
+                'days_remaining' => $cycle->daysRemaining(),
+                'percent' => $cycle->percent(),
+                'started' => $cycle->hasStarted(),
+                'start_date' => $cycle->startDateIso(),
             ],
-            'bmiChart' => $bmiChart,
-            'weeklyBars' => $weeklyBars,
+            'nutritionStatus' => $this->buildNutritionStatus($beneficiaries),
+            'todayAttendance' => $this->buildTodayAttendance($beneficiaries),
             'roster' => $this->buildRoster($students),
-        ]);
+            'generatedAt' => now()->format('g:i A'),
+        ];
+    }
+
+    /**
+     * The beneficiary roll broken down by baseline nutritional status. The
+     * counts always sum to the beneficiary total, so the panel and the headline
+     * card can never tell two different stories.
+     *
+     * The full DepEd scale is listed even where a row is zero: a coordinator
+     * reading "Obese 0" learns something, a missing row only looks like a bug.
+     *
+     * @param  Collection<int, StudentHealthRecord>  $beneficiaries
+     * @return array{total: int, rows: list<array{label: string, count: int, badge: string, eligible: bool}>}
+     */
+    private function buildNutritionStatus(Collection $beneficiaries): array
+    {
+        // Wasted and Severely Wasted decide eligibility, so they lead the table
+        // and carry the loudest badges.
+        $scale = [
+            ['label' => 'Severely Wasted', 'badge' => 'badge-critical', 'eligible' => true],
+            ['label' => 'Wasted', 'badge' => 'badge-risk', 'eligible' => true],
+            ['label' => 'Underweight', 'badge' => 'badge-risk', 'eligible' => true],
+            ['label' => 'Normal', 'badge' => 'badge-normal', 'eligible' => false],
+            ['label' => 'Overweight', 'badge' => 'badge-monitor', 'eligible' => false],
+            ['label' => 'Obese', 'badge' => 'badge-monitor', 'eligible' => false],
+        ];
+
+        $counts = [];
+        foreach ($beneficiaries as $record) {
+            // Baseline is what the programme enrolled them on; a learner with no
+            // baseline on file is counted under their current status instead.
+            $status = $this->normalizeStatus((string) ($record->baseline_nutritional_status ?: $record->nutritional_status));
+            $counts[$status] = ($counts[$status] ?? 0) + 1;
+        }
+
+        return [
+            'total' => $beneficiaries->count(),
+            'rows' => array_map(
+                fn (array $row): array => $row + ['count' => (int) ($counts[$row['label']] ?? 0)],
+                $scale
+            ),
+        ];
+    }
+
+    /**
+     * Today's feeding session, learner by learner.
+     *
+     * Four states, not two: present and absent are confirmed marks, unconfirmed
+     * is a scanned mark no human has read, and "not recorded" is a learner
+     * today's sheet has not covered at all. Collapsing either of the last two
+     * into "absent" would report an absence nobody witnessed.
+     *
+     * @param  Collection<int, StudentHealthRecord>  $beneficiaries
+     * @return array<string, mixed>
+     */
+    private function buildTodayAttendance(Collection $beneficiaries): array
+    {
+        $today = now()->toDateString();
+        $marks = collect();
+
+        if ($beneficiaries->isNotEmpty() && SchemaCache::hasTable('feeding_attendances')) {
+            $hasReviewColumn = SchemaCache::hasColumn('feeding_attendances', 'needs_review');
+
+            $marks = FeedingAttendance::query()
+                ->whereIn('student_health_record_id', $beneficiaries->pluck('id'))
+                ->whereDate('session_date', $today)
+                ->get(array_merge(
+                    ['student_health_record_id', 'is_present'],
+                    $hasReviewColumn ? ['needs_review'] : []
+                ))
+                ->keyBy('student_health_record_id');
+        }
+
+        $counts = ['present' => 0, 'absent' => 0, 'unconfirmed' => 0, 'unrecorded' => 0];
+
+        // student_name is encrypted at rest, so sorting happens in PHP.
+        $rows = $beneficiaries
+            ->map(function (StudentHealthRecord $record) use ($marks, &$counts): array {
+                $mark = $marks->get($record->id);
+                [$grade, $section] = $this->splitSection((string) $record->section);
+
+                $status = match (true) {
+                    $mark === null => 'unrecorded',
+                    (bool) ($mark->needs_review ?? false), $mark->is_present === null => 'unconfirmed',
+                    (bool) $mark->is_present => 'present',
+                    default => 'absent',
+                };
+                $counts[$status]++;
+
+                return [
+                    'name' => (string) $record->student_name,
+                    'grade' => $grade,
+                    'section' => $section,
+                    'status' => $status,
+                ];
+            })
+            ->sortBy(fn (array $row) => strtolower($row['name']))
+            ->values()
+            ->all();
+
+        $expected = $beneficiaries->count();
+
+        return [
+            'date_label' => now()->format('M d, Y'),
+            'expected' => $expected,
+            'present' => $counts['present'],
+            'absent' => $counts['absent'],
+            'unconfirmed' => $counts['unconfirmed'],
+            'unrecorded' => $counts['unrecorded'],
+            // Share of the expected headcount confirmed present today; null when
+            // the session has not been recorded at all.
+            'percent' => $expected > 0 && $counts['unrecorded'] < $expected
+                ? round(($counts['present'] / $expected) * 100, 1)
+                : null,
+            'recorded' => $counts['unrecorded'] < $expected,
+            'rows' => $rows,
+        ];
+    }
+
+    /**
+     * A fingerprint of the tables the dashboard reads — row counts and
+     * last-touched timestamps only, never a column holding personal data, so
+     * the polling endpoint stays free of it.
+     */
+    private function metricsStamp(?int $institutionId): string
+    {
+        $parts = [now()->toDateString()];
+
+        foreach (['student_health_records', 'feeding_attendances'] as $table) {
+            if (! SchemaCache::hasTable($table)) {
+                $parts[] = '-';
+
+                continue;
+            }
+
+            $query = DB::table($table);
+            // feeding_attendances inherits its school scope from the parent
+            // record, so only the owning table filters. A neighbouring school's
+            // write can cost one needless refetch — never a missed change, and
+            // nothing of theirs is ever read.
+            if ($institutionId && SchemaCache::hasColumn($table, 'institution_id')) {
+                $query->where('institution_id', $institutionId);
+            }
+
+            $row = $query->selectRaw('COUNT(*) as row_count, MAX(updated_at) as last_touched')->first();
+            $parts[] = ((int) ($row->row_count ?? 0)).'@'.((string) ($row->last_touched ?? ''));
+        }
+
+        return md5(implode('|', $parts));
+    }
+
+    private function isCoordinator(Request $request): bool
+    {
+        return $request->session()->get('active_role') === 'feeding_coor';
+    }
+
+    /**
+     * The four headline figures: who the programme feeds, how well they are
+     * showing up, who the attendance rule has flagged, and who qualifies but
+     * has never been fed yet.
+     *
+     * Attendance is counted over confirmed marks only. A scanned mark nobody
+     * has reviewed is NULL and votes neither way, so it can neither depress the
+     * rate nor flag a learner — the same rule FeedingAtRiskRule applies. Never
+     * aggregate this in SQL: a SUM(CASE WHEN is_present ...) folds NULL into
+     * "absent" and quietly breaks that invariant.
+     *
+     * @param  Collection<int, StudentHealthRecord>  $beneficiaries
+     * @return array{beneficiaries: int, jhs: int, shs: int, attendance_rate: ?int, confirmed_sessions: int, at_risk: int, at_risk_rule: string, awaiting_enrollment: int}
+     */
+    private function buildBeneficiaryStats(Collection $beneficiaries): array
+    {
+        $rule = FeedingAtRiskRule::fromConfig();
+
+        $marksByRecord = collect();
+        if ($beneficiaries->isNotEmpty() && SchemaCache::hasTable('feeding_attendances')) {
+            $hasReviewColumn = SchemaCache::hasColumn('feeding_attendances', 'needs_review');
+
+            $marksByRecord = FeedingAttendance::query()
+                ->whereIn('student_health_record_id', $beneficiaries->pluck('id'))
+                ->whereDate('session_date', '<=', now()->toDateString())
+                ->orderBy('session_date')
+                ->get(array_merge(
+                    ['student_health_record_id', 'session_date', 'is_present'],
+                    $hasReviewColumn ? ['needs_review'] : []
+                ))
+                ->groupBy('student_health_record_id')
+                // Before the review migration every mark is confirmed by definition.
+                ->map(fn ($rows) => $rows->map(fn ($row) => ($row->needs_review ?? false) ? null : $row->is_present)->all());
+        }
+
+        $confirmedSessions = 0;
+        $presentSessions = 0;
+        $awaiting = 0;
+
+        foreach ($beneficiaries as $record) {
+            $marks = $marksByRecord->get($record->id, []);
+            if ($marks === []) {
+                $awaiting++;
+
+                continue;
+            }
+
+            $confirmed = array_filter($marks, static fn ($mark) => $mark !== null);
+            $confirmedSessions += count($confirmed);
+            $presentSessions += $rule->presentCount($marks);
+        }
+
+        return [
+            'beneficiaries' => $beneficiaries->count(),
+            'jhs' => $beneficiaries->filter(fn ($r) => $this->resolveLevel((string) $r->section) === 'jhs')->count(),
+            'shs' => $beneficiaries->filter(fn ($r) => $this->resolveLevel((string) $r->section) === 'shs')->count(),
+            // Null, not zero: no confirmed session is not a 0% turnout.
+            'attendance_rate' => $confirmedSessions > 0
+                ? (int) round(($presentSessions / $confirmedSessions) * 100)
+                : null,
+            'confirmed_sessions' => $confirmedSessions,
+            'at_risk' => $beneficiaries->filter(fn ($r) => (bool) $r->is_at_risk)->count(),
+            'at_risk_rule' => $rule->describe(),
+            'awaiting_enrollment' => $awaiting,
+        ];
     }
 
     /**
@@ -544,335 +796,5 @@ class FeedingCoordinatorController extends Controller
         }
 
         return 'normal';
-    }
-
-    /**
-     * Average BMI over the last six months, plotted against the WHO BMI-for-age
-     * reference bands (underweight < 18.5, healthy 18.5-25, overweight > 25).
-     * Every month also carries a click-through summary (headcount, average,
-     * nutritional-status breakdown) and an outlier flag so a suspicious month
-     * can be verified before reporting. All geometry is pre-computed here.
-     */
-    private function buildBmiChart(Collection $students): array
-    {
-        $left = 48.0;
-        $right = 900.0;
-        $top = 24.0;
-        $bottom = 196.0;
-        $underweight = 18.5;
-        $overweight = 25.0;
-        $statusOrder = ['Severely Wasted', 'Wasted', 'Underweight', 'Normal', 'Overweight'];
-
-        $months = collect(range(5, 0))->map(fn (int $offset) => now()->copy()->subMonths($offset));
-        $globalAverage = $students->isNotEmpty() ? (float) round((float) $students->avg('bmi_value'), 1) : 0.0;
-
-        // Bucket learners by the month they were recorded; carry the last known
-        // average forward so the line stays continuous through empty months.
-        $carry = $globalAverage > 0 ? $globalAverage : 21.0;
-        $monthsData = $months->map(function (Carbon $month) use ($students, $statusOrder, $underweight, $overweight, &$carry): array {
-            $rows = $students->filter(
-                fn ($row) => $row->created_at && Carbon::parse($row->created_at)->format('Y-m') === $month->format('Y-m')
-            );
-
-            $hasData = $rows->isNotEmpty();
-            $avg = $hasData ? (float) round((float) $rows->avg('bmi_value'), 1) : null;
-            if ($hasData) {
-                $carry = $avg;
-            }
-
-            $statusCounts = [];
-            foreach ($statusOrder as $label) {
-                $count = $rows->filter(fn ($r) => $this->normalizeStatus((string) $r->nutritional_status) === $label)->count();
-                if ($count > 0) {
-                    $statusCounts[] = ['label' => $label, 'count' => $count];
-                }
-            }
-
-            return [
-                'label' => $month->format('M'),
-                'full' => $month->format('F Y'),
-                'value' => $hasData ? $avg : $carry,
-                'has_data' => $hasData,
-                'count' => $rows->count(),
-                'avg_bmi' => $avg,
-                'band' => $this->bmiBandLabel($hasData ? $avg : $carry, $underweight, $overweight),
-                'status' => $statusCounts,
-            ];
-        })->values();
-
-        // Domain always spans below 18.5 and above 25 so all three bands show.
-        $dataValues = $monthsData->where('has_data', true)->pluck('value')->map(fn ($v) => (float) $v)->all();
-        $min = min((count($dataValues) ? min($dataValues) : 18.5) - 1, 16.0);
-        $max = max((count($dataValues) ? max($dataValues) : 22.0) + 1, 26.0);
-        // Snap the ends to even BMI units so the axis reads 28, not 27.4, and
-        // the 2-unit grid below lands on whole numbers.
-        $min = floor($min / 2) * 2;
-        $max = ceil($max / 2) * 2;
-        $y = fn (float $v): float => round($bottom - ((max($min, min($max, $v)) - $min) / ($max - $min)) * ($bottom - $top), 1);
-
-        // Outlier = month whose average is far from the median of the real
-        // months (robust MAD test, with a 1.5-BMI floor so flat data is quiet).
-        $median = $this->median($dataValues);
-        $mad = $this->median(array_map(fn ($v) => abs($v - $median), $dataValues));
-        $threshold = max(1.5, 3 * $mad);
-
-        $xs = array_map(fn (int $i) => round($left + $i * ($right - $left) / 5, 1), range(0, 5));
-        $outlierLabels = [];
-
-        // Delta is measured against the previous month that actually has a
-        // reading, so carried-forward months never report a fake "no change".
-        $previousReading = null;
-        $monthsData = $monthsData->map(function (array $m, int $i) use ($xs, $y, $median, $threshold, $dataValues, &$outlierLabels, &$previousReading): array {
-            $isOutlier = $m['has_data'] && count($dataValues) >= 3 && abs((float) $m['value'] - $median) > $threshold;
-            if ($isOutlier) {
-                $outlierLabels[] = $m['label'];
-            }
-
-            $delta = ($m['has_data'] && $previousReading !== null)
-                ? round((float) $m['avg_bmi'] - $previousReading, 1)
-                : null;
-            if ($m['has_data']) {
-                $previousReading = (float) $m['avg_bmi'];
-            }
-
-            return $m + [
-                'index' => $i,
-                'x' => $xs[$i],
-                'y' => $y((float) $m['value']),
-                'is_outlier' => $isOutlier,
-                'delta' => $delta,
-            ];
-        })->values();
-
-        // The most recent reading is drawn a touch larger than the rest.
-        $currentIndex = ($monthsData->where('has_data', true)->last()['index'] ?? null)
-            ?? $monthsData->count() - 1;
-        $monthsData = $monthsData->map(fn (array $m) => $m + ['is_current' => $m['index'] === $currentIndex])->values();
-
-        $bands = [
-            ['class' => 'over', 'label' => 'Overweight watch', 'top' => $y($max), 'floor' => $y($overweight)],
-            ['class' => 'healthy', 'label' => 'Healthy range', 'top' => $y($overweight), 'floor' => $y($underweight)],
-            ['class' => 'under', 'label' => 'Underweight watch', 'top' => $y($underweight), 'floor' => $y($min)],
-        ];
-
-        // Labels sit at the band edge furthest from where the curve enters the
-        // chart, so the line never runs through the text. Without this the
-        // "Underweight watch" label sat right under the 18.5 boundary — exactly
-        // where a healthy-but-low average draws its line.
-        $curveY = $monthsData->isEmpty() ? null : (float) $monthsData->first()['y'];
-        $bands = array_map(function (array $b) use ($curveY): array {
-            $height = round($b['floor'] - $b['top'], 1);
-            $atTop = $b['top'] + 13;
-            $atFloor = $b['floor'] - 7;
-
-            $labelY = ($height >= 30 && $curveY !== null && abs($curveY - $atFloor) > abs($curveY - $atTop))
-                ? $atFloor
-                : $atTop;
-
-            return [
-                'class' => $b['class'],
-                'label' => $b['label'],
-                'y' => $b['top'],
-                'height' => max(0, $height),
-                'label_y' => round($labelY, 1),
-            ];
-        }, $bands);
-
-        // Zone-keyed gradient. The line, its fill and every marker ring draw
-        // their colour from this one vertical gradient, so a reading's colour
-        // is its WHO band: rose above 25, cyan through the healthy range,
-        // indigo below 18.5. Stops sit on the real boundaries (with a short
-        // blend either side) so the colour turns over exactly at 18.5 / 25
-        // rather than at some arbitrary point along the curve.
-        $span = $bottom - $top;
-        $offsetOf = fn (float $v): float => $span > 0 ? round(($y($v) - $top) / $span, 4) : 0.0;
-        $blend = 0.035;
-        $overOffset = $offsetOf($overweight);
-        $underOffset = $offsetOf($underweight);
-
-        $gradientStops = [
-            ['offset' => 0.0, 'zone' => 'over'],
-            ['offset' => max(0.0, round($overOffset - $blend, 4)), 'zone' => 'over'],
-            ['offset' => min(1.0, round($overOffset + $blend, 4)), 'zone' => 'healthy'],
-            ['offset' => max(0.0, round($underOffset - $blend, 4)), 'zone' => 'healthy'],
-            ['offset' => min(1.0, round($underOffset + $blend, 4)), 'zone' => 'under'],
-            ['offset' => 1.0, 'zone' => 'under'],
-        ];
-
-        // Light horizontal rules every 2 BMI units, so the eye can read a
-        // height off the plot without the band tints having to carry it.
-        $gridLines = [];
-        for ($v = $min; $v <= $max; $v += 2) {
-            $gridLines[] = $y((float) $v);
-        }
-
-        $line = $monthsData->map(fn (array $m) => $m['x'].','.$m['y'])->implode(' ');
-        $points = $monthsData->map(fn (array $m) => [(float) $m['x'], (float) $m['y']])->all();
-        $linePath = $this->smoothPath($points);
-        $firstX = $points !== [] ? $points[0][0] : $left;
-        $lastX = $points !== [] ? $points[count($points) - 1][0] : $right;
-        $areaPath = $linePath === '' ? '' : $linePath.' L '.$lastX.' '.$bottom.' L '.$firstX.' '.$bottom.' Z';
-        $outlierMonth = $monthsData->firstWhere('is_outlier', true);
-        $lastDataMonth = $monthsData->where('has_data', true)->last();
-        $defaultIndex = $outlierMonth ? $outlierMonth['index'] : ($lastDataMonth ? $lastDataMonth['index'] : 5);
-
-        return [
-            'plot' => ['left' => $left, 'right' => $right, 'top' => $top, 'bottom' => $bottom],
-            'bands' => $bands,
-            'y_ticks' => array_map(fn (float $v) => ['label' => rtrim(rtrim(number_format($v, 1), '0'), '.'), 'y' => $y($v)], [$max, $overweight, $underweight, $min]),
-            // Dashed hairlines mark where a zone changes; the plain grid below
-            // is the readable-height scale and stays recessive behind them.
-            'zone_lines' => array_map(fn (float $v) => $y($v), [$overweight, $underweight]),
-            'grid_lines' => $gridLines,
-            'gradient_stops' => $gradientStops,
-            'line' => $line,
-            'line_path' => $linePath,
-            'area' => $left.','.$bottom.' '.$line.' '.$right.','.$bottom,
-            'area_path' => $areaPath,
-            'months' => $monthsData->all(),
-            'has_outlier' => $outlierLabels !== [],
-            'outlier_label' => implode(' & ', $outlierLabels),
-            'default_index' => $defaultIndex,
-        ];
-    }
-
-    /**
-     * Monotone cubic interpolation (Fritsch-Carlson) through the points,
-     * rendered as SVG cubic beziers.
-     *
-     * Deliberately not Catmull-Rom / cardinal: those overshoot: a flat run of
-     * months would bulge above or below its own values, inventing a dip or a
-     * peak that the data never had. Fritsch-Carlson limits each tangent to the
-     * neighbouring secants, so the curve only bends where the readings actually
-     * change direction and stays perfectly flat where they do not.
-     *
-     * @param  list<array{0: float, 1: float}>  $points
-     */
-    private function smoothPath(array $points): string
-    {
-        $count = count($points);
-        if ($count === 0) {
-            return '';
-        }
-        if ($count === 1) {
-            return 'M '.$points[0][0].' '.$points[0][1];
-        }
-
-        // Secant slope of each segment.
-        $secants = [];
-        for ($i = 0; $i < $count - 1; $i++) {
-            $dx = $points[$i + 1][0] - $points[$i][0];
-            $secants[$i] = $dx == 0.0 ? 0.0 : ($points[$i + 1][1] - $points[$i][1]) / $dx;
-        }
-
-        // Tangent at each point: average of the two adjacent secants, forced to
-        // zero at every local extremum so the curve cannot overshoot past it.
-        $tangents = [$secants[0]];
-        for ($i = 1; $i < $count - 1; $i++) {
-            $prev = $secants[$i - 1];
-            $next = $secants[$i];
-            $tangents[$i] = ($prev * $next <= 0.0) ? 0.0 : ($prev + $next) / 2;
-        }
-        $tangents[$count - 1] = $secants[$count - 2];
-
-        // Fritsch-Carlson limiter: keep each tangent within three times the
-        // smaller neighbouring secant, which is the monotonicity guarantee.
-        for ($i = 0; $i < $count - 1; $i++) {
-            if ($secants[$i] == 0.0) {
-                $tangents[$i] = 0.0;
-                $tangents[$i + 1] = 0.0;
-
-                continue;
-            }
-
-            $a = $tangents[$i] / $secants[$i];
-            $b = $tangents[$i + 1] / $secants[$i];
-            $s = $a * $a + $b * $b;
-            if ($s > 9.0) {
-                $t = 3.0 / sqrt($s);
-                $tangents[$i] = $t * $a * $secants[$i];
-                $tangents[$i + 1] = $t * $b * $secants[$i];
-            }
-        }
-
-        $path = 'M '.$points[0][0].' '.$points[0][1];
-        for ($i = 0; $i < $count - 1; $i++) {
-            $dx = ($points[$i + 1][0] - $points[$i][0]) / 3;
-
-            $path .= ' C '.round($points[$i][0] + $dx, 1).' '.round($points[$i][1] + $tangents[$i] * $dx, 1)
-                .', '.round($points[$i + 1][0] - $dx, 1).' '.round($points[$i + 1][1] - $tangents[$i + 1] * $dx, 1)
-                .', '.round($points[$i + 1][0], 1).' '.round($points[$i + 1][1], 1);
-        }
-
-        return $path;
-    }
-
-    private function bmiBandLabel(?float $value, float $underweight, float $overweight): string
-    {
-        if ($value === null) {
-            return '';
-        }
-        if ($value >= $overweight) {
-            return 'Overweight watch';
-        }
-        if ($value < $underweight) {
-            return 'Underweight watch';
-        }
-
-        return 'Healthy range';
-    }
-
-    /** @param  list<float>  $numbers */
-    private function median(array $numbers): float
-    {
-        $count = count($numbers);
-        if ($count === 0) {
-            return 0.0;
-        }
-        sort($numbers);
-        $mid = intdiv($count, 2);
-
-        return $count % 2 === 1 ? (float) $numbers[$mid] : (float) (($numbers[$mid - 1] + $numbers[$mid]) / 2);
-    }
-
-    private function buildWeeklyBars(int $totalStudents, ?int $institutionId = null): array
-    {
-        $hasConsultationTable = SchemaCache::hasTable('consultations');
-
-        return collect(range(4, 0))
-            ->map(function (int $offset) use ($hasConsultationTable, $totalStudents, $institutionId): array {
-                $weekStart = now()->copy()->startOfWeek()->subWeeks($offset);
-                $weekEnd = $weekStart->copy()->endOfWeek();
-
-                $present = 0;
-                if ($hasConsultationTable) {
-                    // student_name is encrypted at rest — count distinct students in PHP.
-                    $present = Consultation::query()
-                        ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-                        ->whereBetween('consulted_at', [$weekStart, $weekEnd])
-                        ->pluck('student_name')
-                        ->unique()
-                        ->count();
-                }
-
-                if (! $hasConsultationTable || $present === 0) {
-                    $present = $totalStudents;
-                }
-
-                $present = min($totalStudents, $present);
-                $missed = max(0, $totalStudents - $present);
-
-                $base = max(1, $totalStudents);
-
-                return [
-                    'label' => 'Week '.(5 - $offset),
-                    'present' => $present,
-                    'missed' => $missed,
-                    'present_height' => (int) max(8, round(($present / $base) * 136)),
-                    'missed_height' => (int) max(0, round(($missed / $base) * 30)),
-                ];
-            })
-            ->values()
-            ->all();
     }
 }

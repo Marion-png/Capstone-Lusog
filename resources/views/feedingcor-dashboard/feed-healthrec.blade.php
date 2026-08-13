@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Health Records - Feeding Coordinator - SIGLA</title>
+    <title>Beneficiaries - Feeding Coordinator - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
@@ -41,13 +41,13 @@
 
 <div class="main">
     <header class="topbar">
-        <div class="topbar-bc"><span>Dashboard</span><span class="bc-sep">&rsaquo;</span><span>Student Health Records</span></div>
+        <div class="topbar-bc"><span>Dashboard</span><span class="bc-sep">&rsaquo;</span><span>Beneficiaries</span></div>
         @include('partials.live-clock')
     </header>
 
     <div class="content">
         <div class="page-header">
-            <h1 class="page-title">Student Health <span>Records</span></h1>
+            <h1 class="page-title">Beneficiaries <span>Feeding Program</span></h1>
             <p class="page-sub">Tracks BMI progression and nutritional status change per beneficiary.</p>
         </div>
 

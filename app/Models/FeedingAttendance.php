@@ -42,6 +42,9 @@ class FeedingAttendance extends Model
 
     public const SOURCE_MANUAL_REVIEW = 'manual_review';
 
+    /** Typed straight into the bulk record-attendance screen by the coordinator. */
+    public const SOURCE_MANUAL_ENTRY = 'manual_entry';
+
     public function studentHealthRecord(): BelongsTo
     {
         return $this->belongsTo(StudentHealthRecord::class);

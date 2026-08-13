@@ -4,156 +4,95 @@
    the status scale come from feeding-theme.css, which is loaded first.
    ══════════════════════════════════════════════════════════════════════ */
 
+/* ── SBFP header ───────────────────────────────────────────────────
+   The programme name carries the page, so the school year rides beside
+   it as a quiet tracked label rather than a second heading. Under them
+   the cycle states where the school is (day, days left) and the bar
+   says the same thing in one glance — the number is the fact, the bar
+   is only its shape, so nothing is encoded by the bar alone. ── */
+.sbfp-header { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: flex-start; justify-content: space-between; }
+.sbfp-headline { min-width: 0; flex: 1 1 320px; }
+.sbfp-title-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.sbfp-title-row .page-title { margin: 0; }
+.sbfp-year {
+	position: relative;
+	padding-left: 13px;
+	font-size: .72rem;
+	font-weight: 600;
+	letter-spacing: .1em;
+	font-variant-numeric: tabular-nums;
+	color: var(--lg-ink-soft);
+	white-space: nowrap;
+}
+.sbfp-year::before { content: ""; position: absolute; left: 0; top: -1px; bottom: 1px; width: 1px; background: var(--lg-border-strong); }
+
+.sbfp-day { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; font-size: .82rem; color: var(--lg-ink-soft); }
+.sbfp-day strong { color: var(--lg-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.sbfp-sep { color: var(--lg-border-strong); }
+.sbfp-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lg-emerald); flex: 0 0 auto; }
+/* Idle is amber, not green: nothing is running yet. */
+.sbfp-day.is-idle .sbfp-dot { background: var(--lg-amber); }
+
+.sbfp-progress { position: relative; margin-top: 10px; max-width: 420px; height: 5px; border-radius: var(--lg-r-pill); background: var(--lg-rail); overflow: hidden; }
+.sbfp-progress-fill { display: block; height: 100%; border-radius: inherit; background: var(--lg-emerald); transition: width .4s ease; }
+
+.sbfp-actions { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 4px; }
+
+@media (max-width: 620px) {
+	.sbfp-actions { width: 100%; }
+	.sbfp-actions .btn { flex: 1 1 auto; justify-content: center; }
+	.sbfp-progress { max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.sbfp-progress-fill, .live-pane { transition: none; }
+}
+
 .dash-stack { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; margin-top: 20px; align-items: start; }
 .dash-stack > .card { min-width: 0; }
 
-/* ── Avg BMI progress chart ────────────────────────────────────────
-   The line, its fill and every marker ring share one vertical gradient
-   keyed to the WHO bands (#bmiZoneGrad, stops positioned in
-   buildBmiChart), so a reading's colour IS its zone: coral above 25,
-   deep emerald through the healthy range, amber below 18.5. Height and
-   hue say the same thing, and neither has to be read alone.
+/* A pane being re-read dims rather than emptying: the previous figures
+   stay readable until the new ones land, so nothing flashes blank. */
+.live-pane { transition: opacity .18s ease; }
+.live-pane.is-refreshing { opacity: .55; }
 
-   The three hues are the system's semantic colours darkened until the
-   set passes as a palette, not chosen by eye — validated with the
-   dataviz validator on a white surface: lightness band, chroma floor,
-   worst adjacent CVD pair ΔE 11.2 (protan) / 29.4 (tritan), normal-vision
-   worst pair ΔE 25.6, and all three at or above 3:1 contrast. Re-run that
-   check before changing any of them; the brief's lighter #F2B84B and
-   #43A866 both fail it as line colours.
+/* ── Attendance monitoring ──────────────────────────────────────────
+   The session's headline is one figure read twice: the fraction is the
+   fact (82 of 87 learners), the percentage only restates it for scale.
+   Both sit above the roll, so a coordinator sees the shape of the day
+   before reading a single name. ── */
+.att-card { padding: var(--lg-pad-card); display: flex; flex-direction: column; overflow: hidden; }
+.att-card .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.att-card .card-head .btn { white-space: nowrap; }
 
-   Band tints stay, but pale enough that the surface still reads white;
-   they and the in-plot labels are the secondary encoding, so the chart
-   survives being printed in grey. ── */
-.bmi-chart-svg .grad-over { stop-color: #DC6A72; }
-.bmi-chart-svg .grad-healthy { stop-color: #126B3A; }
-.bmi-chart-svg .grad-under { stop-color: #C97A1A; }
+.att-headline { display: flex; align-items: center; justify-content: space-between; gap: 12px 18px; flex-wrap: wrap; margin: 14px 0 4px; }
+.att-figure { display: flex; align-items: baseline; gap: 10px; }
+.att-count { font-size: 1.9rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
+.att-percent { font-size: .95rem; font-weight: 600; color: var(--lg-emerald-deep); font-variant-numeric: tabular-nums; }
+/* Nothing recorded yet is a state, not a zero. */
+.att-figure-idle .att-count { font-size: 1.15rem; font-weight: 600; color: var(--lg-ink-soft); }
+.att-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 
-.chart-card { padding: var(--lg-pad-card); }
-.chart-surface { position: relative; margin-top: 4px; }
-.chart-svg { width: 100%; height: 230px; display: block; }
-.bmi-chart-svg { width: 100%; height: auto; overflow: visible; }
+/* The roll runs to the card's edges — a bordered table inside a bordered
+   card is a frame around a frame — so cells take the padding back. */
+.att-scroll { margin: 12px -20px -20px; max-height: 420px; overflow-y: auto; }
+.att-table { width: 100%; }
+.att-table th:first-child, .att-table td:first-child { padding-left: 20px; }
+.att-table th:last-child, .att-table td:last-child { padding-right: 20px; }
+.att-table thead th { position: sticky; top: 0; z-index: 1; background: var(--lg-rail); }
 
-/* Axis type is deliberately quiet: it labels the plot, it is not part of
-   it. Values are tabular so digits line up column-wise down the axis;
-   months are tracked small caps, which reads as a scale rather than as
-   running text. */
-.axis-txt { fill: var(--lg-ink-soft); font-family: inherit; }
-.axis-y { font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
-.axis-x { font-size: 10.5px; font-weight: 600; font-variant-caps: all-small-caps; letter-spacing: .11em; }
-
-/* Zone tints, pale enough to sit under a grid without muddying it; each
-   label is a dark shade of its own band's family. */
-.bmi-band { opacity: 1; }
-.band-under { fill: #FDF6EC; }
-.band-healthy { fill: #EDF7F1; }
-.band-over { fill: #FDF1F1; }
-/* Labels are placed at whichever band edge is furthest from the curve
-   (see buildBmiChart), and carry a flat knockout in their own band's
-   tint so they stay legible even when the line runs straight past them.
-   paint-order puts that stroke behind the glyphs — a solid colour, not
-   a glow or blur. */
-.bmi-band-label { font-size: 10.5px; font-family: inherit; font-weight: 700; font-variant-caps: all-small-caps; letter-spacing: .1em; paint-order: stroke; stroke-width: 4px; stroke-linejoin: round; }
-.label-under { fill: #9A5C10; stroke: #FDF6EC; }
-.label-healthy { fill: #126B3A; stroke: #EDF7F1; }
-.label-over { fill: #A83E45; stroke: #FDF1F1; }
-/* Plain rules carry the height scale; the dashed pair marks 18.5 / 25.
-   Both stay well under the line's weight so the curve reads first. */
-.grid-line { stroke: var(--lg-border); stroke-width: 1; }
-.zone-line { stroke: var(--lg-border-strong); stroke-dasharray: 3 5; stroke-width: 1; }
-
-/* Fill takes the same zone gradient as the line, masked to fade out
-   downward — densest just under the curve, gone before the axis. */
-.area-fill { fill: url(#bmiZoneGrad); fill-opacity: .22; animation: bmiFade 1.1s ease-out both; }
-.line-main { fill: none; stroke: url(#bmiZoneGrad); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1800; stroke-dashoffset: 1800; animation: bmiDraw 1.2s cubic-bezier(.45,0,.15,1) forwards; }
-
-/* Full-height hit column keeps the touch target well over 44px. */
-.bmi-point { cursor: pointer; }
-.bmi-point:focus { outline: none; }
-.bmi-hit { fill: transparent; }
-/* Hollow ring: white core, zone-gradient rim. The white core is also the
-   2px surface gap that keeps a marker legible where the fill is densest. */
-.bmi-dot { fill: #ffffff; stroke: url(#bmiZoneGrad); stroke-width: 2; transition: r .16s ease, stroke-width .16s ease; }
-.bmi-dot.is-current { stroke-width: 2.5; }
-/* A carried-forward month has no reading of its own: grey, dashed rim so
-   it is never mistaken for a measured value. */
-.bmi-dot.no-data { stroke: #AEBDB4; stroke-width: 1.5; stroke-dasharray: 2 2; }
-/* Small at rest, opening up only under the cursor. The touch target is
-   the full-height .bmi-hit column, not the ring, so shrinking the mark
-   costs nothing in reach. */
-.bmi-point:hover .bmi-dot, .bmi-point.is-active .bmi-dot { r: 6.5; stroke-width: 2.5; }
-.bmi-point:focus-visible .bmi-dot { stroke: var(--lg-ink); stroke-width: 2.5; stroke-dasharray: none; r: 6.5; }
-
-.bmi-outlier-banner {
-	margin-top: 16px;
-	padding: 10px 13px;
-	border-radius: var(--lg-r-btn);
-	background: var(--lg-amber-tint);
-	border: 1px solid #EFDCB2;
-	color: var(--lg-amber-ink);
-	font-size: .78rem;
-	font-weight: 500;
-}
-
-/* Floating summary card — hover previews it, a click pins it open. */
-.bmi-card {
-	position: absolute; z-index: 6; left: 0; top: 0;
-	min-width: 192px; max-width: min(280px, calc(100% - 24px));
-	padding: 14px 16px; border-radius: var(--lg-r-card);
-	background: var(--lg-card); border: 1px solid var(--lg-border);
-	box-shadow: var(--lg-shadow-pop);
-	opacity: 0; visibility: hidden; pointer-events: none;
-	transform: translate(-50%, -100%);
-	transition: opacity .12s ease, visibility .12s ease;
-}
-.bmi-card.show { opacity: 1; visibility: visible; }
-.bmi-card.below { transform: translate(-50%, 0); }
-.bmi-card.is-pinned { pointer-events: auto; border-color: var(--lg-emerald); }
-.bmi-card-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 10px; }
-.bmi-card-date { font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); }
-.bmi-card-zone { font-size: .64rem; font-weight: 700; padding: 3px 9px; border-radius: var(--lg-r-pill); white-space: nowrap; border: 1px solid transparent; }
-/* Same three families as the plot, so the badge confirms the colour the
-   reader just saw on the curve. */
-.bmi-card-zone.over { background: #FDF1F1; color: #A83E45; border-color: #F2CDCF; }
-.bmi-card-zone.healthy { background: var(--lg-mint); color: #126B3A; border-color: #C4E4D0; }
-.bmi-card-zone.under { background: #FDF6EC; color: #9A5C10; border-color: #EFDCB2; }
-/* The one number that matters gets the editorial treatment. */
-.bmi-card-figure { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
-.bmi-card-value { font-size: 2rem; font-weight: 700; letter-spacing: -.03em; line-height: 1; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
-.bmi-card-unit { font-size: .72rem; color: var(--lg-ink-soft); }
-.bmi-card-delta { font-size: .74rem; font-weight: 600; font-variant-numeric: tabular-nums; width: 100%; margin-top: 6px; }
-.bmi-card-delta.up { color: var(--lg-success-ink); }
-.bmi-card-delta.down { color: var(--lg-danger-ink); }
-.bmi-card-delta.flat { color: var(--lg-ink-soft); }
-.bmi-card-meta { margin-top: 10px; font-size: .74rem; color: var(--lg-ink-soft); }
-.bmi-card-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
-.bmi-chip { font-size: .68rem; font-weight: 600; color: #3E5348; background: var(--lg-rail); border-radius: var(--lg-r-pill); padding: 3px 9px; }
-.bmi-card-flag { margin-top: 10px; font-size: .72rem; font-weight: 600; color: var(--lg-amber-ink); }
-.bmi-card-empty { font-size: .78rem; color: var(--lg-ink-soft); }
-
-@keyframes bmiDraw { to { stroke-dashoffset: 0; } }
-@keyframes bmiFade { from { opacity: 0; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) {
-	.line-main, .area-fill, .bmi-dot, .bmi-card, .bmi-outlier-banner { animation: none !important; transition: none !important; stroke-dashoffset: 0 !important; }
-}
-
-/* ── Student roster ─────────────────────────────────────────────── */
-
-.roster-card { padding: var(--lg-pad-card); display: flex; flex-direction: column; }
-.roster-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-.roster-list { overflow-y: auto; max-height: 372px; margin: 0 -6px; padding: 0 6px; }
-.roster-row { display: flex; align-items: center; gap: 11px; padding: 9px 6px; border-bottom: 1px solid var(--lg-border); border-radius: 8px; transition: background .12s ease; }
-.roster-row:last-child { border-bottom: none; }
-.roster-row:hover { background: var(--lg-mint); }
-.roster-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--lg-mint); color: var(--lg-emerald-deep); display: flex; align-items: center; justify-content: center; font-size: .72rem; font-weight: 700; flex-shrink: 0; }
-.roster-meta { min-width: 0; flex: 1; }
-.roster-name { font-size: .82rem; font-weight: 600; color: var(--lg-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.roster-grade { font-size: .72rem; color: var(--lg-ink-soft); margin-top: 1px; }
-.roster-change { font-size: .78rem; font-weight: 600; flex-shrink: 0; display: flex; align-items: center; gap: 3px; font-variant-numeric: tabular-nums; }
-.roster-change.up { color: var(--lg-success-ink); }
-.roster-change.down { color: var(--lg-danger-ink); }
-.roster-change.flat { color: var(--lg-ink-soft); }
-.roster-empty { font-size: .82rem; color: var(--lg-ink-soft); padding: 24px 4px; text-align: center; }
+/* ── Nutritional status ─────────────────────────────────────────────
+   Wasted and Severely Wasted decide who the programme feeds, so their
+   rows carry a tinted rail; the rest of the scale is listed at rest,
+   zeros included, because a missing row reads as a bug. ── */
+.ns-card { padding: var(--lg-pad-card); display: flex; flex-direction: column; }
+.ns-total { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 4px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--lg-border); }
+.ns-total-label { font-size: .78rem; font-weight: 600; color: var(--lg-ink-soft); }
+.ns-total-value { font-size: 1.7rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
+.ns-table { width: 100%; }
+.ns-table th { font-size: .68rem; }
+.ns-table td { padding-top: 9px; padding-bottom: 9px; }
+.ns-count { font-size: .92rem; font-weight: 700; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
+.ns-table tr.is-eligible td { background: var(--lg-rail); }
 
 /* ── Weight & BMI log ───────────────────────────────────────────── */
 
@@ -170,5 +109,5 @@
 
 @media (max-width: 1180px) {
 	.dash-stack { grid-template-columns: minmax(0, 1fr); }
-	.roster-list { max-height: 320px; }
+	.att-scroll { max-height: 340px; }
 }

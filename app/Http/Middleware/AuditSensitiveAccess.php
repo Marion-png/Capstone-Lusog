@@ -45,6 +45,7 @@ class AuditSensitiveAccess
     private const NON_SENSITIVE_PATTERNS = [
         'dashboard/class-adviser/activity/pulse',
         'dashboard/school-head/metrics/pulse',
+        'dashboard/feedingcor-dashboard/metrics/pulse',
         'health-records/students/*/documents/pulse',
     ];
 
