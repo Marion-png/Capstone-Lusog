@@ -9,6 +9,7 @@ use App\Models\HealthAssessment;
 use App\Models\HealthConsentForm;
 use App\Models\MedicalCertificate;
 use App\Models\StudentHealthRecord;
+use App\Support\PriorityHealthRule;
 use App\Support\RequestMemo;
 use App\Support\SchemaCache;
 use App\Support\StudentMedicalDocuments;
@@ -393,6 +394,7 @@ class StudentHealthRecordController extends Controller
             'complete' => 0,
             'pending' => 0,
             'needs_followup' => 0,
+            'priority' => 0,
             'needs_attention' => collect(),
             'recent_activity' => collect(),
             'activity_stamp' => $this->activityStamp($request),
@@ -408,6 +410,7 @@ class StudentHealthRecordController extends Controller
 
         $complete = 0;
         $needsFollowup = 0;
+        $priorityCount = 0;
         $needsAttention = collect();
 
         foreach ($roster as $row) {
@@ -429,7 +432,23 @@ class StudentHealthRecordController extends Controller
             $consentDenied = $consent && $consent->consent_choice === HealthConsentForm::CONSENT_DENY;
             $consentPending = $consent && $consent->status === HealthConsentForm::STATUS_SENT;
 
+            // Chronic or life-threatening condition on the adviser's own
+            // assessment. Derived on every read — see PriorityHealthRule.
+            $priorityReasons = PriorityHealthRule::reasonsFor($assessment);
+            $isPriority = $priorityReasons !== [];
+            if ($isPriority) {
+                $priorityCount++;
+            }
+
             $badges = [];
+            // Priority leads the list: a clinic reading this panel needs the
+            // medical risk before the paperwork state.
+            if ($isPriority) {
+                $badges[] = [
+                    'label' => 'Priority — '.implode(', ', $priorityReasons),
+                    'tone' => 'priority',
+                ];
+            }
             if ($consentDenied) {
                 $badges[] = ['label' => 'Consent form declined', 'tone' => 'bad'];
             } elseif ($consentPending) {
@@ -442,7 +461,7 @@ class StudentHealthRecordController extends Controller
                 $badges[] = ['label' => 'Flagged at-risk', 'tone' => 'bad'];
             }
 
-            if ($consentDenied || $atRisk) {
+            if ($consentDenied || $atRisk || $isPriority) {
                 $needsFollowup++;
             }
 
@@ -452,6 +471,7 @@ class StudentHealthRecordController extends Controller
                     'name' => $this->rosterDisplayName($row, $shRecord),
                     'section' => trim(($row['grade_level'] ?? '').'-'.($row['section'] ?? ''), '-'),
                     'badges' => $badges,
+                    'is_priority' => $isPriority,
                     'updated_at' => $shRecord?->updated_at ?? $consent?->updated_at,
                 ]);
             }
@@ -463,7 +483,15 @@ class StudentHealthRecordController extends Controller
             'complete' => $complete,
             'pending' => max(0, $roster->count() - $complete),
             'needs_followup' => $needsFollowup,
-            'needs_attention' => $needsAttention->sortByDesc('updated_at')->values()->take(6),
+            'priority' => $priorityCount,
+            // Priority cases sort to the top of the panel — a chronic
+            // condition outranks a pending consent form no matter which was
+            // touched more recently.
+            'needs_attention' => $needsAttention
+                ->sortByDesc('updated_at')
+                ->sortByDesc(fn (array $item) => $item['is_priority'] ? 1 : 0)
+                ->values()
+                ->take(6),
             'recent_activity' => $this->buildRecentActivity($ctx),
             'activity_stamp' => $this->activityStamp($request),
         ];

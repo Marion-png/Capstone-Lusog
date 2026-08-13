@@ -182,6 +182,7 @@
                     <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>{{ $ov['complete'] }} Complete profiles</span>
                     <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>{{ $ov['pending'] }} Pending</span>
                     <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>{{ $ov['needs_followup'] }} Needs follow-up</span>
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>{{ $ov['priority'] }} Priority</span>
                 </div>
             </div>
 
@@ -201,6 +202,14 @@
                 <article class="card dashboard-stat-card dashboard-wasted">
                     <div class="dsc-icon dsc-icon-alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
                     <div><b>{{ $ov['needs_followup'] }}</b><span>Needs Follow-up</span><small>Requires medical attention</small></div>
+                </article>
+                {{-- Learners whose assessment reports a chronic or
+                     life-threatening condition. Derived every read by
+                     App\Support\PriorityHealthRule — never stored, never
+                     toggled by hand. --}}
+                <article class="card dashboard-stat-card dashboard-priority">
+                    <div class="dsc-icon dsc-icon-priority"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
+                    <div><b>{{ $ov['priority'] }}</b><span>Priority</span><small>Chronic or high-risk condition</small></div>
                 </article>
             </div>
 
