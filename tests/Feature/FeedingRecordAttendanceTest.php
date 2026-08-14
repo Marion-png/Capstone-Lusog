@@ -7,6 +7,7 @@ use App\Models\FeedingAttendance;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -172,6 +173,81 @@ class FeedingRecordAttendanceTest extends TestCase
 
         $this->assertTrue($mark->is_present);
         $this->assertFalse($mark->needs_review);
+    }
+
+    /**
+     * A remark explains an absence, so it is stored only for a learner marked
+     * absent and never for one marked present — a stale reason must not survive
+     * the correction.
+     */
+    #[Test]
+    public function a_remark_is_kept_for_an_absence_and_dropped_for_a_present_learner(): void
+    {
+        $absent = $this->makeStudent();
+        $present = $this->makeStudent();
+
+        $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-program/attendance/record', [
+                'session_date' => now()->toDateString(),
+                'marks' => [$absent->id => 'absent', $present->id => 'present'],
+                'remarks' => [$absent->id => 'Sick with fever', $present->id => 'ignored'],
+            ])
+            ->assertRedirect(route('dashboard.feedingcor-dashboard'));
+
+        $this->assertSame(
+            'Sick with fever',
+            FeedingAttendance::where('student_health_record_id', $absent->id)->first()->remarks
+        );
+        $this->assertNull(FeedingAttendance::where('student_health_record_id', $present->id)->first()->remarks);
+    }
+
+    /**
+     * The bulk write is an upsert, which bypasses the model's casts — so the
+     * remark has to be encrypted on the way in or it would land in the column
+     * as readable plaintext about a named child.
+     */
+    #[Test]
+    public function a_remark_is_encrypted_at_rest(): void
+    {
+        $learner = $this->makeStudent();
+
+        $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-program/attendance/record', [
+                'session_date' => now()->toDateString(),
+                'marks' => [$learner->id => 'absent'],
+                'remarks' => [$learner->id => 'Sick with fever'],
+            ]);
+
+        $raw = (string) DB::table('feeding_attendances')
+            ->where('student_health_record_id', $learner->id)
+            ->value('remarks');
+
+        $this->assertNotSame('', $raw);
+        $this->assertStringNotContainsString('Sick with fever', $raw);
+        $this->assertSame('Sick with fever', FeedingAttendance::first()->remarks);
+    }
+
+    /** Re-opening the screen brings the reason back with the mark. */
+    #[Test]
+    public function an_existing_remark_comes_back_with_the_row(): void
+    {
+        $learner = $this->makeStudent();
+
+        FeedingAttendance::create([
+            'student_health_record_id' => $learner->id,
+            'session_date' => now()->toDateString(),
+            'is_present' => false,
+            'needs_review' => false,
+            'source' => FeedingAttendance::SOURCE_MANUAL_ENTRY,
+            'remarks' => 'Family emergency',
+        ]);
+
+        $rows = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-program/attendance/record')
+            ->assertOk()
+            ->viewData('rows');
+
+        $this->assertSame('Family emergency', $rows->first()['remarks']);
     }
 
     #[Test]

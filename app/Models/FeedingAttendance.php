@@ -20,6 +20,7 @@ class FeedingAttendance extends Model
         'needs_review',
         'reviewed_by_name',
         'reviewed_at',
+        'remarks',
     ];
 
     /**
@@ -34,6 +35,10 @@ class FeedingAttendance extends Model
         'needs_review' => 'boolean',
         'reviewed_at' => 'datetime',
         'reviewed_by_name' => EncryptedString::class,
+        // Why a named child missed a session — personal information, so it is
+        // encrypted at rest. Writes that bypass Eloquent (the bulk upsert in
+        // FeedingProgramController) must encrypt it themselves.
+        'remarks' => EncryptedString::class,
     ];
 
     public const SOURCE_SPREADSHEET = 'spreadsheet';

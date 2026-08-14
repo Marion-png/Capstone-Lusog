@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Models\Institution;
+
 /**
  * Decides whether a learner is an at-risk feeding beneficiary.
  *
@@ -28,6 +30,9 @@ class FeedingAtRiskRule
 
     public const MODE_CONSECUTIVE_ABSENCES = 'consecutive_absences';
 
+    /** The approved programme default, used by any school that has not set its own. */
+    public const DEFAULT_THRESHOLD_PERCENT = 80.0;
+
     public function __construct(
         private readonly string $mode,
         private readonly float $thresholdPercent,
@@ -38,9 +43,38 @@ class FeedingAtRiskRule
     {
         return new self(
             (string) config('feeding.at_risk.mode', self::MODE_ATTENDANCE_RATE),
-            (float) config('feeding.at_risk.threshold_percent', 75),
+            (float) config('feeding.at_risk.threshold_percent', self::DEFAULT_THRESHOLD_PERCENT),
             (int) config('feeding.at_risk.consecutive_absences', 3),
         );
+    }
+
+    /**
+     * The rule as one school has set it.
+     *
+     * The threshold is school-configurable (`institutions.feeding_at_risk_threshold`,
+     * set by the System Admin) because a programme's attendance expectation is a
+     * local policy, not a platform constant. A school that has set nothing keeps
+     * the app default, so the figure moves with the programme rather than being
+     * frozen at whatever it was when the column shipped.
+     *
+     * Everything that computes, displays, or explains at-risk must go through
+     * here, or two screens will disagree about who is flagged.
+     */
+    public static function forInstitution(?int $institutionId): self
+    {
+        $rule = self::fromConfig();
+
+        if (! $institutionId || ! SchemaCache::hasColumn('institutions', 'feeding_at_risk_threshold')) {
+            return $rule;
+        }
+
+        $threshold = Institution::query()->whereKey($institutionId)->value('feeding_at_risk_threshold');
+
+        if ($threshold === null || (float) $threshold <= 0) {
+            return $rule;
+        }
+
+        return new self($rule->mode, (float) $threshold, $rule->consecutiveAbsences);
     }
 
     /**

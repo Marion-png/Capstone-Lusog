@@ -70,6 +70,7 @@
 								<th>Grade</th>
 								<th>Section</th>
 								<th class="ta-r">Mark</th>
+								<th>Remarks</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -90,11 +91,19 @@
 											</label>
 										</div>
 									</td>
+									<td>
+										{{-- Only an absence carries a reason, so the field opens
+										     when Absent is chosen and clears when it is not. --}}
+										<input type="text" class="input ra-remark" maxlength="255"
+											name="remarks[{{ $row['id'] }}]" value="{{ $row['remarks'] }}"
+											aria-label="Reason {{ $row['name'] }} was absent"
+											@disabled($row['mark'] !== 'absent')>
+									</td>
 								</tr>
 							@empty
-								<tr><td colspan="4" class="table-empty">No beneficiaries are on file for this school year.</td></tr>
+								<tr><td colspan="5" class="table-empty">No beneficiaries are on file for this school year.</td></tr>
 							@endforelse
-							<tr id="raNoMatch" style="display:none;"><td colspan="4" class="table-empty">No learner matches this search.</td></tr>
+							<tr id="raNoMatch" style="display:none;"><td colspan="5" class="table-empty">No learner matches this search.</td></tr>
 						</tbody>
 					</table>
 				</div>
@@ -132,6 +141,17 @@
 		none: form.querySelector('[data-tally="none"]'),
 	};
 
+	// A remark belongs to an absence. Marking a learner present clears and
+	// closes theirs, so a stale reason can never survive the correction.
+	const syncRemark = (row) => {
+		const remark = row.querySelector('.ra-remark');
+		if (!remark) return;
+		const checked = row.querySelector('input[type="radio"]:checked');
+		const isAbsent = checked !== null && checked.value === 'absent';
+		remark.disabled = !isAbsent;
+		if (!isAbsent) remark.value = '';
+	};
+
 	const retally = () => {
 		let present = 0;
 		let absent = 0;
@@ -147,7 +167,9 @@
 	};
 
 	form.addEventListener('change', (event) => {
-		if (event.target.matches('input[type="radio"]')) retally();
+		if (!event.target.matches('input[type="radio"]')) return;
+		syncRemark(event.target.closest('tr'));
+		retally();
 	});
 
 	// Bulk buttons only touch rows the current search leaves visible, so
@@ -160,6 +182,7 @@
 				row.querySelectorAll('input[type="radio"]').forEach((input) => {
 					input.checked = value !== '' && input.value === value;
 				});
+				syncRemark(row);
 			});
 			retally();
 		});

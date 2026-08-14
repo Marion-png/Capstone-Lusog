@@ -38,41 +38,50 @@
 			$cycleYear = str_replace('-', '&ndash;', e((string) $cycle['school_year']));
 		@endphp
 		<div class="page-header sbfp-header" id="dashboard">
-			<div class="sbfp-headline">
+			{{-- The action sits on the title's own line rather than beside the
+			     whole block: paired with the heading it belongs to, it reads as
+			     part of the header instead of floating next to the progress bar. --}}
+			<div class="sbfp-top">
+				{{-- Same two voices as every other tab's title: the subject
+				     upright, the section italic emerald. --}}
 				<div class="sbfp-title-row">
-					<h1 class="page-title">SBFP</h1>
+					<h1 class="page-title">School-Based Feeding Program <span>Dashboard</span></h1>
 					<span class="sbfp-year">S.Y. {!! $cycleYear !!}</span>
 				</div>
-				<p class="sbfp-day {{ $cycle['started'] ? '' : 'is-idle' }}">
-					<span class="sbfp-dot" aria-hidden="true"></span>
-					@if ($cycle['started'])
-						Feeding day <strong data-cycle-day>{{ $cycleDay }}</strong> of {{ $cycleDuration }}
-						<span class="sbfp-sep">&middot;</span>
-						<span data-cycle-remaining>{{ $cycle['days_remaining'] }} days remaining</span>
-					@else
-						No feeding session recorded yet
-						<span class="sbfp-sep">&middot;</span>
-						{{ $cycleDuration }}-day cycle
-					@endif
-				</p>
-				{{-- Server-rendered fill; the script below re-reads the calendar so a
-				     page left open overnight still shows today's day. --}}
+				<div class="sbfp-actions">
+					<a class="btn btn-secondary" href="{{ route('dashboard.feedingcor-health-records') }}">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+						Enroll beneficiary
+					</a>
+				</div>
+			</div>
+
+			<p class="sbfp-day {{ $cycle['started'] ? '' : 'is-idle' }}">
+				<span class="sbfp-dot" aria-hidden="true"></span>
+				@if ($cycle['started'])
+					Feeding day <strong data-cycle-day>{{ $cycleDay }}</strong> of {{ $cycleDuration }}
+					<span class="sbfp-sep">&middot;</span>
+					<span data-cycle-remaining>{{ $cycle['days_remaining'] }} days remaining</span>
+				@else
+					No feeding session recorded yet
+					<span class="sbfp-sep">&middot;</span>
+					{{ $cycleDuration }}-day cycle
+				@endif
+			</p>
+
+			{{-- Server-rendered fill; the script below re-reads the calendar so a
+			     page left open overnight still shows today's day. The figure
+			     leads at full size — the bar behind it only gives the number a
+			     shape, and a 10px track reads as a measure rather than a hairline. --}}
+			<div class="sbfp-progress-row">
+				<span class="sbfp-progress-pct" data-cycle-percent>{{ number_format((float) $cycle['percent'], 1) }}%</span>
 				<div class="sbfp-progress" id="sbfpProgress" role="progressbar"
 					aria-valuemin="0" aria-valuemax="{{ $cycleDuration }}" aria-valuenow="{{ $cycleDay }}"
 					aria-valuetext="Feeding day {{ $cycleDay }} of {{ $cycleDuration }}"
 					data-start="{{ $cycle['start_date'] }}" data-duration="{{ $cycleDuration }}">
 					<span class="sbfp-progress-fill" style="width: {{ $cycle['percent'] }}%"></span>
 				</div>
-			</div>
-			<div class="sbfp-actions">
-				<a class="btn btn-primary" href="{{ route('dashboard.feedingcor-program') }}#record-attendance">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>
-					Record attendance
-				</a>
-				<a class="btn btn-secondary" href="{{ route('dashboard.feedingcor-health-records') }}">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-					Enroll beneficiary
-				</a>
+				<span class="sbfp-progress-end">Day {{ $cycleDuration }}</span>
 			</div>
 		</div>
 
@@ -88,6 +97,69 @@
 		<section class="kpi-grid live-pane" id="fc-cards">
 			@include('feedingcor-dashboard.partials.kpi-cards')
 		</section>
+
+		{{-- One coordinated set: school year, grade and section scope the whole
+		     page — the cards above these controls as well as the panels below —
+		     while nutritional and attendance status narrow the attendance roll.
+		     The section list is rebuilt server-side for the chosen grade, so
+		     Grade 8's sections are never selectable under Grade 7. --}}
+		<form method="GET" class="card fc-filters" id="fcFilters">
+			<div class="fc-filter">
+				<label class="field-label" for="filterSchoolYear">School Year</label>
+				<select class="select" name="school_year" id="filterSchoolYear">
+					@foreach ($filterOptions['school_years'] as $year)
+						<option value="{{ $year }}" @selected($filters['school_year'] === $year)>{{ $year }}</option>
+					@endforeach
+				</select>
+			</div>
+			<div class="fc-filter">
+				<label class="field-label" for="filterGrade">Grade</label>
+				<select class="select" name="grade" id="filterGrade">
+					<option value="">All grades</option>
+					@foreach ($filterOptions['grades'] as $grade)
+						<option value="{{ $grade }}" @selected($filters['grade'] === $grade)>{{ $grade }}</option>
+					@endforeach
+				</select>
+			</div>
+			<div class="fc-filter">
+				<label class="field-label" for="filterSection">Section</label>
+				<select class="select" name="section" id="filterSection">
+					<option value="">All sections</option>
+					@foreach ($filterOptions['sections'] as $section)
+						<option value="{{ $section }}" @selected($filters['section'] === $section)>{{ $section }}</option>
+					@endforeach
+				</select>
+			</div>
+			<div class="fc-filter">
+				<label class="field-label" for="filterStatus">Nutritional Status</label>
+				<select class="select" name="status" id="filterStatus">
+					<option value="">All statuses</option>
+					@foreach ($filterOptions['statuses'] as $status)
+						<option value="{{ $status }}" @selected($filters['status'] === $status)>{{ $status }}</option>
+					@endforeach
+				</select>
+			</div>
+			<div class="fc-filter">
+				<label class="field-label" for="filterAttendance">Attendance Status</label>
+				<select class="select" name="attendance" id="filterAttendance">
+					<option value="">All</option>
+					@foreach ($filterOptions['attendance'] as $option)
+						<option value="{{ $option['value'] }}" @selected($filters['attendance'] === $option['value'])>{{ $option['label'] }}</option>
+					@endforeach
+				</select>
+			</div>
+			<div class="fc-filter-actions">
+				{{-- No Apply button: choosing a filter applies it. This submit
+				     exists only for a browser with JS off, where a change event
+				     cannot submit the form on the reader's behalf. --}}
+				<noscript><button type="submit" class="btn btn-primary">Apply</button></noscript>
+				{{-- A school year other than the current one counts as a filter
+				     too, or there would be no way back from it. --}}
+				@if ($filters['grade'] !== '' || $filters['section'] !== '' || $filters['status'] !== '' || $filters['attendance'] !== '' || $filters['school_year'] !== \App\Models\StudentHealthRecord::currentSchoolYear())
+					<a class="btn btn-ghost" href="{{ route('dashboard.feedingcor-dashboard') }}">Clear</a>
+				@endif
+			</div>
+		</form>
 
 		<section class="dash-stack" id="feeding-program">
 			{{-- Today's session is the coordinator's working surface, so it takes
@@ -121,44 +193,34 @@
 			</article>
 		</section>
 
-		<section class="card checkins-card">
+		<section class="card risk-card">
 			<div class="card-head">
 				<div>
-					<h2 class="card-title">Weight &amp; BMI Log</h2>
-					<p class="card-sub">Latest recorded measurement per beneficiary.</p>
+					<h2 class="card-title">
+						<svg class="card-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+						Attendance At Risk
+					</h2>
+					<p class="card-sub">Beneficiaries below the school&rsquo;s cumulative attendance threshold.</p>
+				</div>
+				<a class="btn btn-secondary" href="{{ route('dashboard.feedingcor-program') }}#atRiskSection">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+					View At-Risk List
+				</a>
+			</div>
+			<div class="live-pane" id="fc-risk">
+				@include('feedingcor-dashboard.partials.attendance-risk')
+			</div>
+		</section>
+
+		<section class="card np-card">
+			<div class="card-head">
+				<div>
+					<h2 class="card-title">Nutritional Progress</h2>
+					<p class="card-sub">Improved Nutritional Status &mdash; baseline against endline.</p>
 				</div>
 			</div>
-			@php
-				$statusLabels = ['improving' => 'Improving', 'stable' => 'Stable', 'attention' => 'Needs attention'];
-				$statusBadges = ['improving' => 'badge-normal', 'stable' => 'badge-neutral', 'attention' => 'badge-risk'];
-			@endphp
-			<div class="table-scroll">
-				<table class="checkins-table">
-					<thead>
-						<tr>
-							<th>Student</th>
-							<th>Grade</th>
-							<th class="ta-r">Weight</th>
-							<th class="ta-r">BMI</th>
-							<th class="ta-r">Change</th>
-							<th>Status</th>
-						</tr>
-					</thead>
-					<tbody>
-						@forelse ($roster['students'] as $s)
-							<tr>
-								<td><strong>{{ $s['name'] }}</strong></td>
-								<td>{{ $s['grade'] }}</td>
-								<td class="ta-r">{{ $s['weight'] }} kg</td>
-								<td class="ta-r">{{ $s['bmi'] }}</td>
-								<td class="ta-r {{ $s['trend'] }}">{{ $s['trend'] === 'up' ? '+' : '' }}{{ number_format($s['change'], 1) }}</td>
-								<td><span class="badge {{ $statusBadges[$s['status']] }}">{{ $statusLabels[$s['status']] }}</span></td>
-							</tr>
-						@empty
-							<tr><td colspan="6" class="table-empty">No check-ins recorded yet.</td></tr>
-						@endforelse
-					</tbody>
-				</table>
+			<div class="live-pane" id="fc-progress">
+				@include('feedingcor-dashboard.partials.nutrition-progress')
 			</div>
 		</section>
 
@@ -182,6 +244,7 @@
 	const fill = bar.querySelector('.sbfp-progress-fill');
 	const dayEl = document.querySelector('[data-cycle-day]');
 	const remainingEl = document.querySelector('[data-cycle-remaining]');
+	const percentEl = document.querySelector('[data-cycle-percent]');
 
 	const tick = () => {
 		const today = new Date();
@@ -189,8 +252,10 @@
 		const elapsed = Math.floor((today.getTime() - startMs) / 86400000) + 1;
 		const day = Math.max(0, Math.min(duration, elapsed));
 		const remaining = Math.max(0, duration - day);
+		const percent = ((day / duration) * 100).toFixed(1);
 
-		if (fill) fill.style.width = ((day / duration) * 100).toFixed(1) + '%';
+		if (fill) fill.style.width = percent + '%';
+		if (percentEl) percentEl.textContent = percent + '%';
 		if (dayEl) dayEl.textContent = String(day);
 		if (remainingEl) remainingEl.textContent = remaining + (remaining === 1 ? ' day remaining' : ' days remaining');
 		bar.setAttribute('aria-valuenow', String(day));
@@ -217,9 +282,13 @@
 		cards: document.getElementById('fc-cards'),
 		attendance: document.getElementById('fc-attendance'),
 		nutrition: document.getElementById('fc-nutrition'),
+		risk: document.getElementById('fc-risk'),
+		progress: document.getElementById('fc-progress'),
 	};
 	const updated = document.getElementById('fc-updated');
-	const metricsUrl = root.dataset.metricsUrl;
+	// The refresh carries the page's own filters, so a live update re-renders
+	// the view on screen rather than replacing it with an unfiltered one.
+	const metricsUrl = root.dataset.metricsUrl + window.location.search;
 	const pulseUrl = root.dataset.pulseUrl;
 	const PULSE_MS = 20000;
 
@@ -293,6 +362,47 @@
 	window.setInterval(pulse, PULSE_MS);
 	document.addEventListener('visibilitychange', () => {
 		if (!document.hidden) pulse();
+	});
+})();
+
+// Choosing a filter applies it — there is no Apply button to press.
+//
+// Changing the grade drops the section with it, because the section list the
+// server rebuilds for that grade may no longer contain the one selected. Empty
+// filters are stripped from the URL so the address stays readable and "no
+// filter" has exactly one representation rather than an empty-string one too.
+(() => {
+	const form = document.getElementById('fcFilters');
+	if (!form) {
+		return;
+	}
+
+	const section = form.querySelector('[name="section"]');
+
+	const apply = () => {
+		const params = new URLSearchParams(new FormData(form));
+		Array.from(params.keys()).forEach((key) => {
+			if (params.get(key) === '') {
+				params.delete(key);
+			}
+		});
+
+		const query = params.toString();
+		window.location.href = form.action.split('?')[0] + (query ? '?' + query : '');
+	};
+
+	form.addEventListener('submit', (event) => {
+		event.preventDefault();
+		apply();
+	});
+
+	form.querySelectorAll('select').forEach((select) => {
+		select.addEventListener('change', () => {
+			if (select.name === 'grade' && section) {
+				section.value = '';
+			}
+			apply();
+		});
 	});
 })();
 

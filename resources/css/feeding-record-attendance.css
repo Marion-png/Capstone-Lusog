@@ -43,6 +43,11 @@
 .ra-opt-absent input:checked + span { background: var(--lg-danger-tint); color: var(--lg-danger-ink); }
 .ra-opt input:focus-visible + span { box-shadow: var(--lg-focus); }
 
+/* Closed until the learner is marked absent, so an empty box never invites
+   a reason for someone who was there. */
+.ra-remark { width: 100%; min-width: 150px; font-size: .78rem; padding: 7px 10px; }
+.ra-remark:disabled { background: var(--lg-rail); border-color: var(--lg-border); cursor: not-allowed; }
+
 /* The save bar follows the list down: with 90 learners the button must
    never be a scroll away from the row just marked. */
 .ra-savebar {

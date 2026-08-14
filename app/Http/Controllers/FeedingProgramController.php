@@ -16,6 +16,7 @@ use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Throwable;
@@ -690,7 +691,7 @@ class FeedingProgramController extends Controller
 
         return view('feedingcor-dashboard.attendance-review', [
             'pending' => $pending,
-            'ruleDescription' => FeedingAtRiskRule::fromConfig()->describe(),
+            'ruleDescription' => FeedingAtRiskRule::forInstitution($institutionId)->describe(),
         ]);
     }
 
@@ -755,6 +756,7 @@ class FeedingProgramController extends Controller
                         (bool) $mark->is_present => 'present',
                         default => 'absent',
                     },
+                    'remarks' => (string) ($mark->remarks ?? ''),
                 ];
             })
             ->sortBy(fn (array $row) => strtolower($row['name']))
@@ -766,6 +768,90 @@ class FeedingProgramController extends Controller
             'sessionLabel' => Carbon::parse($sessionDate)->format('M d, Y'),
             'today' => now()->toDateString(),
             'alreadyRecorded' => $existing->count(),
+        ]);
+    }
+
+    /**
+     * One learner's attendance, session by session — what the dashboard's
+     * "View" opens from the at-risk list.
+     *
+     * Keyed by the record id, never by name: a learner's name has no business
+     * in a URL, which is logged, shared and kept in browser history. The record
+     * is re-scoped to the coordinator's school here, so an id off the wire
+     * cannot reach another school's learner.
+     */
+    public function learnerAttendance(Request $request, int $record): View|RedirectResponse
+    {
+        if (! $this->isFeedingCoordinator($request)) {
+            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can view attendance.');
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+
+        $learner = StudentHealthRecord::query()
+            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+            ->forCurrentSchoolYear()
+            ->whereKey($record)
+            ->first();
+
+        if (! $learner) {
+            return redirect()
+                ->route('dashboard.feedingcor-dashboard')
+                ->with('error', 'That learner is not on this school&rsquo;s roster.');
+        }
+
+        $columns = ['id', 'session_date', 'is_present', 'source'];
+        if ($this->hasReviewColumns()) {
+            $columns[] = 'needs_review';
+        }
+        if (SchemaCache::hasColumn('feeding_attendances', 'remarks')) {
+            $columns[] = 'remarks';
+        }
+
+        $sessions = SchemaCache::hasTable('feeding_attendances')
+            ? FeedingAttendance::query()
+                ->where('student_health_record_id', $learner->id)
+                ->whereDate('session_date', '<=', now()->toDateString())
+                ->orderByDesc('session_date')
+                ->get($columns)
+            : collect();
+
+        // Marks in date order, NULL where a scan is still unconfirmed — the
+        // exact input the rule judges, so this page and the flag agree.
+        $marks = $sessions
+            ->sortBy('session_date')
+            ->map(fn (FeedingAttendance $row) => ($row->needs_review ?? false) ? null : $row->is_present)
+            ->values()
+            ->all();
+
+        $rule = FeedingAtRiskRule::forInstitution($institutionId);
+        [$grade, $section] = $this->splitGradeSection((string) $learner->section);
+
+        return view('feedingcor-dashboard.learner-attendance', [
+            'learner' => [
+                'name' => (string) $learner->student_name,
+                'grade' => $grade,
+                'section' => $section,
+                'nutritional_status' => (string) $learner->nutritional_status,
+            ],
+            'sessions' => $sessions->map(fn (FeedingAttendance $row): array => [
+                'date' => optional($row->session_date)->format('M d, Y'),
+                'status' => match (true) {
+                    (bool) ($row->needs_review ?? false), $row->is_present === null => 'unconfirmed',
+                    (bool) $row->is_present => 'present',
+                    default => 'absent',
+                },
+                'remarks' => trim((string) ($row->remarks ?? '')),
+            ])->values(),
+            'summary' => [
+                'rate' => $rule->attendanceRate($marks),
+                'present' => $rule->presentCount($marks),
+                'confirmed' => count(array_filter($marks, static fn ($mark) => $mark !== null)),
+                'unconfirmed' => count(array_filter($marks, static fn ($mark) => $mark === null)),
+                'at_risk' => $rule->isAtRisk($marks),
+                'threshold' => $rule->thresholdPercent(),
+                'rule' => $rule->describe(),
+            ],
         ]);
     }
 
@@ -787,6 +873,8 @@ class FeedingProgramController extends Controller
             'session_date' => ['required', 'date', 'before_or_equal:today'],
             'marks' => ['required', 'array'],
             'marks.*' => ['nullable', 'in:present,absent'],
+            'remarks' => ['nullable', 'array'],
+            'remarks.*' => ['nullable', 'string', 'max:255'],
         ]);
 
         if (! SchemaCache::hasTable('student_health_records') || ! SchemaCache::hasTable('feeding_attendances')) {
@@ -821,9 +909,11 @@ class FeedingProgramController extends Controller
 
         $now = now();
         $hasReviewColumns = $this->hasReviewColumns();
+        $hasRemarks = SchemaCache::hasColumn('feeding_attendances', 'remarks');
         $recorder = (string) $request->session()->get('active_name', 'Feeding Coordinator');
+        $remarks = collect($request->input('remarks', []));
 
-        $upserts = $marks->map(function ($mark, $recordId) use ($sessionDate, $now, $hasReviewColumns): array {
+        $upserts = $marks->map(function ($mark, $recordId) use ($sessionDate, $now, $hasReviewColumns, $hasRemarks, $remarks): array {
             $row = [
                 'student_health_record_id' => (int) $recordId,
                 'session_date' => $sessionDate,
@@ -839,18 +929,32 @@ class FeedingProgramController extends Controller
                 $row['needs_review'] = false;
             }
 
+            if ($hasRemarks) {
+                // A remark explains an absence; a learner marked present keeps
+                // none. An upsert bypasses the model's casts, so the value is
+                // encrypted here rather than landing in the column as plaintext.
+                $remark = $mark === 'absent' ? trim((string) ($remarks[$recordId] ?? '')) : '';
+                $row['remarks'] = $remark === '' ? null : Crypt::encryptString($remark);
+            }
+
             return $row;
         })->values()->all();
 
         $presentCount = $marks->filter(fn ($mark): bool => $mark === 'present')->count();
 
-        DB::transaction(function () use ($upserts, $hasReviewColumns, $institutionId, $sessionDate, $marks, $recorder): void {
+        DB::transaction(function () use ($upserts, $hasReviewColumns, $hasRemarks, $institutionId, $sessionDate, $marks, $recorder): void {
+            $updateColumns = ['is_present', 'updated_at'];
+            if ($hasReviewColumns) {
+                $updateColumns = array_merge($updateColumns, ['source', 'needs_review']);
+            }
+            if ($hasRemarks) {
+                $updateColumns[] = 'remarks';
+            }
+
             FeedingAttendance::query()->upsert(
                 $upserts,
                 ['student_health_record_id', 'session_date'],
-                $hasReviewColumns
-                    ? ['is_present', 'source', 'needs_review', 'updated_at']
-                    : ['is_present', 'updated_at']
+                $updateColumns
             );
 
             $this->refreshAttendanceRiskFlags($institutionId);
@@ -1260,7 +1364,9 @@ class FeedingProgramController extends Controller
      */
     private function refreshAttendanceRiskFlags(?int $institutionId = null): void
     {
-        $rule = FeedingAtRiskRule::fromConfig();
+        // The school's own threshold decides its learners — never the platform
+        // default, or a school that set 90% would still be flagged at 80%.
+        $rule = FeedingAtRiskRule::forInstitution($institutionId);
         $todayDate = now()->toDateString();
 
         // Fetched, not aggregated in SQL: NULL marks must survive to the rule,

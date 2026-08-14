@@ -7,7 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class Institution extends Model
 {
-    protected $fillable = ['name', 'address', 'status'];
+    protected $fillable = ['name', 'address', 'status', 'feeding_at_risk_threshold'];
+
+    protected $casts = [
+        // NULL means "use the app default" — see FeedingAtRiskRule::forInstitution().
+        'feeding_at_risk_threshold' => 'integer',
+    ];
 
     public const DEFAULT_SCHOOLS = [
         'A. L. Navarro National High School',

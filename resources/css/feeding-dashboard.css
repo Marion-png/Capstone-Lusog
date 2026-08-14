@@ -10,9 +10,12 @@
    the cycle states where the school is (day, days left) and the bar
    says the same thing in one glance — the number is the fact, the bar
    is only its shape, so nothing is encoded by the bar alone. ── */
-.sbfp-header { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: flex-start; justify-content: space-between; }
-.sbfp-headline { min-width: 0; flex: 1 1 320px; }
-.sbfp-title-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+/* Title and its action share the top line; the cycle line and the bar run
+   the full width beneath them. The action is anchored to the heading it
+   belongs to rather than left hanging beside a three-row stack. */
+.sbfp-header { display: block; }
+.sbfp-top { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
+.sbfp-title-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; min-width: 0; }
 .sbfp-title-row .page-title { margin: 0; }
 .sbfp-year {
 	position: relative;
@@ -33,15 +36,63 @@
 /* Idle is amber, not green: nothing is running yet. */
 .sbfp-day.is-idle .sbfp-dot { background: var(--lg-amber); }
 
-.sbfp-progress { position: relative; margin-top: 10px; max-width: 420px; height: 5px; border-radius: var(--lg-r-pill); background: var(--lg-rail); overflow: hidden; }
-.sbfp-progress-fill { display: block; height: 100%; border-radius: inherit; background: var(--lg-emerald); transition: width .4s ease; }
+/* The figure leads at full size and the bar follows: a length alone is
+   not readable to the tenth, and a 5px hairline read as a divider rather
+   than a measure. The track is outlined so the empty remainder is
+   visible — a fill with no visible end has no scale to be read against. */
+.sbfp-progress-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; max-width: 520px; }
+.sbfp-progress-pct {
+	flex: 0 0 auto;
+	min-width: 62px;
+	font-size: 1.05rem;
+	font-weight: 700;
+	letter-spacing: -.01em;
+	color: var(--lg-emerald-deep);
+	font-variant-numeric: tabular-nums;
+}
+.sbfp-progress {
+	position: relative;
+	flex: 1 1 auto;
+	height: 10px;
+	border-radius: var(--lg-r-pill);
+	background: var(--lg-rail);
+	border: 1px solid var(--lg-border);
+	overflow: hidden;
+}
+.sbfp-progress-fill {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--lg-emerald);
+	/* A hair of surface at the leading edge so the fill reads as a level
+	   reached, not as a bar that ran out of track. */
+	box-shadow: inset -1px 0 0 rgba(255, 255, 255, .6);
+	transition: width .4s ease;
+}
+.sbfp-progress-end { flex: 0 0 auto; font-size: .72rem; font-weight: 600; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-.sbfp-actions { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 4px; }
+.sbfp-actions { display: flex; gap: 8px; flex-wrap: wrap; flex: 0 0 auto; }
 
 @media (max-width: 620px) {
 	.sbfp-actions { width: 100%; }
 	.sbfp-actions .btn { flex: 1 1 auto; justify-content: center; }
-	.sbfp-progress { max-width: none; }
+	.sbfp-progress-row { max-width: none; }
+}
+
+/* ── Filter bar ─────────────────────────────────────────────────────
+   Five selects on one rail. They wrap rather than shrink, so a label
+   never truncates to something a coordinator has to guess at. ── */
+/* Sits between the cards it scopes and the panels it narrows, so it needs
+   air on both sides rather than only below. */
+.fc-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 14px; padding: 14px var(--lg-pad-card); margin: 16px 0; }
+.fc-filter { flex: 1 1 150px; min-width: 140px; }
+.fc-filter .select { width: 100%; }
+.fc-filter-actions { display: flex; gap: 8px; margin-left: auto; }
+
+@media (max-width: 620px) {
+	.fc-filter { flex: 1 1 100%; }
+	.fc-filter-actions { width: 100%; margin-left: 0; }
+	.fc-filter-actions .btn { flex: 1 1 auto; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) {
 	.sbfp-progress-fill, .live-pane { transition: none; }
@@ -68,8 +119,11 @@
 .att-figure { display: flex; align-items: baseline; gap: 10px; }
 .att-count { font-size: 1.9rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
 .att-percent { font-size: .95rem; font-weight: 600; color: var(--lg-emerald-deep); font-variant-numeric: tabular-nums; }
-/* Nothing recorded yet is a state, not a zero. */
-.att-figure-idle .att-count { font-size: 1.15rem; font-weight: 600; color: var(--lg-ink-soft); }
+/* Before the session is recorded the figure is a real 0 of N, but it is
+   not a turnout anyone measured — so it reads grey until it is. */
+.att-percent.is-idle { color: var(--lg-ink-soft); }
+.att-none { color: var(--lg-ink-soft); }
+.att-remark { color: var(--lg-ink-soft); font-size: .78rem; max-width: 240px; }
 .att-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 
 /* The roll runs to the card's edges — a bordered table inside a bordered
@@ -94,18 +148,76 @@
 .ns-count { font-size: .92rem; font-weight: 700; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
 .ns-table tr.is-eligible td { background: var(--lg-rail); }
 
-/* ── Weight & BMI log ───────────────────────────────────────────── */
+/* ── Attendance at risk ─────────────────────────────────────────────
+   The threshold is printed above the table because it is school-set: the
+   same list means different things at 75% and 85%, and a reader cannot
+   judge "72%" without knowing the line it fell under. ── */
+.risk-card { padding: var(--lg-pad-card); margin-top: 16px; overflow: hidden; }
+.risk-card .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.risk-card .card-head .btn { white-space: nowrap; }
+.card-title-icon { width: 16px; height: 16px; vertical-align: -2px; margin-right: 6px; color: var(--lg-orange); }
 
-/* The table runs to the card's edges — a bordered table inside a bordered
-   card is a frame around a frame — so the cells take the card's padding
-   back on the outer columns. */
-.checkins-card { padding: var(--lg-pad-card); margin-top: 16px; overflow: hidden; }
-.checkins-card .table-scroll { margin: 0 -20px -20px; padding: 0; }
-.checkins-table td.up { color: var(--lg-success-ink); font-weight: 600; }
-.checkins-table td.down { color: var(--lg-danger-ink); font-weight: 600; }
-.checkins-table td.flat { color: var(--lg-ink-soft); }
-.checkins-table th:first-child, .checkins-table td:first-child { padding-left: 20px; }
-.checkins-table th:last-child, .checkins-table td:last-child { padding-right: 20px; }
+.risk-headline { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin: 14px 0 4px; }
+.risk-threshold { font-size: .82rem; color: var(--lg-ink-soft); }
+.risk-threshold strong { color: var(--lg-ink); font-variant-numeric: tabular-nums; }
+.risk-count { font-size: .78rem; font-weight: 600; color: var(--lg-orange-ink); }
+
+.risk-scroll { margin: 12px -20px -20px; max-height: 380px; overflow-y: auto; }
+.risk-table { width: 100%; }
+.risk-table th:first-child, .risk-table td:first-child { padding-left: 20px; }
+.risk-table th:last-child, .risk-table td:last-child { padding-right: 20px; }
+.risk-table thead th { position: sticky; top: 0; z-index: 1; background: var(--lg-rail); }
+/* The rate is the number the flag turned on, so it carries the weight. */
+.risk-rate { font-weight: 700; color: var(--lg-orange-ink); font-variant-numeric: tabular-nums; }
+.risk-view { font-size: .78rem; font-weight: 600; color: var(--lg-emerald); text-decoration: none; }
+.risk-view:hover { text-decoration: underline; }
+
+/* ── Nutritional progress ───────────────────────────────────────────
+   Two series on one scale: --series-risk for baseline, --series-healthy
+   for endline (the theme's validated pair — re-run the dataviz
+   validator before changing either). Colour carries which reading, the
+   row label carries the status, and every bar is direct-labelled, so
+   identity never rests on hue alone. ── */
+.np-card { padding: var(--lg-pad-card); margin-top: 16px; }
+.np-headline { display: flex; align-items: baseline; justify-content: space-between; gap: 12px 18px; flex-wrap: wrap; margin: 14px 0 2px; }
+.np-figure { display: flex; align-items: baseline; gap: 10px; }
+.np-count { font-size: 1.9rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
+.np-rate { font-size: .95rem; font-weight: 600; color: var(--lg-emerald-deep); font-variant-numeric: tabular-nums; }
+/* No endline reading yet: 0 improved is a real count, but not a result. */
+.np-rate.is-idle { color: var(--lg-ink-soft); }
+.np-measured { font-size: .76rem; color: var(--lg-ink-soft); }
+
+.np-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 14px; font-size: .74rem; color: var(--lg-ink-soft); }
+.np-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.np-dot { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 auto; }
+.np-dot-baseline { background: var(--series-risk); }
+.np-dot-endline { background: var(--series-healthy); }
+
+.np-chart { margin-top: 10px; display: flex; flex-direction: column; gap: 12px; }
+.np-row { display: grid; grid-template-columns: 128px minmax(0, 1fr); align-items: center; gap: 12px; }
+.np-label { font-size: .78rem; font-weight: 600; color: var(--lg-ink); }
+/* 2px of surface between the pair, never a border — the two fills must
+   not appear to touch for a reader who cannot separate the hues. */
+.np-bars { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.np-bar-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.np-bar { height: 12px; border-radius: 0 4px 4px 0; min-width: 2px; transition: width .5s cubic-bezier(.22,.61,.36,1); }
+.np-bar-baseline { background: var(--series-risk); }
+.np-bar-endline { background: var(--series-healthy); }
+.np-value { font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+
+.np-table { margin-top: 16px; }
+.np-table summary { font-size: .76rem; color: var(--lg-ink-soft); cursor: pointer; font-weight: 500; padding: 4px 0; width: fit-content; }
+.np-table summary:hover { color: var(--lg-emerald); }
+
+.la-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 620px) {
+	.np-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.np-bar { transition: none; }
+}
 
 @media (max-width: 1180px) {
 	.dash-stack { grid-template-columns: minmax(0, 1fr); }

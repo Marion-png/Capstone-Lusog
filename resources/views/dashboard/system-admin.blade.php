@@ -208,6 +208,48 @@
                 </table>
             </article>
 
+            <article class="card section" id="feeding-policy">
+                <h3>Feeding At-Risk Threshold</h3>
+                {{-- School-configurable by requirement: a programme running four
+                     days a week cannot be judged on the same line as one running
+                     five. An empty field means the school follows the app
+                     default, so it moves with the programme instead of being
+                     pinned to whatever today's number happens to be. --}}
+                <table>
+                    <thead><tr><th>School</th><th>Source</th><th>Threshold</th></tr></thead>
+                    <tbody>
+                        @forelse(($institutions ?? collect()) as $school)
+                            <tr>
+                                <td>{{ $school->name }}</td>
+                                <td>
+                                    @if ($school->feeding_at_risk_threshold === null)
+                                        <span class="tag">Default {{ (int) ($defaultAtRiskThreshold ?? 80) }}%</span>
+                                    @else
+                                        <span class="tag ok">School-set</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    {{-- One form per row, wholly inside this cell: a form
+                                         straddling table cells is invalid markup. --}}
+                                    <form method="POST" action="{{ route('dashboard.system-admin.institutions.at-risk-threshold', $school->id) }}" style="display:flex;gap:8px;align-items:center;">
+                                        @csrf
+                                        <input type="number" name="threshold" min="1" max="100" step="1"
+                                            value="{{ $school->feeding_at_risk_threshold }}"
+                                            placeholder="{{ (int) ($defaultAtRiskThreshold ?? 80) }}"
+                                            aria-label="At-risk attendance threshold for {{ $school->name }}"
+                                            style="width:84px;">
+                                        <span style="color:#6B7C72;">%</span>
+                                        <button type="submit" class="btn btn-secondary">Save</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="3" style="color:#6B7C72;">No schools on file.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </article>
+
             <article class="card section" id="account-history">
                 <h3>Account Request History</h3>
                 <table>

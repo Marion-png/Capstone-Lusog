@@ -27,6 +27,7 @@ use App\Models\Medicine;
 use App\Models\MedicineDispense;
 use App\Models\StudentHealthRecord;
 use App\Support\AuditTrail;
+use App\Support\FeedingAtRiskRule;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -750,6 +751,12 @@ Route::get('/dashboard/feedingcor-program/attendance/record', [FeedingProgramCon
 Route::post('/dashboard/feedingcor-program/attendance/record', [FeedingProgramController::class, 'storeRecordedAttendance'])
     ->name('feedingcor-program.attendance.record.store');
 
+// One learner's session-by-session attendance — what "View" opens from the
+// dashboard's at-risk list. Keyed by record id, never by name.
+Route::get('/dashboard/feedingcor-program/attendance/learner/{record}', [FeedingProgramController::class, 'learnerAttendance'])
+    ->whereNumber('record')
+    ->name('feedingcor-program.attendance.learner');
+
 Route::get('/dashboard/feedingcor-program/attendance/review', [FeedingProgramController::class, 'attendanceReviewQueue'])
     ->name('feedingcor-program.attendance.review');
 
@@ -796,12 +803,59 @@ Route::get('/dashboard/system-admin', function () {
         ? DB::table('account_requests')->whereIn('status', ['accepted', 'declined'])->orderByDesc('decided_at')->get()->map(fn ($r) => array_merge((array) $r, ['submitted_at' => $r->created_at]))->values()->all()
         : [];
 
+    // Per-school feeding policy. The threshold is the one figure the SRS
+    // requires to be school-configurable, so it is administered here rather
+    // than living in config alone.
+    $institutions = Schema::hasTable('institutions')
+        ? Institution::query()->orderBy('name')->get(['id', 'name', 'feeding_at_risk_threshold'])
+        : collect();
+
     return view('dashboard.system-admin', [
         'accounts' => $accounts,
         'pendingRequests' => $pendingRequests,
         'requestHistory' => $requestHistory,
+        'institutions' => $institutions,
+        'defaultAtRiskThreshold' => FeedingAtRiskRule::fromConfig()->thresholdPercent(),
     ]);
 })->name('dashboard.system-admin');
+
+/**
+ * Sets one school's at-risk attendance threshold. Clearing the field returns
+ * that school to the app default rather than pinning it to today's number.
+ * Raw DB write, so the audit entry is recorded explicitly.
+ */
+Route::post('/dashboard/system-admin/institutions/{institution}/at-risk-threshold', function (Request $request, int $institution) {
+    if ($request->session()->get('active_role') !== 'system_admin') {
+        return redirect()->route('login')->with('error', 'Please sign in as System Admin to change feeding policy.');
+    }
+
+    $validated = $request->validate([
+        'threshold' => ['nullable', 'numeric', 'min:1', 'max:100'],
+    ]);
+
+    $school = Institution::query()->find($institution);
+    if (! $school) {
+        return back()->with('error', 'That school is no longer on file.');
+    }
+
+    $previous = $school->feeding_at_risk_threshold;
+    $threshold = $validated['threshold'] === null || $validated['threshold'] === ''
+        ? null
+        : (int) round((float) $validated['threshold']);
+
+    $school->update(['feeding_at_risk_threshold' => $threshold]);
+
+    AuditTrail::record(
+        'updated',
+        'Institution',
+        $school->id,
+        'Feeding at-risk threshold for '.$school->name.' set to '
+            .($threshold === null ? 'the app default' : $threshold.'%')
+            .' (was '.($previous === null ? 'the app default' : $previous.'%').')'
+    );
+
+    return back()->with('success', 'At-risk threshold updated for '.$school->name.'.');
+})->whereNumber('institution')->name('dashboard.system-admin.institutions.at-risk-threshold');
 
 Route::get('/dashboard/system-admin/audit-logs', function (Request $request) {
     if ($request->session()->get('active_role') !== 'system_admin') {

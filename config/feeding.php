@@ -13,17 +13,23 @@ return [
     |   attendance_rate       flag when attended% < `threshold_percent`
     |   consecutive_absences  flag on a run of >= `consecutive_absences` misses
     |
-    | The default stays 75% because that is what this school year's data was
-    | flagged under; switching mid-year silently re-flags learners. Sessions a
-    | human has not yet confirmed (an unresolved "?" from a photo scan) are
-    | excluded from both the numerator and the denominator — an unread mark is
-    | not evidence of attendance or of absence.
+    | The approved default is 80% cumulative attendance, but the threshold is
+    | school-configurable: `institutions.feeding_at_risk_threshold` overrides
+    | this per school (System Admin sets it), and this value is what a school
+    | that has set nothing is judged on. Read it through
+    | FeedingAtRiskRule::forInstitution(), never straight from config, or two
+    | screens will disagree about who is flagged. Changing either figure
+    | mid-year silently re-flags learners.
+    |
+    | Sessions a human has not yet confirmed (an unresolved "?" from a photo
+    | scan) are excluded from both the numerator and the denominator — an unread
+    | mark is not evidence of attendance or of absence.
     |
     */
 
     'at_risk' => [
         'mode' => env('FEEDING_AT_RISK_MODE', 'attendance_rate'),
-        'threshold_percent' => (float) env('FEEDING_AT_RISK_THRESHOLD_PERCENT', 75),
+        'threshold_percent' => (float) env('FEEDING_AT_RISK_THRESHOLD_PERCENT', 80),
         'consecutive_absences' => (int) env('FEEDING_AT_RISK_CONSECUTIVE_ABSENCES', 3),
     ],
 

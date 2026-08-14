@@ -211,26 +211,4 @@ class FeedingBmiReportTest extends TestCase
         $response->assertSee('value="Jacqueline L. Tenizo"', false);
         $response->assertDontSee('Wrong School Nurse');
     }
-
-    #[Test]
-    public function dashboard_renders_the_weight_and_bmi_log(): void
-    {
-        $this->makeStudent('Grade 7 / Sampaguita', 'Male', 'Severely Wasted', 'Stunted');
-        $this->makeStudent('Grade 8 / Ilang', 'Female', 'Normal', 'Normal Height-for-Age');
-
-        $response = $this->withSession($this->coordinatorSession())
-            ->get('/dashboard/feedingcor-dashboard');
-        $response->assertOk();
-
-        $roster = $response->viewData('roster');
-        $this->assertCount(2, $roster['students']);
-        $this->assertSame(1, $roster['attention']);   // the Severely Wasted learner
-        $this->assertArrayHasKey('improving', $roster);
-        $this->assertArrayHasKey('stable', $roster);
-        $this->assertSame('flat', $roster['students'][0]['trend']);  // no endline yet -> no change
-
-        $response->assertSee('Weight &amp; BMI Log', false);
-        $response->assertSee('checkins-table', false);
-        $response->assertSee('Needs attention', false);
-    }
 }

@@ -85,7 +85,8 @@ class FeedingAttendanceImportTest extends TestCase
         // 3 learners × 3 sessions.
         $this->assertSame(9, FeedingAttendance::count());
 
-        // At-risk is decided purely by attendance (threshold 75%).
+        // At-risk is decided purely by attendance, against the school's
+        // threshold (the app default, 80%, for a school that has set none).
         $this->assertTrue($bautista->fresh()->is_at_risk, '0/3 present should be at-risk');
         $this->assertFalse($cruz->fresh()->is_at_risk, '3/3 present should not be at-risk');
         $this->assertTrue($delos->fresh()->is_at_risk, '2/3 = 66% should be at-risk');
@@ -202,7 +203,13 @@ class FeedingAttendanceImportTest extends TestCase
         }
     }
 
-    /** How many table rows on the feeding program page name this learner. */
+    /**
+     * How many rows of the beneficiaries roster name this learner.
+     *
+     * Scoped to the roster table on purpose: a flagged learner also appears in
+     * the At-Risk Beneficiaries table further down the same page, and that
+     * second listing is the feature working, not a duplicate.
+     */
     private function rosterRowsFor(string $name): int
     {
         $html = $this->withSession($this->coordinatorSession())
@@ -210,7 +217,9 @@ class FeedingAttendanceImportTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        preg_match_all('#<tr[^>]*>.*?</tr>#s', $html, $rows);
+        $roster = preg_match('#<table id="rosterTable".*?</table>#s', $html, $match) ? $match[0] : '';
+
+        preg_match_all('#<tr[^>]*>.*?</tr>#s', $roster, $rows);
 
         return collect($rows[0])
             ->filter(fn (string $row): bool => str_contains($row, e($name)))
