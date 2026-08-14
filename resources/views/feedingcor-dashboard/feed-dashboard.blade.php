@@ -38,22 +38,11 @@
 			$cycleYear = str_replace('-', '&ndash;', e((string) $cycle['school_year']));
 		@endphp
 		<div class="page-header sbfp-header" id="dashboard">
-			{{-- The action sits on the title's own line rather than beside the
-			     whole block: paired with the heading it belongs to, it reads as
-			     part of the header instead of floating next to the progress bar. --}}
-			<div class="sbfp-top">
-				{{-- Same two voices as every other tab's title: the subject
-				     upright, the section italic emerald. --}}
-				<div class="sbfp-title-row">
-					<h1 class="page-title">School-Based Feeding Program <span>Dashboard</span></h1>
-					<span class="sbfp-year">S.Y. {!! $cycleYear !!}</span>
-				</div>
-				<div class="sbfp-actions">
-					<a class="btn btn-secondary" href="{{ route('dashboard.feedingcor-health-records') }}">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-						Enroll beneficiary
-					</a>
-				</div>
+			{{-- Same two voices as every other tab's title: the subject upright,
+			     the section italic emerald. --}}
+			<div class="sbfp-title-row">
+				<h1 class="page-title">School-Based Feeding Program <span>Dashboard</span></h1>
+				<span class="sbfp-year">S.Y. {!! $cycleYear !!}</span>
 			</div>
 
 			<p class="sbfp-day {{ $cycle['started'] ? '' : 'is-idle' }}">
@@ -72,7 +61,8 @@
 			{{-- Server-rendered fill; the script below re-reads the calendar so a
 			     page left open overnight still shows today's day. The figure
 			     leads at full size — the bar behind it only gives the number a
-			     shape, and a 10px track reads as a measure rather than a hairline. --}}
+			     shape, and a 10px track reads as a measure rather than a hairline.
+			     The action shares this line, so it sits level with the bar. --}}
 			<div class="sbfp-progress-row">
 				<span class="sbfp-progress-pct" data-cycle-percent>{{ number_format((float) $cycle['percent'], 1) }}%</span>
 				<div class="sbfp-progress" id="sbfpProgress" role="progressbar"
@@ -82,6 +72,14 @@
 					<span class="sbfp-progress-fill" style="width: {{ $cycle['percent'] }}%"></span>
 				</div>
 				<span class="sbfp-progress-end">Day {{ $cycleDuration }}</span>
+				<div class="sbfp-actions">
+					<button type="button" class="btn btn-secondary" id="enrollBeneficiaryBtn"
+						data-candidates-url="{{ route('feedingcor-program.enrollment.candidates') }}"
+						data-enroll-url="{{ route('feedingcor-program.enrollment.store') }}">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+						Enroll beneficiary
+					</button>
+				</div>
 			</div>
 		</div>
 
@@ -226,6 +224,83 @@
 
 	</div>
 </div>
+
+{{-- Enrolment: the coordinator's decision about who the programme feeds.
+     The list is fetched when the modal opens and re-read on the dashboard's
+     own pulse while it stays open, so a learner an adviser measures during the
+     session appears here without a reload. Filters are client-side because the
+     list is small and the names are encrypted at rest — the server cannot
+     search them in SQL. --}}
+<div class="modal-backdrop" id="enrollBackdrop" aria-hidden="true">
+	<div class="modal-panel enroll-panel" role="dialog" aria-modal="true" aria-labelledby="enrollTitle">
+		<div class="modal-head enroll-head">
+			<div>
+				<div class="enroll-eyebrow">Enroll beneficiary</div>
+				<h2 class="modal-title enroll-title" id="enrollTitle">Qualified learners</h2>
+				<p class="enroll-sub" id="enrollSub">Learners measured as wasted or severely wasted. Enrolling one starts their meals at the next feeding day.</p>
+			</div>
+			<button type="button" class="modal-close enroll-close" id="enrollClose" aria-label="Close">&times;</button>
+		</div>
+
+		<div class="enroll-filters">
+			<div class="enroll-filter">
+				<label class="field-label" for="enrollSearch">Name</label>
+				<input type="search" class="input" id="enrollSearch" placeholder="Search a learner" autocomplete="off">
+			</div>
+			<div class="enroll-filter">
+				<label class="field-label" for="enrollGrade">Grade</label>
+				<select class="select" id="enrollGrade"><option value="">All</option></select>
+			</div>
+			<div class="enroll-filter">
+				<label class="field-label" for="enrollSection">Section</label>
+				<select class="select" id="enrollSection"><option value="">All sections</option></select>
+			</div>
+			<div class="enroll-filter">
+				<label class="field-label" for="enrollStatus">Status</label>
+				<select class="select" id="enrollStatus">
+					<option value="">All statuses</option>
+					<option value="Severely Wasted">Severely wasted</option>
+					<option value="Wasted">Wasted</option>
+				</select>
+			</div>
+		</div>
+
+		<div class="enroll-countbar">
+			<span id="enrollShowing">Loading&hellip;</span>
+			<button type="button" class="enroll-clear" id="enrollClearFilters">Clear filters</button>
+		</div>
+
+		<div class="modal-body enroll-body">
+			<table class="enroll-table">
+				<thead>
+					<tr>
+						<th class="enroll-check"><input type="checkbox" id="enrollCheckAll" aria-label="Select every learner shown"></th>
+						<th>Name</th>
+						<th>Grade</th>
+						<th>Section</th>
+						<th>Status</th>
+						<th>Action</th>
+					</tr>
+				</thead>
+				<tbody id="enrollRows"></tbody>
+			</table>
+			<p class="enroll-empty" id="enrollEmpty" hidden>No learner is waiting to be enrolled.</p>
+			<p class="flash err enroll-error" id="enrollError" hidden></p>
+		</div>
+
+		<div class="modal-foot enroll-foot">
+			<div class="enroll-tally">
+				<strong id="enrollEnrolledCount">0</strong> currently enrolled
+				<span class="enroll-sep">&middot;</span>
+				<strong id="enrollWaitingCount">0</strong> waiting
+			</div>
+			<div class="enroll-foot-actions">
+				<button type="button" class="btn btn-ghost" id="enrollCancel">Close</button>
+				<button type="button" class="btn btn-primary" id="enrollSelected" disabled>Enroll selected</button>
+			</div>
+		</div>
+	</div>
+</div>
 <script>
 // Feeding-day progress. The bar ships filled from the server; this only keeps
 // it honest on a page nobody reloads — at midnight the day advances by itself.
@@ -352,11 +427,19 @@
 			if (payload.stamp && payload.stamp !== root.dataset.stamp) {
 				root.dataset.stamp = payload.stamp;
 				await refresh();
+				// The enrolment modal rides the same pulse rather than polling
+				// on its own timer: one question asked of the server, two
+				// things kept current.
+				document.dispatchEvent(new CustomEvent('fc:records-changed'));
 			}
 		} catch (error) {
 			// Ignored — the next pulse retries.
 		}
 	};
+
+	// Enrolling a learner changes the cards immediately, without waiting for
+	// the next pulse to notice.
+	document.addEventListener('fc:refresh-request', () => { refresh(); });
 
 	pulse();
 	window.setInterval(pulse, PULSE_MS);
@@ -404,6 +487,241 @@
 			apply();
 		});
 	});
+})();
+
+// Enrolment modal. Qualifying is the adviser's measurement; enrolling is the
+// coordinator's decision, and this is where it is made.
+(() => {
+	const openBtn = document.getElementById('enrollBeneficiaryBtn');
+	const backdrop = document.getElementById('enrollBackdrop');
+	if (!openBtn || !backdrop) {
+		return;
+	}
+
+	const el = (id) => document.getElementById(id);
+	const rowsBody = el('enrollRows');
+	const search = el('enrollSearch');
+	const gradeSel = el('enrollGrade');
+	const sectionSel = el('enrollSection');
+	const statusSel = el('enrollStatus');
+	const showing = el('enrollShowing');
+	const emptyNote = el('enrollEmpty');
+	const errorNote = el('enrollError');
+	const checkAll = el('enrollCheckAll');
+	const enrolledCount = el('enrollEnrolledCount');
+	const waitingCount = el('enrollWaitingCount');
+	const enrollSelected = el('enrollSelected');
+	const subtitle = el('enrollSub');
+	const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+
+	let candidates = [];
+	const selected = new Set();
+	let open = false;
+	let busy = false;
+
+	const esc = (value) => String(value).replace(/[&<>"']/g, (c) => ({
+		'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+	}[c]));
+
+	const visible = () => candidates.filter((row) => {
+		const term = (search?.value ?? '').trim().toLowerCase();
+		return (term === '' || row.name.toLowerCase().includes(term))
+			&& (gradeSel.value === '' || row.grade === gradeSel.value)
+			&& (sectionSel.value === '' || row.section === sectionSel.value)
+			&& (statusSel.value === '' || row.status === statusSel.value);
+	});
+
+	const setError = (message) => {
+		if (!errorNote) return;
+		errorNote.textContent = message ?? '';
+		errorNote.hidden = !message;
+	};
+
+	const syncFooter = () => {
+		if (enrollSelected) {
+			enrollSelected.disabled = busy || selected.size === 0;
+			enrollSelected.textContent = selected.size > 0
+				? 'Enroll selected (' + selected.size + ')'
+				: 'Enroll selected';
+		}
+
+		const shown = visible();
+		if (checkAll) {
+			const allChecked = shown.length > 0 && shown.every((row) => selected.has(row.id));
+			checkAll.checked = allChecked;
+			checkAll.indeterminate = !allChecked && shown.some((row) => selected.has(row.id));
+		}
+	};
+
+	const render = () => {
+		const shown = visible();
+
+		if (showing) {
+			showing.textContent = 'Showing ' + shown.length + ' of ' + candidates.length
+				+ ' qualified learner' + (candidates.length === 1 ? '' : 's');
+		}
+		if (emptyNote) {
+			emptyNote.hidden = candidates.length !== 0;
+		}
+
+		rowsBody.innerHTML = shown.map((row) => `
+			<tr data-id="${row.id}">
+				<td class="enroll-check"><input type="checkbox" data-select="${row.id}" ${selected.has(row.id) ? 'checked' : ''} aria-label="Select ${esc(row.name)}"></td>
+				<td><strong>${esc(row.name)}</strong></td>
+				<td>${esc(row.grade)}</td>
+				<td>${esc(row.section || '—')}</td>
+				<td><span class="badge ${row.badge}">${esc(row.status_short)}</span></td>
+				<td><button type="button" class="btn btn-primary btn-sm" data-enroll="${row.id}">Enroll</button></td>
+			</tr>`).join('');
+
+		syncFooter();
+	};
+
+	const fillOptions = (select, values, keepValue) => {
+		const first = select.querySelector('option');
+		select.innerHTML = '';
+		select.appendChild(first);
+		values.forEach((value) => {
+			const option = document.createElement('option');
+			option.value = value;
+			option.textContent = value;
+			select.appendChild(option);
+		});
+		// A filter the coordinator set survives a live refresh unless the value
+		// it named has left the list entirely.
+		select.value = values.includes(keepValue) ? keepValue : '';
+	};
+
+	const load = async () => {
+		try {
+			const response = await fetch(openBtn.dataset.candidatesUrl, {
+				headers: { Accept: 'application/json' },
+				credentials: 'same-origin',
+			});
+			if (!response.ok) {
+				setError('Could not load the qualified learners. Try again in a moment.');
+				return;
+			}
+
+			const payload = await response.json();
+			candidates = Array.isArray(payload.rows) ? payload.rows : [];
+
+			// Drop selections for learners who are no longer waiting — someone
+			// else may have enrolled them while this modal sat open.
+			const ids = new Set(candidates.map((row) => row.id));
+			Array.from(selected).forEach((id) => { if (!ids.has(id)) selected.delete(id); });
+
+			fillOptions(gradeSel, payload.grades ?? [], gradeSel.value);
+			fillOptions(sectionSel, payload.sections ?? [], sectionSel.value);
+
+			if (enrolledCount) enrolledCount.textContent = payload.enrolled ?? 0;
+			if (waitingCount) waitingCount.textContent = payload.waiting ?? 0;
+			if (subtitle && payload.weigh_in) {
+				subtitle.textContent = 'Learners measured as wasted or severely wasted at the '
+					+ payload.weigh_in + ' weigh-in. Enrolling one starts their meals at the next feeding day.';
+			}
+
+			setError(null);
+			render();
+		} catch (error) {
+			setError('Could not load the qualified learners. Try again in a moment.');
+		}
+	};
+
+	const enroll = async (ids) => {
+		if (busy || ids.length === 0) {
+			return;
+		}
+
+		busy = true;
+		syncFooter();
+		try {
+			const response = await fetch(openBtn.dataset.enrollUrl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Accept: 'application/json',
+					'X-CSRF-TOKEN': csrf,
+				},
+				credentials: 'same-origin',
+				body: JSON.stringify({ record_ids: ids }),
+			});
+
+			if (!response.ok) {
+				const payload = await response.json().catch(() => ({}));
+				setError(payload.message ?? 'Those learners could not be enrolled.');
+				return;
+			}
+
+			ids.forEach((id) => selected.delete(id));
+			await load();
+			// The cards behind the modal count enrolled learners, so they are
+			// re-read now rather than at the next pulse.
+			document.dispatchEvent(new CustomEvent('fc:refresh-request'));
+		} catch (error) {
+			setError('Those learners could not be enrolled. Check your connection and try again.');
+		} finally {
+			busy = false;
+			syncFooter();
+		}
+	};
+
+	const setOpen = (state) => {
+		open = state;
+		backdrop.classList.toggle('open', state);
+		backdrop.setAttribute('aria-hidden', state ? 'false' : 'true');
+		document.body.style.overflow = state ? 'hidden' : '';
+		if (state) {
+			setError(null);
+			load().then(() => search?.focus());
+		}
+	};
+
+	openBtn.addEventListener('click', () => setOpen(true));
+	[el('enrollClose'), el('enrollCancel')].forEach((btn) => btn?.addEventListener('click', () => setOpen(false)));
+	backdrop.addEventListener('click', (event) => { if (event.target === backdrop) setOpen(false); });
+	document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && open) setOpen(false); });
+
+	[search, gradeSel, sectionSel, statusSel].forEach((control) => {
+		control?.addEventListener('input', render);
+		control?.addEventListener('change', render);
+	});
+
+	el('enrollClearFilters')?.addEventListener('click', () => {
+		if (search) search.value = '';
+		[gradeSel, sectionSel, statusSel].forEach((select) => { if (select) select.value = ''; });
+		render();
+	});
+
+	checkAll?.addEventListener('change', () => {
+		visible().forEach((row) => {
+			if (checkAll.checked) selected.add(row.id);
+			else selected.delete(row.id);
+		});
+		render();
+	});
+
+	rowsBody.addEventListener('click', (event) => {
+		const enrollOne = event.target.closest('[data-enroll]');
+		if (enrollOne) {
+			enroll([Number(enrollOne.dataset.enroll)]);
+		}
+	});
+
+	rowsBody.addEventListener('change', (event) => {
+		const box = event.target.closest('[data-select]');
+		if (!box) return;
+		const id = Number(box.dataset.select);
+		if (box.checked) selected.add(id);
+		else selected.delete(id);
+		syncFooter();
+	});
+
+	enrollSelected?.addEventListener('click', () => enroll(Array.from(selected)));
+
+	// An adviser measuring a learner mid-session moves the dashboard's stamp;
+	// while the modal is open, the waiting list follows it.
+	document.addEventListener('fc:records-changed', () => { if (open) load(); });
 })();
 
 (() => {

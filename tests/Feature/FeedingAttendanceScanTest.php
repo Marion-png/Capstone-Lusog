@@ -64,6 +64,9 @@ class FeedingAttendanceScanTest extends TestCase
             'nutritional_status' => 'Wasted',
             'baseline_nutritional_status' => 'Wasted',
             'student_details' => ['gender' => 'Male'],
+            // Already in the programme: qualifying is the adviser's measurement,
+            // enrolling is the coordinator's decision, and these learners have both.
+            'feeding_enrolled_at' => now(),
         ]);
     }
 
@@ -379,6 +382,9 @@ class FeedingAttendanceScanTest extends TestCase
             'bmi_value' => 15.2,
             'nutritional_status' => 'Wasted',
             'student_details' => ['gender' => 'Male'],
+            // Already in the programme: qualifying is the adviser's measurement,
+            // enrolling is the coordinator's decision, and these learners have both.
+            'feeding_enrolled_at' => now(),
         ]);
 
         FeedingAttendance::create([
@@ -414,6 +420,9 @@ class FeedingAttendanceScanTest extends TestCase
             'bmi_value' => 15.2,
             'nutritional_status' => 'Wasted',
             'student_details' => ['gender' => 'Male'],
+            // Already in the programme: qualifying is the adviser's measurement,
+            // enrolling is the coordinator's decision, and these learners have both.
+            'feeding_enrolled_at' => now(),
         ]);
 
         $mark = FeedingAttendance::create([

@@ -44,6 +44,8 @@ class StudentHealthRecord extends Model
         'is_at_risk',
         'examination',
         'attendance_by_month',
+        'feeding_enrolled_at',
+        'feeding_enrolled_by',
     ];
 
     /**
@@ -70,6 +72,10 @@ class StudentHealthRecord extends Model
         'baseline_recorded_at' => 'date',
         'endline_recorded_at' => 'date',
         'is_at_risk' => 'boolean',
+        // Enrolment state is plain (queries filter on it); the staff name that
+        // made the decision is personal data, so it is encrypted.
+        'feeding_enrolled_at' => 'datetime',
+        'feeding_enrolled_by' => EncryptedString::class,
         'examination' => EncryptedArray::class,
         'attendance_by_month' => EncryptedArray::class,
         'student_details' => EncryptedArray::class,

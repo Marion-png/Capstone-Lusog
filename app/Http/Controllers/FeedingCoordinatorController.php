@@ -486,11 +486,19 @@ class FeedingCoordinatorController extends Controller
         $cycle = FeedingProgramCycle::forInstitution($institutionId);
         $programDay = $cycle->day();
 
-        // nutritional_status is encrypted at rest, so eligibility is decided in
-        // PHP after fetch — the same test the Feeding Program page applies.
-        $allBeneficiaries = $students
+        // nutritional_status is encrypted at rest, so qualification is decided
+        // in PHP after fetch — the same test the Feeding Program page applies.
+        $qualified = $students
             ->filter(fn (StudentHealthRecord $record): bool => $this->isQualifiedForFeeding((string) $record->nutritional_status))
             ->values();
+
+        // Qualifying and being enrolled are two different facts: the adviser's
+        // measurement decides the first, the coordinator's decision the second.
+        // Only enrolled learners are beneficiaries; the rest are waiting.
+        $allBeneficiaries = $qualified
+            ->filter(fn (StudentHealthRecord $record): bool => $record->feeding_enrolled_at !== null)
+            ->values();
+        $awaitingEnrollment = $qualified->count() - $allBeneficiaries->count();
 
         // Grade and section scope every panel; the two status filters narrow
         // the attendance roll alone (see buildTodayAttendance), so the headline
@@ -520,7 +528,10 @@ class FeedingCoordinatorController extends Controller
                 'attendance_sessions' => $beneficiaryStats['confirmed_sessions'],
                 'at_risk' => $beneficiaryStats['at_risk'],
                 'at_risk_rule' => $beneficiaryStats['at_risk_rule'],
-                'awaiting_enrollment' => $beneficiaryStats['awaiting_enrollment'],
+                // Qualified but not yet enrolled — the modal's waiting list,
+                // counted school-wide rather than within the grade filter so
+                // the card and the modal never report different numbers.
+                'awaiting_enrollment' => $awaitingEnrollment,
             ],
             'programCycle' => [
                 'school_year' => StudentHealthRecord::currentSchoolYear(),
@@ -789,9 +800,8 @@ class FeedingCoordinatorController extends Controller
     }
 
     /**
-     * The four headline figures: who the programme feeds, how well they are
-     * showing up, who the attendance rule has flagged, and who qualifies but
-     * has never been fed yet.
+     * The headline figures for the enrolled roll: how many there are, how well
+     * they are showing up, and who the attendance rule has flagged.
      *
      * Attendance is counted over confirmed marks only. A scanned mark nobody
      * has reviewed is NULL and votes neither way, so it can neither depress the
@@ -800,7 +810,7 @@ class FeedingCoordinatorController extends Controller
      * "absent" and quietly breaks that invariant.
      *
      * @param  Collection<int, StudentHealthRecord>  $beneficiaries
-     * @return array{beneficiaries: int, jhs: int, shs: int, attendance_rate: ?int, confirmed_sessions: int, at_risk: int, at_risk_rule: string, awaiting_enrollment: int}
+     * @return array{beneficiaries: int, jhs: int, shs: int, attendance_rate: ?int, confirmed_sessions: int, at_risk: int, at_risk_rule: string}
      */
     private function buildBeneficiaryStats(Collection $beneficiaries, FeedingAtRiskRule $rule): array
     {
@@ -808,17 +818,13 @@ class FeedingCoordinatorController extends Controller
 
         $confirmedSessions = 0;
         $presentSessions = 0;
-        $awaiting = 0;
         $atRisk = 0;
 
         foreach ($beneficiaries as $record) {
+            // A learner no session has covered yet contributes nothing and is
+            // flagged by nothing — the rule already reads no marks as no
+            // evidence, so there is no special case to write here.
             $marks = $marksByRecord->get($record->id, []);
-            if ($marks === []) {
-                $awaiting++;
-
-                continue;
-            }
-
             $confirmed = array_filter($marks, static fn ($mark) => $mark !== null);
             $confirmedSessions += count($confirmed);
             $presentSessions += $rule->presentCount($marks);
@@ -843,7 +849,6 @@ class FeedingCoordinatorController extends Controller
             'confirmed_sessions' => $confirmedSessions,
             'at_risk' => $atRisk,
             'at_risk_rule' => $rule->describe(),
-            'awaiting_enrollment' => $awaiting,
         ];
     }
 

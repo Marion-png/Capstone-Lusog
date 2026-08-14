@@ -56,6 +56,9 @@ class FeedingCoordinatorDashboardTest extends TestCase
             'baseline_nutritional_status' => $status,
             'endline_nutritional_status' => $endlineStatus,
             'student_details' => ['gender' => 'Male'],
+            // Already in the programme: qualifying is the adviser's measurement,
+            // enrolling is the coordinator's decision, and these learners have both.
+            'feeding_enrolled_at' => now(),
         ]);
     }
 
@@ -210,6 +213,9 @@ class FeedingCoordinatorDashboardTest extends TestCase
             'nutritional_status' => 'Wasted',
             'baseline_nutritional_status' => 'Wasted',
             'student_details' => ['gender' => 'Male'],
+            // Already in the programme: qualifying is the adviser's measurement,
+            // enrolling is the coordinator's decision, and these learners have both.
+            'feeding_enrolled_at' => now(),
         ]);
 
         $response = $this->withSession($this->coordinatorSession())
@@ -347,16 +353,20 @@ class FeedingCoordinatorDashboardTest extends TestCase
 
     /**
      * The four headline cards are Beneficiary / Attendance / At-Risk /
-     * Awaiting Enrollment. "Beneficiary" is the learners the programme feeds
-     * (wasted, severely wasted, underweight) — not everyone on file — and
-     * "Awaiting Enrollment" is those of them no session has ever covered.
+     * Awaiting Enrollment. "Beneficiary" is the learners the coordinator has
+     * enrolled — qualifying alone does not feed anyone — and "Awaiting
+     * Enrollment" is those who qualify but have not been enrolled yet.
      */
     #[Test]
     public function the_headline_cards_count_beneficiaries_attendance_and_awaiting_enrollment(): void
     {
         $fed = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', 15.1);
-        $this->makeStudent('Grade 11 / Ilang', 'Severely Wasted', 13.4);   // qualified, never fed
-        $this->makeStudent('Grade 8 / Rosal', 'Normal', 20.5);             // not a beneficiary
+        $this->makeStudent('Grade 11 / Ilang', 'Severely Wasted', 13.4);   // enrolled, never fed
+        $this->makeStudent('Grade 8 / Rosal', 'Normal', 20.5);             // does not qualify
+
+        // Qualified but not enrolled: waiting, and not a beneficiary yet.
+        $this->makeStudent('Grade 9 / Narra', 'Wasted', 15.5)
+            ->update(['feeding_enrolled_at' => null]);
 
         foreach ([true, true, true, false] as $index => $isPresent) {
             $this->markAttendance($fed, now()->subDays(4 - $index)->toDateString(), $isPresent);
@@ -369,12 +379,12 @@ class FeedingCoordinatorDashboardTest extends TestCase
             ->assertSee('Awaiting Enrollment')
             ->viewData('dashboardStats');
 
-        $this->assertSame(2, $stats['beneficiaries'], 'Only qualified learners are beneficiaries.');
+        $this->assertSame(2, $stats['beneficiaries'], 'Only enrolled learners are beneficiaries.');
         $this->assertSame(1, $stats['beneficiaries_jhs']);
         $this->assertSame(1, $stats['beneficiaries_shs']);
         $this->assertSame(4, $stats['attendance_sessions']);
         $this->assertSame(75, $stats['attendance_rate']);
-        $this->assertSame(1, $stats['awaiting_enrollment'], 'A qualified learner with no session is awaiting enrollment.');
+        $this->assertSame(1, $stats['awaiting_enrollment'], 'A qualified learner nobody enrolled is waiting.');
     }
 
     /**
@@ -396,7 +406,7 @@ class FeedingCoordinatorDashboardTest extends TestCase
 
         $this->assertSame(1, $stats['attendance_sessions']);
         $this->assertSame(100, $stats['attendance_rate']);
-        $this->assertSame(0, $stats['awaiting_enrollment'], 'A learner with a scanned mark has been fed, unconfirmed or not.');
+        $this->assertSame(0, $stats['awaiting_enrollment'], 'An enrolled learner is not waiting to be enrolled.');
     }
 
     /** No confirmed session is not a 0% turnout — the card shows a dash. */

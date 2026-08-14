@@ -7,6 +7,7 @@ use App\Http\Controllers\ConditionController;
 use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\FeedingCoordinatorController;
+use App\Http\Controllers\FeedingEnrollmentController;
 use App\Http\Controllers\FeedingProgramController;
 use App\Http\Controllers\HealthAssessmentController;
 use App\Http\Controllers\HealthConsentFormController;
@@ -750,6 +751,15 @@ Route::get('/dashboard/feedingcor-program/attendance/record', [FeedingProgramCon
 
 Route::post('/dashboard/feedingcor-program/attendance/record', [FeedingProgramController::class, 'storeRecordedAttendance'])
     ->name('feedingcor-program.attendance.record.store');
+
+// Enrolment: qualifying is the adviser's measurement, enrolling is the
+// coordinator's decision. The candidates list returns learner names, so it is
+// audited like every other read of personal data.
+Route::get('/dashboard/feedingcor-program/enrollment/candidates', [FeedingEnrollmentController::class, 'candidates'])
+    ->name('feedingcor-program.enrollment.candidates');
+
+Route::post('/dashboard/feedingcor-program/enrollment', [FeedingEnrollmentController::class, 'store'])
+    ->name('feedingcor-program.enrollment.store');
 
 // One learner's session-by-session attendance — what "View" opens from the
 // dashboard's at-risk list. Keyed by record id, never by name.

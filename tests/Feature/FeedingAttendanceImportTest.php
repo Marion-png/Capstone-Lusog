@@ -50,6 +50,9 @@ class FeedingAttendanceImportTest extends TestCase
             'bmi_value' => 15.0,
             'nutritional_status' => $status,
             'baseline_nutritional_status' => $status,
+            // Already in the programme: qualifying is the adviser's measurement,
+            // enrolling is the coordinator's decision, and these learners have both.
+            'feeding_enrolled_at' => now(),
         ]);
     }
 

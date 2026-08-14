@@ -60,7 +60,7 @@ class FeedingProgramController extends Controller
             $eligibleStudents = $studentsQuery
                 ->forCurrentSchoolYear()
                 ->get()
-                ->filter(fn (StudentHealthRecord $record): bool => $this->isAttendanceEligible($record->nutritional_status))
+                ->filter(fn (StudentHealthRecord $record): bool => $this->isEnrolledBeneficiary($record))
                 ->values();
         }
 
@@ -725,7 +725,7 @@ class FeedingProgramController extends Controller
                 ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
                 ->forCurrentSchoolYear()
                 ->get()
-                ->filter(fn (StudentHealthRecord $record): bool => $this->isAttendanceEligible($record->nutritional_status))
+                ->filter(fn (StudentHealthRecord $record): bool => $this->isEnrolledBeneficiary($record))
                 ->values();
         }
 
@@ -897,7 +897,7 @@ class FeedingProgramController extends Controller
             ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
             ->forCurrentSchoolYear()
             ->get()
-            ->filter(fn (StudentHealthRecord $record): bool => $this->isAttendanceEligible($record->nutritional_status))
+            ->filter(fn (StudentHealthRecord $record): bool => $this->isEnrolledBeneficiary($record))
             ->pluck('id')
             ->all();
 
@@ -1296,6 +1296,22 @@ class FeedingProgramController extends Controller
         }
 
         return '';
+    }
+
+    /**
+     * A beneficiary of the programme: qualified by the adviser's measurement
+     * AND enrolled by the coordinator.
+     *
+     * Qualifying alone is not enough — a learner the coordinator has not
+     * enrolled is on the waiting list, not on the feeding line. Attendance
+     * import and photo scanning deliberately still match against the whole
+     * roster: a sheet is evidence of who was fed, and dropping a name because
+     * of a missing enrolment would lose that evidence.
+     */
+    private function isEnrolledBeneficiary(StudentHealthRecord $record): bool
+    {
+        return $record->feeding_enrolled_at !== null
+            && $this->isAttendanceEligible($record->nutritional_status);
     }
 
     private function isAttendanceEligible(?string $nutritionalStatus): bool
