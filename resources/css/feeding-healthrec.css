@@ -4,6 +4,147 @@
    KPI cards, tables and the status scale come from feeding-theme.css.
    ══════════════════════════════════════════════════════════════════════ */
 
+/* ── SBFP header ───────────────────────────────────────────────────
+   The same header the Dashboard uses, so the two coordinator tabs open
+   the same way: the acronym carries the title, the school year rides
+   beside it as a quiet tracked label rather than a second heading, and
+   the programme is named in full on the line beneath. ── */
+/* Title on one side, actions on the other, on one row. The headline takes
+   the space it needs and the buttons keep theirs — below 900px the pair
+   wraps and the actions become a full-width row of their own. */
+.sbfp-header { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+.sbfp-headline { flex: 1 1 340px; min-width: 0; }
+.sbfp-title-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.sbfp-title-row .page-title { margin: 0; }
+.sbfp-year {
+	position: relative;
+	padding-left: 13px;
+	font-size: .72rem;
+	font-weight: 600;
+	letter-spacing: .1em;
+	font-variant-numeric: tabular-nums;
+	color: var(--lg-ink-soft);
+	white-space: nowrap;
+}
+.sbfp-year::before { content: ""; position: absolute; left: 0; top: -1px; bottom: 1px; width: 1px; background: var(--lg-border-strong); }
+/* Only the programme name takes the ink — the label in front of it is
+   scaffolding, not the fact. */
+.sbfp-program { margin-top: 8px; font-size: .82rem; color: var(--lg-ink-soft); }
+.sbfp-program strong { color: var(--lg-ink); font-weight: 600; }
+
+/* A pane being re-read dims rather than emptying: the previous figures
+   stay readable until the new ones land, so nothing flashes blank. */
+.live-pane { transition: opacity .18s ease; }
+.live-pane.is-refreshing { opacity: .55; }
+@media (prefers-reduced-motion: reduce) {
+	.live-pane { transition: none; }
+}
+
+/* ── View tabs ──────────────────────────────────────────────────────
+   Three views of one roster on a single rail under the cards. The rail
+   is a hairline the active tab overdraws, so the selected view is read
+   from a mark on the line rather than from weight alone; each tab
+   carries its own size, and the active count takes the ink because it
+   is the number the table below is showing. ── */
+.seg-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 6px;
+	margin-top: 20px;
+	border-bottom: 1px solid var(--lg-border);
+}
+.seg-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 14px;
+	margin-bottom: -1px;
+	border-bottom: 2px solid transparent;
+	font-size: .84rem;
+	font-weight: 500;
+	color: var(--lg-ink-soft);
+	text-decoration: none;
+	white-space: nowrap;
+	transition: color .16s ease, border-color .16s ease;
+}
+.seg-tab:hover { color: var(--lg-ink); }
+.seg-tab:focus-visible { outline: 2px solid var(--lg-emerald); outline-offset: -2px; border-radius: var(--lg-r-btn) var(--lg-r-btn) 0 0; }
+.seg-tab.is-active { color: var(--lg-ink); font-weight: 700; border-bottom-color: var(--lg-emerald); }
+
+.seg-tab-count {
+	min-width: 20px;
+	padding: 1px 6px;
+	border-radius: var(--lg-r-pill);
+	background: var(--lg-rail);
+	color: var(--lg-ink-soft);
+	font-size: .72rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+.seg-tab.is-active .seg-tab-count { background: var(--lg-mint); color: var(--lg-success-ink); }
+
+@media (max-width: 620px) {
+	.seg-tabs { gap: 0; }
+	.seg-tab { flex: 1 1 auto; justify-content: center; padding: 10px 8px; }
+}
+
+/* ── Filter bar ─────────────────────────────────────────────────────
+   The name search leads on its own row — one learner is looked up by
+   typing, not by working down eight selects — then the selects sit in
+   an even grid in scope-then-narrowing order: year, grade, section
+   first (they move the cards with them), then the five that only
+   narrow the list.
+
+   A grid, not a wrapping flex row: equal columns line the controls up
+   in tidy rows instead of leaving a ragged last line, and every label
+   keeps its own width so none truncates to something to guess at. ── */
+.bnf-filters {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 14px;
+	padding: 16px var(--lg-pad-card);
+	margin: 0 0 16px;
+}
+/* "Baseline Nutritional Status" wraps to two lines where "Sex" does not,
+   so each cell is a column that pushes its control to the bottom — the
+   selects then line up across a row however the labels fall. */
+.bnf-filter { min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; }
+.bnf-filter .select, .bnf-filter .lg-search, .bnf-filter .lg-search input { width: 100%; min-width: 0; }
+
+/* The search spans the row above the selects, with a hairline under it
+   so "find a learner" reads as its own act rather than as a ninth
+   filter competing with the eight. */
+.bnf-filter-search {
+	grid-column: 1 / -1;
+	padding-bottom: 14px;
+	border-bottom: 1px solid var(--lg-border);
+}
+.bnf-filter-search .lg-search { max-width: 420px; }
+
+.bnf-filter-actions {
+	grid-column: 1 / -1;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding-top: 14px;
+	border-top: 1px solid var(--lg-border);
+}
+.bnf-filter-actions .toolbar-count { margin-left: auto; }
+
+@media (max-width: 1180px) {
+	.bnf-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+	.bnf-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+	.bnf-filters { grid-template-columns: 1fr; }
+	.bnf-filter-search .lg-search { max-width: none; }
+	.bnf-filter-actions { flex-wrap: wrap; }
+	.bnf-filter-actions .toolbar-count { margin-left: 0; }
+}
+
 .records-section { margin-top: 24px; }
 
 /* Sortable column head: the whole cell is the control, the caret only
@@ -25,17 +166,94 @@ th.sortable[data-dir="asc"]::after { border-bottom: 5px solid var(--lg-emerald);
 th.sortable[data-dir="desc"]::after { border-top: 5px solid var(--lg-emerald); opacity: 1; }
 th.sortable:focus-visible { outline: 2px solid var(--lg-emerald); outline-offset: -2px; }
 
+/* ── Beneficiary table ──────────────────────────────────────────────
+   One line per learner: who they are, why they qualify (baseline), how
+   they are turning up, and where they stand. The row number and the
+   percentage are tabular so the columns read as columns; the name is
+   the only thing that takes weight, so the eye lands there first. ── */
+.bnf-table td, .bnf-table th { vertical-align: middle; }
+.bnf-idx {
+	width: 44px;
+	text-align: right;
+	padding-right: 14px !important;
+	color: var(--lg-ink-soft);
+	font-variant-numeric: tabular-nums;
+	font-size: .8rem;
+}
+.bnf-name { min-width: 190px; }
+
+/* ── Pending Enrollment ─────────────────────────────────────────────
+   The waiting list carries the decision, so it gains two columns the
+   other views have no use for: a checkbox to gather learners and the
+   action that enrols them. The action is a text button, not a filled
+   one — a filled button on every row would make the table read as
+   twenty primary actions rather than one list. ── */
+/* Its own head, because it is a section in its own right rather than a
+   continuation of the roll above: what it is, and how many are on it. */
+.pending-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.pending-head .section-title { margin: 0; }
+.pending-sub { margin-top: 4px; font-size: .8rem; color: var(--lg-ink-soft); }
+.pending-tally {
+	flex: 0 0 auto;
+	font-size: .74rem;
+	font-weight: 700;
+	color: var(--lg-amber-ink);
+	background: var(--lg-amber-tint);
+	border: 1px solid #EFDCB2;
+	border-radius: var(--lg-r-pill);
+	padding: 4px 12px;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.bnf-check { width: 38px; }
+.bnf-check input { width: 15px; height: 15px; accent-color: var(--lg-emerald); cursor: pointer; }
+.bnf-action { width: 96px; }
+.btn-link-enroll {
+	font: inherit;
+	font-size: .78rem;
+	font-weight: 600;
+	color: var(--lg-emerald);
+	background: none;
+	border: 1px solid transparent;
+	border-radius: var(--lg-r-btn);
+	padding: 4px 10px;
+	cursor: pointer;
+	transition: background .16s ease, color .16s ease;
+}
+.btn-link-enroll:hover { background: var(--lg-mint); color: var(--lg-emerald-dark); }
+.btn-link-enroll:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+
+/* Selection bar above the roll: what is held, and the one act that
+   applies to it. It keeps its place when nothing is selected so the
+   table does not jump as boxes are ticked. */
+.bulk-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+	padding: 10px 14px;
+	margin-bottom: 12px;
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-card);
+	background: var(--lg-rail);
+}
+.bulk-count { font-size: .8rem; font-weight: 600; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; }
+.bulk-error { margin-bottom: 12px; }
+.bnf-table td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Nothing to report reads as an em dash, never as a zero or a blank. */
+.bnf-none { color: var(--lg-border-strong); }
+.badge-icon { width: 12px; height: 12px; margin-right: 1px; flex: 0 0 auto; }
+/* A badge that carries a glyph drops the theme's status dot: one mark, not two. */
+.badge.has-icon::before { display: none; }
+
 /* Baseline → endline movement. Green for a gain, coral for a loss, grey
    while endline is still outstanding; every one carries its own words. */
 .delta { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .delta-up { color: var(--lg-success-ink); }
 .delta-down { color: var(--lg-danger-ink); }
 .delta-none { color: var(--lg-ink-soft); font-weight: 500; }
-
-/* Consolidated per-section counts: the numbers are the point, so they sit
-   right-aligned and tabular under a plain head. */
-.summary-table td.count { text-align: right; font-variant-numeric: tabular-nums; }
-.summary-table th.count { text-align: right; }
 
 /* ── Attendance Review ── */
 .rule-chip {
@@ -71,4 +289,59 @@ th.sortable:focus-visible { outline: 2px solid var(--lg-emerald); outline-offset
 @media (max-width: 900px) {
 	.table-card { overflow-x: auto; }
 	.table-card table { min-width: 760px; }
+}
+
+/* ── Primary actions ────────────────────────────────────────────────
+   The three ride the right end of the header row, the one that changes
+   the programme filled and leading. They keep their own width rather
+   than shrinking, so a label never truncates to something to guess
+   at — when the row runs out of space they wrap as a block instead. ── */
+.sbfp-actions { display: flex; flex-wrap: wrap; gap: 8px; flex: 0 0 auto; margin-left: auto; }
+.sbfp-actions .btn { white-space: nowrap; }
+
+@media (max-width: 620px) {
+	.sbfp-actions { width: 100%; margin-left: 0; }
+	.sbfp-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
+
+/* ── Print Masterlist ───────────────────────────────────────────────
+   The roster on paper: the rail, the topbar, the filter toolbar and
+   every control come off, because none of them can be used there. What
+   is left is what the coordinator was reading — the header, the five
+   figures and the table, with a row hidden by the search hidden here
+   too. Cards and rows are kept off page breaks so a learner is never
+   split across two sheets. ── */
+@media print {
+	.asb-sidebar,
+	.topbar,
+	.toolbar,
+	.bnf-filters,
+	.sbfp-actions,
+	.modal-backdrop,
+	.announcements { display: none !important; }
+
+	.main { margin: 0 !important; opacity: 1 !important; transform: none !important; }
+	.content { padding: 0 !important; }
+	body { background: #fff; }
+
+	.card, .table-card { box-shadow: none; border-color: #999; break-inside: avoid; }
+	.kpi-grid, .kpi-grid.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+	.kpi { padding: 10px 12px; }
+	.kpi-value { font-size: 1.2rem; }
+
+	/* Only the view being printed stays: the other two are links nobody can
+	   follow on paper, while the active one names the roster below it. */
+	.seg-tab:not(.is-active) { display: none; }
+	/* Controls do not print: a checkbox and an Enroll button are useless
+	   on paper, so the waiting list prints as a plain roster. */
+	.bulk-bar, .bnf-check, .bnf-action { display: none !important; }
+	.seg-tabs { border-bottom: none; }
+	.seg-tab { padding-left: 0; }
+
+	.table-scroll { overflow: visible !important; max-height: none !important; }
+	table { width: 100%; }
+	thead { display: table-header-group; }
+	tr { break-inside: avoid; }
+	/* The empty-search row is a UI affordance, never a roster line. */
+	#recordsNoMatch { display: none !important; }
 }

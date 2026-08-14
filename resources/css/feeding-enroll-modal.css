@@ -1,0 +1,74 @@
+/* ══════════════════════════════════════════════════════════════════════
+   Feeding Coordinator — Enrolment dialog
+   Loaded by every coordinator page that offers "Enroll beneficiary", so the
+   dialog is the same object wherever it is opened from. Inline it after
+   lusog-theme.css and the page's own sheet.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Enrolment modal ────────────────────────────────────────────────
+   Same anatomy as the Feeding Program page's modals (backdrop / panel /
+   head / body / foot) so a dialog looks like a dialog everywhere in the
+   product; only the list inside it is particular to enrolment. ── */
+.modal-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(21, 40, 31, .48);
+	display: none;
+	align-items: flex-start;
+	justify-content: center;
+	z-index: 250;
+	padding: 16px;
+	overflow-y: auto;
+}
+.modal-backdrop.open { display: flex; }
+.modal-panel {
+	width: min(760px, 100%);
+	max-height: calc(100vh - 32px);
+	background: var(--lg-card);
+	border-radius: var(--lg-r-card);
+	box-shadow: 0 24px 64px rgba(21, 40, 31, .28);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	margin: auto;
+}
+.modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 20px 14px; }
+.modal-title { font-size: 1.02rem; font-weight: 600; letter-spacing: -.01em; color: var(--lg-ink); }
+.modal-close { border: none; background: none; font-size: 1.4rem; line-height: 1; color: var(--lg-ink-soft); cursor: pointer; padding: 2px 8px; border-radius: 8px; border: 1px solid var(--lg-border); }
+.modal-close:hover { color: var(--lg-ink); background: var(--lg-rail); }
+.modal-body { padding: 0; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.modal-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 20px; border-top: 1px solid var(--lg-border); background: var(--lg-card); }
+
+.enroll-eyebrow { font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--lg-ink-soft); }
+.enroll-title { margin-top: 6px; font-size: 1.18rem; font-weight: 700; }
+.enroll-sub { margin-top: 6px; font-size: .8rem; line-height: 1.5; color: var(--lg-ink-soft); max-width: 58ch; }
+
+.enroll-filters { display: flex; flex-wrap: wrap; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--lg-border); border-bottom: 1px solid var(--lg-border); background: var(--lg-page); }
+.enroll-filter { flex: 1 1 150px; min-width: 130px; }
+.enroll-filter .input, .enroll-filter .select { width: 100%; }
+
+.enroll-countbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; font-size: .78rem; color: var(--lg-ink-soft); }
+.enroll-clear { border: none; background: none; padding: 0; font: inherit; color: var(--lg-emerald); text-decoration: underline; cursor: pointer; }
+.enroll-clear:hover { color: var(--lg-emerald-deep); }
+
+.enroll-body { max-height: 46vh; }
+.enroll-table { width: 100%; }
+.enroll-table th:first-child, .enroll-table td:first-child { padding-left: 20px; }
+.enroll-table th:last-child, .enroll-table td:last-child { padding-right: 20px; }
+.enroll-table thead th { position: sticky; top: 0; z-index: 1; background: var(--lg-card); }
+.enroll-check { width: 34px; }
+.enroll-check input { width: 15px; height: 15px; accent-color: var(--lg-emerald); cursor: pointer; }
+.btn-sm { padding: 5px 14px; font-size: .74rem; }
+.enroll-empty { padding: 28px 20px; text-align: center; font-size: .82rem; color: var(--lg-ink-soft); }
+.enroll-error { margin: 12px 20px; }
+
+.enroll-tally { font-size: .78rem; color: var(--lg-ink-soft); }
+.enroll-tally strong { color: var(--lg-ink); font-variant-numeric: tabular-nums; }
+.enroll-sep { color: var(--lg-border-strong); margin: 0 4px; }
+.enroll-foot-actions { display: flex; gap: 8px; margin-left: auto; }
+
+@media (max-width: 620px) {
+	.enroll-filter { flex: 1 1 100%; }
+	.enroll-foot-actions { width: 100%; }
+	.enroll-foot-actions .btn { flex: 1 1 auto; justify-content: center; }
+}

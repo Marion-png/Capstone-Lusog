@@ -9,6 +9,8 @@ use App\Models\HealthAssessment;
 use App\Models\HealthConsentForm;
 use App\Models\MedicalCertificate;
 use App\Models\StudentHealthRecord;
+use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingBeneficiarySummary;
 use App\Support\PriorityHealthRule;
 use App\Support\RequestMemo;
 use App\Support\SchemaCache;
@@ -23,6 +25,19 @@ use Illuminate\View\View;
 
 class StudentHealthRecordController extends Controller
 {
+    /**
+     * The nutritional statuses the Beneficiaries filters offer, in scale order
+     * (worst first). This is what the app's own classifier emits — it never
+     * produces "Obese", so that label is deliberately absent rather than
+     * offered as a filter that can only ever return nothing.
+     *
+     * @var list<string>
+     */
+    private const STATUS_OPTIONS = ['Severely Wasted', 'Wasted', 'Underweight', 'Normal', 'Overweight'];
+
+    /** @var list<string> */
+    private const SEX_OPTIONS = ['Male', 'Female'];
+
     /**
      * Per-request memo for this page's repeated reads.
      *
@@ -1191,18 +1206,53 @@ class StudentHealthRecordController extends Controller
     public function feedingHealthRecords(Request $request): View
     {
         $records = collect();
+        $schoolYears = collect();
+        $institutionId = $request->session()->get('active_institution_id');
+
+        // school_year is a plain lookup column, so the year list and the year
+        // filter are the only parts of this the database may decide. Every
+        // other filter reads an encrypted column and is applied in PHP.
+        $yearFilter = trim((string) $request->query('school_year', '')) ?: StudentHealthRecord::currentSchoolYear();
 
         if (SchemaCache::hasTable('student_health_records')) {
-            $q = StudentHealthRecord::query();
-            $institutionId = $request->session()->get('active_institution_id');
-            if ($institutionId) {
-                $q->where('institution_id', $institutionId);
-            }
+            $scope = fn () => StudentHealthRecord::query()
+                ->when($institutionId, fn ($query) => $query->where('institution_id', $institutionId));
+
+            $schoolYears = $scope()->distinct()->orderByDesc('school_year')->pluck('school_year')->values();
+
             // student_name is encrypted at rest, so sorting happens in PHP.
-            $records = $q->forCurrentSchoolYear()->get()->sortBy([
+            $records = $scope()->forCurrentSchoolYear($yearFilter)->get()->sortBy([
                 ['section', 'asc'],
                 ['student_name', 'asc'],
             ])->values();
+        }
+
+        // The year on screen is always offered, even before anyone has a row in it.
+        if ($schoolYears->doesntContain($yearFilter)) {
+            $schoolYears = $schoolYears->push($yearFilter)->sortDesc()->values();
+        }
+
+        // Where each learner stands with the attendance rule — the rate and the
+        // flag together, from one reading of one set of marks. The table prints
+        // the very figure that decided the flag, and the tab filters on the
+        // same verdict the At Risk card counted.
+        $standings = FeedingBeneficiarySummary::attendanceStandings(
+            $records->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isBeneficiary($record))->values(),
+            FeedingAtRiskRule::forInstitution($institutionId)
+        );
+
+        // Today's marks, for the attendance filter. A learner no sheet has
+        // covered is unmarked, and a scanned mark nobody has confirmed is NULL
+        // — neither is an absence, so both read as "unmarked" here.
+        $todayMarks = collect();
+        if ($records->isNotEmpty() && SchemaCache::hasTable('feeding_attendances')) {
+            $todayMarks = FeedingAttendance::query()
+                ->whereIn('student_health_record_id', $records->pluck('id'))
+                ->whereDate('session_date', now()->toDateString())
+                ->get(['student_health_record_id', 'is_present', 'needs_review'])
+                ->mapWithKeys(fn ($mark): array => [
+                    $mark->student_health_record_id => ($mark->needs_review ?? false) ? null : $mark->is_present,
+                ]);
         }
 
         $sessionAtRiskRecords = collect($request->session()->get('school_health_card_records', []))
@@ -1274,13 +1324,48 @@ class StudentHealthRecordController extends Controller
         // `section` holds "Grade 7 / Section A" (see StudentRosterSync). Split it
         // so grade level and section can be filtered independently, and flatten
         // both sources to one shape the view can read without special-casing.
-        $records = $records->map(function ($record): object {
+        $records = $records->map(function ($record) use ($standings, $todayMarks): object {
             $raw = trim((string) ($record->section ?? ''));
             $parts = array_map('trim', explode('/', $raw, 2));
             $grade = ($parts[0] ?? '') !== '' ? $parts[0] : 'Unassigned';
             $section = ($parts[1] ?? '') !== '' ? $parts[1] : 'Unassigned';
 
+            // Which of the three views this learner belongs to. Qualifying is
+            // the adviser's measurement, enrolling the coordinator's decision:
+            // only an enrolled learner is a beneficiary, and one who qualifies
+            // without being enrolled is waiting. A session-fallback row has no
+            // database row to carry an enrolment, so it can only be waiting.
+            $id = $record->id ?? null;
+            $qualified = FeedingBeneficiarySummary::qualifies((string) $record->nutritional_status);
+            $enrolled = ($record->feeding_enrolled_at ?? null) !== null;
+
+            // Sex lives in the encrypted student_details blob, so it is read
+            // here rather than filtered in SQL. A session-fallback row carries
+            // no details at all, which reads as "not on file".
+            $details = is_array($record->student_details ?? null) ? $record->student_details : [];
+            $sex = ucfirst(strtolower(trim((string) ($details['gender'] ?? ''))));
+
             return (object) [
+                // The record id, for the actions a row can carry. A
+                // session-fallback row has none, so it can only be read.
+                'id' => $id,
+                'segment' => match (true) {
+                    $qualified && $enrolled => 'beneficiary',
+                    $qualified => 'pending',
+                    default => 'other',
+                },
+                'at_risk' => (bool) ($standings[$id]['at_risk'] ?? false),
+                // NULL, not 0: a learner no confirmed session has covered has
+                // no turnout to report, which the table prints as an em dash.
+                'attendance_rate' => $standings[$id]['rate'] ?? null,
+                'sex' => in_array($sex, ['Male', 'Female'], true) ? $sex : '',
+                'attendance_today' => match (true) {
+                    $id === null || ! $todayMarks->has($id) => 'unmarked',
+                    $todayMarks->get($id) === true => 'present',
+                    $todayMarks->get($id) === false => 'absent',
+                    // A scanned mark no human has confirmed is not an absence.
+                    default => 'unmarked',
+                },
                 'student_name' => $record->student_name,
                 'grade_level' => $grade,
                 'section_name' => $section,
@@ -1313,7 +1398,22 @@ class StudentHealthRecordController extends Controller
             $sectionFilter = '';
         }
 
-        $totalBeforeFilters = $records->count();
+        $segmentView = in_array($request->query('view'), ['all', 'pending', 'at_risk'], true)
+            ? (string) $request->query('view')
+            : 'all';
+
+        // "All beneficiaries" is the enrolled roll — the Total Beneficiaries
+        // card — and "At risk" is the At Risk card. Both read the flags set
+        // above, so a tab can never disagree with the card it sits under.
+        $inView = fn (Collection $rows, string $view): Collection => match ($view) {
+            'pending' => $rows->where('segment', 'pending'),
+            'at_risk' => $rows->where('at_risk', true),
+            default => $rows->where('segment', 'beneficiary'),
+        };
+
+        // The whole-school size of this view, which the toolbar counts against
+        // — "Showing 1 of 3" still means the grade filter narrowed three to one.
+        $totalBeforeFilters = $inView($records, $segmentView)->count();
 
         if ($gradeFilter !== '') {
             $records = $records->where('grade_level', $gradeFilter);
@@ -1323,48 +1423,111 @@ class StudentHealthRecordController extends Controller
         }
         $records = $records->values();
 
-        $statusCounts = [
-            'severely_wasted' => 0,
-            'wasted' => 0,
-            'normal' => 0,
-            'overweight' => 0,
+        // The tabs count inside the scope on screen: with Grade 8 chosen, a tab
+        // reports Grade 8's learners, matching the cards, which filter the same way.
+        $segmentCounts = [
+            'all' => $records->where('segment', 'beneficiary')->count(),
+            'pending' => $records->where('segment', 'pending')->count(),
+            'at_risk' => $records->where('at_risk', true)->count(),
         ];
 
-        foreach ($records as $record) {
-            $key = $this->statusKey((string) $record->nutritional_status);
-            $statusCounts[$key]++;
+        $records = $inView($records, $segmentView)->values();
+
+        // The narrowing filters. Year, grade and section above are *scope* —
+        // they move the cards and the tabs with them, exactly as they do on the
+        // Dashboard. These five narrow the list alone, so the tab above the
+        // table keeps reporting the size of the view rather than the size of
+        // the last thing typed into a select.
+        $narrow = [
+            'sex' => trim((string) $request->query('sex', '')),
+            'baseline_status' => trim((string) $request->query('baseline_status', '')),
+            'attendance' => trim((string) $request->query('attendance', '')),
+            'beneficiary_status' => trim((string) $request->query('beneficiary_status', '')),
+            'endline_status' => trim((string) $request->query('endline_status', '')),
+        ];
+
+        if (! in_array($narrow['sex'], self::SEX_OPTIONS, true)) {
+            $narrow['sex'] = '';
+        }
+        if (! in_array($narrow['baseline_status'], self::STATUS_OPTIONS, true)) {
+            $narrow['baseline_status'] = '';
+        }
+        if (! in_array($narrow['attendance'], ['present', 'absent', 'unmarked'], true)) {
+            $narrow['attendance'] = '';
+        }
+        if (! in_array($narrow['beneficiary_status'], ['enrolled', 'pending'], true)) {
+            $narrow['beneficiary_status'] = '';
+        }
+        if (! in_array($narrow['endline_status'], array_merge(self::STATUS_OPTIONS, ['not_measured']), true)) {
+            $narrow['endline_status'] = '';
         }
 
-        $sectionSummary = $records
-            ->groupBy(fn ($record) => (string) ($record->section ?: 'Unassigned'))
-            ->map(function ($sectionRows, string $section): array {
-                $counts = [
-                    'severely_wasted' => 0,
-                    'wasted' => 0,
-                    'normal' => 0,
-                    'overweight' => 0,
-                ];
+        if ($narrow['sex'] !== '') {
+            $records = $records->where('sex', $narrow['sex']);
+        }
+        if ($narrow['baseline_status'] !== '') {
+            $records = $records->filter(fn ($row): bool => FeedingBeneficiarySummary::normalize(
+                (string) ($row->baseline_nutritional_status ?: $row->nutritional_status)
+            ) === $narrow['baseline_status']);
+        }
+        if ($narrow['attendance'] !== '') {
+            $records = $records->where('attendance_today', $narrow['attendance']);
+        }
+        if ($narrow['beneficiary_status'] !== '') {
+            $records = $records->where('segment', $narrow['beneficiary_status'] === 'enrolled' ? 'beneficiary' : 'pending');
+        }
+        if ($narrow['endline_status'] !== '') {
+            $records = $records->filter(function ($row) use ($narrow): bool {
+                $endline = trim((string) $row->endline_nutritional_status);
 
-                foreach ($sectionRows as $row) {
-                    $counts[$this->statusKey((string) $row->baseline_nutritional_status ?: (string) $row->nutritional_status)]++;
-                }
+                // "Not yet measured" is a real answer, not a missing one: it is
+                // the learners the endline weigh-in has still to reach.
+                return $narrow['endline_status'] === 'not_measured'
+                    ? $endline === ''
+                    : FeedingBeneficiarySummary::normalize($endline) === $narrow['endline_status'];
+            });
+        }
 
-                return [
-                    'section' => $section,
-                    'total' => count($sectionRows),
-                    'counts' => $counts,
-                ];
-            })
-            ->values();
+        $records = $records->values();
 
         return view('feedingcor-dashboard.feed-healthrec', [
             'records' => $records,
-            'statusCounts' => $statusCounts,
-            'sectionSummary' => $sectionSummary,
             'gradeLevels' => $gradeLevels,
             'sections' => $sections,
-            'filters' => ['grade_level' => $gradeFilter, 'section' => $sectionFilter],
+            'filters' => [
+                'school_year' => $yearFilter,
+                'grade_level' => $gradeFilter,
+                'section' => $sectionFilter,
+            ] + $narrow,
+            'filterOptions' => [
+                'school_years' => $schoolYears->all(),
+                'grades' => $gradeLevels->all(),
+                'sections' => $sections->all(),
+                'sexes' => self::SEX_OPTIONS,
+                'statuses' => self::STATUS_OPTIONS,
+                'attendance' => [
+                    'present' => 'Present today',
+                    'absent' => 'Absent today',
+                    'unmarked' => 'Unmarked today',
+                ],
+                'beneficiary' => [
+                    'enrolled' => 'Enrolled',
+                    'pending' => 'Pending enrollment',
+                ],
+            ],
             'totalBeforeFilters' => $totalBeforeFilters,
+            // The headline cards count the enrolled roll, not every learner on
+            // file, and they follow the same grade/section filter the table
+            // does. Same source as the Dashboard's figures, so the two tabs can
+            // never report a different programme size.
+            'beneficiarySummary' => FeedingBeneficiarySummary::forInstitution($institutionId, [
+                'school_year' => $yearFilter,
+                'grade' => $gradeFilter,
+                'section' => $sectionFilter,
+            ]),
+            'segmentCounts' => $segmentCounts,
+            'segmentView' => $segmentView,
+            'schoolYear' => $yearFilter,
         ]);
     }
 
@@ -1402,22 +1565,5 @@ class StudentHealthRecordController extends Controller
         }
 
         return 'Normal';
-    }
-
-    private function statusKey(string $status): string
-    {
-        $normalized = strtolower($status);
-
-        if (str_contains($normalized, 'severe')) {
-            return 'severely_wasted';
-        }
-        if (str_contains($normalized, 'wast') || str_contains($normalized, 'underweight')) {
-            return 'wasted';
-        }
-        if (str_contains($normalized, 'over')) {
-            return 'overweight';
-        }
-
-        return 'normal';
     }
 }

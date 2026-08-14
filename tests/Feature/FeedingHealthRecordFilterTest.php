@@ -52,6 +52,10 @@ class FeedingHealthRecordFilterTest extends TestCase
             'nutritional_status' => 'Wasted',
             'baseline_nutritional_status' => 'Wasted',
             'student_details' => ['gender' => 'Male'],
+            // Qualified by the measurement AND enrolled by the coordinator —
+            // only then is a learner a beneficiary, and only then does the
+            // page's default "All beneficiaries" view list them.
+            'feeding_enrolled_at' => now(),
         ]);
     }
 
@@ -87,10 +91,10 @@ class FeedingHealthRecordFilterTest extends TestCase
     }
 
     /** How many table rows on the page name this learner. */
-    private function rowsNaming(string $name, array $session): int
+    private function rowsNaming(string $name, array $session, string $query = ''): int
     {
         $html = $this->withSession($session)
-            ->get('/dashboard/feedingcor-health-records')
+            ->get('/dashboard/feedingcor-health-records'.$query)
             ->assertOk()
             ->getContent();
 
@@ -135,7 +139,11 @@ class FeedingHealthRecordFilterTest extends TestCase
             ]],
         ];
 
-        $this->assertSame(1, $this->rowsNaming('Solano, Rita B.', $session));
+        // A learner with no database row has no enrolment either, so the view
+        // that lists them is Pending enrollment — not "All beneficiaries",
+        // which is the enrolled roll. What must not happen is vanishing.
+        $this->assertSame(1, $this->rowsNaming('Solano, Rita B.', $session, '?view=pending'));
+        $this->assertSame(0, $this->rowsNaming('Solano, Rita B.', $session));
     }
 
     #[Test]
@@ -209,9 +217,11 @@ class FeedingHealthRecordFilterTest extends TestCase
         $response = $this->withSession($this->coordinatorSession())
             ->get('/dashboard/feedingcor-health-records');
 
+        // The column head says Grade, so the cell carries the number alone —
+        // repeating the word on every row said nothing new.
         $response->assertOk()
             ->assertSee('Grade Level')
-            ->assertSee('<td>Grade 7</td>', false)
+            ->assertSee('<td>7</td>', false)
             ->assertSee('<td>Rizal</td>', false);
     }
 
@@ -262,18 +272,22 @@ class FeedingHealthRecordFilterTest extends TestCase
     }
 
     #[Test]
-    public function summary_cards_and_consolidated_report_follow_the_filter(): void
+    public function the_count_and_the_rows_follow_the_filter(): void
     {
         $this->seedThreeSections();
 
         $response = $this->withSession($this->coordinatorSession())
             ->get('/dashboard/feedingcor-health-records?grade_level=Grade+8');
 
-        // One Grade 8 learner out of three overall.
+        // One Grade 8 learner out of three overall. Grade and section are their
+        // own columns now, so the row is read from those rather than from the
+        // combined "Grade 8 / Mabini" string.
         $response->assertOk()
             ->assertSee('Showing 1 of 3 beneficiaries')
-            ->assertSee('Grade 8 / Mabini')
-            ->assertDontSee('Grade 7 / Rizal');
+            ->assertSee('Charlie Learner')
+            ->assertSee('<td>Mabini</td>', false)
+            ->assertDontSee('Alpha Learner')
+            ->assertDontSee('Bravo Learner');
     }
 
     #[Test]

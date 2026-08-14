@@ -606,6 +606,11 @@ Route::get('/dashboard/feedingcor-sbfp-forms', [FeedingCoordinatorController::cl
 Route::get('/dashboard/feedingcor-health-records', [StudentHealthRecordController::class, 'feedingHealthRecords'])
     ->name('dashboard.feedingcor-health-records');
 
+// The Beneficiaries tab's headline cards, re-rendered when the coordinator's
+// metrics stamp moves. Same partial and same summary as the first paint.
+Route::get('/dashboard/feedingcor-health-records/cards', [FeedingCoordinatorController::class, 'beneficiaryCards'])
+    ->name('dashboard.feedingcor-health-records.cards');
+
 Route::post('/dashboard/class-adviser/health-records/baseline', [StudentHealthRecordController::class, 'storeBaseline'])
     ->name('class-adviser.health-records.baseline.store');
 

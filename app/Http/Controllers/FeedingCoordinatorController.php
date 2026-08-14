@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\FeedingAttendance;
 use App\Models\StudentHealthRecord;
 use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingNutritionProgress;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
@@ -340,38 +341,19 @@ class FeedingCoordinatorController extends Controller
         return [$grade !== '' ? $grade : 'Unassigned', $sectionName];
     }
 
+    /**
+     * Both of these live in FeedingBeneficiarySummary, which the Beneficiaries
+     * tab reads too. One definition, or the two tabs would eventually disagree
+     * about who the programme feeds.
+     */
     private function normalizeStatus(string $status): string
     {
-        $normalized = strtolower(trim($status));
-        if ($normalized === '') {
-            return '';
-        }
-        if (str_contains($normalized, 'severe')) {
-            return 'Severely Wasted';
-        }
-        if (str_contains($normalized, 'wast')) {
-            return 'Wasted';
-        }
-        if (str_contains($normalized, 'underweight')) {
-            return 'Underweight';
-        }
-        if (str_contains($normalized, 'over')) {
-            return 'Overweight';
-        }
-        if (str_contains($normalized, 'normal')) {
-            return 'Normal';
-        }
-
-        return $status;
+        return FeedingBeneficiarySummary::normalize($status);
     }
 
     private function isQualifiedForFeeding(string $status): bool
     {
-        $normalized = strtolower($status);
-
-        return str_contains($normalized, 'wast')
-            || str_contains($normalized, 'severe')
-            || str_contains($normalized, 'underweight');
+        return FeedingBeneficiarySummary::qualifies($status);
     }
 
     public function dashboard(Request $request): View
@@ -410,6 +392,54 @@ class FeedingCoordinatorController extends Controller
                 'nutrition' => view('feedingcor-dashboard.partials.nutrition-status', $metrics)->render(),
                 'risk' => view('feedingcor-dashboard.partials.attendance-risk', $metrics)->render(),
                 'progress' => view('feedingcor-dashboard.partials.nutrition-progress', $metrics)->render(),
+            ],
+        ]);
+    }
+
+    /**
+     * The Beneficiaries tab's headline cards, re-read on demand.
+     *
+     * It renders the same Blade partial the first paint used and reads the same
+     * FeedingBeneficiarySummary, so a live card can never drift from a reloaded
+     * one — and it forwards the tab's own grade/section filter, so a refresh
+     * redraws the filtered view rather than replacing it with the whole school.
+     */
+    public function beneficiaryCards(Request $request): JsonResponse
+    {
+        if (! $this->isCoordinator($request)) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+
+        // Only the scope filters reach the cards — the same three the page
+        // scopes them by, so a live refresh redraws the view on screen.
+        $summary = FeedingBeneficiarySummary::forInstitution($institutionId, [
+            'school_year' => trim((string) $request->query('school_year', '')) ?: null,
+            'grade' => trim((string) $request->query('grade_level', '')),
+            'section' => trim((string) $request->query('section', '')),
+        ]);
+
+        // The tabs read the very figures the cards do, so "All beneficiaries"
+        // and "At risk" can never disagree with the cards above them.
+        $segmentCounts = [
+            'all' => $summary['beneficiaries'],
+            'pending' => $summary['pending'],
+            'at_risk' => $summary['at_risk'],
+        ];
+
+        return response()->json([
+            'stamp' => $this->metricsStamp($institutionId),
+            'html' => [
+                'cards' => view('feedingcor-dashboard.partials.beneficiary-cards', [
+                    'beneficiarySummary' => $summary,
+                ])->render(),
+                'tabs' => view('feedingcor-dashboard.partials.beneficiary-tabs', [
+                    'segmentCounts' => $segmentCounts,
+                    'segmentView' => in_array($request->query('view'), ['all', 'pending', 'at_risk'], true)
+                        ? (string) $request->query('view')
+                        : 'all',
+                ])->render(),
             ],
         ]);
     }
@@ -652,17 +682,11 @@ class FeedingCoordinatorController extends Controller
      */
     private function panelStatus(StudentHealthRecord $record): string
     {
-        $status = $this->normalizeStatus((string) ($record->baseline_nutritional_status ?: $record->nutritional_status));
-
         // Every status lands on exactly one row of nutritionScale(), including
         // ones the scale does not name — a learner who fell through would make
-        // the breakdown stop summing to the beneficiary total.
-        return match ($status) {
-            'Severely Wasted' => 'Severely Wasted',
-            'Wasted', 'Underweight' => 'Wasted',
-            'Overweight', 'Obese' => FeedingNutritionProgress::ABOVE_NORMAL,
-            default => 'Normal',
-        };
+        // the breakdown stop summing to the beneficiary total. The folding is
+        // shared with the Beneficiaries tab so both report the same statuses.
+        return FeedingBeneficiarySummary::statusOf($record);
     }
 
     /**
@@ -865,23 +889,7 @@ class FeedingCoordinatorController extends Controller
      */
     private function marksByRecord(Collection $beneficiaries): Collection
     {
-        if ($beneficiaries->isEmpty() || ! SchemaCache::hasTable('feeding_attendances')) {
-            return collect();
-        }
-
-        $hasReviewColumn = SchemaCache::hasColumn('feeding_attendances', 'needs_review');
-
-        return FeedingAttendance::query()
-            ->whereIn('student_health_record_id', $beneficiaries->pluck('id'))
-            ->whereDate('session_date', '<=', now()->toDateString())
-            ->orderBy('session_date')
-            ->get(array_merge(
-                ['student_health_record_id', 'session_date', 'is_present'],
-                $hasReviewColumn ? ['needs_review'] : []
-            ))
-            ->groupBy('student_health_record_id')
-            // Before the review migration every mark is confirmed by definition.
-            ->map(fn ($rows) => $rows->map(fn ($row) => ($row->needs_review ?? false) ? null : $row->is_present)->all());
+        return FeedingBeneficiarySummary::marksByRecord($beneficiaries);
     }
 
     /**
