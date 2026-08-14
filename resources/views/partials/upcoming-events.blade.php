@@ -53,36 +53,12 @@
         <span class="evt-board-title">Upcoming Events</span>
         <span class="evt-board-sub">scheduled by School Nurse</span>
         @if ($canCreateEvent)
-            <button type="button" class="evt-add-toggle" onclick="document.getElementById('evtAddForm').classList.toggle('open')">+ Add Event</button>
+            <button type="button" class="evt-add-toggle" data-bmodal-open="evtAddModal">+ Add Event</button>
         @endif
     </div>
 
     @if (session('event_success'))
         <div class="evt-flash">{{ session('event_success') }}</div>
-    @endif
-
-    @if ($canCreateEvent)
-        <div class="evt-add-form" id="evtAddForm">
-            <form method="POST" action="{{ route('events.store') }}">
-                @csrf
-                <input type="text" name="title" placeholder="Event title" maxlength="150" required value="{{ old('title') }}">
-                <div class="evt-add-grid">
-                    <input type="date" name="event_date" required value="{{ old('event_date') }}">
-                    <select name="category" required>
-                        @foreach (Event::CATEGORIES as $key => $label)
-                            <option value="{{ $key }}" @selected(old('category') === $key)>{{ $label }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <textarea name="description" placeholder="Description (optional)" maxlength="1000">{{ old('description') }}</textarea>
-                @error('title') <div style="color:#b91c1c;font-size:.74rem;margin-bottom:8px;">{{ $message }}</div> @enderror
-                @error('event_date') <div style="color:#b91c1c;font-size:.74rem;margin-bottom:8px;">{{ $message }}</div> @enderror
-                <div class="evt-form-actions">
-                    <button type="submit" class="evt-btn-primary">Schedule</button>
-                    <button type="button" class="evt-btn-ghost" onclick="document.getElementById('evtAddForm').classList.remove('open')">Cancel</button>
-                </div>
-            </form>
-        </div>
     @endif
 
     @if ($upcomingEvents->isEmpty())
@@ -115,3 +91,75 @@
         </div>
     @endif
 </div>
+
+@if ($canCreateEvent)
+    @include('partials.board-modal-assets')
+
+    {{-- Outside .evt-board on purpose: the backdrop is position:fixed and
+         must blur the whole dashboard, not sit inside one card. --}}
+    <div class="bmodal" id="evtAddModal" role="dialog" aria-modal="true" aria-labelledby="evtAddModalTitle"
+         @if ($errors->event->any()) data-bmodal-autoopen @endif>
+        <div class="bmodal-panel">
+            <form method="POST" action="{{ route('events.store') }}">
+                @csrf
+                <div class="bmodal-head">
+                    <div>
+                        <div class="bmodal-eyebrow">Upcoming Events</div>
+                        <div class="bmodal-title" id="evtAddModalTitle">Schedule an event</div>
+                        <div class="bmodal-sub">Shown on every staff dashboard at {{ session('active_school_name', 'this school') }}.</div>
+                    </div>
+                    <button type="button" class="bmodal-close" data-bmodal-close aria-label="Close">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+
+                <div class="bmodal-body">
+                    <div class="bmodal-field">
+                        <label for="evtTitle">Event title</label>
+                        <input type="text" id="evtTitle" name="title" maxlength="150" required
+                               placeholder="e.g. Grade 7 deworming day"
+                               value="{{ old('title') }}">
+                        @if ($errors->event->has('title'))
+                            <div class="bmodal-error">{{ $errors->event->first('title') }}</div>
+                        @endif
+                    </div>
+
+                    <div class="bmodal-field bmodal-grid">
+                        <div>
+                            <label for="evtDate">Date</label>
+                            <input type="date" id="evtDate" name="event_date" required value="{{ old('event_date') }}">
+                            @if ($errors->event->has('event_date'))
+                                <div class="bmodal-error">{{ $errors->event->first('event_date') }}</div>
+                            @endif
+                        </div>
+                        <div>
+                            <label for="evtCategory">Category</label>
+                            <select id="evtCategory" name="category" required>
+                                @foreach (Event::CATEGORIES as $key => $label)
+                                    <option value="{{ $key }}" @selected(old('category') === $key)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                            @if ($errors->event->has('category'))
+                                <div class="bmodal-error">{{ $errors->event->first('category') }}</div>
+                            @endif
+                        </div>
+                    </div>
+
+                    <div class="bmodal-field">
+                        <label for="evtDescription">Description <span style="text-transform:none;letter-spacing:0;font-weight:500">(optional)</span></label>
+                        <textarea id="evtDescription" name="description" maxlength="1000"
+                                  placeholder="Anything staff should know in advance...">{{ old('description') }}</textarea>
+                        @if ($errors->event->has('description'))
+                            <div class="bmodal-error">{{ $errors->event->first('description') }}</div>
+                        @endif
+                    </div>
+                </div>
+
+                <div class="bmodal-foot">
+                    <button type="button" class="bmodal-btn bmodal-btn-ghost" data-bmodal-close>Cancel</button>
+                    <button type="submit" class="bmodal-btn bmodal-btn-primary">Schedule event</button>
+                </div>
+            </form>
+        </div>
+    </div>
+@endif

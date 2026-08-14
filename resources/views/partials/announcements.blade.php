@@ -6,9 +6,16 @@
 --}}
 @php
     use App\Models\Announcement;
-    $canPostAnnouncement = Announcement::canPost(session('active_role'));
+    $announcementRole = (string) session('active_role', '');
+    $canPostAnnouncement = Announcement::canPost($announcementRole);
+    // Only what this role was addressed to. An announcement with no audience
+    // goes to everyone; the author always sees their own.
     $announcements = \App\Support\SchemaCache::hasTable('announcements')
-        ? Announcement::forActiveInstitution()->latest()->limit(6)->get()
+        ? Announcement::forActiveInstitution()
+            ->visibleToRole($announcementRole)
+            ->latest()
+            ->limit(6)
+            ->get()
         : collect();
 @endphp
 {{--
@@ -45,6 +52,20 @@
     .ann-item-delete-btn { background: none; border: none; color: #b91c1c; font-size: .7rem; font-weight: 600; cursor: pointer; font-family: inherit; padding: 2px 6px; }
     .ann-item-delete-btn:hover { text-decoration: underline; }
     .ann-empty { padding: 22px 18px; text-align: center; color: var(--ann-empty, #94a3b8); font-size: .8rem; }
+
+    /* Priority. Urgent takes the system's critical coral, Important its
+       monitoring amber; a normal notice shows no chip at all, so the two
+       that matter are the only coloured things in the list. Never colour
+       alone — each chip carries its word. */
+    .ann-pill { font-size: .6rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; flex-shrink: 0; }
+    .ann-pill-urgent { background: #FCECEC; color: #b91c1c; box-shadow: inset 0 0 0 1px #F2C9C9; }
+    .ann-pill-important { background: #FDF4E2; color: #8A5A06; box-shadow: inset 0 0 0 1px #EFDCB2; }
+    /* An urgent notice also gets a left rule, so it survives greyscale. */
+    .ann-item.is-urgent { border-left: 3px solid #D95C5C; }
+    .ann-item.is-important { border-left: 3px solid #F2B84B; }
+    .ann-item-audience { font-size: .68rem; color: var(--ann-sub, #6B7C72); }
+
+    .ann-aud-note { font-size: .72rem; color: #6B7C72; margin-top: 6px; }
 </style>
 
 <div class="ann-board">
@@ -53,7 +74,7 @@
         <span class="ann-board-title">Announcements</span>
         <span class="ann-board-sub">from the School Nurse</span>
         @if ($canPostAnnouncement)
-            <button type="button" class="ann-post-toggle" onclick="document.getElementById('annPostForm').classList.toggle('open')">+ Post Announcement</button>
+            <button type="button" class="ann-post-toggle" data-bmodal-open="annPostModal">+ Post Announcement</button>
         @endif
     </div>
 
@@ -61,35 +82,26 @@
         <div class="ann-flash">{{ session('announcement_success') }}</div>
     @endif
 
-    @if ($canPostAnnouncement)
-        <div class="ann-post-form" id="annPostForm">
-            <form method="POST" action="{{ route('announcements.store') }}">
-                @csrf
-                <input type="text" name="title" placeholder="Announcement title" maxlength="150" required value="{{ old('title') }}">
-                <textarea name="body" placeholder="Write the announcement..." maxlength="2000" required>{{ old('body') }}</textarea>
-                @error('title') <div style="color:#b91c1c;font-size:.74rem;margin-bottom:8px;">{{ $message }}</div> @enderror
-                @error('body') <div style="color:#b91c1c;font-size:.74rem;margin-bottom:8px;">{{ $message }}</div> @enderror
-                <div class="ann-form-actions">
-                    <button type="submit" class="ann-btn-primary">Post</button>
-                    <button type="button" class="ann-btn-ghost" onclick="document.getElementById('annPostForm').classList.remove('open')">Cancel</button>
-                </div>
-            </form>
-        </div>
-    @endif
-
     @if ($announcements->isEmpty())
         <div class="ann-empty">No announcements yet.</div>
     @else
         <div class="ann-list">
             @foreach ($announcements as $item)
-                <div class="ann-item">
+                <div class="ann-item {{ $item->priority === Announcement::PRIORITY_URGENT ? 'is-urgent' : ($item->priority === Announcement::PRIORITY_IMPORTANT ? 'is-important' : '') }}">
                     <div class="ann-item-top">
+                        @if ($item->isFlagged())
+                            <span class="ann-pill ann-pill-{{ $item->priority }}">{{ $item->priorityLabel() }}</span>
+                        @endif
                         <span class="ann-item-title">{{ $item->title }}</span>
                         <span class="ann-item-time">{{ $item->created_at->diffForHumans() }}</span>
                     </div>
                     <div class="ann-item-body">{{ $item->body }}</div>
                     <div class="ann-item-meta">
                         <span class="ann-item-by">&mdash; {{ $item->posted_by_name }}</span>
+                        @if ($canPostAnnouncement)
+                            {{-- Only the poster needs to see who it went to. --}}
+                            <span class="ann-item-audience">&middot; To: {{ $item->audienceLabel() }}</span>
+                        @endif
                         @if ($canPostAnnouncement)
                             <form method="POST" action="{{ route('announcements.destroy', $item) }}" class="ann-item-delete-form" onsubmit="return confirm('Remove this announcement?');">
                                 @csrf
@@ -102,3 +114,88 @@
         </div>
     @endif
 </div>
+
+@if ($canPostAnnouncement)
+    @include('partials.board-modal-assets')
+
+    {{-- Outside .ann-board on purpose: the backdrop is position:fixed and
+         must blur the whole dashboard, not sit inside one card. --}}
+    <div class="bmodal" id="annPostModal" role="dialog" aria-modal="true" aria-labelledby="annPostModalTitle"
+         @if ($errors->announcement->any()) data-bmodal-autoopen @endif>
+        <div class="bmodal-panel">
+            <form method="POST" action="{{ route('announcements.store') }}">
+                @csrf
+                <div class="bmodal-head">
+                    <div>
+                        <div class="bmodal-eyebrow">Announcements</div>
+                        <div class="bmodal-title" id="annPostModalTitle">Post an announcement</div>
+                        <div class="bmodal-sub">Visible on every staff dashboard at {{ session('active_school_name', 'this school') }}.</div>
+                    </div>
+                    <button type="button" class="bmodal-close" data-bmodal-close aria-label="Close">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+
+                <div class="bmodal-body">
+                    <div class="bmodal-field">
+                        <label for="annTitle">Title</label>
+                        <input type="text" id="annTitle" name="title" maxlength="150" required
+                               placeholder="e.g. Deworming schedule this Friday"
+                               value="{{ old('title') }}">
+                        @if ($errors->announcement->has('title'))
+                            <div class="bmodal-error">{{ $errors->announcement->first('title') }}</div>
+                        @endif
+                    </div>
+
+                    <div class="bmodal-field">
+                        <label for="annPriority">Priority</label>
+                        <select id="annPriority" name="priority" required>
+                            @foreach (Announcement::PRIORITIES as $key => $label)
+                                <option value="{{ $key }}" @selected(old('priority', Announcement::PRIORITY_NORMAL) === $key)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                        @if ($errors->announcement->has('priority'))
+                            <div class="bmodal-error">{{ $errors->announcement->first('priority') }}</div>
+                        @endif
+                    </div>
+
+                    <div class="bmodal-field">
+                        <label for="annBody">Announcement</label>
+                        <textarea id="annBody" name="body" maxlength="2000" required
+                                  placeholder="Write the announcement...">{{ old('body') }}</textarea>
+                        @if ($errors->announcement->has('body'))
+                            <div class="bmodal-error">{{ $errors->announcement->first('body') }}</div>
+                        @endif
+                    </div>
+
+                    <div class="bmodal-field">
+                        <label for="annAudience">Audience</label>
+                        @php
+                            // A single-select posts into audience[], because the
+                            // column stores a list — addressing one announcement
+                            // to several roles stays possible without a schema
+                            // change if this ever grows a multi-picker.
+                            $chosenAudience = (array) old('audience', []);
+                            $chosenAudience = $chosenAudience[0] ?? '';
+                        @endphp
+                        <select id="annAudience" name="audience[]">
+                            <option value="" @selected($chosenAudience === '')>Everyone</option>
+                            @foreach (Announcement::AUDIENCES as $key => $label)
+                                <option value="{{ $key }}" @selected($chosenAudience === $key)>{{ $label }} only</option>
+                            @endforeach
+                        </select>
+                        <div class="ann-aud-note">Everyone means all staff at this school.</div>
+                        @if ($errors->announcement->has('audience') || $errors->announcement->has('audience.0'))
+                            <div class="bmodal-error">{{ $errors->announcement->first('audience') ?: $errors->announcement->first('audience.0') }}</div>
+                        @endif
+                    </div>
+                </div>
+
+                <div class="bmodal-foot">
+                    <button type="button" class="bmodal-btn bmodal-btn-ghost" data-bmodal-close>Cancel</button>
+                    <button type="submit" class="bmodal-btn bmodal-btn-primary">Post announcement</button>
+                </div>
+            </form>
+        </div>
+    </div>
+@endif

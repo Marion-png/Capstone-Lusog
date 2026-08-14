@@ -203,38 +203,53 @@
                     <div class="dsc-icon dsc-icon-alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
                     <div><b>{{ $ov['needs_followup'] }}</b><span>Needs Follow-up</span><small>Requires medical attention</small></div>
                 </article>
-                {{-- Learners whose assessment reports a chronic or
-                     life-threatening condition. Derived every read by
-                     App\Support\PriorityHealthRule — never stored, never
-                     toggled by hand. --}}
-                <article class="card dashboard-stat-card dashboard-priority">
-                    <div class="dsc-icon dsc-icon-priority"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div>
-                    <div><b>{{ $ov['priority'] }}</b><span>Priority</span><small>Chronic or high-risk condition</small></div>
-                </article>
             </div>
 
             <div class="dashboard-panels-two" id="needs-attention">
+                {{-- Learners whose health assessment reports a chronic or
+                     life-threatening condition. The list is derived on every
+                     read by App\Support\PriorityHealthRule — correcting an
+                     assessment corrects this table. --}}
                 <article class="card section">
                     <div class="panel-head">
-                        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;color:#d97706;vertical-align:-2px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Needs Attention</h3>
+                        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;color:#b91c1c;vertical-align:-2px;"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg> Priority Students</h3>
                         <a href="{{ route('dashboard.class-adviser', ['tab' => 'saved']) }}" class="panel-head-link">View all students</a>
                     </div>
-                    @forelse ($ov['needs_attention'] as $item)
-                        <div class="na-row">
-                            <div class="na-avatar">{{ strtoupper(substr($item['name'], 0, 2)) }}</div>
-                            <div class="na-body">
-                                <div class="na-name">{{ $item['name'] }}</div>
-                                <div class="na-meta">LRN {{ $item['lrn'] }} &middot; {{ $item['section'] }}</div>
-                                <div class="na-badges">
-                                    @foreach ($item['badges'] as $badge)
-                                        <span class="na-badge na-badge-{{ $badge['tone'] }}">{{ $badge['label'] }}</span>
+
+                    @if ($ov['priority_students']->isEmpty())
+                        <p class="muted" style="padding:8px 0;font-size:.82rem;">No learners are flagged as priority right now.</p>
+                    @else
+                        <div class="ps-scroll">
+                            <table class="ps-table">
+                                <thead>
+                                    <tr>
+                                        <th>Student</th>
+                                        <th>Section</th>
+                                        <th>Condition</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($ov['priority_students'] as $item)
+                                        <tr>
+                                            <td>
+                                                <div class="ps-name">{{ $item['name'] }}</div>
+                                                <div class="ps-lrn">LRN {{ $item['lrn'] }}</div>
+                                            </td>
+                                            <td class="ps-section">{{ $item['section'] }}</td>
+                                            <td>
+                                                <div class="ps-conditions">
+                                                    @foreach ($item['reasons'] as $reason)
+                                                        <span class="ps-chip">{{ $reason }}</span>
+                                                    @endforeach
+                                                </div>
+                                            </td>
+                                        </tr>
                                     @endforeach
-                                </div>
-                            </div>
+                                </tbody>
+                            </table>
                         </div>
-                    @empty
-                        <p class="muted" style="padding:8px 0;font-size:.82rem;">Nothing needs attention right now.</p>
-                    @endforelse
+                        <div class="ps-foot">{{ $ov['priority_students']->count() }} {{ Str::plural('learner', $ov['priority_students']->count()) }} needing advance care planning.</div>
+                    @endif
                 </article>
 
                 <article class="card section">

@@ -66,9 +66,11 @@ class AnnouncementTest extends TestCase
     #[Test]
     public function announcement_requires_title_and_body(): void
     {
+        // Errors land in the 'announcement' bag so the announcement dialog
+        // re-opens without also re-opening the event one beside it.
         $this->withSession($this->sessionFor('school_nurse'))
             ->post(route('announcements.store'), [])
-            ->assertSessionHasErrors(['title', 'body']);
+            ->assertSessionHasErrors(['title', 'body'], null, 'announcement');
 
         $this->assertSame(0, Announcement::count());
     }

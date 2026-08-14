@@ -12,11 +12,11 @@ use Tests\TestCase;
 
 /**
  * A learner with a chronic or life-threatening condition is flagged
- * "Priority" on the Class Adviser dashboard.
+ * "Priority" and listed in the Class Adviser's Priority Students table.
  *
  * The flag is derived from the adviser's own health assessment on every
  * read — never stored, never toggled by hand. Correcting the assessment
- * corrects the flag, so there is no second copy of the truth to drift.
+ * corrects the table, so there is no second copy of the truth to drift.
  *
  * It is deliberately NOT the feeding programme's at-risk flag: that one
  * comes from attendance and means something else. These tests pin both the
@@ -47,7 +47,7 @@ class PriorityHealthFlagTest extends TestCase
         ];
     }
 
-    /** A learner on this adviser's roster, with an assessment. */
+    /** A learner on this adviser's roster, with an optional assessment. */
     private function learner(string $lrn, string $name, array $assessmentFlags = []): StudentHealthRecord
     {
         $record = StudentHealthRecord::create([
@@ -84,17 +84,41 @@ class PriorityHealthFlagTest extends TestCase
         ];
     }
 
+    private function dashboard(array $roster): string
+    {
+        return $this->withSession($this->adviserSession($roster))
+            ->get(route('dashboard.class-adviser'))
+            ->assertOk()
+            ->getContent();
+    }
+
+    /**
+     * Just the Priority Students panel, so assertions cannot match elsewhere.
+     *
+     * Anchored on the heading markup, not the words: the page also inlines a
+     * stylesheet whose comment reads "Priority Students table", and a plain
+     * search finds that first.
+     */
+    private function priorityTable(string $html): string
+    {
+        $start = strpos($html, 'Priority Students</h3>');
+        $this->assertNotFalse($start, 'The Priority Students panel is missing.');
+
+        $end = strpos($html, 'Recent Activity</h3>', $start);
+
+        return substr($html, $start, $end === false ? null : $end - $start);
+    }
+
     #[Test]
     public function asthma_alone_makes_a_learner_priority(): void
     {
         $this->learner('100000000001', 'Cruz, Juan', ['med_asthma' => true]);
 
-        $html = $this->withSession($this->adviserSession([
-            $this->rosterRow('100000000001', 'Juan', 'Cruz'),
-        ]))->get(route('dashboard.class-adviser'))->assertOk()->getContent();
+        $html = $this->dashboard([$this->rosterRow('100000000001', 'Juan', 'Cruz')]);
 
-        $this->assertStringContainsString('Priority', $html);
-        $this->assertStringContainsString('Priority — Asthma', $html);
+        $this->assertStringContainsString('Priority Students', $html);
+        $this->assertStringContainsString('Cruz, Juan', $html);
+        $this->assertStringContainsString('<span class="ps-chip">Asthma</span>', $html);
     }
 
     #[Test]
@@ -115,12 +139,10 @@ class PriorityHealthFlagTest extends TestCase
     {
         $this->learner('100000000002', 'Reyes, Ana', ['med_asthma' => false, 'med_diabetes' => false]);
 
-        $html = $this->withSession($this->adviserSession([
-            $this->rosterRow('100000000002', 'Ana', 'Reyes'),
-        ]))->get(route('dashboard.class-adviser'))->assertOk()->getContent();
+        $html = $this->dashboard([$this->rosterRow('100000000002', 'Ana', 'Reyes')]);
 
-        $this->assertStringNotContainsString('Priority — ', $html);
-        $this->assertStringContainsString('<b>0</b><span>Priority</span>', $html);
+        $this->assertStringContainsString('0 Priority</span>', $html, 'The hero strip must show the priority count.');
+        $this->assertStringContainsString('No learners are flagged as priority right now.', $html);
     }
 
     /** An unknown health profile is not the same as a clear one. */
@@ -129,27 +151,24 @@ class PriorityHealthFlagTest extends TestCase
     {
         $this->learner('100000000003', 'Santos, Mia');
 
-        $html = $this->withSession($this->adviserSession([
-            $this->rosterRow('100000000003', 'Mia', 'Santos'),
-        ]))->get(route('dashboard.class-adviser'))->assertOk()->getContent();
+        $html = $this->dashboard([$this->rosterRow('100000000003', 'Mia', 'Santos')]);
 
-        $this->assertStringContainsString('<b>0</b><span>Priority</span>', $html);
+        $this->assertStringContainsString('0 Priority</span>', $html, 'The hero strip must show the priority count.');
         $this->assertFalse(PriorityHealthRule::applies(null));
     }
 
     #[Test]
-    public function several_conditions_are_all_named_on_the_badge(): void
+    public function every_condition_gets_its_own_chip_in_the_table(): void
     {
         $this->learner('100000000004', 'Lim, Paolo', [
             'med_asthma' => true,
             'med_diabetes' => true,
         ]);
 
-        $html = $this->withSession($this->adviserSession([
-            $this->rosterRow('100000000004', 'Paolo', 'Lim'),
-        ]))->get(route('dashboard.class-adviser'))->assertOk()->getContent();
+        $html = $this->dashboard([$this->rosterRow('100000000004', 'Paolo', 'Lim')]);
 
-        $this->assertStringContainsString('Priority — Asthma, Diabetes', $html);
+        $this->assertStringContainsString('<span class="ps-chip">Asthma</span>', $html);
+        $this->assertStringContainsString('<span class="ps-chip">Diabetes</span>', $html);
     }
 
     #[Test]
@@ -159,13 +178,13 @@ class PriorityHealthFlagTest extends TestCase
         $this->learner('100000000006', 'B, Two', ['med_heart_condition' => true]);
         $this->learner('100000000007', 'C, Three', ['med_asthma' => false]);
 
-        $html = $this->withSession($this->adviserSession([
+        $html = $this->dashboard([
             $this->rosterRow('100000000005', 'One', 'A'),
             $this->rosterRow('100000000006', 'Two', 'B'),
             $this->rosterRow('100000000007', 'Three', 'C'),
-        ]))->get(route('dashboard.class-adviser'))->assertOk()->getContent();
+        ]);
 
-        $this->assertStringContainsString('<b>2</b><span>Priority</span>', $html);
+        $this->assertStringContainsString('2 Priority</span>', $html, 'The hero strip must show the priority count.');
     }
 
     /** Priority is a medical flag; at-risk is an attendance flag. */
@@ -175,13 +194,12 @@ class PriorityHealthFlagTest extends TestCase
         $record = $this->learner('100000000008', 'Dela Cruz, Nena');
         $record->update(['is_at_risk' => true, 'nutritional_status' => 'Severely Wasted']);
 
-        $html = $this->withSession($this->adviserSession([
-            $this->rosterRow('100000000008', 'Nena', 'Dela Cruz'),
-        ]))->get(route('dashboard.class-adviser'))->assertOk()->getContent();
+        $html = $this->dashboard([$this->rosterRow('100000000008', 'Nena', 'Dela Cruz')]);
 
-        // Flagged at-risk, but not Priority.
-        $this->assertStringContainsString('Flagged at-risk', $html);
-        $this->assertStringContainsString('<b>0</b><span>Priority</span>', $html);
+        // At-risk by attendance counts toward follow-up but never puts a
+        // learner in the Priority table.
+        $this->assertStringContainsString('0 Priority</span>', $html, 'The hero strip must show the priority count.');
+        $this->assertStringContainsString('No learners are flagged as priority right now.', $html);
     }
 
     /** Correcting the assessment clears the flag — nothing is stored. */
@@ -189,58 +207,73 @@ class PriorityHealthFlagTest extends TestCase
     public function the_flag_follows_a_corrected_assessment(): void
     {
         $record = $this->learner('100000000009', 'Tan, Rico', ['med_asthma' => true]);
-        $session = $this->adviserSession([$this->rosterRow('100000000009', 'Rico', 'Tan')]);
+        $roster = [$this->rosterRow('100000000009', 'Rico', 'Tan')];
 
-        $this->assertStringContainsString(
-            'Priority — Asthma',
-            $this->withSession($session)->get(route('dashboard.class-adviser'))->getContent()
-        );
+        $this->assertStringContainsString('<span class="ps-chip">Asthma</span>', $this->dashboard($roster));
 
         HealthAssessment::where('student_health_record_id', $record->id)->first()->update(['med_asthma' => false]);
 
-        $this->assertStringNotContainsString(
-            'Priority — Asthma',
-            $this->withSession($session)->get(route('dashboard.class-adviser'))->getContent()
+        $this->assertStringContainsString(
+            'No learners are flagged as priority right now.',
+            $this->dashboard($roster)
         );
     }
 
-    /** Priority cases sort above paperwork-only cases in the panel. */
+    /** The table lists priority learners only — nobody else. */
     #[Test]
-    public function priority_learners_lead_the_needs_attention_panel(): void
+    public function only_priority_learners_appear_in_the_table(): void
     {
-        // No assessment at all -> "Health profile not started" only.
+        // No assessment at all: needs paperwork, but is not a medical priority.
         $this->learner('100000000010', 'Zulu, Paper');
         $this->learner('100000000011', 'Alpha, Medical', ['med_asthma' => true]);
 
-        $html = $this->withSession($this->adviserSession([
+        $table = $this->priorityTable($this->dashboard([
             $this->rosterRow('100000000010', 'Paper', 'Zulu'),
             $this->rosterRow('100000000011', 'Medical', 'Alpha'),
-        ]))->get(route('dashboard.class-adviser'))->assertOk()->getContent();
+        ]));
 
-        $priorityAt = strpos($html, 'na-badge-priority');
-        $paperAt = strpos($html, 'Health profile not started');
+        $this->assertStringContainsString('Alpha, Medical', $table);
+        $this->assertStringNotContainsString('Zulu, Paper', $table);
+    }
 
-        $this->assertNotFalse($priorityAt);
-        $this->assertNotFalse($paperAt);
-        $this->assertLessThan($paperAt, $priorityAt, 'A Priority learner must sort above a paperwork-only one.');
+    /** A learner with more conditions leads the table. */
+    #[Test]
+    public function the_most_affected_learner_is_listed_first(): void
+    {
+        $this->learner('100000000013', 'One, Single', ['med_asthma' => true]);
+        $this->learner('100000000014', 'Many, Multiple', [
+            'med_asthma' => true,
+            'med_diabetes' => true,
+            'med_heart_condition' => true,
+        ]);
+
+        $table = $this->priorityTable($this->dashboard([
+            $this->rosterRow('100000000013', 'Single', 'One'),
+            $this->rosterRow('100000000014', 'Multiple', 'Many'),
+        ]));
+
+        $this->assertLessThan(
+            strpos($table, 'One, Single'),
+            strpos($table, 'Many, Multiple'),
+            'The learner with more conditions must be listed first.'
+        );
     }
 
     /**
-     * Priority renders as a badge pill in the same row as the others, and
-     * the badge names the conditions — so the flag is never colour alone.
+     * The table names each condition and the learner's LRN and section, so
+     * it is readable without colour and identifies who is meant.
      */
     #[Test]
-    public function priority_renders_as_a_badge_naming_the_conditions(): void
+    public function the_table_names_the_condition_lrn_and_section(): void
     {
         $this->learner('100000000012', 'Ong, Kim', ['med_tuberculosis' => true]);
 
-        $html = $this->withSession($this->adviserSession([
+        $table = $this->priorityTable($this->dashboard([
             $this->rosterRow('100000000012', 'Kim', 'Ong'),
-        ]))->get(route('dashboard.class-adviser'))->assertOk()->getContent();
+        ]));
 
-        $this->assertStringContainsString(
-            '<span class="na-badge na-badge-priority">Priority — Tuberculosis</span>',
-            $html
-        );
+        $this->assertStringContainsString('<span class="ps-chip">Tuberculosis</span>', $table);
+        $this->assertStringContainsString('LRN 100000000012', $table);
+        $this->assertStringContainsString('Grade 10-Dalton', $table);
     }
 }

@@ -69,9 +69,10 @@ class EventTest extends TestCase
     #[Test]
     public function event_requires_title_date_and_category(): void
     {
+        // Errors land in the 'event' bag — see AnnouncementTest for why.
         $this->withSession($this->sessionFor('school_nurse'))
             ->post(route('events.store'), [])
-            ->assertSessionHasErrors(['title', 'event_date', 'category']);
+            ->assertSessionHasErrors(['title', 'event_date', 'category'], null, 'event');
 
         $this->assertSame(0, Event::count());
     }

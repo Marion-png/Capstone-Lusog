@@ -18,7 +18,8 @@ class EventController extends Controller
 
         abort_unless(Event::canCreate($role), 403, 'Only the School Nurse may schedule events.');
 
-        $validated = $request->validate([
+        // Named bag — see the note in AnnouncementController::store().
+        $validated = $request->validateWithBag('event', [
             'title' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:1000'],
             'event_date' => ['required', 'date'],
