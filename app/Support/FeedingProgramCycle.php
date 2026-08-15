@@ -52,6 +52,19 @@ class FeedingProgramCycle
         return max(0, self::DURATION_DAYS - $this->day());
     }
 
+    /**
+     * Whether the cycle has run its full length.
+     *
+     * An endline measurement is the closing half of a baseline-to-endline
+     * comparison, so it is only meaningful once the programme has actually
+     * finished. A cycle nobody has started has not finished either — day()
+     * returns 0 there, so this stays false.
+     */
+    public function isComplete(): bool
+    {
+        return $this->hasStarted() && $this->day() >= self::DURATION_DAYS;
+    }
+
     /** Share of the cycle elapsed, 0-100, for the progress bar. */
     public function percent(): float
     {

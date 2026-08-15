@@ -83,7 +83,10 @@
         return;
     }
 
-    const studentsUrl = (lrn) => `{{ route('dashboard.class-adviser') }}?tab=saved&q=${encodeURIComponent(lrn)}`;
+    // A search result opens that learner's profile directly. It used to
+    // land on the My Students list filtered to their LRN, which meant
+    // picking a named student and then having to click them again.
+    const studentsUrl = (lrn) => `{{ url('dashboard/class-adviser/students') }}/${encodeURIComponent(lrn)}`;
 
     const render = (query) => {
         const term = query.trim().toLowerCase();

@@ -830,3 +830,18 @@ tbody tr:hover td{background:#f3fbf6}
 .fs-progress-bar.is-empty span{background:#cbd9d1}
 
 .fs-badge-stack{display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+
+/* ── Endline measurement (edit form) ───────────────────────────────────
+   The closing half of the baseline-to-endline pair. Locked until the
+   feeding cycle finishes, so it reads as "not yet" rather than broken. */
+.endline-section{margin-top:14px;border-top:1px solid var(--border);padding-top:14px}
+.endline-baseline{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:.78rem;color:var(--muted);margin-bottom:10px}
+.endline-baseline b{color:#14321f;font-weight:700;font-variant-numeric:tabular-nums}
+.endline-locked{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;margin-bottom:12px;background:#FDF4E2;border:1px solid #EFDCB2;border-radius:9px;font-size:.78rem;line-height:1.5;color:#8A5A06}
+.endline-locked svg{width:15px;height:15px;flex-shrink:0;margin-top:2px}
+.endline-fieldset{border:none;padding:0;margin:0}
+.endline-fieldset[disabled]{opacity:.55}
+.endline-fieldset[disabled] input{background:#f2f5f3;cursor:not-allowed}
+/* BMI is worked out, not typed — a figure, not a field. */
+.endline-bmi{display:flex;align-items:center;min-height:38px;padding:8px 11px;background:var(--g50);border:1.5px dashed var(--g200);border-radius:9px;font-size:1rem;font-weight:700;color:var(--g700);font-variant-numeric:tabular-nums}
+.endline-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:12px}

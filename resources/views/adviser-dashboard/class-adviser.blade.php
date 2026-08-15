@@ -812,6 +812,119 @@
                     <button type="button" class="btn" id="reviewSubmitBtn">Review &amp; Submit</button>
                 </div>
             </form>
+
+            {{-- Endline measurement.
+
+                 The height and weight above are the learner's BASELINE — the
+                 opening measurement of the feeding programme. This is the
+                 closing one, so it only opens after the cycle has run its
+                 full length; a mid-cycle "endline" would compare a learner
+                 against themselves halfway through and report it as an
+                 outcome. It sits outside the form above because it posts
+                 somewhere else, and only appears when one learner is open for
+                 editing (?edit=<LRN>) — there is nothing to close otherwise.
+
+                 StudentHealthRecordController::storeEndline enforces the same
+                 rule, so the disabled fieldset is a courtesy, not the control. --}}
+            @if (! empty($editRecord))
+                @php
+                    $endlineOpen = $editRecord->baseline_bmi_value !== null
+                        && isset($cycle)
+                        && $cycle->isComplete();
+                @endphp
+
+                <section class="student-section endline-section">
+                    <h4>Endline Measurement</h4>
+
+                    <div class="endline-baseline">
+                        <span>Baseline &middot;</span>
+                        <b>{{ $editRecord->baseline_height_cm ? $editRecord->baseline_height_cm.' cm' : '—' }}</b>
+                        <b>{{ $editRecord->baseline_weight_kg ? $editRecord->baseline_weight_kg.' kg' : '—' }}</b>
+                        <b>BMI {{ $editRecord->baseline_bmi_value ?: '—' }}</b>
+                        <span class="muted">{{ $editRecord->baseline_nutritional_status ?: 'Not classified' }}</span>
+                    </div>
+
+                    @unless ($endlineOpen)
+                        <div class="endline-locked">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            <span>
+                                <b>Not yet open —</b>
+                                @if ($editRecord->baseline_bmi_value === null)
+                                    record the baseline height and weight first; endline is measured against it.
+                                @elseif (! isset($cycle) || ! $cycle->hasStarted())
+                                    the {{ \App\Support\FeedingProgramCycle::DURATION_DAYS }}-day feeding programme has not started.
+                                @else
+                                    endline opens when the {{ \App\Support\FeedingProgramCycle::DURATION_DAYS }}-day programme finishes.
+                                    Day {{ $cycle->day() }} of {{ \App\Support\FeedingProgramCycle::DURATION_DAYS }},
+                                    {{ $cycle->daysRemaining() }} {{ \Illuminate\Support\Str::plural('day', $cycle->daysRemaining()) }} to go.
+                                @endif
+                            </span>
+                        </div>
+                    @endunless
+
+                    <form method="POST" action="{{ route('class-adviser.health-records.endline.store', $editRecord) }}">
+                        @csrf
+                        <fieldset class="endline-fieldset" @disabled(! $endlineOpen)>
+                            <div class="student-grid">
+                                <div class="field">
+                                    <label for="endlineAge">Age</label>
+                                    <input id="endlineAge" name="age" type="number" min="2" max="25" step="1"
+                                           value="{{ old('age', $editRecord->endline_age ?? $editRecord->baseline_age) }}" required>
+                                </div>
+                                <div class="field">
+                                    <label for="endlineHeight">Height (cm)</label>
+                                    <input id="endlineHeight" name="height_cm" type="number" min="50" max="250" step="0.1"
+                                           value="{{ old('height_cm', $editRecord->endline_height_cm) }}" required>
+                                </div>
+                                <div class="field">
+                                    <label for="endlineWeight">Weight (kg)</label>
+                                    <input id="endlineWeight" name="weight_kg" type="number" min="5" max="300" step="0.1"
+                                           value="{{ old('weight_kg', $editRecord->endline_weight_kg) }}" required>
+                                </div>
+                                <div class="field">
+                                    <label>BMI</label>
+                                    {{-- Worked out, never typed: the server recalculates on save. --}}
+                                    <div class="endline-bmi" id="endlineBmi">{{ $editRecord->endline_bmi_value ?: '—' }}</div>
+                                </div>
+                            </div>
+
+                            <div class="endline-foot">
+                                <span class="muted" style="font-size:.74rem;">
+                                    @if ($editRecord->endline_nutritional_status)
+                                        Recorded {{ $editRecord->endline_recorded_at ?: '' }} &middot; {{ $editRecord->endline_nutritional_status }}
+                                    @else
+                                        BMI and nutritional status are worked out on save.
+                                    @endif
+                                </span>
+                                <button type="submit" class="btn" @disabled(! $endlineOpen)>Save endline</button>
+                            </div>
+                        </fieldset>
+                    </form>
+                </section>
+
+                <script>
+                // Endline BMI preview. The server recalculates on save, so a
+                // tampered value could never become the stored one.
+                (() => {
+                    const h = document.getElementById('endlineHeight');
+                    const w = document.getElementById('endlineWeight');
+                    const out = document.getElementById('endlineBmi');
+                    if (!h || !w || !out) return;
+
+                    const recalc = () => {
+                        const height = parseFloat(h.value);
+                        const weight = parseFloat(w.value);
+                        out.textContent = (height > 0 && weight > 0)
+                            ? (weight / Math.pow(height / 100, 2)).toFixed(2)
+                            : '—';
+                    };
+
+                    h.addEventListener('input', recalc);
+                    w.addEventListener('input', recalc);
+                    recalc();
+                })();
+                </script>
+            @endif
         </section>
     </div>
 </div>

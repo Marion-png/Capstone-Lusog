@@ -11,6 +11,7 @@ use App\Models\MedicalCertificate;
 use App\Models\StudentHealthRecord;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingBeneficiarySummary;
+use App\Support\FeedingProgramCycle;
 use App\Support\PriorityHealthRule;
 use App\Support\RequestMemo;
 use App\Support\SchemaCache;
@@ -21,6 +22,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class StudentHealthRecordController extends Controller
@@ -133,7 +135,34 @@ class StudentHealthRecordController extends Controller
             'lrnsWithCertificates' => $lrnsWithCertificates,
             'overview' => $this->buildAdviserOverview($request),
             'rosterMeta' => $this->buildRosterMeta($request),
+            // Editing one learner (?edit=<LRN>) also opens their endline
+            // measurement below the form. Resolved here so the section can
+            // post against a real record and read the baseline it closes.
+            'editRecord' => $this->resolveEditRecord($request, $records),
+            'cycle' => FeedingProgramCycle::forInstitution(
+                $request->session()->get('active_institution_id')
+                    ? (int) $request->session()->get('active_institution_id')
+                    : null
+            ),
         ]);
+    }
+
+    /**
+     * The learner the adviser opened for editing, if any.
+     *
+     * The edit form itself is filled in by the browser from the roster row,
+     * but the endline section needs the database record — its id to post to,
+     * and its baseline to close against.
+     */
+    private function resolveEditRecord(Request $request, Collection $records): ?StudentHealthRecord
+    {
+        $lrn = trim((string) $request->query('edit', ''));
+
+        if ($lrn === '') {
+            return null;
+        }
+
+        return $records->first(fn (StudentHealthRecord $record) => (string) $record->student_id === $lrn);
     }
 
     /**
@@ -157,8 +186,25 @@ class StudentHealthRecordController extends Controller
                 ->with('error', 'Student not found in your assigned class.');
         }
 
+        $institutionId = $request->session()->get('active_institution_id');
+
+        // The database row behind the session record, so the endline form can
+        // post against a real id and read the baseline it must build on.
+        $dbRecord = SchemaCache::hasTable('student_health_records')
+            ? StudentHealthRecord::forActiveInstitution()
+                ->where('student_id', $lrn)
+                ->latest('id')
+                ->first()
+            : null;
+
+        // Endline opens only once the cycle has run its full length — see
+        // storeEndline(), which enforces the same rule server-side.
+        $cycle = FeedingProgramCycle::forInstitution($institutionId ? (int) $institutionId : null);
+
         return view('adviser-dashboard.student-profile', [
             'prototypeRecord' => $record,
+            'dbRecord' => $dbRecord,
+            'cycle' => $cycle,
             'meta' => $this->buildRosterMeta($request)[$lrn] ?? [
                 'has_assessment' => false,
                 'consent' => 'pending',
@@ -1162,6 +1208,22 @@ class StudentHealthRecordController extends Controller
         // student and program cycle (school year).
         if ($record->baseline_bmi_value === null) {
             return back()->with('error', 'Record the baseline measurement first — endline cannot be entered without a baseline.');
+        }
+
+        // Endline closes a baseline-to-endline comparison, so it only means
+        // anything once the programme has run its full length. Enforced here
+        // and not only in the form: the field being disabled on screen is a
+        // courtesy, this is the rule.
+        $cycle = FeedingProgramCycle::forInstitution($institutionId ? (int) $institutionId : null);
+
+        if (! $cycle->isComplete()) {
+            $remaining = $cycle->hasStarted()
+                ? $cycle->daysRemaining().' feeding '.Str::plural('day', $cycle->daysRemaining()).' remain'
+                : 'the programme has not started';
+
+            $duration = FeedingProgramCycle::DURATION_DAYS;
+
+            return back()->with('error', "Endline can only be recorded once the {$duration}-day feeding programme is complete — {$remaining}.");
         }
 
         $validated = $request->validate([
