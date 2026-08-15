@@ -1,0 +1,366 @@
+/* Attendance — who was fed, on which day.
+   Shell, cards, tables, badges and buttons come from lusog-theme.css. This
+   sheet carries the SBFP masthead and the view rail (identical to the
+   Beneficiaries tab, so the two read as one product), the date-and-filter
+   toolbar, the marking sheet, the calendar, and the print rules. */
+
+/* ── SBFP masthead — same anatomy and the same values as the
+   Beneficiaries tab. A coordinator moving between tabs should not be
+   able to tell the sheets apart. ── */
+.sbfp-header { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+.sbfp-headline { flex: 1 1 340px; min-width: 0; }
+.sbfp-title-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.sbfp-title-row .page-title { margin: 0; }
+.sbfp-year {
+	position: relative;
+	padding-left: 13px;
+	font-size: .72rem;
+	font-weight: 600;
+	letter-spacing: .1em;
+	font-variant-numeric: tabular-nums;
+	color: var(--lg-ink-soft);
+	white-space: nowrap;
+}
+.sbfp-year::before { content: ""; position: absolute; left: 0; top: -1px; bottom: 1px; width: 1px; background: var(--lg-border-strong); }
+.sbfp-program { margin-top: 8px; font-size: .82rem; color: var(--lg-ink-soft); }
+.sbfp-program strong { color: var(--lg-ink); font-weight: 600; }
+.sbfp-actions { display: flex; flex-wrap: wrap; gap: 8px; flex: 0 0 auto; margin-left: auto; }
+.sbfp-actions .btn { white-space: nowrap; }
+
+/* Which day of the cycle this is, and what today is — the two facts a
+   coordinator checks before opening a sheet. */
+.fa-daymeta { margin-top: 6px; font-size: .82rem; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; }
+.fa-day { font-weight: 600; color: var(--lg-emerald-deep); }
+.fa-daymeta .fa-sep { color: var(--lg-border-strong); margin: 0 8px; }
+
+/* A pane being re-read dims rather than emptying, so nothing flashes blank. */
+.live-pane { transition: opacity .18s ease; }
+.live-pane.is-refreshing { opacity: .55; }
+@media (prefers-reduced-motion: reduce) {
+	.live-pane { transition: none; }
+}
+
+/* Notices breathe. The margins live on the bars themselves, not on the
+   container, so a session with nothing to report leaves no gap behind — and
+   the action sits clear of the text rather than crowding it. */
+#fa-notices .alert-bar { margin-bottom: 0; padding: 15px 18px; }
+#fa-notices .alert-bar:first-child { margin-top: 20px; }
+#fa-notices .alert-bar + .alert-bar { margin-top: 12px; }
+#fa-notices .alert-bar:last-child { margin-bottom: 6px; }
+#fa-notices .alert-bar .alert-body { gap: 13px; padding-right: 12px; }
+#fa-notices .alert-bar strong + span,
+#fa-notices .alert-bar span { display: block; margin-top: 3px; }
+
+/* ── View rail — the Beneficiaries tab's rail, to the pixel. ── */
+.seg-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 6px;
+	margin-top: 20px;
+	border-bottom: 1px solid var(--lg-border);
+}
+.seg-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 14px;
+	margin-bottom: -1px;
+	border-bottom: 2px solid transparent;
+	font-size: .84rem;
+	font-weight: 500;
+	color: var(--lg-ink-soft);
+	text-decoration: none;
+	white-space: nowrap;
+	transition: color .16s ease, border-color .16s ease;
+}
+.seg-tab:hover { color: var(--lg-ink); }
+.seg-tab:focus-visible { outline: 2px solid var(--lg-emerald); outline-offset: -2px; border-radius: var(--lg-r-btn) var(--lg-r-btn) 0 0; }
+.seg-tab.is-active { color: var(--lg-ink); font-weight: 700; border-bottom-color: var(--lg-emerald); }
+
+/* ── Toolbar ────────────────────────────────────────────────────────
+   The session being read and the three filters on one row. This was two
+   full-width cards for six controls, which spent a third of the screen
+   saying very little; the date is now a single stepper the width of the
+   date it shows, and the filters sit beside it. Nothing here has an
+   Apply button — every control applies itself. ── */
+.fa-toolbar {
+	display: flex;
+	align-items: end;
+	gap: 10px 18px;
+	flex-wrap: wrap;
+	margin-top: 16px;
+	padding: 12px 16px;
+}
+.fa-filter { min-width: 132px; }
+.fa-filter .select { width: 100%; }
+
+/* The date and its two steps read as one control, so they are drawn as
+   one: a single bordered group rather than three separate widgets. */
+.fa-dategroup {
+	display: inline-flex;
+	align-items: stretch;
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-btn);
+	overflow: hidden;
+	background: var(--lg-card);
+	margin-right: 4px;
+}
+.fa-dateinput {
+	border: none;
+	border-radius: 0;
+	border-left: 1px solid var(--lg-border);
+	border-right: 1px solid var(--lg-border);
+	padding: 7px 10px;
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+}
+.fa-dateinput:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+.fa-step {
+	display: inline-flex;
+	align-items: center;
+	padding: 0 12px;
+	font-size: 1.05rem;
+	font-weight: 700;
+	line-height: 1;
+	color: var(--lg-ink-soft);
+	text-decoration: none;
+	transition: background .12s ease, color .12s ease;
+}
+.fa-step:hover { background: var(--lg-mint); color: var(--lg-emerald-dark); }
+.fa-step:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+/* A step with nowhere to go stays in place rather than disappearing, so
+   the control never moves under the cursor. */
+.fa-step.is-disabled { opacity: .3; pointer-events: none; }
+
+/* ── Bulk bar ───────────────────────────────────────────────────────
+   Marking everyone present and correcting the few absences is the fast
+   path through 87 learners, so it sits above the sheet rather than in a
+   menu. ── */
+.fa-bulkbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+	margin-top: 16px;
+	padding: 12px 18px;
+}
+.fa-search input { min-width: 240px; }
+.fa-bulk-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── Tables ─────────────────────────────────────────────────────── */
+.fa-table { width: 100%; }
+.fa-table th:first-child, .fa-table td:first-child { padding-left: 18px; }
+.fa-table th:last-child, .fa-table td:last-child { padding-right: 18px; }
+.fa-idx { width: 44px; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; }
+.fa-name { min-width: 190px; }
+.fa-table + .fa-table { margin-top: 0; }
+.table-card { margin-top: 16px; }
+
+.fa-datelink { color: inherit; text-decoration: none; }
+.fa-datelink:hover { color: var(--lg-emerald-dark); }
+.fa-datelink:focus-visible { outline: none; box-shadow: var(--lg-focus); border-radius: 4px; }
+
+.badge.has-glyph::before { display: none; }
+.fa-glyph { font-weight: 700; margin-right: 5px; }
+
+/* ── The mark toggle ────────────────────────────────────────────────
+   Two states, one tap, no dropdown: the whole point of this screen is
+   encoding a day's attendance without opening anything. ── */
+.fa-mark-col { width: 1%; white-space: nowrap; }
+.fa-toggle {
+	display: inline-flex;
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-btn);
+	overflow: hidden;
+	background: var(--lg-card);
+}
+.fa-opt { position: relative; display: inline-flex; }
+.fa-opt input {
+	position: absolute;
+	opacity: 0;
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	cursor: pointer;
+}
+.fa-opt span {
+	display: inline-flex;
+	align-items: center;
+	padding: 6px 14px;
+	font-size: .76rem;
+	font-weight: 600;
+	color: var(--lg-ink-soft);
+	transition: background .12s ease, color .12s ease;
+}
+.fa-opt + .fa-opt span { border-left: 1px solid var(--lg-border); }
+.fa-opt:hover span { background: var(--lg-rail); }
+.fa-opt-present input:checked + span { background: var(--lg-mint); color: var(--lg-success-ink); }
+.fa-opt-absent input:checked + span { background: var(--lg-danger-tint); color: var(--lg-danger-ink); }
+.fa-opt input:focus-visible + span { outline: none; box-shadow: var(--lg-focus); }
+.fa-unconfirmed { margin-left: 8px; }
+
+.fa-remark { width: 100%; min-width: 150px; font-size: .78rem; }
+.fa-remark:disabled { background: var(--lg-rail); color: var(--lg-ink-soft); }
+
+/* ── Save bar ──────────────────────────────────────────────────────
+   The three counts and the one act, together: nothing is saved until
+   the coordinator has seen what they are saving.
+
+   It sits below the table and stays there. It used to be sticky, which
+   meant it slid over the roll on every scroll — the counts are a summary
+   of the list, so they belong at the end of it, not chasing the reader
+   down the page. ── */
+.fa-savebar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+	margin-top: 16px;
+	padding: 12px 18px;
+}
+.fa-tally { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fa-total { font-size: .82rem; font-weight: 600; color: var(--lg-ink); }
+
+/* ── Calendar ───────────────────────────────────────────────────────
+   A month of feeding days: complete, incomplete, or no session at all.
+   Colour never travels alone — each state carries its own glyph, so the
+   grid survives greyscale and a bad projector. ── */
+.fa-calendar { margin-top: 16px; padding: 18px 20px 20px; }
+.fa-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .74rem; color: var(--lg-ink-soft); }
+.fa-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.fa-key {
+	width: 11px;
+	height: 11px;
+	border-radius: 3px;
+	border: 1px solid var(--lg-border-strong);
+	background: var(--lg-card);
+}
+.fa-key.fa-day-complete { background: var(--lg-mint); border-color: #C4E4D0; }
+.fa-key.fa-day-partial { background: var(--lg-amber-tint); border-color: #EFDCB2; }
+
+.fa-cal-grid {
+	display: grid;
+	grid-template-columns: repeat(7, minmax(0, 1fr));
+	gap: 6px;
+	margin-top: 14px;
+}
+.fa-cal-head {
+	padding: 4px 0;
+	text-align: center;
+	font-size: .68rem;
+	font-weight: 700;
+	letter-spacing: .07em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft);
+}
+.fa-cal-day {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	min-height: 56px;
+	padding: 6px 4px;
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-btn);
+	background: var(--lg-card);
+	color: var(--lg-ink);
+	text-decoration: none;
+	font-variant-numeric: tabular-nums;
+}
+a.fa-cal-day:hover { border-color: var(--lg-emerald); }
+a.fa-cal-day:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+.fa-cal-day.is-outside { border-color: transparent; background: transparent; }
+.fa-cal-day.is-weekend { background: var(--lg-rail); }
+.fa-cal-day.is-today { border-color: var(--lg-ink); }
+.fa-cal-day.is-selected { border-color: var(--lg-emerald); box-shadow: inset 0 0 0 1px var(--lg-emerald); }
+.fa-cal-day.fa-day-complete { background: var(--lg-mint); border-color: #C4E4D0; }
+.fa-cal-day.fa-day-partial { background: var(--lg-amber-tint); border-color: #EFDCB2; }
+.fa-cal-num { font-size: .8rem; font-weight: 600; }
+.fa-cal-mark { font-size: .84rem; font-weight: 700; line-height: 1; }
+.fa-day-complete .fa-cal-mark { color: var(--lg-success-ink); }
+.fa-day-partial .fa-cal-mark { color: var(--lg-amber-ink); }
+
+@media (max-width: 900px) {
+	.fa-toolbar { gap: 10px 12px; }
+	.fa-filter { flex: 1 1 132px; }
+	.fa-search input { min-width: 0; width: 100%; }
+	.fa-bulk-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
+
+@media (max-width: 620px) {
+	.sbfp-actions { width: 100%; margin-left: 0; }
+	.sbfp-actions .btn { flex: 1 1 auto; justify-content: center; }
+	.seg-tabs { gap: 0; }
+	.seg-tab { flex: 1 1 auto; justify-content: center; padding: 10px 8px; }
+	.fa-dategroup { width: 100%; }
+	.fa-dateinput { flex: 1 1 auto; min-width: 0; text-align: center; }
+	.fa-cal-day { min-height: 44px; }
+}
+
+/* ── Print — the attendance sheet on paper ─────────────────────────
+   The shell is a fixed-height scrolling window (see lusog-theme), so
+   every scroll container has to be reopened or the printer gets one
+   screenful and drops the rest of the roll. Controls come off, and the
+   marks print as text because a school printer cannot be trusted with
+   colour. ── */
+.print-masthead { display: none; }
+
+@media print {
+	.asb-sidebar,
+	.topbar,
+	.sbfp-actions,
+	.seg-tabs,
+	.fa-toolbar,
+	.fa-bulkbar,
+	.fa-savebar,
+	.alert-bar,
+	.flash,
+	.fa-legend { display: none !important; }
+
+	html, body { height: auto !important; overflow: visible !important; background: #fff; }
+	.main { margin: 0 !important; height: auto !important; overflow: visible !important; opacity: 1 !important; transform: none !important; }
+	.content { padding: 0 !important; height: auto !important; overflow: visible !important; }
+
+	.print-masthead {
+		display: block;
+		margin-bottom: 14px;
+		padding-bottom: 10px;
+		border-bottom: 1.5px solid #333;
+	}
+	.print-masthead h2 { font-size: 1.15rem; font-weight: 700; color: #000; }
+	.print-masthead p { font-size: .78rem; color: #333; margin-top: 3px; }
+
+	.page-header { margin-bottom: 12px; }
+	.page-title { font-size: 1.3rem; }
+	.fa-daymeta, .sbfp-program { color: #333; }
+
+	.kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 8px; }
+	.kpi { padding: 10px 12px; break-inside: avoid; }
+	.kpi-value { font-size: 1.15rem; }
+	.kpi-icon { display: none; }
+
+	.card, .table-card { box-shadow: none; border-color: #999; break-inside: avoid; }
+	.table-scroll, .table-card { overflow: visible !important; }
+	.table-card table { min-width: 0 !important; }
+	table { width: 100%; font-size: .72rem; }
+	th, td { padding: 5px 6px; }
+	thead { display: table-header-group; }
+	tr { break-inside: avoid; }
+
+	/* The toggle becomes what it means: the chosen mark, in words. */
+	.fa-toggle { border: none; }
+	.fa-opt input:not(:checked) + span { display: none; }
+	.fa-opt span { padding: 0; color: #000; background: transparent !important; }
+	.fa-remark { border: none; padding: 0; background: transparent; color: #000; font-size: .72rem; }
+	.fa-remark:disabled { background: transparent; }
+
+	.badge { background: transparent !important; color: #000 !important; border: 1px solid #666 !important; }
+	.badge::before { display: none; }
+
+	.fa-cal-day { min-height: 40px; border-color: #999 !important; background: transparent !important; }
+	.fa-cal-day.fa-day-complete, .fa-cal-day.fa-day-partial { background: transparent !important; }
+}

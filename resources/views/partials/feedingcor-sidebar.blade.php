@@ -2,7 +2,7 @@
     Shared Feeding Coordinator sidebar — same look as the Class Adviser sidebar
     (partials/adviser-sidebar.blade.php), collapsed to an icon rail until the
     cursor enters it. Pass $active to highlight the current item:
-    'dashboard' | 'records' | 'program' | 'forms'.
+    'dashboard' | 'records' | 'attendance' | 'program' | 'forms'.
 
     Every label sits in its own element so the collapse can fade text out
     without reflowing the icons. Requires resources/css/role-sidebar.css (the
@@ -34,6 +34,10 @@
         <a href="{{ route('dashboard.feedingcor-health-records') }}" class="asb-link {{ $active === 'records' ? 'active' : '' }}" title="Beneficiaries">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></svg>
             <span class="asb-link-text">Beneficiaries</span>
+        </a>
+        <a href="{{ route('dashboard.feedingcor-attendance') }}" class="asb-link {{ $active === 'attendance' ? 'active' : '' }}" title="Attendance">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg>
+            <span class="asb-link-text">Attendance</span>
         </a>
         <a href="{{ route('dashboard.feedingcor-program') }}" class="asb-link {{ $active === 'program' ? 'active' : '' }}" title="Feeding Program">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v7c0 1.1.9 2 2 2h1a2 2 0 0 0 2-2V2"/><path d="M6 11v11"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>

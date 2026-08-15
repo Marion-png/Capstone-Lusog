@@ -1195,6 +1195,8 @@ class FeedingProgramController extends Controller
             'marks.*' => ['nullable', 'in:present,absent'],
             'remarks' => ['nullable', 'array'],
             'remarks.*' => ['nullable', 'string', 'max:255'],
+            // Which screen the coordinator saved from, so they land back on it.
+            'return_to' => ['nullable', 'in:attendance,dashboard'],
         ]);
 
         if (! SchemaCache::hasTable('student_health_records') || ! SchemaCache::hasTable('feeding_attendances')) {
@@ -1202,6 +1204,24 @@ class FeedingProgramController extends Controller
         }
 
         $institutionId = $request->session()->get('active_institution_id');
+
+        // A session outside the running cycle is a slip, not a decision: a
+        // mistyped year would open a feeding day the programme never had and
+        // change the denominator every at-risk flag is judged against.
+        $cycleStart = FeedingProgramCycle::forInstitution($institutionId)->startDateIso();
+        $requestedDate = Carbon::parse((string) $request->input('session_date'))->toDateString();
+
+        if ($cycleStart !== null) {
+            $cycleEnd = Carbon::parse($cycleStart)->addDays(self::PROGRAM_DURATION_DAYS - 1)->toDateString();
+
+            if ($requestedDate < $cycleStart || $requestedDate > $cycleEnd) {
+                return back()->with(
+                    'error',
+                    'That date is outside the active feeding program ('
+                        .Carbon::parse($cycleStart)->format('M j, Y').' to '.Carbon::parse($cycleEnd)->format('M j, Y').').'
+                );
+            }
+        }
         $sessionDate = Carbon::parse((string) $request->input('session_date'))->toDateString();
 
         $submitted = collect($request->input('marks', []))
@@ -1316,9 +1336,14 @@ class FeedingProgramController extends Controller
                 .': '.$presentCount.' present, '.($marks->count() - $presentCount).' absent'
         );
 
-        return redirect()
-            ->route('dashboard.feedingcor-dashboard')
-            ->with('success', $marks->count().' mark(s) recorded for '.Carbon::parse($sessionDate)->format('M d, Y').'.');
+        // Back to the screen the marks were entered on, with the same session
+        // still open — a coordinator correcting one learner should not have to
+        // navigate back to the day they were working on.
+        $redirect = $request->input('return_to') === 'attendance'
+            ? redirect()->route('dashboard.feedingcor-attendance', ['date' => $sessionDate])
+            : redirect()->route('dashboard.feedingcor-dashboard');
+
+        return $redirect->with('success', $marks->count().' mark(s) recorded for '.Carbon::parse($sessionDate)->format('M d, Y').'.');
     }
 
     /**

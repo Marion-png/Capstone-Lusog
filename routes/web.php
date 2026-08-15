@@ -6,6 +6,7 @@ use App\Http\Controllers\ClinicNoteController;
 use App\Http\Controllers\ConditionController;
 use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\FeedingAttendanceController;
 use App\Http\Controllers\FeedingCoordinatorController;
 use App\Http\Controllers\FeedingEnrollmentController;
 use App\Http\Controllers\FeedingProgramController;
@@ -599,6 +600,21 @@ Route::get('/dashboard/nutricor-comparison', [NutritionCoordinatorController::cl
 
 Route::get('/dashboard/nutricor-consolidated', [NutricorController::class, 'consolidatedReport'])
     ->name('dashboard.nutricor-consolidated');
+
+// Attendance: who was fed, on which day. Four views of one set of marks —
+// the session sheet, the day-by-day history, the per-beneficiary standing and
+// the month calendar — plus the school's own XLSX attendance template.
+Route::get('/dashboard/feedingcor-attendance', [FeedingAttendanceController::class, 'index'])
+    ->name('dashboard.feedingcor-attendance');
+
+// Re-rendered panels for the tab's live refresh. Returns the same Blade
+// partials the first paint used, so a live view cannot drift from a reloaded
+// one. The unsaved sheet is deliberately not among them.
+Route::get('/dashboard/feedingcor-attendance/metrics', [FeedingAttendanceController::class, 'metrics'])
+    ->name('dashboard.feedingcor-attendance.metrics');
+
+Route::get('/dashboard/feedingcor-attendance/export', [FeedingAttendanceController::class, 'export'])
+    ->name('dashboard.feedingcor-attendance.export');
 
 Route::get('/dashboard/feedingcor-sbfp-forms', [FeedingCoordinatorController::class, 'sbfpForms'])
     ->name('dashboard.feedingcor-sbfp-forms');
