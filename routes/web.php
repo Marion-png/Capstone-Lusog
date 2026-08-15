@@ -6,6 +6,7 @@ use App\Http\Controllers\ClinicNoteController;
 use App\Http\Controllers\ConditionController;
 use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\FeedingAtRiskController;
 use App\Http\Controllers\FeedingAttendanceController;
 use App\Http\Controllers\FeedingCoordinatorController;
 use App\Http\Controllers\FeedingEnrollmentController;
@@ -641,6 +642,26 @@ Route::get('/dashboard/feedingcor-attendance/metrics', [FeedingAttendanceControl
 
 Route::get('/dashboard/feedingcor-attendance/export', [FeedingAttendanceController::class, 'export'])
     ->name('dashboard.feedingcor-attendance.export');
+
+// At-Risk Students: which beneficiaries are below the school's own attendance
+// threshold, why, and who needs following up. It reads the marks the Attendance
+// tab wrote and never writes one of its own.
+Route::get('/dashboard/feedingcor-at-risk', [FeedingAtRiskController::class, 'index'])
+    ->name('dashboard.feedingcor-at-risk');
+
+// The summary cards for the tab's live refresh — the same partial the first
+// paint used. The list is deliberately not re-rendered: it holds the rows a
+// coordinator has opened to read.
+Route::get('/dashboard/feedingcor-at-risk/metrics', [FeedingAtRiskController::class, 'metrics'])
+    ->name('dashboard.feedingcor-at-risk.metrics');
+
+Route::get('/dashboard/feedingcor-at-risk/export', [FeedingAtRiskController::class, 'export'])
+    ->name('dashboard.feedingcor-at-risk.export');
+
+// The one thing on the tab a human enters: what was done about a learner who is
+// not turning up. Scoped, audited, encrypted — and never an enrolment change.
+Route::post('/dashboard/feedingcor-at-risk/follow-up', [FeedingAtRiskController::class, 'storeFollowUp'])
+    ->name('feedingcor-at-risk.follow-up.store');
 
 Route::get('/dashboard/feedingcor-sbfp-forms', [FeedingCoordinatorController::class, 'sbfpForms'])
     ->name('dashboard.feedingcor-sbfp-forms');

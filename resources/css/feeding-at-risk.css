@@ -1,0 +1,396 @@
+/* At-Risk Students — who is below the school's attendance threshold, why, and
+   who needs following up.
+
+   Shell, cards, tables, badges, buttons and the status scale come from
+   lusog-theme.css. This sheet carries only what is particular to this tab: the
+   SBFP masthead (identical to the Attendance and Beneficiaries tabs, so a
+   coordinator moving between them cannot tell the sheets apart), the filter
+   toolbar, the priority list and the explanation that opens under a row, the
+   follow-up dialog, and the print rules.
+
+   Colour never carries meaning alone here: a priority dot always sits beside
+   its word, and a risk badge always spells its state out. */
+
+/* ── SBFP masthead — same anatomy and the same values as the other
+   coordinator tabs. ── */
+.sbfp-header { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
+.sbfp-headline { flex: 1 1 340px; min-width: 0; }
+.sbfp-title-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.sbfp-title-row .page-title { margin: 0; }
+.sbfp-year {
+	position: relative;
+	padding-left: 13px;
+	font-size: .72rem;
+	font-weight: 600;
+	letter-spacing: .1em;
+	font-variant-numeric: tabular-nums;
+	color: var(--lg-ink-soft);
+	white-space: nowrap;
+}
+.sbfp-year::before { content: ""; position: absolute; left: 0; top: -1px; bottom: 1px; width: 1px; background: var(--lg-border-strong); }
+.sbfp-program { margin-top: 8px; font-size: .82rem; color: var(--lg-ink-soft); }
+.sbfp-program strong { color: var(--lg-ink); font-weight: 600; }
+.sbfp-actions { display: flex; flex-wrap: wrap; gap: 8px; flex: 0 0 auto; margin-left: auto; }
+.sbfp-actions .btn { white-space: nowrap; }
+
+/* Where the programme stands, and how much of it is left to recover a
+   shortfall in — the two facts a coordinator checks before working the list. */
+.ar-daymeta { margin-top: 6px; font-size: .82rem; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; }
+.ar-day { font-weight: 600; color: var(--lg-emerald-deep); }
+.ar-daymeta .ar-sep { color: var(--lg-border-strong); margin: 0 8px; }
+
+/* A pane being re-read dims rather than emptying, so nothing flashes blank. */
+.live-pane { transition: opacity .18s ease; }
+.live-pane.is-refreshing { opacity: .55; }
+@media (prefers-reduced-motion: reduce) {
+	.live-pane { transition: none; }
+}
+
+.ar-alert { margin-top: 20px; padding: 15px 18px; }
+.ar-alert .alert-body { gap: 13px; }
+.ar-alert strong + span { display: block; margin-top: 3px; }
+
+/* ── Toolbar ────────────────────────────────────────────────────────
+   Six controls on one row, each applying itself. Grade and section are
+   scope; the rest narrow the list alone. ── */
+.ar-toolbar {
+	display: flex;
+	align-items: end;
+	gap: 12px 18px;
+	flex-wrap: wrap;
+	margin-top: 20px;
+	padding: 14px 18px;
+}
+.ar-filter { flex: 1 1 140px; min-width: 132px; }
+.ar-filter .select { width: 100%; }
+
+/* ── The list ───────────────────────────────────────────────────── */
+.ar-listcard { margin-top: 20px; }
+.ar-listhead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px 20px;
+	flex-wrap: wrap;
+	padding: 16px 18px 14px;
+	border-bottom: 1px solid var(--lg-border);
+}
+.ar-listhead .card-sub { font-variant-numeric: tabular-nums; }
+.ar-search input { min-width: 240px; }
+
+.ar-table { width: 100%; }
+.ar-table th:first-child, .ar-table td:first-child { padding-left: 18px; }
+.ar-table th:last-child, .ar-table td:last-child { padding-right: 18px; }
+.ar-name { min-width: 190px; }
+/* The name opens the learner's record, and the whole cell is the target:
+   a coordinator aiming at a row should not have to hit the glyphs. The
+   button fills the cell's padding box, so the click area is the column
+   rather than the text inside it — the same anatomy the Beneficiaries
+   tab uses, so the two rosters behave alike.
+
+   It stays the table's ink rather than turning every row into a link,
+   and it is never underlined: the cell lifts and the name takes the
+   brand colour on hover, which says "open me" without ruling a line
+   through the list. */
+.ar-name.is-link { padding: 0; }
+.ar-namebtn {
+	display: block;
+	width: 100%;
+	padding: 11px 14px;
+	border: none;
+	background: none;
+	font: inherit;
+	font-size: .78rem;
+	text-align: left;
+	color: inherit;
+	cursor: pointer;
+}
+.ar-namebtn strong { color: var(--lg-ink); font-weight: 600; }
+.ar-namebtn:hover { background: var(--lg-mint); }
+.ar-namebtn:hover strong { color: var(--lg-emerald-dark); }
+.ar-namebtn:focus-visible { outline: none; box-shadow: var(--lg-focus); border-radius: 3px; }
+
+/* Priority: a dot for the glance, a word for everything else. */
+.ar-prio {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	font-size: .78rem;
+	font-weight: 600;
+	color: var(--lg-ink);
+	white-space: nowrap;
+}
+.ar-prio::before {
+	content: "";
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	background: var(--lg-border-strong);
+	flex: 0 0 auto;
+}
+.ar-prio.is-high::before { background: var(--lg-danger); }
+.ar-prio.is-medium::before { background: var(--lg-orange); }
+.ar-prio.is-low::before { background: var(--lg-amber); }
+
+/* ── One learner's record, inside the details dialog ────────────────
+   Four readings a follow-up needs: the rule the learner failed, the
+   direction they are moving, the sessions they missed, and what has
+   already been done about it. The panels are laid out here rather than
+   in the dialog's own rules, so they keep their spacing wherever the
+   template is dropped. ── */
+.ar-detail {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+	gap: 16px;
+	padding: 18px 20px 20px;
+	background: var(--lg-page);
+}
+.ar-panel {
+	background: var(--lg-card);
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-card);
+	padding: 16px 18px 18px;
+	min-width: 0;
+}
+.ar-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.ar-panel-title {
+	font-size: .7rem;
+	font-weight: 700;
+	letter-spacing: .1em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft);
+}
+.ar-sub { margin-top: 14px; font-size: .72rem; font-weight: 600; color: var(--lg-ink-soft); }
+.ar-empty { margin-top: 12px; font-size: .8rem; color: var(--lg-ink-soft); }
+
+.ar-facts { margin-top: 12px; display: grid; gap: 8px; }
+.ar-fact { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.ar-fact dt { font-size: .78rem; color: var(--lg-ink-soft); }
+.ar-fact dd {
+	font-size: .86rem;
+	font-weight: 600;
+	color: var(--lg-ink);
+	font-variant-numeric: tabular-nums;
+	font-family: ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+}
+.ar-fact dd.is-risk { color: var(--lg-danger-ink); }
+
+.ar-sequence { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.ar-mark {
+	display: inline-flex;
+	align-items: center;
+	padding: 3px 9px;
+	border-radius: var(--lg-r-pill);
+	border: 1px solid transparent;
+	font-size: .7rem;
+	font-weight: 600;
+}
+.ar-mark.is-present { background: var(--lg-mint); color: var(--lg-success-ink); border-color: #C4E4D0; }
+.ar-mark.is-absent { background: var(--lg-danger-tint); color: var(--lg-danger-ink); border-color: #F2C9C9; }
+
+.ar-reason {
+	margin-top: 14px;
+	padding-top: 12px;
+	border-top: 1px solid var(--lg-border);
+	font-size: .8rem;
+	line-height: 1.55;
+	color: var(--lg-ink-soft);
+}
+.ar-reason strong { color: var(--lg-ink); font-weight: 600; }
+
+/* The trend: a cumulative rate after each confirmed session, with the
+   school's own threshold drawn across it. The two series colours are the
+   theme's validated pair — re-run the dataviz validator before changing
+   either. */
+.ar-trendline { margin-top: 12px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.ar-trend-value {
+	font-size: 1.3rem;
+	font-weight: 700;
+	color: var(--lg-ink);
+	font-variant-numeric: tabular-nums;
+	font-family: ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+}
+.ar-trend-value.is-risk { color: var(--lg-danger-ink); }
+.ar-trend-tag {
+	display: inline-flex;
+	padding: 3px 9px;
+	border-radius: var(--lg-r-pill);
+	border: 1px solid var(--lg-border);
+	background: var(--lg-rail);
+	font-size: .68rem;
+	font-weight: 700;
+	letter-spacing: .04em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft);
+}
+.ar-trend-tag.is-improving { background: var(--lg-mint); color: var(--lg-success-ink); border-color: #C4E4D0; }
+.ar-trend-tag.is-declining { background: var(--lg-danger-tint); color: var(--lg-danger-ink); border-color: #F2C9C9; }
+.ar-chart { display: block; margin-top: 10px; width: 100%; max-width: 320px; height: auto; }
+.ar-axis {
+	margin-top: 6px;
+	display: flex;
+	justify-content: space-between;
+	gap: 10px;
+	max-width: 320px;
+	font-size: .68rem;
+	color: var(--lg-ink-soft);
+	font-variant-numeric: tabular-nums;
+}
+
+.ar-mini { width: 100%; margin-top: 10px; border-collapse: collapse; }
+.ar-mini th {
+	padding: 6px 8px 6px 0;
+	text-align: left;
+	font-size: .68rem;
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft);
+	border-bottom: 1px solid var(--lg-border);
+}
+.ar-mini td {
+	padding: 7px 8px 7px 0;
+	font-size: .8rem;
+	color: var(--lg-ink);
+	border-bottom: 1px solid var(--lg-border);
+}
+.ar-mini tr:last-child td { border-bottom: none; }
+
+.ar-timeline { margin-top: 12px; display: grid; gap: 12px; list-style: none; }
+.ar-entry { padding-left: 12px; border-left: 2px solid var(--lg-border-strong); }
+.ar-entry-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ar-entry-date { font-size: .78rem; font-weight: 600; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
+.ar-entry-line { margin-top: 4px; font-size: .78rem; line-height: 1.5; color: var(--lg-ink-soft); }
+.ar-entry-line strong { color: var(--lg-ink); font-weight: 600; }
+.ar-entry-by { margin-top: 5px; font-size: .72rem; color: var(--lg-ink-soft); }
+
+/* ── Follow-up dialog ───────────────────────────────────────────────
+   The same anatomy as the enrolment dialog (backdrop / panel / head /
+   body / foot) so a dialog looks like a dialog everywhere in the
+   product; only the form inside it is particular to a follow-up. ── */
+.modal-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(21, 40, 31, .48);
+	display: none;
+	align-items: flex-start;
+	justify-content: center;
+	z-index: 250;
+	padding: 16px;
+	overflow-y: auto;
+}
+.modal-backdrop.open { display: flex; }
+.modal-panel {
+	width: min(620px, 100%);
+	max-height: calc(100vh - 32px);
+	background: var(--lg-card);
+	border-radius: var(--lg-r-card);
+	box-shadow: 0 24px 64px rgba(21, 40, 31, .28);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	margin: auto;
+}
+.modal-panel > form { display: flex; flex-direction: column; min-height: 0; }
+.modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 20px 14px; }
+.modal-title { font-size: 1.02rem; font-weight: 600; letter-spacing: -.01em; color: var(--lg-ink); }
+.modal-close { border: 1px solid var(--lg-border); background: none; font-size: 1.4rem; line-height: 1; color: var(--lg-ink-soft); cursor: pointer; padding: 2px 8px; border-radius: 8px; }
+.modal-close:hover { color: var(--lg-ink); background: var(--lg-rail); }
+.modal-close:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+.modal-body { padding: 0; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.modal-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 20px; border-top: 1px solid var(--lg-border); background: var(--lg-card); }
+
+/* The record is a wider read than a form: four panels, two to a row on a
+   normal screen. */
+.ar-detail-modal { width: min(900px, 100%); }
+.ar-detail-modal .ar-detail { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.ar-detail-body { border-top: 1px solid var(--lg-border); }
+.ar-detail-ident { min-width: 0; }
+.ar-modal-meta { margin-top: 5px; font-size: .8rem; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; }
+.ar-detail-modal .modal-foot .badge { margin-right: auto; }
+
+.ar-modal-eyebrow { font-size: .66rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--lg-ink-soft); }
+.ar-modal-body { display: grid; gap: 14px; padding: 16px 20px 20px; border-top: 1px solid var(--lg-border); }
+.ar-field { min-width: 0; }
+.ar-field .input, .ar-field .select { width: 100%; }
+.ar-field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+.ar-textarea { resize: vertical; line-height: 1.5; padding-top: 9px; padding-bottom: 9px; }
+.ar-modal-note { font-size: .74rem; color: var(--lg-ink-soft); }
+.ar-modal-actions { display: flex; gap: 8px; margin-left: auto; }
+
+@media (max-width: 900px) {
+	.ar-toolbar { gap: 12px; }
+	.ar-search input { min-width: 0; width: 100%; }
+	.ar-search { flex: 1 1 100%; }
+}
+
+@media (max-width: 620px) {
+	.sbfp-actions { width: 100%; margin-left: 0; }
+	.sbfp-actions .btn { flex: 1 1 auto; justify-content: center; }
+	.ar-detail { padding: 14px; }
+}
+
+/* ── Print — the at-risk list on paper ─────────────────────────────
+   The shell is a fixed-height scrolling window (see lusog-theme), so every
+   scroll container has to be reopened or the printer gets one screenful and
+   drops the rest of the list. Controls come off, and every badge prints as
+   bordered black text because a school printer is not to be trusted with the
+   status scale.
+
+   One learner's record does not print with the list: it lives in a <template>
+   until the dialog asks for it, so paper gets the follow-up list itself. ── */
+.print-masthead { display: none; }
+
+@media print {
+	.asb-sidebar,
+	.topbar,
+	.sbfp-actions,
+	.ar-toolbar,
+	.ar-search,
+	.modal-backdrop,
+	.flash { display: none !important; }
+
+	html, body { height: auto !important; overflow: visible !important; background: #fff; }
+	.main { margin: 0 !important; height: auto !important; overflow: visible !important; opacity: 1 !important; transform: none !important; }
+	.content { padding: 0 !important; height: auto !important; overflow: visible !important; }
+
+	.print-masthead {
+		display: block;
+		margin-bottom: 14px;
+		padding-bottom: 10px;
+		border-bottom: 1.5px solid #333;
+	}
+	.print-masthead h2 { font-size: 1.15rem; font-weight: 700; color: #000; }
+	.print-masthead p { font-size: .78rem; color: #333; margin-top: 3px; }
+
+	.page-header { margin-bottom: 12px; }
+	.page-title { font-size: 1.3rem; }
+	.ar-daymeta, .sbfp-program { color: #333; }
+
+	.kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 8px; }
+	.kpi { padding: 10px 12px; break-inside: avoid; }
+	.kpi-value { font-size: 1.15rem; }
+	.kpi-icon { display: none; }
+
+	.alert-bar { break-inside: avoid; }
+	.card, .table-card { box-shadow: none; border-color: #999; break-inside: avoid; }
+	.ar-listcard { break-inside: auto; }
+	.ar-listhead { padding-left: 0; padding-right: 0; }
+	.table-scroll, .table-card { overflow: visible !important; }
+	.table-card table { min-width: 0 !important; }
+	table { width: 100%; font-size: .72rem; }
+	th, td { padding: 5px 6px; }
+	thead { display: table-header-group; }
+	tr { break-inside: avoid; }
+	.ar-row { background: transparent !important; }
+	.ar-row > td { background: transparent !important; }
+
+	/* On paper the name is a name, not a control. */
+	.ar-name.is-link { padding: 5px 6px; }
+	.ar-namebtn { display: inline; width: auto; padding: 0; background: none !important; }
+	.ar-namebtn strong { color: #000; }
+
+	.ar-prio::before { border: 1px solid #000; background: transparent !important; }
+	.badge { background: transparent !important; color: #000 !important; border: 1px solid #666 !important; }
+	.badge::before { display: none; }
+}

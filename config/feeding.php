@@ -31,6 +31,23 @@ return [
         'mode' => env('FEEDING_AT_RISK_MODE', 'attendance_rate'),
         'threshold_percent' => (float) env('FEEDING_AT_RISK_THRESHOLD_PERCENT', 80),
         'consecutive_absences' => (int) env('FEEDING_AT_RISK_CONSECUTIVE_ABSENCES', 3),
+
+        /*
+        | The two monitoring bands the At-Risk Students tab draws around the
+        | official threshold. They are an operational aid and NOTHING else: the
+        | threshold above is still the only thing that decides who is at risk,
+        | and only at-risk learners are counted by the at-risk figure.
+        |
+        |   watch_margin_percent     how far ABOVE the threshold still warrants
+        |                            a look — "Watch"
+        |   critical_margin_percent  how far BELOW the threshold stops being
+        |                            "At Risk" and becomes "Critical"
+        |
+        | Read both through App\Support\FeedingRiskSeverity, never from config
+        | directly, so the bands move with the school's own threshold.
+        */
+        'watch_margin_percent' => (float) env('FEEDING_WATCH_MARGIN_PERCENT', 5),
+        'critical_margin_percent' => (float) env('FEEDING_CRITICAL_MARGIN_PERCENT', 10),
     ],
 
     /*
