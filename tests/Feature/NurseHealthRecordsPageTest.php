@@ -105,15 +105,21 @@ class NurseHealthRecordsPageTest extends TestCase
 
         $html = $response->getContent();
 
-        $this->assertStringContainsString('data-filter="grade" data-value="Grade 7"', $html);
-        $this->assertStringContainsString('data-filter="grade" data-value="Grade 10"', $html);
-        $this->assertStringContainsString('data-filter="section" data-value="curie"', $html);
-        $this->assertStringContainsString('data-filter="section" data-value="dalton"', $html);
-        $this->assertStringContainsString('data-filter="sex" data-value="male"', $html);
-        $this->assertStringContainsString('data-filter="sex" data-value="female"', $html);
+        // The three filters are dropdowns, each built from the roster.
+        foreach (['grade', 'sex', 'section'] as $group) {
+            $this->assertStringContainsString('data-filter="'.$group.'"', $html);
+        }
 
-        // A grade nobody is in never becomes a chip.
-        $this->assertStringNotContainsString('data-value="Grade 8"', $html);
+        // Options carry the value the filter matches on, and its count.
+        $this->assertStringContainsString('<option value="Grade 7">Grade 7 (2)</option>', $html);
+        $this->assertStringContainsString('<option value="Grade 10">Grade 10 (1)</option>', $html);
+        $this->assertStringContainsString('<option value="curie">Curie (2)</option>', $html);
+        $this->assertStringContainsString('<option value="dalton">Dalton (1)</option>', $html);
+        $this->assertStringContainsString('<option value="male">Male (2)</option>', $html);
+        $this->assertStringContainsString('<option value="female">Female (1)</option>', $html);
+
+        // A grade nobody is in never becomes an option.
+        $this->assertStringNotContainsString('value="Grade 8"', $html);
 
         // Rows carry the hooks the chips filter on.
         $this->assertStringContainsString('data-grade="Grade 7"', $html);

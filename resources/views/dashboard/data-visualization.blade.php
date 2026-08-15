@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -7,49 +7,77 @@
     <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
     <title>Data Visualization - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
-        @php $pageCssPath = resource_path('css/school-nurse-data-visualization.css'); @endphp
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <script>document.documentElement.classList.add('js');</script>
+    {{-- LUSOG order: theme, then this page's sheet, then the nurse rail. --}}
+    <style>{!! file_get_contents(resource_path('css/lusog-theme.css')) !!}</style>
+    @php $pageCssPath = resource_path('css/school-nurse-data-visualization.css'); @endphp
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
-    {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
-         last so it overrides this page's own :root colours. --}}
-    <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
+    <style>{!! file_get_contents(resource_path('css/nurse-sidebar.css')) !!}</style>
 </head>
 <body>
-@include('partials.nurse-sidebar', ['active' => 'visualization'])
+@include('partials.nurse-lusog-sidebar', ['active' => 'visualization'])
 
 <div class="main">
+    @php
+        $schoolName = session('active_school_name', 'No school assigned');
+        $schoolYear = \App\Models\StudentHealthRecord::currentSchoolYear();
+    @endphp
+
     <header class="topbar">
-        <div class="topbar-breadcrumb">
-            <a href="{{ route('dashboard.school-nurse') }}" class="bc-home">Dashboard</a>
-            <span class="bc-sep">&rsaquo;</span>
-            <span class="bc-current">Data Visualization</span>
-        </div>
-        <div class="topbar-chip">DCNHS - SY 2025-2026</div>
+        <div class="topbar-bc"><span>School Nurse</span><span class="bc-sep">&rsaquo;</span><span>Data Visualization</span></div>
+        <div class="topbar-spacer"></div>
+        <div class="topbar-chip"><span class="dot"></span>{{ $schoolName }} &middot; SY {{ $schoolYear }}</div>
         @include('partials.live-clock')
     </header>
 
     <div class="content">
-        <h1 class="page-title">Manuscript-Based <span>Data Visualization</span></h1>
-        <p class="page-sub">Input-Process-Output aligned view: BMI status, consultations, trends, inventory thresholds, and feeding program outcomes.</p>
+        <div class="page-header">
+            <div class="page-eyebrow">Reports</div>
+            <h1 class="page-title">Manuscript-Based <span>Data Visualization</span></h1>
+            <p class="page-sub">Input-Process-Output aligned view: BMI status, consultations, trends, inventory thresholds, and feeding program outcomes.</p>
+        </div>
+
+        {{-- These charts are illustrative layouts, not this school's figures:
+             every value below is fixed in the markup. Wiring them to the
+             student, consultation, inventory and feeding tables is a separate
+             piece of work — until then the banner says so, rather than letting
+             a reader take the numbers for their own. --}}
+        <div class="alert-bar is-info">
+            <div class="alert-body">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                <div>
+                    <strong>Sample layout &mdash; not live data</strong>
+                    <span>These charts show the intended reports. The figures are placeholders and are not read from {{ $schoolName }}'s records.</span>
+                </div>
+            </div>
+        </div>
 
         <section class="viz-grid">
-            <article class="viz-card">
-                <div class="viz-head"><div class="viz-title">Nutritional Status Donut Chart</div><div class="viz-meta">Source: Student Profile Module (BMI baseline: height and weight)</div></div>
+            <article class="card viz-card">
+                <div class="viz-head">
+                    <div class="viz-title">Nutritional Status Donut Chart</div>
+                    <div class="viz-meta">Source: Student Profile Module (BMI baseline: height and weight)</div>
+                </div>
                 <div class="viz-body donut-wrap">
-                    <div class="donut" aria-hidden="true"></div>
+                    <div class="donut" style="background:conic-gradient(var(--lg-emerald) 0 49%, var(--lg-amber) 49% 73%, var(--lg-danger) 73% 87%, var(--lg-info) 87% 100%)" aria-hidden="true"></div>
                     <div>
-                        <div class="legend-item"><span class="legend-dot" style="background:#1F8A4C"></span>Normal - 49%</div>
-                        <div class="legend-item"><span class="legend-dot" style="background:#F2B84B"></span>Wasted - 24%</div>
-                        <div class="legend-item"><span class="legend-dot" style="background:#D95C5C"></span>Severely Wasted - 14%</div>
-                        <div class="legend-item"><span class="legend-dot" style="background:#3D8FA3"></span>Overweight/Obese - 13%</div>
+                        <div class="legend-item"><span class="legend-dot" style="background:var(--lg-emerald)"></span>Normal &mdash; 49%</div>
+                        <div class="legend-item"><span class="legend-dot" style="background:var(--lg-amber)"></span>Wasted &mdash; 24%</div>
+                        <div class="legend-item"><span class="legend-dot" style="background:var(--lg-danger)"></span>Severely Wasted &mdash; 14%</div>
+                        <div class="legend-item"><span class="legend-dot" style="background:var(--lg-info)"></span>Overweight/Obese &mdash; 13%</div>
                     </div>
                 </div>
             </article>
 
-            <article class="viz-card">
-                <div class="viz-head"><div class="viz-title">Top Consultation Cases Bar Chart</div><div class="viz-meta">Source: Consultation Module (condition field)</div></div>
+            <article class="card viz-card">
+                <div class="viz-head">
+                    <div class="viz-title">Top Consultation Cases Bar Chart</div>
+                    <div class="viz-meta">Source: Consultation Module (condition field)</div>
+                </div>
                 <div class="viz-body">
                     <div class="bars">
                         <div class="bar" style="height:95%"></div>
@@ -62,42 +90,79 @@
                 </div>
             </article>
 
-            <article class="viz-card">
-                <div class="viz-head"><div class="viz-title">Consultation Trend Line Chart</div><div class="viz-meta">Source: Consultation Module (dates grouped by month)</div></div>
+            <article class="card viz-card">
+                <div class="viz-head">
+                    <div class="viz-title">Consultation Trend Line Chart</div>
+                    <div class="viz-meta">Source: Consultation Module (dates grouped by month)</div>
+                </div>
                 <div class="viz-body">
                     <svg class="line" viewBox="0 0 560 220" preserveAspectRatio="none" aria-label="Monthly consultation trend">
-                        <polyline points="18,166 96,138 174,150 252,112 330,94 408,120 486,78 542,98" fill="none" stroke="#3D8FA3" stroke-width="4" />
-                        <circle cx="18" cy="166" r="4" fill="#3D8FA3" /><circle cx="96" cy="138" r="4" fill="#3D8FA3" /><circle cx="174" cy="150" r="4" fill="#3D8FA3" /><circle cx="252" cy="112" r="4" fill="#3D8FA3" /><circle cx="330" cy="94" r="4" fill="#3D8FA3" /><circle cx="408" cy="120" r="4" fill="#3D8FA3" /><circle cx="486" cy="78" r="4" fill="#3D8FA3" /><circle cx="542" cy="98" r="4" fill="#3D8FA3" />
+                        <polyline points="18,166 96,138 174,150 252,112 330,94 408,120 486,78 542,98" fill="none" stroke="var(--series-healthy)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
+                        {{-- 2px surface ring on each point, so a marker stays
+                             legible where the line crosses the grid. --}}
+                        @foreach ([[18,166],[96,138],[174,150],[252,112],[330,94],[408,120],[486,78],[542,98]] as [$px, $py])
+                            <circle cx="{{ $px }}" cy="{{ $py }}" r="5" fill="var(--series-healthy)" stroke="#fff" stroke-width="2" />
+                        @endforeach
                     </svg>
                 </div>
             </article>
 
-            <article class="viz-card">
-                <div class="viz-head"><div class="viz-title">Medicine Inventory Gauges</div><div class="viz-meta">Source: Medicine Inventory Module (stock quantity vs minimum threshold)</div></div>
+            <article class="card viz-card">
+                <div class="viz-head">
+                    <div class="viz-title">Medicine Inventory Gauges</div>
+                    <div class="viz-meta">Source: Medicine Inventory Module (stock quantity vs minimum threshold)</div>
+                </div>
                 <div class="viz-body">
-                    <div class="gauge"><div class="gauge-top"><span>Paracetamol</span><span>18% / min 20%</span></div><div class="gauge-bar"><div class="gauge-fill" style="width:18%;background:#D95C5C"></div></div></div>
-                    <div class="gauge"><div class="gauge-top"><span>Amoxicillin</span><span>24% / min 20%</span></div><div class="gauge-bar"><div class="gauge-fill" style="width:24%;background:#F2B84B"></div></div></div>
-                    <div class="gauge"><div class="gauge-top"><span>Antihistamine</span><span>34% / min 20%</span></div><div class="gauge-bar"><div class="gauge-fill" style="width:34%;background:#F2B84B"></div></div></div>
-                    <div class="gauge"><div class="gauge-top"><span>Vitamin C</span><span>67% / min 20%</span></div><div class="gauge-bar"><div class="gauge-fill" style="width:67%;background:#1F8A4C"></div></div></div>
+                    @php
+                        // Fixed sample rows. Colour follows the status scale:
+                        // below the reorder point is critical, just above it is
+                        // monitoring, comfortably above is healthy.
+                        $gauges = [
+                            ['Paracetamol', 18, 'var(--lg-danger)'],
+                            ['Amoxicillin', 24, 'var(--lg-amber)'],
+                            ['Antihistamine', 34, 'var(--lg-amber)'],
+                            ['Vitamin C', 67, 'var(--lg-emerald)'],
+                        ];
+                    @endphp
+                    @foreach ($gauges as [$name, $pct, $colour])
+                        <div class="gauge">
+                            <div class="gauge-top"><strong>{{ $name }}</strong><span class="tnum">{{ $pct }}% / min 20%</span></div>
+                            <div class="gauge-bar"><div class="gauge-fill" style="width:{{ $pct }}%;background:{{ $colour }}"></div></div>
+                        </div>
+                    @endforeach
                 </div>
             </article>
 
-            <article class="viz-card" style="grid-column:1 / -1;">
-                <div class="viz-head"><div class="viz-title">Feeding Program Stacked Bar Chart</div><div class="viz-meta">Source: Feeding Program Module (baseline vs endline nutritional status)</div></div>
+            <article class="card viz-card is-wide" style="grid-column:1 / -1;">
+                <div class="viz-head">
+                    <div class="viz-title">Feeding Program Stacked Bar Chart</div>
+                    <div class="viz-meta">Source: Feeding Program Module (baseline vs endline nutritional status)</div>
+                </div>
                 <div class="viz-body">
                     <div class="stack-wrap">
-                        <div class="stack"><div class="seg-g" style="height:34%"></div><div class="seg-a" style="height:24%"></div><div class="seg-r" style="height:20%"></div></div>
-                        <div class="stack"><div class="seg-g" style="height:30%"></div><div class="seg-a" style="height:30%"></div><div class="seg-r" style="height:16%"></div></div>
-                        <div class="stack"><div class="seg-g" style="height:44%"></div><div class="seg-a" style="height:20%"></div><div class="seg-r" style="height:12%"></div></div>
-                        <div class="stack"><div class="seg-g" style="height:50%"></div><div class="seg-a" style="height:18%"></div><div class="seg-r" style="height:10%"></div></div>
-                        <div class="stack"><div class="seg-g" style="height:56%"></div><div class="seg-a" style="height:12%"></div><div class="seg-r" style="height:8%"></div></div>
-                        <div class="stack"><div class="seg-g" style="height:62%"></div><div class="seg-a" style="height:10%"></div><div class="seg-r" style="height:6%"></div></div>
+                        @foreach ([[34,24,20],[30,30,16],[44,20,12],[50,18,10],[56,12,8],[62,10,6]] as [$g, $a, $r])
+                            <div class="stack">
+                                <div class="seg-g" style="height:{{ $g }}%"></div>
+                                <div class="seg-a" style="height:{{ $a }}%"></div>
+                                <div class="seg-r" style="height:{{ $r }}%"></div>
+                            </div>
+                        @endforeach
                     </div>
-                    <div class="months"><span>Baseline</span><span>Month 1</span><span>Month 2</span><span>Month 3</span><span>Month 4</span><span>Endline</span></div>
+                    <div class="months">
+                        <span>Baseline</span><span>Month 1</span><span>Month 2</span>
+                        <span>Month 3</span><span>Month 4</span><span>Endline</span>
+                    </div>
+                    <div class="legend-item" style="margin-top:12px">
+                        <span class="legend-dot" style="background:var(--lg-emerald)"></span>Normal
+                        <span class="legend-dot" style="background:var(--lg-amber);margin-left:14px"></span>Wasted
+                        <span class="legend-dot" style="background:var(--lg-danger);margin-left:14px"></span>Severely Wasted
+                    </div>
                 </div>
             </article>
         </section>
     </div>
 </div>
+
+@include('partials.nurse-page-transition')
 </body>
 </html>

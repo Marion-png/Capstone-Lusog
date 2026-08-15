@@ -119,39 +119,39 @@
                     </div>
                 </div>
 
+                {{-- Dropdowns rather than pill rows: a school with a dozen
+                     sections wrapped the panel over several lines, and the
+                     counts stay on each option so nothing is lost. --}}
                 <div class="shr-filter-row">
                     <div class="shr-filter-group">
-                        <span class="shr-filter-label">Grade Level</span>
-                        <div class="shr-filter-btns" id="shrGradeBtns">
-                            <button type="button" class="shr-fbtn active" data-filter="grade" data-value="all">All</button>
+                        <label class="shr-filter-label" for="shrGradeFilter">Grade Level</label>
+                        <select class="shr-select" id="shrGradeFilter" data-filter="grade">
+                            <option value="all">All grade levels ({{ count($records) }})</option>
                             @foreach ($gradeOptions as $grade => $count)
-                                <button type="button" class="shr-fbtn" data-filter="grade" data-value="{{ $grade }}">
-                                    {{ $grade }}<span class="shr-count">{{ $count }}</span>
-                                </button>
+                                <option value="{{ $grade }}">{{ $grade }} ({{ $count }})</option>
                             @endforeach
-                        </div>
+                        </select>
                     </div>
 
                     <div class="shr-filter-group">
-                        <span class="shr-filter-label">Sex</span>
-                        <div class="shr-filter-btns" id="shrSexBtns">
-                            <button type="button" class="shr-fbtn active" data-filter="sex" data-value="all">All</button>
+                        <label class="shr-filter-label" for="shrSexFilter">Sex</label>
+                        <select class="shr-select" id="shrSexFilter" data-filter="sex">
+                            <option value="all">All ({{ count($records) }})</option>
                             @foreach ($sexOptions as $sex => $count)
-                                <button type="button" class="shr-fbtn {{ strtolower($sex) === 'male' ? 'is-male' : (strtolower($sex) === 'female' ? 'is-female' : '') }}" data-filter="sex" data-value="{{ strtolower($sex) }}">
-                                    {{ $sex }}<span class="shr-count">{{ $count }}</span>
-                                </button>
+                                <option value="{{ strtolower($sex) }}">{{ $sex }} ({{ $count }})</option>
                             @endforeach
-                        </div>
+                        </select>
                     </div>
-                </div>
 
-                <div class="shr-sections" id="shrSectionBtns">
-                    <button type="button" class="shr-sbtn active" data-filter="section" data-value="all">All Sections</button>
-                    @foreach ($sectionOptions as $section => $count)
-                        <button type="button" class="shr-sbtn" data-filter="section" data-value="{{ strtolower($section) }}">
-                            {{ $section }}<span class="shr-count">{{ $count }}</span>
-                        </button>
-                    @endforeach
+                    <div class="shr-filter-group">
+                        <label class="shr-filter-label" for="shrSectionFilter">Section</label>
+                        <select class="shr-select" id="shrSectionFilter" data-filter="section">
+                            <option value="all">All sections ({{ count($records) }})</option>
+                            @foreach ($sectionOptions as $section => $count)
+                                <option value="{{ strtolower($section) }}">{{ $section }} ({{ $count }})</option>
+                            @endforeach
+                        </select>
+                    </div>
                 </div>
             </section>
 
@@ -195,6 +195,7 @@
                                 <tr class="js-record-row"
                                     data-record='@json($record, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP)'
                                     data-route="{{ route('nurse.examine', $index) }}"
+                                    data-lrn="{{ $rowLrn }}"
                                     data-search="{{ strtolower($fullName . ' ' . $rowLrn) }}"
                                     data-grade="{{ $rowGrade }}"
                                     data-section="{{ strtolower($rowSection) }}"
@@ -275,6 +276,13 @@
                 <button type="button" class="btn btn-secondary" id="profilePrint">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                     Print
+                </button>
+                {{-- Opens the consultation dialog over this profile, with the
+                     learner already filled in — the profile stays behind it
+                     rather than being navigated away from. --}}
+                <button type="button" id="profileConsultLink" class="btn btn-secondary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
+                    New Consultation
                 </button>
                 <a href="#" id="profileFillLink" class="btn btn-primary">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
@@ -463,6 +471,8 @@
     const closeBtn = document.getElementById('profileClose');
     const printBtn = document.getElementById('profilePrint');
     const fillLink = document.getElementById('profileFillLink');
+    const consultLink = document.getElementById('profileConsultLink');
+    const openLrn = new URLSearchParams(window.location.search).get('open') || '';
 
     if (!backdrop) {
         return;
@@ -711,6 +721,15 @@
     const openProfile = (record, route) => {
         if (fillLink) {
             fillLink.setAttribute('href', route || '#');
+        }
+
+        // "New Consultation" opens the dialog over this profile with the
+        // learner filled in. Without an LRN there is no learner to record
+        // against, so the button is hidden rather than left dangling.
+        if (consultLink) {
+            const lrn = String(record.lrn || '').trim();
+            consultLink.hidden = lrn === '';
+            consultLink.dataset.consultLrn = lrn;
         }
         const fullName = [record.last_name, ',', record.first_name, record.middle_name ? (' ' + String(record.middle_name).charAt(0).toUpperCase() + '.') : '']
             .join(' ')
@@ -1366,6 +1385,13 @@
             });
         }
         row.addEventListener('click', open);
+
+        // Arrived from the dashboard's learner search (?open=<lrn>): open
+        // that learner's profile straight away, so the search is one step
+        // rather than "search, land on a list, find the row again".
+        if (openLrn !== '' && String(row.getAttribute('data-lrn') || '') === openLrn) {
+            open();
+        }
     });
 
     if (closeBtn) {
@@ -1373,6 +1399,22 @@
     }
     if (printBtn) {
         printBtn.addEventListener('click', () => window.print());
+    }
+
+    // The profile is itself a dialog, so close it before opening the
+    // consultation one — two stacked backdrops would blur twice and trap
+    // focus between them.
+    if (consultLink) {
+        consultLink.addEventListener('click', () => {
+            const name = document.getElementById('pName')?.textContent?.trim() || '';
+            const section = document.getElementById('pGrade')?.textContent?.trim() || '';
+
+            closeProfile();
+
+            if (typeof window.openConsultationFor === 'function') {
+                window.openConsultationFor(name, section);
+            }
+        });
     }
     backdrop.addEventListener('click', (event) => {
         if (event.target === backdrop) {
@@ -1428,17 +1470,14 @@
         }
     };
 
-    document.querySelectorAll('[data-filter]').forEach((button) => {
-        button.addEventListener('click', () => {
-            const group = button.dataset.filter;
-            if (!(group in filters)) {
-                return;
-            }
+    document.querySelectorAll('select[data-filter]').forEach((select) => {
+        const group = select.dataset.filter;
+        if (!(group in filters)) {
+            return;
+        }
 
-            filters[group] = button.dataset.value || 'all';
-            button.parentElement.querySelectorAll('[data-filter="' + group + '"]').forEach((sibling) => {
-                sibling.classList.toggle('active', sibling === button);
-            });
+        select.addEventListener('change', () => {
+            filters[group] = select.value || 'all';
             applyFilters();
         });
     });
@@ -1451,6 +1490,7 @@
 })();
 </script>
 
+@include('partials.consultation-modal')
 @include('partials.nurse-page-transition')
 </body>
 </html>

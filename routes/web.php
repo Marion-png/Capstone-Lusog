@@ -30,6 +30,7 @@ use App\Models\MedicineDispense;
 use App\Models\StudentHealthRecord;
 use App\Support\AuditTrail;
 use App\Support\FeedingAtRiskRule;
+use App\Support\StudentRosterSync;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -233,9 +234,34 @@ Route::get('/dashboard/school-nurse', function (Request $request) {
             ->get();
     }
 
+    // Roster for the dashboard's learner search. Names are encrypted, so the
+    // search cannot run in SQL — the list is embedded and filtered in the
+    // browser, exactly as the adviser's topbar search does.
+    StudentRosterSync::syncToSession($request);
+
+    $learnerSearchRoster = collect($request->session()->get('school_health_card_records', []))
+        ->map(function ($row) {
+            $middle = trim((string) ($row['middle_name'] ?? ''));
+            $name = trim(
+                trim((string) ($row['last_name'] ?? '')).', '.
+                trim((string) ($row['first_name'] ?? '')).
+                ($middle !== '' ? ' '.strtoupper(substr($middle, 0, 1)).'.' : '')
+            );
+
+            return [
+                'lrn' => (string) ($row['lrn'] ?? ''),
+                'name' => trim($name, ' ,'),
+                'section' => trim(trim((string) ($row['grade_level'] ?? '')).' - '.trim((string) ($row['section'] ?? '')), ' -'),
+            ];
+        })
+        ->filter(fn (array $row) => $row['lrn'] !== '' && $row['name'] !== '')
+        ->sortBy('name')
+        ->values();
+
     return view('dashboard.school-nurse', compact(
         'totalRecords', 'consultationsToday', 'atRiskCount', 'lowStockCount',
-        'recentConsultations', 'topConditions', 'lowStockMedicines'
+        'recentConsultations', 'topConditions', 'lowStockMedicines',
+        'learnerSearchRoster'
     ));
 })->name('dashboard.school-nurse');
 

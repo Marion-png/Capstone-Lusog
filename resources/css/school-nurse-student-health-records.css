@@ -159,30 +159,24 @@
 .shr-search input { padding: 8px 15px 8px 34px; border: 1.5px solid var(--border); border-radius: 999px; font-family: 'DM Sans', sans-serif; font-size: .8rem; color: var(--text-1); background: #fff; outline: none; min-width: 230px; transition: border-color .2s, box-shadow .2s; }
 .shr-search input:focus { border-color: var(--g700); box-shadow: 0 0 0 3px rgba(21,128,61,.1); }
 
-.shr-filter-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
-.shr-filter-group { display: flex; flex-direction: column; gap: 5px; }
+.shr-filter-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: end; }
+.shr-filter-group { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .shr-filter-label { font-size: .64rem; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: .08em; }
-.shr-filter-btns { display: flex; gap: 5px; flex-wrap: wrap; }
 
-.shr-fbtn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 15px; border: 1.5px solid var(--border); border-radius: 999px; background: #fff; font-family: 'DM Sans', sans-serif; font-size: .74rem; font-weight: 600; color: var(--text-3); cursor: pointer; transition: all .18s ease; }
-.shr-fbtn:hover { border-color: var(--g300); color: var(--g900); background: var(--g50); }
-.shr-fbtn.active { border-color: var(--g900); background: var(--g900); color: #fff; }
-.shr-fbtn svg { width: 12px; height: 12px; }
-.shr-fbtn .shr-count { background: #eef3f0; color: var(--text-3); padding: 1px 7px; border-radius: 999px; font-size: .62rem; }
-.shr-fbtn.active .shr-count { background: rgba(255,255,255,.22); color: #fff; }
-.shr-fbtn.is-male { border-color: #bbdefb; color: #1565c0; }
-.shr-fbtn.is-male:hover { background: #e3f2fd; border-color: #1565c0; }
-.shr-fbtn.is-male.active { background: #1565c0; border-color: #1565c0; color: #fff; }
-.shr-fbtn.is-female { border-color: #f8bbd0; color: #ad1457; }
-.shr-fbtn.is-female:hover { background: #fce4ec; border-color: #ad1457; }
-.shr-fbtn.is-female.active { background: #ad1457; border-color: #ad1457; color: #fff; }
+/* Dropdowns replaced the pill rows: a dozen sections wrapped the panel
+   over several lines. Each option keeps its count. */
+.shr-select {
+    width: 100%; font-family: inherit; font-size: .8rem; color: var(--text-1);
+    background: #fff; border: 1.5px solid var(--border); border-radius: 9px;
+    padding: 8px 30px 8px 12px; cursor: pointer; appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--text-3) 50%), linear-gradient(135deg, var(--text-3) 50%, transparent 50%);
+    background-position: calc(100% - 16px) 54%, calc(100% - 11px) 54%;
+    background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+}
+.shr-select:hover { border-color: var(--g300); }
+.shr-select:focus { outline: none; border-color: var(--g700); box-shadow: 0 0 0 3px rgba(21,128,61,.1); }
 
-.shr-sections { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
-.shr-sbtn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 13px; border: 1.5px solid var(--border); border-radius: 999px; background: #fff; font-family: 'DM Sans', sans-serif; font-size: .73rem; font-weight: 500; color: var(--text-3); cursor: pointer; transition: all .18s ease; }
-.shr-sbtn:hover { border-color: var(--g300); color: var(--g900); background: var(--g50); }
-.shr-sbtn.active { border-color: var(--g600); background: var(--g600); color: #fff; }
-.shr-sbtn .shr-count { background: #eef3f0; color: var(--text-3); padding: 1px 7px; border-radius: 999px; font-size: .62rem; }
-.shr-sbtn.active .shr-count { background: rgba(255,255,255,.22); color: #fff; }
+@media (max-width: 780px) { .shr-filter-row { grid-template-columns: 1fr; } }
 
 .shr-table-card { background: #fff; border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-card); overflow: hidden; margin-top: 16px; }
 .shr-table-head { padding: 14px 18px; border-bottom: 1px solid var(--border); background: #f7faf8; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }

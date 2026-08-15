@@ -38,11 +38,33 @@ return [
     */
 
     'priority' => [
+        /*
+         | Fields on the Health Assessment form (health_assessments table).
+         */
         'conditions' => [
             'med_asthma' => 'Asthma',
             'med_diabetes' => 'Diabetes',
             'med_seizure_disorder' => 'Seizure disorder',
             'med_heart_condition' => 'Heart condition',
+            'med_tuberculosis' => 'Tuberculosis',
+            'med_allergies' => 'Severe allergies',
+        ],
+
+        /*
+         | The SAME conditions as recorded on the adviser's student profile
+         | (student_health_records.student_details['health_history']).
+         |
+         | That form is older and names three of them differently — med_seizure
+         | rather than med_seizure_disorder, med_heart rather than
+         | med_heart_condition. Both forms must flag a learner, so the rule
+         | reads both and the labels are deliberately identical: a learner
+         | recorded in both places is one Priority entry, not two.
+         */
+        'profile_conditions' => [
+            'med_asthma' => 'Asthma',
+            'med_diabetes' => 'Diabetes',
+            'med_seizure' => 'Seizure disorder',
+            'med_heart' => 'Heart condition',
             'med_tuberculosis' => 'Tuberculosis',
             'med_allergies' => 'Severe allergies',
         ],

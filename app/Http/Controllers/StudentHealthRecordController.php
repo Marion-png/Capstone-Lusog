@@ -446,9 +446,11 @@ class StudentHealthRecordController extends Controller
             $consentDenied = $consent && $consent->consent_choice === HealthConsentForm::CONSENT_DENY;
             $consentPending = $consent && $consent->status === HealthConsentForm::STATUS_SENT;
 
-            // Chronic or life-threatening condition on the adviser's own
-            // assessment. Derived on every read — see PriorityHealthRule.
-            $priorityReasons = PriorityHealthRule::reasonsFor($assessment);
+            // Chronic or life-threatening condition recorded EITHER on the
+            // Health Assessment form or in the student profile's Health
+            // History checklist. Derived on every read — see
+            // PriorityHealthRule, which reads both sources.
+            $priorityReasons = PriorityHealthRule::reasonsFor($assessment, $shRecord);
             $isPriority = $priorityReasons !== [];
 
             if ($consentDenied || $atRisk || $isPriority) {

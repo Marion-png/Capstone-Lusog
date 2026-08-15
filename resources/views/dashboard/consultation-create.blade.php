@@ -37,12 +37,12 @@
                     </div>
                     <div class="field">
                         <label for="student_name">Student Name</label>
-                        <input id="student_name" type="text" name="student_name" value="{{ old('student_name') }}" placeholder="e.g. Dela Cruz, Juan" required>
+                        <input id="student_name" type="text" name="student_name" value="{{ old('student_name', $prefillName ?? '') }}" placeholder="e.g. Dela Cruz, Juan" required>
                         @error('student_name') <div class="err">{{ $message }}</div> @enderror
                     </div>
                     <div class="field">
                         <label for="grade_section">Grade and Section</label>
-                        <input id="grade_section" type="text" name="grade_section" value="{{ old('grade_section') }}" placeholder="e.g. Grade 10 - Rizal" required>
+                        <input id="grade_section" type="text" name="grade_section" value="{{ old('grade_section', $prefillSection ?? '') }}" placeholder="e.g. Grade 10 - Rizal" required>
                         @error('grade_section') <div class="err">{{ $message }}</div> @enderror
                     </div>
                     <div class="field">

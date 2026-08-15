@@ -195,7 +195,10 @@
 			</div>
 		@endif
 
-		<section class="kpi-grid">
+		{{-- Three figures for the School Nurse, four for the coordinator: the
+		     nutritional-improvement card is hidden read-only (see below), so
+		     the row closes up rather than leaving a hole. --}}
+		<section class="kpi-grid {{ $isReadOnly ? 'cols-3' : '' }}">
 			<article class="card kpi accent-brand">
 				<div class="kpi-top">
 					<div class="kpi-label">Enrolled Students</div>
@@ -220,6 +223,13 @@
 				<div class="kpi-value" id="avgAttendanceValue">{{ $programStats['avg_attendance'] ?? '0%' }}</div>
 				<div class="kpi-hint">Confirmed marks only</div>
 			</article>
+			{{-- Nutritional improvement is a baseline-to-endline comparison,
+			     so it only means anything once the closing measurement has
+			     been taken. The School Nurse reads this page mid-cycle and
+			     would see a permanent 0%, which reads as "nobody improved"
+			     rather than "not measured yet". The Feeding Coordinator, who
+			     owns the endline, still sees it. --}}
+			@unless ($isReadOnly)
 			<article class="card kpi accent-success">
 				<div class="kpi-top">
 					<div class="kpi-label">Improving</div>
@@ -228,6 +238,7 @@
 				<div class="kpi-value">{{ $programStats['improving_rate'] ?? '0%' }}</div>
 				<div class="kpi-hint">{{ $programStats['improving_hint'] ?? '0 of 0 students' }}</div>
 			</article>
+			@endunless
 		</section>
 
 		<section class="card progress-card">

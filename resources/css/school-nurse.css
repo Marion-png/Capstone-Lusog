@@ -7,6 +7,93 @@
    the boards row, the two summary meters, and the quick-access grid.
    ══════════════════════════════════════════════════════════════════════ */
 
+/* ── Topbar learner search ─────────────────────────────────────────────
+   Search straight to a learner from the dashboard, as the Class Adviser's
+   topbar does. The roster is embedded and filtered in the browser because
+   names are encrypted at rest and no SQL LIKE can see them. ── */
+
+.nurse-search {
+	position: relative;
+	flex: 1 1 auto;
+	max-width: 420px;
+	margin: 0 auto 0 24px;
+	display: flex;
+	align-items: center;
+}
+.nurse-search > svg {
+	position: absolute;
+	left: 12px;
+	width: 15px;
+	height: 15px;
+	color: var(--lg-ink-soft);
+	pointer-events: none;
+}
+.nurse-search input {
+	width: 100%;
+	font: inherit;
+	font-size: .82rem;
+	color: var(--lg-ink);
+	background: var(--lg-page);
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-pill);
+	padding: 8px 14px 8px 34px;
+}
+.nurse-search input::placeholder { color: #9AAEA4; }
+.nurse-search input:focus {
+	outline: none;
+	background: var(--lg-card);
+	border-color: var(--lg-emerald);
+	box-shadow: var(--lg-focus);
+}
+
+/* Results hang below the field, over the page. */
+.nurse-search-dropdown {
+	display: none;
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: calc(100% + 7px);
+	z-index: 60;
+	max-height: 340px;
+	overflow-y: auto;
+	background: var(--lg-card);
+	border: 1px solid var(--lg-border-strong);
+	border-radius: var(--lg-r-card);
+	box-shadow: var(--lg-shadow-pop);
+	padding: 5px;
+}
+.nurse-search-dropdown.show { display: block; }
+
+.lf-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 10px;
+	border-radius: var(--lg-r-input);
+	text-decoration: none;
+}
+.lf-row:hover, .lf-row:focus-visible { background: var(--lg-mint); outline: none; }
+.lf-avatar {
+	width: 32px;
+	height: 32px;
+	flex: 0 0 auto;
+	border-radius: 50%;
+	background: var(--lg-emerald-deep);
+	color: #fff;
+	display: grid;
+	place-items: center;
+	font-size: .7rem;
+	font-weight: 700;
+}
+.lf-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.lf-name { font-size: .84rem; font-weight: 600; color: var(--lg-ink); }
+.lf-meta { font-size: .72rem; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; }
+.lf-empty { padding: 16px 11px; text-align: center; font-size: .8rem; color: var(--lg-ink-soft); }
+
+@media (max-width: 900px) {
+	.nurse-search { display: none; }
+}
+
 /* Announcements + upcoming events, side by side. */
 .board-row {
 	display: grid;

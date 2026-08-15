@@ -176,13 +176,12 @@ class SchoolNurseDashboardTest extends TestCase
             '/dashboard/student-health-records' => 'dashboard.student-health-records',
             '/dashboard/consultation-log' => 'dashboard.consultation-log',
             '/dashboard/medicine-inventory' => 'dashboard.medicine-inventory',
+            '/dashboard/data-visualization' => 'dashboard.data-visualization',
         ];
 
         // Still on the older .nsb-* rail. Move each entry up to $lusogPages
         // as it is converted; the list is expected to reach zero.
-        $legacyPages = [
-            '/dashboard/data-visualization' => 'dashboard.data-visualization',
-        ];
+        $legacyPages = [];
 
         // Reachable and fully working, but deliberately absent from the rail
         // (see the note in partials/nurse-lusog-sidebar). These still render

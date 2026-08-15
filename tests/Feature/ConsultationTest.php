@@ -95,7 +95,7 @@ class ConsultationTest extends TestCase
         // The condition-search component only ever renders @error('condition_id')
         // (its `name` prop). The error must be attached under that same key or
         // it never reaches the user — see missing_condition_error_is_visible_to_the_condition_search_component.
-        $response->assertSessionHasErrors('condition_id');
+        $response->assertSessionHasErrors('condition_id', null, 'consultation');
 
         $this->assertSame(0, Consultation::count());
     }
@@ -121,7 +121,7 @@ class ConsultationTest extends TestCase
                 'status' => 'treated',
             ]);
 
-        $response->assertSessionHasErrors(['condition_id' => 'Please select or enter a condition.']);
+        $response->assertSessionHasErrors(['condition_id' => 'Please select or enter a condition.'], null, 'consultation');
     }
 
     /** @test */
@@ -163,7 +163,7 @@ class ConsultationTest extends TestCase
                 'status' => 'treated',
             ]);
 
-        $response->assertSessionHasErrors('condition_id');
+        $response->assertSessionHasErrors('condition_id', null, 'consultation');
     }
 
     /** @test */

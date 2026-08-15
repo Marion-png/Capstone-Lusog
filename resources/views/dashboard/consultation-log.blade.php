@@ -52,10 +52,13 @@
                 </div>
                 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
                     <a href="{{ route('dashboard.student-health-records') }}" class="btn btn-secondary">Health Records</a>
-                    <a href="{{ route('consultations.create') }}" class="btn btn-primary">
+                    {{-- Opens the dialog on this page rather than navigating
+                         away; the standalone form is still at
+                         consultations.create for anyone who links to it. --}}
+                    <button type="button" class="btn btn-primary" data-bmodal-open="consultModal">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         New Consultation
-                    </a>
+                    </button>
                 </div>
             </div>
         </div>
@@ -215,6 +218,7 @@
     </div>
 </div>
 
+@include('partials.consultation-modal')
 @include('partials.nurse-page-transition')
 
 <script>

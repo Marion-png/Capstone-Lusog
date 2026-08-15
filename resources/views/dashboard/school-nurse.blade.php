@@ -32,7 +32,17 @@
 
     <header class="topbar">
         <div class="topbar-bc"><span>School Nurse</span><span class="bc-sep">&rsaquo;</span><span>Dashboard</span></div>
-        <div class="topbar-spacer"></div>
+
+        {{-- Search straight to a learner, as the adviser's topbar does. The
+             roster is embedded and filtered in the browser: student names are
+             encrypted at rest, so no SQL LIKE can see them. --}}
+        <div class="nurse-search" id="nurseSearchBox">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="search" id="learnerFind" placeholder="Search students..." autocomplete="off"
+                   role="combobox" aria-expanded="false" aria-controls="learnerFindResults">
+            <div class="nurse-search-dropdown" id="learnerFindResults" role="listbox"></div>
+        </div>
+
         <div class="topbar-chip"><span class="dot"></span>{{ $schoolName }} &middot; SY {{ $schoolYear }}</div>
         @include('partials.live-clock')
     </header>
@@ -304,6 +314,108 @@
 </div>
 
 @include('partials.nurse-page-transition')
+
+<script>
+// Learner search. The roster is embedded because student names are
+// encrypted at rest and cannot be matched by a SQL LIKE.
+(() => {
+    const box = document.getElementById('nurseSearchBox');
+    const input = document.getElementById('learnerFind');
+    const results = document.getElementById('learnerFindResults');
+    if (!box || !input || !results) return;
+
+    const roster = @json($learnerSearchRoster ?? []);
+    const recordsUrl = @json(route('dashboard.student-health-records'));
+
+    const initialsOf = (name) => {
+        const parts = String(name).split(',');
+        const last = (parts[0] || '').trim();
+        const first = (parts[1] || '').trim();
+        return ((first.charAt(0) || last.charAt(0) || '?') + (last.charAt(0) || '')).toUpperCase();
+    };
+
+    const render = (matches, term) => {
+        results.textContent = '';
+
+        if (matches.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'lf-empty';
+            empty.textContent = 'No students found matching "' + term + '"';
+            results.appendChild(empty);
+            return;
+        }
+
+        matches.forEach((row) => {
+            // Built from DOM nodes, never innerHTML: these are names typed
+            // by an adviser, and a template string would run any markup in
+            // them.
+            const link = document.createElement('a');
+            link.className = 'lf-row';
+            link.setAttribute('role', 'option');
+            link.href = recordsUrl + '?open=' + encodeURIComponent(row.lrn);
+
+            const avatar = document.createElement('div');
+            avatar.className = 'lf-avatar';
+            avatar.textContent = initialsOf(row.name);
+
+            const info = document.createElement('div');
+            info.className = 'lf-info';
+
+            const name = document.createElement('span');
+            name.className = 'lf-name';
+            name.textContent = row.name;
+
+            const meta = document.createElement('span');
+            meta.className = 'lf-meta';
+            meta.textContent = (row.section || '—') + ' · LRN ' + row.lrn;
+
+            info.append(name, meta);
+            link.append(avatar, info);
+            results.appendChild(link);
+        });
+    };
+
+    const close = () => {
+        results.classList.remove('show');
+        input.setAttribute('aria-expanded', 'false');
+    };
+
+    const apply = () => {
+        const raw = input.value.trim();
+        const term = raw.toLowerCase();
+
+        if (term === '') {
+            close();
+            results.textContent = '';
+            return;
+        }
+
+        const matches = roster.filter((row) =>
+            row.name.toLowerCase().includes(term) || row.lrn.toLowerCase().includes(term)
+        ).slice(0, 8);
+
+        render(matches, raw);
+        results.classList.add('show');
+        input.setAttribute('aria-expanded', 'true');
+    };
+
+    input.addEventListener('input', apply);
+    input.addEventListener('focus', apply);
+
+    document.addEventListener('click', (event) => {
+        if (!box.contains(event.target)) {
+            close();
+        }
+    });
+
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            close();
+            input.blur();
+        }
+    });
+})();
+</script>
 
 <script>
 // Recent Consultations: search + date/level filters over the rendered rows.

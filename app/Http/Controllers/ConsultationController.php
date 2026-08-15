@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Condition;
 use App\Models\Consultation;
+use App\Models\StudentHealthRecord;
+use App\Support\SchemaCache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -77,7 +79,26 @@ class ConsultationController extends Controller
             return $redirect;
         }
 
-        return view('dashboard.consultation-create');
+        // Opened from a learner's profile: ?lrn=... pre-fills who this
+        // consultation is for. The LRN is looked up rather than the name
+        // being passed through the URL — names are encrypted and URLs are
+        // logged and shared, and a looked-up record cannot be spoofed by
+        // editing the query string.
+        $learner = null;
+        $lrn = trim((string) $request->query('lrn', ''));
+
+        if ($lrn !== '' && SchemaCache::hasTable('student_health_records')) {
+            $learner = StudentHealthRecord::forActiveInstitution()
+                ->where('student_id', $lrn)
+                ->latest('id')
+                ->first();
+        }
+
+        return view('dashboard.consultation-create', [
+            'prefillName' => $learner?->student_name,
+            'prefillSection' => $learner?->section,
+            'prefillLrn' => $learner ? $lrn : null,
+        ]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -86,7 +107,10 @@ class ConsultationController extends Controller
             return $redirect;
         }
 
-        $validated = $request->validate([
+        // Named bag: the form is now also a dialog, and a dialog whose save
+        // failed has to re-open itself to show why. Its own bag keeps that
+        // from re-opening whatever other dialog shares the page.
+        $validated = $request->validateWithBag('consultation', [
             'consulted_at' => ['required', 'date'],
             'student_name' => ['required', 'string', 'max:255'],
             'grade_section' => ['required', 'string', 'max:255'],
@@ -102,7 +126,7 @@ class ConsultationController extends Controller
 
         if (! $conditionId && ! $conditionText) {
             return back()
-                ->withErrors(['condition_id' => 'Please select or enter a condition.'])
+                ->withErrors(['condition_id' => 'Please select or enter a condition.'], 'consultation')
                 ->withInput();
         }
 
@@ -111,7 +135,19 @@ class ConsultationController extends Controller
         if ($conditionId) {
             $condition = Condition::find($conditionId);
             if ($condition) {
-                $conditionName = $condition->name;
+                // "Others" is the catalogue's catch-all. Storing that word
+                // would throw away what the nurse actually recorded, and the
+                // top-conditions report groups on this text — so an unusual
+                // case would read as "others" forever. Keep the detail.
+                $isCatchAll = strcasecmp($condition->name, 'Others') === 0;
+
+                if ($isCatchAll && ($conditionText === null || trim($conditionText) === '')) {
+                    return back()
+                        ->withErrors(['condition' => 'Please describe the condition.'], 'consultation')
+                        ->withInput();
+                }
+
+                $conditionName = $isCatchAll ? trim((string) $conditionText) : $condition->name;
             }
         }
 
@@ -122,7 +158,9 @@ class ConsultationController extends Controller
             'grade_section' => $validated['grade_section'],
             'condition' => $conditionName,
             'condition_id' => $conditionId,
-            'treatment_given' => $validated['treatment_given'],
+            // Nullable in the rules above, so it is absent from $validated
+            // when left blank — reading it directly raised a 500.
+            'treatment_given' => $validated['treatment_given'] ?? null,
             'status' => $validated['status'],
         ]);
 

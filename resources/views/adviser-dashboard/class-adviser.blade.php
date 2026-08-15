@@ -635,6 +635,32 @@
                         <div class="field"><label for="pulse">Pulse (BPM)</label><input id="pulse" name="pulse_bpm" type="number" step="1" min="20" max="250" placeholder="e.g., 72" value="{{ old('pulse_bpm') }}"></div>
                         <div class="field"><label for="bloodPressure">BP (mmHg)</label><input id="bloodPressure" name="blood_pressure" type="text" maxlength="20" placeholder="e.g., 110/70" value="{{ old('blood_pressure') }}"></div>
                     </div>
+
+                    {{-- Computed from weight, height and date of birth as they
+                         are typed — never entered by hand. The script that
+                         fills these also writes the hidden height_cm the
+                         server stores, so these four elements are load-bearing
+                         and not merely decorative. --}}
+                    <div class="bmi-readout" aria-live="polite">
+                        <div class="bmi-item">
+                            <span class="bmi-label">Height&sup2;</span>
+                            <span class="bmi-value" id="heightSquared">-</span>
+                            <span class="bmi-unit">m&sup2;</span>
+                        </div>
+                        <div class="bmi-item is-primary">
+                            <span class="bmi-label">BMI</span>
+                            <span class="bmi-value" id="bmiDisplay">-</span>
+                            <span class="bmi-unit">kg/m&sup2;</span>
+                        </div>
+                        <div class="bmi-item">
+                            <span class="bmi-label">Nutritional Status</span>
+                            <span class="bmi-value is-text" id="nutriStatusDisplay">-</span>
+                        </div>
+                        <div class="bmi-item">
+                            <span class="bmi-label">Height-for-Age</span>
+                            <span class="bmi-value is-text" id="hfaDisplay">-</span>
+                        </div>
+                    </div>
                 </div>
                 </div>{{-- end Sheet 1 --}}
 

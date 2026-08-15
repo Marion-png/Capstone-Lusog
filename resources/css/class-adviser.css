@@ -721,6 +721,27 @@ tbody tr:hover td{background:#f3fbf6}
 .na-badge-bad{background:#FCECEC;color:#b91c1c}
 .na-badge-warn{background:#FDF4E2;color:#8A5A06}
 
+/* ── Live BMI readout (student form, Vital Signs) ──────────────────────
+   Computed from weight, height and date of birth as the adviser types.
+   Styled as a readout, not as inputs, so it is visibly something the form
+   works out rather than something to fill in. */
+.bmi-readout{
+    display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;
+    padding:12px 14px;margin-top:4px;
+    background:var(--g50);border:1px solid var(--g200);border-radius:10px;
+}
+.bmi-item{display:flex;flex-direction:column;gap:2px;min-width:0}
+.bmi-label{font-size:.64rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.bmi-value{font-size:1.15rem;font-weight:700;color:#14321f;line-height:1.2;font-variant-numeric:tabular-nums}
+/* A status reads as words, so it does not need the figure treatment. */
+.bmi-value.is-text{font-size:.84rem;font-weight:600;line-height:1.35;overflow-wrap:anywhere}
+.bmi-unit{font-size:.66rem;color:var(--muted)}
+.bmi-item.is-primary .bmi-value{color:var(--g700);font-size:1.35rem}
+
+@media (max-width:780px){
+    .bmi-readout{grid-template-columns:1fr 1fr}
+}
+
 /* ── Priority Students table ───────────────────────────────────────────
    Learners with a chronic or life-threatening condition. Coral is the
    system's critical step — deliberately not the amber used for at-risk
