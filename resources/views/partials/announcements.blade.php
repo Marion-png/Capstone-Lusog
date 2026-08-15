@@ -49,8 +49,9 @@
     .ann-item-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
     .ann-item-by { font-size: .7rem; color: var(--ann-sub, #6B7C72); }
     .ann-item-delete-form { margin-left: auto; }
-    .ann-item-delete-btn { background: none; border: none; color: #b91c1c; font-size: .7rem; font-weight: 600; cursor: pointer; font-family: inherit; padding: 2px 6px; }
-    .ann-item-delete-btn:hover { text-decoration: underline; }
+    .ann-item-delete-btn { background: none; border: none; border-radius: 5px; color: #b91c1c; font-size: .7rem; font-weight: 600; cursor: pointer; font-family: inherit; padding: 2px 6px; }
+    /* Tinted, never underlined — nothing in this app rules a line through a word. */
+    .ann-item-delete-btn:hover { background: #FCECEC; }
     .ann-empty { padding: 22px 18px; text-align: center; color: var(--ann-empty, #94a3b8); font-size: .8rem; }
 
     /* Priority. Urgent takes the system's critical coral, Important its

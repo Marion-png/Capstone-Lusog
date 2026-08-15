@@ -18,6 +18,7 @@ class FeedingAttendance extends Model
         'attendance_import_id',
         'source',
         'needs_review',
+        'recorded_by_name',
         'reviewed_by_name',
         'reviewed_at',
         'remarks',
@@ -34,6 +35,10 @@ class FeedingAttendance extends Model
         'is_present' => 'boolean',
         'needs_review' => 'boolean',
         'reviewed_at' => 'datetime',
+        // Who the mark came from, and who last decided it. Both are staff
+        // names — personal information — so both are encrypted at rest, and
+        // the bulk upserts that bypass these casts encrypt them themselves.
+        'recorded_by_name' => EncryptedString::class,
         'reviewed_by_name' => EncryptedString::class,
         // Why a named child missed a session — personal information, so it is
         // encrypted at rest. Writes that bypass Eloquent (the bulk upsert in

@@ -766,6 +766,19 @@ Route::get('/dashboard/feedingcor-program/enrollment/candidates', [FeedingEnroll
 Route::post('/dashboard/feedingcor-program/enrollment', [FeedingEnrollmentController::class, 'store'])
     ->name('feedingcor-program.enrollment.store');
 
+// One beneficiary's own page — what clicking a learner's name opens from the
+// Beneficiaries tab. Keyed by record id, never by name.
+Route::get('/dashboard/feedingcor-program/beneficiary/{record}', [FeedingProgramController::class, 'beneficiaryProfile'])
+    ->whereNumber('record')
+    ->name('feedingcor-program.beneficiary');
+
+// Correcting one learner's mark for one session. Keyed by learner and date, so
+// the same path fixes a wrong mark and fills one a sheet skipped; every
+// correction is attributed and audited with the value it replaced.
+Route::post('/dashboard/feedingcor-program/beneficiary/{record}/attendance', [FeedingProgramController::class, 'correctAttendance'])
+    ->whereNumber('record')
+    ->name('feedingcor-program.beneficiary.attendance.correct');
+
 // One learner's session-by-session attendance — what "View" opens from the
 // dashboard's at-risk list. Keyed by record id, never by name.
 Route::get('/dashboard/feedingcor-program/attendance/learner/{record}', [FeedingProgramController::class, 'learnerAttendance'])

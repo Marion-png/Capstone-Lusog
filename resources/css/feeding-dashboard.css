@@ -171,8 +171,9 @@
 .risk-table thead th { position: sticky; top: 0; z-index: 1; background: var(--lg-rail); }
 /* The rate is the number the flag turned on, so it carries the weight. */
 .risk-rate { font-weight: 700; color: var(--lg-orange-ink); font-variant-numeric: tabular-nums; }
+/* Never underlined — the colour deepening is the affordance. */
 .risk-view { font-size: .78rem; font-weight: 600; color: var(--lg-emerald); text-decoration: none; }
-.risk-view:hover { text-decoration: underline; }
+.risk-view:hover { color: var(--lg-emerald-dark); text-decoration: none; }
 
 /* ── Nutritional progress ───────────────────────────────────────────
    Two series on one scale: --series-risk for baseline, --series-healthy

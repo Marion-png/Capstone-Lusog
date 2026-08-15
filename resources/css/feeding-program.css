@@ -10,6 +10,7 @@
    ══════════════════════════════════════════════════════════════════════ */
 
 .head-row { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 .school-filter-form { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .school-filter-label { font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); }
@@ -278,3 +279,80 @@
 /* The School Nurse read-only variant's rail used to be restated here. It
    now lives in css/nurse-sidebar.css, shared with every other nurse page,
    and this template loads that sheet instead when $isReadOnly. */
+
+/* ══ Print ═══════════════════════════════════════════════════════════
+   The programme report on paper: a masthead saying whose programme and
+   which day, the four figures, and the two rolls. Everything that only
+   works with a cursor — filters, uploads, modals, the rail — is gone,
+   and the tables are unwrapped from their scrollers so no column is
+   clipped at the page edge. ══ */
+
+.print-masthead { display: none; }
+
+@media print {
+	.asb-sidebar,
+	.sidebar,
+	.topbar,
+	.head-actions,
+	.school-filter-form,
+	.risk-filters,
+	.attendance-actions,
+	.risk-search,
+	.risk-filter,
+	.modal-backdrop,
+	.flash,
+	#focusAtRiskBtn { display: none !important; }
+
+	.main { margin: 0 !important; height: auto !important; overflow: visible !important; opacity: 1 !important; transform: none !important; }
+	.content { padding: 0 !important; overflow: visible !important; }
+	html, body { height: auto; overflow: visible; background: #fff; }
+
+	/* Whose programme, which day, printed when — the sidebar and the clock
+	   carry this on screen and neither survives the page. */
+	.print-masthead {
+		display: block;
+		margin-bottom: 14px;
+		padding-bottom: 10px;
+		border-bottom: 1.5px solid #333;
+	}
+	.print-masthead h2 { font-size: 1.15rem; font-weight: 700; color: #000; }
+	.print-masthead p { font-size: .78rem; color: #333; margin-top: 3px; }
+
+	.page-header { margin-bottom: 12px; }
+	.page-title { font-size: 1.3rem; }
+	.page-sub { display: none; }
+
+	.kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 8px; }
+	.kpi { padding: 10px 12px; break-inside: avoid; }
+	.kpi-value { font-size: 1.15rem; }
+	.kpi-icon { display: none; }
+
+	.card, .table-card { box-shadow: none; border-color: #999; break-inside: avoid; }
+	.progress-card, .risk-section, .attendance-section { margin-top: 14px; }
+	.attendance-section { overflow: visible; }
+
+	/* Unwrapped: a scroller on paper is a column cut off at the margin. */
+	.table-scroll, .table-card { overflow: visible !important; }
+	.table-card table, .encode-grid { min-width: 0 !important; width: 100%; }
+	table { width: 100%; font-size: .72rem; }
+	th, td { padding: 5px 6px; }
+	thead { display: table-header-group; }
+	tr { break-inside: avoid; }
+
+	/* Colour is not reliable on a school printer, so every badge prints as
+	   bordered text and the scale survives in black and white. */
+	.badge {
+		background: transparent !important;
+		color: #000 !important;
+		border: 1px solid #666 !important;
+	}
+	.badge::before { display: none; }
+
+	.prog-track { border: 1px solid #666; }
+	.prog-fill { background: #666 !important; }
+	.prog-marker { display: none; }
+
+	/* Rows a search or filter has hidden stay hidden: the printout is the
+	   list on screen, not a different one. */
+	#riskNoMatchRow, #rosterNoMatchRow { display: none !important; }
+}

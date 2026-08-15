@@ -1,0 +1,318 @@
+/* One beneficiary's record.
+   Shell, buttons and badges come from lusog-theme.css — this sheet carries the
+   record itself: the identity block, the standing plate, the three-tab rail,
+   the label/value fact lists, and the print rules that turn the page into the
+   printed beneficiary record.
+
+   Figures are set in a monospaced face on purpose. A record is read down its
+   value column — heights against heights, rates against rates — and a fixed
+   advance keeps that column aligned in a way proportional digits cannot. */
+
+.bd-page { --bd-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+
+/* ── Back out ────────────────────────────────────────────────────── */
+.bd-back {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: .78rem;
+	color: var(--lg-ink-soft);
+	text-decoration: none;
+	margin-bottom: 18px;
+}
+.bd-back:hover { color: var(--lg-emerald-dark); }
+.bd-back:focus-visible { outline: none; box-shadow: var(--lg-focus); border-radius: 4px; }
+
+/* ── Identity ────────────────────────────────────────────────────────
+   The learner's name is the masthead of this page, so it is set in the
+   body face at display weight rather than the serif used for section
+   titles: a record is a document about a person, not a tab. ── */
+.bd-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 20px;
+	flex-wrap: wrap;
+	margin-bottom: 18px;
+}
+.bd-eyebrow {
+	font-size: .68rem;
+	font-weight: 700;
+	letter-spacing: .14em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft);
+	margin-bottom: 6px;
+}
+.bd-name {
+	font-size: 1.85rem;
+	font-weight: 700;
+	line-height: 1.15;
+	letter-spacing: -.015em;
+	color: var(--lg-ink);
+}
+.bd-meta { margin-top: 10px; font-size: .84rem; color: var(--lg-ink-soft); }
+.bd-meta strong { color: var(--lg-ink); font-weight: 600; }
+.bd-meta + .bd-meta { margin-top: 4px; }
+.bd-meta .bd-sep { color: var(--lg-border-strong); margin: 0 6px; }
+
+.bd-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* ── Standing ────────────────────────────────────────────────────────
+   One plate, one fact: what this learner is to the programme. The
+   colour rides an accent bar rather than the whole plate, so the four
+   standings sit on the same scale as the roster's badges without
+   shouting over the record beneath them. ── */
+.bd-standing {
+	display: inline-flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 18px 12px 15px;
+	background: var(--lg-card);
+	border: 1px solid var(--lg-border);
+	border-left: 3px solid var(--bd-accent, var(--lg-emerald));
+	border-radius: var(--lg-r-card);
+	margin-bottom: 22px;
+}
+.bd-standing-label {
+	font-size: .66rem;
+	font-weight: 700;
+	letter-spacing: .12em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft);
+}
+.bd-standing-value {
+	font-family: var(--bd-mono);
+	font-size: .92rem;
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--bd-accent, var(--lg-emerald));
+}
+.bd-standing.is-active  { --bd-accent: var(--lg-emerald-deep); }
+.bd-standing.is-risk    { --bd-accent: var(--lg-orange-ink); }
+.bd-standing.is-pending { --bd-accent: var(--lg-amber-ink); }
+.bd-standing.is-none    { --bd-accent: #55645C; }
+
+/* ── Tab rail ───────────────────────────────────────────────────────
+   Three readings of one record, not three pages: everything is
+   rendered in the first response and the rail only chooses which part
+   is on screen, so nothing here can go stale between tabs. ── */
+.bd-tabs {
+	display: flex;
+	gap: 4px;
+	border-bottom: 1px solid var(--lg-border);
+	margin-bottom: 18px;
+}
+.bd-tab {
+	appearance: none;
+	background: none;
+	border: none;
+	border-bottom: 2px solid transparent;
+	margin-bottom: -1px;
+	padding: 10px 14px;
+	font: inherit;
+	font-size: .86rem;
+	font-weight: 500;
+	color: var(--lg-ink-soft);
+	cursor: pointer;
+	transition: color .12s ease, border-color .12s ease;
+}
+.bd-tab:hover { color: var(--lg-ink); }
+.bd-tab.is-active { color: var(--lg-ink); font-weight: 700; border-bottom-color: var(--lg-ink); }
+.bd-tab:focus-visible { outline: none; box-shadow: var(--lg-focus); border-radius: 4px 4px 0 0; }
+
+.bd-panel { display: grid; gap: 16px; }
+.bd-panel[hidden] { display: none; }
+.bd-panel.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+
+/* ── Fact lists ─────────────────────────────────────────────────────
+   Label left, value in a column of its own — read down, not across. ── */
+.bd-card { padding: 20px 22px 8px; }
+.bd-card-title {
+	font-size: .68rem;
+	font-weight: 700;
+	letter-spacing: .14em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft);
+	margin-bottom: 4px;
+}
+.bd-card-sub { font-size: .78rem; color: var(--lg-ink-soft); margin-bottom: 6px; }
+
+.bd-facts { margin: 0; }
+.bd-fact {
+	display: grid;
+	grid-template-columns: minmax(0, 200px) minmax(0, 1fr);
+	align-items: baseline;
+	gap: 16px;
+	padding: 11px 0;
+	border-top: 1px solid var(--lg-border);
+}
+.bd-fact:first-child { border-top: none; }
+.bd-fact dt { font-size: .84rem; color: var(--lg-ink-soft); }
+.bd-fact dd {
+	margin: 0;
+	font-family: var(--bd-mono);
+	font-size: .86rem;
+	font-weight: 600;
+	color: var(--lg-ink);
+}
+/* Status values keep the scale's colour, so a learner's standing reads the
+   same here as in the badge that carried it on the roster. */
+.bd-fact dd.is-critical { color: var(--lg-danger-ink); }
+.bd-fact dd.is-risk     { color: var(--lg-orange-ink); }
+.bd-fact dd.is-monitor  { color: var(--lg-amber-ink); }
+.bd-fact dd.is-normal   { color: var(--lg-success-ink); }
+.bd-fact dd.is-none     { color: var(--lg-ink-soft); font-weight: 500; }
+
+.bd-note {
+	margin: 4px 0 14px;
+	padding-top: 12px;
+	border-top: 1px solid var(--lg-border);
+	font-size: .78rem;
+	color: var(--lg-ink-soft);
+	font-variant-numeric: tabular-nums;
+}
+.bd-empty { padding: 6px 0 20px; font-size: .86rem; color: var(--lg-ink-soft); }
+
+/* The rate the programme is judged on, set once at size. */
+.bd-rate {
+	font-family: var(--bd-mono);
+	font-size: 1.7rem;
+	font-weight: 700;
+	line-height: 1;
+	letter-spacing: -.02em;
+	color: var(--lg-ink);
+}
+.bd-rate.is-risk { color: var(--lg-orange-ink); }
+
+/* ── Attendance headline ────────────────────────────────────────────
+   Days attended over the sessions the rule divided by, the same
+   fraction printed as a share, and a bar carrying the school's own
+   threshold — so the gap between where the learner is and where the
+   school expects them to be is what the eye reads first. ── */
+.bd-att-headline {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	flex-wrap: wrap;
+	margin: 10px 0 12px;
+}
+.bd-att-of { font-size: .84rem; color: var(--lg-ink-soft); }
+.bd-att-pct {
+	margin-left: auto;
+	font-family: var(--bd-mono);
+	font-size: 1.1rem;
+	font-weight: 700;
+	color: var(--lg-emerald-deep);
+}
+.bd-att-pct.is-risk { color: var(--lg-orange-ink); }
+
+.bd-bar {
+	position: relative;
+	height: 10px;
+	border-radius: 999px;
+	background: #E4EAE6;
+	overflow: hidden;
+}
+.bd-bar-fill {
+	display: block;
+	height: 100%;
+	border-radius: 999px;
+	background: var(--lg-emerald);
+	transition: width .2s ease;
+}
+.bd-bar.is-risk .bd-bar-fill { background: var(--lg-orange); }
+/* The threshold, drawn on the track rather than written beside it. */
+.bd-bar-mark {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 2px;
+	margin-left: -1px;
+	background: var(--lg-ink);
+	opacity: .45;
+}
+.bd-alert { margin: 12px 0 16px; }
+
+/* ── Session calendar ───────────────────────────────────────────── */
+.bd-sessions { padding: 0; }
+.bd-sessions .bd-card-title { padding: 20px 22px 12px; margin: 0; }
+.bd-session-date { font-family: var(--bd-mono); font-size: .78rem; color: var(--lg-ink); white-space: nowrap; }
+.bd-remark { color: var(--lg-ink-soft); }
+
+/* The tick and the cross the sheet is read by. They replace the scale's
+   own mark rather than joining it, so a badge never carries two. */
+.badge.has-glyph::before { display: none; }
+.bd-glyph { font-weight: 700; margin-right: 5px; }
+
+.bd-correct-col { width: 1%; white-space: nowrap; text-align: right; }
+.bd-correct { display: inline-flex; gap: 6px; justify-content: flex-end; }
+.bd-correct-btn {
+	font: inherit;
+	font-size: .72rem;
+	font-weight: 600;
+	padding: 4px 10px;
+	border-radius: var(--lg-r-btn);
+	border: 1px solid var(--lg-border);
+	background: var(--lg-card);
+	color: var(--lg-ink-soft);
+	cursor: pointer;
+	transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+.bd-correct-btn.is-present:hover:not(:disabled) { background: var(--lg-mint); color: var(--lg-success-ink); border-color: #C4E4D0; }
+.bd-correct-btn.is-absent:hover:not(:disabled) { background: var(--lg-danger-tint); color: var(--lg-danger-ink); border-color: #F2C9C9; }
+.bd-correct-btn:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+/* The mark a session already reads is not offered again — there is nothing
+   to correct it to. */
+.bd-correct-btn:disabled { opacity: .35; cursor: default; }
+
+@media (max-width: 1000px) {
+	.bd-panel.cols-2 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+	.bd-header { flex-direction: column; }
+	.bd-actions { width: 100%; }
+	.bd-fact { grid-template-columns: 1fr; gap: 2px; }
+}
+
+/* Print Beneficiary Record: the chrome and the rail go, and every tab prints —
+   paper has no tabs, and a record that printed only one third of itself would
+   not be the record. */
+@media print {
+	.asb-sidebar,
+	.topbar,
+	.bd-back,
+	.bd-actions,
+	.bd-correct-col,
+	.bd-tabs { display: none !important; }
+
+	/* The app shell is a fixed-height, scrolling window (see lusog-theme):
+	   left as it is, the printer gets the first screenful and drops the rest
+	   of the record. Every scroll container is opened up here. */
+	html, body { height: auto !important; overflow: visible !important; background: #fff; }
+	.main { margin: 0 !important; height: auto !important; overflow: visible !important; opacity: 1 !important; transform: none !important; }
+	.content { padding: 0 !important; height: auto !important; overflow: visible !important; }
+
+	.bd-panel, .bd-panel[hidden] { display: grid !important; }
+	.bd-panel.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+	.card { box-shadow: none; border-color: #999; break-inside: avoid; }
+
+	/* Every tab prints, so each section names itself rather than relying on a
+	   rail that is not there. */
+	.bd-standing { break-inside: avoid; }
+	.bd-name { font-size: 1.4rem; }
+	.bd-sessions { break-inside: auto; }
+	.bd-sessions .table-scroll { overflow: visible !important; }
+	.bd-session-table { font-size: .72rem; }
+	.bd-session-table th, .bd-session-table td { padding: 4px 6px; }
+	thead { display: table-header-group; }
+	tr { break-inside: avoid; }
+
+	/* A school printer is not to be trusted with colour: the tick, the cross
+	   and the scale all have to survive in black and white. */
+	.badge { background: transparent !important; color: #000 !important; border: 1px solid #666 !important; }
+	.bd-bar { border: 1px solid #666; }
+	.bd-bar-fill { background: #666 !important; }
+	.bd-bar-mark { background: #000 !important; opacity: 1; }
+}

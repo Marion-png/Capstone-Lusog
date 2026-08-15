@@ -182,6 +182,25 @@ th.sortable:focus-visible { outline: 2px solid var(--lg-emerald); outline-offset
 }
 .bnf-name { min-width: 190px; }
 
+/* The name opens the learner's own record, and the whole cell is the target:
+   a coordinator aiming at a row should not have to hit the glyphs. The link
+   fills the cell's padding box, so the click area is the column rather than
+   the text inside it.
+
+   It stays the table's ink rather than turning every row into a blue link,
+   and it is never underlined: the cell lifts and the name takes the brand
+   colour on hover, which says "follow me" without ruling a line through the
+   roster. */
+.bnf-name.is-link { padding: 0; }
+.bnf-name a {
+	display: block;
+	padding: 11px 14px;
+	color: inherit;
+	text-decoration: none;
+}
+.bnf-name a:hover { color: var(--lg-emerald-dark); background: var(--lg-mint); }
+.bnf-name a:focus-visible { outline: none; box-shadow: var(--lg-focus); border-radius: 3px; }
+
 /* ── Pending Enrollment ─────────────────────────────────────────────
    The waiting list carries the decision, so it gains two columns the
    other views have no use for: a checkbox to gather learners and the
@@ -320,14 +339,24 @@ th.sortable:focus-visible { outline: 2px solid var(--lg-emerald); outline-offset
 	.modal-backdrop,
 	.announcements { display: none !important; }
 
-	.main { margin: 0 !important; opacity: 1 !important; transform: none !important; }
-	.content { padding: 0 !important; }
-	body { background: #fff; }
+	/* The app shell is a fixed-height, scrolling window (see lusog-theme):
+	   left as it is, the printer gets the first screenful and throws the rest
+	   of the roster away. Every scroll container has to be opened up before a
+	   masterlist can run to more than one page. */
+	html, body { height: auto !important; overflow: visible !important; background: #fff; }
+	.main { margin: 0 !important; height: auto !important; overflow: visible !important; opacity: 1 !important; transform: none !important; }
+	.content { padding: 0 !important; height: auto !important; overflow: visible !important; }
 
 	.card, .table-card { box-shadow: none; border-color: #999; break-inside: avoid; }
 	.kpi-grid, .kpi-grid.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 	.kpi { padding: 10px 12px; }
 	.kpi-value { font-size: 1.2rem; }
+	.kpi-icon { display: none; }
+
+	/* A school printer is not to be trusted with colour, so the status scale
+	   prints as bordered text and survives in black and white. */
+	.badge { background: transparent !important; color: #000 !important; border: 1px solid #666 !important; }
+	.badge::before { display: none; }
 
 	/* Only the view being printed stays: the other two are links nobody can
 	   follow on paper, while the active one names the roster below it. */
@@ -338,10 +367,15 @@ th.sortable:focus-visible { outline: 2px solid var(--lg-emerald); outline-offset
 	.seg-tabs { border-bottom: none; }
 	.seg-tab { padding-left: 0; }
 
-	.table-scroll { overflow: visible !important; max-height: none !important; }
-	table { width: 100%; }
+	.table-scroll, .table-card { overflow: visible !important; max-height: none !important; }
+	.table-card table { min-width: 0 !important; }
+	table { width: 100%; font-size: .72rem; }
+	th, td { padding: 5px 6px; }
 	thead { display: table-header-group; }
 	tr { break-inside: avoid; }
+	/* A name that opens a record on screen is just a name on paper. */
+	.bnf-name.is-link { padding: 5px 6px; }
+	.bnf-name a { display: inline; padding: 0; color: #000; }
 	/* The empty-search row is a UI affordance, never a roster line. */
 	#recordsNoMatch { display: none !important; }
 }

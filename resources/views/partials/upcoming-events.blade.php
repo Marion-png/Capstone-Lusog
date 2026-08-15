@@ -42,8 +42,9 @@
     .evt-cat-program { background: #E7F5EC; color: #14653C; }
     .evt-item-desc { font-size: .78rem; color: #6B7C72; margin-top: 3px; }
     .evt-item-delete-form { margin-left: auto; flex-shrink: 0; }
-    .evt-item-delete-btn { background: none; border: none; color: #b91c1c; font-size: .7rem; font-weight: 600; cursor: pointer; font-family: inherit; padding: 2px 6px; white-space: nowrap; }
-    .evt-item-delete-btn:hover { text-decoration: underline; }
+    .evt-item-delete-btn { background: none; border: none; border-radius: 5px; color: #b91c1c; font-size: .7rem; font-weight: 600; cursor: pointer; font-family: inherit; padding: 2px 6px; white-space: nowrap; }
+    /* Tinted, never underlined — nothing in this app rules a line through a word. */
+    .evt-item-delete-btn:hover { background: #FCECEC; }
     .evt-empty { padding: 22px 18px; text-align: center; color: #94a3b8; font-size: .8rem; }
 </style>
 

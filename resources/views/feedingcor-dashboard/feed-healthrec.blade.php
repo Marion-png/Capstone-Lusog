@@ -281,7 +281,16 @@
                                                 <input type="checkbox" data-select="{{ $record->id }}" aria-label="Select {{ $record->student_name }}">
                                             @endif
                                         </td>
-                                        <td class="bnf-name"><strong>{{ $record->student_name }}</strong></td>
+                                        {{-- The whole cell opens the learner's
+                                             record. A learner with no database
+                                             row has none to open. --}}
+                                        <td class="bnf-name {{ $record->id ? 'is-link' : '' }}">
+                                            @if ($record->id)
+                                                <a href="{{ route('feedingcor-program.beneficiary', $record->id) }}"><strong>{{ $record->student_name }}</strong></a>
+                                            @else
+                                                <strong>{{ $record->student_name }}</strong>
+                                            @endif
+                                        </td>
                                         <td>{{ $grade !== '' ? $grade : '—' }}</td>
                                         <td>{{ $record->section_name }}</td>
                                         <td><span class="badge {{ $statusBadge($baselineStatus) }}">{{ $baselineStatus ?: 'Not set' }}</span></td>
@@ -348,7 +357,16 @@
                                 @endphp
                                 <tr data-search="{{ strtolower(trim($record->student_name.' '.$record->section_name)) }}">
                                     <td class="bnf-idx">{{ $index + 1 }}</td>
-                                    <td class="bnf-name"><strong>{{ $record->student_name }}</strong></td>
+                                    {{-- The whole name cell opens the learner's
+                                         own beneficiary record. A session-fallback
+                                         row has no id, so it stays plain text. --}}
+                                    <td class="bnf-name {{ $record->id ? 'is-link' : '' }}">
+                                        @if ($record->id)
+                                            <a href="{{ route('feedingcor-program.beneficiary', $record->id) }}"><strong>{{ $record->student_name }}</strong></a>
+                                        @else
+                                            <strong>{{ $record->student_name }}</strong>
+                                        @endif
+                                    </td>
                                     <td>{{ $grade !== '' ? $grade : '—' }}</td>
                                     <td>{{ $record->section_name }}</td>
                                     <td>{{ $record->sex !== '' ? substr($record->sex, 0, 1) : '—' }}</td>

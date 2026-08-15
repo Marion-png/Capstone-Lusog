@@ -151,6 +151,11 @@ html, body {
 .topbar-bc span { white-space: nowrap; }
 .topbar-bc span:last-child { color: var(--lg-ink); font-weight: 600; }
 .topbar-bc .bc-sep { color: var(--lg-border-strong); }
+/* A crumb that can be followed is still a crumb: no underline, no link blue —
+   it deepens to the brand colour on hover like every other action here. */
+.topbar-bc a { color: inherit; text-decoration: none; white-space: nowrap; }
+.topbar-bc a:hover { color: var(--lg-emerald-dark); }
+.topbar-bc a:focus-visible { outline: none; box-shadow: var(--lg-focus); border-radius: 4px; }
 
 .content { flex: 1 1 auto; overflow: auto; padding: 24px 28px 48px; }
 

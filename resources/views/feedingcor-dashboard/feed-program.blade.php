@@ -158,6 +158,25 @@
 					</form>
 				@endif
 			</div>
+			<div class="head-actions">
+				<button type="button" class="btn btn-secondary" id="printProgramBtn">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+					Print Program Report
+				</button>
+			</div>
+		</div>
+
+		{{-- Paper has no sidebar to say whose programme this is, and no clock
+		     to date it. This masthead prints in their place and is invisible on
+		     screen. --}}
+		<div class="print-masthead" aria-hidden="true">
+			<h2>School-Based Feeding Program</h2>
+			<p>
+				{{ session('active_school_name', 'School') }}
+				&middot; S.Y. {{ \App\Models\StudentHealthRecord::currentSchoolYear() }}
+				&middot; Day {{ (int) explode('/', $programStats['program_day'] ?? '0/120')[0] }} of {{ \App\Support\FeedingProgramCycle::DURATION_DAYS }}
+			</p>
+			<p>Printed {{ now()->format('F j, Y') }}{{ ($programStats['sessions_held'] ?? 0) > 0 ? ' · '.$programStats['sessions_held'].' feeding sessions recorded' : '' }}</p>
 		</div>
 
 		@if (($programStats['at_risk_count'] ?? 0) > 0)
@@ -166,7 +185,10 @@
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
 					<div>
 						<strong>{{ $programStats['at_risk_count'] }} at-risk beneficiaries detected</strong>
-						<span>Attendance below {{ $programStats['at_risk_threshold'] ?? 75 }}% of expected sessions ({{ $programStats['at_risk_threshold_count'] ?? 0 }} required by current program day).</span>
+						{{-- The school's own rule, printed as it stands: two
+						     schools read different lines here, and the figure
+						     named is the one that decided the flags. --}}
+						<span>{{ ucfirst($programStats['at_risk_rule'] ?? '') }} &middot; {{ $programStats['at_risk_threshold_count'] ?? 0 }} of {{ $programStats['sessions_held'] ?? 0 }} sessions needed to clear it.</span>
 					</div>
 				</div>
 				<button type="button" class="btn btn-secondary" id="focusAtRiskBtn">Review List</button>
@@ -283,7 +305,10 @@
 								data-risk-search="{{ strtolower(trim(($student['student_name'] ?? '').' '.($student['section'] ?? ''))) }}">
 								<td><strong>{{ $student['student_name'] }}</strong></td>
 								<td>{{ $student['section'] }}</td>
-								<td class="tnum">{{ $student['attendance'] }} ({{ $student['attendance_percent'] }}%)</td>
+								{{-- Present out of the sessions the rule judged.
+								     A learner no confirmed session has covered
+								     has no rate to print. --}}
+								<td class="tnum">{{ $student['attendance'] }}{{ $student['attendance_percent'] !== null ? ' ('.$student['attendance_percent'].'%)' : '' }}</td>
 								<td><span class="badge {{ $statusBadge }}">{{ $student['nutritional_status'] ?: 'Not set' }}</span></td>
 							</tr>
 						@empty
@@ -297,11 +322,6 @@
 				</div>
 			</div>
 		</section>
-
-		@php
-			$studentCollection = ($students ?? collect());
-			$lowAttendanceCount = $studentCollection->filter(fn ($student) => (float) ($student['attendance_percent'] ?? 0) < 70)->count();
-		@endphp
 
 		@php
 			$attendanceRosterRows = ($attendanceRoster ?? collect());
@@ -366,18 +386,27 @@
 						<tbody>
 							@foreach ($attendanceRosterRows as $row)
 								@php
-									$weightChange = (float) ($row['weight_change'] ?? 0);
+									// A learner with no baseline has no movement to
+									// report — the row says so rather than reading
+									// "No change" against a measurement nobody took.
+									$weightChange = $row['weight_change'] === null ? null : (float) $row['weight_change'];
 									$hasAttendance = $row['sessions'] > 0;
-									$statusBadge = $weightChange > 1 ? 'badge-normal' : ($weightChange < 0 ? 'badge-risk' : 'badge-neutral');
-									$statusLabel = $weightChange > 1 ? 'Improved' : ($weightChange < 0 ? 'Declined' : 'No change');
+									[$statusBadge, $statusLabel] = match (true) {
+										$weightChange === null => ['badge-neutral', 'No baseline'],
+										$weightChange > 1 => ['badge-normal', 'Improved'],
+										$weightChange < 0 => ['badge-risk', 'Declined'],
+										default => ['badge-neutral', 'No change'],
+									};
 								@endphp
 								<tr data-roster-grade="{{ strtolower((string) ($row['grade_level'] ?? '')) }}"
 									data-roster-search="{{ strtolower(trim(($row['student_name'] ?? '').' '.($row['section'] ?? ''))) }}">
 									<td><strong>{{ $row['student_name'] }}</strong></td>
 									<td>{{ $row['section'] }}</td>
-									<td class="num">{{ number_format((float) $row['baseline_weight'], 1) }} kg</td>
+									<td class="num">{{ $row['baseline_weight'] === null ? '—' : number_format((float) $row['baseline_weight'], 1).' kg' }}</td>
 									<td class="num"><strong>{{ number_format((float) $row['current_weight'], 1) }} kg</strong></td>
-									<td class="num {{ $weightChange > 0 ? 'bmi-up' : ($weightChange < 0 ? 'bmi-down' : 'muted') }}">{{ $weightChange > 0 ? '+' : '' }}{{ number_format($weightChange, 1) }} kg</td>
+									<td class="num {{ $weightChange === null ? 'muted' : ($weightChange > 0 ? 'bmi-up' : ($weightChange < 0 ? 'bmi-down' : 'muted')) }}">
+										{{ $weightChange === null ? '—' : ($weightChange > 0 ? '+' : '').number_format($weightChange, 1).' kg' }}
+									</td>
 									<td class="num">
 										{{ $hasAttendance ? $row['present'] : '—' }}
 										@if ($row['pending'] > 0)
@@ -399,17 +428,6 @@
 			@endif
 		</section>
 
-		@if ($lowAttendanceCount > 0)
-			<div class="alert-bar" style="margin-top:24px;">
-				<div class="alert-body">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-					<div>
-						<strong>Follow-up Required</strong>
-						<span>{{ $lowAttendanceCount }} students have attendance below 70%. Please coordinate with advisers and parents.</span>
-					</div>
-				</div>
-			</div>
-		@endif
 	</div>
 </div>
 
@@ -1498,6 +1516,11 @@
 			atRiskSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 		});
 	}
+
+	// Printing hands the page to the sheet's @media print block, which keeps
+	// the two rolls and drops every control that means nothing on paper. Rows
+	// a filter has hidden stay hidden, so what prints is what is on screen.
+	document.getElementById('printProgramBtn')?.addEventListener('click', () => window.print());
 
 	if (riskRows.length > 0) {
 		const riskControls = [riskSearch, riskGradeFilter, riskGenderFilter, riskFilter].filter(Boolean);

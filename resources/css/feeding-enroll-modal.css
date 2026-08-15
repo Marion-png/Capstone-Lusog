@@ -48,8 +48,10 @@
 .enroll-filter .input, .enroll-filter .select { width: 100%; }
 
 .enroll-countbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; font-size: .78rem; color: var(--lg-ink-soft); }
-.enroll-clear { border: none; background: none; padding: 0; font: inherit; color: var(--lg-emerald); text-decoration: underline; cursor: pointer; }
-.enroll-clear:hover { color: var(--lg-emerald-deep); }
+/* A text action, not a link: weight and colour carry it, never an underline. */
+.enroll-clear { border: none; background: none; padding: 2px 6px; margin: -2px -6px; border-radius: var(--lg-r-btn); font: inherit; font-weight: 600; color: var(--lg-emerald); text-decoration: none; cursor: pointer; }
+.enroll-clear:hover { color: var(--lg-emerald-deep); background: var(--lg-mint); }
+.enroll-clear:focus-visible { outline: none; box-shadow: var(--lg-focus); }
 
 .enroll-body { max-height: 46vh; }
 .enroll-table { width: 100%; }
