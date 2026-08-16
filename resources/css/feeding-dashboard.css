@@ -163,6 +163,9 @@
 .risk-threshold { font-size: .82rem; color: var(--lg-ink-soft); }
 .risk-threshold strong { color: var(--lg-ink); font-variant-numeric: tabular-nums; }
 .risk-count { font-size: .78rem; font-weight: 600; color: var(--lg-orange-ink); }
+/* Why the list may be empty: learners the rule has not started judging. Set
+   quieter than the flagged count — it is context, not an alarm. */
+.risk-observing { margin: 0 0 6px; font-size: .76rem; color: var(--lg-ink-soft); }
 
 .risk-scroll { margin: 12px -20px -20px; max-height: 380px; overflow-y: auto; }
 .risk-table { width: 100%; }

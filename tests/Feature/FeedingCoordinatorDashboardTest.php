@@ -361,8 +361,10 @@ class FeedingCoordinatorDashboardTest extends TestCase
     public function the_headline_cards_count_beneficiaries_attendance_and_awaiting_enrollment(): void
     {
         $fed = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', 15.1);
-        $this->makeStudent('Grade 11 / Ilang', 'Severely Wasted', 13.4);   // enrolled, never fed
+        $this->makeStudent('Grade 10 / Ilang', 'Severely Wasted', 13.4);   // enrolled, never fed
         $this->makeStudent('Grade 8 / Rosal', 'Normal', 20.5);             // does not qualify
+        // Senior High is outside the programme: measured, but never a beneficiary.
+        $this->makeStudent('Grade 11 / Humss', 'Severely Wasted', 13.2);
 
         // Qualified but not enrolled: waiting, and not a beneficiary yet.
         $this->makeStudent('Grade 9 / Narra', 'Wasted', 15.5)
@@ -379,9 +381,8 @@ class FeedingCoordinatorDashboardTest extends TestCase
             ->assertSee('Awaiting Enrollment')
             ->viewData('dashboardStats');
 
-        $this->assertSame(2, $stats['beneficiaries'], 'Only enrolled learners are beneficiaries.');
-        $this->assertSame(1, $stats['beneficiaries_jhs']);
-        $this->assertSame(1, $stats['beneficiaries_shs']);
+        $this->assertSame(2, $stats['beneficiaries'], 'Only enrolled Junior High learners are beneficiaries.');
+        $this->assertSame('Grades 7–10', $stats['beneficiaries_grade_range']);
         $this->assertSame(4, $stats['attendance_sessions']);
         $this->assertSame(75, $stats['attendance_rate']);
         $this->assertSame(1, $stats['awaiting_enrollment'], 'A qualified learner nobody enrolled is waiting.');
@@ -503,12 +504,11 @@ class FeedingCoordinatorDashboardTest extends TestCase
         $failing = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', 15.1);
         $passing = $this->makeStudent('Grade 7 / Rosal', 'Wasted', 15.2);
 
-        // 3 of 4 = 75%, below the 80% default.
-        foreach ([true, true, true, false] as $index => $present) {
-            $this->markAttendance($failing, now()->subDays(5 - $index)->toDateString(), $present);
-        }
-        foreach ([true, true, true, true] as $index => $present) {
-            $this->markAttendance($passing, now()->subDays(5 - $index)->toDateString(), $present);
+        // 9 of 12 = 75%, below the 80% default — and twelve sessions deep, so
+        // the rule's observation window is met and the rate is a verdict.
+        foreach (range(1, 12) as $day) {
+            $this->markAttendance($failing, now()->subDays(13 - $day)->toDateString(), $day <= 9);
+            $this->markAttendance($passing, now()->subDays(13 - $day)->toDateString(), true);
         }
 
         $panel = $this->withSession($this->coordinatorSession())
@@ -523,8 +523,8 @@ class FeedingCoordinatorDashboardTest extends TestCase
         $this->assertSame(1, $panel['count']);
         $this->assertSame($failing->student_name, $panel['rows'][0]['name']);
         $this->assertSame(75.0, $panel['rows'][0]['rate']);
-        $this->assertSame(3, $panel['rows'][0]['present']);
-        $this->assertSame(4, $panel['rows'][0]['sessions']);
+        $this->assertSame(9, $panel['rows'][0]['present']);
+        $this->assertSame(12, $panel['rows'][0]['sessions']);
     }
 
     /**
@@ -536,8 +536,8 @@ class FeedingCoordinatorDashboardTest extends TestCase
     public function a_school_set_threshold_decides_who_is_flagged(): void
     {
         $learner = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', 15.1);
-        foreach ([true, true, true, false] as $index => $present) {   // 75%
-            $this->markAttendance($learner, now()->subDays(5 - $index)->toDateString(), $present);
+        foreach (range(1, 12) as $day) {   // 9 of 12 = 75%
+            $this->markAttendance($learner, now()->subDays(13 - $day)->toDateString(), $day <= 9);
         }
 
         // At the 80% default the learner is flagged.

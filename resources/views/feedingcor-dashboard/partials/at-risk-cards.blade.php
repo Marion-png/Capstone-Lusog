@@ -24,7 +24,15 @@
 		<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div>
 	</div>
 	<div class="kpi-value">{{ $c['at_risk'] }}</div>
-	<div class="kpi-hint">{{ $c['critical'] }} critical &middot; {{ $c['watch'] }} on watch</div>
+	{{-- Learners still inside the observation window are named here, never
+	     added to the figure above: the rule has not classified them, so
+	     counting them would report a programme problem nobody has established. --}}
+	<div class="kpi-hint">
+		{{ $c['critical'] }} critical &middot; {{ $c['watch'] }} on watch
+		@if ($c['observing'] > 0)
+			&middot; {{ $c['observing'] }} in early monitoring
+		@endif
+	</div>
 </article>
 
 <article class="card kpi accent-brand">
@@ -51,5 +59,12 @@
 		<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22h16"/><path d="M12 2v10"/><path d="m8 6 4-4 4 4"/><path d="M4 12h16v4a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4Z"/></svg></div>
 	</div>
 	<div class="kpi-value">{{ $c['threshold_label'] }}%</div>
-	<div class="kpi-hint">Watch band from {{ $c['watch_label'] }}%</div>
+	{{-- The threshold and the history it needs are one policy, so the card
+	     that prints the school's percentage prints its window too. --}}
+	<div class="kpi-hint">
+		Watch band from {{ $c['watch_label'] }}%
+		@if ($c['minimum_observation_days'] > 1)
+			&middot; after {{ $c['minimum_observation_days'] }} feeding days
+		@endif
+	</div>
 </article>

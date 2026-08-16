@@ -1,10 +1,16 @@
 {{-- What needs doing, said plainly and only when it is true.
 
-     A blank table tells the coordinator nothing: these three notices say
-     whether the session was recorded at all, whether it was finished, and who
-     the school's threshold has flagged across the programme. The threshold is
-     never written here — it comes from the school's own setting through
-     FeedingAtRiskRule, so two schools read two different lines. --}}
+     A blank table tells the coordinator nothing: these notices say whether the
+     session was recorded at all, whether it was finished, who the school's
+     threshold has flagged across the programme, and who it has not started
+     judging yet. Neither figure is written here — both come from the school's
+     own settings through FeedingAtRiskRule, so two schools read two different
+     lines.
+
+     The last two are separate notices on purpose. A learner inside the
+     observation window is not a quieter kind of at-risk; they are unclassified,
+     and putting them in the same red bar is exactly the confusion the window
+     exists to prevent. --}}
 @php
 	$unrecorded = ! $sessionRecorded;
 	$incomplete = $sessionRecorded && $tally['recorded'] < $beneficiaryCount;
@@ -46,5 +52,18 @@
 		{{-- Opens the per-beneficiary roll with the flag already applied, so the
 		     list the coordinator lands on is exactly the one counted here. --}}
 		<a class="btn btn-secondary" href="{{ $pageUrl(['view' => 'beneficiary', 'status' => 'at_risk']) }}">View At-Risk Beneficiaries</a>
+	</div>
+@endif
+
+@if ($atRisk['observing'] > 0)
+	<div class="alert-bar is-info">
+		<div class="alert-body">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+			<div>
+				<strong>{{ $atRisk['observing'] }} {{ \Illuminate\Support\Str::plural('beneficiary', $atRisk['observing']) }} currently under observation</strong>
+				<span>At-risk classification begins after {{ $atRisk['minimumObservationDays'] }} recorded feeding days &middot; {{ $cumulative['sessions'] }} recorded so far.</span>
+			</div>
+		</div>
+		<a class="btn btn-secondary" href="{{ $pageUrl(['view' => 'beneficiary', 'status' => 'early_monitoring']) }}">View Under Observation</a>
 	</div>
 @endif

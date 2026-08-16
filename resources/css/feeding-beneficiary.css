@@ -6,9 +6,13 @@
 
    Figures are set in a monospaced face on purpose. A record is read down its
    value column — heights against heights, rates against rates — and a fixed
-   advance keeps that column aligned in a way proportional digits cannot. */
+   advance keeps that column aligned in a way proportional digits cannot.
 
-.bd-page { --bd-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+   The stack itself comes from the theme (--lg-mono), so the app has one
+   monospaced face rather than a copy per page; the fallback keeps this sheet
+   working if it is ever loaded on its own. */
+
+.bd-page { --bd-mono: var(--lg-mono, ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace); }
 
 /* ── Back out ────────────────────────────────────────────────────── */
 .bd-back {

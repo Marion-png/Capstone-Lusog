@@ -153,11 +153,29 @@ class FeedingBeneficiaryProfileTest extends TestCase
     {
         $record = $this->makeStudent();
 
+        // Ten sessions deep, so the rule's observation window is met and the
+        // rate is a verdict rather than a first impression: 3 of 10 = 30%.
+        foreach (range(1, 10) as $offset) {
+            $this->mark($record, now()->subDays($offset)->toDateString(), $offset <= 3);
+        }
+
+        $this->openRecord($record)->assertOk()->assertSee('At Risk Beneficiary');
+    }
+
+    #[Test]
+    public function a_learner_inside_the_observation_window_does_not_read_as_at_risk(): void
+    {
+        $record = $this->makeStudent();
+
+        // The same shortfall on three sheets instead of ten. The rate is 33%,
+        // and the record still reads Active — the rule has not classified them.
         $this->mark($record, now()->subDays(2)->toDateString(), true);
         $this->mark($record, now()->subDay()->toDateString(), false);
         $this->mark($record, now()->toDateString(), false);
 
-        $this->openRecord($record)->assertOk()->assertSee('At Risk Beneficiary');
+        $this->openRecord($record)->assertOk()
+            ->assertSee('Active Beneficiary')
+            ->assertDontSee('At Risk Beneficiary');
     }
 
     #[Test]
@@ -407,6 +425,11 @@ class FeedingBeneficiaryProfileTest extends TestCase
     #[Test]
     public function a_correction_moves_the_at_risk_flag(): void
     {
+        // This test is about a correction recomputing the flag, so the school
+        // classifies from the first session — otherwise three feeding days
+        // would leave the learner unclassified for an unrelated reason.
+        $this->institution->update(['feeding_min_observation_days' => 1]);
+
         $record = $this->makeStudent();
         $this->mark($record, '2026-08-10', true);
         $this->mark($record, '2026-08-11', false);

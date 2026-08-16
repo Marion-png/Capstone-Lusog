@@ -270,13 +270,16 @@ class FeedingAtRiskController extends Controller
                 ->values();
         }
 
-        // Grade and section are scope: they move the cards and the list
+        // Grade, section and sex are scope: they move the cards and the list
         // together, so a filtered page reports the size of what it is showing.
         $filters = $this->readFilters($request, $beneficiaries);
-        $scoped = FeedingBeneficiarySummary::scopeToSection($beneficiaries, [
-            'grade' => $filters['grade'],
-            'section' => $filters['section'],
-        ]);
+        $scoped = FeedingBeneficiarySummary::scopeToSex(
+            FeedingBeneficiarySummary::scopeToSection($beneficiaries, [
+                'grade' => $filters['grade'],
+                'section' => $filters['section'],
+            ]),
+            $filters['sex']
+        );
 
         $marks = $this->marksFor($scoped);
         $byRecord = $marks->groupBy('record_id');
@@ -306,8 +309,14 @@ class FeedingAtRiskController extends Controller
 
         // The list is the learners who need attention — at risk or in the watch
         // band. A learner comfortably above the threshold has nothing to follow
-        // up and is not printed as a row with no action.
-        $listed = $rows->filter(fn (array $row): bool => $row['severity'] !== FeedingRiskSeverity::STEADY);
+        // up and is not printed as a row with no action; nor does a learner the
+        // rule has not started classifying, whose low rate is a short record
+        // rather than a finding and whose follow-up would be premature.
+        $listed = $rows->filter(fn (array $row): bool => ! in_array(
+            $row['severity'],
+            [FeedingRiskSeverity::STEADY, FeedingRiskSeverity::OBSERVING],
+            true
+        ));
         $listed = $this->applyFilters($listed, $filters)->values();
 
         return [
@@ -329,6 +338,11 @@ class FeedingAtRiskController extends Controller
                 'rule' => $rule->describe(),
                 'critical' => $rows->where('severity', FeedingRiskSeverity::CRITICAL)->count(),
                 'watch' => $rows->where('severity', FeedingRiskSeverity::WATCH)->count(),
+                // Learners the observation window has not started judging.
+                // Reported, never added to the at-risk figure — the whole point
+                // of the window is that they are unclassified, not flagged.
+                'observing' => $rows->where('severity', FeedingRiskSeverity::OBSERVING)->count(),
+                'minimum_observation_days' => $rule->minimumObservationDays(),
                 'needs_follow_up' => $listed
                     ->where('follow_up.status', FeedingFollowUp::STATUS_FOLLOW_UP_REQUIRED)
                     ->count(),
@@ -570,6 +584,13 @@ class FeedingAtRiskController extends Controller
             $section = '';
         }
 
+        // Scope, alongside grade and section: it moves the cards and the list
+        // together, so the At-Risk figure keeps describing the roll on screen.
+        $sex = trim((string) $request->query('sex', ''));
+        if (! in_array($sex, FeedingBeneficiarySummary::SEX_OPTIONS, true)) {
+            $sex = '';
+        }
+
         $risk = trim((string) $request->query('risk', ''));
         if (! in_array($risk, [FeedingRiskSeverity::CRITICAL, FeedingRiskSeverity::AT_RISK, FeedingRiskSeverity::WATCH], true)) {
             $risk = '';
@@ -595,6 +616,7 @@ class FeedingAtRiskController extends Controller
         return [
             'grade' => $grade,
             'section' => $section,
+            'sex' => $sex,
             'risk' => $risk,
             'attendance' => $attendance,
             'absences' => $absences,

@@ -97,9 +97,70 @@ class FeedingAtRiskThresholdTest extends TestCase
 
         $this->assertSame(90.0, $rule->thresholdPercent());
         $this->assertStringContainsString('90%', $rule->describe());
-        // 4 of 5 = 80%, fine at the default and flagged at 90%.
-        $this->assertTrue($rule->isAtRisk([true, true, true, true, false]));
-        $this->assertFalse(FeedingAtRiskRule::forInstitution(null)->isAtRisk([true, true, true, true, false]));
+
+        // 8 of 10 = 80%: past the observation window, so it is a verdict —
+        // fine at the default threshold and flagged at this school's 90%.
+        $marks = [true, true, true, true, true, true, true, true, false, false];
+        $this->assertTrue($rule->isAtRisk($marks));
+        $this->assertFalse(FeedingAtRiskRule::forInstitution(null)->isAtRisk($marks));
+    }
+
+    #[Test]
+    public function a_school_can_be_given_its_own_observation_window(): void
+    {
+        // The threshold says how much attendance is enough; this says how much
+        // history the threshold needs before it judges anyone.
+        $this->institution->update(['feeding_min_observation_days' => 4]);
+
+        $rule = FeedingAtRiskRule::forInstitution($this->institution->id);
+        $marks = [true, false, false, false];   // 25% over four sessions
+
+        $this->assertSame(4, $rule->minimumObservationDays());
+        $this->assertTrue($rule->isAtRisk($marks));
+        // The same learner at a school on the default ten-day window is not
+        // flagged at all — same marks, same threshold, different local policy.
+        $this->assertFalse(FeedingAtRiskRule::forInstitution(null)->isAtRisk($marks));
+    }
+
+    #[Test]
+    public function the_system_admin_sets_and_clears_a_schools_observation_window(): void
+    {
+        $this->withSession($this->adminSession())
+            ->post("/dashboard/system-admin/institutions/{$this->institution->id}/at-risk-threshold", [
+                'threshold' => 85,
+                'minimum_observation_days' => 4,
+            ])
+            ->assertRedirect();
+
+        $this->assertSame(4, $this->institution->fresh()->feeding_min_observation_days);
+        $this->assertTrue(
+            AuditLog::query()->get()->contains(
+                fn ($log) => str_contains((string) $log->description, 'minimum observation period set to 4 feeding days')
+            )
+        );
+
+        // Cleared, it returns to the app default rather than being pinned.
+        $this->withSession($this->adminSession())
+            ->post("/dashboard/system-admin/institutions/{$this->institution->id}/at-risk-threshold", [
+                'threshold' => 85,
+                'minimum_observation_days' => null,
+            ])
+            ->assertRedirect();
+
+        $this->assertNull($this->institution->fresh()->feeding_min_observation_days);
+        $this->assertSame(10, FeedingAtRiskRule::forInstitution($this->institution->id)->minimumObservationDays());
+    }
+
+    #[Test]
+    public function posting_a_threshold_alone_leaves_the_observation_window_alone(): void
+    {
+        // A form that does not carry the field must not silently wipe it.
+        $this->institution->update(['feeding_min_observation_days' => 4]);
+
+        $this->withSession($this->adminSession())
+            ->post("/dashboard/system-admin/institutions/{$this->institution->id}/at-risk-threshold", ['threshold' => 85]);
+
+        $this->assertSame(4, $this->institution->fresh()->feeding_min_observation_days);
     }
 
     #[Test]
@@ -172,6 +233,11 @@ class FeedingAtRiskThresholdTest extends TestCase
     #[Test]
     public function the_learner_view_shows_one_beneficiarys_sessions(): void
     {
+        // This test is about an unconfirmed mark voting neither way, so the
+        // observation window is waived — otherwise three sessions would leave
+        // the learner unclassified for a different reason entirely.
+        $this->institution->update(['feeding_min_observation_days' => 1]);
+
         $learner = $this->makeStudent();
         $this->mark($learner, now()->subDays(2)->toDateString(), true);
         $this->mark($learner, now()->subDay()->toDateString(), false);

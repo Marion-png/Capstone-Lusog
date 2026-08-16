@@ -8,7 +8,9 @@
 		<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
 	</div>
 	<div class="kpi-value">{{ $dashboardStats['beneficiaries'] ?? 0 }}</div>
-	<div class="kpi-hint">JHS {{ $dashboardStats['beneficiaries_jhs'] ?? 0 }} &middot; SHS {{ $dashboardStats['beneficiaries_shs'] ?? 0 }}</div>
+	{{-- The programme is Junior High only, so the card names the grades it
+	     covers rather than splitting a roll that has only one half. --}}
+	<div class="kpi-hint">{{ $dashboardStats['beneficiaries_grade_range'] ?? \App\Http\Controllers\FeedingCoordinatorController::gradeRangeLabel() }}</div>
 </article>
 <article class="card kpi accent-info">
 	<div class="kpi-top">

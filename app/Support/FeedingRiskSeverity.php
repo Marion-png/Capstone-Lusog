@@ -18,6 +18,11 @@ namespace App\Support;
  *   worth a look. A Watch learner is deliberately NOT at risk and must never be
  *   added to the at-risk count, or the tab would report a different programme
  *   size than the Dashboard and the Beneficiaries tab.
+ * - **Observing** is a learner still inside the rule's observation window
+ *   (FeedingAtRiskRule invariant 3). It outranks every other band: a learner
+ *   with four confirmed sessions at 25% is neither At Risk nor Watch — there is
+ *   simply not enough history to say which, and calling 25% "Watch" (a band
+ *   that means *above* the threshold) would be plainly wrong.
  *
  * Both bands are derived from the school's own threshold plus a configured
  * margin (config/feeding.php), so a school that moves its threshold moves the
@@ -38,6 +43,9 @@ final class FeedingRiskSeverity
 
     /** Above the monitoring band — nothing to follow up. */
     public const STEADY = 'steady';
+
+    /** Inside the observation window — not yet classified either way. */
+    public const OBSERVING = 'observing';
 
     public const PRIORITY_HIGH = 'high';
 
@@ -80,7 +88,7 @@ final class FeedingRiskSeverity
      * sorts.
      *
      * @param  list<bool|null>  $marks  session marks in date order; NULL = unconfirmed
-     * @return array{present: int, absent: int, confirmed: int, unconfirmed: int, rate: ?float, at_risk: bool, severity: string, priority: string, trend: ?string, reason: string}
+     * @return array{present: int, absent: int, confirmed: int, unconfirmed: int, rate: ?float, at_risk: bool, observing: bool, sessions_until_classification: int, status: string, severity: string, priority: string, trend: ?string, reason: string}
      */
     public static function evaluate(array $marks, FeedingAtRiskRule $rule): array
     {
@@ -88,9 +96,10 @@ final class FeedingRiskSeverity
         $present = $rule->presentCount($marks);
         $rate = $rule->attendanceRate($marks);
         $atRisk = $rule->isAtRisk($marks);
+        $observing = ! $rule->hasEnoughObservation($marks);
         $trend = self::trend($marks);
 
-        $severity = self::severity($atRisk, $rate, $trend, $rule);
+        $severity = self::severity($atRisk, $observing, $rate, $trend, $rule);
 
         return [
             'present' => $present,
@@ -100,6 +109,10 @@ final class FeedingRiskSeverity
             // Null, not zero: no confirmed session is not a 0% turnout.
             'rate' => $rate,
             'at_risk' => $atRisk,
+            // Still inside the observation window: a rate, but not yet a verdict.
+            'observing' => $observing,
+            'sessions_until_classification' => $rule->sessionsUntilClassification($marks),
+            'status' => $rule->status($marks),
             'severity' => $severity,
             'priority' => self::priority($severity, $rate, $rule),
             'trend' => $trend,
@@ -157,6 +170,7 @@ final class FeedingRiskSeverity
             self::CRITICAL => 'Critical',
             self::AT_RISK => 'At Risk',
             self::WATCH => 'Watch',
+            self::OBSERVING => 'Early Monitoring',
             default => 'Steady',
         };
     }
@@ -182,8 +196,15 @@ final class FeedingRiskSeverity
         };
     }
 
-    private static function severity(bool $atRisk, ?float $rate, ?string $trend, FeedingAtRiskRule $rule): string
+    private static function severity(bool $atRisk, bool $observing, ?float $rate, ?string $trend, FeedingAtRiskRule $rule): string
     {
+        // Checked first, and before Watch especially: Watch means "above the
+        // threshold", and a learner at 25% of four sessions is not above
+        // anything — they are unclassified, which is its own answer.
+        if ($observing) {
+            return self::OBSERVING;
+        }
+
         if ($atRisk) {
             $farBelow = $rate !== null && $rate < self::criticalThresholdPercent($rule);
 
@@ -209,6 +230,8 @@ final class FeedingRiskSeverity
             return self::PRIORITY_MEDIUM;
         }
 
+        // Early Monitoring lands here too, and correctly: there is nothing to
+        // prioritise until the rule has enough history to classify on.
         if ($severity !== self::WATCH) {
             return self::PRIORITY_NONE;
         }
@@ -240,6 +263,10 @@ final class FeedingRiskSeverity
             self::CRITICAL => 'Cumulative feeding attendance'.($rateLabel ? ' ('.$rateLabel.')' : '').' is far below the configured '.$threshold.'% threshold.',
             self::AT_RISK => 'Cumulative feeding attendance has fallen below the configured '.$threshold.'% threshold.',
             self::WATCH => 'Cumulative feeding attendance is above the '.$threshold.'% threshold but within the '.self::format(self::watchThresholdPercent($rule)).'% monitoring band.',
+            // Says what is missing, not what the rate means: too few recorded
+            // sessions is a gap in the evidence, never a finding about the child.
+            self::OBSERVING => 'Attendance'.($rateLabel ? ' ('.$rateLabel.')' : '').' is still inside the minimum observation period of '
+                .$rule->minimumObservationDays().' recorded feeding days, so the '.$threshold.'% threshold does not classify this learner yet.',
             default => 'Cumulative feeding attendance is above the configured '.$threshold.'% threshold.',
         };
     }

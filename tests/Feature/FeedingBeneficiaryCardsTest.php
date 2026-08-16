@@ -132,10 +132,12 @@ class FeedingBeneficiaryCardsTest extends TestCase
         $this->makeStudent('Grade 10 / Narra', 'Normal');               // enrolled but not qualified
         $this->makeStudent('Grade 7 / Rosal', 'Wasted', enrolled: false); // waiting, not a beneficiary
 
-        // Three sessions: one learner turns up twice of three, the other never.
-        foreach ([true, false, true] as $index => $isPresent) {
-            $this->markAttendance($severe, now()->subDays(3 - $index)->toDateString(), $isPresent);
-            $this->markAttendance($wasted, now()->subDays(3 - $index)->toDateString(), false);
+        // Twelve sessions — past the rule's ten-day observation window, so the
+        // threshold is actually classifying. One learner turns up for eight of
+        // them (67%), the other never.
+        foreach (range(1, 12) as $day) {
+            $this->markAttendance($severe, now()->subDays(13 - $day)->toDateString(), $day <= 8);
+            $this->markAttendance($wasted, now()->subDays(13 - $day)->toDateString(), false);
         }
 
         $summary = $this->withSession($this->coordinatorSession())
@@ -151,8 +153,8 @@ class FeedingBeneficiaryCardsTest extends TestCase
         $this->assertSame(3, $summary['beneficiaries'], 'Only qualified AND enrolled learners are beneficiaries.');
         $this->assertSame(1, $summary['severely_wasted']);
         $this->assertSame(2, $summary['wasted'], 'Underweight is folded into Wasted.');
-        $this->assertSame(6, $summary['attendance_sessions']);
-        $this->assertSame(33, $summary['attendance_rate'], '2 present of 6 confirmed marks.');
+        $this->assertSame(24, $summary['attendance_sessions']);
+        $this->assertSame(33, $summary['attendance_rate'], '8 present of 24 confirmed marks.');
         $this->assertSame(2, $summary['at_risk'], 'Both fed learners are under the 80% threshold.');
     }
 
@@ -276,6 +278,83 @@ class FeedingBeneficiaryCardsTest extends TestCase
     }
 
     /**
+     * The masterlist leaves as the school's own DepEd form in a real workbook —
+     * not a comma-separated dump of the table. A .xlsx is a spreadsheet by
+     * format, so it opens in Excel wherever it lands; which program opens a
+     * .csv is a setting on the reader's own machine.
+     */
+    #[Test]
+    public function the_masterlist_exports_as_the_deped_form_in_a_workbook(): void
+    {
+        $learner = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', name: 'Maria Clara Santos');
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-health-records/masterlist', ['record_ids' => [$learner->id]])
+            ->assertOk()
+            ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+        // The workbook holds the form's heading, its column heads and the
+        // learner — read out of the sheet XML inside the .xlsx.
+        $sheet = $this->readSheetXml($response->streamedContent());
+
+        $this->assertStringContainsString('Masterlists of Identified Severely Wasted and Wasted Students', $sheet);
+        $this->assertStringContainsString('Test School', $sheet);
+        $this->assertStringContainsString('Maria Clara Santos', $sheet);
+        $this->assertStringContainsString('Sampaguita', $sheet);
+        $this->assertStringContainsString('Prepared by:', $sheet);
+        $this->assertStringContainsString('Noted by:', $sheet);
+    }
+
+    /** Ids off the wire decide nothing: another school's learner never lands in the file. */
+    #[Test]
+    public function the_masterlist_export_never_carries_another_schools_learner(): void
+    {
+        $other = Institution::create(['name' => 'Other School', 'status' => 'active']);
+        $outsider = StudentHealthRecord::create([
+            'institution_id' => $other->id,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'student_name' => 'Outsider Learner',
+            'student_id' => 'LRN999999',
+            'school_name' => 'Other School',
+            'section' => 'Grade 7 / Sampaguita',
+            'weight' => 30,
+            'bmi_value' => 15.0,
+            'nutritional_status' => 'Wasted',
+            'student_details' => ['gender' => 'Male'],
+            'feeding_enrolled_at' => now(),
+        ]);
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-health-records/masterlist', ['record_ids' => [$outsider->id]])
+            ->assertOk();
+
+        $this->assertStringNotContainsString('Outsider Learner', $this->readSheetXml($response->streamedContent()));
+    }
+
+    #[Test]
+    public function only_the_feeding_coordinator_may_export_the_masterlist(): void
+    {
+        $this->withSession(['active_role' => 'class_adviser', 'active_institution_id' => $this->institution->id])
+            ->post('/dashboard/feedingcor-health-records/masterlist', ['record_ids' => []])
+            ->assertRedirect(route('login'));
+    }
+
+    /** The first worksheet's XML, out of the .xlsx zip. */
+    private function readSheetXml(string $binary): string
+    {
+        $path = tempnam(sys_get_temp_dir(), 'masterlist-test-');
+        file_put_contents($path, $binary);
+
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($path) === true, 'The export is a real .xlsx archive.');
+        $xml = (string) $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        @unlink($path);
+
+        return $xml;
+    }
+
+    /**
      * Enrolling from this tab is the very dialog the Dashboard opens — one
      * partial, one script, one set of endpoints. A second copy would be a
      * second thing to keep in step, and enrolment is not a place to discover
@@ -316,9 +395,10 @@ class FeedingBeneficiaryCardsTest extends TestCase
         $this->makeStudent('Grade 9 / Narra', 'Underweight', enrolled: false);
         $this->makeStudent('Grade 10 / Acacia', 'Normal');                  // neither
 
-        // Four sessions, one attended: well under the 80% threshold.
-        foreach ([true, false, false, false] as $index => $isPresent) {
-            $this->markAttendance($flagged, now()->subDays(4 - $index)->toDateString(), $isPresent);
+        // Twelve sessions, three attended: 25%, and deep enough into the
+        // programme for the threshold to have classified them.
+        foreach (range(1, 12) as $day) {
+            $this->markAttendance($flagged, now()->subDays(13 - $day)->toDateString(), $day <= 3);
         }
 
         $expected = ['all' => 2, 'pending' => 2, 'at_risk' => 1];
@@ -421,9 +501,10 @@ class FeedingBeneficiaryCardsTest extends TestCase
     {
         $learner = $this->makeStudent('Grade 7 / Maabilidad', 'Wasted', name: 'Jeb Sean Cachuela');
 
-        // Two of four: well under the 80% threshold.
-        foreach ([true, false, true, false] as $index => $isPresent) {
-            $this->markAttendance($learner, now()->subDays(4 - $index)->toDateString(), $isPresent);
+        // Six of twelve: well under the 80% threshold, and past the rule's
+        // observation window so the shortfall is a verdict.
+        foreach (range(1, 12) as $day) {
+            $this->markAttendance($learner, now()->subDays(13 - $day)->toDateString(), $day % 2 === 0);
         }
 
         $body = $this->tableBody();

@@ -355,7 +355,13 @@
                                         default => ['Active', 'badge-normal'],
                                     };
                                 @endphp
-                                <tr data-search="{{ strtolower(trim($record->student_name.' '.$record->section_name)) }}">
+                                {{-- The record id rides the row so the masterlist
+                                     export can name exactly the learners on
+                                     screen, in the order they are on screen. A
+                                     session-fallback row has none and is simply
+                                     left out of the file. --}}
+                                <tr data-search="{{ strtolower(trim($record->student_name.' '.$record->section_name)) }}"
+                                    @if ($record->id) data-record-id="{{ $record->id }}" @endif>
                                     <td class="bnf-idx">{{ $index + 1 }}</td>
                                     {{-- The whole name cell opens the learner's
                                          own beneficiary record. A session-fallback
@@ -726,24 +732,44 @@
         });
     });
 
-    // ── Export Masterlist: whatever is on screen, in the order it is on
-    // screen — the same roster the coordinator filtered, sorted and searched,
-    // so what leaves the page is what they were reading. ──
+    // ── Export Masterlist ──────────────────────────────────────────────
+    // The file is the school's own DepEd masterlist form — heading, ruled
+    // No./Name/Grade/Section table, and the Prepared by / Noted by block — so
+    // it can be printed and handed in rather than retyped onto the form.
+    //
+    // The server writes it, because a form has a shape that comma-separated
+    // text cannot carry, and a real .xlsx opens in Excel on any machine; which
+    // program opens a .csv is a setting on the reader's computer that this page
+    // has no reach into.
+    //
+    // What is sent is the ordered ids of the rows still on screen — the roster
+    // the coordinator filtered, searched and sorted — so what leaves the page is
+    // what they were reading. A short-lived form post is used rather than fetch
+    // so the browser handles the download itself.
     document.getElementById('exportMasterlistBtn').addEventListener('click', () => {
-        const cell = (el) => '"' + el.textContent.trim().replace(/\s+/g, ' ').replace(/"/g, '""') + '"';
-        // A checkbox and an Enroll button are controls, not data: they are
-        // dropped so the file carries the roster and nothing else.
-        const keep = (el) => !el.classList.contains('bnf-check') && !el.classList.contains('bnf-action');
-        const lines = [Array.from(table.tHead.rows[0].cells).filter(keep).map(cell).join(',')];
-        rows.filter((row) => row.style.display !== 'none')
-            .forEach((row) => lines.push(Array.from(row.cells).filter(keep).map(cell).join(',')));
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = @json(route('dashboard.feedingcor-health-records.masterlist'));
+        form.style.display = 'none';
 
-        const url = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' }));
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'sbfp-masterlist-' + new Date().toISOString().slice(0, 10) + '.csv';
-        link.click();
-        URL.revokeObjectURL(url);
+        const field = (name, value) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            input.value = value;
+            form.appendChild(input);
+        };
+
+        field('_token', document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '');
+        // The year on screen, so the heading names the period being exported.
+        field('school_year', new URLSearchParams(window.location.search).get('school_year') ?? '');
+
+        rows.filter((row) => row.style.display !== 'none' && row.dataset.recordId)
+            .forEach((row) => field('record_ids[]', row.dataset.recordId));
+
+        document.body.appendChild(form);
+        form.submit();
+        form.remove();
     });
 
     // ── Print Masterlist: the same roster on paper. The print stylesheet

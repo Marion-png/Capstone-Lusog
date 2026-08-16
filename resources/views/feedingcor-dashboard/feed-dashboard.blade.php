@@ -127,6 +127,19 @@
 					@endforeach
 				</select>
 			</div>
+			{{-- Sex is scope like grade and section, not a narrowing filter: it
+			     changes who the figures describe. It reads the encrypted
+			     student_details.gender through FeedingBeneficiarySummary, so
+			     every coordinator tab agrees on the answer. --}}
+			<div class="fc-filter">
+				<label class="field-label" for="filterSex">Sex</label>
+				<select class="select" name="sex" id="filterSex">
+					<option value="">All</option>
+					@foreach ($filterOptions['sexes'] as $sexOption)
+						<option value="{{ $sexOption }}" @selected($filters['sex'] === $sexOption)>{{ $sexOption }}</option>
+					@endforeach
+				</select>
+			</div>
 			<div class="fc-filter">
 				<label class="field-label" for="filterStatus">Nutritional Status</label>
 				<select class="select" name="status" id="filterStatus">
@@ -152,7 +165,7 @@
 				<noscript><button type="submit" class="btn btn-primary">Apply</button></noscript>
 				{{-- A school year other than the current one counts as a filter
 				     too, or there would be no way back from it. --}}
-				@if ($filters['grade'] !== '' || $filters['section'] !== '' || $filters['status'] !== '' || $filters['attendance'] !== '' || $filters['school_year'] !== \App\Models\StudentHealthRecord::currentSchoolYear())
+				@if ($filters['grade'] !== '' || $filters['section'] !== '' || $filters['sex'] !== '' || $filters['status'] !== '' || $filters['attendance'] !== '' || $filters['school_year'] !== \App\Models\StudentHealthRecord::currentSchoolYear())
 					<a class="btn btn-ghost" href="{{ route('dashboard.feedingcor-dashboard') }}">Clear</a>
 				@endif
 			</div>

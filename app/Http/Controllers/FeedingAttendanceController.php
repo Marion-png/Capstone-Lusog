@@ -35,7 +35,19 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  * - a beneficiary no sheet has covered for a session is **unmarked**, never
  *   absent, because nobody observed them missing;
  * - the at-risk threshold comes from the school's own setting via
- *   FeedingAtRiskRule::forInstitution(), never a constant in this file.
+ *   FeedingAtRiskRule::forInstitution(), never a constant in this file;
+ * - and a rate is not a classification until the school's minimum observation
+ *   period has passed. Until then a learner reads **Early Monitoring**: their
+ *   rate is computed and shown, but nothing flags them. One of four recorded
+ *   sessions is 25% and would fail every threshold, yet four sessions is not a
+ *   programme problem — it is too little history to put a child on a follow-up
+ *   list over.
+ *
+ * Three different figures live on this page and are labelled as three different
+ * figures, never merged: **this session's** turnout, the programme's
+ * **cumulative** turnout over confirmed sessions, and the **programme day**
+ * within the cycle. A feeding day the school ran but never recorded is a
+ * missing record, not a day of absences, so it moves none of them.
  *
  * Saving goes through FeedingProgramController::storeRecordedAttendance — the
  * one audited write path for a recorded session — rather than a second one
@@ -197,10 +209,14 @@ class FeedingAttendanceController extends Controller
         $filters = $this->readFilters($request, $rows);
         $filteredRows = $this->applyFilters($rows, $filters);
 
-        $standings = $this->standings($beneficiaries, $byRecord, $rule);
+        $standings = $this->standings($beneficiaries, $byRecord, $rule, count($sessionDates));
         $atRiskCount = collect($standings)->where('at_risk', true)->count();
+        // Learners the threshold has not started classifying yet. They are
+        // deliberately not added to the at-risk count — that is the whole point
+        // of the observation window — and are reported as their own figure.
+        $observingCount = collect($standings)->where('status', FeedingAtRiskRule::STATUS_EARLY_MONITORING)->count();
 
-        $cumulative = $this->cumulativeRate($marks);
+        $cumulative = $this->cumulative($marks);
         $todayTally = $this->tally($rows);
 
         return [
@@ -237,15 +253,30 @@ class FeedingAttendanceController extends Controller
             'rows' => $filteredRows,
             'unfilteredRows' => $rows,
             'tally' => $todayTally,
-            'cumulativeRate' => $cumulative,
+            // The programme's own turnout, kept apart from the session's: same
+            // word, different question, and merging them is how a coordinator
+            // reads today's 100% as the programme's 100%.
+            'cumulative' => $cumulative,
             'filters' => $filters,
             'filterOptions' => $this->filterOptions($rows),
             'sessionRecorded' => $byDate->has($selectedDate),
+            // How much of this session is settled. When nothing on screen is
+            // still open the sheet becomes a record rather than a form: the
+            // save bar and the bulk marks go, because there is nothing left to
+            // save. A wrong mark is fixed on the learner's own record, where
+            // the correction is attributed and audited.
+            'openMarkCount' => $filteredRows->where('locked', false)->count(),
+            'lockedMarkCount' => $filteredRows->where('locked', true)->count(),
             'atRisk' => [
                 'count' => $atRiskCount,
                 'threshold' => $rule->thresholdPercent(),
                 'thresholdLabel' => rtrim(rtrim(number_format($rule->thresholdPercent(), 1), '0'), '.'),
                 'rule' => $rule->describe(),
+                // The observation window: how many learners it is still holding
+                // back, and what it is set to for this school.
+                'observing' => $observingCount,
+                'minimumObservationDays' => $rule->minimumObservationDays(),
+                'observationRule' => $rule->describeObservation(),
             ],
             'history' => $this->history($beneficiaries, $byDate, $sessionDates),
             'beneficiaryRows' => $this->beneficiaryRows($beneficiaries, $standings, $filters),
@@ -312,14 +343,25 @@ class FeedingAttendanceController extends Controller
             [$grade, $section] = FeedingBeneficiarySummary::splitSection((string) $record->section);
             $mark = $marksForDate->get($record->id);
 
+            $status = $mark['status'] ?? 'unmarked';
+
             return [
                 'id' => $record->id,
                 'name' => (string) $record->student_name,
                 'grade' => $grade,
                 'grade_number' => preg_replace('/^grade\s*/i', '', $grade),
                 'section' => $section,
-                'status' => $mark['status'] ?? 'unmarked',
+                // Carried on the row so the sex filter and the search can read
+                // it without going back to the encrypted record.
+                'sex' => FeedingBeneficiarySummary::sexOf($record),
+                'status' => $status,
                 'remarks' => $mark['remarks'] ?? '',
+                // A mark a human has already recorded for this learner on this
+                // day is settled: the sheet shows it and offers no way to
+                // change it, here or on the server. An UNCONFIRMED scanned mark
+                // is deliberately not locked — nobody has read it yet, and
+                // recording on site is exactly how it gets decided.
+                'locked' => in_array($status, ['present', 'absent'], true),
             ];
         })->values();
     }
@@ -327,13 +369,21 @@ class FeedingAttendanceController extends Controller
     /**
      * Where each beneficiary stands with the school's rule, from one reading of
      * their marks — so the rate printed beside a learner is exactly the one
-     * that decided their flag.
+     * that decided their flag, and the badge beside it is the one state the
+     * rule put them in.
+     *
+     * `not_marked` is the school's feeding days minus the days this learner was
+     * marked on at all. It is reported as its own figure and never folded into
+     * absences: a session no sheet covered them for is a missing record, and
+     * the difference between "did not come" and "nobody wrote it down" is the
+     * difference between a follow-up and a filing job.
      *
      * @param  Collection<int, StudentHealthRecord>  $beneficiaries
      * @param  Collection<int, Collection<int, array<string, mixed>>>  $byRecord
-     * @return array<int, array{present: int, absent: int, confirmed: int, rate: ?float, at_risk: bool}>
+     * @param  int  $sessionCount  feeding days the school recorded at all
+     * @return array<int, array{present: int, absent: int, confirmed: int, unconfirmed: int, not_marked: int, rate: ?float, at_risk: bool, status: string, sessions_needed: int}>
      */
-    private function standings(Collection $beneficiaries, Collection $byRecord, FeedingAtRiskRule $rule): array
+    private function standings(Collection $beneficiaries, Collection $byRecord, FeedingAtRiskRule $rule, int $sessionCount): array
     {
         $standings = [];
 
@@ -348,14 +398,18 @@ class FeedingAttendanceController extends Controller
             })->all();
 
             $present = $rule->presentCount($marks);
-            $confirmed = count(array_filter($marks, static fn ($mark) => $mark !== null));
+            $confirmed = $rule->confirmedCount($marks);
 
             $standings[$record->id] = [
                 'present' => $present,
                 'absent' => $confirmed - $present,
                 'confirmed' => $confirmed,
+                'unconfirmed' => count($marks) - $confirmed,
+                'not_marked' => max(0, $sessionCount - count($marks)),
                 'rate' => $rule->attendanceRate($marks),
                 'at_risk' => $rule->isAtRisk($marks),
+                'status' => $rule->status($marks),
+                'sessions_needed' => $rule->sessionsUntilClassification($marks),
             ];
         }
 
@@ -414,10 +468,16 @@ class FeedingAttendanceController extends Controller
      */
     private function beneficiaryRows(Collection $beneficiaries, array $standings, array $filters): array
     {
+        $blank = [
+            'present' => 0, 'absent' => 0, 'confirmed' => 0, 'unconfirmed' => 0, 'not_marked' => 0,
+            'rate' => null, 'at_risk' => false, 'status' => FeedingAtRiskRule::STATUS_EARLY_MONITORING,
+            'sessions_needed' => 0,
+        ];
+
         return $beneficiaries
-            ->map(function (StudentHealthRecord $record) use ($standings): array {
+            ->map(function (StudentHealthRecord $record) use ($standings, $blank): array {
                 [$grade, $section] = FeedingBeneficiarySummary::splitSection((string) $record->section);
-                $standing = $standings[$record->id] ?? ['present' => 0, 'absent' => 0, 'confirmed' => 0, 'rate' => null, 'at_risk' => false];
+                $standing = $standings[$record->id] ?? $blank;
 
                 return [
                     'id' => $record->id,
@@ -425,18 +485,32 @@ class FeedingAttendanceController extends Controller
                     'grade' => $grade,
                     'grade_number' => preg_replace('/^grade\s*/i', '', $grade),
                     'section' => $section,
+                    'sex' => FeedingBeneficiarySummary::sexOf($record),
                     'present' => $standing['present'],
                     'absent' => $standing['absent'],
+                    'confirmed' => $standing['confirmed'],
+                    // Feeding days no sheet covered this learner on. Its own
+                    // column, never added to absences.
+                    'not_marked' => $standing['not_marked'],
                     'rate' => $standing['rate'],
                     'at_risk' => $standing['at_risk'],
+                    'status' => $standing['status'],
+                    'sessions_needed' => $standing['sessions_needed'],
                 ];
             })
-            // Grade and section are the tab's scope, so they narrow this roll
-            // exactly as they narrow the sheet.
+            // Grade, section and sex are the tab's scope, so they narrow this
+            // roll exactly as they narrow the sheet.
             ->filter(fn (array $row): bool => ($filters['grade'] === '' || $row['grade'] === $filters['grade'])
-                && ($filters['section'] === '' || $row['section'] === $filters['section']))
+                && ($filters['section'] === '' || $row['section'] === $filters['section'])
+                && ($filters['sex'] === '' || $row['sex'] === $filters['sex']))
             // "View At-Risk Beneficiaries" lands here with the flag already on.
             ->when($filters['status'] === 'at_risk', fn (Collection $rows) => $rows->where('at_risk', true))
+            // The learners the observation window is still holding back — who a
+            // coordinator asking "why is nobody flagged yet?" is looking for.
+            ->when(
+                $filters['status'] === 'early_monitoring',
+                fn (Collection $rows) => $rows->where('status', FeedingAtRiskRule::STATUS_EARLY_MONITORING)
+            )
             ->values()
             ->all();
     }
@@ -626,16 +700,30 @@ class FeedingAttendanceController extends Controller
 
     /**
      * The programme's turnout across every session so far — a different figure
-     * from today's rate, and labelled as such on screen.
+     * from today's, and labelled as such on screen.
+     *
+     * `sessions` is the count of feeding days the school actually recorded, not
+     * the programme day: a coordinator reading 25% needs to know it was taken
+     * over four sheets, not over the twenty days the cycle has been running.
      *
      * @param  Collection<int, array<string, mixed>>  $marks
+     * @return array{present: int, absent: int, unconfirmed: int, confirmed: int, sessions: int, rate: ?float}
      */
-    private function cumulativeRate(Collection $marks): ?float
+    private function cumulative(Collection $marks): array
     {
         $present = $marks->where('status', 'present')->count();
-        $confirmed = $present + $marks->where('status', 'absent')->count();
+        $absent = $marks->where('status', 'absent')->count();
+        $confirmed = $present + $absent;
 
-        return $confirmed > 0 ? round(($present / $confirmed) * 100, 1) : null;
+        return [
+            'present' => $present,
+            'absent' => $absent,
+            'unconfirmed' => $marks->where('status', 'unconfirmed')->count(),
+            'confirmed' => $confirmed,
+            'sessions' => $marks->pluck('date')->unique()->count(),
+            // Null, not zero: no confirmed session is not a turnout of nothing.
+            'rate' => $confirmed > 0 ? round(($present / $confirmed) * 100, 1) : null,
+        ];
     }
 
     /**
@@ -659,17 +747,25 @@ class FeedingAttendanceController extends Controller
             $section = '';
         }
 
+        // Sex is scope alongside grade and section: it moves the sheet and the
+        // per-beneficiary roll together. Read off the encrypted details blob,
+        // so it is applied in PHP like the other two.
+        $sex = trim((string) $request->query('sex', ''));
+        if (! in_array($sex, FeedingBeneficiarySummary::SEX_OPTIONS, true)) {
+            $sex = '';
+        }
+
         $status = trim((string) $request->query('status', ''));
-        if (! in_array($status, ['present', 'absent', 'unmarked', 'unconfirmed', 'at_risk'], true)) {
+        if (! in_array($status, ['present', 'absent', 'unmarked', 'unconfirmed', 'at_risk', 'early_monitoring'], true)) {
             $status = '';
         }
 
-        return ['grade' => $grade, 'section' => $section, 'status' => $status];
+        return ['grade' => $grade, 'section' => $section, 'sex' => $sex, 'status' => $status];
     }
 
     /**
      * @param  Collection<int, array<string, mixed>>  $rows
-     * @param  array{grade: string, section: string, status: string}  $filters
+     * @param  array{grade: string, section: string, sex: string, status: string}  $filters
      * @return Collection<int, array<string, mixed>>
      */
     private function applyFilters(Collection $rows, array $filters): Collection
@@ -677,6 +773,7 @@ class FeedingAttendanceController extends Controller
         return $rows
             ->when($filters['grade'] !== '', fn (Collection $r) => $r->where('grade', $filters['grade']))
             ->when($filters['section'] !== '', fn (Collection $r) => $r->where('section', $filters['section']))
+            ->when($filters['sex'] !== '', fn (Collection $r) => $r->where('sex', $filters['sex']))
             // at_risk is a cumulative standing, not a mark on this session, so
             // it narrows the per-beneficiary roll rather than the sheet.
             ->when(

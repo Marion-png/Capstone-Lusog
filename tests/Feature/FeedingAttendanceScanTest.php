@@ -287,6 +287,12 @@ class FeedingAttendanceScanTest extends TestCase
     #[Test]
     public function confirming_a_mark_records_who_decided_and_recomputes_the_flag(): void
     {
+        // This test is about a review recording who decided and recomputing the
+        // flag, so the school classifies from the first confirmed session —
+        // otherwise four sheets would leave the learner unclassified for a
+        // reason that has nothing to do with the review path.
+        $this->institution->update(['feeding_min_observation_days' => 1]);
+
         $alpha = $this->makeStudent('Alpha Learner');
 
         // Three confirmed absences plus one unclear: 0% of 3 confirmed → flagged.

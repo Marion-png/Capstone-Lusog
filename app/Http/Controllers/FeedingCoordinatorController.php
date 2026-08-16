@@ -110,7 +110,13 @@ class FeedingCoordinatorController extends Controller
      */
     private function buildBmiValues(Collection $records): array
     {
-        $gradeKeys = ['g7', 'g8', 'g9', 'g10', 'g11', 'g12'];
+        // Junior High only, from the one declaration of what the programme
+        // covers — the grids and the eligibility test must never disagree
+        // about which grades exist.
+        $gradeKeys = array_map(
+            static fn (int $grade): string => 'g'.$grade,
+            FeedingBeneficiarySummary::GRADE_LEVELS
+        );
         $sexes = ['male', 'female'];
         $nsCols = ['sw', 'w', 'n', 'ow', 'ob'];
         $hfaCols = ['ss', 'st', 'hn', 't'];
@@ -223,14 +229,16 @@ class FeedingCoordinatorController extends Controller
     }
 
     /**
-     * "Grade 7" → "g7"; the report covers Grades 7-12 (JHS 7-10 plus SHS
-     * 11-12), so anything outside that range is left off the grids.
+     * "Grade 7" → "g7". The report covers Junior High only, so anything outside
+     * FeedingBeneficiarySummary::GRADE_LEVELS is left off the grids — and,
+     * because the same list decides eligibility, a learner left off here was
+     * never a beneficiary in the first place.
      */
     private function bmiGradeKey(string $gradeLabel): ?string
     {
         if (preg_match('/(\d{1,2})/', $gradeLabel, $m)) {
             $grade = (int) $m[1];
-            if ($grade >= 7 && $grade <= 12) {
+            if (in_array($grade, FeedingBeneficiarySummary::GRADE_LEVELS, true)) {
                 return 'g'.$grade;
             }
         }
@@ -473,6 +481,10 @@ class FeedingCoordinatorController extends Controller
             'school_year' => $clean('school_year') ?: StudentHealthRecord::currentSchoolYear(),
             'grade' => $clean('grade'),
             'section' => $clean('section'),
+            // Sex is scope, like grade and section: it narrows who the figures
+            // describe rather than which of them are listed. An unrecognised
+            // value is dropped rather than emptying the page.
+            'sex' => in_array($clean('sex'), FeedingBeneficiarySummary::SEX_OPTIONS, true) ? $clean('sex') : '',
             'status' => $clean('status'),
             'attendance' => in_array($clean('attendance'), ['present', 'absent', 'unmarked'], true)
                 ? $clean('attendance')
@@ -490,6 +502,7 @@ class FeedingCoordinatorController extends Controller
             'school_year' => StudentHealthRecord::currentSchoolYear(),
             'grade' => '',
             'section' => '',
+            'sex' => '',
             'status' => '',
             'attendance' => '',
         ];
@@ -516,10 +529,12 @@ class FeedingCoordinatorController extends Controller
         $cycle = FeedingProgramCycle::forInstitution($institutionId);
         $programDay = $cycle->day();
 
-        // nutritional_status is encrypted at rest, so qualification is decided
-        // in PHP after fetch — the same test the Feeding Program page applies.
+        // nutritional_status is encrypted at rest and the grade lives inside
+        // the section string, so eligibility is decided in PHP after fetch —
+        // the same one test every other feeding screen applies, status plus a
+        // grade the programme covers.
         $qualified = $students
-            ->filter(fn (StudentHealthRecord $record): bool => $this->isQualifiedForFeeding((string) $record->nutritional_status))
+            ->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isEligible($record))
             ->values();
 
         // Qualifying and being enrolled are two different facts: the adviser's
@@ -530,17 +545,20 @@ class FeedingCoordinatorController extends Controller
             ->values();
         $awaitingEnrollment = $qualified->count() - $allBeneficiaries->count();
 
-        // Grade and section scope every panel; the two status filters narrow
-        // the attendance roll alone (see buildTodayAttendance), so the headline
-        // stays "of everyone expected today" rather than "of what is on screen".
-        $beneficiaries = $allBeneficiaries
-            ->filter(function (StudentHealthRecord $record) use ($filters): bool {
+        // Grade, section and sex scope every panel; the two status filters
+        // narrow the attendance roll alone (see buildTodayAttendance), so the
+        // headline stays "of everyone expected today" rather than "of what is
+        // on screen". Sex is read through FeedingBeneficiarySummary so this
+        // page and the Beneficiaries tab agree on who is male and who female.
+        $beneficiaries = FeedingBeneficiarySummary::scopeToSex(
+            $allBeneficiaries->filter(function (StudentHealthRecord $record) use ($filters): bool {
                 [$grade, $section] = $this->splitSection((string) $record->section);
 
                 return ($filters['grade'] === '' || $grade === $filters['grade'])
                     && ($filters['section'] === '' || $section === $filters['section']);
-            })
-            ->values();
+            })->values(),
+            (string) ($filters['sex'] ?? '')
+        );
 
         $rule = FeedingAtRiskRule::forInstitution($institutionId);
         $beneficiaryStats = $this->buildBeneficiaryStats($beneficiaries, $rule);
@@ -552,8 +570,7 @@ class FeedingCoordinatorController extends Controller
                 'total_students' => $students->count(),
                 'program_day' => $programDay,
                 'beneficiaries' => $beneficiaryStats['beneficiaries'],
-                'beneficiaries_jhs' => $beneficiaryStats['jhs'],
-                'beneficiaries_shs' => $beneficiaryStats['shs'],
+                'beneficiaries_grade_range' => $beneficiaryStats['grade_range'],
                 'attendance_rate' => $beneficiaryStats['attendance_rate'],
                 'attendance_sessions' => $beneficiaryStats['confirmed_sessions'],
                 'at_risk' => $beneficiaryStats['at_risk'],
@@ -614,6 +631,10 @@ class FeedingCoordinatorController extends Controller
             'school_years' => $schoolYears->all(),
             'grades' => $grades->all(),
             'sections' => $sections->all(),
+            // The two answers the app records — never a list built from the
+            // data, which would offer an option only if someone had already
+            // been filed under it.
+            'sexes' => FeedingBeneficiarySummary::SEX_OPTIONS,
             'statuses' => array_column($this->nutritionScale(), 'label'),
             'attendance' => [
                 ['value' => 'present', 'label' => 'Present'],
@@ -864,8 +885,10 @@ class FeedingCoordinatorController extends Controller
 
         return [
             'beneficiaries' => $beneficiaries->count(),
-            'jhs' => $beneficiaries->filter(fn ($r) => $this->resolveLevel((string) $r->section) === 'jhs')->count(),
-            'shs' => $beneficiaries->filter(fn ($r) => $this->resolveLevel((string) $r->section) === 'shs')->count(),
+            // The grades the roll actually spans, from the programme's own
+            // list. There is no JHS/SHS split to report any more: Senior High
+            // is out of scope, so the old "SHS 0" said nothing.
+            'grade_range' => self::gradeRangeLabel(),
             // Null, not zero: no confirmed session is not a 0% turnout.
             'attendance_rate' => $confirmedSessions > 0
                 ? (int) round(($presentSessions / $confirmedSessions) * 100)
@@ -938,11 +961,22 @@ class FeedingCoordinatorController extends Controller
             ->values()
             ->all();
 
+        // Learners the rule has not started classifying. Reported separately so
+        // an empty list on feeding day 8 reads as "too early to say" rather
+        // than "the programme has no attendance problem".
+        $observing = $beneficiaries
+            ->reject(fn (StudentHealthRecord $record): bool => $rule->hasEnoughObservation(
+                $marksByRecord->get($record->id, [])
+            ))
+            ->count();
+
         return [
             'threshold' => $rule->thresholdPercent(),
             'rule' => $rule->describe(),
             'mode' => $rule->mode(),
             'count' => count($rows),
+            'observing' => $observing,
+            'minimum_observation_days' => $rule->minimumObservationDays(),
             'rows' => $rows,
         ];
     }
@@ -971,14 +1005,12 @@ class FeedingCoordinatorController extends Controller
         };
     }
 
-    private function resolveLevel(string $section): string
+    /** "Grades 7–10" — what the programme covers, said once. */
+    public static function gradeRangeLabel(): string
     {
-        $normalized = strtolower($section);
-        if (str_contains($normalized, 'shs') || str_contains($normalized, 'grade 11') || str_contains($normalized, 'grade 12') || str_contains($normalized, 'g11') || str_contains($normalized, 'g12')) {
-            return 'shs';
-        }
+        $grades = FeedingBeneficiarySummary::GRADE_LEVELS;
 
-        return 'jhs';
+        return 'Grades '.min($grades).'–'.max($grades);
     }
 
     private function resolveStatus(string $status): string

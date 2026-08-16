@@ -29,7 +29,15 @@ class FeedingPendingMigrationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->institution = Institution::create(['name' => 'Test School', 'status' => 'active']);
+
+        // This class is about an un-migrated schema, not about the at-risk
+        // rule's observation window, so the school classifies from the first
+        // confirmed session and a four-column sheet still exercises the flag.
+        $this->institution = Institution::create([
+            'name' => 'Test School',
+            'status' => 'active',
+            'feeding_min_observation_days' => 1,
+        ]);
 
         // Roll the schema back to its pre-scan shape (indexes first, as the
         // migration's own down() does).

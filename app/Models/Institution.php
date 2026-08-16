@@ -7,11 +7,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class Institution extends Model
 {
-    protected $fillable = ['name', 'address', 'status', 'feeding_at_risk_threshold'];
+    protected $fillable = ['name', 'address', 'status', 'feeding_at_risk_threshold', 'feeding_min_observation_days'];
 
     protected $casts = [
         // NULL means "use the app default" — see FeedingAtRiskRule::forInstitution().
         'feeding_at_risk_threshold' => 'integer',
+        // How many recorded feeding days a learner must have before the
+        // threshold classifies them at all. NULL is the app default too.
+        'feeding_min_observation_days' => 'integer',
     ];
 
     public const DEFAULT_SCHOOLS = [

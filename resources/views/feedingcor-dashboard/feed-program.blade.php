@@ -359,6 +359,15 @@
 								<option value="{{ strtolower($gradeOption) }}">{{ $gradeOption }}</option>
 							@endforeach
 						</select>
+						{{-- The at-risk list above already filters by sex; the roll
+						     it is drawn from now does too, so the two read the
+						     same population. --}}
+						<select class="select risk-filter" id="rosterGenderFilter" aria-label="Filter recorded attendance by sex">
+							<option value="all">Sex</option>
+							@foreach (\App\Support\FeedingBeneficiarySummary::SEX_OPTIONS as $sexOption)
+								<option value="{{ strtolower($sexOption) }}">{{ $sexOption }}</option>
+							@endforeach
+						</select>
 					@endif
 					@if (!$isReadOnly)
 						<button type="button" class="btn btn-primary" id="uploadAttendanceBtn">
@@ -410,6 +419,7 @@
 									};
 								@endphp
 								<tr data-roster-grade="{{ strtolower((string) ($row['grade_level'] ?? '')) }}"
+									data-roster-gender="{{ strtolower((string) ($row['gender'] ?? '')) }}"
 									data-roster-search="{{ strtolower(trim(($row['student_name'] ?? '').' '.($row['section'] ?? ''))) }}">
 									<td><strong>{{ $row['student_name'] }}</strong></td>
 									<td>{{ $row['section'] }}</td>
@@ -650,6 +660,7 @@
 	const riskRows = Array.from(document.querySelectorAll('#riskTable tbody tr[data-risk-status]'));
 	const rosterSearch = document.getElementById('rosterSearch');
 	const rosterGradeFilter = document.getElementById('rosterGradeFilter');
+	const rosterGenderFilter = document.getElementById('rosterGenderFilter');
 	const rosterNoMatchRow = document.getElementById('rosterNoMatchRow');
 	const rosterRows = Array.from(document.querySelectorAll('#rosterTable tbody tr[data-roster-search]'));
 	const backdrop = document.getElementById('weightsModalBackdrop');
@@ -1612,12 +1623,14 @@
 		const applyRosterFilters = () => {
 			const term = rosterSearch ? String(rosterSearch.value || '').trim().toLowerCase() : '';
 			const grade = rosterGradeFilter ? String(rosterGradeFilter.value || 'all').toLowerCase() : 'all';
+			const gender = rosterGenderFilter ? String(rosterGenderFilter.value || 'all').toLowerCase() : 'all';
 			let matches = 0;
 
 			rosterRows.forEach((row) => {
 				const attr = (name) => String(row.getAttribute(name) || '').toLowerCase();
 				const visible = (term === '' || attr('data-roster-search').includes(term))
-					&& (grade === 'all' || attr('data-roster-grade') === grade);
+					&& (grade === 'all' || attr('data-roster-grade') === grade)
+					&& (gender === 'all' || attr('data-roster-gender') === gender);
 
 				row.style.display = visible ? '' : 'none';
 				if (visible) {
@@ -1636,6 +1649,10 @@
 
 		if (rosterGradeFilter) {
 			rosterGradeFilter.addEventListener('change', applyRosterFilters);
+		}
+
+		if (rosterGenderFilter) {
+			rosterGenderFilter.addEventListener('change', applyRosterFilters);
 		}
 	}
 

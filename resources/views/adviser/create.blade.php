@@ -125,8 +125,10 @@
                                 <option>Grade 8/SPED</option>
                                 <option>Grade 9/SPED</option>
                                 <option>Grade 10/SPED</option>
-                                <option>Grade 11/SPED</option>
-                                <option>Grade 12/SPED</option>
+                                {{-- Senior High is not offered: the feeding
+                                     programme covers Grades 7-10, and a learner
+                                     enrolled above that would be measured here
+                                     and then dropped by every SBFP report. --}}
                             </select>
                         </div>
                         <div class="field">

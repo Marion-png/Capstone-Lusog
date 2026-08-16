@@ -29,6 +29,97 @@ use Illuminate\Support\Collection;
  */
 final class FeedingBeneficiarySummary
 {
+    /** The two answers the app records, and the only two a filter may offer. */
+    public const SEX_OPTIONS = ['Male', 'Female'];
+
+    /**
+     * The grade levels the feeding programme covers: Junior High School only.
+     *
+     * Senior High (11-12) is deliberately out of scope. It is declared once,
+     * here, because the boundary has to hold in three places at least — who may
+     * be enrolled, who is counted a beneficiary, and which grids the DepEd BMI
+     * report prints — and a range re-typed in each of them is a range that will
+     * eventually disagree with itself.
+     */
+    public const GRADE_LEVELS = [7, 8, 9, 10];
+
+    /**
+     * The grade number in a "Grade 8 / Matiyaga" section string, or null when
+     * there is none to read.
+     */
+    public static function gradeNumber(string $section): ?int
+    {
+        [$grade] = self::splitSection($section);
+
+        return preg_match('/(\d{1,2})/', $grade, $matches) ? (int) $matches[1] : null;
+    }
+
+    /** Whether this learner sits in a grade the programme covers. */
+    public static function coversGrade(StudentHealthRecord $record): bool
+    {
+        $grade = self::gradeNumber((string) $record->section);
+
+        return $grade !== null && in_array($grade, self::GRADE_LEVELS, true);
+    }
+
+    /**
+     * Whether this learner may be enrolled at all: measured into a qualifying
+     * status AND sitting in a grade the programme covers.
+     *
+     * Both halves belong together. Judging only on status let a Senior High
+     * learner be enrolled and fed while every report silently dropped them,
+     * because the BMI grids only ever covered Junior High.
+     */
+    public static function isEligible(StudentHealthRecord $record): bool
+    {
+        return self::coversGrade($record) && self::qualifies((string) $record->nutritional_status);
+    }
+
+    /**
+     * One learner's sex, as every coordinator screen must read it.
+     *
+     * It lives in the encrypted `student_details.gender` blob, so it can never
+     * be a WHERE clause — every filter on it is applied in PHP after fetch.
+     * This is the single normalizer: advisers have typed "M", "male" and
+     * "Male", and four tabs each guessing at that would disagree about who is
+     * in a filtered roll.
+     *
+     * Returns '' for anything that is neither, so an unrecorded sex is
+     * "unknown" rather than being quietly filed under one of them.
+     */
+    public static function sexOf(StudentHealthRecord $record): string
+    {
+        $details = is_array($record->student_details) ? $record->student_details : [];
+        $value = strtolower(trim((string) ($details['gender'] ?? '')));
+
+        return match (true) {
+            $value === '' => '',
+            str_starts_with($value, 'm') => 'Male',
+            str_starts_with($value, 'f') => 'Female',
+            default => '',
+        };
+    }
+
+    /**
+     * Narrows a roll to one sex. An empty filter keeps everyone; a learner with
+     * no sex on file is kept only when no sex is being asked for.
+     *
+     * @param  Collection<int, StudentHealthRecord>  $records
+     * @return Collection<int, StudentHealthRecord>
+     */
+    public static function scopeToSex(Collection $records, string $sex): Collection
+    {
+        $sex = trim($sex);
+
+        if (! in_array($sex, self::SEX_OPTIONS, true)) {
+            return $records->values();
+        }
+
+        return $records
+            ->filter(fn (StudentHealthRecord $record): bool => self::sexOf($record) === $sex)
+            ->values();
+    }
+
     /**
      * The adviser's measurement qualifies a learner for the programme.
      * Qualifying is not enrolment — see isBeneficiary().
@@ -49,8 +140,7 @@ final class FeedingBeneficiarySummary
      */
     public static function isBeneficiary(StudentHealthRecord $record): bool
     {
-        return $record->feeding_enrolled_at !== null
-            && self::qualifies((string) $record->nutritional_status);
+        return $record->feeding_enrolled_at !== null && self::isEligible($record);
     }
 
     /**
@@ -180,7 +270,7 @@ final class FeedingBeneficiarySummary
      * "Grade 7 / Sampaguita" as one encrypted-adjacent lookup string; passing
      * either empty counts the whole school.
      *
-     * @param  array{school_year?: string, grade?: string, section?: string}  $filters
+     * @param  array{school_year?: string, grade?: string, section?: string, sex?: string}  $filters
      * @return array{beneficiaries: int, severely_wasted: int, wasted: int, at_risk: int, pending: int, attendance_rate: ?int, attendance_sessions: int, at_risk_rule: string, at_risk_threshold: float}
      */
     public static function forInstitution(?int $institutionId, array $filters = []): array
@@ -194,10 +284,13 @@ final class FeedingBeneficiarySummary
                 ->get();
         }
 
-        $records = self::scopeToSection($records, $filters);
+        // Grade, section and sex are all scope: they narrow which learners the
+        // figures describe, so they move the cards together. All three read
+        // encrypted or lookup values, so all three are applied in PHP.
+        $records = self::scopeToSex(self::scopeToSection($records, $filters), (string) ($filters['sex'] ?? ''));
 
         $qualified = $records
-            ->filter(fn (StudentHealthRecord $record): bool => self::qualifies((string) $record->nutritional_status))
+            ->filter(fn (StudentHealthRecord $record): bool => self::isEligible($record))
             ->values();
 
         $beneficiaries = $qualified

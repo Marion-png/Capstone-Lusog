@@ -436,10 +436,40 @@ class FeedingAtRiskTabTest extends TestCase
         $this->assertSame(FeedingRiskSeverity::STEADY, $steady['severity']);
         $this->assertFalse($steady['at_risk']);
 
+        // 25% over four sessions — under every threshold on arithmetic, and
+        // still not a standing: the observation window outranks the bands, so
+        // this is Observing rather than Critical or (absurdly) Watch.
+        $early = FeedingRiskSeverity::evaluate([true, false, false, false], $rule);
+        $this->assertSame(FeedingRiskSeverity::OBSERVING, $early['severity']);
+        $this->assertFalse($early['at_risk']);
+        $this->assertTrue($early['observing']);
+        $this->assertSame(25.0, $early['rate']);
+        $this->assertSame(FeedingRiskSeverity::PRIORITY_NONE, $early['priority']);
+
         // No confirmed session is no evidence — never a standing.
         $none = FeedingRiskSeverity::evaluate([null, null], $rule);
-        $this->assertSame(FeedingRiskSeverity::STEADY, $none['severity']);
+        $this->assertSame(FeedingRiskSeverity::OBSERVING, $none['severity']);
         $this->assertNull($none['rate']);
+    }
+
+    #[Test]
+    public function a_learner_inside_the_observation_window_is_never_listed_for_follow_up(): void
+    {
+        // Four sessions, one attended. On the arithmetic alone this learner is
+        // the worst in the school; a follow-up on four sheets is still
+        // premature, so the tab neither counts nor lists them.
+        $early = $this->makeStudent(['student_name' => 'Newly Enrolled']);
+        $this->markRun($early, [true, false, false, false]);
+
+        $response = $this->open()->assertOk();
+
+        $this->assertSame(0, $response->viewData('cards')['at_risk']);
+        $this->assertSame(1, $response->viewData('cards')['observing']);
+        $this->assertCount(0, $response->viewData('rows'));
+        $response->assertDontSee('Newly Enrolled');
+        // The card still says how many the window is holding back, so nobody
+        // reads an empty list as "the programme has no problems".
+        $response->assertSee('in early monitoring');
     }
 
     #[Test]

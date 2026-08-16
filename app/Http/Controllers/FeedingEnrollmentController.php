@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
 use App\Support\AuditTrail;
+use App\Support\FeedingBeneficiarySummary;
 use App\Support\SchemaCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -38,9 +39,12 @@ class FeedingEnrollmentController extends Controller
         $institutionId = $request->session()->get('active_institution_id');
         $records = $this->schoolRecords($institutionId);
 
-        // nutritional_status is encrypted at rest, so qualification is decided
-        // in PHP after fetch, never in a WHERE clause.
-        $qualified = $records->filter(fn (StudentHealthRecord $r): bool => $this->qualifies((string) $r->nutritional_status));
+        // nutritional_status is encrypted at rest and the grade lives inside
+        // the section string, so eligibility is decided in PHP after fetch,
+        // never in a WHERE clause. FeedingBeneficiarySummary::isEligible is the
+        // one test — status AND a grade the programme covers — so this dialog
+        // can never offer a learner the reports would go on to drop.
+        $qualified = $records->filter(fn (StudentHealthRecord $r): bool => FeedingBeneficiarySummary::isEligible($r));
         $waiting = $qualified->filter(fn (StudentHealthRecord $r): bool => $r->feeding_enrolled_at === null);
 
         // student_name is encrypted, so sorting happens in PHP too.
@@ -54,6 +58,9 @@ class FeedingEnrollmentController extends Controller
                     'name' => (string) $record->student_name,
                     'grade' => $grade,
                     'section' => $section,
+                    // Read through the one normalizer, so the dialog's Sex
+                    // filter agrees with every other coordinator screen.
+                    'sex' => FeedingBeneficiarySummary::sexOf($record),
                     'status' => $status,
                     'status_short' => $status === 'Severely Wasted' ? 'SW' : 'W',
                     'badge' => $status === 'Severely Wasted' ? 'badge-critical' : 'badge-risk',
@@ -99,11 +106,18 @@ class FeedingEnrollmentController extends Controller
 
         $institutionId = $request->session()->get('active_institution_id');
 
+        if (! $institutionId) {
+            return response()->json([
+                'message' => 'Your account is not attached to a school, so no learner can be enrolled.',
+                'enrolled_now' => 0,
+            ], 422);
+        }
+
         // Ids arrive off the wire, so the roster is re-read and re-scoped here:
-        // only this school's qualified, not-yet-enrolled learners may be taken.
+        // only this school's eligible, not-yet-enrolled learners may be taken.
         $eligible = $this->schoolRecords($institutionId)
             ->whereIn('id', $validated['record_ids'])
-            ->filter(fn (StudentHealthRecord $r): bool => $this->qualifies((string) $r->nutritional_status))
+            ->filter(fn (StudentHealthRecord $r): bool => FeedingBeneficiarySummary::isEligible($r))
             ->filter(fn (StudentHealthRecord $r): bool => $r->feeding_enrolled_at === null)
             ->values();
 
@@ -139,29 +153,28 @@ class FeedingEnrollmentController extends Controller
     }
 
     /**
-     * This school's current-year records. Scoped by institution like every
-     * other read of learner data.
+     * This school's current-year records — the learners its advisers measured.
+     *
+     * The institution is **required**, not merely applied when present. A
+     * coordinator whose session carries no school gets an empty list rather
+     * than every school's children: this dialog names learners, and "no scope"
+     * must fail closed. It is also what makes the adviser-to-coordinator
+     * handover exact — an adviser's entry appears here when, and only when,
+     * they work at the same institution, because the adviser stamps
+     * `institution_id` from their own session on the way in.
      *
      * @return Collection<int, StudentHealthRecord>
      */
     private function schoolRecords(?int $institutionId): Collection
     {
-        if (! SchemaCache::hasTable('student_health_records')) {
+        if (! $institutionId || ! SchemaCache::hasTable('student_health_records')) {
             return collect();
         }
 
         return StudentHealthRecord::query()
-            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+            ->where('institution_id', $institutionId)
             ->forCurrentSchoolYear()
             ->get();
-    }
-
-    /** Wasted, severely wasted or the app's "underweight" — the feeding criteria. */
-    private function qualifies(string $status): bool
-    {
-        $normalized = strtolower(preg_replace('/\s+/', ' ', trim($status)) ?? '');
-
-        return in_array($normalized, ['wasted', 'severely wasted', 'severly wasted', 'underweight'], true);
     }
 
     private function normalizeStatus(string $status): string

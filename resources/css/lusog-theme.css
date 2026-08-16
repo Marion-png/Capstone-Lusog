@@ -103,6 +103,41 @@
 	--clock-ink: var(--lg-ink);
 	--clock-muted: var(--lg-ink-soft);
 	--clock-icon: var(--lg-emerald);
+
+	/* ── Figures ──────────────────────────────────────────────────────
+	   Numbers in this system are read *down* a column far more often than
+	   along a line: a roster of attendance rates, a stack of KPI values, a
+	   BMI grid. So every figure is set with the same three features,
+	   declared once here rather than guessed at per page:
+
+	     tabular-nums   every digit the same width, so decimal points and
+	                    thousands land on the same pixel row to row. Inter's
+	                    proportional default lets "1" narrow, which makes a
+	                    column of rates visibly ragged.
+	     lining-nums    figures sit on the baseline at cap height, so they
+	                    align with the uppercase labels beside them instead
+	                    of hanging like old-style text figures.
+	     slashed-zero   0 and O are told apart at a glance, which matters on
+	                    an LRN and on a printed DepEd sheet.
+
+	   Inter carries all three, so nothing new is loaded and the numbers stay
+	   in the same voice as the rest of the interface — this is a refinement
+	   of the type already in use, not a second typeface competing with it. */
+	--lg-figures: tabular-nums lining-nums slashed-zero;
+	--lg-figure-features: 'tnum' 1, 'lnum' 1, 'zero' 1, 'ss01' 1, 'cv05' 1;
+
+	/* The one monospaced stack, for the places a figure is the subject
+	   rather than a value in a sentence — the beneficiary record's value
+	   column reads this rather than declaring its own. */
+	--lg-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+/* Applied wherever a figure appears, so a number never has to remember to
+   ask for this itself. */
+.tnum, .num, .ta-r, .kpi-value, .kpi-hint, .badge, td.num, th.num,
+input[type="number"], input[type="date"], .lg-figure {
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
 }
 
 html, body {
@@ -311,15 +346,24 @@ html, body {
 	color: var(--kpi-accent, var(--lg-emerald));
 }
 .kpi-icon svg { width: 17px; height: 17px; }
+/* The headline figure. Tabular digits are wider than proportional ones, so
+   the tracking is pulled in a touch further than display text would need —
+   without it a four-digit count reads loose beside its label. */
 .kpi-value {
 	font-size: 2rem;
 	font-weight: 700;
 	line-height: 1;
-	letter-spacing: -.03em;
+	letter-spacing: -.035em;
 	color: var(--lg-ink);
-	font-variant-numeric: tabular-nums;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
 }
-.kpi-hint { font-size: .76rem; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; }
+.kpi-hint {
+	font-size: .76rem;
+	color: var(--lg-ink-soft);
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
+}
 
 .kpi.accent-brand   { --kpi-accent: var(--lg-emerald-deep); --kpi-tint: var(--lg-mint); }
 .kpi.accent-success { --kpi-accent: var(--lg-green);        --kpi-tint: var(--lg-mint); }
@@ -451,8 +495,12 @@ tbody tr:last-child td { border-bottom: none; }
 tbody tr { transition: background .12s ease; }
 tbody tr:hover td { background: var(--lg-mint); }
 td strong { color: var(--lg-ink); font-weight: 600; }
-.num, .ta-r { text-align: right; font-variant-numeric: tabular-nums; }
-.tnum { font-variant-numeric: tabular-nums; }
+/* Right-aligned so the units line up under each other; the figure features
+   themselves come from the shared rule at the top of this file. A figure in a
+   table is one notch tighter than the prose around it, which is what stops a
+   column of rates reading as a wall. */
+.num, .ta-r { text-align: right; letter-spacing: -.005em; }
+.tnum { letter-spacing: -.005em; }
 .table-empty { padding: 28px 14px; text-align: center; color: var(--lg-ink-soft); font-size: .82rem; }
 
 /* ══ Status scale ═══════════════════════════════════════════════════

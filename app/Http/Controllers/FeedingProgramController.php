@@ -1247,6 +1247,26 @@ class FeedingProgramController extends Controller
             return back()->with('error', 'None of the submitted learners belong to this school.');
         }
 
+        // A mark a human has already recorded for this learner on this day is
+        // settled, and this path will not rewrite it. The sheet renders those
+        // rows without controls, but a form can be replayed and a stale tab can
+        // be submitted, so the refusal has to live here as well — otherwise the
+        // read-only sheet is only a suggestion.
+        //
+        // An UNCONFIRMED scanned mark is deliberately not settled: nobody has
+        // read it, and recording on site is exactly how it gets decided.
+        $settledIds = $this->settledMarkIds($marks->keys()->map(fn ($id): int => (int) $id)->all(), $sessionDate);
+
+        $marks = $marks->reject(fn ($mark, $recordId): bool => in_array((int) $recordId, $settledIds, true));
+
+        if ($marks->isEmpty()) {
+            return back()->with(
+                'error',
+                'Attendance for '.Carbon::parse($sessionDate)->format('F j, Y').' has already been recorded for '
+                    .'those learners. Correct a recorded mark on the learner’s beneficiary record.'
+            );
+        }
+
         $now = now();
         $hasReviewColumns = $this->hasReviewColumns();
         $hasRemarks = SchemaCache::hasColumn('feeding_attendances', 'remarks');
@@ -1784,19 +1804,21 @@ class FeedingProgramController extends Controller
      * blob, so it is normalised to the two labels the filter offers; anything
      * else (blank, "prefer not to say") stays unlabelled rather than guessed.
      */
+    /**
+     * Kept as a thin pass-through to the one normalizer every coordinator
+     * screen reads sex through. Two copies of this logic is how two tabs start
+     * disagreeing about who is in a filtered roll.
+     */
     private function resolveGenderLabel(string $gender): string
     {
         $value = strtolower(trim($gender));
 
-        if (str_starts_with($value, 'm')) {
-            return 'Male';
-        }
-
-        if (str_starts_with($value, 'f')) {
-            return 'Female';
-        }
-
-        return '';
+        return match (true) {
+            $value === '' => '',
+            str_starts_with($value, 'm') => 'Male',
+            str_starts_with($value, 'f') => 'Female',
+            default => '',
+        };
     }
 
     /**
@@ -1866,6 +1888,38 @@ class FeedingProgramController extends Controller
     private function resolveProgramDay(?int $institutionId = null): int
     {
         return FeedingProgramCycle::forInstitution($institutionId)->day();
+    }
+
+    /**
+     * Of these learners, the ones whose mark for this session a human has
+     * already decided — present or absent, not awaiting review.
+     *
+     * `is_present` is nullable and `needs_review` marks a scanned mark nobody
+     * has read; neither counts as settled, so an unread scan stays open for the
+     * coordinator to decide on site.
+     *
+     * @param  list<int>  $recordIds
+     * @return list<int>
+     */
+    private function settledMarkIds(array $recordIds, string $sessionDate): array
+    {
+        if ($recordIds === [] || ! SchemaCache::hasTable('feeding_attendances')) {
+            return [];
+        }
+
+        return FeedingAttendance::query()
+            ->whereIn('student_health_record_id', $recordIds)
+            ->whereDate('session_date', $sessionDate)
+            ->whereNotNull('is_present')
+            ->when(
+                $this->hasReviewColumns(),
+                fn ($query) => $query->where(fn ($q) => $q->where('needs_review', false)->orWhereNull('needs_review'))
+            )
+            ->pluck('student_health_record_id')
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

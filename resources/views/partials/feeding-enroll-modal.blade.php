@@ -39,6 +39,15 @@
 				<select class="select" id="enrollSection"><option value="">All sections</option></select>
 			</div>
 			<div class="enroll-filter">
+				<label class="field-label" for="enrollSex">Sex</label>
+				<select class="select" id="enrollSex">
+					<option value="">All</option>
+					@foreach (\App\Support\FeedingBeneficiarySummary::SEX_OPTIONS as $sexOption)
+						<option value="{{ $sexOption }}">{{ $sexOption }}</option>
+					@endforeach
+				</select>
+			</div>
+			<div class="enroll-filter">
 				<label class="field-label" for="enrollStatus">Status</label>
 				<select class="select" id="enrollStatus">
 					<option value="">All statuses</option>
@@ -61,6 +70,7 @@
 						<th>Name</th>
 						<th>Grade</th>
 						<th>Section</th>
+						<th>Sex</th>
 						<th>Status</th>
 						<th>Action</th>
 					</tr>
@@ -99,6 +109,7 @@
 	const search = el('enrollSearch');
 	const gradeSel = el('enrollGrade');
 	const sectionSel = el('enrollSection');
+	const sexSel = el('enrollSex');
 	const statusSel = el('enrollStatus');
 	const showing = el('enrollShowing');
 	const emptyNote = el('enrollEmpty');
@@ -124,6 +135,7 @@
 		return (term === '' || row.name.toLowerCase().includes(term))
 			&& (gradeSel.value === '' || row.grade === gradeSel.value)
 			&& (sectionSel.value === '' || row.section === sectionSel.value)
+			&& (sexSel.value === '' || row.sex === sexSel.value)
 			&& (statusSel.value === '' || row.status === statusSel.value);
 	});
 
@@ -166,6 +178,7 @@
 				<td><strong>${esc(row.name)}</strong></td>
 				<td>${esc(row.grade)}</td>
 				<td>${esc(row.section || '—')}</td>
+				<td>${esc(row.sex || '—')}</td>
 				<td><span class="badge ${row.badge}">${esc(row.status_short)}</span></td>
 				<td><button type="button" class="btn btn-primary btn-sm" data-enroll="${row.id}">Enroll</button></td>
 			</tr>`).join('');
@@ -278,14 +291,14 @@
 	backdrop.addEventListener('click', (event) => { if (event.target === backdrop) setOpen(false); });
 	document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && open) setOpen(false); });
 
-	[search, gradeSel, sectionSel, statusSel].forEach((control) => {
+	[search, gradeSel, sectionSel, sexSel, statusSel].forEach((control) => {
 		control?.addEventListener('input', render);
 		control?.addEventListener('change', render);
 	});
 
 	el('enrollClearFilters')?.addEventListener('click', () => {
 		if (search) search.value = '';
-		[gradeSel, sectionSel, statusSel].forEach((select) => { if (select) select.value = ''; });
+		[gradeSel, sectionSel, sexSel, statusSel].forEach((select) => { if (select) select.value = ''; });
 		render();
 	});
 

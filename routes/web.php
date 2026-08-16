@@ -10,6 +10,7 @@ use App\Http\Controllers\FeedingAtRiskController;
 use App\Http\Controllers\FeedingAttendanceController;
 use App\Http\Controllers\FeedingCoordinatorController;
 use App\Http\Controllers\FeedingEnrollmentController;
+use App\Http\Controllers\FeedingMasterlistExportController;
 use App\Http\Controllers\FeedingProgramController;
 use App\Http\Controllers\HealthAssessmentController;
 use App\Http\Controllers\HealthConsentFormController;
@@ -674,6 +675,13 @@ Route::get('/dashboard/feedingcor-health-records', [StudentHealthRecordControlle
 Route::get('/dashboard/feedingcor-health-records/cards', [FeedingCoordinatorController::class, 'beneficiaryCards'])
     ->name('dashboard.feedingcor-health-records.cards');
 
+// The masterlist as the school's own DepEd form, in a real workbook. POST
+// because the page sends the ordered ids of the rows on screen — the roster the
+// coordinator filtered, searched and sorted — which is more than a URL should
+// carry and is a read of learner data either way.
+Route::post('/dashboard/feedingcor-health-records/masterlist', FeedingMasterlistExportController::class)
+    ->name('dashboard.feedingcor-health-records.masterlist');
+
 Route::post('/dashboard/class-adviser/health-records/baseline', [StudentHealthRecordController::class, 'storeBaseline'])
     ->name('class-adviser.health-records.baseline.store');
 
@@ -898,7 +906,10 @@ Route::get('/dashboard/system-admin', function () {
     // requires to be school-configurable, so it is administered here rather
     // than living in config alone.
     $institutions = Schema::hasTable('institutions')
-        ? Institution::query()->orderBy('name')->get(['id', 'name', 'feeding_at_risk_threshold'])
+        ? Institution::query()->orderBy('name')->get(array_merge(
+            ['id', 'name', 'feeding_at_risk_threshold'],
+            Schema::hasColumn('institutions', 'feeding_min_observation_days') ? ['feeding_min_observation_days'] : []
+        ))
         : collect();
 
     return view('dashboard.system-admin', [
@@ -907,13 +918,22 @@ Route::get('/dashboard/system-admin', function () {
         'requestHistory' => $requestHistory,
         'institutions' => $institutions,
         'defaultAtRiskThreshold' => FeedingAtRiskRule::fromConfig()->thresholdPercent(),
+        'defaultMinObservationDays' => FeedingAtRiskRule::fromConfig()->minimumObservationDays(),
     ]);
 })->name('dashboard.system-admin');
 
 /**
- * Sets one school's at-risk attendance threshold. Clearing the field returns
- * that school to the app default rather than pinning it to today's number.
- * Raw DB write, so the audit entry is recorded explicitly.
+ * Sets one school's feeding at-risk policy: the attendance threshold, and the
+ * minimum observation period the threshold only applies after. Clearing either
+ * field returns that school to the app default rather than pinning it to
+ * today's number.
+ *
+ * The observation period is only touched when the form actually submits it, so
+ * a caller that posts a threshold alone cannot silently wipe a school's window.
+ *
+ * Raw DB write, so the audit entry is recorded explicitly — and it carries the
+ * value it replaced, because "who moved the threshold and from what" is exactly
+ * the question an audit of a re-flagged learner has to answer.
  */
 Route::post('/dashboard/system-admin/institutions/{institution}/at-risk-threshold', function (Request $request, int $institution) {
     if ($request->session()->get('active_role') !== 'system_admin') {
@@ -922,6 +942,8 @@ Route::post('/dashboard/system-admin/institutions/{institution}/at-risk-threshol
 
     $validated = $request->validate([
         'threshold' => ['nullable', 'numeric', 'min:1', 'max:100'],
+        // 0 is a real answer: classify from the very first confirmed session.
+        'minimum_observation_days' => ['nullable', 'integer', 'min:0', 'max:120'],
     ]);
 
     $school = Institution::query()->find($institution);
@@ -934,18 +956,28 @@ Route::post('/dashboard/system-admin/institutions/{institution}/at-risk-threshol
         ? null
         : (int) round((float) $validated['threshold']);
 
-    $school->update(['feeding_at_risk_threshold' => $threshold]);
+    $changes = ['feeding_at_risk_threshold' => $threshold];
+    $notes = ['at-risk threshold for '.$school->name.' set to '
+        .($threshold === null ? 'the app default' : $threshold.'%')
+        .' (was '.($previous === null ? 'the app default' : $previous.'%').')'];
 
-    AuditTrail::record(
-        'updated',
-        'Institution',
-        $school->id,
-        'Feeding at-risk threshold for '.$school->name.' set to '
-            .($threshold === null ? 'the app default' : $threshold.'%')
-            .' (was '.($previous === null ? 'the app default' : $previous.'%').')'
-    );
+    if ($request->has('minimum_observation_days')) {
+        $previousDays = $school->feeding_min_observation_days;
+        $days = $validated['minimum_observation_days'] === null || $validated['minimum_observation_days'] === ''
+            ? null
+            : (int) $validated['minimum_observation_days'];
 
-    return back()->with('success', 'At-risk threshold updated for '.$school->name.'.');
+        $changes['feeding_min_observation_days'] = $days;
+        $notes[] = 'minimum observation period set to '
+            .($days === null ? 'the app default' : $days.' feeding days')
+            .' (was '.($previousDays === null ? 'the app default' : $previousDays.' feeding days').')';
+    }
+
+    $school->update($changes);
+
+    AuditTrail::record('updated', 'Institution', $school->id, 'Feeding '.implode('; ', $notes));
+
+    return back()->with('success', 'Feeding at-risk policy updated for '.$school->name.'.');
 })->whereNumber('institution')->name('dashboard.system-admin.institutions.at-risk-threshold');
 
 Route::get('/dashboard/system-admin/audit-logs', function (Request $request) {

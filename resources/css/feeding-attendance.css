@@ -164,6 +164,10 @@
 .badge.has-glyph::before { display: none; }
 .fa-glyph { font-weight: 700; margin-right: 5px; }
 
+/* How much longer a learner stays unclassified, sitting under the badge rather
+   than beside it: the state is the answer, the count is the footnote. */
+.fa-substatus { display: block; margin-top: 3px; font-size: .7rem; color: var(--lg-ink-soft); }
+
 /* ── The mark toggle ────────────────────────────────────────────────
    Two states, one tap, no dropdown: the whole point of this screen is
    encoding a day's attendance without opening anything. ── */
@@ -199,6 +203,21 @@
 .fa-opt-absent input:checked + span { background: var(--lg-danger-tint); color: var(--lg-danger-ink); }
 .fa-opt input:focus-visible + span { outline: none; box-shadow: var(--lg-focus); }
 .fa-unconfirmed { margin-left: 8px; }
+
+/* A settled row: the mark stands, and the lock says why there is nothing to
+   press. Quiet on purpose — it is the normal end state of a feeding day, not a
+   warning. */
+.fa-locked {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-left: 8px;
+	font-size: .7rem;
+	color: var(--lg-ink-soft);
+}
+.fa-locked svg { width: 12px; height: 12px; }
+.fa-remark-read { font-size: .78rem; color: var(--lg-ink-soft); }
+.fa-lockbar { margin-bottom: 12px; }
 
 .fa-remark { width: 100%; min-width: 150px; font-size: .78rem; }
 .fa-remark:disabled { background: var(--lg-rail); color: var(--lg-ink-soft); }
@@ -338,7 +357,7 @@ a.fa-cal-day:focus-visible { outline: none; box-shadow: var(--lg-focus); }
 	.page-title { font-size: 1.3rem; }
 	.fa-daymeta, .sbfp-program { color: #333; }
 
-	.kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 8px; }
+	.kpi-grid, .kpi-grid.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; gap: 8px; }
 	.kpi { padding: 10px 12px; break-inside: avoid; }
 	.kpi-value { font-size: 1.15rem; }
 	.kpi-icon { display: none; }

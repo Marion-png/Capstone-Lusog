@@ -1,19 +1,29 @@
-{{-- The session's four figures, and the programme's turnout beside them.
+{{-- The session's four figures, the programme's turnout beside them, and where
+     the school's rule currently stands.
 
      These are attendance figures and nothing else — no BMI, no baseline, no
      nutritional status. Who was fed on this day, and how the programme is doing
      across every day so far. Two different questions, so the cumulative rate is
-     labelled as its own thing rather than sitting in the same row.
+     labelled as its own thing and carries the number of recorded sessions it
+     was taken over: 25% over four sheets is a very different claim from 25%
+     over forty.
 
      A session nobody has recorded has no rate: the card reads an em dash, never
      0%, because no evidence is not a turnout of nothing. --}}
 @php
 	$t = $tally;
 	$rateLabel = $t['rate'] !== null ? number_format($t['rate'], 1).'%' : '—';
-	$cumulativeLabel = $cumulativeRate !== null ? number_format($cumulativeRate, 1).'%' : '—';
+	$cumulativeLabel = $cumulative['rate'] !== null ? number_format($cumulative['rate'], 1).'%' : '—';
 	$rateAccent = match (true) {
 		$t['rate'] === null => 'accent-info',
 		$t['rate'] < $atRisk['threshold'] => 'accent-orange',
+		default => 'accent-success',
+	};
+	// The at-risk card stays quiet while the observation window is still
+	// holding everyone back — nobody is flagged, so nothing is wrong yet.
+	$riskAccent = match (true) {
+		$atRisk['count'] > 0 => 'accent-danger',
+		$atRisk['observing'] > 0 => 'accent-info',
 		default => 'accent-success',
 	};
 @endphp
@@ -52,6 +62,25 @@
 	</div>
 	<div class="kpi-value">{{ $rateLabel }}</div>
 	{{-- The programme's own turnout, which is a different figure from this
-	     session's and is named so it can never be read as one. --}}
-	<div class="kpi-hint">Cumulative: {{ $cumulativeLabel }}</div>
+	     session's, named so it can never be read as one — and over how many
+	     recorded sessions, which is what makes it readable at all. --}}
+	<div class="kpi-hint">Cumulative: {{ $cumulativeLabel }} &middot; {{ $cumulative['sessions'] }} recorded {{ \Illuminate\Support\Str::plural('session', $cumulative['sessions']) }}</div>
+</article>
+
+<article class="card kpi {{ $riskAccent }}">
+	<div class="kpi-top">
+		<div class="kpi-label">At Risk</div>
+		<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div>
+	</div>
+	<div class="kpi-value">{{ $atRisk['count'] }}</div>
+	{{-- Learners the observation window is still holding back are named here
+	     rather than added to the figure above: they are unclassified, not
+	     flagged, and the two must never be summed. --}}
+	<div class="kpi-hint">
+		@if ($atRisk['observing'] > 0)
+			{{ $atRisk['observing'] }} in early monitoring
+		@else
+			Below {{ $atRisk['thresholdLabel'] }}% attendance
+		@endif
+	</div>
 </article>

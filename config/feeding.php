@@ -25,12 +25,23 @@ return [
     | scan) are excluded from both the numerator and the denominator — an unread
     | mark is not evidence of attendance or of absence.
     |
+    | `minimum_observation_days` is the observation window the threshold is only
+    | applied AFTER. A learner one of four sessions has covered is at 25%, but
+    | four sessions is not a programme problem — it is too little history to
+    | classify anyone on, and flagging them would put a child on a follow-up
+    | list on the strength of a single missed morning. Until the window is met
+    | the learner reads Early Monitoring; the rate is still computed and shown,
+    | it simply does not classify. Also school-configurable
+    | (`institutions.feeding_min_observation_days`); 0 or 1 means the threshold
+    | applies from the first confirmed session.
+    |
     */
 
     'at_risk' => [
         'mode' => env('FEEDING_AT_RISK_MODE', 'attendance_rate'),
         'threshold_percent' => (float) env('FEEDING_AT_RISK_THRESHOLD_PERCENT', 80),
         'consecutive_absences' => (int) env('FEEDING_AT_RISK_CONSECUTIVE_ABSENCES', 3),
+        'minimum_observation_days' => (int) env('FEEDING_MINIMUM_OBSERVATION_DAYS', 10),
 
         /*
         | The two monitoring bands the At-Risk Students tab draws around the

@@ -204,8 +204,8 @@
                             <option {{ old('assigned_grade_level') === 'Grade 8/SPED' ? 'selected' : '' }}>Grade 8/SPED</option>
                             <option {{ old('assigned_grade_level') === 'Grade 9/SPED' ? 'selected' : '' }}>Grade 9/SPED</option>
                             <option {{ old('assigned_grade_level') === 'Grade 10/SPED' ? 'selected' : '' }}>Grade 10/SPED</option>
-                            <option {{ old('assigned_grade_level') === 'Grade 11/SPED' ? 'selected' : '' }}>Grade 11/SPED</option>
-                            <option {{ old('assigned_grade_level') === 'Grade 12/SPED' ? 'selected' : '' }}>Grade 12/SPED</option>
+                            {{-- Senior High is not offered: the feeding programme
+                                 covers Grades 7-10. --}}
                         </select>
                     </div>
                     <div class="field" id="sectionField">

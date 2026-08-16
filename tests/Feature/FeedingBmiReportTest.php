@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
+use App\Support\FeedingBeneficiarySummary;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
@@ -104,37 +105,43 @@ class FeedingBmiReportTest extends TestCase
     }
 
     #[Test]
-    public function senior_high_grades_11_and_12_get_their_own_grids(): void
+    public function senior_high_is_outside_the_programme_and_off_the_report(): void
     {
+        // The programme covers Junior High. A Senior High learner is neither a
+        // beneficiary nor a row on the DepEd grids, and neither is a grade that
+        // does not exist — the report cannot print a grid it has no column for.
         $this->makeStudent('Grade 11 / Humss', 'Male', 'Wasted', 'Stunted');
         $this->makeStudent('Grade 12 / Stem', 'Female', 'Normal', 'Normal Height-for-Age');
-        // Grade 13 does not exist — anything outside 7-12 stays off the report.
         $this->makeStudent('Grade 13 / Ghost', 'Male', 'Wasted', 'Stunted');
+        // One Junior High learner, so the Overall figure has something true in it.
+        $this->makeStudent('Grade 10 / Narra', 'Male', 'Wasted', 'Stunted');
 
         $v = $this->bmiValues();
 
-        $this->assertSame(1, $v['bmib_g11_male_w']);
-        $this->assertSame(1, $v['bmib_g11_male_st']);
-        $this->assertSame(1, $v['bmib_g11_total_nst']);
-        $this->assertSame(1, $v['bmib_g12_female_n']);
-        $this->assertSame(1, $v['bmib_g12_total_nst']);
-
-        // Both senior-high grades roll into Overall; the Grade 13 row does not.
-        $this->assertSame(2, $v['bmib_overall_total_nst']);
+        $this->assertArrayNotHasKey('bmib_g11_male_w', $v);
+        $this->assertArrayNotHasKey('bmib_g12_female_n', $v);
+        $this->assertSame(1, $v['bmib_g10_male_w']);
+        $this->assertSame(1, $v['bmib_overall_total_nst'], 'Only the Junior High learner is counted.');
     }
 
     #[Test]
-    public function both_reports_render_a_grid_for_every_grade_7_to_12(): void
+    public function both_reports_render_a_grid_for_every_junior_high_grade(): void
     {
         $response = $this->withSession($this->coordinatorSession())
             ->get('/dashboard/feedingcor-sbfp-forms');
         $response->assertOk();
 
-        foreach (range(7, 12) as $grade) {
+        foreach (FeedingBeneficiarySummary::GRADE_LEVELS as $grade) {
             $response->assertSee('GRADE '.$grade.' BMI', false);
             // One cell from each phase is enough to prove the grid was built.
             $response->assertSee('bmib_g'.$grade.'_male_sw', false);
             $response->assertSee('bmif_g'.$grade.'_male_sw', false);
+        }
+
+        // And no Senior High grid at all.
+        foreach ([11, 12] as $grade) {
+            $response->assertDontSee('GRADE '.$grade.' BMI', false);
+            $response->assertDontSee('bmib_g'.$grade.'_male_sw', false);
         }
     }
 

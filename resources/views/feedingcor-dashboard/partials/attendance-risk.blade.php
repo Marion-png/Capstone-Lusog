@@ -1,14 +1,22 @@
 @php
-	$risk = $attendanceRisk ?? ['threshold' => 80, 'rule' => '', 'mode' => 'attendance_rate', 'count' => 0, 'rows' => []];
+	$risk = $attendanceRisk ?? ['threshold' => 80, 'rule' => '', 'mode' => 'attendance_rate', 'count' => 0, 'rows' => [], 'observing' => 0, 'minimum_observation_days' => 0];
 	// The threshold is the school's own (System Admin sets it per school), so
 	// it is printed rather than assumed — two schools read different lines here.
 	$thresholdLabel = rtrim(rtrim(number_format((float) $risk['threshold'], 1), '0'), '.');
+	$observing = (int) ($risk['observing'] ?? 0);
 @endphp
 
 <div class="risk-headline">
 	<span class="risk-threshold">At-risk threshold: <strong>{{ $thresholdLabel }}%</strong></span>
 	<span class="risk-count">{{ $risk['count'] }} flagged</span>
 </div>
+
+@if ($observing > 0)
+	{{-- Without this line an empty list on feeding day 8 reads as "no
+	     attendance problem", when the truth is that the rule has not started
+	     judging anyone yet. --}}
+	<p class="risk-observing">{{ $observing }} {{ \Illuminate\Support\Str::plural('beneficiary', $observing) }} under observation &middot; classification begins after {{ $risk['minimum_observation_days'] }} recorded feeding days</p>
+@endif
 
 <div class="table-scroll risk-scroll">
 	<table class="risk-table">

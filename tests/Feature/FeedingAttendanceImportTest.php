@@ -23,7 +23,17 @@ class FeedingAttendanceImportTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->institution = Institution::create(['name' => 'Test School', 'status' => 'active']);
+
+        // This class is about reading a sheet and writing the marks it holds —
+        // the fixtures are three- and four-column sheets on purpose. The school
+        // therefore classifies from the first confirmed session, so an
+        // is_at_risk assertion here is testing the import's arithmetic rather
+        // than the rule's observation window (which FeedingAtRiskRuleTest owns).
+        $this->institution = Institution::create([
+            'name' => 'Test School',
+            'status' => 'active',
+            'feeding_min_observation_days' => 1,
+        ]);
     }
 
     private function coordinatorSession(): array

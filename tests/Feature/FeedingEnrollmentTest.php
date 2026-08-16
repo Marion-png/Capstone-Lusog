@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\FeedingEnrollmentController;
 use App\Models\AuditLog;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -244,6 +246,93 @@ class FeedingEnrollmentTest extends TestCase
             ->assertOk()
             ->assertSee($enrolled->student_name)
             ->assertDontSee($waiting->student_name);
+    }
+
+    /**
+     * The adviser-to-coordinator handover, and its boundary.
+     *
+     * An adviser measuring a learner stamps their own institution on the
+     * record; the dialog reads the coordinator's. So a learner appears on the
+     * waiting list when — and only when — the two work at the same school.
+     */
+    #[Test]
+    public function a_learner_appears_for_the_coordinator_at_the_advisers_own_school(): void
+    {
+        $mine = $this->makeCandidate('Wasted', 'Grade 7 / Sampaguita');
+
+        $otherSchool = Institution::create(['name' => 'Other School', 'status' => 'active']);
+        $theirs = $this->makeCandidate('Wasted', 'Grade 7 / Sampaguita', $otherSchool->id);
+
+        $payload = $this->withSession($this->coordinatorSession())
+            ->getJson(self::CANDIDATES)
+            ->assertOk()
+            ->json();
+
+        $names = array_column($payload['rows'], 'name');
+
+        $this->assertContains($mine->student_name, $names);
+        $this->assertNotContains($theirs->student_name, $names, 'Another school’s learner never reaches this dialog.');
+
+        // And the write refuses them too, whatever the client posts.
+        $this->withSession($this->coordinatorSession())
+            ->postJson(self::ENROLL, ['record_ids' => [$theirs->id]])
+            ->assertStatus(422);
+
+        $this->assertNull($theirs->fresh()->feeding_enrolled_at);
+    }
+
+    /**
+     * No school on the session means no list — never every school's children.
+     * Scope fails closed twice over on a screen that names learners: the
+     * InstitutionScope middleware ejects the request before it arrives, and the
+     * controller would still return nobody if it ever did.
+     */
+    #[Test]
+    public function a_coordinator_with_no_school_reaches_nobody(): void
+    {
+        $learner = $this->makeCandidate();
+        $session = ['active_role' => 'feeding_coor', 'active_name' => 'Test Coordinator'];
+
+        $this->withSession($session)->getJson(self::CANDIDATES)->assertRedirect();
+        $this->withSession($session)->postJson(self::ENROLL, ['record_ids' => [$learner->id]])->assertRedirect();
+
+        $this->assertNull($learner->fresh()->feeding_enrolled_at);
+
+        // And the controller's own guard, exercised directly: an unscoped read
+        // returns an empty waiting list rather than the whole database.
+        $controller = new FeedingEnrollmentController;
+        $request = Request::create(self::CANDIDATES);
+        $request->setLaravelSession(app('session.store'));
+        $request->session()->put(['active_role' => 'feeding_coor']);
+
+        $payload = $controller->candidates($request)->getData(true);
+
+        $this->assertSame([], $payload['rows']);
+        $this->assertSame(0, $payload['waiting']);
+    }
+
+    /** Senior High is outside the programme, so it is never offered for enrolment. */
+    #[Test]
+    public function a_senior_high_learner_is_never_a_candidate(): void
+    {
+        $jhs = $this->makeCandidate('Wasted', 'Grade 10 / Narra');
+        $shs = $this->makeCandidate('Severely Wasted', 'Grade 11 / Humss');
+
+        $payload = $this->withSession($this->coordinatorSession())
+            ->getJson(self::CANDIDATES)
+            ->assertOk()
+            ->json();
+
+        $names = array_column($payload['rows'], 'name');
+
+        $this->assertContains($jhs->student_name, $names);
+        $this->assertNotContains($shs->student_name, $names);
+
+        $this->withSession($this->coordinatorSession())
+            ->postJson(self::ENROLL, ['record_ids' => [$shs->id]])
+            ->assertStatus(422);
+
+        $this->assertNull($shs->fresh()->feeding_enrolled_at);
     }
 
     #[Test]

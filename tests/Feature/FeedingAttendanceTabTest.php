@@ -214,6 +214,61 @@ class FeedingAttendanceTabTest extends TestCase
         $this->assertDatabaseCount('feeding_attendances', 1);
     }
 
+    /**
+     * Once a learner's mark for a day is on file the sheet reports it and
+     * offers no way to change it — no radio, no remark box. A disabled input
+     * would still be a control the browser could re-enable and post; rendering
+     * none at all cannot be.
+     */
+    #[Test]
+    public function a_recorded_learner_is_read_only_on_the_sheet(): void
+    {
+        $recorded = $this->makeStudent(['student_name' => 'Already Recorded']);
+        $open = $this->makeStudent(['student_name' => 'Not Yet Recorded']);
+        $this->mark($recorded, now()->toDateString(), false, remarks: 'Sick');
+
+        $response = $this->open()->assertOk();
+
+        $response->assertDontSee('marks['.$recorded->id.']', false);
+        $response->assertDontSee('remarks['.$recorded->id.']', false);
+        $response->assertSee('Sick');
+        $response->assertSee('already recorded for '.now()->format('F j, Y'));
+
+        // The learner nobody has marked is still open, and so is the save bar.
+        $response->assertSee('marks['.$open->id.']', false);
+        $response->assertSee('Save Attendance');
+    }
+
+    #[Test]
+    public function a_fully_recorded_session_offers_nothing_to_save(): void
+    {
+        $learner = $this->makeStudent();
+        $this->mark($learner, now()->toDateString(), true);
+
+        $response = $this->open()->assertOk();
+
+        $response->assertDontSee('Save Attendance');
+        // The button, not the phrase — the page's own script mentions it in a
+        // comment, and that is not a control.
+        $response->assertDontSee('data-mark-all="present"', false);
+    }
+
+    /**
+     * An unconfirmed scanned mark is not a recorded one: nobody has read it,
+     * and recording on site is exactly how it gets decided.
+     */
+    #[Test]
+    public function an_unconfirmed_scanned_mark_stays_editable(): void
+    {
+        $learner = $this->makeStudent();
+        $this->mark($learner, now()->toDateString(), null, needsReview: true);
+
+        $response = $this->open()->assertOk();
+
+        $response->assertSee('marks['.$learner->id.']', false);
+        $response->assertSee('Unconfirmed');
+    }
+
     #[Test]
     public function the_filters_narrow_the_sheet(): void
     {
@@ -256,16 +311,30 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertSee('0.0%');
     }
 
+    /**
+     * A run of feeding days for one learner, present on the most recent
+     * `$presentDays` of them.
+     *
+     * The threshold tests below run twelve days deep on purpose: that is past
+     * the default ten-day observation window, so the threshold is actually
+     * classifying. Four sessions would leave everyone in Early Monitoring,
+     * which is its own test.
+     */
+    private function markRun(StudentHealthRecord $record, int $days, int $presentDays): void
+    {
+        foreach (range(1, $days) as $offset) {
+            $this->mark($record, now()->subDays($offset)->toDateString(), $offset <= $presentDays);
+        }
+    }
+
     #[Test]
     public function the_by_beneficiary_view_applies_the_schools_threshold(): void
     {
         $good = $this->makeStudent(['student_name' => 'Reliable Learner']);
         $risky = $this->makeStudent(['student_name' => 'Missing Learner']);
 
-        foreach (range(1, 4) as $offset) {
-            $this->mark($good, now()->subDays($offset)->toDateString(), true);
-            $this->mark($risky, now()->subDays($offset)->toDateString(), $offset === 1);
-        }
+        $this->markRun($good, 12, 12);
+        $this->markRun($risky, 12, 3);   // 3 of 12 = 25%
 
         $response = $this->open('?view=beneficiary')->assertOk();
 
@@ -282,15 +351,95 @@ class FeedingAttendanceTabTest extends TestCase
     }
 
     #[Test]
+    public function a_learner_inside_the_observation_window_is_not_flagged(): void
+    {
+        // Four feeding days in, 1 of 4 attended. The rate is 25% and fails the
+        // 80% threshold on arithmetic alone — but four recorded sessions is not
+        // enough history to put a child on a follow-up list, so the tab reports
+        // them as unclassified rather than at risk.
+        $learner = $this->makeStudent(['student_name' => 'Early Learner']);
+        $this->markRun($learner, 4, 1);
+
+        $response = $this->open('?view=beneficiary')->assertOk();
+
+        $response->assertSee('Early Learner');
+        $response->assertSee('Early Monitoring');
+        // No at-risk badge on the row, and nothing counted by the figure. (The
+        // words "At Risk" still appear as the card label and the filter option,
+        // so the row itself is what this asserts.)
+        $response->assertDontSee('badge badge-risk', false);
+        $this->assertSame(0, $response->viewData('atRisk')['count']);
+        $this->assertFalse($response->viewData('beneficiaryRows')[0]['at_risk']);
+
+        // The window suppresses the verdict, never the figure.
+        $response->assertSee('25.0%');
+        // And the coordinator is told why nobody is flagged, in its own notice.
+        $response->assertSee('currently under observation');
+        $response->assertSee('At-risk classification begins after 10 recorded feeding days');
+        $response->assertDontSee('below the 80% attendance threshold');
+    }
+
+    #[Test]
+    public function the_observation_window_is_the_schools_own_setting(): void
+    {
+        // The same learner, at a school that classifies from the third session.
+        $this->institution->update(['feeding_min_observation_days' => 3]);
+
+        $learner = $this->makeStudent(['student_name' => 'Early Learner']);
+        $this->markRun($learner, 4, 1);
+
+        $response = $this->open('?view=beneficiary')->assertOk();
+
+        $response->assertSee('badge badge-risk', false);
+        $response->assertDontSee('currently under observation');
+        $this->assertSame(1, $response->viewData('atRisk')['count']);
+    }
+
+    #[Test]
+    public function the_early_monitoring_filter_shows_only_unclassified_beneficiaries(): void
+    {
+        $settled = $this->makeStudent(['student_name' => 'Settled Learner']);
+        $newcomer = $this->makeStudent(['student_name' => 'Newly Enrolled']);
+
+        $this->markRun($settled, 12, 12);
+        $this->markRun($newcomer, 3, 3);
+
+        $response = $this->open('?view=beneficiary&status=early_monitoring')->assertOk();
+
+        $response->assertSee('Newly Enrolled');
+        $response->assertDontSee('Settled Learner');
+    }
+
+    #[Test]
+    public function a_feeding_day_nobody_marked_a_learner_on_is_reported_as_missing_not_absent(): void
+    {
+        $covered = $this->makeStudent(['student_name' => 'Covered Learner']);
+        $skipped = $this->makeStudent(['student_name' => 'Skipped Learner']);
+
+        // The school held twelve feeding days; one learner's sheets only
+        // covered three of them. The other nine are a filing gap, and folding
+        // them into absences would flag a child nobody observed missing.
+        $this->markRun($covered, 12, 12);
+        $this->markRun($skipped, 3, 3);
+
+        $rows = collect($this->open('?view=beneficiary')->assertOk()->viewData('beneficiaryRows'))
+            ->keyBy('name');
+
+        $this->assertSame(0, $rows['Skipped Learner']['absent']);
+        $this->assertSame(9, $rows['Skipped Learner']['not_marked']);
+        $this->assertSame(100.0, $rows['Skipped Learner']['rate']);
+        $this->assertFalse($rows['Skipped Learner']['at_risk']);
+        $this->assertSame(0, $rows['Covered Learner']['not_marked']);
+    }
+
+    #[Test]
     public function the_at_risk_filter_shows_only_flagged_beneficiaries(): void
     {
         $good = $this->makeStudent(['student_name' => 'Reliable Learner']);
         $risky = $this->makeStudent(['student_name' => 'Missing Learner']);
 
-        foreach (range(1, 4) as $offset) {
-            $this->mark($good, now()->subDays($offset)->toDateString(), true);
-            $this->mark($risky, now()->subDays($offset)->toDateString(), false);
-        }
+        $this->markRun($good, 12, 12);
+        $this->markRun($risky, 12, 0);
 
         $response = $this->open('?view=beneficiary&status=at_risk')->assertOk();
 

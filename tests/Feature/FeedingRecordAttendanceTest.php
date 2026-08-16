@@ -133,22 +133,66 @@ class FeedingRecordAttendanceTest extends TestCase
         $this->assertFalse((bool) $skipped->fresh()->is_at_risk, 'A skipped row must not flag a learner.');
     }
 
+    /**
+     * A recorded mark is settled. Re-posting the sheet cannot rewrite it — the
+     * screen renders those rows without controls, but a stale tab or a replayed
+     * form would still reach this endpoint, so the refusal lives on the server.
+     * A genuine mistake is put right on the learner's beneficiary record, where
+     * the correction is attributed and audited.
+     */
     #[Test]
-    public function re_saving_the_same_day_corrects_the_mark_instead_of_duplicating_it(): void
+    public function a_recorded_mark_cannot_be_rewritten_by_saving_the_sheet_again(): void
     {
         $learner = $this->makeStudent();
         $today = now()->toDateString();
 
-        foreach (['present', 'absent'] as $mark) {
-            $this->withSession($this->coordinatorSession())
-                ->post('/dashboard/feedingcor-program/attendance/record', [
-                    'session_date' => $today,
-                    'marks' => [$learner->id => $mark],
-                ]);
-        }
+        $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-program/attendance/record', [
+                'session_date' => $today,
+                'marks' => [$learner->id => 'present'],
+            ]);
 
-        $this->assertSame(1, FeedingAttendance::where('student_health_record_id', $learner->id)->count());
-        $this->assertFalse(FeedingAttendance::where('student_health_record_id', $learner->id)->first()->is_present);
+        $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-program/attendance/record', [
+                'session_date' => $today,
+                'marks' => [$learner->id => 'absent'],
+                'remarks' => [$learner->id => 'Changed my mind'],
+            ])
+            ->assertSessionHas('error');
+
+        $rows = FeedingAttendance::where('student_health_record_id', $learner->id)->get();
+
+        $this->assertCount(1, $rows, 'The second save writes nothing, not a duplicate.');
+        $this->assertTrue((bool) $rows->first()->is_present, 'The mark on file is the one first recorded.');
+        $this->assertSame('', trim((string) $rows->first()->remarks), 'And its remark is untouched too.');
+    }
+
+    /**
+     * A session recorded in two passes still works: only the learners already
+     * on file are refused, so finishing an incomplete sheet is unaffected.
+     */
+    #[Test]
+    public function learners_left_unmarked_can_still_be_recorded_afterwards(): void
+    {
+        $first = $this->makeStudent();
+        $second = $this->makeStudent();
+        $today = now()->toDateString();
+
+        $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-program/attendance/record', [
+                'session_date' => $today,
+                'marks' => [$first->id => 'present'],
+            ]);
+
+        $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-program/attendance/record', [
+                'session_date' => $today,
+                // The settled learner is re-posted and ignored; the new one lands.
+                'marks' => [$first->id => 'absent', $second->id => 'absent'],
+            ]);
+
+        $this->assertTrue((bool) FeedingAttendance::where('student_health_record_id', $first->id)->first()->is_present);
+        $this->assertFalse((bool) FeedingAttendance::where('student_health_record_id', $second->id)->first()->is_present);
     }
 
     /** Saving is what confirms an unread scanned mark — and it clears the queue. */

@@ -103,7 +103,7 @@
 			<p>Session: {{ $selectedDateLabel }} &middot; Printed {{ now()->format('F j, Y') }}</p>
 		</div>
 
-		<section class="kpi-grid live-pane" id="fa-cards">
+		<section class="kpi-grid cols-5 live-pane" id="fa-cards">
 			@include('feedingcor-dashboard.partials.attendance-cards')
 		</section>
 
@@ -178,6 +178,15 @@
 				</select>
 			</div>
 			<div class="fa-filter">
+				<label class="field-label" for="faSex">Sex</label>
+				<select class="select" name="sex" id="faSex">
+					<option value="">All</option>
+					@foreach (\App\Support\FeedingBeneficiarySummary::SEX_OPTIONS as $sexOption)
+						<option value="{{ $sexOption }}" @selected($filters['sex'] === $sexOption)>{{ $sexOption }}</option>
+					@endforeach
+				</select>
+			</div>
+			<div class="fa-filter">
 				<label class="field-label" for="faStatus">Attendance</label>
 				<select class="select" name="status" id="faStatus">
 					<option value="">All</option>
@@ -186,6 +195,7 @@
 					<option value="unmarked" @selected($filters['status'] === 'unmarked')>Not yet recorded</option>
 					<option value="unconfirmed" @selected($filters['status'] === 'unconfirmed')>Unconfirmed</option>
 					<option value="at_risk" @selected($filters['status'] === 'at_risk')>At risk (cumulative)</option>
+					<option value="early_monitoring" @selected($filters['status'] === 'early_monitoring')>Early monitoring (cumulative)</option>
 				</select>
 			</div>
 
@@ -208,15 +218,33 @@
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
 						<input type="search" id="faSearch" placeholder="Search name or section" autocomplete="off" aria-label="Search beneficiaries by name or section">
 					</div>
-					{{-- Marking everyone present and correcting the few absences
-					     is the fast path; it only touches rows the filters and
-					     the search leave on screen. --}}
-					<div class="fa-bulk-actions">
-						<button type="button" class="btn btn-secondary" data-mark-all="present">Mark All Present</button>
-						<button type="button" class="btn btn-secondary" data-mark-all="absent">Mark All Absent</button>
-						<button type="button" class="btn btn-ghost" data-mark-all="">Clear Marks</button>
-					</div>
+					@if ($openMarkCount > 0)
+						{{-- Marking everyone present and correcting the few absences
+						     is the fast path; it only touches rows the filters and
+						     the search leave on screen, and never a settled one. --}}
+						<div class="fa-bulk-actions">
+							<button type="button" class="btn btn-secondary" data-mark-all="present">Mark All Present</button>
+							<button type="button" class="btn btn-secondary" data-mark-all="absent">Mark All Absent</button>
+							<button type="button" class="btn btn-ghost" data-mark-all="">Clear Marks</button>
+						</div>
+					@endif
 				</div>
+
+				@if ($lockedMarkCount > 0)
+					{{-- Says why some rows carry no controls, and where a genuine
+					     mistake is put right — a correction belongs on the
+					     learner's own record, where it is attributed and audited,
+					     not in a sheet anyone can retype. --}}
+					<div class="alert-bar is-info fa-lockbar">
+						<div class="alert-body">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+							<div>
+								<strong>{{ $lockedMarkCount }} {{ \Illuminate\Support\Str::plural('learner', $lockedMarkCount) }} already recorded for {{ $selectedDateLabel }}</strong>
+								<span>A recorded mark and its remark are read-only. Correct one on the learner&rsquo;s beneficiary record.</span>
+							</div>
+						</div>
+					</div>
+				@endif
 
 				<div class="table-card">
 					<div class="table-scroll">
@@ -233,35 +261,56 @@
 							</thead>
 							<tbody>
 								@forelse ($rows as $index => $row)
-									<tr data-search="{{ strtolower(trim($row['name'].' '.$row['grade'].' '.$row['section'])) }}">
+									<tr data-search="{{ strtolower(trim($row['name'].' '.$row['grade'].' '.$row['section'])) }}"
+										@if ($row['locked']) data-locked="{{ $row['status'] }}" @endif>
 										<td class="fa-idx">{{ $index + 1 }}</td>
 										<td class="fa-name"><strong>{{ $row['name'] }}</strong></td>
 										<td>{{ $row['grade_number'] !== '' ? $row['grade_number'] : '—' }}</td>
 										<td>{{ $row['section'] }}</td>
 										<td class="fa-mark-col">
-											<div class="fa-toggle" role="group" aria-label="Attendance for {{ $row['name'] }}">
-												<label class="fa-opt fa-opt-present">
-													<input type="radio" name="marks[{{ $row['id'] }}]" value="present" @checked($row['status'] === 'present')>
-													<span>Present</span>
-												</label>
-												<label class="fa-opt fa-opt-absent">
-													<input type="radio" name="marks[{{ $row['id'] }}]" value="absent" @checked($row['status'] === 'absent')>
-													<span>Absent</span>
-												</label>
-											</div>
-											@if ($row['status'] === 'unconfirmed')
-												{{-- A scanned mark no human has read: it is neither
-												     present nor absent until someone says so. --}}
-												<span class="badge badge-monitor fa-unconfirmed">Unconfirmed</span>
+											@if ($row['locked'])
+												{{-- Already recorded for this day, so the row is a
+												     record and not a control: the mark is shown, and
+												     no input is rendered at all. Disabling one would
+												     still post it; not rendering it cannot. --}}
+												<span class="badge {{ $row['status'] === 'present' ? 'badge-normal' : 'badge-critical' }} has-glyph">
+													<span class="fa-glyph">{{ $row['status'] === 'present' ? '✓' : '✕' }}</span>{{ ucfirst($row['status']) }}
+												</span>
+												<span class="fa-locked" title="Recorded for {{ $selectedDateLabel }}">
+													<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+													Recorded
+												</span>
+											@else
+												<div class="fa-toggle" role="group" aria-label="Attendance for {{ $row['name'] }}">
+													<label class="fa-opt fa-opt-present">
+														<input type="radio" name="marks[{{ $row['id'] }}]" value="present">
+														<span>Present</span>
+													</label>
+													<label class="fa-opt fa-opt-absent">
+														<input type="radio" name="marks[{{ $row['id'] }}]" value="absent">
+														<span>Absent</span>
+													</label>
+												</div>
+												@if ($row['status'] === 'unconfirmed')
+													{{-- A scanned mark no human has read: it is neither
+													     present nor absent until someone says so, so it
+													     stays open for the coordinator to decide. --}}
+													<span class="badge badge-monitor fa-unconfirmed">Unconfirmed</span>
+												@endif
 											@endif
 										</td>
 										<td>
-											{{-- Only an absence carries a reason, so the field opens
-											     when Absent is chosen and clears when it is not. --}}
-											<input type="text" class="input fa-remark" maxlength="255"
-												name="remarks[{{ $row['id'] }}]" value="{{ $row['remarks'] }}"
-												aria-label="Reason {{ $row['name'] }} was absent"
-												@disabled($row['status'] !== 'absent')>
+											@if ($row['locked'])
+												{{-- The remark is settled with the mark it explains. --}}
+												<span class="fa-remark-read">{{ $row['remarks'] !== '' ? $row['remarks'] : '—' }}</span>
+											@else
+												{{-- Only an absence carries a reason, so the field opens
+												     when Absent is chosen and clears when it is not. --}}
+												<input type="text" class="input fa-remark" maxlength="255"
+													name="remarks[{{ $row['id'] }}]" value=""
+													aria-label="Reason {{ $row['name'] }} was absent"
+													disabled>
+											@endif
 										</td>
 									</tr>
 								@empty
@@ -275,7 +324,7 @@
 					</div>
 				</div>
 
-				@if ($rows->isNotEmpty())
+				@if ($rows->isNotEmpty() && $openMarkCount > 0)
 					<div class="card fa-savebar">
 						<div class="fa-tally">
 							<span class="fa-total">{{ $beneficiaryCount }} {{ \Illuminate\Support\Str::plural('beneficiary', $beneficiaryCount) }}</span>
@@ -354,6 +403,14 @@
 			let present = 0;
 			let absent = 0;
 			rows.forEach((row) => {
+				// A settled row has no radio to read — its mark is the one
+				// already on file, and it still counts toward the session.
+				const locked = row.dataset.locked;
+				if (locked) {
+					if (locked === 'present') present++;
+					else if (locked === 'absent') absent++;
+					return;
+				}
 				const checked = row.querySelector('input[type="radio"]:checked');
 				if (!checked) return;
 				if (checked.value === 'present') present++;
@@ -376,7 +433,9 @@
 			button.addEventListener('click', () => {
 				const value = button.dataset.markAll;
 				rows.forEach((row) => {
-					if (row.style.display === 'none') return;
+					// Never a settled row: it carries no inputs to set, and the
+					// server would refuse the write anyway.
+					if (row.style.display === 'none' || row.dataset.locked) return;
 					row.querySelectorAll('input[type="radio"]').forEach((input) => {
 						input.checked = value !== '' && input.value === value;
 					});

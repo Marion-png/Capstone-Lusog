@@ -84,7 +84,7 @@
 					</div>
 
 					<div class="report-body">
-						@foreach ([7, 8, 9, 10, 11, 12] as $grade)
+						@foreach (\App\Support\FeedingBeneficiarySummary::GRADE_LEVELS as $grade)
 							<div class="bmi-grade-block" data-grade="{{ $grade }}">
 								<div class="grade-title">GRADE {{ $grade }} BMI</div>
 								@include('feedingcor-dashboard.partials.bmi-table', ['prefix' => 'bmib_g' . $grade, 'editable' => false, 'values' => $bmiValues])
@@ -135,7 +135,7 @@
 					</div>
 
 					<div class="report-body">
-						@foreach ([7, 8, 9, 10, 11, 12] as $grade)
+						@foreach (\App\Support\FeedingBeneficiarySummary::GRADE_LEVELS as $grade)
 							<div class="bmi-grade-block" data-grade="{{ $grade }}">
 								<div class="grade-title">GRADE {{ $grade }} BMI</div>
 								@include('feedingcor-dashboard.partials.bmi-table', ['prefix' => 'bmif_g' . $grade, 'editable' => false, 'values' => $bmiValues])

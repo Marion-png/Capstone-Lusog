@@ -78,17 +78,20 @@ class FeedingProgramPageTest extends TestCase
     public function attendance_is_counted_over_confirmed_sessions_not_the_cycle_length(): void
     {
         $record = $this->makeStudent();
-        $this->mark($record, now()->subDays(2)->toDateString(), true);
-        $this->mark($record, now()->subDay()->toDateString(), true);
-        $this->mark($record, now()->toDateString(), false);
+        // Twelve feeding days, eight attended: deep enough for the rule's
+        // observation window, so the learner reaches the at-risk list where
+        // this fraction is printed.
+        foreach (range(1, 12) as $offset) {
+            $this->mark($record, now()->subDays($offset)->toDateString(), $offset <= 8);
+        }
 
         $response = $this->page()->assertOk();
 
-        // Two of three sessions attended — not two of the 120-day cycle, and
-        // not two of however many days have passed since day one.
-        $response->assertSee('2/3 sessions');
+        // Eight of twelve sessions attended — not eight of the 120-day cycle,
+        // and not eight of however many days have passed since day one.
+        $response->assertSee('8/12 sessions');
         $response->assertSee('67%');
-        $response->assertDontSee('2/120 days');
+        $response->assertDontSee('8/120 days');
     }
 
     #[Test]
@@ -103,8 +106,10 @@ class FeedingProgramPageTest extends TestCase
     public function the_at_risk_list_follows_the_schools_threshold_without_an_import(): void
     {
         $record = $this->makeStudent(['student_name' => 'Halfway Learner']);
-        $this->mark($record, now()->subDay()->toDateString(), true);
-        $this->mark($record, now()->toDateString(), false);
+        // Ten sessions, five attended: 50%, and past the observation window.
+        foreach (range(1, 10) as $offset) {
+            $this->mark($record, now()->subDays($offset)->toDateString(), $offset <= 5);
+        }
 
         // 50% is under the 80% default, so the learner is flagged...
         $this->page()->assertOk()->assertSee('1 at-risk beneficiaries detected');
@@ -125,10 +130,16 @@ class FeedingProgramPageTest extends TestCase
         $this->institution->update(['feeding_at_risk_threshold' => 90]);
 
         $record = $this->makeStudent();
-        $this->mark($record, now()->subDay()->toDateString(), true);
-        $this->mark($record, now()->toDateString(), false);
+        foreach (range(1, 10) as $offset) {
+            $this->mark($record, now()->subDays($offset)->toDateString(), $offset <= 5);
+        }
 
-        $this->page()->assertOk()->assertSee('Attendance below 90%');
+        $response = $this->page()->assertOk();
+
+        $response->assertSee('Attendance below 90%');
+        // And the second half of the rule, so nobody reads the threshold as
+        // something that applies from the first sheet.
+        $response->assertSee('after at least 10 recorded feeding days');
     }
 
     #[Test]

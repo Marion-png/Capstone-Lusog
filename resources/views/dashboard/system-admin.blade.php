@@ -210,20 +210,24 @@
 
             <article class="card section" id="feeding-policy">
                 <h3>Feeding At-Risk Threshold</h3>
-                {{-- School-configurable by requirement: a programme running four
-                     days a week cannot be judged on the same line as one running
-                     five. An empty field means the school follows the app
-                     default, so it moves with the programme instead of being
-                     pinned to whatever today's number happens to be. --}}
+                {{-- School-configurable by requirement, and two settings rather
+                     than one: a programme running four days a week cannot be
+                     judged on the same line as one running five, and neither
+                     can be judged at all on the first few sheets. The threshold
+                     is how much attendance is enough; the observation period is
+                     how much recorded history the threshold needs before it
+                     classifies anyone. An empty field means the school follows
+                     the app default, so it moves with the programme instead of
+                     being pinned to whatever today's number happens to be. --}}
                 <table>
-                    <thead><tr><th>School</th><th>Source</th><th>Threshold</th></tr></thead>
+                    <thead><tr><th>School</th><th>Source</th><th>Threshold &amp; observation period</th></tr></thead>
                     <tbody>
                         @forelse(($institutions ?? collect()) as $school)
                             <tr>
                                 <td>{{ $school->name }}</td>
                                 <td>
-                                    @if ($school->feeding_at_risk_threshold === null)
-                                        <span class="tag">Default {{ (int) ($defaultAtRiskThreshold ?? 80) }}%</span>
+                                    @if ($school->feeding_at_risk_threshold === null && ($school->feeding_min_observation_days ?? null) === null)
+                                        <span class="tag">Default {{ (int) ($defaultAtRiskThreshold ?? 80) }}% / {{ (int) ($defaultMinObservationDays ?? 10) }} days</span>
                                     @else
                                         <span class="tag ok">School-set</span>
                                     @endif
@@ -231,7 +235,7 @@
                                 <td>
                                     {{-- One form per row, wholly inside this cell: a form
                                          straddling table cells is invalid markup. --}}
-                                    <form method="POST" action="{{ route('dashboard.system-admin.institutions.at-risk-threshold', $school->id) }}" style="display:flex;gap:8px;align-items:center;">
+                                    <form method="POST" action="{{ route('dashboard.system-admin.institutions.at-risk-threshold', $school->id) }}" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                                         @csrf
                                         <input type="number" name="threshold" min="1" max="100" step="1"
                                             value="{{ $school->feeding_at_risk_threshold }}"
@@ -239,6 +243,12 @@
                                             aria-label="At-risk attendance threshold for {{ $school->name }}"
                                             style="width:84px;">
                                         <span style="color:#6B7C72;">%</span>
+                                        <input type="number" name="minimum_observation_days" min="0" max="120" step="1"
+                                            value="{{ $school->feeding_min_observation_days ?? null }}"
+                                            placeholder="{{ (int) ($defaultMinObservationDays ?? 10) }}"
+                                            aria-label="Minimum observation period in feeding days for {{ $school->name }}"
+                                            style="width:84px;">
+                                        <span style="color:#6B7C72;">feeding days</span>
                                         <button type="submit" class="btn btn-secondary">Save</button>
                                     </form>
                                 </td>
