@@ -2,7 +2,10 @@
     Shared School Head sidebar. Same panel as every other role's rail
     (resources/css/role-sidebar.css, .asb-*) so the colorway and layout match
     the Class Adviser / Feeding Coordinator side. Pass $active to highlight the
-    current item: 'dashboard' | 'reports'.
+    current item: 'dashboard' | 'program' | 'reports' | 'masterlist'.
+
+    The four items are the head's whole job in order — what needs me today,
+    how the programme is running, what I have to sign, and who is on the roll.
 
     The panel is a fixed width and never opens or closes on hover — a cursor
     crossing the rail must not move the page's content.
@@ -29,9 +32,17 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
             <span class="asb-link-text">Dashboard</span>
         </a>
+        <a href="{{ route('dashboard.school-head.program') }}" class="asb-link {{ $active === 'program' ? 'active' : '' }}" title="Feeding Program">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>
+            <span class="asb-link-text">Feeding Program</span>
+        </a>
         <a href="{{ route('dashboard.school-head.reports') }}" class="asb-link {{ $active === 'reports' ? 'active' : '' }}" title="Reports">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg>
             <span class="asb-link-text">Reports</span>
+        </a>
+        <a href="{{ route('dashboard.school-head.masterlist') }}" class="asb-link {{ $active === 'masterlist' ? 'active' : '' }}" title="Masterlist">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+            <span class="asb-link-text">Masterlist</span>
         </a>
     </nav>
 

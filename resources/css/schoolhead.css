@@ -1,14 +1,69 @@
 /* ══════════════════════════════════════════════════════════════════════
-   School Head — Dashboard & Reports
-   Page-specific styles only. Tokens, shell, KPI cards, buttons, tables,
-   the .badge status scale and the alert/flash components come from
-   lusog-theme.css, which is loaded first — so this role reads as the same
-   product as the Feeding Coordinator rather than a second design.
+   School Head — Dashboard, Feeding Program, Reports, Masterlist
+   ──────────────────────────────────────────────────────────────────────
+   Page-specific styles only. Tokens, shell, KPI cards, buttons, inputs,
+   tables, the .badge status scale and the alert/flash components come
+   from lusog-theme.css, which is loaded first — so this role reads as the
+   same product as the Feeding Coordinator rather than a second design.
+
+   One sheet for all four tabs on purpose: they share a masthead, a filter
+   toolbar, a dialog and a print block, and four copies of those is four
+   chances for the tabs to drift apart.
+
+   Nothing here underlines a word. A link that can be followed is carried
+   by colour, weight or a tinted hover, exactly as everywhere else in the
+   product.
    ══════════════════════════════════════════════════════════════════════ */
 
+:root {
+	/* ── Nutritional status fills ──────────────────────────────────────
+	   The five DepEd BMI-for-age categories, as the diverging chart draws
+	   them. This is a STATUS scale, not a categorical one: each fill means
+	   a state, so it always travels with its name — in the legend, in the
+	   per-segment tooltip, and in the table view under the chart.
+
+	   Normal and Overweight are the theme's already-validated
+	   --series-healthy / --series-risk pair, reused unchanged so a reader
+	   learns one meaning for those two colours across the whole product.
+	   The other three were stepped against them.
+
+	   Validated as a five-slot set with the dataviz validator on the card
+	   surface — all six checks PASS:
+	     lightness band   all 5 inside L 0.43–0.77
+	     chroma floor     all 5 >= 0.1
+	     CVD separation   worst adjacent #126B3A↔#D0741C ΔE 11.6 (protan) / 20.8 (tritan)
+	     normal vision    worst adjacent #D0741C↔#8C2F2F ΔE 22.2
+	     contrast         all 5 >= 3:1
+	   The two groups as actually drawn (the left pair either side of the
+	   axis, the right triple) pass on their own as well.
+
+	   Re-run scripts/validate_palette.js before changing any of them. ── */
+	--sh-sw: #8C2F2F;   /* Severely Wasted */
+	--sh-w:  #D0741C;   /* Wasted (the app's "Underweight" folds in here) */
+	--sh-n:  #126B3A;   /* Normal — the theme's --series-healthy */
+	--sh-ow: #C97A1A;   /* Overweight — the theme's --series-risk */
+	--sh-ob: #2F6FB3;   /* Obese */
+}
+
 /* The head reads summaries, not rows of data, so the column is capped —
-   a 2000px-wide table of three numbers is harder to scan, not easier. */
+   a 2000px-wide table of three numbers is harder to scan, not easier.
+   The masterlist opts out: twelve columns want the room. */
 .content-inner { max-width: 1280px; margin: 0 auto; }
+
+/* ── Vertical rhythm ───────────────────────────────────────────────
+   One stack rule for the gap between a page's top-level blocks, rather
+   than a margin on each section in turn. Declared once, so a section
+   added to any of the four tabs is spaced without having to remember to
+   ask for it — which is exactly how the chart and the activity log came
+   to sit flush against the block above them.
+
+   Two steps, and the difference is the hierarchy: 24px SEPARATES
+   sections, 16px (the grid gaps below) groups cards that belong
+   together. Adjacent margins collapse, so a block carrying its own
+   bottom margin — the announcements board, the page header — keeps
+   whichever of the two is larger instead of adding them up. ── */
+.content-inner > * + *,
+.content > * + * { margin-top: 24px; }
 
 .section { padding: var(--lg-pad-card); }
 .section-head {
@@ -25,7 +80,144 @@
 .grid-2 { display: grid; grid-template-columns: 1fr 1.15fr; gap: 16px; align-items: start; }
 .grid-2 > .card { min-width: 0; }
 
-/* ── Program overview ──────────────────────────────────────────────── */
+.sh-empty { padding: 22px 4px; font-size: .82rem; color: var(--lg-ink-soft); }
+
+/* Refetch holds the previous render at reduced opacity — never a
+   skeleton flash, never a layout jump. */
+.live-pane { transition: opacity .18s ease; }
+.live-pane.is-refreshing { opacity: .55; }
+
+/* ══ Masthead ═══════════════════════════════════════════════════════
+   The same anatomy on all four tabs, so a head moving between them
+   cannot tell the sheets apart. ══ */
+
+.sh-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap; }
+.sh-headline { flex: 1 1 360px; min-width: 0; }
+.sh-title-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.sh-title-row .page-title { margin: 0; }
+.sh-year {
+	position: relative;
+	padding-left: 13px;
+	font-size: .72rem;
+	font-weight: 600;
+	letter-spacing: .1em;
+	color: var(--lg-ink-soft);
+	white-space: nowrap;
+}
+.sh-year::before { content: ""; position: absolute; left: 0; top: -1px; bottom: 1px; width: 1px; background: var(--lg-border-strong); }
+.sh-meta { margin-top: 8px; font-size: .82rem; color: var(--lg-ink-soft); }
+.sh-meta .sh-sep { color: var(--lg-border-strong); margin: 0 8px; }
+.sh-note { margin-top: 6px; font-size: .76rem; color: var(--lg-ink-soft); }
+.sh-actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; flex: 0 0 auto; margin-left: auto; }
+.sh-actions .btn { white-space: nowrap; }
+.sh-yearpick { display: flex; flex-direction: column; gap: 0; min-width: 150px; }
+.sh-yearpick .field-label { margin-bottom: 4px; }
+
+/* ══ Cycle bar ══════════════════════════════════════════════════════
+   Two figures, never merged: the calendar day the cycle is on, and the
+   feeding days actually recorded. The recorded run is the solid fill
+   inside the elapsed one, so the gap between them IS the reading. ══ */
+
+.sh-header-cycle { flex: 0 0 auto; min-width: 280px; }
+.sh-cycle {
+	background: var(--lg-card);
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-card);
+	box-shadow: var(--lg-shadow);
+	padding: 13px 16px;
+	min-width: 280px;
+}
+.sh-cycle-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+.sh-cycle-label { font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--lg-ink-soft); }
+.sh-cycle-meta { font-size: .78rem; font-weight: 600; color: var(--lg-ink); }
+.sh-cycle-track {
+	position: relative;
+	height: 9px;
+	border-radius: var(--lg-r-pill);
+	background: var(--lg-rail);
+	overflow: hidden;
+}
+.sh-cycle-fill { position: absolute; inset: 0 auto 0 0; background: var(--lg-border-strong); border-radius: var(--lg-r-pill); }
+.sh-cycle-fed { position: absolute; inset: 0 auto 0 0; background: var(--lg-emerald); border-radius: var(--lg-r-pill); }
+.sh-cycle-foot { margin-top: 9px; font-size: .74rem; color: var(--lg-ink-soft); }
+.sh-cycle-sep { color: var(--lg-border-strong); margin: 0 8px; }
+.sh-cycle-key { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; }
+.sh-cycle-key.is-fed { background: var(--lg-emerald); }
+.sh-cycle-key.is-elapsed { background: var(--lg-border-strong); }
+.sh-cycle.is-idle .sh-cycle-meta { color: var(--lg-ink-soft); font-weight: 500; }
+
+/* ══ Action queue ═══════════════════════════════════════════════════
+   Severity is never colour alone: the left rail's tint is paired with a
+   word in a badge, so the queue survives greyscale and a colour-vision
+   deficient reader. ══ */
+
+.sh-queue { list-style: none; display: grid; gap: 10px; }
+.sh-queue-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 14px 18px;
+	flex-wrap: wrap;
+	padding: 13px 16px;
+	background: var(--lg-page);
+	border: 1px solid var(--lg-border);
+	border-left: 4px solid var(--lg-border-strong);
+	border-radius: var(--lg-r-card);
+}
+.sh-queue-item.is-high { border-left-color: var(--lg-danger); }
+.sh-queue-item.is-medium { border-left-color: var(--lg-orange); }
+.sh-queue-item.is-info { border-left-color: var(--lg-info); }
+.sh-queue-body { display: flex; align-items: flex-start; gap: 13px; min-width: 0; flex: 1 1 320px; }
+.sh-queue-body .badge { flex: 0 0 auto; margin-top: 1px; }
+.sh-queue-text { min-width: 0; }
+.sh-queue-text strong { display: block; font-size: .84rem; font-weight: 600; color: var(--lg-ink); }
+.sh-queue-text span { display: block; margin-top: 3px; font-size: .78rem; line-height: 1.5; color: var(--lg-ink-soft); }
+.sh-queue-action { flex: 0 0 auto; }
+.sh-queue-action svg { width: 13px; height: 13px; }
+
+.sh-queue-clear {
+	display: flex;
+	align-items: flex-start;
+	gap: 13px;
+	padding: 20px 18px;
+	background: var(--lg-mint);
+	border: 1px solid #C4E4D0;
+	border-radius: var(--lg-r-card);
+}
+.sh-queue-clear svg { width: 20px; height: 20px; flex: 0 0 auto; color: var(--lg-emerald); margin-top: 1px; }
+.sh-queue-clear strong { display: block; font-size: .86rem; font-weight: 600; color: var(--lg-success-ink); }
+.sh-queue-clear span { display: block; margin-top: 3px; font-size: .8rem; color: #35604A; }
+
+/* ══ Grade snapshot ═════════════════════════════════════════════════ */
+
+.sh-bar-cell { display: flex; align-items: center; gap: 10px; min-width: 180px; }
+.sh-bar { flex: 1 1 auto; height: 7px; min-width: 70px; border-radius: var(--lg-r-pill); background: var(--lg-rail); overflow: hidden; }
+.sh-bar-fill { display: block; height: 100%; background: var(--sh-w); border-radius: var(--lg-r-pill); }
+.sh-bar-value { flex: 0 0 auto; font-size: .76rem; font-weight: 600; color: var(--lg-ink); }
+/* Direction is a word plus a sign, never the colour on its own. */
+.sh-delta { font-weight: 600; }
+.sh-delta.is-down { color: var(--lg-success-ink); }
+.sh-delta.is-up { color: var(--lg-danger-ink); }
+
+/* ══ Quick links ════════════════════════════════════════════════════ */
+
+.sh-links { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.sh-link { display: flex; align-items: flex-start; gap: 13px; padding: 16px 18px; text-decoration: none; color: inherit; }
+.sh-link:hover { background: var(--lg-mint); }
+.sh-link:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+.sh-link-icon {
+	width: 34px; height: 34px; flex: 0 0 auto;
+	border-radius: 9px; display: grid; place-items: center;
+	background: var(--lg-mint); color: var(--lg-emerald-deep);
+}
+.sh-link:hover .sh-link-icon { background: #D6EDDF; }
+.sh-link-icon svg { width: 17px; height: 17px; }
+.sh-link-text { min-width: 0; }
+.sh-link-text strong { display: block; font-size: .86rem; font-weight: 600; color: var(--lg-ink); }
+.sh-link:hover .sh-link-text strong { color: var(--lg-emerald-dark); }
+.sh-link-text span { display: block; margin-top: 3px; font-size: .76rem; line-height: 1.5; color: var(--lg-ink-soft); }
+
+/* ══ Program overview rows ══════════════════════════════════════════ */
 
 .program-item {
 	display: flex;
@@ -43,97 +235,490 @@
    is the second signal, never the only one. */
 .program-note { font-size: .74rem; color: var(--lg-amber-ink); margin-top: 4px; font-weight: 500; }
 
-/* ── Nutritional status by grade ───────────────────────────────────
-   Thin columns on a hairline grid: the data is the only loud thing.
-   Marks stay <= 24px wide with a 4px cap and a square baseline.
+/* ══ Feeding day grid ═══════════════════════════════════════════════
+   120 cells. Every cell carries its day number and a title naming its
+   state and turnout, so the colour is a second signal rather than the
+   only one. ══ */
 
-   The two series are the brand emerald and the system's watch amber —
-   validated as a pair against the card surface with the dataviz
-   validator: CVD separation dE 12.6 (protan) / 29.4 (tritan),
-   normal-vision dE 25.6, and both at or above 3:1 contrast. Re-run that
-   check before changing either. ── */
+.sh-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 14px; }
+.sh-legend-item { display: inline-flex; align-items: center; gap: 7px; font-size: .74rem; color: var(--lg-ink-soft); }
+.sh-cell-key { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; border: 1px solid var(--lg-border-strong); }
+.sh-cell-key.is-fed { background: var(--lg-emerald); border-color: var(--lg-emerald); }
+.sh-cell-key.is-low { background: var(--sh-w); border-color: var(--sh-w); }
+.sh-cell-key.is-review { background: var(--lg-info-tint); border-color: var(--lg-info); }
+.sh-cell-key.is-today { background: var(--lg-card); border: 2px solid var(--lg-emerald-deep); }
+.sh-cell-key.is-upcoming { background: var(--lg-rail); }
 
-.chart-legend { display: flex; align-items: center; gap: 18px; font-size: .76rem; color: var(--lg-ink-soft); margin-bottom: 4px; flex-wrap: wrap; }
-.legend-item { display: inline-flex; align-items: center; gap: 7px; }
-.legend-item b { color: var(--lg-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
-.legend-dot { width: 9px; height: 9px; border-radius: 3px; display: inline-block; flex: 0 0 auto; }
-.legend-healthy { background: var(--series-healthy); }
-.legend-risk { background: var(--series-risk); }
+.sh-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(30px, 1fr)); gap: 5px; }
+.sh-cell {
+	display: grid;
+	place-items: center;
+	aspect-ratio: 1;
+	border-radius: 5px;
+	border: 1px solid var(--lg-border);
+	background: var(--lg-rail);
+	font-size: .62rem;
+	font-weight: 600;
+	color: var(--lg-ink-soft);
+	font-variant-numeric: var(--lg-figures);
+	cursor: default;
+}
+.sh-cell.is-fed { background: var(--lg-emerald); border-color: var(--lg-emerald); color: #fff; }
+.sh-cell.is-low { background: var(--sh-w); border-color: var(--sh-w); color: #fff; }
+.sh-cell.is-review { background: var(--lg-info-tint); border-color: var(--lg-info); color: var(--lg-info-ink); }
+.sh-cell.is-today { background: var(--lg-card); border: 2px solid var(--lg-emerald-deep); color: var(--lg-emerald-deep); }
+.sh-cell.is-upcoming { color: #9AAEA4; }
 
-/* The top margin is the cap labels' room: a column at the axis maximum
-   reaches the top gridline, and its total is drawn above that. */
-.chart-figure { display: grid; grid-template-columns: 32px minmax(0, 1fr); grid-template-rows: 196px auto; column-gap: 10px; row-gap: 8px; margin-top: 16px; }
-.chart-axis { grid-column: 1; grid-row: 1; position: relative; }
-.axis-tick { position: absolute; right: 0; transform: translateY(50%); font-size: .68rem; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; line-height: 1; }
-.chart-axis-title { grid-column: 1; grid-row: 2; font-size: .66rem; color: var(--lg-ink-soft); text-align: right; }
-.chart-plot { grid-column: 2; grid-row: 1; position: relative; }
-.chart-grid { position: absolute; inset: 0; }
-.grid-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--lg-border); }
-.chart-cols, .chart-labels { display: flex; align-items: flex-end; gap: 8px; height: 100%; }
-.chart-labels { grid-column: 2; grid-row: 2; height: auto; }
-.col-label { flex: 1 1 0; min-width: 0; text-align: center; font-size: .7rem; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; }
+/* ══ Baseline / Latest toggle ═══════════════════════════════════════ */
 
-.chart-col { flex: 1 1 0; min-width: 0; height: 100%; position: relative; display: flex; align-items: flex-end; justify-content: center; outline: none; }
-.col-stack { width: min(24px, 70%); height: 100%; display: flex; flex-direction: column-reverse; justify-content: flex-start; }
-.col-seg { width: 100%; transform-origin: bottom; }
-/* Column-reverse puts the last child on top — that is the data end, so
-   it carries the 4px cap while the baseline stays square. */
-.col-seg:last-child { border-radius: 4px 4px 0 0; }
+.sh-seg { display: inline-flex; padding: 3px; gap: 3px; background: var(--lg-rail); border: 1px solid var(--lg-border); border-radius: var(--lg-r-pill); }
+.sh-seg-btn {
+	padding: 5px 14px;
+	border-radius: var(--lg-r-pill);
+	font-size: .74rem;
+	font-weight: 600;
+	color: var(--lg-ink-soft);
+	text-decoration: none;
+	white-space: nowrap;
+}
+.sh-seg-btn:hover { color: var(--lg-emerald-dark); }
+.sh-seg-btn.is-active { background: var(--lg-card); color: var(--lg-ink); box-shadow: var(--lg-shadow); }
+.sh-seg-btn:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+
+/* ══ Diverging status chart ═════════════════════════════════════════
+   Undernutrition extends left of the centre line, normal-and-above
+   extends right, every bar on one shared scale — so a segment twice as
+   long is twice as many learners whichever side it sits on. ══ */
+
+.sh-callout {
+	padding: 12px 14px;
+	margin-bottom: 14px;
+	background: var(--lg-page);
+	border: 1px solid var(--lg-border);
+	border-left: 3px solid var(--lg-emerald);
+	border-radius: var(--lg-r-btn);
+	font-size: .82rem;
+	line-height: 1.6;
+	color: var(--lg-ink-soft);
+}
+.sh-callout strong { color: var(--lg-ink); font-weight: 600; }
+
+.sh-divlegend { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 14px; }
+.sh-divlegend li { display: inline-flex; align-items: center; gap: 7px; font-size: .74rem; color: var(--lg-ink-soft); }
+.sh-swatch { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+.sh-swatch.tone-sw { background: var(--sh-sw); }
+.sh-swatch.tone-w  { background: var(--sh-w); }
+.sh-swatch.tone-n  { background: var(--sh-n); }
+.sh-swatch.tone-ow { background: var(--sh-ow); }
+.sh-swatch.tone-ob { background: var(--sh-ob); }
+
+.sh-diverging { display: grid; gap: 9px; }
+.sh-div-row { display: grid; grid-template-columns: 88px 34px minmax(0, 1fr) 34px; align-items: center; gap: 10px; }
+.sh-div-label { font-size: .78rem; font-weight: 600; color: var(--lg-ink); white-space: nowrap; }
+.sh-div-figure { font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); }
+.sh-div-figure.is-left { text-align: right; }
+.sh-div-figure.is-right { text-align: left; }
+.sh-div-track { position: relative; display: flex; align-items: stretch; height: 16px; }
+.sh-div-half { display: flex; width: 50%; height: 100%; min-width: 0; }
+/* Left segments grow outward from the centre, so the worst category
+   sits furthest from the axis. */
+.sh-div-half.is-left { justify-content: flex-end; }
+.sh-div-seg { display: block; height: 100%; }
 /* A 2px gap in the surface colour, never a stroke, separates the fills. */
-.col-seg + .col-seg { margin-bottom: 2px; }
-.seg-healthy { background: var(--series-healthy); }
-.seg-risk { background: var(--series-risk); }
-.col-cap { position: absolute; left: 50%; transform: translateX(-50%); font-size: .72rem; font-weight: 600; color: var(--lg-ink); font-variant-numeric: tabular-nums; line-height: 1; }
+.sh-div-half.is-left .sh-div-seg + .sh-div-seg { margin-right: 2px; }
+.sh-div-half.is-right .sh-div-seg + .sh-div-seg { margin-left: 2px; }
+/* The data end carries the 4px cap; the axis end stays square. */
+.sh-div-half.is-left .sh-div-seg:first-child { border-radius: 4px 0 0 4px; }
+.sh-div-half.is-right .sh-div-seg:last-child { border-radius: 0 4px 4px 0; }
+.sh-div-seg.tone-sw { background: var(--sh-sw); }
+.sh-div-seg.tone-w  { background: var(--sh-w); }
+.sh-div-seg.tone-n  { background: var(--sh-n); }
+.sh-div-seg.tone-ow { background: var(--sh-ow); }
+.sh-div-seg.tone-ob { background: var(--sh-ob); }
+.sh-div-axis { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--lg-ink-soft); opacity: .5; }
 
-.chart-col::after { content: ''; position: absolute; inset: 0 -4px; }
-/* The card is the tooltip's ceiling: each column sets its own `bottom`
-   from its height, capped so a full-height column drops the card into
-   the plot instead of pushing it out over the section title. */
-.chart-tip {
-	position: absolute; bottom: 60%; left: 50%; transform: translateX(-50%) translateY(4px);
-	min-width: 140px; padding: 10px 12px; border-radius: var(--lg-r-btn); z-index: 5;
-	background: var(--lg-ink); color: #fff; box-shadow: var(--lg-shadow-pop);
-	opacity: 0; pointer-events: none; transition: opacity .14s ease, transform .14s ease;
+/* The WCAG-clean twin: every value the chart encodes with colour is also
+   readable as text, so nothing is gated behind hover or hue. */
+.sh-table-view { margin-top: 18px; }
+.sh-table-view summary { font-size: .76rem; color: var(--lg-ink-soft); cursor: pointer; font-weight: 500; padding: 4px 0; width: fit-content; }
+.sh-table-view summary:hover { color: var(--lg-emerald); }
+.sh-table-view .table-card { margin-top: 10px; }
+.sh-total-row td { background: var(--lg-rail); }
+
+/* ══ Reports ════════════════════════════════════════════════════════ */
+
+/* ── Baseline-to-endline shift ──────────────────────────────────────
+   Two series on one shared scale, mirroring the anatomy of the
+   coordinator's Nutritional Progress panel (.np-* in
+   feeding-dashboard.css) so the same comparison reads the same way in
+   both roles: --series-risk for the baseline, --series-healthy for the
+   endline — the theme's validated pair, unchanged.
+
+   Colour carries WHICH WEIGHING; the row label carries the status and
+   every bar is direct-labelled, so identity never rests on hue. Bars are
+   thin, 12px, with a 4px cap on the data end and a square start at the
+   axis, and 2px of surface between the pair — never a border, because
+   two fills must not appear to touch for a reader who cannot separate
+   the hues. Re-run the dataviz validator before changing either colour. */
+.sh-serieslegend { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 14px; }
+.sh-serieslegend li { display: inline-flex; align-items: center; gap: 7px; font-size: .74rem; color: var(--lg-ink-soft); }
+.sh-swatch.is-baseline { background: var(--series-risk); }
+.sh-swatch.is-endline { background: var(--series-healthy); }
+
+.sh-shift { display: flex; flex-direction: column; gap: 12px; }
+.sh-shift-row { display: grid; grid-template-columns: 128px minmax(0, 1fr); align-items: center; gap: 12px; }
+.sh-shift-label { font-size: .78rem; font-weight: 600; color: var(--lg-ink); }
+.sh-shift-bars { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sh-shift-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sh-shift-bar { height: 12px; border-radius: 0 4px 4px 0; min-width: 2px; flex: 0 0 auto; }
+.sh-shift-bar.is-baseline { background: var(--series-risk); }
+.sh-shift-bar.is-endline { background: var(--series-healthy); }
+.sh-shift-value { font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); flex: 0 0 auto; }
+/* Direction is a sign and a word-sized figure, never the colour alone. */
+.sh-shift-delta { font-size: .7rem; font-weight: 600; flex: 0 0 auto; }
+.sh-shift-delta.is-down { color: var(--lg-success-ink); }
+.sh-shift-delta.is-up { color: var(--lg-danger-ink); }
+.sh-shift-axis {
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+	margin: 10px 0 0 140px;
+	font-size: .68rem;
+	color: var(--lg-ink-soft);
 }
-.chart-col:hover .chart-tip, .chart-col:focus-visible .chart-tip { opacity: 1; transform: translateX(-50%) translateY(0); }
-.chart-col:focus-visible .col-stack { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--lg-emerald); border-radius: 5px; }
-.chart-col:first-child .chart-tip { left: 0; transform: translateX(0) translateY(4px); }
-.chart-col:first-child:hover .chart-tip, .chart-col:first-child:focus-visible .chart-tip { transform: translateX(0) translateY(0); }
-.chart-col:last-child .chart-tip { left: auto; right: 0; transform: translateX(0) translateY(4px); }
-.chart-col:last-child:hover .chart-tip, .chart-col:last-child:focus-visible .chart-tip { transform: translateX(0) translateY(0); }
-.tip-head { font-size: .76rem; font-weight: 600; margin-bottom: 6px; }
-.tip-row { display: flex; align-items: center; gap: 7px; font-size: .72rem; color: rgba(255,255,255,.78); margin-top: 3px; }
-.tip-row b { margin-left: auto; color: #fff; font-variant-numeric: tabular-nums; }
-.tip-total { margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.18); font-size: .7rem; color: rgba(255,255,255,.7); }
 
-.chart-table { margin-top: 16px; }
-.chart-table summary { font-size: .76rem; color: var(--lg-ink-soft); cursor: pointer; font-weight: 500; padding: 4px 0; width: fit-content; }
-.chart-table summary:hover { color: var(--lg-emerald); }
-.chart-table .table-card { margin-top: 10px; }
-.chart-empty { display: grid; place-items: center; min-height: 196px; font-size: .82rem; color: var(--lg-ink-soft); text-align: center; padding: 0 20px; }
-
-/* Refetch holds the previous render at reduced opacity — never a
-   skeleton flash, never a layout jump. */
-.live-pane { transition: opacity .18s ease; }
-.live-pane.is-refreshing { opacity: .55; }
-
-.chart.is-animating .col-seg { transform: scaleY(0); animation: growBar .6s cubic-bezier(.22,.61,.36,1) forwards; }
-.chart.is-animating .seg-risk { animation-delay: .05s; }
-.chart.is-animating .seg-healthy { animation-delay: .14s; }
-.chart.is-animating .col-cap { opacity: 0; animation: capIn .4s ease .5s forwards; }
-
-@keyframes growBar { from { transform: scaleY(0); } to { transform: scaleY(1); } }
-@keyframes capIn { from { opacity: 0; transform: translateX(-50%) translateY(4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-
-@media (prefers-reduced-motion: reduce) {
-	.chart.is-animating .col-seg, .chart.is-animating .col-cap { animation: none; transform: none; opacity: 1; }
-	.chart.is-animating .col-cap { transform: translateX(-50%); }
-	.live-pane { transition: none; }
+/* ── Turnout month by month ─────────────────────────────────────────
+   A fixed 0–100 axis: a percentage's scale is not the data's to choose,
+   and a truncated one exaggerates every difference. The programme's
+   full-turnout line is drawn across the plot, so the gap between a
+   column and that line is what the eye reads rather than the number. ── */
+.sh-turnout {
+	display: grid;
+	grid-template-columns: 40px minmax(0, 1fr);
+	grid-template-rows: 180px auto;
+	column-gap: 10px;
+	row-gap: 8px;
+	margin-bottom: 22px;
 }
+.sh-turnout-axis { grid-column: 1; grid-row: 1; position: relative; display: flex; flex-direction: column-reverse; justify-content: space-between; align-items: flex-end; font-size: .66rem; color: var(--lg-ink-soft); }
+.sh-turnout-plot { grid-column: 2; grid-row: 1; position: relative; }
+.sh-turnout-grid { position: absolute; inset: 0; }
+.sh-turnout-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--lg-border); }
+/* The target reads as a rule with a value, not as a third series. */
+.sh-turnout-target { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--lg-orange); }
+.sh-turnout-target::after {
+	content: attr(data-label);
+	position: absolute;
+	right: 0;
+	top: -14px;
+	font-size: .62rem;
+	font-weight: 600;
+	color: var(--lg-orange-ink);
+	font-variant-numeric: var(--lg-figures);
+}
+.sh-turnout-cols, .sh-turnout-labels { display: flex; align-items: flex-end; gap: 10px; height: 100%; }
+.sh-turnout-labels { grid-column: 2; grid-row: 2; height: auto; }
+.sh-turnout-labels span { flex: 1 1 0; min-width: 0; text-align: center; font-size: .7rem; color: var(--lg-ink-soft); }
+.sh-turnout-col { flex: 1 1 0; min-width: 0; max-width: 72px; height: 100%; position: relative; display: flex; align-items: flex-end; justify-content: center; outline: none; }
+.sh-turnout-col:focus-visible { box-shadow: var(--lg-focus); border-radius: 5px; }
+.sh-turnout-bar { width: min(28px, 80%); border-radius: 4px 4px 0 0; background: var(--series-healthy); }
+/* Below the full-turnout line: the fill changes AND the column sits under
+   the dashed rule, so the state is legible without the colour. It borrows
+   the theme's generic risk series, not a nutritional-status fill — those
+   five colours mean a child's status and nothing else. */
+.sh-turnout-bar.is-low { background: var(--series-risk); }
+.sh-turnout-cap { position: absolute; left: 50%; transform: translateX(-50%); font-size: .7rem; font-weight: 600; color: var(--lg-ink); line-height: 1; white-space: nowrap; }
+
+.sh-compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.sh-panel { min-width: 0; }
+.sh-panel-note { margin-top: 12px; font-size: .76rem; line-height: 1.5; color: var(--lg-ink-soft); }
+
+.sh-reports { list-style: none; display: grid; gap: 12px; }
+.sh-report {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 14px 20px;
+	flex-wrap: wrap;
+	padding: 15px 18px;
+	box-shadow: none;
+}
+.sh-report-main { min-width: 0; flex: 1 1 340px; }
+.sh-report-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sh-report-head strong { font-size: .88rem; font-weight: 600; color: var(--lg-ink); }
+.sh-report-sub { margin-top: 4px; font-size: .78rem; line-height: 1.5; color: var(--lg-ink-soft); }
+.sh-report-detail { margin-top: 4px; font-size: .76rem; color: var(--lg-ink-soft); }
+.sh-report-stamp { margin-top: 7px; font-size: .76rem; line-height: 1.5; color: var(--lg-ink-soft); }
+.sh-report-remark { display: block; margin-top: 3px; color: var(--lg-ink); font-style: italic; }
+.sh-report-actions { display: flex; flex-wrap: wrap; gap: 8px; flex: 0 0 auto; margin-left: auto; }
+.sh-report-locked { font-size: .76rem; font-weight: 600; color: var(--lg-info-ink); align-self: center; }
+
+.sh-month { margin-bottom: 18px; }
+.sh-month:last-child { margin-bottom: 0; }
+.sh-month-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 9px; }
+.sh-month-head strong { font-size: .84rem; font-weight: 600; color: var(--lg-ink); }
+.sh-month-head span { font-size: .76rem; color: var(--lg-ink-soft); }
+
+/* ══ Masterlist ═════════════════════════════════════════════════════ */
+
+.sh-toolbar {
+	display: flex;
+	align-items: end;
+	gap: 12px 18px;
+	flex-wrap: wrap;
+	padding: 14px 18px;
+}
+.sh-filter { flex: 1 1 150px; min-width: 140px; }
+.sh-filter .select { width: 100%; }
+
+.sh-listcard { overflow: visible; }
+.sh-listhead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px 20px;
+	flex-wrap: wrap;
+	padding: 16px 18px 14px;
+	border-bottom: 1px solid var(--lg-border);
+}
+.sh-search input { min-width: 240px; }
+
+.sh-table th:first-child, .sh-table td:first-child { padding-left: 18px; }
+.sh-table th:last-child, .sh-table td:last-child { padding-right: 18px; }
+.sh-index { color: var(--lg-ink-soft); width: 46px; }
+
+/* A sortable head says so on hover and carries its direction as a caret,
+   never as colour alone. */
+.sh-table th.is-sortable { cursor: pointer; user-select: none; }
+.sh-table th.is-sortable:hover { color: var(--lg-emerald-dark); }
+.sh-table th.is-sortable:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+.sh-table th.is-asc::after { content: " \25B2"; font-size: .58rem; }
+.sh-table th.is-desc::after { content: " \25BC"; font-size: .58rem; }
+
+/* The name opens the learner's record, and the whole cell is the target:
+   a head aiming at a row should not have to hit the glyphs. The button
+   fills the cell's padding box, so the click area is the column rather
+   than the text inside it — the same anatomy the coordinator's rosters
+   use, so the two lists behave alike. It is never underlined: the cell
+   tints and the name takes the brand colour on hover, which says "open
+   me" without ruling a line through the list. */
+.sh-name { min-width: 190px; }
+.sh-name.is-link { padding: 0; }
+.sh-namebtn {
+	display: block;
+	width: 100%;
+	padding: 11px 14px;
+	border: none;
+	background: none;
+	font: inherit;
+	font-size: .78rem;
+	text-align: left;
+	color: inherit;
+	cursor: pointer;
+}
+.sh-namebtn strong { color: var(--lg-ink); font-weight: 600; }
+.sh-namebtn:hover { background: var(--lg-mint); }
+.sh-namebtn:hover strong { color: var(--lg-emerald-dark); }
+.sh-namebtn:focus-visible { outline: none; box-shadow: var(--lg-focus); border-radius: 3px; }
+
+/* ══ Dialogs ════════════════════════════════════════════════════════
+   The same backdrop / panel / head / body / foot anatomy the enrolment
+   and follow-up dialogs use, so a dialog looks like a dialog everywhere
+   in the product. ══ */
+
+.modal-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(21, 40, 31, .48);
+	display: none;
+	align-items: flex-start;
+	justify-content: center;
+	z-index: 250;
+	padding: 16px;
+	overflow-y: auto;
+}
+.modal-backdrop.open { display: flex; }
+.modal-panel {
+	width: min(620px, 100%);
+	max-height: calc(100vh - 32px);
+	background: var(--lg-card);
+	border-radius: var(--lg-r-card);
+	box-shadow: 0 24px 64px rgba(21, 40, 31, .28);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	margin: auto;
+}
+.modal-panel > form { display: flex; flex-direction: column; min-height: 0; }
+.modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 20px 14px; }
+.modal-title { font-size: 1.02rem; font-weight: 600; letter-spacing: -.01em; color: var(--lg-ink); }
+.modal-close { border: 1px solid var(--lg-border); background: none; font-size: 1.4rem; line-height: 1; color: var(--lg-ink-soft); cursor: pointer; padding: 2px 8px; border-radius: 8px; }
+.modal-close:hover { color: var(--lg-ink); background: var(--lg-rail); }
+.modal-close:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+.modal-body { padding: 0; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.modal-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 20px; border-top: 1px solid var(--lg-border); background: var(--lg-card); }
+
+.sh-modal-eyebrow { font-size: .66rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--lg-ink-soft); }
+.sh-modal-meta { margin-top: 5px; font-size: .8rem; color: var(--lg-ink-soft); }
+.sh-modal-body { display: grid; gap: 14px; padding: 16px 20px 20px; border-top: 1px solid var(--lg-border); }
+.sh-modal-note { font-size: .74rem; line-height: 1.5; color: var(--lg-ink-soft); }
+.sh-modal-actions { display: flex; gap: 8px; margin-left: auto; }
+.sh-field { min-width: 0; }
+.sh-field .input { width: 100%; }
+.sh-textarea { resize: vertical; line-height: 1.5; padding-top: 9px; padding-bottom: 9px; }
+
+/* The learner's record is a wider read than a form: two panels side by
+   side on a normal screen. */
+.sh-detail-modal { width: min(880px, 100%); }
+.sh-detail-body { border-top: 1px solid var(--lg-border); }
+.sh-detail-ident { min-width: 0; }
+.sh-detail {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	gap: 16px;
+	padding: 18px 20px 20px;
+	background: var(--lg-page);
+}
+.sh-panel-box {
+	background: var(--lg-card);
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-card);
+	padding: 16px 18px 18px;
+	min-width: 0;
+}
+.sh-panel-title { font-size: .7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--lg-ink-soft); margin-bottom: 10px; }
+.sh-panel-sub { margin-top: 14px; font-size: .72rem; font-weight: 600; color: var(--lg-ink-soft); }
+
+.sh-mini { width: 100%; border-collapse: collapse; }
+.sh-mini th {
+	padding: 6px 8px 6px 0;
+	text-align: left;
+	font-size: .66rem;
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft);
+	background: none;
+	border-bottom: 1px solid var(--lg-border);
+	white-space: nowrap;
+}
+.sh-mini td { padding: 7px 8px 7px 0; font-size: .78rem; color: var(--lg-ink); border-bottom: 1px solid var(--lg-border); }
+.sh-mini tr:last-child td { border-bottom: none; }
+.sh-mini th.num, .sh-mini td.num { text-align: right; padding-right: 0; }
+
+.sh-facts { display: grid; gap: 8px; }
+.sh-fact { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.sh-fact dt { font-size: .78rem; color: var(--lg-ink-soft); }
+/* A figure that is the subject rather than a value in a sentence reads in
+   the system's one monospaced stack. */
+.sh-fact dd { font-size: .84rem; font-weight: 600; color: var(--lg-ink); font-family: var(--lg-mono); font-variant-numeric: var(--lg-figures); }
+
+.sh-spark { display: block; margin-top: 8px; width: 100%; max-width: 260px; height: 40px; }
+.sh-spark-axis { display: flex; justify-content: space-between; gap: 10px; max-width: 260px; margin-top: 5px; font-size: .68rem; color: var(--lg-ink-soft); }
+
+/* ══ Responsive ═════════════════════════════════════════════════════ */
 
 @media (max-width: 1180px) {
 	.grid-2 { grid-template-columns: 1fr; }
+	.sh-links { grid-template-columns: 1fr; }
+	.sh-div-row { grid-template-columns: 76px 30px minmax(0, 1fr) 30px; gap: 8px; }
 }
 @media (max-width: 900px) {
+	.sh-header-cycle { flex: 1 1 100%; min-width: 0; }
+	.sh-cycle { min-width: 0; }
+	.sh-search input { min-width: 0; width: 100%; }
+	.sh-search { flex: 1 1 100%; }
 	.table-card { overflow-x: auto; }
+}
+@media (max-width: 620px) {
+	.sh-actions { width: 100%; margin-left: 0; }
+	.sh-actions .btn { flex: 1 1 auto; justify-content: center; }
+	.sh-report-actions { width: 100%; margin-left: 0; }
+	.sh-detail { padding: 14px; }
+	.sh-grid { grid-template-columns: repeat(auto-fill, minmax(26px, 1fr)); gap: 4px; }
+	.sh-div-row { grid-template-columns: 1fr; gap: 4px; }
+	.sh-div-figure.is-left, .sh-div-figure.is-right { text-align: left; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.live-pane { transition: none; }
+}
+
+/* ══ Print ══════════════════════════════════════════════════════════
+   The app shell is a fixed-height scrolling window (see lusog-theme), so
+   every scroll container has to be reopened or the printer gets one
+   screenful and drops the rest of the roster. Controls come off, and
+   every badge prints as bordered black text because a school printer is
+   not to be trusted with the status scale.
+
+   A learner's record does not print with the list: it lives in a
+   template until the dialog asks for it, so paper gets the list itself.
+   ══ */
+
+.print-masthead { display: none; }
+
+@media print {
+	.asb-sidebar,
+	.topbar,
+	.sh-actions,
+	.sh-toolbar,
+	.sh-search,
+	.sh-links,
+	.sh-report-actions,
+	.sh-seg,
+	.modal-backdrop,
+	.ann-board,
+	.flash { display: none !important; }
+
+	html, body { height: auto !important; overflow: visible !important; background: #fff; }
+	.main { margin: 0 !important; height: auto !important; overflow: visible !important; opacity: 1 !important; transform: none !important; }
+	.content { padding: 0 !important; height: auto !important; overflow: visible !important; }
+	.content-inner { max-width: none !important; }
+
+	.print-masthead {
+		display: block;
+		margin-bottom: 14px;
+		padding-bottom: 10px;
+		border-bottom: 1.5px solid #333;
+	}
+	.print-masthead h2 { font-size: 1.15rem; font-weight: 700; color: #000; }
+	.print-masthead p { font-size: .78rem; color: #333; margin-top: 3px; }
+
+	.page-header { margin-bottom: 12px; }
+	.page-title { font-size: 1.3rem; }
+	.sh-meta, .sh-note, .sh-callout { color: #333; }
+
+	.kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 8px; }
+	.kpi { padding: 10px 12px; break-inside: avoid; }
+	.kpi-value { font-size: 1.15rem; }
+	.kpi-icon { display: none; }
+
+	.card, .table-card { box-shadow: none; border-color: #999; break-inside: avoid; }
+	.sh-listcard, .sh-gridcard { break-inside: auto; }
+	.sh-listhead { padding-left: 0; padding-right: 0; }
+	.table-scroll, .table-card, .sh-listcard { overflow: visible !important; }
+	.table-card table { min-width: 0 !important; }
+	table { width: 100%; font-size: .7rem; }
+	th, td { padding: 4px 5px; }
+	thead { display: table-header-group; }
+	tr { break-inside: avoid; }
+
+	/* The table view under a chart is the chart's twin on paper, where a
+	   details element would otherwise print closed. */
+	.sh-table-view[open] .table-card, .sh-table-view .table-card { display: block; }
+	.sh-table-view summary { display: none; }
+
+	/* On paper the name is a name, not a control. */
+	.sh-name.is-link { padding: 4px 5px; }
+	.sh-namebtn { display: inline; width: auto; padding: 0; background: none !important; }
+	.sh-namebtn strong { color: #000; }
+
+	.sh-queue-item, .sh-report { break-inside: avoid; }
+	.sh-cell { border-color: #999 !important; color: #000 !important; }
+	.sh-cell.is-fed { background: #ddd !important; }
+	.sh-cell.is-low { background: #fff !important; border: 2px solid #000 !important; }
+	.sh-cell.is-upcoming { background: #fff !important; color: #999 !important; }
+
+	.badge { background: transparent !important; color: #000 !important; border: 1px solid #666 !important; }
+	.badge::before { display: none; }
 }

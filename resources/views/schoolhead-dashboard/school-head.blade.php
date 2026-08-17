@@ -21,7 +21,7 @@
 
 <div class="main">
     <header class="topbar">
-        <div class="topbar-bc"><span>Dashboard</span><span class="bc-sep">&rsaquo;</span><span>School Head</span></div>
+        <div class="topbar-bc"><span>School Head</span><span class="bc-sep">&rsaquo;</span><span>Dashboard</span></div>
         @include('partials.live-clock')
     </header>
 
@@ -31,9 +31,21 @@
              data-stamp="{{ $stamp }}"
              data-metrics-url="{{ route('dashboard.school-head.metrics') }}"
              data-pulse-url="{{ route('dashboard.school-head.metrics.pulse') }}">
-        <div class="page-header">
-            <h1 class="page-title">School Head <span>Decision Dashboard</span></h1>
-            <p class="page-sub">School health reports and program approvals overview.</p>
+
+        <div class="page-header sh-header">
+            <div class="sh-headline">
+                <h1 class="page-title">Good day, <span>{{ $headName }}</span></h1>
+                <p class="sh-meta">
+                    <span>{{ $todayLabel }}</span>
+                    <span class="sh-sep">&middot;</span>
+                    <span>{{ $schoolName }}</span>
+                    <span class="sh-sep">&middot;</span>
+                    <span class="tnum">S.Y. {{ $schoolYear }}</span>
+                </p>
+            </div>
+            <div class="live-pane sh-header-cycle" id="sh-cycle">
+                @include('schoolhead-dashboard.partials.cycle-bar')
+            </div>
         </div>
 
         @if (session('success'))
@@ -46,15 +58,27 @@
 
         @include('partials.announcements')
 
-        <section class="kpi-grid cols-3 live-pane" id="sh-stats">
+        <section class="kpi-grid live-pane" id="sh-stats">
             @include('schoolhead-dashboard.partials.stat-cards')
+        </section>
+
+        {{-- The queue is the reason this screen exists, so it sits above
+             everything that merely reports. --}}
+        <section class="card section sh-queue-card">
+            <div class="section-head">
+                <h2 class="section-title">What needs you today</h2>
+                <div class="section-meta">Generated from live records &middot; updated <span id="sh-updated">{{ $generatedAt }}</span></div>
+            </div>
+            <div class="live-pane" id="sh-queue">
+                @include('schoolhead-dashboard.partials.action-queue')
+            </div>
         </section>
 
         <section class="grid-2">
             <article class="card section">
                 <div class="section-head">
-                    <h2 class="section-title">Program Overview</h2>
-                    <div class="section-meta">Updated <span id="sh-updated">{{ $generatedAt }}</span></div>
+                    <h2 class="section-title">Program overview</h2>
+                    <div class="section-meta">From this school&rsquo;s own records</div>
                 </div>
                 <div class="live-pane" id="sh-programs">
                     @include('schoolhead-dashboard.partials.program-overview')
@@ -63,13 +87,38 @@
 
             <article class="card section">
                 <div class="section-head">
-                    <h2 class="section-title">Nutritional Status by Grade</h2>
-                    <div class="section-meta">{{ \App\Models\StudentHealthRecord::currentSchoolYear() }}</div>
+                    <h2 class="section-title">Grade level snapshot</h2>
+                    <div class="section-meta">Latest weighing</div>
                 </div>
-                <div class="chart live-pane" id="sh-chart">
-                    @include('schoolhead-dashboard.partials.status-chart')
+                <div class="live-pane" id="sh-snapshot">
+                    @include('schoolhead-dashboard.partials.grade-snapshot')
                 </div>
             </article>
+        </section>
+
+        {{-- Where the head goes next. Three cards, one per remaining tab. --}}
+        <section class="sh-links">
+            <a class="card sh-link" href="{{ route('dashboard.school-head.program') }}">
+                <span class="sh-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg></span>
+                <span class="sh-link-text">
+                    <strong>Feeding Program</strong>
+                    <span>The 120-day grid, turnout and nutritional status by grade.</span>
+                </span>
+            </a>
+            <a class="card sh-link" href="{{ route('dashboard.school-head.reports') }}">
+                <span class="sh-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg></span>
+                <span class="sh-link-text">
+                    <strong>Reports</strong>
+                    <span>Baseline against endline, and the reports awaiting your decision.</span>
+                </span>
+            </a>
+            <a class="card sh-link" href="{{ route('dashboard.school-head.masterlist') }}">
+                <span class="sh-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></span>
+                <span class="sh-link-text">
+                    <strong>Masterlist</strong>
+                    <span>Every learner, their measurements and their attendance standing.</span>
+                </span>
+            </a>
         </section>
         </div>
     </div>
@@ -81,30 +130,24 @@
             return;
         }
 
-        const chart = document.getElementById('sh-chart');
-        const stats = document.getElementById('sh-stats');
-        const programs = document.getElementById('sh-programs');
+        const panes = {
+            stats: document.getElementById('sh-stats'),
+            queue: document.getElementById('sh-queue'),
+            cycle: document.getElementById('sh-cycle'),
+            snapshot: document.getElementById('sh-snapshot'),
+            programs: document.getElementById('sh-programs'),
+        };
         const updated = document.getElementById('sh-updated');
         const metricsUrl = root.dataset.metricsUrl;
         const pulseUrl = root.dataset.pulseUrl;
-        const stillMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
         // Cheap enough to ask often; the answer is a stamp, and the expensive
         // rebuild only runs when the stamp actually moves.
         const PULSE_MS = 20000;
 
-        const animateChart = function () {
-            if (!chart || stillMotion.matches) {
-                return;
-            }
-            chart.classList.remove('is-animating');
-            void chart.offsetWidth;
-            chart.classList.add('is-animating');
-        };
-
-        const panes = [stats, programs, chart].filter(Boolean);
+        const live = Object.values(panes).filter(Boolean);
         const setRefreshing = function (on) {
-            panes.forEach(function (pane) { pane.classList.toggle('is-refreshing', on); });
+            live.forEach(function (pane) { pane.classList.toggle('is-refreshing', on); });
         };
 
         let inFlight = false;
@@ -129,9 +172,11 @@
 
                 // The server renders the same Blade partials the first paint
                 // used, so the live view can never drift from it.
-                if (stats && typeof payload.html.stats === 'string') { stats.innerHTML = payload.html.stats; }
-                if (programs && typeof payload.html.programs === 'string') { programs.innerHTML = payload.html.programs; }
-                if (chart && typeof payload.html.chart === 'string') { chart.innerHTML = payload.html.chart; animateChart(); }
+                Object.keys(panes).forEach(function (key) {
+                    if (panes[key] && typeof payload.html[key] === 'string') {
+                        panes[key].innerHTML = payload.html[key];
+                    }
+                });
                 if (updated && payload.generatedAt) { updated.textContent = payload.generatedAt; }
                 if (payload.stamp) { root.dataset.stamp = payload.stamp; }
             } catch (error) {
@@ -163,9 +208,6 @@
                 // Ignored — the next pulse retries.
             }
         };
-
-        window.addEventListener('load', animateChart);
-        window.addEventListener('pageshow', animateChart);
 
         // First pulse seeds the stamp; from then on it only fires a rebuild
         // when the underlying records have actually changed.

@@ -63,6 +63,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Rehabilitation target
+    |--------------------------------------------------------------------------
+    |
+    | The share of beneficiaries a school (or its Division) expects to see at
+    | Normal by the endline weighing. The School Head's Reports tab prints the
+    | achieved rate against it.
+    |
+    | NULL by default, and left that way on purpose: a target nobody set is a
+    | number this application invented, and a rate compared against an invented
+    | target is worse than a rate standing on its own. Set
+    | FEEDING_REHABILITATION_TARGET_PERCENT only when a real target exists.
+    |
+    */
+
+    'rehabilitation_target_percent' => env('FEEDING_REHABILITATION_TARGET_PERCENT'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Attendance photo scanning
     |--------------------------------------------------------------------------
     |

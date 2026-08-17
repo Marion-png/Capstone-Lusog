@@ -6,14 +6,16 @@ use App\Models\FeedingAttendance;
 use App\Models\Institution;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
+use App\Support\SchoolHeadOverview;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
  * Guards the School Head dashboard: its numbers come from the school's own
- * records (never a fixed schedule), the live-refresh endpoints stay scoped and
- * role-gated, and the chart's axis stays on whole learners.
+ * records (never a fixed schedule), the action queue is generated from live
+ * conditions rather than a stored list, and the live-refresh endpoints stay
+ * scoped and role-gated.
  */
 class SchoolHeadDashboardTest extends TestCase
 {
@@ -41,7 +43,7 @@ class SchoolHeadDashboardTest extends TestCase
         ];
     }
 
-    private function makeStudent(string $section, string $status, ?Institution $school = null): StudentHealthRecord
+    private function makeStudent(string $section, string $status, ?Institution $school = null, array $extra = []): StudentHealthRecord
     {
         $school ??= $this->institution;
 
@@ -56,7 +58,7 @@ class SchoolHeadDashboardTest extends TestCase
             'bmi_value' => 15,
             'nutritional_status' => $status,
             'baseline_nutritional_status' => $status,
-        ]);
+        ] + $extra);
     }
 
     #[Test]
@@ -65,7 +67,7 @@ class SchoolHeadDashboardTest extends TestCase
         $this->withSession($this->headSession())
             ->get('/dashboard/school-head')
             ->assertOk()
-            ->assertSee('No student data yet', false);
+            ->assertSee('Nothing needs your attention right now.', false);
     }
 
     #[Test]
@@ -78,9 +80,16 @@ class SchoolHeadDashboardTest extends TestCase
     }
 
     #[Test]
-    public function dashboard_uses_the_shared_role_sidebar_that_never_collapses(): void
+    public function all_four_tabs_render_on_the_shared_role_sidebar(): void
     {
-        foreach (['/dashboard/school-head', '/dashboard/school-head/reports'] as $url) {
+        $urls = [
+            '/dashboard/school-head',
+            '/dashboard/school-head/program',
+            '/dashboard/school-head/reports',
+            '/dashboard/school-head/masterlist',
+        ];
+
+        foreach ($urls as $url) {
             $response = $this->withSession($this->headSession())->get($url)->assertOk();
 
             // The shared panel, at one fixed width...
@@ -88,11 +97,15 @@ class SchoolHeadDashboardTest extends TestCase
             // ...and none of the hover-driven collapse it replaced.
             $response->assertDontSee('sidebar:hover', false);
             $response->assertDontSee('sb-pin', false);
+
+            // Every tab is reachable from every other one.
+            $response->assertSee('Feeding Program', false);
+            $response->assertSee('Masterlist', false);
         }
     }
 
     #[Test]
-    public function chart_counts_only_this_schools_learners(): void
+    public function the_grade_snapshot_counts_only_this_schools_learners(): void
     {
         $this->makeStudent('Grade 7 - Rizal', 'Normal');
         $this->makeStudent('Grade 7 - Rizal', 'Wasted');
@@ -101,36 +114,66 @@ class SchoolHeadDashboardTest extends TestCase
 
         $response = $this->withSession($this->headSession())->get('/dashboard/school-head')->assertOk();
 
-        $chart = $response->viewData('gradeChart');
-        $this->assertCount(2, $chart);
-        $this->assertSame('Grade 7', $chart[0]['label']);
-        $this->assertSame(1, $chart[0]['healthy']);
-        $this->assertSame(1, $chart[0]['risk']);
-        $this->assertSame(2, $chart[0]['total']);
-        $this->assertSame('Grade 8', $chart[1]['label']);
-        $this->assertSame(1, $chart[1]['total']);
+        $snapshot = collect($response->viewData('gradeSnapshot'))->keyBy('label');
+        $this->assertCount(2, $snapshot);
+        $this->assertSame(2, $snapshot['Grade 7']['total']);
+        $this->assertSame(1, $snapshot['Grade 7']['undernourished']);
+        $this->assertSame(1, $snapshot['Grade 8']['total']);
+        $this->assertSame(0, $snapshot['Grade 8']['undernourished']);
 
         $this->assertSame(3, $response->viewData('stats')['total_students']);
     }
 
     #[Test]
-    public function chart_axis_ticks_are_whole_learners(): void
+    public function an_unmeasured_learner_is_never_counted_as_normal(): void
     {
-        foreach (range(1, 7) as $ignored) {
-            $this->makeStudent('Grade 9 - Luna', 'Normal');
-        }
+        // No baseline and no nutritional status: nobody classified this
+        // learner, which is exactly the row a monitoring report must not file
+        // under Normal.
+        StudentHealthRecord::create([
+            'institution_id' => $this->institution->id,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'student_name' => 'Unweighed Learner',
+            'student_id' => 'LRN000111',
+            'school_name' => 'Test School',
+            'section' => 'Grade 7 - Rizal',
+            'weight' => 30,
+            'bmi_value' => 15,
+            'nutritional_status' => '',
+        ]);
 
-        $axis = $this->withSession($this->headSession())
-            ->get('/dashboard/school-head')
-            ->assertOk()
-            ->viewData('chartAxis');
+        $snapshot = collect($this->withSession($this->headSession())
+            ->get('/dashboard/school-head')->assertOk()->viewData('gradeSnapshot'))
+            ->keyBy('label');
 
-        // Eight is the first multiple of four that clears seven learners.
-        $this->assertSame(8, $axis['max']);
-        $this->assertSame([8, 6, 4, 2, 0], $axis['ticks']);
-        foreach ($axis['ticks'] as $tick) {
-            $this->assertIsInt($tick);
-        }
+        $this->assertSame(1, $snapshot['Grade 7']['total']);
+        $this->assertSame(0, $snapshot['Grade 7']['measured']);
+        $this->assertSame(0, $snapshot['Grade 7']['counts']['Normal']);
+        $this->assertSame(1, $snapshot['Grade 7']['counts'][SchoolHeadOverview::NOT_MEASURED]);
+        // A grade nobody measured has no undernourished share at all.
+        $this->assertNull($snapshot['Grade 7']['bar']);
+    }
+
+    #[Test]
+    public function the_action_queue_is_generated_from_live_conditions(): void
+    {
+        // Qualified by the adviser's measurement, not yet enrolled by the
+        // coordinator: the waiting list.
+        $this->makeStudent('Grade 7 / Rizal', 'Wasted');
+
+        $queue = $this->withSession($this->headSession())
+            ->get('/dashboard/school-head')->assertOk()->viewData('queue');
+
+        $titles = collect($queue)->pluck('title')->implode(' | ');
+        $this->assertStringContainsString('awaiting enrolment', $titles);
+
+        // Enrol them and the item is gone — nothing about it was stored.
+        StudentHealthRecord::query()->update(['feeding_enrolled_at' => now()]);
+
+        $titles = collect($this->withSession($this->headSession())
+            ->get('/dashboard/school-head')->assertOk()->viewData('queue'))
+            ->pluck('title')->implode(' | ');
+        $this->assertStringNotContainsString('awaiting enrolment', $titles);
     }
 
     #[Test]
@@ -184,9 +227,11 @@ class SchoolHeadDashboardTest extends TestCase
             ->json();
 
         $this->assertArrayHasKey('stamp', $payload);
-        $this->assertStringContainsString('Total Students', $payload['html']['stats']);
+        $this->assertStringContainsString('Learners enrolled', $payload['html']['stats']);
         $this->assertStringContainsString('Feeding Program', $payload['html']['programs']);
-        $this->assertStringContainsString('Grade 7', $payload['html']['chart']);
+        $this->assertStringContainsString('Grade 7', $payload['html']['snapshot']);
+        $this->assertArrayHasKey('queue', $payload['html']);
+        $this->assertArrayHasKey('cycle', $payload['html']);
     }
 
     #[Test]

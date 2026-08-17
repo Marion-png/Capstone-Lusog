@@ -22,6 +22,9 @@ use App\Http\Controllers\NutricorController;
 use App\Http\Controllers\NutritionCoordinatorController;
 use App\Http\Controllers\ParentalConsentFormController;
 use App\Http\Controllers\SchoolHeadController;
+use App\Http\Controllers\SchoolHeadMasterlistController;
+use App\Http\Controllers\SchoolHeadProgramController;
+use App\Http\Controllers\SchoolHeadReportsController;
 use App\Http\Controllers\StudentHealthRecordController;
 use App\Http\Controllers\StudentMedicalDocumentController;
 use App\Models\AuditLog;
@@ -585,8 +588,31 @@ Route::get('/dashboard/class-adviser/activity/pulse', [StudentHealthRecordContro
 Route::get('/dashboard/school-head', [SchoolHeadController::class, 'index'])
     ->name('dashboard.school-head');
 
-Route::get('/dashboard/school-head/reports', [SchoolHeadController::class, 'reports'])
+// The head's four tabs. Everything here is a GET but the report decision:
+// this role reads and decides while other roles write, and
+// RestrictSchoolHeadWrites enforces that over every other endpoint in the app.
+Route::get('/dashboard/school-head/program', [SchoolHeadProgramController::class, 'index'])
+    ->name('dashboard.school-head.program');
+
+Route::get('/dashboard/school-head/reports', [SchoolHeadReportsController::class, 'index'])
     ->name('dashboard.school-head.reports');
+
+// The report key travels as a parameter, never as a path segment: a monthly
+// key is "monthly:2026-08", and a colon in a URL path is an encoding hazard
+// that route matching would have to be taught to survive.
+Route::get('/dashboard/school-head/reports/export', [SchoolHeadReportsController::class, 'export'])
+    ->name('dashboard.school-head.reports.export');
+
+// The one write the School Head has: approving, returning or locking a report.
+// Named in RestrictSchoolHeadWrites::ALLOWED_ROUTES — nothing else is.
+Route::post('/dashboard/school-head/reports/review', [SchoolHeadReportsController::class, 'review'])
+    ->name('dashboard.school-head.reports.review');
+
+Route::get('/dashboard/school-head/masterlist', [SchoolHeadMasterlistController::class, 'index'])
+    ->name('dashboard.school-head.masterlist');
+
+Route::get('/dashboard/school-head/masterlist/export', [SchoolHeadMasterlistController::class, 'export'])
+    ->name('dashboard.school-head.masterlist.export');
 
 // Keeps the school head's dashboard current without a reload: the page polls
 // the pulse (a stamp, no data) and only re-reads the metrics when it moves.
@@ -862,10 +888,6 @@ Route::get('/dashboard/feedingcor-program/attendance/review', [FeedingProgramCon
 Route::post('/dashboard/feedingcor-program/attendance/review/{attendance}', [FeedingProgramController::class, 'resolveAttendanceReview'])
     ->whereNumber('attendance')
     ->name('feedingcor-program.attendance.review.resolve');
-
-Route::post('/dashboard/school-head/approvals/{approval}/{decision}', [SchoolHeadController::class, 'decide'])
-    ->whereIn('decision', ['approve', 'decline'])
-    ->name('dashboard.school-head.approvals.decide');
 
 Route::get('/dashboard/system-admin', function () {
     $activeRole = session('active_role');
