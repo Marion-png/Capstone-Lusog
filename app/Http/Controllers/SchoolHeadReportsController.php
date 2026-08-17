@@ -5,15 +5,24 @@ namespace App\Http\Controllers;
 use App\Models\ReportReview;
 use App\Models\StudentHealthRecord;
 use App\Support\AuditTrail;
+use App\Support\BmiAssessmentReport;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
 use App\Support\SchoolHeadOverview;
+use App\Support\SchoolSignatories;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use OpenSpout\Common\Entity\Cell;
 use OpenSpout\Common\Entity\Row;
+use OpenSpout\Common\Entity\Style\Border;
+use OpenSpout\Common\Entity\Style\BorderName;
+use OpenSpout\Common\Entity\Style\BorderPart;
+use OpenSpout\Common\Entity\Style\BorderWidth;
+use OpenSpout\Common\Entity\Style\CellAlignment;
+use OpenSpout\Common\Entity\Style\Style;
 use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -188,7 +197,30 @@ class SchoolHeadReportsController extends Controller
     }
 
     /**
-     * One report as a workbook.
+     * One report as a workbook — **the school's own DepEd form, not a dump of
+     * the screen.**
+     *
+     * The nutritional assessment exports open on the same sheet the Feeding
+     * Coordinator's SBFP Forms page prints: the school heading, the per-grade
+     * BMI grids (Sex × BMI-for-age × height-for-age) and the OVERALL grid, then
+     * the Prepared by / Attested by / Noted by block. The cells are computed by
+     * `BmiAssessmentReport`, which is the one implementation both screens read,
+     * so the printed form and the exported one cannot report different numbers
+     * for the same school and year. Someone can print the download and hand it
+     * in; the flat table this used to write always needed retyping onto the
+     * real form first.
+     *
+     * Every figure on it is what the people who use the app actually entered —
+     * the class adviser's weighings and the nurse's examinations, read at export
+     * time, never a stored copy that could have gone stale. The signature block
+     * carries the school's own staff (`SchoolSignatories`), and a report the
+     * head has already decided on carries that decision and the reviewer's name
+     * too, because that is a genuine entry by a specific person about this
+     * document.
+     *
+     * The supporting detail the head used to get — the learner list, the
+     * outcome figures — moves to its own sheet, so the first sheet stays the
+     * form and nothing is lost.
      *
      * Every export re-reads and re-scopes the school's own records: what is on
      * the wire decides which report, never whose data.
@@ -215,6 +247,19 @@ class SchoolHeadReportsController extends Controller
             return back()->with('error', 'That report does not exist for this school year.');
         }
 
+        // The cells of the DepEd grid, computed from this school's own records.
+        $bmiValues = BmiAssessmentReport::values($overview->records);
+        $reviews = $this->reviews($institutionId, $schoolYear);
+
+        // Who signs the sheet. Read from the school's accounts, so the printed
+        // form and this one are signed by the same people; the head exporting it
+        // is named from their own session when no head account is on file.
+        $signatories = [
+            'prepared' => SchoolSignatories::preparedBy($institutionId, $schoolName),
+            'noted' => SchoolSignatories::notedBy($institutionId, $schoolName)
+                ?: trim((string) $request->session()->get('active_name', '')),
+        ];
+
         $reserved = tempnam(sys_get_temp_dir(), 'sh-report-');
         $path = $reserved.'.xlsx';
         @unlink($reserved);
@@ -226,15 +271,35 @@ class SchoolHeadReportsController extends Controller
             // One workbook, one sheet per report: the Division asks for the set
             // together, and three separate files is three chances to send the
             // wrong year.
-            $this->writeNutritionSheet($writer, $overview, $schoolName, 'baseline');
+            $this->writeAssessmentForm($writer, $overview, $schoolName, 'baseline', $bmiValues, $signatories, $reviews['baseline'] ?? null, 'Baseline BMI');
             $writer->addNewSheetAndMakeItCurrent();
-            $this->writeNutritionSheet($writer, $overview, $schoolName, 'endline');
+            $this->writeAssessmentForm($writer, $overview, $schoolName, 'endline', $bmiValues, $signatories, $reviews['endline'] ?? null, 'Final BMI');
             $writer->addNewSheetAndMakeItCurrent();
-            $this->writeAccomplishmentSheet($writer, $overview, $schoolName);
+            $this->writeAccomplishmentSheet($writer, $overview, $schoolName, null, $signatories);
+            $writer->addNewSheetAndMakeItCurrent();
+            $this->writeSupportingSheet($writer, $overview, 'endline');
         } elseif (str_starts_with($report, 'monthly')) {
-            $this->writeAccomplishmentSheet($writer, $overview, $schoolName, substr($report, strlen('monthly:')));
+            $this->writeAccomplishmentSheet(
+                $writer,
+                $overview,
+                $schoolName,
+                substr($report, strlen('monthly:')),
+                $signatories,
+                $reviews[$report] ?? null,
+            );
         } else {
-            $this->writeNutritionSheet($writer, $overview, $schoolName, $report);
+            $this->writeAssessmentForm(
+                $writer,
+                $overview,
+                $schoolName,
+                $report,
+                $bmiValues,
+                $signatories,
+                $reviews[$report] ?? null,
+                $report === 'baseline' ? 'Baseline BMI' : 'Final BMI',
+            );
+            $writer->addNewSheetAndMakeItCurrent();
+            $this->writeSupportingSheet($writer, $overview, $report);
         }
 
         $writer->close();
@@ -643,48 +708,164 @@ class SchoolHeadReportsController extends Controller
     }
 
     /**
-     * One nutritional-assessment sheet: the counts by grade and section, then
-     * the learners behind them.
+     * One nutritional-assessment sheet, written as the DepEd form.
+     *
+     * The anatomy is the SBFP Forms page's printed sheet, in order: the school
+     * heading with the address line and the school year, one ruled BMI grid per
+     * grade the programme covers, the OVERALL grid, and the signature block.
+     * The grids come from BmiAssessmentReport, which the coordinator's page
+     * reads too — one computation behind both, so the printed form and this one
+     * cannot disagree.
+     *
+     * A MALE or FEMALE cell nobody counted is left blank, exactly as on paper;
+     * the Total columns and the TOTAL row always print a figure, because a
+     * total of nothing is nothing.
+     *
+     * @param  array<string, int|string>  $bmiValues
+     * @param  array{prepared: string, noted: string}  $signatories
      */
-    private function writeNutritionSheet(XlsxWriter $writer, SchoolHeadOverview $overview, string $schoolName, string $phase): void
-    {
-        $label = $phase === 'baseline' ? 'BASELINE' : 'ENDLINE';
+    private function writeAssessmentForm(
+        XlsxWriter $writer,
+        SchoolHeadOverview $overview,
+        string $schoolName,
+        string $phase,
+        array $bmiValues,
+        array $signatories,
+        ?ReportReview $review,
+        string $sheetName,
+    ): void {
+        $writer->getCurrentSheet()->setName($sheetName);
 
-        $writer->addRow(Row::fromValues([$label.' NUTRITIONAL ASSESSMENT']));
-        $writer->addRow(Row::fromValues([$schoolName]));
-        $writer->addRow(Row::fromValues(['S.Y. '.$overview->schoolYear]));
-        $writer->addRow(Row::fromValues([]));
+        $prefix = BmiAssessmentReport::prefixFor($phase);
+        $banner = $phase === 'baseline'
+            ? 'Baseline Nutritional Assessment (BMI) Report'
+            : 'Final Nutritional Assessment (BMI) Report';
 
-        $writer->addRow(Row::fromValues(array_merge(
-            ['GRADE LEVEL'],
-            array_map('strtoupper', SchoolHeadOverview::NUTRITION_SCALE),
-            ['NOT MEASURED', 'TOTAL'],
-        )));
+        $title = (new Style)->withFontBold(true)->withFontSize(12);
+        $heading = (new Style)->withFontBold(true)->withFontSize(11);
+        $gridTitle = (new Style)->withFontBold(true);
+        $ruled = (new Style)->withBorder($this->hairline());
+        $ruledHead = (new Style)->withFontBold(true)->withBorder($this->hairline())
+            ->withCellAlignment(CellAlignment::CENTER);
 
-        foreach ($overview->gradeBreakdown($phase) as $row) {
-            $writer->addRow(Row::fromValues(array_merge(
-                [$row['label']],
-                array_map(fn (string $status): int => $row['counts'][$status], SchoolHeadOverview::NUTRITION_SCALE),
-                [$row['counts'][SchoolHeadOverview::NOT_MEASURED], $row['total']],
-            )));
+        $writer->addRow($this->line([$schoolName], $title));
+        // Left blank deliberately: the school address is typed onto the form and
+        // the app does not hold it. An invented line would be worse than a gap.
+        $writer->addRow($this->line(['School address:']));
+        $writer->addRow($this->line([$banner], $heading));
+        $writer->addRow($this->line(['S.Y. '.$overview->schoolYear]));
+        $writer->addRow($this->line(['']));
+
+        $nsLabels = array_values(BmiAssessmentReport::NS_COLUMNS);
+        $hfaLabels = array_values(BmiAssessmentReport::HFA_COLUMNS);
+        $nsKeys = array_keys(BmiAssessmentReport::NS_COLUMNS);
+        $hfaKeys = array_keys(BmiAssessmentReport::HFA_COLUMNS);
+
+        // The printed grid heads two groups of columns; a workbook cannot merge
+        // cells here, so each group name sits over the first column of its group
+        // and the sub-heads carry the rest — the same two-row head, read the
+        // same way down the sheet.
+        $groupHead = array_merge(
+            ['Sex', 'Nutritional Status'],
+            array_fill(0, count($nsLabels), ''),
+            ['Height for Age (HFA)'],
+            array_fill(0, count($hfaLabels), ''),
+        );
+        $columnHead = array_merge([''], $nsLabels, ['Total'], $hfaLabels, ['Total']);
+
+        foreach (array_merge(BmiAssessmentReport::gradeKeys(), ['overall']) as $gradeKey) {
+            $writer->addRow($this->line([BmiAssessmentReport::gridTitle($gradeKey)], $gridTitle));
+            $writer->addRow($this->line($groupHead, $ruledHead));
+            $writer->addRow($this->line($columnHead, $ruledHead));
+
+            foreach (BmiAssessmentReport::SEX_ROWS as $sexKey => $sexLabel) {
+                $cell = fn (string $key) => $bmiValues[$prefix.'_'.$gradeKey.'_'.$sexKey.'_'.$key] ?? '';
+
+                $writer->addRow($this->line(array_merge(
+                    [$sexLabel],
+                    array_map($cell, $nsKeys),
+                    [$cell('nst')],
+                    array_map($cell, $hfaKeys),
+                    [$cell('hfat')],
+                ), $ruled));
+            }
+
+            $writer->addRow($this->line(['']));
         }
 
-        $totals = $overview->statusCounts($phase);
-        $writer->addRow(Row::fromValues(array_merge(
-            ['TOTAL'],
-            array_map(fn (string $status): int => $totals[$status], SchoolHeadOverview::NUTRITION_SCALE),
-            [$totals[SchoolHeadOverview::NOT_MEASURED], $overview->records->count()],
-        )));
+        $this->writeSignatureBlock($writer, $signatories, $review);
+    }
 
-        $writer->addRow(Row::fromValues([]));
-        $writer->addRow(Row::fromValues(['NO.', 'LRN', 'NAME', 'GRADE & SECTION', 'SEX', 'STATUS']));
+    /**
+     * The form's foot: who prepared it, who attested it, who noted it — and,
+     * when the head has already decided on the report, that decision with the
+     * name of the person who made it.
+     *
+     * A name the app does not hold prints as a blank line to sign on. Putting a
+     * plausible name on a document nobody signed would be worse than a gap.
+     *
+     * @param  array{prepared: string, noted: string}  $signatories
+     */
+    private function writeSignatureBlock(XlsxWriter $writer, array $signatories, ?ReportReview $review): void
+    {
+        $label = (new Style)->withFontBold(true);
+
+        $writer->addRow($this->line(['']));
+        $writer->addRow($this->line(['Prepared by:', '', 'Attested by:', '', 'Noted by:'], $label));
+        $writer->addRow($this->line([$signatories['prepared'], '', '', '', $signatories['noted']]));
+        $writer->addRow($this->line([
+            'School Clinic Nurse / Teacher', '', 'MAPEH Department Head', '', 'Principal',
+        ]));
+
+        if ($review === null || $review->status === ReportReview::STATUS_PENDING) {
+            return;
+        }
+
+        $writer->addRow($this->line(['']));
+        $writer->addRow($this->line(['REVIEW'], $label));
+        $writer->addRow($this->line(['Status', ReportReview::statusLabel($review->status)]));
+        $writer->addRow($this->line(['Reviewed by', (string) $review->reviewed_by_name]));
+        $writer->addRow($this->line(['Reviewed on', $review->reviewed_at?->format('j F Y') ?? '']));
+
+        $remarks = trim((string) $review->remarks);
+        if ($remarks !== '') {
+            $writer->addRow($this->line(['Remarks', $remarks]));
+        }
+
+        if ($review->isLocked()) {
+            $writer->addRow($this->line(['Locked by', (string) $review->locked_by_name]));
+            $writer->addRow($this->line(['Locked on', $review->locked_at?->format('j F Y') ?? '']));
+        }
+    }
+
+    /**
+     * The learners behind the grid, on their own sheet.
+     *
+     * The form is the first sheet and stays the form; this is the working list
+     * that used to sit under it — every learner with the status the grid counted
+     * them under, so a figure on the form can be traced to the children in it.
+     * A learner nobody measured is named as unmeasured, never as Normal.
+     */
+    private function writeSupportingSheet(XlsxWriter $writer, SchoolHeadOverview $overview, string $phase): void
+    {
+        $writer->getCurrentSheet()->setName('Supporting Data');
+
+        $label = (new Style)->withFontBold(true);
+        $ruledHead = (new Style)->withFontBold(true)->withBorder($this->hairline());
+        $ruled = (new Style)->withBorder($this->hairline());
+
+        $writer->addRow($this->line([strtoupper($phase).' — SUPPORTING DATA'], $label));
+        $writer->addRow($this->line(['S.Y. '.$overview->schoolYear]));
+        $writer->addRow($this->line(['']));
+
+        $writer->addRow($this->line(['NO.', 'LRN', 'NAME', 'GRADE & SECTION', 'SEX', 'STATUS'], $ruledHead));
 
         $number = 0;
         foreach ($overview->records as $record) {
             $number++;
             $status = SchoolHeadOverview::phaseStatus($record, $phase);
 
-            $writer->addRow(Row::fromValues([
+            $writer->addRow($this->line([
                 $number,
                 (string) $record->student_id,
                 (string) $record->student_name,
@@ -692,64 +873,114 @@ class SchoolHeadReportsController extends Controller
                 FeedingBeneficiarySummary::sexOf($record) ?: '—',
                 // Never Normal by default: an unmeasured learner is named as one.
                 $status !== '' ? $status : SchoolHeadOverview::NOT_MEASURED,
-            ]));
+            ], $ruled));
         }
 
         if ($phase === 'endline') {
             $outcome = $overview->outcome();
-            $writer->addRow(Row::fromValues([]));
-            $writer->addRow(Row::fromValues(['OUTCOME']));
-            $writer->addRow(Row::fromValues(['Beneficiaries', $outcome['beneficiaries']]));
-            $writer->addRow(Row::fromValues(['Measured at endline', $outcome['measured']]));
-            $writer->addRow(Row::fromValues(['Rehabilitated (Normal at endline)', $outcome['rehabilitated']]));
-            $writer->addRow(Row::fromValues([
+            $writer->addRow($this->line(['']));
+            $writer->addRow($this->line(['OUTCOME'], $label));
+            $writer->addRow($this->line(['Beneficiaries', $outcome['beneficiaries']]));
+            $writer->addRow($this->line(['Measured at endline', $outcome['measured']]));
+            $writer->addRow($this->line(['Rehabilitated (Normal at endline)', $outcome['rehabilitated']]));
+            $writer->addRow($this->line([
                 'Rehabilitation rate',
                 $outcome['rate'] !== null ? $this->percent($outcome['rate']).'%' : '—',
             ]));
-            $writer->addRow(Row::fromValues(['Improved but not rehabilitated', $outcome['improved'] - $outcome['rehabilitated'] > 0 ? $outcome['improved'] - $outcome['rehabilitated'] : 0]));
-            $writer->addRow(Row::fromValues(['Still undernourished', $outcome['still_undernourished']]));
+            $writer->addRow($this->line([
+                'Improved but not rehabilitated',
+                max(0, $outcome['improved'] - $outcome['rehabilitated']),
+            ]));
+            $writer->addRow($this->line(['Still undernourished', $outcome['still_undernourished']]));
         }
     }
 
-    /** The monthly accomplishment sheet: one block per month, newest first. */
-    private function writeAccomplishmentSheet(XlsxWriter $writer, SchoolHeadOverview $overview, string $schoolName, ?string $onlyMonth = null): void
+    /**
+     * A row whose cells all carry one style. This OpenSpout takes a row's style
+     * through its cells rather than as a second argument.
+     *
+     * @param  list<mixed>  $values
+     */
+    private function line(array $values, ?Style $style = null): Row
     {
-        $writer->addRow(Row::fromValues(['MONTHLY ACCOMPLISHMENT REPORT']));
-        $writer->addRow(Row::fromValues([$schoolName]));
-        $writer->addRow(Row::fromValues(['S.Y. '.$overview->schoolYear]));
-        $writer->addRow(Row::fromValues([
+        return new Row(array_values(array_map(
+            static fn ($value): Cell => Cell::fromValue($value, $style),
+            $values
+        )));
+    }
+
+    /**
+     * A hairline box, as on the printed sheet: the DepEd form is a ruled grid,
+     * and an unruled block of figures is not the same document.
+     */
+    private function hairline(): Border
+    {
+        return new Border(
+            new BorderPart(BorderName::TOP, width: BorderWidth::THIN),
+            new BorderPart(BorderName::BOTTOM, width: BorderWidth::THIN),
+            new BorderPart(BorderName::LEFT, width: BorderWidth::THIN),
+            new BorderPart(BorderName::RIGHT, width: BorderWidth::THIN),
+        );
+    }
+
+    /** The monthly accomplishment sheet: one block per month, newest first. */
+    private function writeAccomplishmentSheet(
+        XlsxWriter $writer,
+        SchoolHeadOverview $overview,
+        string $schoolName,
+        ?string $onlyMonth = null,
+        array $signatories = ['prepared' => '', 'noted' => ''],
+        ?ReportReview $review = null,
+    ): void {
+        $writer->getCurrentSheet()->setName('Accomplishment');
+
+        $title = (new Style)->withFontBold(true)->withFontSize(12);
+        $heading = (new Style)->withFontBold(true)->withFontSize(11);
+        $label = (new Style)->withFontBold(true);
+        $ruled = (new Style)->withBorder($this->hairline());
+        $ruledHead = (new Style)->withFontBold(true)->withBorder($this->hairline());
+
+        // The same heading block the assessment sheets carry, so every report a
+        // head exports reads as one school's set of forms.
+        $writer->addRow($this->line([$schoolName], $title));
+        $writer->addRow($this->line(['School address:']));
+        $writer->addRow($this->line(['Monthly Accomplishment Report'], $heading));
+        $writer->addRow($this->line(['S.Y. '.$overview->schoolYear]));
+        $writer->addRow($this->line([
             'Feeding day '.$overview->cycle->day().' of '.FeedingProgramCycle::DURATION_DAYS,
             $overview->daysCompleted().' feeding days recorded',
         ]));
-        $writer->addRow(Row::fromValues([]));
+        $writer->addRow($this->line(['']));
 
         foreach ($this->monthlyReports($overview) as $month) {
             if ($onlyMonth !== null && $month['month'] !== $onlyMonth) {
                 continue;
             }
 
-            $writer->addRow(Row::fromValues([strtoupper($month['label'])]));
-            $writer->addRow(Row::fromValues(['Days fed', $month['days_fed']]));
-            $writer->addRow(Row::fromValues(['Beneficiaries', $month['beneficiaries']]));
-            $writer->addRow(Row::fromValues(['Meals served', $month['meals_served']]));
-            $writer->addRow(Row::fromValues([
+            $writer->addRow($this->line([strtoupper($month['label'])], $label));
+            $writer->addRow($this->line(['Days fed', $month['days_fed']]));
+            $writer->addRow($this->line(['Beneficiaries', $month['beneficiaries']]));
+            $writer->addRow($this->line(['Meals served', $month['meals_served']]));
+            $writer->addRow($this->line([
                 'Average turnout',
                 $month['turnout'] !== null ? $this->percent($month['turnout']).'%' : '—',
             ]));
-            $writer->addRow(Row::fromValues([]));
-            $writer->addRow(Row::fromValues(['GRADE LEVEL', 'PRESENT', 'CONFIRMED MARKS', 'TURNOUT']));
+            $writer->addRow($this->line(['']));
+            $writer->addRow($this->line(['GRADE LEVEL', 'PRESENT', 'CONFIRMED MARKS', 'TURNOUT'], $ruledHead));
 
             foreach ($month['grades'] as $grade) {
-                $writer->addRow(Row::fromValues([
+                $writer->addRow($this->line([
                     $grade['label'],
                     $grade['present'],
                     $grade['confirmed'],
                     $grade['rate'] !== null ? $this->percent($grade['rate']).'%' : '—',
-                ]));
+                ], $ruled));
             }
 
-            $writer->addRow(Row::fromValues([]));
+            $writer->addRow($this->line(['']));
         }
+
+        $this->writeSignatureBlock($writer, $signatories, $review);
     }
 
     private function percent(float $value): string

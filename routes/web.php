@@ -21,7 +21,10 @@ use App\Http\Controllers\NurseController;
 use App\Http\Controllers\NutricorController;
 use App\Http\Controllers\NutritionCoordinatorController;
 use App\Http\Controllers\ParentalConsentFormController;
+use App\Http\Controllers\SchoolHeadConsentController;
 use App\Http\Controllers\SchoolHeadController;
+use App\Http\Controllers\SchoolHeadHealthController;
+use App\Http\Controllers\SchoolHeadInventoryController;
 use App\Http\Controllers\SchoolHeadMasterlistController;
 use App\Http\Controllers\SchoolHeadProgramController;
 use App\Http\Controllers\SchoolHeadReportsController;
@@ -588,11 +591,29 @@ Route::get('/dashboard/class-adviser/activity/pulse', [StudentHealthRecordContro
 Route::get('/dashboard/school-head', [SchoolHeadController::class, 'index'])
     ->name('dashboard.school-head');
 
-// The head's four tabs. Everything here is a GET but the report decision:
-// this role reads and decides while other roles write, and
-// RestrictSchoolHeadWrites enforces that over every other endpoint in the app.
+// The head's tabs. Everything here is a GET but the report decision: this role
+// reads and decides while other roles write, and RestrictSchoolHeadWrites
+// enforces that over every other endpoint in the app.
 Route::get('/dashboard/school-head/program', [SchoolHeadProgramController::class, 'index'])
     ->name('dashboard.school-head.program');
+
+// Clinic activity, aggregated. The clinical narrative stays with the nurse.
+Route::get('/dashboard/school-head/health', [SchoolHeadHealthController::class, 'index'])
+    ->name('dashboard.school-head.health');
+
+// Whether the school holds the health-services consent it must hold.
+Route::get('/dashboard/school-head/consent', [SchoolHeadConsentController::class, 'index'])
+    ->name('dashboard.school-head.consent');
+
+Route::get('/dashboard/school-head/consent/export', [SchoolHeadConsentController::class, 'export'])
+    ->name('dashboard.school-head.consent.export');
+
+// Stock levels only — receiving and dispensing belong to the clinic.
+Route::get('/dashboard/school-head/inventory', [SchoolHeadInventoryController::class, 'index'])
+    ->name('dashboard.school-head.inventory');
+
+Route::get('/dashboard/school-head/inventory/export', [SchoolHeadInventoryController::class, 'export'])
+    ->name('dashboard.school-head.inventory.export');
 
 Route::get('/dashboard/school-head/reports', [SchoolHeadReportsController::class, 'index'])
     ->name('dashboard.school-head.reports');

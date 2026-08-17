@@ -217,6 +217,154 @@
 .sh-link:hover .sh-link-text strong { color: var(--lg-emerald-dark); }
 .sh-link-text span { display: block; margin-top: 3px; font-size: .76rem; line-height: 1.5; color: var(--lg-ink-soft); }
 
+/* ══ Section link ═══════════════════════════════════════════════════
+   The way out of a summary panel and into the tab that owns it. Carried
+   by colour and weight, never by a rule under the word. ══ */
+
+.sh-section-link {
+	font-size: .76rem;
+	font-weight: 600;
+	color: var(--lg-emerald);
+	text-decoration: none;
+	white-space: nowrap;
+}
+.sh-section-link::after { content: " \203A"; font-weight: 700; }
+.sh-section-link:hover { color: var(--lg-emerald-dark); }
+.sh-section-link:focus-visible { outline: none; box-shadow: var(--lg-focus); border-radius: 4px; }
+
+/* ══ Figure grid ════════════════════════════════════════════════════
+   A block of named figures — the shape every oversight panel opens on.
+   The value is set in the system's one monospaced stack because here a
+   figure is the subject, not a value inside a sentence, and a column of
+   them has to read straight down. ══ */
+
+.sh-figs {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+	gap: 1px;
+	background: var(--lg-border);
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-card);
+	overflow: hidden;
+}
+.sh-figs.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sh-figs + .sh-panel-sub, .sh-figs + .sh-meter, .sh-figs + .table-card, .sh-figs + .sh-empty { margin-top: 16px; }
+.table-card + .sh-figs { margin-top: 16px; }
+.sh-figs-tight .sh-fig { padding: 11px 14px; }
+.sh-fig { background: var(--lg-card); padding: 13px 15px; min-width: 0; }
+.sh-fig-label {
+	font-size: .7rem;
+	font-weight: 600;
+	letter-spacing: .02em;
+	color: var(--lg-ink-soft);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.sh-fig-value {
+	margin-top: 5px;
+	font-family: var(--lg-mono);
+	font-size: 1.12rem;
+	font-weight: 600;
+	color: var(--lg-ink);
+	letter-spacing: -.01em;
+}
+/* What the figure is taken over, in the same voice a KPI card uses — so a
+   rate that reads as an em dash still says why there is nothing behind it. */
+.sh-fig-hint { margin-top: 4px; font-size: .7rem; line-height: 1.45; color: var(--lg-ink-soft); }
+
+/* ══ Meter rows ═════════════════════════════════════════════════════
+   A ranked tally: label, bar, count, share. Every bar is
+   direct-labelled, so the length is a second reading of a number that is
+   already on the row rather than the only way to get it.
+
+   One fill per meaning: the neutral teal for a plain count, the theme's
+   validated healthy green where more is better, the monitoring amber
+   where a row is a thing to watch. Never a categorical palette — these
+   lists have no fixed set of categories to learn colours for. ══ */
+
+.sh-meter { list-style: none; display: grid; gap: 9px; }
+.sh-meter + .sh-panel-sub { margin-top: 16px; }
+.sh-meter-row {
+	display: grid;
+	grid-template-columns: minmax(96px, 1.1fr) minmax(0, 2fr) 44px 48px;
+	align-items: center;
+	gap: 10px;
+}
+.sh-meter-label {
+	font-size: .78rem;
+	font-weight: 500;
+	color: var(--lg-ink);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.sh-meter-track { height: 8px; border-radius: var(--lg-r-pill); background: var(--lg-rail); overflow: hidden; }
+.sh-meter-fill { display: block; height: 100%; background: var(--lg-info); border-radius: var(--lg-r-pill); }
+.sh-meter-fill.is-healthy { background: var(--series-healthy); }
+.sh-meter-fill.is-watch { background: var(--lg-amber); }
+.sh-meter-value { font-size: .76rem; font-weight: 600; color: var(--lg-ink); text-align: right; }
+.sh-meter-share { font-size: .74rem; color: var(--lg-ink-soft); text-align: right; }
+
+/* ══ Performance rows ═══════════════════════════════════════════════
+   Five shares on one fixed 0–100 track, so the bars are comparable down
+   the column. A percentage's scale is not the data's to choose.
+
+   The two fills are the theme's validated --series-healthy /
+   --series-risk pair: four rows read "higher is better", the at-risk
+   rate reads the other way, and the row label says which without the
+   colour. ══ */
+
+.sh-perf { list-style: none; display: grid; gap: 12px; }
+.sh-perf-row {
+	display: grid;
+	grid-template-columns: minmax(120px, 1.2fr) minmax(0, 2fr) 52px 78px;
+	align-items: center;
+	gap: 12px;
+}
+.sh-perf-label { font-size: .8rem; font-weight: 600; color: var(--lg-ink); }
+.sh-perf-track { height: 9px; border-radius: var(--lg-r-pill); background: var(--lg-rail); overflow: hidden; }
+.sh-perf-fill { display: block; height: 100%; border-radius: var(--lg-r-pill); background: var(--series-healthy); }
+.sh-perf-fill.is-risk { background: var(--series-risk); }
+.sh-perf-value { font-size: .84rem; font-weight: 700; color: var(--lg-ink); text-align: right; font-family: var(--lg-mono); }
+.sh-perf-detail { font-size: .72rem; color: var(--lg-ink-soft); text-align: right; }
+
+/* The way out of a panel, sitting under its content. */
+.sh-panel-action { margin-top: 16px; }
+.sh-panel-action svg { width: 13px; height: 13px; }
+
+/* ══ Column chart ═══════════════════════════════════════════════════
+   One neutral series of counts against a clean axis, so a bar never
+   lands between two gridlines. Colour carries nothing here — the axis
+   and the direct label do the work. ══ */
+
+.sh-cols {
+	display: grid;
+	grid-template-columns: 44px minmax(0, 1fr);
+	grid-template-rows: 190px auto;
+	column-gap: 10px;
+	row-gap: 8px;
+}
+.sh-cols-axis {
+	grid-column: 1; grid-row: 1;
+	display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end;
+	font-size: .66rem; color: var(--lg-ink-soft);
+	font-variant-numeric: var(--lg-figures);
+}
+.sh-cols-plot { grid-column: 2; grid-row: 1; position: relative; }
+.sh-cols-grid { position: absolute; inset: 0; }
+.sh-cols-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--lg-border); }
+.sh-cols-bars, .sh-cols-labels { display: flex; align-items: flex-end; gap: 8px; height: 100%; }
+.sh-cols-labels { grid-column: 2; grid-row: 2; height: auto; }
+.sh-cols-labels span { flex: 1 1 0; min-width: 0; text-align: center; font-size: .7rem; color: var(--lg-ink-soft); }
+.sh-col { flex: 1 1 0; min-width: 0; max-width: 72px; height: 100%; position: relative; display: flex; align-items: flex-end; justify-content: center; }
+.sh-col-bar { width: min(30px, 78%); border-radius: 4px 4px 0 0; background: var(--lg-info); min-height: 2px; }
+.sh-col-cap {
+	position: absolute; left: 50%; transform: translateX(-50%);
+	font-size: .7rem; font-weight: 600; color: var(--lg-ink); line-height: 1; white-space: nowrap;
+	font-variant-numeric: var(--lg-figures);
+}
+
 /* ══ Program overview rows ══════════════════════════════════════════ */
 
 .program-item {
@@ -470,6 +618,10 @@
 }
 .sh-filter { flex: 1 1 150px; min-width: 140px; }
 .sh-filter .select { width: 100%; }
+/* A control that acts rather than narrows sits with the selects but keeps
+   its own height, so it lines up with their boxes and not their labels. */
+.sh-filter-action { flex: 0 0 auto; min-width: 0; display: flex; align-items: flex-end; }
+
 
 .sh-listcard { overflow: visible; }
 .sh-listhead {
@@ -623,6 +775,14 @@
 	.sh-links { grid-template-columns: 1fr; }
 	.sh-div-row { grid-template-columns: 76px 30px minmax(0, 1fr) 30px; gap: 8px; }
 }
+@media (max-width: 780px) {
+	/* The detail column is the first thing to go: the share and the count
+	   beside it already carry the reading. */
+	.sh-perf-row { grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr) 52px; }
+	.sh-perf-detail { display: none; }
+	.sh-meter-row { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.6fr) 40px 44px; }
+	.sh-figs.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 900px) {
 	.sh-header-cycle { flex: 1 1 100%; min-width: 0; }
 	.sh-cycle { min-width: 0; }
@@ -665,6 +825,8 @@
 	.sh-search,
 	.sh-links,
 	.sh-report-actions,
+	.sh-panel-action,
+	.sh-section-link,
 	.sh-seg,
 	.modal-backdrop,
 	.ann-board,
@@ -713,7 +875,11 @@
 	.sh-namebtn { display: inline; width: auto; padding: 0; background: none !important; }
 	.sh-namebtn strong { color: #000; }
 
-	.sh-queue-item, .sh-report { break-inside: avoid; }
+	.sh-queue-item, .sh-report, .sh-figs, .sh-perf-row, .sh-meter-row { break-inside: avoid; }
+	/* Bars are ink on paper: the fills print as solid grey so a share is
+	   still readable from a school printer that has no colour. */
+	.sh-perf-fill, .sh-meter-fill, .sh-col-bar { background: #666 !important; }
+	.sh-perf-track, .sh-meter-track { border: 1px solid #999; }
 	.sh-cell { border-color: #999 !important; color: #000 !important; }
 	.sh-cell.is-fed { background: #ddd !important; }
 	.sh-cell.is-low { background: #fff !important; border: 2px solid #000 !important; }

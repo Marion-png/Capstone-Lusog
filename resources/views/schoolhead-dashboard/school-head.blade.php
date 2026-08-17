@@ -58,15 +58,59 @@
 
         @include('partials.announcements')
 
+        {{-- The figures first: the head opens this screen to read them, and a
+             row of controls above them is a row of controls between the reader
+             and the reading. The scope that produced them sits underneath. --}}
         <section class="kpi-grid live-pane" id="sh-stats">
             @include('schoolhead-dashboard.partials.stat-cards')
         </section>
+
+        {{-- Scope. School year, grade and section move every panel
+             together; only the school year is a SQL filter, because every other
+             column these read is encrypted at rest. --}}
+        <form method="GET" class="card sh-toolbar" id="shToolbar">
+            <div class="sh-filter">
+                <label class="field-label" for="shYear">School year</label>
+                <select class="select" name="school_year" id="shYear">
+                    @foreach ($schoolYears as $year)
+                        <option value="{{ $year }}" @selected($filters['school_year'] === $year)>{{ $year }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="sh-filter">
+                <label class="field-label" for="shGrade">Grade</label>
+                <select class="select" name="grade" id="shGrade">
+                    <option value="">All grades</option>
+                    @foreach ($filterOptions['grades'] as $grade)
+                        <option value="{{ $grade }}" @selected($filters['grade'] === $grade)>{{ $grade }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="sh-filter">
+                <label class="field-label" for="shSection">Section</label>
+                <select class="select" name="section" id="shSection">
+                    <option value="">All sections</option>
+                    @foreach ($filterOptions['sections'] as $section)
+                        <option value="{{ $section }}" @selected($filters['section'] === $section)>{{ $section }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="sh-filter sh-filter-action">
+                @if ($filters['grade'] !== '' || $filters['section'] !== '')
+                    <a class="btn btn-secondary" href="{{ route('dashboard.school-head', ['school_year' => $filters['school_year']]) }}">Whole school</a>
+                @endif
+            </div>
+
+            {{-- No-JS fallback: without it the selects would be unreachable
+                 controls on a page that never reloads. --}}
+            <noscript><button type="submit" class="btn btn-secondary">Apply</button></noscript>
+        </form>
 
         {{-- The queue is the reason this screen exists, so it sits above
              everything that merely reports. --}}
         <section class="card section sh-queue-card">
             <div class="section-head">
-                <h2 class="section-title">What needs you today</h2>
+                <h2 class="section-title">Attention Required</h2>
                 <div class="section-meta">Generated from live records &middot; updated <span id="sh-updated">{{ $generatedAt }}</span></div>
             </div>
             <div class="live-pane" id="sh-queue">
@@ -77,7 +121,68 @@
         <section class="grid-2">
             <article class="card section">
                 <div class="section-head">
-                    <h2 class="section-title">Program overview</h2>
+                    <h2 class="section-title">Health Program Performance</h2>
+                </div>
+                <div class="live-pane" id="sh-performance">
+                    @include('schoolhead-dashboard.partials.performance')
+                </div>
+            </article>
+
+            <article class="card section">
+                <div class="section-head">
+                    <h2 class="section-title">Clinic Overview</h2>
+                    <a class="sh-section-link" href="{{ route('dashboard.school-head.health') }}">Health Overview</a>
+                </div>
+                <div class="live-pane" id="sh-clinic">
+                    @include('schoolhead-dashboard.partials.clinic-panel')
+                </div>
+            </article>
+        </section>
+
+        <section class="card section">
+            <div class="section-head">
+                <h2 class="section-title">Feeding Program</h2>
+                <a class="sh-section-link" href="{{ route('dashboard.school-head.program') }}">Feeding Dashboard</a>
+            </div>
+            <div class="live-pane" id="sh-feeding">
+                @include('schoolhead-dashboard.partials.feeding-panel')
+            </div>
+        </section>
+
+        <section class="card section">
+            <div class="section-head">
+                <h2 class="section-title">Nutritional Assessment</h2>
+                <a class="sh-section-link" href="{{ route('dashboard.school-head.reports') }}">Reports</a>
+            </div>
+            <div class="live-pane" id="sh-nutrition">
+                @include('schoolhead-dashboard.partials.nutrition-panel')
+            </div>
+        </section>
+
+        <section class="grid-2">
+            <article class="card section">
+                <div class="section-head">
+                    <h2 class="section-title">Consent Compliance</h2>
+                </div>
+                <div class="live-pane" id="sh-consent">
+                    @include('schoolhead-dashboard.partials.consent-panel')
+                </div>
+            </article>
+
+            <article class="card section">
+                <div class="section-head">
+                    <h2 class="section-title">Medicine Inventory</h2>
+                </div>
+                <div class="live-pane" id="sh-inventory">
+                    @include('schoolhead-dashboard.partials.inventory-panel')
+                </div>
+            </article>
+        </section>
+
+        <section class="grid-2">
+            <article class="card section">
+                <div class="section-head">
+                    <h2 class="section-title">Program Overview</h2>
                     <div class="section-meta">From this school&rsquo;s own records</div>
                 </div>
                 <div class="live-pane" id="sh-programs">
@@ -87,7 +192,7 @@
 
             <article class="card section">
                 <div class="section-head">
-                    <h2 class="section-title">Grade level snapshot</h2>
+                    <h2 class="section-title">Grade Level Snapshot</h2>
                     <div class="section-meta">Latest weighing</div>
                 </div>
                 <div class="live-pane" id="sh-snapshot">
@@ -96,7 +201,7 @@
             </article>
         </section>
 
-        {{-- Where the head goes next. Three cards, one per remaining tab. --}}
+        {{-- Where the head goes next. One card per remaining tab. --}}
         <section class="sh-links">
             <a class="card sh-link" href="{{ route('dashboard.school-head.program') }}">
                 <span class="sh-link-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg></span>
@@ -125,6 +230,15 @@
 </div>
 <script>
     (function () {
+        // The scope selects reload the page: every panel is server-rendered
+        // from one scoped reading, so a filter is a new request, never a
+        // client-side hide.
+        document.querySelectorAll('#shToolbar select').forEach(function (control) {
+            control.addEventListener('change', function () {
+                control.form.requestSubmit ? control.form.requestSubmit() : control.form.submit();
+            });
+        });
+
         const root = document.getElementById('sh-dashboard');
         if (!root) {
             return;
@@ -136,9 +250,17 @@
             cycle: document.getElementById('sh-cycle'),
             snapshot: document.getElementById('sh-snapshot'),
             programs: document.getElementById('sh-programs'),
+            performance: document.getElementById('sh-performance'),
+            clinic: document.getElementById('sh-clinic'),
+            feeding: document.getElementById('sh-feeding'),
+            nutrition: document.getElementById('sh-nutrition'),
+            consent: document.getElementById('sh-consent'),
+            inventory: document.getElementById('sh-inventory'),
         };
         const updated = document.getElementById('sh-updated');
-        const metricsUrl = root.dataset.metricsUrl;
+        // The refresh has to carry the page's own scope, or a filtered
+        // dashboard would silently redraw itself as the whole school.
+        const metricsUrl = root.dataset.metricsUrl + (window.location.search || '');
         const pulseUrl = root.dataset.pulseUrl;
 
         // Cheap enough to ask often; the answer is a stamp, and the expensive

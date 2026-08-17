@@ -160,7 +160,7 @@
 				<label class="field-label" for="mlAttendance">Attendance</label>
 				<select class="select" name="attendance" id="mlAttendance">
 					<option value="">All</option>
-					<option value="at_risk" @selected($filters['attendance'] === 'at_risk')>At risk</option>
+					<option value="at_risk" @selected($filters['attendance'] === 'at_risk')>At Risk</option>
 					<option value="early_monitoring" @selected($filters['attendance'] === 'early_monitoring')>Early monitoring</option>
 					<option value="on_track" @selected($filters['attendance'] === 'on_track')>On track</option>
 					<option value="no_sessions" @selected($filters['attendance'] === 'no_sessions')>No confirmed session</option>
@@ -265,7 +265,7 @@
 			<template class="sh-detail-source" data-detail-for="{{ $row['id'] }}">
 				<div class="sh-detail">
 					<section class="sh-panel-box">
-						<h3 class="sh-panel-title">Measurement history</h3>
+						<h3 class="sh-panel-title">Measurement History</h3>
 						@if (empty($row['history']))
 							<p class="sh-empty">No measurement has been recorded for this learner.</p>
 						@else
@@ -307,7 +307,7 @@
 					</section>
 
 					<section class="sh-panel-box">
-						<h3 class="sh-panel-title">Feeding programme</h3>
+						<h3 class="sh-panel-title">Feeding Programme</h3>
 						<dl class="sh-facts">
 							<div class="sh-fact"><dt>Standing</dt><dd>{{ $row['standing_label'] }}</dd></div>
 							@if ($row['enrolled_on'])

@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\StudentHealthRecord;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
+use App\Support\SchoolHeadHealthOverview;
 use App\Support\SchoolHeadOverview;
+use App\Support\SchoolHeadPulse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -13,32 +15,33 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
- * The School Head's Dashboard — "what needs me today".
+ * The School Head's Dashboard — oversight and decision support.
  *
- * It is deliberately not a smaller copy of the other three tabs. Those answer
- * how the programme is running, what has to be signed and who is on the roll;
- * this one surfaces the exceptions and hands off to whichever tab resolves
- * them. Every item in the action queue is generated from a live condition in
- * the school's own records — there is no fixed list, and an item disappears the
- * moment the condition it describes stops being true.
+ * It answers three questions and nothing else: what is happening in the clinic
+ * and the feeding programme, what needs management attention, and whether the
+ * school is meeting its health-programme obligations. It is deliberately not a
+ * smaller copy of the operational tabs: there is no encoding here, no
+ * consultation form, no attendance mark, no inventory movement — those belong
+ * to the roles that own them, and RestrictSchoolHeadWrites refuses them
+ * server-side.
  *
- * Every figure comes from SchoolHeadOverview, which all four tabs read, so the
- * Dashboard's count of undernourished learners and the Reports tab's count of
- * the same children cannot drift apart.
+ * Two readings feed every panel: SchoolHeadOverview (roster, feeding,
+ * nutrition) and SchoolHeadHealthOverview (clinic, consent, inventory). Both
+ * are taken once per request and shared, so the Dashboard's consultation count
+ * and the Health tab's, or its consent rate and the Consent tab's, cannot
+ * drift apart.
+ *
+ * Four filters scope the whole screen — school year, grade and section move
+ * every panel together; only the school year is a SQL filter, because every
+ * other column the filters read is encrypted at rest.
  */
 class SchoolHeadController extends Controller
 {
-    /** Tables whose rows can move any number on the dashboard. */
-    private const WATCHED_TABLES = [
-        'student_health_records',
-        'parental_consent_forms',
-        'health_assessments',
-        'feeding_attendances',
-        'attendance_imports',
-    ];
-
     /** How close the cycle has to be to its end before the head is warned. */
     private const ENDLINE_NOTICE_DAYS = 30;
+
+    /** Consent completion under this share is named on the queue. */
+    private const CONSENT_TARGET_PERCENT = 95.0;
 
     public function index(Request $request): View
     {
@@ -71,6 +74,12 @@ class SchoolHeadController extends Controller
                 'cycle' => view('schoolhead-dashboard.partials.cycle-bar', $metrics)->render(),
                 'snapshot' => view('schoolhead-dashboard.partials.grade-snapshot', $metrics)->render(),
                 'programs' => view('schoolhead-dashboard.partials.program-overview', $metrics)->render(),
+                'performance' => view('schoolhead-dashboard.partials.performance', $metrics)->render(),
+                'clinic' => view('schoolhead-dashboard.partials.clinic-panel', $metrics)->render(),
+                'feeding' => view('schoolhead-dashboard.partials.feeding-panel', $metrics)->render(),
+                'nutrition' => view('schoolhead-dashboard.partials.nutrition-panel', $metrics)->render(),
+                'consent' => view('schoolhead-dashboard.partials.consent-panel', $metrics)->render(),
+                'inventory' => view('schoolhead-dashboard.partials.inventory-panel', $metrics)->render(),
             ],
         ]);
     }
@@ -95,11 +104,44 @@ class SchoolHeadController extends Controller
     private function buildMetrics(Request $request): array
     {
         $institutionId = $request->session()->get('active_institution_id');
-        $overview = SchoolHeadOverview::for($institutionId);
+        $years = SchoolHeadOverview::schoolYears($institutionId);
+
+        $schoolYear = trim((string) $request->query('school_year', ''));
+        if (! in_array($schoolYear, $years, true)) {
+            $schoolYear = $years[0] ?? StudentHealthRecord::currentSchoolYear();
+        }
+
+        // The whole school first: the filter selects have to offer every grade
+        // and section on the roll, not only those left after the last choice.
+        $school = SchoolHeadOverview::for($institutionId, $schoolYear);
+        $options = $school->sectionOptions();
+
+        $grade = trim((string) $request->query('grade', ''));
+        if (! in_array($grade, $options['grades'], true)) {
+            $grade = '';
+        }
+
+        $section = trim((string) $request->query('section', ''));
+        if (! in_array($section, $options['sections'], true)) {
+            $section = '';
+        }
+
+        $overview = $school->scopedTo($grade, $section);
+        // One filter moves every panel: a narrowed roster narrows the clinic
+        // figures too, rather than leaving them reporting the whole school.
+        $health = SchoolHeadHealthOverview::for(
+            $institutionId,
+            $schoolYear,
+            $overview->records,
+            $grade !== '' || $section !== '',
+        );
 
         $trend = $overview->undernourishedTrend();
         $outcome = $overview->outcome();
         $turnout = $overview->averageTurnout();
+        $clinic = $health->clinic();
+        $consent = $health->consent();
+        $inventory = $health->inventory();
         $sections = $overview->records
             ->map(fn (StudentHealthRecord $record): string => trim((string) $record->section))
             ->filter()
@@ -109,7 +151,10 @@ class SchoolHeadController extends Controller
         return [
             'headName' => trim((string) $request->session()->get('active_name', '')) ?: 'School Head',
             'schoolName' => $request->session()->get('active_school_name', 'this school'),
-            'schoolYear' => $overview->schoolYear,
+            'schoolYear' => $schoolYear,
+            'schoolYears' => $years,
+            'filters' => ['school_year' => $schoolYear, 'grade' => $grade, 'section' => $section],
+            'filterOptions' => $options,
             'todayLabel' => now()->format('l, j F Y'),
             'generatedAt' => now()->format('g:i A'),
             'cycle' => $this->buildCycle($overview),
@@ -126,8 +171,25 @@ class SchoolHeadController extends Controller
                 'turnout' => $turnout,
                 'turnout_days' => $overview->daysCompleted(),
                 'at_risk' => $overview->atRiskCount(),
+                'consultations' => $clinic['total'],
+                'consultations_this_month' => $clinic['this_month'],
+                'referrals' => $clinic['referred'],
+                'referrals_this_month' => $clinic['referred_this_month'],
+                'clinic_month_label' => $clinic['month_label'],
+                'consent_rate' => $consent['rate'],
+                'consent_valid' => $consent['valid'],
+                'consent_missing' => $consent['missing'],
+                'medicines_low' => $inventory['low'] + $inventory['out'],
+                'medicines_out' => $inventory['out'],
+                'medicines_tracked' => $inventory['tracked'],
             ],
-            'queue' => $this->buildQueue($overview),
+            'clinic' => $clinic,
+            'consent' => $consent,
+            'inventory' => $inventory,
+            'feeding' => $this->buildFeeding($overview, $outcome),
+            'nutrition' => $this->buildNutrition($overview, $outcome),
+            'performance' => $this->buildPerformance($overview, $consent, $outcome, $turnout),
+            'queue' => $this->buildQueue($overview, $consent, $inventory, $clinic),
             'gradeSnapshot' => $this->buildGradeSnapshot($overview),
             'programs' => $this->buildPrograms($overview),
         ];
@@ -157,16 +219,174 @@ class SchoolHeadController extends Controller
     }
 
     /**
+     * The feeding programme at a glance, as the head is accountable for it.
+     *
+     * Every figure is the one the coordinator's own tabs report — this panel
+     * re-decides nothing, it only gathers.
+     *
+     * @param  array<string, mixed>  $outcome
+     * @return array<string, mixed>
+     */
+    private function buildFeeding(SchoolHeadOverview $overview, array $outcome): array
+    {
+        $baseline = $overview->statusCounts('baseline', $overview->beneficiaries);
+        $sessions = $overview->sessions();
+        $today = now()->toDateString();
+
+        $todaySession = collect($sessions)->firstWhere('date', $today);
+        $latest = $sessions === [] ? null : $sessions[count($sessions) - 1];
+
+        return [
+            'beneficiaries' => $overview->beneficiaries->count(),
+            'severely_wasted' => $baseline['Severely Wasted'],
+            'wasted' => $baseline['Wasted'],
+            'pending' => $overview->pendingEnrollment()->count(),
+            'at_risk' => $overview->atRiskCount(),
+            'observing' => $overview->observingCount(),
+            'days_completed' => $overview->daysCompleted(),
+            // Today's session only when today is actually a recorded feeding
+            // day: an unheld day has no turnout, and 0% would say it did.
+            'today_rate' => $todaySession['rate'] ?? null,
+            'today_present' => $todaySession['present'] ?? 0,
+            'today_recorded' => $todaySession !== null,
+            'latest_label' => $latest['label'] ?? null,
+            'latest_rate' => $latest['rate'] ?? null,
+            'cumulative_rate' => $overview->averageTurnout(),
+            'meals_served' => $overview->mealsServed(),
+            'endline_measured' => $outcome['measured'],
+            'endline_rate' => $outcome['beneficiaries'] > 0
+                ? round(($outcome['measured'] / $outcome['beneficiaries']) * 100, 1)
+                : null,
+        ];
+    }
+
+    /**
+     * The consolidated baseline-to-endline picture over the whole roster.
+     *
+     * A learner nobody weighed is carried in its own row and never folded into
+     * Normal, so a head reading "5,585 Normal" is not reading children no one
+     * has looked at.
+     *
+     * @param  array<string, mixed>  $outcome
+     * @return array<string, mixed>
+     */
+    private function buildNutrition(SchoolHeadOverview $overview, array $outcome): array
+    {
+        $baseline = $overview->statusCounts('baseline');
+        $endline = $overview->statusCounts('endline');
+        $total = $overview->records->count();
+
+        $baselineMeasured = $total - $baseline[SchoolHeadOverview::NOT_MEASURED];
+        $endlineMeasured = $total - $endline[SchoolHeadOverview::NOT_MEASURED];
+
+        $rows = array_map(static fn (string $status): array => [
+            'label' => $status,
+            'baseline' => $baseline[$status],
+            'endline' => $endline[$status],
+            'baseline_share' => $baselineMeasured > 0 ? round(($baseline[$status] / $baselineMeasured) * 100, 1) : null,
+            'endline_share' => $endlineMeasured > 0 ? round(($endline[$status] / $endlineMeasured) * 100, 1) : null,
+            'change' => $endlineMeasured > 0 ? $endline[$status] - $baseline[$status] : null,
+        ], SchoolHeadOverview::NUTRITION_SCALE);
+
+        return [
+            'rows' => $rows,
+            'baseline_measured' => $baselineMeasured,
+            'endline_measured' => $endlineMeasured,
+            'not_measured' => $baseline[SchoolHeadOverview::NOT_MEASURED],
+            'total' => $total,
+            'has_endline' => $endlineMeasured > 0,
+            'improved' => $outcome['improved'],
+            'improved_rate' => $outcome['improved_rate'],
+            'rehabilitated' => $outcome['rehabilitated'],
+            'rehabilitation_rate' => $outcome['rate'],
+            'beneficiaries' => $outcome['beneficiaries'],
+        ];
+    }
+
+    /**
+     * How the school is performing against its health-programme obligations.
+     *
+     * Five shares, each printed with the counts behind it, and each NULL —
+     * an em dash — where the denominator is empty. A programme nobody has
+     * started is not a programme at 0%.
+     *
+     * @param  array<string, mixed>  $consent
+     * @param  array<string, mixed>  $outcome
+     * @return list<array<string, mixed>>
+     */
+    private function buildPerformance(
+        SchoolHeadOverview $overview,
+        array $consent,
+        array $outcome,
+        ?float $turnout,
+    ): array {
+        $total = $overview->records->count();
+        $beneficiaries = $overview->beneficiaries->count();
+        $atRisk = $overview->atRiskCount();
+
+        $baselineMeasured = $total - $overview->statusCounts('baseline')[SchoolHeadOverview::NOT_MEASURED];
+
+        return [
+            [
+                'label' => 'Consent Completion',
+                'value' => $consent['rate'],
+                'detail' => $total > 0 ? $consent['valid'].' of '.$total : null,
+                // High is good for four of the five; the at-risk rate is the
+                // one where a big number is the bad news, and the bar is drawn
+                // in the risk colour so the direction is never guessed.
+                'tone' => 'good',
+            ],
+            [
+                'label' => 'SBFP Attendance',
+                'value' => $turnout,
+                'detail' => $overview->daysCompleted() > 0
+                    ? $overview->daysCompleted().' recorded feeding '.$this->plural('day', 'days', $overview->daysCompleted())
+                    : null,
+                'tone' => 'good',
+            ],
+            [
+                'label' => 'SBFP At-Risk Rate',
+                'value' => $beneficiaries > 0 ? round(($atRisk / $beneficiaries) * 100, 1) : null,
+                'detail' => $beneficiaries > 0 ? $atRisk.' of '.$beneficiaries : null,
+                'tone' => 'risk',
+            ],
+            [
+                'label' => 'Baseline Assessments',
+                'value' => $total > 0 ? round(($baselineMeasured / $total) * 100, 1) : null,
+                'detail' => $total > 0 ? $baselineMeasured.' of '.$total : null,
+                'tone' => 'good',
+            ],
+            [
+                'label' => 'Endline Assessments',
+                'value' => $outcome['beneficiaries'] > 0
+                    ? round(($outcome['measured'] / $outcome['beneficiaries']) * 100, 1)
+                    : null,
+                'detail' => $outcome['beneficiaries'] > 0
+                    ? $outcome['measured'].' of '.$outcome['beneficiaries']
+                    : null,
+                'tone' => 'good',
+            ],
+        ];
+    }
+
+    /**
      * The queue, generated from live conditions.
      *
      * Every item names the condition, the figure behind it and where it is
      * resolved. None of them is a stored to-do: an item is present because the
      * records say so this second, and gone when they no longer do.
      *
+     * @param  array<string, mixed>  $consent
+     * @param  array<string, mixed>  $inventory
+     * @param  array<string, mixed>  $clinic
      * @return list<array<string, mixed>>
      */
-    private function buildQueue(SchoolHeadOverview $overview): array
-    {
+    private function buildQueue(
+        SchoolHeadOverview $overview,
+        array $consent,
+        array $inventory,
+        array $clinic,
+    ): array {
         $items = [];
         $today = now()->toDateString();
         $sessionDates = $overview->sessionDates();
@@ -183,7 +403,37 @@ class SchoolHeadController extends Controller
             ];
         }
 
-        // 2. A report is only as good as the marks behind it, so unread ones
+        // 2. Consent the school is required to hold and does not.
+        if ($consent['missing'] > 0 && $consent['required'] > 0) {
+            $below = $consent['rate'] !== null && $consent['rate'] < self::CONSENT_TARGET_PERCENT;
+            $items[] = [
+                'severity' => $below ? 'high' : 'medium',
+                'title' => $consent['missing'].' '.$this->plural('learner', 'learners', $consent['missing']).' without valid health services consent',
+                'detail' => 'Completion is '.$this->percent((float) ($consent['rate'] ?? 0)).'% of '.$consent['required'].' on the roll.',
+                'action' => ['label' => 'Open consent compliance', 'url' => route('dashboard.school-head.consent')],
+            ];
+        }
+
+        // 3. Stock the clinic can no longer dispense from.
+        if ($inventory['out'] > 0) {
+            $items[] = [
+                'severity' => 'high',
+                'title' => $inventory['out'].' '.$this->plural('medicine', 'medicines', $inventory['out']).' out of stock',
+                'detail' => 'The clinic cannot dispense them until they are received.',
+                'action' => ['label' => 'Open inventory', 'url' => route('dashboard.school-head.inventory')],
+            ];
+        }
+
+        if ($inventory['low'] > 0) {
+            $items[] = [
+                'severity' => 'medium',
+                'title' => $inventory['low'].' '.$this->plural('medicine', 'medicines', $inventory['low']).' below the reorder threshold',
+                'detail' => 'Each is under the minimum the clinic set for it.',
+                'action' => ['label' => 'Open inventory', 'url' => route('dashboard.school-head.inventory')],
+            ];
+        }
+
+        // 4. A report is only as good as the marks behind it, so unread ones
         //    are named before anything is concluded from them.
         $unconfirmed = $overview->unconfirmedMarkCount();
         if ($unconfirmed > 0) {
@@ -195,7 +445,7 @@ class SchoolHeadController extends Controller
             ];
         }
 
-        // 3. Today's session. Only once the cycle is actually running — before
+        // 5. Today's session. Only once the cycle is actually running — before
         //    the first sheet there is no session to be missing.
         if ($overview->cycle->hasStarted() && $sessionDates !== [] && ! in_array($today, $sessionDates, true)) {
             $items[] = [
@@ -207,7 +457,7 @@ class SchoolHeadController extends Controller
             ];
         }
 
-        // 4. Feeding days whose turnout fell below the monitoring line.
+        // 6. Feeding days whose turnout fell below the monitoring line.
         $lowDays = collect($overview->sessions())->where('state', 'low');
         if ($lowDays->isNotEmpty()) {
             $worst = $lowDays->sortBy('rate')->first();
@@ -220,7 +470,7 @@ class SchoolHeadController extends Controller
             ];
         }
 
-        // 5. Qualified by the adviser's measurement, not yet enrolled by the
+        // 7. Qualified by the adviser's measurement, not yet enrolled by the
         //    coordinator. The head cannot enrol — this is visibility, not an act.
         $pending = $overview->pendingEnrollment()->count();
         if ($pending > 0) {
@@ -232,7 +482,7 @@ class SchoolHeadController extends Controller
             ];
         }
 
-        // 6. A beneficiary with no baseline has nothing to be compared against
+        // 8. A beneficiary with no baseline has nothing to be compared against
         //    at endline, so the whole outcome report loses them.
         $noBaseline = $overview->beneficiaries
             ->filter(fn (StudentHealthRecord $record): bool => SchoolHeadOverview::phaseStatus($record, 'baseline') === '')
@@ -246,8 +496,20 @@ class SchoolHeadController extends Controller
             ];
         }
 
-        // 7. The endline: overdue once the cycle has run its length, a heads-up
-        //    while it is still inside the last stretch.
+        // 9. Clinic referrals this month: a learner sent out of school is a
+        //    management fact, not a clinical one.
+        if ($clinic['referred_this_month'] > 0) {
+            $items[] = [
+                'severity' => 'info',
+                'title' => $clinic['referred_this_month'].' clinic '.$this->plural('referral', 'referrals', $clinic['referred_this_month'])
+                    .' in '.$clinic['month_label'],
+                'detail' => 'Out of '.$clinic['this_month'].' '.$this->plural('consultation', 'consultations', $clinic['this_month']).' logged this month.',
+                'action' => ['label' => 'Open health overview', 'url' => route('dashboard.school-head.health')],
+            ];
+        }
+
+        // 10. The endline: overdue once the cycle has run its length, a heads-up
+        //     while it is still inside the last stretch.
         $outcome = $overview->outcome();
         if ($outcome['beneficiaries'] > 0 && $outcome['not_measured'] > 0) {
             if ($overview->cycle->isComplete()) {
@@ -392,36 +654,13 @@ class SchoolHeadController extends Controller
     }
 
     /**
-     * A fingerprint of every table the dashboard reads. Row counts and
-     * last-touched timestamps only — no column that holds personal data is
-     * touched, so the polling endpoint stays free of it.
+     * A fingerprint of every table the head's screens read — see
+     * SchoolHeadPulse, which every School Head tab shares so that an adviser's
+     * or a nurse's entry reaches all of them on the same signal.
      */
     private function metricsStamp(Request $request): string
     {
-        $institutionId = $request->session()->get('active_institution_id');
-        $parts = [];
-
-        foreach (self::WATCHED_TABLES as $table) {
-            if (! SchemaCache::hasTable($table)) {
-                $parts[] = '-';
-
-                continue;
-            }
-
-            $query = DB::table($table);
-            // The child tables inherit their school scope from the parent
-            // record, so only the owning tables filter. A neighbouring school's
-            // write can therefore cost one needless refetch — never a missed
-            // change, and nothing of theirs is ever read.
-            if ($institutionId && SchemaCache::hasColumn($table, 'institution_id')) {
-                $query->where('institution_id', $institutionId);
-            }
-
-            $row = $query->selectRaw('COUNT(*) as row_count, MAX(updated_at) as last_touched')->first();
-            $parts[] = ((int) ($row->row_count ?? 0)).'@'.((string) ($row->last_touched ?? ''));
-        }
-
-        return md5(implode('|', $parts));
+        return SchoolHeadPulse::stamp($request->session()->get('active_institution_id'));
     }
 
     private function isSchoolHead(Request $request): bool

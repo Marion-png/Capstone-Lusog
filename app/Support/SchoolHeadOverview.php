@@ -107,9 +107,14 @@ final class SchoolHeadOverview
     /**
      * The school's roster for one year, with its marks, its rule and its cycle.
      *
-     * Scoped by institution like every other read of school-owned data. A
-     * session with no institution (legacy rows) falls through unscoped exactly
-     * as StudentHealthRecord::forActiveInstitution does.
+     * **The scope is required, not optional.** Without an institution this
+     * returns nothing rather than falling through to every school's children —
+     * the same rule FeedingEnrollmentController::schoolRecords() follows, and
+     * what makes the handover between roles exact: an adviser's entry reaches
+     * this head because the adviser stamped their own institution_id on it, and
+     * a neighbouring school's entry can never arrive here by accident. A
+     * scoped role with no institution is already ejected by InstitutionScope;
+     * this is the second lock on the same door.
      */
     public static function for(?int $institutionId, ?string $schoolYear = null): self
     {
@@ -119,9 +124,9 @@ final class SchoolHeadOverview
 
         $records = collect();
 
-        if (SchemaCache::hasTable('student_health_records')) {
+        if ($institutionId && SchemaCache::hasTable('student_health_records')) {
             $records = StudentHealthRecord::query()
-                ->when($institutionId, fn ($query) => $query->where('institution_id', $institutionId))
+                ->where('institution_id', $institutionId)
                 // school_year is plain precisely so it can be a WHERE; every
                 // other narrowing below happens in PHP because the columns are
                 // encrypted at rest.
@@ -149,17 +154,74 @@ final class SchoolHeadOverview
         );
     }
 
+    /**
+     * The same reading, narrowed to one grade or one section.
+     *
+     * The marks, the rule and the cycle are the ones already fetched, so a
+     * filtered dashboard costs no second query and cannot judge a learner by a
+     * different threshold than the unfiltered one did.
+     *
+     * The session dates deliberately stay the SCHOOL's feeding days rather than
+     * the filtered roll's: a day the school fed but no sheet covered this grade
+     * is a gap in the paperwork, and shortening the denominator would hide it.
+     */
+    public function scopedTo(string $grade = '', string $section = ''): self
+    {
+        if (trim($grade) === '' && trim($section) === '') {
+            return $this;
+        }
+
+        $records = FeedingBeneficiarySummary::scopeToSection($this->records, [
+            'grade' => $grade,
+            'section' => $section,
+        ]);
+
+        $keep = array_flip($records->pluck('id')->all());
+
+        return new self(
+            $this->institutionId,
+            $this->schoolYear,
+            $records,
+            $records
+                ->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isBeneficiary($record))
+                ->values(),
+            $this->rule,
+            $this->cycle,
+            array_intersect_key($this->marksByRecord, $keep),
+            $this->sessionDates,
+        );
+    }
+
+    /**
+     * The grades and sections this school's roster actually contains, for the
+     * filter selects. Read off the section string the adviser typed, so a
+     * roster with no grade in it offers "Unassigned" rather than nothing.
+     *
+     * @return array{grades: list<string>, sections: list<string>}
+     */
+    public function sectionOptions(): array
+    {
+        $split = $this->records->map(
+            fn (StudentHealthRecord $record): array => FeedingBeneficiarySummary::splitSection((string) $record->section)
+        );
+
+        return [
+            'grades' => $split->pluck(0)->filter()->unique()->sort(SORT_NATURAL)->values()->all(),
+            'sections' => $split->pluck(1)->filter()->unique()->sort(SORT_NATURAL)->values()->all(),
+        ];
+    }
+
     /** The school years this school has records for, newest first. */
     public static function schoolYears(?int $institutionId): array
     {
         $current = StudentHealthRecord::currentSchoolYear();
 
-        if (! SchemaCache::hasTable('student_health_records')) {
+        if (! $institutionId || ! SchemaCache::hasTable('student_health_records')) {
             return [$current];
         }
 
         $years = StudentHealthRecord::query()
-            ->when($institutionId, fn ($query) => $query->where('institution_id', $institutionId))
+            ->where('institution_id', $institutionId)
             ->distinct()
             ->orderByDesc('school_year')
             ->pluck('school_year')

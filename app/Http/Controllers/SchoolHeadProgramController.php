@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Support\FeedingProgramCycle;
 use App\Support\SchoolHeadOverview;
+use App\Support\SchoolHeadPulse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -47,6 +48,7 @@ class SchoolHeadProgramController extends Controller
             'rule' => $overview->rule->describe(),
             'atRisk' => $overview->atRiskCount(),
             'observing' => $overview->observingCount(),
+            'stamp' => SchoolHeadPulse::stamp($institutionId),
         ]);
     }
 

@@ -2,10 +2,14 @@
     Shared School Head sidebar. Same panel as every other role's rail
     (resources/css/role-sidebar.css, .asb-*) so the colorway and layout match
     the Class Adviser / Feeding Coordinator side. Pass $active to highlight the
-    current item: 'dashboard' | 'program' | 'reports' | 'masterlist'.
+    current item: 'dashboard' | 'health' | 'masterlist' | 'program' | 'consent'
+    | 'inventory' | 'reports'.
 
-    The four items are the head's whole job in order — what needs me today,
-    how the programme is running, what I have to sign, and who is on the roll.
+    Grouped by the thing the head is accountable for rather than by the tab's
+    machinery — clinic, learners, feeding, compliance, oversight — because the
+    role's job is oversight across every programme, not one workflow in order.
+    Nothing on the rail leads to an encoding screen: this role reads, decides
+    and exports, and RestrictSchoolHeadWrites enforces that server-side.
 
     The panel is a fixed width and never opens or closes on hover — a cursor
     crossing the rail must not move the page's content.
@@ -32,17 +36,39 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
             <span class="asb-link-text">Dashboard</span>
         </a>
+
+        <div class="asb-nav-label">Health</div>
+        <a href="{{ route('dashboard.school-head.health') }}" class="asb-link {{ $active === 'health' ? 'active' : '' }}" title="Health Overview">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            <span class="asb-link-text">Health Overview</span>
+        </a>
+
+        <div class="asb-nav-label">Students</div>
+        <a href="{{ route('dashboard.school-head.masterlist') }}" class="asb-link {{ $active === 'masterlist' ? 'active' : '' }}" title="Masterlist">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+            <span class="asb-link-text">Masterlist</span>
+        </a>
+
+        <div class="asb-nav-label">Feeding Program</div>
         <a href="{{ route('dashboard.school-head.program') }}" class="asb-link {{ $active === 'program' ? 'active' : '' }}" title="Feeding Program">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>
             <span class="asb-link-text">Feeding Program</span>
         </a>
+
+        <div class="asb-nav-label">Compliance</div>
+        <a href="{{ route('dashboard.school-head.consent') }}" class="asb-link {{ $active === 'consent' ? 'active' : '' }}" title="Consent Compliance">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg>
+            <span class="asb-link-text">Consent Compliance</span>
+        </a>
+        <a href="{{ route('dashboard.school-head.inventory') }}" class="asb-link {{ $active === 'inventory' ? 'active' : '' }}" title="Medicine Inventory">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>
+            <span class="asb-link-text">Medicine Inventory</span>
+        </a>
+
+        <div class="asb-nav-label">Oversight</div>
         <a href="{{ route('dashboard.school-head.reports') }}" class="asb-link {{ $active === 'reports' ? 'active' : '' }}" title="Reports">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg>
             <span class="asb-link-text">Reports</span>
-        </a>
-        <a href="{{ route('dashboard.school-head.masterlist') }}" class="asb-link {{ $active === 'masterlist' ? 'active' : '' }}" title="Masterlist">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
-            <span class="asb-link-text">Masterlist</span>
         </a>
     </nav>
 

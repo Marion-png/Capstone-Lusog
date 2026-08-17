@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\FeedingAttendance;
 use App\Models\StudentHealthRecord;
+use App\Support\BmiAssessmentReport;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingNutritionProgress;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
+use App\Support\SchoolSignatories;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -58,282 +60,20 @@ class FeedingCoordinatorController extends Controller
         return view('feedingcor-dashboard.sbfp-forms', [
             'studentsByGrade' => $studentsByGrade,
             'gradeOptions' => array_keys($studentsByGrade),
-            'bmiValues' => $this->buildBmiValues($records),
+            'bmiValues' => BmiAssessmentReport::values($records),
             'schoolYear' => StudentHealthRecord::currentSchoolYear(),
             'nurseName' => $this->resolveSchoolNurseName($institutionId, (string) $request->session()->get('active_school_name', '')),
         ]);
     }
 
     /**
-     * The School Nurse registered to this coordinator's school, used to
-     * pre-fill the "Prepared by" signatory on the BMI reports. Matched on the
-     * same institution (falling back to the plain school name), so a nurse from
-     * another school is never pulled in.
+     * The nurse whose name pre-fills the form's Prepared-by line. Read through
+     * SchoolSignatories so the printed form and the School Head's exported one
+     * are signed by the same person.
      */
     private function resolveSchoolNurseName(?int $institutionId, string $schoolName): string
     {
-        if (! SchemaCache::hasTable('accounts')) {
-            return '';
-        }
-
-        if ($institutionId) {
-            $name = (string) (DB::table('accounts')
-                ->where('role', 'school_nurse')
-                ->where('institution_id', $institutionId)
-                ->orderBy('id')
-                ->value('name') ?? '');
-            if ($name !== '') {
-                return $name;
-            }
-        }
-
-        if (trim($schoolName) !== '') {
-            return (string) (DB::table('accounts')
-                ->where('role', 'school_nurse')
-                ->where('school_name', $schoolName)
-                ->orderBy('id')
-                ->value('name') ?? '');
-        }
-
-        return '';
-    }
-
-    /**
-     * Tabulates adviser-entered learners into the DepEd BMI report grids —
-     * Grades 7-12 plus Overall — for both the Baseline (prefix "bmib") and the
-     * Final/endline (prefix "bmif") assessments. Every cell is derived here (in
-     * PHP, since names/statuses are encrypted at rest) and rendered read-only,
-     * so the reports always mirror the current roster with no hand-keying.
-     *
-     * @param  Collection<int, StudentHealthRecord>  $records
-     * @return array<string, int|string>
-     */
-    private function buildBmiValues(Collection $records): array
-    {
-        // Junior High only, from the one declaration of what the programme
-        // covers — the grids and the eligibility test must never disagree
-        // about which grades exist.
-        $gradeKeys = array_map(
-            static fn (int $grade): string => 'g'.$grade,
-            FeedingBeneficiarySummary::GRADE_LEVELS
-        );
-        $sexes = ['male', 'female'];
-        $nsCols = ['sw', 'w', 'n', 'ow', 'ob'];
-        $hfaCols = ['ss', 'st', 'hn', 't'];
-
-        // counts[phase][gradeKey][sex][column] — phase is "bmib" or "bmif".
-        $counts = [];
-        foreach (['bmib', 'bmif'] as $phase) {
-            foreach ($gradeKeys as $gk) {
-                foreach ($sexes as $sex) {
-                    foreach (array_merge($nsCols, $hfaCols) as $col) {
-                        $counts[$phase][$gk][$sex][$col] = 0;
-                    }
-                }
-            }
-        }
-
-        foreach ($records as $record) {
-            [$gradeLabel] = $this->splitSection((string) $record->section);
-            $gk = $this->bmiGradeKey($gradeLabel);
-            if ($gk === null) {
-                continue; // Report only covers Grades 7-12.
-            }
-
-            $details = is_array($record->student_details) ? $record->student_details : [];
-            $sex = $this->bmiSexKey((string) ($details['gender'] ?? ''));
-            if ($sex === null) {
-                continue; // No sex on file — cannot place in a MALE/FEMALE row.
-            }
-
-            // Baseline: BMI-for-age from the baseline column, HFA from the
-            // classification the adviser computed at entry time.
-            if ($ns = $this->bmiNsColumn((string) ($record->baseline_nutritional_status ?: $record->nutritional_status))) {
-                $counts['bmib'][$gk][$sex][$ns]++;
-            }
-            if ($hfa = $this->bmiHfaColumn((string) ($details['nutritional_status_height_for_age'] ?? ''))) {
-                $counts['bmib'][$gk][$sex][$hfa]++;
-            }
-
-            // Final: only learners with an endline measurement contribute; HFA is
-            // recomputed from the endline height/age (endline HFA is not stored).
-            if ($ns = $this->bmiNsColumn((string) $record->endline_nutritional_status)) {
-                $counts['bmif'][$gk][$sex][$ns]++;
-            }
-            if ($record->endline_height_cm !== null && $record->endline_age !== null) {
-                $endlineHfa = $this->classifyHeightForAge((float) $record->endline_height_cm, (int) $record->endline_age);
-                if ($hfa = $this->bmiHfaColumn($endlineHfa)) {
-                    $counts['bmif'][$gk][$sex][$hfa]++;
-                }
-            }
-        }
-
-        $values = [];
-        foreach (['bmib', 'bmif'] as $phase) {
-            foreach ($gradeKeys as $gk) {
-                $this->flattenBmiTable($values, $phase.'_'.$gk, $counts[$phase][$gk], $nsCols, $hfaCols);
-            }
-
-            // Overall table = column-wise sum of every grade.
-            $overall = [];
-            foreach ($sexes as $sex) {
-                foreach (array_merge($nsCols, $hfaCols) as $col) {
-                    $overall[$sex][$col] = array_sum(array_map(fn (string $gk): int => $counts[$phase][$gk][$sex][$col], $gradeKeys));
-                }
-            }
-            $this->flattenBmiTable($values, $phase.'_overall', $overall, $nsCols, $hfaCols);
-        }
-
-        return $values;
-    }
-
-    /**
-     * Expands one grade's male/female counts into flat cell values: per-row
-     * Total columns, a computed TOTAL row, and blank (not "0") data cells so an
-     * empty report reads like the blank DepEd sheet.
-     *
-     * @param  array<string, int|string>  $values
-     * @param  array<string, array<string, int>>  $table
-     * @param  list<string>  $nsCols
-     * @param  list<string>  $hfaCols
-     */
-    private function flattenBmiTable(array &$values, string $prefix, array $table, array $nsCols, array $hfaCols): void
-    {
-        $totals = [];
-
-        foreach (['male', 'female'] as $sex) {
-            $nst = 0;
-            $hfat = 0;
-            foreach ($nsCols as $col) {
-                $v = (int) ($table[$sex][$col] ?? 0);
-                $nst += $v;
-                $totals[$col] = ($totals[$col] ?? 0) + $v;
-                $values[$prefix.'_'.$sex.'_'.$col] = $v > 0 ? $v : '';
-            }
-            foreach ($hfaCols as $col) {
-                $v = (int) ($table[$sex][$col] ?? 0);
-                $hfat += $v;
-                $totals[$col] = ($totals[$col] ?? 0) + $v;
-                $values[$prefix.'_'.$sex.'_'.$col] = $v > 0 ? $v : '';
-            }
-            $values[$prefix.'_'.$sex.'_nst'] = $nst;
-            $values[$prefix.'_'.$sex.'_hfat'] = $hfat;
-            $totals['nst'] = ($totals['nst'] ?? 0) + $nst;
-            $totals['hfat'] = ($totals['hfat'] ?? 0) + $hfat;
-        }
-
-        // TOTAL row and Total columns always show an integer, matching the sheet.
-        foreach (array_merge($nsCols, $hfaCols, ['nst', 'hfat']) as $col) {
-            $values[$prefix.'_total_'.$col] = $totals[$col] ?? 0;
-        }
-    }
-
-    /**
-     * "Grade 7" → "g7". The report covers Junior High only, so anything outside
-     * FeedingBeneficiarySummary::GRADE_LEVELS is left off the grids — and,
-     * because the same list decides eligibility, a learner left off here was
-     * never a beneficiary in the first place.
-     */
-    private function bmiGradeKey(string $gradeLabel): ?string
-    {
-        if (preg_match('/(\d{1,2})/', $gradeLabel, $m)) {
-            $grade = (int) $m[1];
-            if (in_array($grade, FeedingBeneficiarySummary::GRADE_LEVELS, true)) {
-                return 'g'.$grade;
-            }
-        }
-
-        return null;
-    }
-
-    private function bmiSexKey(string $gender): ?string
-    {
-        $g = strtolower(trim($gender));
-        if (str_starts_with($g, 'm')) {
-            return 'male';
-        }
-        if (str_starts_with($g, 'f')) {
-            return 'female';
-        }
-
-        return null;
-    }
-
-    /** Maps a BMI-for-age status string onto a report column, or null to skip. */
-    private function bmiNsColumn(string $status): ?string
-    {
-        $s = strtolower(trim($status));
-        if ($s === '') {
-            return null;
-        }
-        if (str_contains($s, 'severe') && str_contains($s, 'wast')) {
-            return 'sw';
-        }
-        if (str_contains($s, 'wast')) {
-            return 'w';
-        }
-        // The adviser classifier emits "Underweight" (BMI 17.0-18.5); the DepEd
-        // BMI-for-age sheet has no such column, so it is grouped under Wasted —
-        // consistent with isQualifiedForFeeding() treating both as undernourished.
-        if (str_contains($s, 'underweight')) {
-            return 'w';
-        }
-        if (str_contains($s, 'obes')) {
-            return 'ob';
-        }
-        if (str_contains($s, 'over')) {
-            return 'ow';
-        }
-        if (str_contains($s, 'normal')) {
-            return 'n';
-        }
-
-        return null;
-    }
-
-    /** Maps a height-for-age status string onto a report column, or null to skip. */
-    private function bmiHfaColumn(string $hfa): ?string
-    {
-        $s = strtolower(trim($hfa));
-        if ($s === '') {
-            return null;
-        }
-        if (str_contains($s, 'severe') && str_contains($s, 'stunt')) {
-            return 'ss';
-        }
-        if (str_contains($s, 'stunt')) {
-            return 'st';
-        }
-        if (str_contains($s, 'tall')) {
-            return 't';
-        }
-        if (str_contains($s, 'normal')) {
-            return 'hn';
-        }
-
-        return null;
-    }
-
-    /**
-     * Height-for-age classification for the Final report, mirroring
-     * App\Http\Controllers\AdviserController::classifyHeightForAge so endline
-     * HFA is derived the same way baseline HFA originally was.
-     */
-    private function classifyHeightForAge(float $heightCm, int $age): string
-    {
-        if ($heightCm <= 0 || $age <= 0) {
-            return '';
-        }
-
-        $minNormalHeight = 70 + ($age * 5);
-        if ($heightCm < ($minNormalHeight - 8)) {
-            return 'Severely Stunted';
-        }
-        if ($heightCm < $minNormalHeight) {
-            return 'Stunted';
-        }
-
-        return 'Normal Height-for-Age';
+        return SchoolSignatories::preparedBy($institutionId, $schoolName);
     }
 
     /**

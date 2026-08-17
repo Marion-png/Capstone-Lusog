@@ -91,7 +91,7 @@
 		     numbers below are the same numbers. ── --}}
 		<section class="card section">
 			<div class="section-head">
-				<h2 class="section-title">Nutritional status, baseline to endline</h2>
+				<h2 class="section-title">Nutritional Status, Baseline to Endline</h2>
 				<div class="section-meta tnum">
 					{{ number_format($shift['baseline_measured']) }} measured at baseline
 					@if ($shift['has_endline'])
@@ -212,7 +212,7 @@
 			</article>
 			<article class="card kpi accent-brand">
 				<div class="kpi-top">
-					<div class="kpi-label">Rehabilitation rate</div>
+					<div class="kpi-label">Rehabilitation Rate</div>
 					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg></div>
 				</div>
 				<div class="kpi-value">{{ $shPct($outcome['rate']) }}</div>
@@ -230,7 +230,7 @@
 			</article>
 			<article class="card kpi accent-orange">
 				<div class="kpi-top">
-					<div class="kpi-label">Still undernourished</div>
+					<div class="kpi-label">Still Undernourished</div>
 					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div>
 				</div>
 				<div class="kpi-value">{{ number_format($outcome['still_undernourished']) }}</div>
@@ -340,7 +340,7 @@
 		@if (! empty($monthly))
 			<section class="card section">
 				<div class="section-head">
-					<h2 class="section-title">Monthly accomplishment</h2>
+					<h2 class="section-title">Monthly Accomplishment</h2>
 					<div class="section-meta tnum">
 						@if ($turnout['average'] !== null)
 							{{ $shPct($turnout['average']) }} average turnout

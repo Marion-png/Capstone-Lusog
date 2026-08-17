@@ -227,7 +227,7 @@ class SchoolHeadDashboardTest extends TestCase
             ->json();
 
         $this->assertArrayHasKey('stamp', $payload);
-        $this->assertStringContainsString('Learners enrolled', $payload['html']['stats']);
+        $this->assertStringContainsString('Learners Enrolled', $payload['html']['stats']);
         $this->assertStringContainsString('Feeding Program', $payload['html']['programs']);
         $this->assertStringContainsString('Grade 7', $payload['html']['snapshot']);
         $this->assertArrayHasKey('queue', $payload['html']);
