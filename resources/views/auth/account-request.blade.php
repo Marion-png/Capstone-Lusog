@@ -210,7 +210,17 @@
                     </div>
                     <div class="field" id="sectionField">
                         <label for="assigned_section">Assigned Section</label>
+                        {{-- Two controls, one name: the school's published list
+                             where there is one, a typed answer where there is
+                             not. A disabled control is not submitted, so only
+                             the visible one ever posts. --}}
+                        <select id="assigned_section_select" name="assigned_section" disabled style="display:none;">
+                            <option value="" selected disabled>Select section</option>
+                        </select>
                         <input id="assigned_section" name="assigned_section" type="text" value="{{ old('assigned_section') }}" placeholder="e.g. SPED-A">
+                        @error('assigned_section')
+                            <span style="color:#dc2626;font-size:0.8rem;">{{ $message }}</span>
+                        @enderror
                     </div>
                     <p class="hint" id="classAdviserHint">Grade level and section are required for Class Adviser requests only.</p>
                 </div>
@@ -232,10 +242,21 @@
         const schoolField     = document.getElementById('schoolField');
         const gradeSelect     = document.getElementById('assigned_grade_level');
         const sectionInput    = document.getElementById('assigned_section');
+        const sectionSelect   = document.getElementById('assigned_section_select');
         const gradeField      = document.getElementById('gradeField');
         const sectionField    = document.getElementById('sectionField');
         const classAdviserHint = document.getElementById('classAdviserHint');
         const oldInstitutionId = @json((string) old('institution_id', ''));
+        const oldGrade         = @json((string) old('assigned_grade_level', ''));
+        const oldSection       = @json((string) old('assigned_section', ''));
+
+        // The generic grade list, kept so a school that has not published its
+        // sections still gets a working form.
+        const fallbackGradeOptions = gradeSelect.innerHTML;
+
+        // { "Grade 7": ["MATIYAGA", ...], ... } for the chosen school, empty
+        // when that school has no published catalogue.
+        let sectionCatalog = {};
 
         function populateSchools(institutions) {
             if (!Array.isArray(institutions) || institutions.length === 0) {
@@ -269,6 +290,83 @@
             .then(populateSchools)
             .catch(function () {});
 
+        /** Show the school's published sections, or fall back to a typed one. */
+        function useCatalog(hasCatalog) {
+            sectionSelect.style.display = hasCatalog ? '' : 'none';
+            sectionSelect.disabled      = !hasCatalog;
+            sectionInput.style.display  = hasCatalog ? 'none' : '';
+            sectionInput.disabled       = hasCatalog;
+        }
+
+        function renderGrades() {
+            const grades = Object.keys(sectionCatalog);
+
+            if (grades.length === 0) {
+                gradeSelect.innerHTML = fallbackGradeOptions;
+                useCatalog(false);
+                return;
+            }
+
+            gradeSelect.innerHTML = '<option value="" selected disabled>Select grade level</option>';
+
+            grades.forEach(function (grade) {
+                const opt = document.createElement('option');
+                opt.value = grade;
+                opt.textContent = grade;
+                if (grade === oldGrade) opt.selected = true;
+                gradeSelect.appendChild(opt);
+            });
+
+            useCatalog(true);
+            renderSections();
+        }
+
+        function renderSections() {
+            const names = sectionCatalog[gradeSelect.value] || [];
+
+            sectionSelect.innerHTML = names.length
+                ? '<option value="" selected disabled>Select section</option>'
+                : '<option value="" selected disabled>Select a grade level first</option>';
+
+            names.forEach(function (name) {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                if (name === oldSection) opt.selected = true;
+                sectionSelect.appendChild(opt);
+            });
+
+            sectionSelect.setCustomValidity('');
+        }
+
+        /** Load the chosen school's sections; a school without any keeps the typed box. */
+        function loadSections() {
+            const institutionId = institutionSel.value;
+
+            if (!institutionId) {
+                sectionCatalog = {};
+                renderGrades();
+                return;
+            }
+
+            fetch('/api/institutions/' + encodeURIComponent(institutionId) + '/sections')
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error('Unable to load sections');
+                    }
+
+                    return response.json();
+                })
+                .then(function (payload) {
+                    sectionCatalog = (payload && payload.grades) || {};
+                    renderGrades();
+                })
+                .catch(function () {
+                    sectionCatalog = {};
+                    renderGrades();
+                });
+        }
+
         function syncRoleFields() {
             const role = roleSelect.value;
             const requiresSchool = SCOPED_ROLES.includes(role);
@@ -282,16 +380,21 @@
             institutionSel.required = requiresSchool;
             gradeSelect.required    = isClassAdviser;
             sectionInput.required   = isClassAdviser;
+            sectionSelect.required  = isClassAdviser;
 
             if (!requiresSchool) {
                 institutionSel.value = '';
                 institutionSel.setCustomValidity('');
+                sectionCatalog = {};
+                renderGrades();
             }
             if (!isClassAdviser) {
                 gradeSelect.selectedIndex = 0;
                 sectionInput.value = '';
+                sectionSelect.selectedIndex = 0;
                 gradeSelect.setCustomValidity('');
                 sectionInput.setCustomValidity('');
+                sectionSelect.setCustomValidity('');
             }
         }
 
@@ -302,10 +405,19 @@
 
         institutionSel.addEventListener('change', function () {
             institutionSel.setCustomValidity('');
+            // The sections on offer belong to the school just chosen.
+            loadSections();
         });
+
+        // Sections are per grade: changing the grade changes the list.
+        gradeSelect.addEventListener('change', renderSections);
 
         sectionInput.addEventListener('input', function () {
             sectionInput.setCustomValidity('');
+        });
+
+        sectionSelect.addEventListener('change', function () {
+            sectionSelect.setCustomValidity('');
         });
 
         requestForm.addEventListener('submit', function (event) {
@@ -321,7 +433,12 @@
 
             if (isClassAdviser) {
                 gradeSelect.setCustomValidity(gradeSelect.value ? '' : 'Please select assigned grade level.');
-                sectionInput.setCustomValidity(sectionInput.value.trim() ? '' : 'Please enter assigned section.');
+
+                if (sectionSelect.disabled) {
+                    sectionInput.setCustomValidity(sectionInput.value.trim() ? '' : 'Please enter assigned section.');
+                } else {
+                    sectionSelect.setCustomValidity(sectionSelect.value ? '' : 'Please select your assigned section.');
+                }
             }
 
             if (!requestForm.checkValidity()) {
@@ -331,6 +448,12 @@
         });
 
         syncRoleFields();
+
+        // A rejected submission comes back with the school already chosen; load
+        // its sections so the adviser's grade and section are restored, not lost.
+        if (oldInstitutionId) {
+            loadSections();
+        }
     </script>
 </body>
 </html>

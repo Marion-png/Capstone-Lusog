@@ -241,6 +241,69 @@
 }
 .fa-tally { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .fa-total { font-size: .82rem; font-weight: 600; color: var(--lg-ink); }
+/* Nothing to save from the sheet — the bar is a summary of the session. */
+.fa-savebar.is-readonly { justify-content: flex-start; }
+
+/* The sheet's standing, and the one action it offers when the day is open. */
+.fa-sheet-standing { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: wrap; }
+/* A learner nobody wrote down. Never styled as an absence. */
+.fa-unmarked { font-size: .78rem; color: var(--lg-ink-soft); }
+
+/* ── Record Attendance dialog ───────────────────────────────────────
+   The one place a mark is entered. Same anatomy as the enrolment and
+   follow-up dialogs (backdrop / panel / head / body / foot), so a dialog
+   looks like a dialog everywhere in the product. ── */
+.modal-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(21, 40, 31, .48);
+	display: none;
+	align-items: flex-start;
+	justify-content: center;
+	z-index: 250;
+	padding: 16px;
+	overflow-y: auto;
+}
+.modal-backdrop.open { display: flex; }
+.modal-panel {
+	width: min(920px, 100%);
+	max-height: calc(100vh - 32px);
+	background: var(--lg-card);
+	border-radius: var(--lg-r-card);
+	box-shadow: 0 24px 64px rgba(21, 40, 31, .28);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	margin: auto;
+}
+.modal-panel form { display: flex; flex-direction: column; min-height: 0; }
+.modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 20px 14px; }
+.modal-eyebrow { font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--lg-ink-soft); }
+.modal-title { margin-top: 6px; font-size: 1.18rem; font-weight: 700; letter-spacing: -.01em; color: var(--lg-ink); }
+.modal-sub { margin-top: 6px; font-size: .8rem; line-height: 1.5; color: var(--lg-ink-soft); }
+.modal-close { background: none; font-size: 1.4rem; line-height: 1; color: var(--lg-ink-soft); cursor: pointer; padding: 2px 8px; border-radius: 8px; border: 1px solid var(--lg-border); }
+.modal-close:hover { color: var(--lg-ink); background: var(--lg-rail); }
+.modal-body { padding: 0; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.modal-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 20px; border-top: 1px solid var(--lg-border); background: var(--lg-card); }
+.modal-actions { display: flex; gap: 8px; margin-left: auto; }
+
+.ra-modal-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 14px 20px; border-top: 1px solid var(--lg-border); border-bottom: 1px solid var(--lg-border); background: var(--lg-page); }
+.ra-modal-search { flex: 1 1 220px; }
+.ra-modal-bulk { display: flex; gap: 8px; flex-wrap: wrap; }
+.ra-modal-scroll { max-height: 48vh; }
+.ra-modal-table { width: 100%; }
+.ra-modal-table th:first-child, .ra-modal-table td:first-child { padding-left: 20px; }
+.ra-modal-table th:last-child, .ra-modal-table td:last-child { padding-right: 20px; }
+.ra-modal-table thead th { position: sticky; top: 0; z-index: 1; background: var(--lg-card); }
+.ra-idx { width: 40px; color: var(--lg-ink-soft); }
+.ra-mark-col { white-space: nowrap; }
+
+@media (max-width: 620px) {
+	.ra-modal-bulk { width: 100%; }
+	.ra-modal-bulk .btn { flex: 1 1 auto; justify-content: center; }
+	.modal-actions { width: 100%; }
+	.modal-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
 
 /* ── Calendar ───────────────────────────────────────────────────────
    A month of feeding days: complete, incomplete, or no session at all.
@@ -338,6 +401,8 @@ a.fa-cal-day:focus-visible { outline: none; box-shadow: var(--lg-focus); }
 	.fa-savebar,
 	.alert-bar,
 	.flash,
+	/* The dialog is a control, and paper has none. */
+	.modal-backdrop,
 	.fa-legend { display: none !important; }
 
 	html, body { height: auto !important; overflow: visible !important; background: #fff; }

@@ -142,6 +142,21 @@
 					@endforeach
 				</select>
 			</div>
+			{{-- The health service the head is asking about. It narrows the
+			     consented list below — "show me who I may deworm" — and leaves
+			     the outstanding list, which is about forms rather than
+			     services, alone. --}}
+			<div class="sh-filter">
+				<label class="field-label" for="csService">Health service</label>
+				<select class="select" name="service" id="csService">
+					<option value="">All services</option>
+					@foreach ($serviceLabels as $key => $label)
+						<option value="{{ $key }}" @selected($filters['service'] === $key)>
+							{{ \Illuminate\Support\Str::limit($label, 60) }} ({{ $serviceCounts[$key] ?? 0 }})
+						</option>
+					@endforeach
+				</select>
+			</div>
 			<noscript><button type="submit" class="btn btn-secondary">Apply</button></noscript>
 		</form>
 
@@ -177,6 +192,81 @@
 											<span class="sh-bar"><span class="sh-bar-fill" style="width: {{ $row['rate'] ?? 0 }}%; background: var(--series-healthy);"></span></span>
 											<span class="sh-bar-value tnum">{{ $shPct($row['rate']) }}</span>
 										</span>
+									</td>
+								</tr>
+							@endforeach
+						</tbody>
+					</table>
+				</div>
+			@endif
+		</section>
+
+		{{-- ── Who the school may give a service to ──────────────────────
+		     The compliance question answered the other way round: not who is
+		     outstanding, but who a parent has actually authorised, for which
+		     service. Filtering to Deworming lists the learners whose parent
+		     consented to it, and each row opens that parent's own signed
+		     letter — the head checking a named learner's authority, which is a
+		     different act from reading a monitoring table and is audited as
+		     one.
+
+		     Standing and service only. The allergies, the write-in exceptions
+		     and the parent's signature stay off this table; the letter itself
+		     is where they belong, behind a deliberate click. ── --}}
+		<section class="table-card sh-listcard">
+			<div class="sh-listhead">
+				<div>
+					<h2 class="card-title">
+						@if ($service !== '')
+							Consented to {{ \Illuminate\Support\Str::limit($serviceLabel, 48) }}
+						@else
+							Learners With Valid Consent
+						@endif
+					</h2>
+					<p class="card-sub tnum">
+						{{ number_format($grantedRows->count()) }} {{ \Illuminate\Support\Str::plural('learner', $grantedRows->count()) }}
+						@if ($service !== '') &middot; parent answered and did not refuse @endif
+					</p>
+				</div>
+			</div>
+
+			@if ($grantedRows->isEmpty())
+				<p class="table-empty">
+					@if ($service !== '')
+						No learner in this scope has a parent&rsquo;s consent for that service.
+					@else
+						No learner in this scope has a valid consent on file.
+					@endif
+				</p>
+			@else
+				<div class="table-scroll">
+					<table class="sh-table">
+						<thead>
+							<tr>
+								<th class="num">#</th>
+								<th>LRN</th>
+								<th>Name</th>
+								<th>Grade</th>
+								<th>Section</th>
+								<th>Standing</th>
+								<th>Signed form</th>
+							</tr>
+						</thead>
+						<tbody>
+							@foreach ($grantedRows as $index => $row)
+								<tr>
+									<td class="num sh-index tnum">{{ $index + 1 }}</td>
+									<td class="tnum">{{ $row['lrn'] }}</td>
+									<td><strong>{{ $row['name'] }}</strong></td>
+									<td>{{ $row['grade'] }}</td>
+									<td>{{ $row['section'] }}</td>
+									<td><span class="badge badge-normal">Valid consent</span></td>
+									<td>
+										@if ($row['form_id'] > 0)
+											<a href="{{ route('consent-forms.head-show', $row['form_id']) }}">View signed form</a>
+										@else
+											<span class="sh-none">&mdash;</span>
+										@endif
 									</td>
 								</tr>
 							@endforeach

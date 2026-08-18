@@ -638,6 +638,11 @@
 .sh-table th:first-child, .sh-table td:first-child { padding-left: 18px; }
 .sh-table th:last-child, .sh-table td:last-child { padding-right: 18px; }
 .sh-index { color: var(--lg-ink-soft); width: 46px; }
+/* No form to open. An em dash, not an empty cell that reads as a bug. */
+.sh-none { color: var(--lg-ink-soft); }
+/* A link is carried by colour and weight, never an underline. */
+.sh-table a { color: var(--lg-emerald-deep); font-weight: 600; text-decoration: none; }
+.sh-table a:hover { color: var(--lg-emerald); }
 
 /* A sortable head says so on hover and carries its direction as a caret,
    never as colour alone. */

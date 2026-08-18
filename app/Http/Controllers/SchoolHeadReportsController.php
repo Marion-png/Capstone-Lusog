@@ -2,18 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ReportReview;
 use App\Models\StudentHealthRecord;
-use App\Support\AuditTrail;
 use App\Support\BmiAssessmentReport;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
-use App\Support\SchemaCache;
 use App\Support\SchoolHeadOverview;
+use App\Support\SchoolHeadPulse;
 use App\Support\SchoolSignatories;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 use OpenSpout\Common\Entity\Cell;
 use OpenSpout\Common\Entity\Row;
@@ -27,19 +26,25 @@ use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
- * The School Head's Reports tab — "what needs my signature".
+ * The School Head's Reports tab — read, open, export.
  *
- * Two halves. The first is the programme's outcome, derived every time it is
- * read: the school's nutritional status at baseline against the same roll at
- * endline, and how many beneficiaries actually left wasting. Nothing there is
- * stored, so a report can never disagree with the learners' records it
- * summarises.
+ * The programme's outcome is derived every time it is read: the school's
+ * nutritional status at baseline against the same roll at endline, and how many
+ * beneficiaries actually left wasting. Nothing here is stored, so a report can
+ * never disagree with the learners' records it summarises.
  *
- * The second is the only thing this role writes: the head's decision on a
- * report (ReportReview). Approving stamps the approver and writes an audit
- * entry; returning requires a remark saying what has to be corrected; locking
- * ends the line, and a locked report is refused by every write path here — not
- * merely by a hidden button.
+ * **The role no longer records a decision on a report.** Approve / Return for
+ * correction / Lock are gone, and with them the last write this role had: the
+ * head reads, opens and exports, and every other role writes. What replaced them
+ * is **View** — the report itself, rendered as the DepEd form the coordinator
+ * prints, from the same `BmiAssessmentReport` computation, so the form on screen
+ * and the workbook that downloads cannot report different numbers.
+ *
+ * **A report is exportable only once its weighing is finished.** A baseline
+ * form with sixty learners still unmeasured is not a draft of the school's
+ * return, it is a form that would be wrong when it was handed in — so the
+ * button is not offered and the endpoint refuses it. The Endline follows the
+ * same rule against its own weighing.
  *
  * Improvement and rehabilitation are counted separately and never conflated: a
  * learner who climbed from Severely Wasted to Wasted has improved but is not
@@ -50,9 +55,6 @@ class SchoolHeadReportsController extends Controller
 {
     /** The reports whose key is fixed. Monthly keys are built from the data. */
     private const FIXED_REPORTS = ['baseline', 'endline'];
-
-    /** The decisions a head can record. */
-    private const DECISIONS = ['approve', 'return', 'lock'];
 
     public function index(Request $request): View|RedirectResponse
     {
@@ -70,7 +72,6 @@ class SchoolHeadReportsController extends Controller
 
         $overview = SchoolHeadOverview::for($institutionId, $schoolYear);
         $monthly = $this->monthlyReports($overview);
-        $reviews = $this->reviews($institutionId, $schoolYear);
 
         return view('schoolhead-dashboard.school-headreport', [
             'schoolName' => $request->session()->get('active_school_name', 'School'),
@@ -83,117 +84,141 @@ class SchoolHeadReportsController extends Controller
             'outcome' => $overview->outcome(),
             'target' => $this->target(),
             'monthly' => $monthly,
-            'reports' => $this->reportCards($overview, $monthly, $reviews),
+            'reports' => $this->reportCards($overview, $monthly),
             'headName' => trim((string) $request->session()->get('active_name', '')) ?: 'School Head',
-            'reviewsAvailable' => SchemaCache::hasTable('report_reviews'),
         ]);
     }
 
     /**
-     * Records one decision on one report.
+     * One report, opened on screen as the form it will be exported as.
      *
-     * School Head only, re-scoped to their own school, written through the
-     * model — never a raw upsert, because the casts are what keep the remark
-     * and the reviewer's name encrypted — and audited with the value the
-     * decision replaced as well as the new one. A locked report is refused
-     * here, server-side, so a stale tab cannot reopen a closed decision.
+     * The Baseline and Endline reports render the DepEd Nutritional Assessment
+     * grid — the same sheet the Feeding Coordinator's SBFP Forms page prints,
+     * from the same `BmiAssessmentReport` computation, so what the head reads
+     * and what downloads cannot report different numbers for the same school.
+     * The Masterlist renders the school's masterlist form. Monthly reports
+     * render their accomplishment table.
+     *
+     * Everything is derived at read time, and the page carries the head's live
+     * pulse: an adviser recording a weighing while this is open updates it
+     * without anybody pressing refresh. Nothing here is a control — it is the
+     * document.
      */
-    public function review(Request $request): RedirectResponse
+    public function show(Request $request): View|RedirectResponse
     {
         if (! $this->isSchoolHead($request)) {
-            return redirect()->route('login')->with('error', 'Only the School Head can review a report.');
-        }
-
-        if (! SchemaCache::hasTable('report_reviews')) {
-            return back()->with('error', 'Report reviews are not available yet. Run the pending migrations.');
+            return redirect()->route('login')->with('error', 'Only the School Head can open a report.');
         }
 
         $institutionId = $request->session()->get('active_institution_id');
         $years = SchoolHeadOverview::schoolYears($institutionId);
 
-        $validated = $request->validate([
-            'report' => ['required', 'string', 'max:64'],
-            'decision' => ['required', 'string', 'in:'.implode(',', self::DECISIONS)],
-            'school_year' => ['required', 'string', 'in:'.implode(',', $years)],
-            'remarks' => ['nullable', 'string', 'max:500'],
-        ]);
+        $schoolYear = trim((string) $request->query('school_year', ''));
+        if (! in_array($schoolYear, $years, true)) {
+            $schoolYear = $years[0] ?? StudentHealthRecord::currentSchoolYear();
+        }
 
-        $report = $validated['report'];
-        $schoolYear = $validated['school_year'];
         $overview = SchoolHeadOverview::for($institutionId, $schoolYear);
+        $report = trim((string) $request->query('report', 'baseline'));
 
-        if (! in_array($report, $this->reportKeys($overview), true)) {
-            return back()->with('error', 'That report does not exist for this school year.');
+        if ($report !== 'masterlist' && ! in_array($report, $this->reportKeys($overview), true)) {
+            return redirect()
+                ->route('dashboard.school-head.reports', ['school_year' => $schoolYear])
+                ->with('error', 'That report does not exist for this school year.');
         }
 
-        // Returning a report is an instruction to whoever has to correct it, so
-        // it is worthless without one.
-        $remarks = trim((string) ($validated['remarks'] ?? ''));
-        if ($validated['decision'] === 'return' && $remarks === '') {
-            return back()->with('error', 'Say what has to be corrected before returning a report.');
-        }
+        $schoolName = (string) $request->session()->get('active_school_name', 'School');
+        $monthly = $this->monthlyReports($overview);
+        $readiness = $this->readiness($overview);
 
-        $existing = ReportReview::query()
-            ->where('institution_id', $institutionId)
-            ->where('school_year', $schoolYear)
-            ->where('report_key', $report)
-            ->first();
+        return view('schoolhead-dashboard.report-view', [
+            'report' => $report,
+            'reportLabel' => $this->reportLabel($report),
+            'schoolName' => $schoolName,
+            'schoolYear' => $schoolYear,
+            'todayLabel' => now()->format('j F Y'),
+            'overview' => $overview,
+            // The one computation both this page and the export read.
+            'bmiValues' => BmiAssessmentReport::values($overview->records),
+            'monthly' => collect($monthly)->firstWhere('key', $report),
+            'readiness' => $readiness[$report] ?? ['complete' => true, 'label' => '', 'blocked_reason' => ''],
+            'signatories' => [
+                'prepared' => SchoolSignatories::preparedBy($institutionId, $schoolName),
+                'noted' => SchoolSignatories::notedBy($institutionId, $schoolName)
+                    ?: trim((string) $request->session()->get('active_name', '')),
+            ],
+            'masterlistRows' => $report === 'masterlist' ? $this->masterlistRows($overview) : [],
+            'stamp' => SchoolHeadPulse::stamp($institutionId),
+        ]);
+    }
 
-        if ($existing?->isLocked()) {
-            return back()->with('error',
-                'This report was locked on '.$existing->locked_at?->format('j F Y')
-                .' and can no longer be changed. A System Admin can reopen it.');
-        }
+    /**
+     * The masterlist form's rows: the school's beneficiaries, name, grade and
+     * section, the way the printed masterlist rules them.
+     *
+     * Names are encrypted at rest, so the sort runs in PHP after fetch.
+     *
+     * @return list<array{name: string, grade: string, section: string}>
+     */
+    private function masterlistRows(SchoolHeadOverview $overview): array
+    {
+        return $overview->beneficiaries
+            ->map(function (StudentHealthRecord $record): array {
+                [$grade, $section] = FeedingBeneficiarySummary::splitSection((string) $record->section);
 
-        $previous = $existing?->status ?? ReportReview::STATUS_PENDING;
-        $headName = trim((string) $request->session()->get('active_name', '')) ?: null;
+                return [
+                    'name' => (string) $record->student_name,
+                    'grade' => preg_replace('/^grade\s*/i', '', $grade),
+                    'section' => $section,
+                ];
+            })
+            ->sortBy(fn (array $row): string => strtolower($row['name']))
+            ->values()
+            ->all();
+    }
 
-        $attributes = [
-            'status' => match ($validated['decision']) {
-                'approve' => ReportReview::STATUS_APPROVED,
-                'return' => ReportReview::STATUS_RETURNED,
-                default => ReportReview::STATUS_LOCKED,
-            },
-            'remarks' => $remarks !== '' ? $remarks : null,
-            'reviewed_by_name' => $headName,
-            'reviewed_by_role' => 'school_head',
-            'reviewed_at' => now(),
+    /**
+     * Whether each report's weighing is finished, and so whether it may be
+     * exported at all.
+     *
+     * A baseline form with learners still unmeasured is not a draft of the
+     * school's return — it is a form that would be wrong when it was handed in.
+     * The rule is asked here once and read by the tab (which does not offer the
+     * button), the view page and `export()` (which refuses it), so a stale tab
+     * cannot download an unfinished form.
+     *
+     * Monthly accomplishment reports are never gated: they record what happened
+     * in a month that has already happened.
+     *
+     * @return array<string, array{complete: bool, label: string, blocked_reason: string}>
+     */
+    private function readiness(SchoolHeadOverview $overview): array
+    {
+        $roll = $overview->records->count();
+        $baselineMeasured = $roll - $overview->statusCounts('baseline')[SchoolHeadOverview::NOT_MEASURED];
+
+        $outcome = $overview->outcome();
+        $beneficiaries = (int) $outcome['beneficiaries'];
+        $endlineMeasured = (int) $outcome['measured'];
+
+        return [
+            'baseline' => [
+                'complete' => $roll > 0 && $baselineMeasured >= $roll,
+                'label' => $baselineMeasured.' of '.$roll.' learners measured',
+                'blocked_reason' => $roll === 0
+                    ? 'No learner is on the roll for this school year yet.'
+                    : ($roll - $baselineMeasured).' '.Str::plural('learner', $roll - $baselineMeasured)
+                        .' still to be weighed. The baseline report can be exported once every learner has been measured.',
+            ],
+            'endline' => [
+                'complete' => $beneficiaries > 0 && $endlineMeasured >= $beneficiaries,
+                'label' => $endlineMeasured.' of '.$beneficiaries.' beneficiaries measured',
+                'blocked_reason' => $beneficiaries === 0
+                    ? 'No beneficiary is enrolled for this school year yet.'
+                    : ($beneficiaries - $endlineMeasured).' '.Str::plural('beneficiary', $beneficiaries - $endlineMeasured)
+                        .' still to be weighed at endline. The endline report can be exported once every beneficiary has been measured.',
+            ],
         ];
-
-        if ($validated['decision'] === 'lock') {
-            $attributes['locked_by_name'] = $headName;
-            $attributes['locked_at'] = now();
-        }
-
-        $review = ReportReview::updateOrCreate(
-            [
-                'institution_id' => $institutionId,
-                'school_year' => $schoolYear,
-                'report_key' => $report,
-            ],
-            $attributes,
-        );
-
-        AuditTrail::record(
-            'report_review_recorded',
-            'ReportReview',
-            $review->id,
-            'Recorded a '.$validated['decision'].' decision on the '.$this->reportLabel($report).' report for S.Y. '.$schoolYear,
-            [
-                'report_key' => $report,
-                'school_year' => $schoolYear,
-                'previous_status' => $previous,
-                'new_status' => $review->status,
-            ],
-        );
-
-        $message = match ($validated['decision']) {
-            'approve' => 'Approved. Your name and the time are stamped on the report.',
-            'return' => 'Returned for correction.',
-            default => 'Locked. This report can no longer be changed.',
-        };
-
-        return back()->with('success', $message);
     }
 
     /**
@@ -247,9 +272,22 @@ class SchoolHeadReportsController extends Controller
             return back()->with('error', 'That report does not exist for this school year.');
         }
 
+        // A weighing that is not finished is not a report. The tab does not
+        // offer the button and the view page says why, but a bookmarked URL or
+        // a stale tab reaches this endpoint all the same — so the rule lives
+        // here too, or the button is only a suggestion. The packet holds both
+        // assessment forms, so it needs both weighings finished.
+        $readiness = $this->readiness($overview);
+        $required = $report === 'packet' ? ['baseline', 'endline'] : [$report];
+
+        foreach ($required as $key) {
+            if (isset($readiness[$key]) && ! $readiness[$key]['complete']) {
+                return back()->with('error', $readiness[$key]['blocked_reason']);
+            }
+        }
+
         // The cells of the DepEd grid, computed from this school's own records.
         $bmiValues = BmiAssessmentReport::values($overview->records);
-        $reviews = $this->reviews($institutionId, $schoolYear);
 
         // Who signs the sheet. Read from the school's accounts, so the printed
         // form and this one are signed by the same people; the head exporting it
@@ -271,9 +309,9 @@ class SchoolHeadReportsController extends Controller
             // One workbook, one sheet per report: the Division asks for the set
             // together, and three separate files is three chances to send the
             // wrong year.
-            $this->writeAssessmentForm($writer, $overview, $schoolName, 'baseline', $bmiValues, $signatories, $reviews['baseline'] ?? null, 'Baseline BMI');
+            $this->writeAssessmentForm($writer, $overview, $schoolName, 'baseline', $bmiValues, $signatories, 'Baseline BMI');
             $writer->addNewSheetAndMakeItCurrent();
-            $this->writeAssessmentForm($writer, $overview, $schoolName, 'endline', $bmiValues, $signatories, $reviews['endline'] ?? null, 'Final BMI');
+            $this->writeAssessmentForm($writer, $overview, $schoolName, 'endline', $bmiValues, $signatories, 'Final BMI');
             $writer->addNewSheetAndMakeItCurrent();
             $this->writeAccomplishmentSheet($writer, $overview, $schoolName, null, $signatories);
             $writer->addNewSheetAndMakeItCurrent();
@@ -285,7 +323,6 @@ class SchoolHeadReportsController extends Controller
                 $schoolName,
                 substr($report, strlen('monthly:')),
                 $signatories,
-                $reviews[$report] ?? null,
             );
         } else {
             $this->writeAssessmentForm(
@@ -295,7 +332,6 @@ class SchoolHeadReportsController extends Controller
                 $report,
                 $bmiValues,
                 $signatories,
-                $reviews[$report] ?? null,
                 $report === 'baseline' ? 'Baseline BMI' : 'Final BMI',
             );
             $writer->addNewSheetAndMakeItCurrent();
@@ -596,31 +632,27 @@ class SchoolHeadReportsController extends Controller
      * The report cards, each with the head's decision on it.
      *
      * @param  list<array<string, mixed>>  $monthly
-     * @param  array<string, ReportReview>  $reviews
      * @return list<array<string, mixed>>
      */
-    private function reportCards(SchoolHeadOverview $overview, array $monthly, array $reviews): array
+    private function reportCards(SchoolHeadOverview $overview, array $monthly): array
     {
-        $outcome = $overview->outcome();
+        $readiness = $this->readiness($overview);
         $cards = [];
 
         $cards[] = [
             'key' => 'baseline',
             'name' => 'Baseline report',
             'summary' => 'Opening nutritional status of every learner, by grade level and section.',
-            'detail' => $overview->records->count() - $overview->statusCounts('baseline')[SchoolHeadOverview::NOT_MEASURED]
-                .' of '.$overview->records->count().' learners measured',
-            'exportable' => true,
-        ];
+            'detail' => $readiness['baseline']['label'],
+        ] + $readiness['baseline'];
 
         $cards[] = [
             'key' => 'endline',
             'name' => 'Endline report',
-            'summary' => 'Closing nutritional status and the rehabilitation rate.',
-            'detail' => $outcome['measured'].' of '.$outcome['beneficiaries'].' beneficiaries measured'
+            'summary' => 'Closing nutritional status against the baseline the programme started from.',
+            'detail' => $readiness['endline']['label']
                 .($overview->cycle->isComplete() ? '' : ' · cycle still running'),
-            'exportable' => true,
-        ];
+        ] + $readiness['endline'];
 
         foreach ($monthly as $month) {
             $cards[] = [
@@ -630,40 +662,15 @@ class SchoolHeadReportsController extends Controller
                 'detail' => $month['days_fed'].' feeding '.($month['days_fed'] === 1 ? 'day' : 'days')
                     .' · '.number_format($month['meals_served']).' meals served'
                     .($month['turnout'] !== null ? ' · '.$this->percent($month['turnout']).'% turnout' : ''),
-                'exportable' => true,
+                // A month that has happened is a record of what happened; there
+                // is no weighing left to finish before it can be handed in.
+                'complete' => true,
+                'label' => '',
+                'blocked_reason' => '',
             ];
         }
 
-        return array_map(function (array $card) use ($reviews): array {
-            $review = $reviews[$card['key']] ?? null;
-
-            return $card + [
-                'status' => $review?->status ?? ReportReview::STATUS_PENDING,
-                'status_label' => ReportReview::statusLabel($review?->status),
-                'badge' => ReportReview::statusBadge($review?->status),
-                'locked' => (bool) $review?->isLocked(),
-                'remarks' => trim((string) $review?->remarks),
-                'reviewed_by' => trim((string) $review?->reviewed_by_name),
-                'reviewed_at' => $review?->reviewed_at?->format('j F Y, g:i A'),
-            ];
-        }, $cards);
-    }
-
-    /**
-     * @return array<string, ReportReview>
-     */
-    private function reviews(?int $institutionId, string $schoolYear): array
-    {
-        if (! SchemaCache::hasTable('report_reviews')) {
-            return [];
-        }
-
-        return ReportReview::query()
-            ->where('institution_id', $institutionId)
-            ->where('school_year', $schoolYear)
-            ->get()
-            ->keyBy('report_key')
-            ->all();
+        return $cards;
     }
 
     /**
@@ -731,7 +738,6 @@ class SchoolHeadReportsController extends Controller
         string $phase,
         array $bmiValues,
         array $signatories,
-        ?ReportReview $review,
         string $sheetName,
     ): void {
         $writer->getCurrentSheet()->setName($sheetName);
@@ -793,7 +799,7 @@ class SchoolHeadReportsController extends Controller
             $writer->addRow($this->line(['']));
         }
 
-        $this->writeSignatureBlock($writer, $signatories, $review);
+        $this->writeSignatureBlock($writer, $signatories);
     }
 
     /**
@@ -806,7 +812,7 @@ class SchoolHeadReportsController extends Controller
      *
      * @param  array{prepared: string, noted: string}  $signatories
      */
-    private function writeSignatureBlock(XlsxWriter $writer, array $signatories, ?ReportReview $review): void
+    private function writeSignatureBlock(XlsxWriter $writer, array $signatories): void
     {
         $label = (new Style)->withFontBold(true);
 
@@ -816,26 +822,6 @@ class SchoolHeadReportsController extends Controller
         $writer->addRow($this->line([
             'School Clinic Nurse / Teacher', '', 'MAPEH Department Head', '', 'Principal',
         ]));
-
-        if ($review === null || $review->status === ReportReview::STATUS_PENDING) {
-            return;
-        }
-
-        $writer->addRow($this->line(['']));
-        $writer->addRow($this->line(['REVIEW'], $label));
-        $writer->addRow($this->line(['Status', ReportReview::statusLabel($review->status)]));
-        $writer->addRow($this->line(['Reviewed by', (string) $review->reviewed_by_name]));
-        $writer->addRow($this->line(['Reviewed on', $review->reviewed_at?->format('j F Y') ?? '']));
-
-        $remarks = trim((string) $review->remarks);
-        if ($remarks !== '') {
-            $writer->addRow($this->line(['Remarks', $remarks]));
-        }
-
-        if ($review->isLocked()) {
-            $writer->addRow($this->line(['Locked by', (string) $review->locked_by_name]));
-            $writer->addRow($this->line(['Locked on', $review->locked_at?->format('j F Y') ?? '']));
-        }
     }
 
     /**
@@ -930,7 +916,6 @@ class SchoolHeadReportsController extends Controller
         string $schoolName,
         ?string $onlyMonth = null,
         array $signatories = ['prepared' => '', 'noted' => ''],
-        ?ReportReview $review = null,
     ): void {
         $writer->getCurrentSheet()->setName('Accomplishment');
 
@@ -980,7 +965,7 @@ class SchoolHeadReportsController extends Controller
             $writer->addRow($this->line(['']));
         }
 
-        $this->writeSignatureBlock($writer, $signatories, $review);
+        $this->writeSignatureBlock($writer, $signatories);
     }
 
     private function percent(float $value): string

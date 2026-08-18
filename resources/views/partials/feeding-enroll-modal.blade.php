@@ -39,7 +39,7 @@
 				<select class="select" id="enrollSection"><option value="">All sections</option></select>
 			</div>
 			<div class="enroll-filter">
-				<label class="field-label" for="enrollSex">Sex</label>
+				<label class="field-label" for="enrollSex">Gender</label>
 				<select class="select" id="enrollSex">
 					<option value="">All</option>
 					@foreach (\App\Support\FeedingBeneficiarySummary::SEX_OPTIONS as $sexOption)
@@ -70,7 +70,7 @@
 						<th>Name</th>
 						<th>Grade</th>
 						<th>Section</th>
-						<th>Sex</th>
+						<th>Gender</th>
 						<th>Status</th>
 						<th>Action</th>
 					</tr>

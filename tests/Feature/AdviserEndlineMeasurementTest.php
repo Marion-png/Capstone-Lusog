@@ -80,10 +80,15 @@ class AdviserEndlineMeasurementTest extends TestCase
     /** Start the cycle far enough back that it has finished. */
     private function completeTheCycle(StudentHealthRecord $record): void
     {
+        // The cycle is 120 *feeding* days, and a week holds five of them, so a
+        // finished cycle is about 168 calendar days back — not 120. Derived from
+        // the constant rather than typed, so the fixture cannot drift from it.
+        $calendarDays = (int) ceil(FeedingProgramCycle::DURATION_DAYS / 5 * 7) + 7;
+
         FeedingAttendance::create([
             'institution_id' => $this->school->id,
             'student_health_record_id' => $record->id,
-            'session_date' => now()->subDays(FeedingProgramCycle::DURATION_DAYS + 5)->toDateString(),
+            'session_date' => now()->subDays($calendarDays)->toDateString(),
             'is_present' => true,
         ]);
     }

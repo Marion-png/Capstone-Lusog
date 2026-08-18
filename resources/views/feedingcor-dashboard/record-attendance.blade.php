@@ -15,11 +15,15 @@
 	<style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
 </head>
 <body>
-@include('partials.feedingcor-sidebar', ['active' => 'program'])
+{{-- Attendance owns a mark, so recording one belongs under the Attendance tab.
+     This screen used to light up Feeding Program, which reads the marks and
+     deliberately offers no way to change one — the rail was pointing at the tab
+     that cannot do what the screen is for. --}}
+@include('partials.feedingcor-sidebar', ['active' => 'attendance'])
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>Dashboard</span><span class="bc-sep">&rsaquo;</span><span>Record Attendance</span></div>
+		<div class="topbar-bc"><a href="{{ route('dashboard.feedingcor-attendance') }}">Attendance</a><span class="bc-sep">&rsaquo;</span><span>Record Attendance</span></div>
 		@include('partials.live-clock')
 	</header>
 
@@ -33,6 +37,27 @@
 		@endif
 		@if ($errors->any())
 			<div class="flash err">{{ $errors->first() }}</div>
+		@endif
+
+		{{-- A recorded session is closed as a whole: this screen becomes a record,
+		     the same way the Attendance tab's sheet does, and the endpoint refuses
+		     the write regardless of what is on screen. A wrong mark, or a learner
+		     this session missed, is put right on that learner's beneficiary record
+		     where the change is attributed and audited. --}}
+		@if ($sessionLocked || ! $isFeedingDay)
+			<div class="alert-bar is-info">
+				<div class="alert-body">
+					<div>
+						@if ($sessionLocked)
+							<strong>Attendance for {{ $sessionLabel }} has already been recorded</strong>
+							<span>This session is read-only. Correct a mark on the learner&rsquo;s beneficiary record.</span>
+						@else
+							<strong>{{ $sessionLabel }} is a {{ \Carbon\Carbon::parse($sessionDate)->format('l') }}</strong>
+							<span>There are no feeding sessions on Saturdays or Sundays.</span>
+						@endif
+					</div>
+				</div>
+			</div>
 		@endif
 
 		<form method="POST" action="{{ route('feedingcor-program.attendance.record.store') }}" id="recordForm">
@@ -54,7 +79,7 @@
 						<input type="search" id="raSearch" placeholder="Name or section" autocomplete="off" aria-label="Search beneficiaries by name or section">
 					</div>
 				</div>
-				<div class="ra-bulk">
+				<div class="ra-bulk" @if ($sessionLocked || ! $isFeedingDay) hidden @endif>
 					<button type="button" class="btn btn-secondary" data-mark-all="present">All present</button>
 					<button type="button" class="btn btn-secondary" data-mark-all="absent">All absent</button>
 					<button type="button" class="btn btn-ghost" data-mark-all="">Clear</button>
@@ -80,24 +105,37 @@
 									<td>{{ $row['grade'] }}</td>
 									<td>{{ $row['section'] ?: '—' }}</td>
 									<td class="ta-r">
-										<div class="ra-toggle" role="group" aria-label="Attendance for {{ $row['name'] }}">
-											<label class="ra-opt ra-opt-present">
-												<input type="radio" name="marks[{{ $row['id'] }}]" value="present" @checked($row['mark'] === 'present')>
-												<span>Present</span>
-											</label>
-											<label class="ra-opt ra-opt-absent">
-												<input type="radio" name="marks[{{ $row['id'] }}]" value="absent" @checked($row['mark'] === 'absent')>
-												<span>Absent</span>
-											</label>
-										</div>
+										@if ($sessionLocked || ! $isFeedingDay)
+											{{-- The session is a record: the mark is shown and no
+											     input is rendered at all. A disabled control is
+											     still one a browser can re-enable and post. --}}
+											<span class="badge {{ $row['mark'] === 'present' ? 'badge-normal' : ($row['mark'] === 'absent' ? 'badge-critical' : 'badge-neutral') }}">
+												{{ $row['mark'] === '' ? 'Not recorded' : ucfirst($row['mark']) }}
+											</span>
+										@else
+											<div class="ra-toggle" role="group" aria-label="Attendance for {{ $row['name'] }}">
+												<label class="ra-opt ra-opt-present">
+													<input type="radio" name="marks[{{ $row['id'] }}]" value="present" @checked($row['mark'] === 'present')>
+													<span>Present</span>
+												</label>
+												<label class="ra-opt ra-opt-absent">
+													<input type="radio" name="marks[{{ $row['id'] }}]" value="absent" @checked($row['mark'] === 'absent')>
+													<span>Absent</span>
+												</label>
+											</div>
+										@endif
 									</td>
 									<td>
-										{{-- Only an absence carries a reason, so the field opens
-										     when Absent is chosen and clears when it is not. --}}
-										<input type="text" class="input ra-remark" maxlength="255"
-											name="remarks[{{ $row['id'] }}]" value="{{ $row['remarks'] }}"
-											aria-label="Reason {{ $row['name'] }} was absent"
-											@disabled($row['mark'] !== 'absent')>
+										@if ($sessionLocked || ! $isFeedingDay)
+											<span class="ra-remark-read">{{ $row['remarks'] !== '' ? $row['remarks'] : '—' }}</span>
+										@else
+											{{-- Only an absence carries a reason, so the field opens
+											     when Absent is chosen and clears when it is not. --}}
+											<input type="text" class="input ra-remark" maxlength="255"
+												name="remarks[{{ $row['id'] }}]" value="{{ $row['remarks'] }}"
+												aria-label="Reason {{ $row['name'] }} was absent"
+												@disabled($row['mark'] !== 'absent')>
+										@endif
 									</td>
 								</tr>
 							@empty
@@ -109,7 +147,7 @@
 				</div>
 			</div>
 
-			@if ($rows->isNotEmpty())
+			@if ($rows->isNotEmpty() && ! $sessionLocked && $isFeedingDay)
 				{{-- A learner left unmarked is saved as nothing at all, never as an
 				     absence, so the bar counts what is still undecided. --}}
 				<div class="ra-savebar">

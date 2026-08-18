@@ -135,8 +135,12 @@ class FeedingCoordinatorDashboardTest extends TestCase
         $labels = collect($panel['rows'])->pluck('label')->all();
         $counts = collect($panel['rows'])->pluck('count', 'label')->all();
 
-        $this->assertSame(['Severely Wasted', 'Wasted', 'Normal', 'Obese'], $labels);
+        // "Not measured" is on the scale for All Students, where a learner
+        // nobody weighed must not be reported as Normal. For beneficiaries it
+        // is always zero — one qualified on a measurement.
+        $this->assertSame(['Severely Wasted', 'Wasted', 'Normal', 'Obese', 'Not measured'], $labels);
         $this->assertSame(2, $counts['Wasted']);
+        $this->assertSame(0, $counts['Not measured']);
         $this->assertSame($panel['total'], array_sum($counts));
     }
 
@@ -470,10 +474,12 @@ class FeedingCoordinatorDashboardTest extends TestCase
         $cycle = $response->viewData('programCycle');
 
         $this->assertTrue($cycle['started']);
-        $this->assertSame(11, $cycle['day']);
+        // Ten calendar days back is nine feeding days: a weekend sits inside the
+        // span and nobody is fed on it, so it is not a day the programme had.
+        $this->assertSame(9, $cycle['day']);
         $this->assertSame(120, $cycle['duration']);
-        $this->assertSame(109, $cycle['days_remaining']);
-        $this->assertEqualsWithDelta(9.2, $cycle['percent'], 0.05);
+        $this->assertSame(111, $cycle['days_remaining']);
+        $this->assertEqualsWithDelta(7.5, $cycle['percent'], 0.05);
         $this->assertSame(now()->subDays(10)->toDateString(), $cycle['start_date']);
     }
 

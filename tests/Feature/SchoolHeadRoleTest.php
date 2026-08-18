@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\FeedingAttendance;
 use App\Models\Institution;
-use App\Models\ReportReview;
 use App\Models\StudentHealthRecord;
+use App\Support\BmiAssessmentReport;
 use App\Support\SchoolHeadOverview;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -155,6 +155,105 @@ class SchoolHeadRoleTest extends TestCase
         $this->withSession($this->headSession())
             ->post('/logout')
             ->assertRedirect();
+    }
+
+    /**
+     * The way out of a role must never be gated on the role.
+     *
+     * A browser whose session still says `school_head` — a real head who never
+     * signed out, or the demo session this app seeds on any /dashboard/school-head
+     * URL — must still be able to sign in as somebody else. `POST /login` was
+     * unnamed, so it matched nothing on the allow list and every one of these
+     * logins was refused with the School Head read-only message: the role
+     * refusing the very form that replaces it.
+     */
+    #[Test]
+    public function every_role_can_sign_in_over_a_stale_school_head_session(): void
+    {
+        $roles = [
+            'school_nurse' => 'dashboard.school-nurse',
+            'clinic_staff' => 'dashboard.clinic-staff',
+            'class_adviser' => 'dashboard.class-adviser',
+            'school_head' => 'dashboard.school-head',
+            'feeding_coor' => 'dashboard.feedingcor-dashboard',
+            'nutricor' => 'dashboard.nutricor-dashboard',
+        ];
+
+        foreach ($roles as $role => $dashboard) {
+            DB::table('accounts')->insert([
+                'name' => ucfirst($role),
+                'username' => $role.'.login',
+                'password_hash' => bcrypt('password1'),
+                'role' => $role,
+                'institution_id' => $this->institution->id,
+                'school_name' => $this->institution->name,
+                'assigned_grade_level' => $role === 'class_adviser' ? 'Grade 7' : null,
+                'assigned_section' => $role === 'class_adviser' ? 'MATIYAGA' : null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        foreach ($roles as $role => $dashboard) {
+            $this->flushSession();
+
+            $this->withSession($this->headSession())
+                ->post('/login', ['email' => $role.'.login', 'password' => 'password1'])
+                ->assertRedirect(route($dashboard));
+
+            $this->assertSame($role, session('active_role'), "{$role} could not sign in over a School Head session");
+        }
+    }
+
+    /** The System Admin sign-in is a session endpoint too, and just as trapped. */
+    #[Test]
+    public function the_system_admin_can_sign_in_over_a_stale_school_head_session(): void
+    {
+        $this->withSession($this->headSession())
+            ->post('/admin-login', ['username' => 'systemadmin', 'password' => 'admin123'])
+            ->assertRedirect(route('dashboard.system-admin'));
+
+        $this->assertSame('system_admin', session('active_role'));
+    }
+
+    /** Asking for an account is how a person gets in, not a write on school data. */
+    #[Test]
+    public function an_account_request_is_not_blocked_by_a_stale_school_head_session(): void
+    {
+        $this->withSession($this->headSession())
+            ->post('/account-request', [
+                'name' => 'New Coordinator',
+                'username' => 'new.coordinator',
+                'password' => 'password1',
+                'password_confirmation' => 'password1',
+                'role' => 'feeding_coor',
+                'institution_id' => $this->institution->id,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('account_requests', ['username' => 'new.coordinator']);
+    }
+
+    /**
+     * Every allow-list entry has to name a route that actually exists, and a
+     * write route has to carry a name to be nameable at all. An unnamed POST
+     * reports its name as null and is refused whatever the list says — which is
+     * exactly how signing in broke, so it is worth failing the build over.
+     */
+    #[Test]
+    public function every_write_route_is_named_so_it_can_be_allow_listed(): void
+    {
+        $unnamed = [];
+
+        foreach (app('router')->getRoutes() as $route) {
+            $writes = array_intersect($route->methods(), ['POST', 'PUT', 'PATCH', 'DELETE']);
+
+            if ($writes !== [] && ($route->getName() === null || $route->getName() === '')) {
+                $unnamed[] = implode('|', $writes).' /'.$route->uri();
+            }
+        }
+
+        $this->assertSame([], $unnamed, 'Unnamed write routes can never be allow-listed: '.implode(', ', $unnamed));
     }
 
     // ── Feeding Program tab ─────────────────────────────────────────────
@@ -407,8 +506,16 @@ class SchoolHeadRoleTest extends TestCase
         }
     }
 
+    /**
+     * The role writes nothing at all now.
+     *
+     * Approve / Return for correction / Lock were the head's one write over
+     * school data, and they are gone with the endpoint behind them — so the
+     * invariant reads exactly as it is stated: the head reads, monitors and
+     * exports, and every other role writes.
+     */
     #[Test]
-    public function approving_a_report_stamps_the_approver_and_writes_an_audit_entry(): void
+    public function there_is_no_report_decision_endpoint_any_more(): void
     {
         $this->makeLearner();
 
@@ -418,91 +525,120 @@ class SchoolHeadRoleTest extends TestCase
                 'decision' => 'approve',
                 'school_year' => StudentHealthRecord::currentSchoolYear(),
             ])
-            ->assertRedirect();
-
-        $review = ReportReview::first();
-        $this->assertNotNull($review);
-        $this->assertSame(ReportReview::STATUS_APPROVED, $review->status);
-        $this->assertSame('Principal Reyes', $review->reviewed_by_name);
-        $this->assertNotNull($review->reviewed_at);
-        $this->assertSame($this->institution->id, (int) $review->institution_id);
-
-        $this->assertDatabaseHas('audit_logs', ['action' => 'report_review_recorded']);
-    }
-
-    #[Test]
-    public function the_reviewers_name_is_encrypted_at_rest(): void
-    {
-        $this->withSession($this->headSession())
-            ->post('/dashboard/school-head/reports/review', [
-                'report' => 'baseline',
-                'decision' => 'approve',
-                'school_year' => StudentHealthRecord::currentSchoolYear(),
-            ])
-            ->assertRedirect();
-
-        $raw = DB::table('report_reviews')->value('reviewed_by_name');
-        $this->assertNotSame('Principal Reyes', $raw);
-        $this->assertSame('Principal Reyes', ReportReview::first()->reviewed_by_name);
-    }
-
-    #[Test]
-    public function returning_a_report_requires_a_remark(): void
-    {
-        $this->withSession($this->headSession())
-            ->post('/dashboard/school-head/reports/review', [
-                'report' => 'baseline',
-                'decision' => 'return',
-                'school_year' => StudentHealthRecord::currentSchoolYear(),
-            ])
-            ->assertRedirect()
-            ->assertSessionHas('error');
+            ->assertNotFound();
 
         $this->assertDatabaseCount('report_reviews', 0);
+
+        // And the tab offers none of the three actions.
+        $this->withSession($this->headSession())
+            ->get('/dashboard/school-head/reports')
+            ->assertOk()
+            ->assertDontSee('Return for correction')
+            ->assertDontSee('data-review-open', false)
+            ->assertSee('View')
+            ->assertSee('Export');
     }
 
+    /** What replaced them: the report itself, as the form it exports as. */
     #[Test]
-    public function a_locked_report_cannot_be_changed_by_a_direct_request(): void
+    public function a_report_opens_as_the_deped_form_it_exports_as(): void
     {
-        $year = StudentHealthRecord::currentSchoolYear();
+        $this->makeLearner(['student_details' => ['gender' => 'Male', 'nutritional_status_height_for_age' => 'Stunted']]);
+
+        $response = $this->withSession($this->headSession())
+            ->get('/dashboard/school-head/reports/view?report=baseline')
+            ->assertOk();
+
+        $response->assertSee('Baseline Nutritional Assessment (BMI) Report');
+        $response->assertSee('GRADE 7 BMI');
+        $response->assertSee('OVERALL BMI');
+        // The grid on screen is the one the workbook writes.
+        $this->assertSame(
+            BmiAssessmentReport::values(
+                SchoolHeadOverview::for($this->institution->id, StudentHealthRecord::currentSchoolYear())->records
+            ),
+            $response->viewData('bmiValues'),
+        );
+    }
+
+    /** The masterlist opens as its own form too. */
+    #[Test]
+    public function the_masterlist_opens_as_a_form(): void
+    {
+        $this->makeLearner(['feeding_enrolled_at' => now(), 'student_name' => 'Dela Cruz, Juan']);
 
         $this->withSession($this->headSession())
-            ->post('/dashboard/school-head/reports/review', [
-                'report' => 'endline', 'decision' => 'lock', 'school_year' => $year,
-            ])->assertRedirect();
+            ->get('/dashboard/school-head/reports/view?report=masterlist')
+            ->assertOk()
+            ->assertSee('Masterlists of Identified Severely Wasted and Wasted Students')
+            ->assertSee('Dela Cruz, Juan');
+    }
 
-        $this->assertSame(ReportReview::STATUS_LOCKED, ReportReview::first()->status);
-
-        // The UI hides the buttons; the endpoint refuses regardless.
+    /** A report key that does not exist is refused rather than rendered. */
+    #[Test]
+    public function a_report_key_that_does_not_exist_cannot_be_opened(): void
+    {
         $this->withSession($this->headSession())
-            ->post('/dashboard/school-head/reports/review', [
-                'report' => 'endline', 'decision' => 'approve', 'school_year' => $year,
-            ])
+            ->get('/dashboard/school-head/reports/view?report=monthly:1999-01')
+            ->assertRedirect()
+            ->assertSessionHas('error');
+    }
+
+    /**
+     * A weighing that is not finished is not a report.
+     *
+     * A baseline form with learners still unmeasured would be wrong the moment
+     * it was handed in, so the tab does not offer the button and the endpoint
+     * refuses the download — a stale tab reaches it all the same.
+     */
+    #[Test]
+    public function an_unfinished_weighing_cannot_be_exported(): void
+    {
+        // Measured at baseline, never measured at endline.
+        $learner = $this->makeLearner(['feeding_enrolled_at' => now()]);
+        $this->mark($learner, now()->toDateString(), true);
+
+        $this->withSession($this->headSession())
+            ->get('/dashboard/school-head/reports/export?report=endline')
             ->assertRedirect()
             ->assertSessionHas('error');
 
-        $this->assertSame(ReportReview::STATUS_LOCKED, ReportReview::first()->fresh()->status);
-    }
-
-    #[Test]
-    public function a_report_key_that_does_not_exist_is_refused(): void
-    {
+        // The packet holds both assessment forms, so it needs both weighings.
         $this->withSession($this->headSession())
-            ->post('/dashboard/school-head/reports/review', [
-                'report' => 'monthly:1999-01',
-                'decision' => 'approve',
-                'school_year' => StudentHealthRecord::currentSchoolYear(),
-            ])
+            ->get('/dashboard/school-head/reports/export?report=packet')
             ->assertRedirect()
             ->assertSessionHas('error');
 
-        $this->assertDatabaseCount('report_reviews', 0);
+        // The tab says so, and offers View rather than Export.
+        $this->withSession($this->headSession())
+            ->get('/dashboard/school-head/reports')
+            ->assertOk()
+            ->assertSee('Weighing in progress')
+            ->assertSee('still to be weighed at endline');
+    }
+
+    /** A learner nobody has weighed at baseline blocks the baseline form too. */
+    #[Test]
+    public function an_unmeasured_learner_blocks_the_baseline_export(): void
+    {
+        // Enrolled and on the roll, but nobody has recorded a status for them.
+        $this->makeLearner(['baseline_nutritional_status' => '', 'nutritional_status' => '']);
+
+        $this->withSession($this->headSession())
+            ->get('/dashboard/school-head/reports/export?report=baseline')
+            ->assertRedirect()
+            ->assertSessionHas('error');
     }
 
     #[Test]
     public function every_report_exports_as_a_workbook(): void
     {
-        $learner = $this->makeLearner(['feeding_enrolled_at' => now()]);
+        // Both weighings finished: a report is exportable only once the
+        // measurement behind it is complete.
+        $learner = $this->makeLearner([
+            'feeding_enrolled_at' => now(),
+            'endline_nutritional_status' => 'Normal',
+        ]);
         $this->mark($learner, now()->toDateString(), true);
 
         foreach (['baseline', 'endline', 'packet', 'monthly:'.now()->format('Y-m')] as $report) {

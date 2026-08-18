@@ -44,6 +44,19 @@ final class FeedingBeneficiarySummary
     public const GRADE_LEVELS = [7, 8, 9, 10];
 
     /**
+     * How the covered range is written on a form or a heading — "Grades 7-10".
+     *
+     * A label typed by hand is a copy of the range that no longer changes with
+     * it: the SBFP Forms page offered its BMI reports as "(Grades 7-12)" long
+     * after the grids themselves had been cut to Junior High, so the page named
+     * a scope it did not have. Read this instead of writing the numbers out.
+     */
+    public static function gradeRangeLabel(): string
+    {
+        return 'Grades '.min(self::GRADE_LEVELS).'-'.max(self::GRADE_LEVELS);
+    }
+
+    /**
      * The grade number in a "Grade 8 / Matiyaga" section string, or null when
      * there is none to read.
      */

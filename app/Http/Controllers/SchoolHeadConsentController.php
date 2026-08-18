@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\HealthConsentForm;
 use App\Models\StudentHealthRecord;
 use App\Support\SchoolHeadHealthOverview;
 use App\Support\SchoolHeadOverview;
@@ -147,6 +148,14 @@ class SchoolHeadConsentController extends Controller
             $state = '';
         }
 
+        // Which health service the head is asking about — "show me who I may
+        // deworm". An unrecognised key is dropped rather than emptying the page.
+        $serviceLabels = HealthConsentForm::serviceLabels();
+        $service = trim((string) $request->query('service', ''));
+        if (! array_key_exists($service, $serviceLabels)) {
+            $service = '';
+        }
+
         $overview = $school->scopedTo($grade, $section);
         $health = SchoolHeadHealthOverview::for($institutionId, $schoolYear, $overview->records);
         $consent = $health->consent();
@@ -164,6 +173,20 @@ class SchoolHeadConsentController extends Controller
             ])
             ->values();
 
+        // The learners the school may actually give a service to: a parent
+        // answered, did not refuse, and the letter covered that service.
+        // Narrowed in PHP — `services` is encrypted at rest.
+        $granted = collect($consent['granted_rows'])
+            ->when($service !== '', fn ($list) => $list->filter(
+                fn (array $row): bool => in_array($service, $row['services'], true)
+            ))
+            ->sortBy([
+                fn (array $row): string => $row['grade'],
+                fn (array $row): string => $row['section'],
+                fn (array $row): string => strtolower($row['name']),
+            ])
+            ->values();
+
         return [
             'schoolName' => $request->session()->get('active_school_name', 'School'),
             'schoolYear' => $schoolYear,
@@ -174,9 +197,15 @@ class SchoolHeadConsentController extends Controller
                 'grade' => $grade,
                 'section' => $section,
                 'state' => $state,
+                'service' => $service,
             ],
             'filterOptions' => $options,
             'states' => self::STATES,
+            'serviceLabels' => $serviceLabels,
+            'serviceCounts' => $consent['service_counts'],
+            'service' => $service,
+            'serviceLabel' => $service !== '' ? $serviceLabels[$service] : '',
+            'grantedRows' => $granted,
             'consent' => $consent,
             'rows' => $rows,
             'shown' => $rows->count(),

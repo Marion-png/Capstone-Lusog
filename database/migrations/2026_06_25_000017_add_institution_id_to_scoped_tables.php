@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Institution;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -49,7 +50,7 @@ return new class extends Migration
     {
         foreach (['student_health_records', 'consultations', 'medicines', 'deworming_requests'] as $tbl) {
             Schema::table($tbl, function (Blueprint $table) {
-                $table->dropForeignIdFor(\App\Models\Institution::class);
+                $table->dropForeignIdFor(Institution::class);
                 $table->dropColumn('institution_id');
             });
         }

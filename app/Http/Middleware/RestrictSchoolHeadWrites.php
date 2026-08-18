@@ -27,15 +27,38 @@ class RestrictSchoolHeadWrites
     /**
      * Route names a School Head may still post to.
      *
-     * Deliberately short. Signing out is the head's own session, not school
-     * data; reviewing a report is the head's own decision, and the only write
-     * the role has. Nothing that touches a learner's measurement, enrolment,
-     * attendance, inventory or account belongs on this list.
+     * Deliberately short, and of exactly two kinds.
+     *
+     * The first is **how a person gets into or out of the app at all**: signing
+     * in, signing out, and asking for an account. None of it is school data —
+     * it is the browser's own session — and refusing it does not protect a
+     * learner's measurement, it strands whoever is sitting at the keyboard. A
+     * session that still says `school_head` (a real head who has not signed
+     * out, or a demo session this app seeds on any /dashboard/school-head URL)
+     * would otherwise refuse the very form that replaces it, so signing in as
+     * the Feeding Coordinator would fail with a message about the School Head
+     * being read-only. The way out of a role must never be gated on the role.
+     *
+     * There is no second kind. The role's one write over school data — recording
+     * a decision on a report — was removed with the Approve / Return / Lock
+     * buttons, so the School Head now writes nothing at all beyond their own
+     * session. That is the invariant stated exactly: the head reads, monitors
+     * and exports; every other role writes.
+     *
+     * Nothing that touches a learner's measurement, enrolment, attendance,
+     * inventory or an approved account belongs on this list.
+     *
+     * Every entry must be a name a write route actually carries. An unnamed
+     * POST route reports its name as null, matches nothing here, and is refused
+     * no matter what this list says — which is how signing in broke, since
+     * `POST /login` was unnamed and the `login` entry named only the GET form.
+     * `SchoolHeadRoleTest` pins each of these to a real route.
      */
     private const ALLOWED_ROUTES = [
-        'login',
+        'login.submit',
         'logout',
-        'dashboard.school-head.reports.review',
+        'admin.login.submit',
+        'account.request.submit',
     ];
 
     /** Methods that change state. Everything else is a read. */

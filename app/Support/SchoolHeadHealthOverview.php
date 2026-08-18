@@ -299,6 +299,8 @@ final class SchoolHeadHealthOverview
 
         $sections = [];
         $missing = [];
+        $granted = [];
+        $serviceCounts = array_fill_keys(array_keys(HealthConsentForm::serviceLabels()), 0);
         $valid = 0;
         $declined = 0;
         $awaiting = 0;
@@ -326,6 +328,30 @@ final class SchoolHeadHealthOverview
             if ($state === 'valid') {
                 $valid++;
                 $sections[$key]['valid']++;
+
+                // The learners a health service may actually be given to: a
+                // parent answered, and did not refuse. Which services the letter
+                // covered is what the head filters on — "show me who I may
+                // deworm" is the question this list answers.
+                $form = $this->consentByLrn[trim((string) $record->student_id)] ?? null;
+                $services = is_array($form['services'] ?? null) ? $form['services'] : [];
+
+                foreach ($services as $service) {
+                    if (array_key_exists($service, $serviceCounts)) {
+                        $serviceCounts[$service]++;
+                    }
+                }
+
+                $granted[] = [
+                    'id' => $record->id,
+                    // The form itself, so the head can open the signed letter.
+                    'form_id' => (int) ($form['id'] ?? 0),
+                    'name' => (string) $record->student_name,
+                    'lrn' => (string) $record->student_id,
+                    'grade' => $grade,
+                    'section' => $section,
+                    'services' => array_values($services),
+                ];
 
                 continue;
             }
@@ -378,6 +404,12 @@ final class SchoolHeadHealthOverview
             'rate' => $required > 0 ? round(($valid / $required) * 100, 1) : null,
             'sections' => $sections,
             'missing_rows' => $missing,
+            // Who the school holds valid consent for, and for what. Standing and
+            // service only — never the allergies, the write-in exceptions or the
+            // parent's signature, which belong to the adviser and the nurse who
+            // act on them.
+            'granted_rows' => $granted,
+            'service_counts' => $serviceCounts,
         ];
     }
 
@@ -734,14 +766,19 @@ final class SchoolHeadHealthOverview
         $forms = HealthConsentForm::query()
             ->where('institution_id', $institutionId)
             ->where('school_year', $schoolYear)
-            ->get(['id', 'student_lrn', 'status', 'consent_choice']);
+            ->get(['id', 'student_lrn', 'status', 'consent_choice', 'services']);
 
         $byLrn = [];
 
         foreach ($forms as $form) {
             $byLrn[trim((string) $form->student_lrn)] = [
+                'id' => (int) $form->id,
                 'status' => (string) $form->status,
                 'choice' => strtolower(trim((string) $form->consent_choice)),
+                // Which health services the letter actually asked about. The
+                // column is encrypted, so this is read after fetch and every
+                // filter on it runs in PHP.
+                'services' => is_array($form->services) ? $form->services : [],
             ];
         }
 

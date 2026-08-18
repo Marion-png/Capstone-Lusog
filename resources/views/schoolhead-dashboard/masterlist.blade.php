@@ -117,7 +117,7 @@
 				</select>
 			</div>
 			<div class="sh-filter">
-				<label class="field-label" for="mlSex">Sex</label>
+				<label class="field-label" for="mlSex">Gender</label>
 				<select class="select" name="sex" id="mlSex">
 					<option value="">All</option>
 					@foreach ($sexOptions as $sex)
@@ -195,7 +195,7 @@
 								<th data-sort="lrn">LRN</th>
 								<th data-sort="name">Name</th>
 								<th data-sort="section">Grade &amp; Section</th>
-								<th data-sort="sex">Sex</th>
+								<th data-sort="sex">Gender</th>
 								<th class="num" data-sort="age">Age</th>
 								<th class="num" data-sort="weight">Weight (kg)</th>
 								<th class="num" data-sort="height">Height (cm)</th>

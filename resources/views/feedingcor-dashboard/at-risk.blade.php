@@ -133,7 +133,7 @@
 			{{-- Scope, like grade and section above it: it moves the cards and
 			     the list together rather than narrowing the list alone. --}}
 			<div class="ar-filter">
-				<label class="field-label" for="arSex">Sex</label>
+				<label class="field-label" for="arSex">Gender</label>
 				<select class="select" name="sex" id="arSex">
 					<option value="">All</option>
 					@foreach (\App\Support\FeedingBeneficiarySummary::SEX_OPTIONS as $sexOption)

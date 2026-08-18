@@ -100,9 +100,10 @@
             @php
                 // The heading names the view being read, so the section and the
                 // tab above it always say the same thing.
-                $isPending = ($segmentView ?? 'all') === 'pending';
+                $allStudentsView = \App\Http\Controllers\StudentHealthRecordController::VIEW_ALL_STUDENTS;
+                $isPending = ($segmentView ?? 'all') === $allStudentsView;
                 $sectionTitle = match ($segmentView ?? 'all') {
-                    'pending' => 'Pending Enrollment',
+                    $allStudentsView => 'All Students',
                     'at_risk' => 'Attendance At Risk',
                     default => 'Per Beneficiary Comparison',
                 };
@@ -169,7 +170,7 @@
                     </select>
                 </div>
                 <div class="bnf-filter">
-                    <label class="field-label" for="filterSex">Sex</label>
+                    <label class="field-label" for="filterSex">Gender</label>
                     <select class="select" name="sex" id="filterSex">
                         <option value="">All</option>
                         @foreach (($fo['sexes'] ?? []) as $sexOption)
@@ -231,16 +232,20 @@
             </form>
 
             @if ($isPending)
-                {{-- Pending Enrollment: the waiting list, with the decision on
-                     it. Qualifying is the adviser's measurement; enrolling is
-                     the coordinator's, so under this tab the table carries the
-                     action rather than only reporting who is waiting.
+                {{-- All Students: the school's whole roll for these grades.
 
-                     Baseline status is the column that matters here — it is why
-                     the learner qualifies at all — so the roll is kept to who
-                     they are and why, and nothing else. There is no Status
-                     column on purpose: a learner nobody has enrolled has no
-                     attendance standing to report.
+                     A learner measured Normal, Overweight or Obese will never be
+                     a beneficiary — the programme feeds the wasted — but they are
+                     still the school's child and still counted, so they are listed
+                     here with their standing and **no Enroll action**. Only a
+                     learner the measurement qualifies (Severely Wasted, Wasted, or
+                     the app's Underweight, which the DepEd sheet counts as Wasted)
+                     can be enrolled, so only those rows carry a checkbox and a
+                     button.
+
+                     Qualifying is the adviser's measurement; enrolling is the
+                     coordinator's decision. Baseline status is the column that
+                     matters here — it is *why* a learner qualifies or does not.
 
                      It posts to the same endpoint the enrolment dialog uses, so
                      a learner enrolled from here and one enrolled from there
@@ -265,6 +270,7 @@
                                     <th class="sortable" data-sort="text" tabindex="0" role="button">Grade</th>
                                     <th class="sortable" data-sort="text" tabindex="0" role="button">Section</th>
                                     <th class="sortable" data-sort="text" tabindex="0" role="button">Baseline Status</th>
+                                    <th class="sortable" data-sort="text" tabindex="0" role="button">Standing</th>
                                     <th class="bnf-action">Action</th>
                                 </tr>
                             </thead>
@@ -273,11 +279,22 @@
                                     @php
                                         $baselineStatus = $record->baseline_nutritional_status ?: $record->nutritional_status;
                                         $grade = preg_replace('/^grade\s*/i', '', (string) $record->grade_level);
+                                        $segment = $record->segment ?? 'other';
+                                        // Enrolling is only ever offered to a learner
+                                        // the measurement qualifies and nobody has
+                                        // enrolled yet. Everyone else is here to be
+                                        // read, not acted on.
+                                        $canEnrol = $segment === 'pending' && $record->id;
+                                        [$standing, $standingBadge] = match ($segment) {
+                                            'beneficiary' => ['Enrolled', 'badge-normal'],
+                                            'pending' => ['Awaiting enrollment', 'badge-monitor'],
+                                            default => ['Not qualified', 'badge-neutral'],
+                                        };
                                     @endphp
                                     <tr data-search="{{ strtolower(trim($record->student_name.' '.$record->section_name)) }}"
                                         @if ($record->id) data-record="{{ $record->id }}" @endif>
                                         <td class="bnf-check">
-                                            @if ($record->id)
+                                            @if ($canEnrol)
                                                 <input type="checkbox" data-select="{{ $record->id }}" aria-label="Select {{ $record->student_name }}">
                                             @endif
                                         </td>
@@ -293,20 +310,22 @@
                                         </td>
                                         <td>{{ $grade !== '' ? $grade : '—' }}</td>
                                         <td>{{ $record->section_name }}</td>
-                                        <td><span class="badge {{ $statusBadge($baselineStatus) }}">{{ $baselineStatus ?: 'Not set' }}</span></td>
+                                        <td><span class="badge {{ $statusBadge($baselineStatus) }}">{{ $baselineStatus ?: 'Not measured' }}</span></td>
+                                        <td><span class="badge {{ $standingBadge }}">{{ $standing }}</span></td>
                                         <td class="bnf-action">
-                                            @if ($record->id)
+                                            @if ($canEnrol)
                                                 <button type="button" class="btn-link-enroll" data-enroll="{{ $record->id }}">Enroll</button>
                                             @else
-                                                {{-- No database row yet, so there is nothing to enrol. --}}
+                                                {{-- Already enrolled, not qualified, or no
+                                                     database row to enrol at all. --}}
                                                 <span class="bnf-none">&mdash;</span>
                                             @endif
                                         </td>
                                     </tr>
                                 @empty
-                                    <tr><td colspan="6" class="table-empty">{{ $activeFilters ? 'No learner matches these filters.' : 'No learner is waiting to be enrolled.' }}</td></tr>
+                                    <tr><td colspan="7" class="table-empty">{{ $activeFilters ? 'No learner matches these filters.' : 'No learner is on the roll for this school year.' }}</td></tr>
                                 @endforelse
-                                <tr id="recordsNoMatch" style="display:none;"><td colspan="6" class="table-empty">No learner matches this search.</td></tr>
+                                <tr id="recordsNoMatch" style="display:none;"><td colspan="7" class="table-empty">No learner matches this search.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -326,7 +345,7 @@
                                 <th class="sortable" data-sort="text" tabindex="0" role="button">Student</th>
                                 <th class="sortable" data-sort="text" tabindex="0" role="button">Grade</th>
                                 <th class="sortable" data-sort="text" tabindex="0" role="button">Section</th>
-                                <th class="sortable" data-sort="text" tabindex="0" role="button">Sex</th>
+                                <th class="sortable" data-sort="text" tabindex="0" role="button">Gender</th>
                                 <th class="sortable" data-sort="text" tabindex="0" role="button">Baseline</th>
                                 <th class="sortable num" data-sort="number" tabindex="0" role="button">Attendance</th>
                                 <th class="sortable" data-sort="text" tabindex="0" role="button">Status</th>

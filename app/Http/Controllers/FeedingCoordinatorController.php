@@ -32,6 +32,18 @@ class FeedingCoordinatorController extends Controller
             $records = $query->forCurrentSchoolYear()->get();
         }
 
+        // Every form on this page is an SBFP form, and SBFP is Junior High only.
+        // The whole page is therefore narrowed once, here, to the grades the
+        // programme covers — read from FeedingBeneficiarySummary::GRADE_LEVELS,
+        // never re-typed. Without it the Grade Level dropdown offered whatever
+        // grades happened to be on the roll (Grade 11, Grade 12, an elementary
+        // grade, "Unassigned") and would auto-fill a masterlist of qualified
+        // recipients for learners the programme cannot feed. The BMI grids drop
+        // them already; this makes the two agree rather than relying on it.
+        $records = $records->filter(
+            fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::coversGrade($record)
+        )->values();
+
         // Group adviser-entered students by grade level so each SBFP form is
         // filled with one grade only — Grade 8 is never mixed with Grade 9.
         // Names and statuses are encrypted at rest, so the grouping and sorting
@@ -229,6 +241,14 @@ class FeedingCoordinatorController extends Controller
             'attendance' => in_array($clean('attendance'), ['present', 'absent', 'unmarked'], true)
                 ? $clean('attendance')
                 : '',
+            // Which population the Nutritional Status panel reports on. It moves
+            // that panel alone — the cards above it are the programme's figures
+            // and must not change because somebody widened one breakdown.
+            'population' => in_array(
+                $clean('population'),
+                array_column(self::populationOptions(), 'value'),
+                true
+            ) ? $clean('population') : self::POPULATION_BENEFICIARIES,
         ];
     }
 
@@ -245,7 +265,9 @@ class FeedingCoordinatorController extends Controller
             'sex' => '',
             'status' => '',
             'attendance' => '',
+            'population' => self::POPULATION_BENEFICIARIES,
         ];
+        $filters['population'] ??= self::POPULATION_BENEFICIARIES;
 
         $students = collect();
         $schoolYears = collect();
@@ -300,6 +322,26 @@ class FeedingCoordinatorController extends Controller
             (string) ($filters['sex'] ?? '')
         );
 
+        // "All Students" for the Nutritional Status panel: every learner in a
+        // grade the programme covers, whatever their status and whether or not
+        // anyone enrolled them — which is where a Normal or Obese learner is
+        // counted, since they are never beneficiaries but are still the school's
+        // children. Scoped by the same grade/section/sex the panels use, so the
+        // two populations answer the same question about the same class.
+        $allStudentsInScope = FeedingBeneficiarySummary::scopeToSex(
+            $students->filter(function (StudentHealthRecord $record) use ($filters): bool {
+                if (! FeedingBeneficiarySummary::coversGrade($record)) {
+                    return false;
+                }
+
+                [$grade, $section] = $this->splitSection((string) $record->section);
+
+                return ($filters['grade'] === '' || $grade === $filters['grade'])
+                    && ($filters['section'] === '' || $section === $filters['section']);
+            })->values(),
+            (string) ($filters['sex'] ?? '')
+        );
+
         $rule = FeedingAtRiskRule::forInstitution($institutionId);
         $beneficiaryStats = $this->buildBeneficiaryStats($beneficiaries, $rule);
 
@@ -329,7 +371,12 @@ class FeedingCoordinatorController extends Controller
                 'started' => $cycle->hasStarted(),
                 'start_date' => $cycle->startDateIso(),
             ],
-            'nutritionStatus' => $this->buildNutritionStatus($beneficiaries),
+            'nutritionStatus' => $this->buildNutritionStatus(
+                $filters['population'] === self::POPULATION_ALL_STUDENTS
+                    ? $allStudentsInScope
+                    : $beneficiaries,
+                (string) $filters['population']
+            ),
             'todayAttendance' => $this->buildTodayAttendance($beneficiaries, $filters),
             'attendanceRisk' => $this->buildAttendanceRisk($beneficiaries, $rule),
             'nutritionProgress' => FeedingNutritionProgress::build(
@@ -376,6 +423,7 @@ class FeedingCoordinatorController extends Controller
             // been filed under it.
             'sexes' => FeedingBeneficiarySummary::SEX_OPTIONS,
             'statuses' => array_column($this->nutritionScale(), 'label'),
+            'populations' => self::populationOptions(),
             'attendance' => [
                 ['value' => 'present', 'label' => 'Present'],
                 ['value' => 'absent', 'label' => 'Absent'],
@@ -402,35 +450,111 @@ class FeedingCoordinatorController extends Controller
             ['label' => 'Wasted', 'badge' => 'badge-risk', 'eligible' => true],
             ['label' => 'Normal', 'badge' => 'badge-normal', 'eligible' => false],
             ['label' => 'Obese', 'badge' => 'badge-monitor', 'eligible' => false],
+            // Only ever non-zero for All Students: a beneficiary qualified on a
+            // measurement, so one cannot be unmeasured. It exists because a
+            // learner nobody weighed must not be reported as Normal — "412
+            // Normal" that quietly includes 60 children no one has looked at is
+            // the one reading this panel must never produce.
+            ['label' => self::STATUS_NOT_MEASURED, 'badge' => 'badge-neutral', 'eligible' => false],
         ];
     }
 
     /**
-     * The beneficiary roll broken down by baseline nutritional status. The
-     * counts always sum to the beneficiary total, so the panel and the headline
-     * card can never tell two different stories.
+     * The two populations the Nutritional Status panel can report.
      *
-     * Rows are listed even where the count is zero: a coordinator reading
-     * "Obese 0" learns something, a missing row only looks like a bug.
-     *
-     * @param  Collection<int, StudentHealthRecord>  $beneficiaries
-     * @return array{total: int, rows: list<array{label: string, count: int, badge: string, eligible: bool}>}
+     * Beneficiaries is the programme (qualified AND enrolled). All Students is
+     * every learner in a covered grade, whatever their status — which is where a
+     * Normal or Obese learner shows up, since they are never beneficiaries but
+     * are still the school's children and still counted.
      */
-    private function buildNutritionStatus(Collection $beneficiaries): array
+    public const POPULATION_BENEFICIARIES = 'beneficiaries';
+
+    public const POPULATION_ALL_STUDENTS = 'all_students';
+
+    /** A learner nobody has weighed. Not a status — the absence of one. */
+    public const STATUS_NOT_MEASURED = 'Not measured';
+
+    /** @return list<array{value: string, label: string}> */
+    public static function populationOptions(): array
     {
-        $counts = [];
-        foreach ($beneficiaries as $record) {
-            $status = $this->panelStatus($record);
-            $counts[$status] = ($counts[$status] ?? 0) + 1;
+        return [
+            ['value' => self::POPULATION_BENEFICIARIES, 'label' => 'Beneficiaries'],
+            ['value' => self::POPULATION_ALL_STUDENTS, 'label' => 'All Students'],
+        ];
+    }
+
+    /**
+     * The chosen population broken down by nutritional status, at both
+     * weighings.
+     *
+     * The counts always sum to the total above them, so the panel and the
+     * headline card can never tell two different stories. Rows are listed even
+     * where the count is zero: a coordinator reading "Obese 0" learns something,
+     * a missing row only looks like a bug.
+     *
+     * Two readings, side by side and never merged. **Baseline** is what the
+     * learner was measured at; **Endline** is the closing measurement, and it
+     * counts only learners who have actually had one — an unmeasured learner is
+     * not "unchanged", so the endline column is deliberately allowed to sum to
+     * less than the total, and says how many are still to be measured rather
+     * than filing them under a status nobody recorded.
+     *
+     * @param  Collection<int, StudentHealthRecord>  $population
+     * @return array<string, mixed>
+     */
+    private function buildNutritionStatus(Collection $population, string $populationKey): array
+    {
+        $baseline = [];
+        $endline = [];
+        $endlineMeasured = 0;
+
+        foreach ($population as $record) {
+            $status = $this->panelStatusOrUnmeasured($record);
+            $baseline[$status] = ($baseline[$status] ?? 0) + 1;
+
+            $closing = $this->endlineStatus($record);
+            if ($closing !== '') {
+                $endline[$closing] = ($endline[$closing] ?? 0) + 1;
+                $endlineMeasured++;
+            }
         }
 
+        $label = collect(self::populationOptions())->firstWhere('value', $populationKey)['label']
+            ?? 'Beneficiaries';
+
         return [
-            'total' => $beneficiaries->count(),
+            'total' => $population->count(),
+            'population' => $populationKey,
+            'population_label' => $label,
+            'total_label' => $populationKey === self::POPULATION_ALL_STUDENTS
+                ? 'Total Students'
+                : 'Total Beneficiaries',
+            'endline_measured' => $endlineMeasured,
+            'endline_pending' => $population->count() - $endlineMeasured,
             'rows' => array_map(
-                fn (array $row): array => $row + ['count' => (int) ($counts[$row['label']] ?? 0)],
+                fn (array $row): array => $row + [
+                    'count' => (int) ($baseline[$row['label']] ?? 0),
+                    'endline' => (int) ($endline[$row['label']] ?? 0),
+                ],
                 $this->nutritionScale()
             ),
         ];
+    }
+
+    /**
+     * A learner's baseline status, or "Not measured" when there is no reading.
+     *
+     * `FeedingBeneficiarySummary::statusOf()` folds an absent reading into
+     * Normal so its four cards sum to the beneficiary total, which is right for
+     * the programme — every beneficiary was measured. It is wrong for All
+     * Students, where reporting the unweighed as Normal turns children nobody
+     * has looked at into good news.
+     */
+    private function panelStatusOrUnmeasured(StudentHealthRecord $record): string
+    {
+        $reading = trim((string) ($record->baseline_nutritional_status ?: $record->nutritional_status));
+
+        return $reading === '' ? self::STATUS_NOT_MEASURED : $this->panelStatus($record);
     }
 
     /**

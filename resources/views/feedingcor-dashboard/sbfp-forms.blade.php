@@ -40,8 +40,8 @@
 					<select id="formTemplateSelect" class="select selector-input" aria-label="Select SBFP form template">
 						<option value="">Choose a form...</option>
 						<optgroup label="Reports (auto-tabulated)">
-							<option value="bmi-baseline">BMI Report - Baseline Nutritional Assessment (Grades 7-12)</option>
-							<option value="bmi-final">BMI Report - Final Nutritional Assessment (Grades 7-12)</option>
+							<option value="bmi-baseline">BMI Report - Baseline Nutritional Assessment ({{ \App\Support\FeedingBeneficiarySummary::gradeRangeLabel() }})</option>
+							<option value="bmi-final">BMI Report - Final Nutritional Assessment ({{ \App\Support\FeedingBeneficiarySummary::gradeRangeLabel() }})</option>
 						</optgroup>
 						<optgroup label="Feeding Program (hand-encoded)">
 							<option value="feeding-narrative">Feeding Program - Narrative Report</option>

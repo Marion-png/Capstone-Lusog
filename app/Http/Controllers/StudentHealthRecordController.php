@@ -41,6 +41,22 @@ class StudentHealthRecordController extends Controller
     private const SEX_OPTIONS = ['Male', 'Female'];
 
     /**
+     * The Beneficiaries tab's three views.
+     *
+     * `all_students` replaced `pending`, which listed only the qualified
+     * learners waiting to be enrolled. A learner who is Normal or Obese will
+     * never be a beneficiary, but they are still on the school's roll and still
+     * counted — so the view lists everyone and offers the Enroll action on the
+     * qualified rows alone.
+     *
+     * @var list<string>
+     */
+    public const VIEW_ALL_STUDENTS = 'all_students';
+
+    /** @var list<string> */
+    public const BENEFICIARY_VIEWS = ['all', self::VIEW_ALL_STUDENTS, 'at_risk'];
+
+    /**
      * Per-request memo for this page's repeated reads.
      *
      * The adviser dashboard builds two things from the same underlying data —
@@ -1462,15 +1478,27 @@ class StudentHealthRecordController extends Controller
             $sectionFilter = '';
         }
 
-        $segmentView = in_array($request->query('view'), ['all', 'pending', 'at_risk'], true)
-            ? (string) $request->query('view')
+        $requestedView = (string) $request->query('view', '');
+        // `pending` was this view's old name, when it listed only the qualified
+        // learners waiting to be enrolled. Old links still work and land on the
+        // view that replaced it.
+        if ($requestedView === 'pending') {
+            $requestedView = self::VIEW_ALL_STUDENTS;
+        }
+        $segmentView = in_array($requestedView, self::BENEFICIARY_VIEWS, true)
+            ? $requestedView
             : 'all';
 
         // "All beneficiaries" is the enrolled roll — the Total Beneficiaries
         // card — and "At risk" is the At Risk card. Both read the flags set
         // above, so a tab can never disagree with the card it sits under.
+        //
+        // "All Students" is every learner on the roll, whatever their status:
+        // the Normal and Obese learners who will never be beneficiaries are
+        // still the school's children and are counted here. Only the qualified
+        // ones carry an Enroll action — see the view.
         $inView = fn (Collection $rows, string $view): Collection => match ($view) {
-            'pending' => $rows->where('segment', 'pending'),
+            self::VIEW_ALL_STUDENTS => $rows,
             'at_risk' => $rows->where('at_risk', true),
             default => $rows->where('segment', 'beneficiary'),
         };
@@ -1491,7 +1519,7 @@ class StudentHealthRecordController extends Controller
         // reports Grade 8's learners, matching the cards, which filter the same way.
         $segmentCounts = [
             'all' => $records->where('segment', 'beneficiary')->count(),
-            'pending' => $records->where('segment', 'pending')->count(),
+            self::VIEW_ALL_STUDENTS => $records->count(),
             'at_risk' => $records->where('at_risk', true)->count(),
         ];
 
@@ -1519,7 +1547,7 @@ class StudentHealthRecordController extends Controller
         if (! in_array($narrow['attendance'], ['present', 'absent', 'unmarked'], true)) {
             $narrow['attendance'] = '';
         }
-        if (! in_array($narrow['beneficiary_status'], ['enrolled', 'pending'], true)) {
+        if (! in_array($narrow['beneficiary_status'], ['enrolled', 'pending', 'not_qualified'], true)) {
             $narrow['beneficiary_status'] = '';
         }
         if (! in_array($narrow['endline_status'], array_merge(self::STATUS_OPTIONS, ['not_measured']), true)) {
@@ -1538,7 +1566,11 @@ class StudentHealthRecordController extends Controller
             $records = $records->where('attendance_today', $narrow['attendance']);
         }
         if ($narrow['beneficiary_status'] !== '') {
-            $records = $records->where('segment', $narrow['beneficiary_status'] === 'enrolled' ? 'beneficiary' : 'pending');
+            $records = $records->where('segment', match ($narrow['beneficiary_status']) {
+                'enrolled' => 'beneficiary',
+                'pending' => 'pending',
+                default => 'other',
+            });
         }
         if ($narrow['endline_status'] !== '') {
             $records = $records->filter(function ($row) use ($narrow): bool {
@@ -1576,7 +1608,10 @@ class StudentHealthRecordController extends Controller
                 ],
                 'beneficiary' => [
                     'enrolled' => 'Enrolled',
-                    'pending' => 'Pending enrollment',
+                    'pending' => 'Qualified, awaiting enrollment',
+                    // Normal, Overweight or Obese: on the roll, never a
+                    // beneficiary, and visible on the All Students view.
+                    'not_qualified' => 'Not qualified',
                 ],
             ],
             'totalBeforeFilters' => $totalBeforeFilters,

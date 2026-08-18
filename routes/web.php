@@ -33,6 +33,7 @@ use App\Http\Controllers\StudentMedicalDocumentController;
 use App\Models\AuditLog;
 use App\Models\Consultation;
 use App\Models\Institution;
+use App\Models\InstitutionSection;
 use App\Models\Medicine;
 use App\Models\MedicineDispense;
 use App\Models\StudentHealthRecord;
@@ -99,6 +100,30 @@ Route::post('/account-request', function (Request $request) {
     // Usernames are unique per school: the same teacher may register a
     // separate account for each school they work in.
     $requestedInstitutionId = in_array($role, $scopedRoles, true) ? ((int) $validated['institution_id']) : null;
+
+    // An adviser is scoped to one grade and one section, so those two strings
+    // decide which learners they may enter and read for the rest of the year.
+    // Where the school has published its sections, the answer must be one of
+    // them — a typo would hand the adviser a class that does not exist and an
+    // empty roster they cannot explain. A school with no catalogue is accepted
+    // as typed: not every school has published its list, and refusing them a
+    // registration would be worse than accepting a typed answer.
+    if ($role === 'class_adviser' && InstitutionSection::hasCatalog($requestedInstitutionId)) {
+        $gradeLevel = (string) ($validated['assigned_grade_level'] ?? '');
+        $section = (string) ($validated['assigned_section'] ?? '');
+
+        $canonical = InstitutionSection::canonical($requestedInstitutionId, $gradeLevel, $section);
+
+        if ($canonical === null) {
+            return back()
+                ->withErrors(['assigned_section' => 'Select a grade level and section your school runs.'])
+                ->withInput();
+        }
+
+        // Store the catalogue's own spelling, so every adviser at this school
+        // is scoped by the same string the roster filters compare against.
+        [$validated['assigned_grade_level'], $validated['assigned_section']] = $canonical;
+    }
 
     $alreadyPending = Schema::hasTable('account_requests') && DB::table('account_requests')
         ->whereRaw('LOWER(TRIM(username)) = ?', [$username])
@@ -452,6 +477,15 @@ Route::get('/api/institutions', function () {
     return Institution::active()->orderBy('name')->get(['id', 'name']);
 })->name('api.institutions.index');
 
+// API: the sections one school runs, grouped by grade level, for the cascading
+// grade/section dropdowns on the account-request form. School structure, not
+// personal information — no session is needed to read it.
+Route::get('/api/institutions/{institutionId}/sections', function (string $institutionId) {
+    return response()->json([
+        'grades' => (object) InstitutionSection::catalogFor((int) $institutionId),
+    ]);
+})->whereNumber('institutionId')->name('api.institutions.sections');
+
 // API routes for condition search and creation
 Route::get('/api/conditions', [ConditionController::class, 'index'])
     ->name('api.conditions.index');
@@ -626,8 +660,11 @@ Route::get('/dashboard/school-head/reports/export', [SchoolHeadReportsController
 
 // The one write the School Head has: approving, returning or locking a report.
 // Named in RestrictSchoolHeadWrites::ALLOWED_ROUTES — nothing else is.
-Route::post('/dashboard/school-head/reports/review', [SchoolHeadReportsController::class, 'review'])
-    ->name('dashboard.school-head.reports.review');
+// One report, opened as the DepEd form it will be exported as. A read, like
+// everything else this role does — the head no longer records a decision on a
+// report, so there is no POST here at all.
+Route::get('/dashboard/school-head/reports/view', [SchoolHeadReportsController::class, 'show'])
+    ->name('dashboard.school-head.reports.view');
 
 Route::get('/dashboard/school-head/masterlist', [SchoolHeadMasterlistController::class, 'index'])
     ->name('dashboard.school-head.masterlist');
@@ -799,6 +836,10 @@ Route::get('/dashboard/school-nurse/consent-forms', [HealthConsentFormController
     ->name('consent-forms.nurse-index');
 Route::get('/dashboard/school-nurse/consent-forms/{form}', [HealthConsentFormController::class, 'nurseShow'])
     ->whereNumber('form')->name('consent-forms.nurse-show');
+// The School Head reads one signed letter: a click with a reason behind it,
+// audited like every other read of a parent's answer.
+Route::get('/dashboard/school-head/consent-forms/{form}', [HealthConsentFormController::class, 'headShow'])
+    ->whereNumber('form')->name('consent-forms.head-show');
 Route::get('/dashboard/consent-forms/{form}/print', [HealthConsentFormController::class, 'print'])
     ->whereNumber('form')->name('consent-forms.print');
 Route::get('/consent/{token}', [HealthConsentFormController::class, 'parentShow'])
@@ -844,18 +885,26 @@ Route::post('/events/{event}/delete', [EventController::class, 'destroy'])
     ->whereNumber('event')
     ->name('events.destroy');
 
+// The Feeding Coordinator's Feeding Program tab is gone. Everything it showed
+// now lives on a tab that owns it outright — the cycle and the session figures
+// on Attendance, the threshold list on At-Risk Students, the roll on
+// Beneficiaries — and the page was a fourth rendering of all three, which is how
+// screens start disagreeing about the same programme. Its endpoints (import,
+// scan, record, enrolment, the beneficiary record) are unaffected and keep their
+// `feedingcor-program.*` names; only the page is retired, and old links to it
+// land on Attendance rather than a 404.
 Route::get('/dashboard/feedingcor-program', function (Request $request) {
     $activeRole = strtolower(trim((string) $request->session()->get('active_role', '')));
 
     if ($activeRole === 'school_nurse') {
-        return redirect()
-            ->route('dashboard.school-nurse.feeding-program')
-            ->with('error', 'School Nurse has view-only access to Feeding Program.');
+        return redirect()->route('dashboard.school-nurse.feeding-program');
     }
 
-    return app(FeedingProgramController::class)->index($request);
+    return redirect()->route('dashboard.feedingcor-attendance');
 })->name('dashboard.feedingcor-program');
 
+// The School Nurse keeps a read-only Feeding Program page: it is that role's
+// only window onto the programme, not a second copy of a coordinator tab.
 Route::get('/dashboard/school-nurse/feeding-program', [FeedingProgramController::class, 'index'])
     ->name('dashboard.school-nurse.feeding-program');
 
@@ -1309,7 +1358,7 @@ Route::post('/login', function (Request $request) {
     ];
 
     return redirect()->route($routeByRole[$role] ?? 'dashboard.school-nurse');
-});
+})->name('login.submit');
 
 Route::post('/admin-login', function (Request $request) {
     $validated = $request->validate([

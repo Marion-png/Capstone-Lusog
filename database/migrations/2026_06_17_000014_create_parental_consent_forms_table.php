@@ -11,8 +11,8 @@ return new class extends Migration
         Schema::create('parental_consent_forms', function (Blueprint $table) {
             $table->id();
             $table->foreignId('student_health_record_id')
-                  ->constrained('student_health_records')
-                  ->cascadeOnDelete();
+                ->constrained('student_health_records')
+                ->cascadeOnDelete();
             $table->string('program_type', 50)->default('Deworming');
             $table->string('school_year', 9); // e.g. "2025-2026"
             $table->string('file_path');

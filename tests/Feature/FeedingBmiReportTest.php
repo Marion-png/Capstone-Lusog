@@ -145,6 +145,66 @@ class FeedingBmiReportTest extends TestCase
         }
     }
 
+    /**
+     * The grids were Junior High only, but the page around them was not.
+     *
+     * The Grade Level control offered whatever grades happened to be on the
+     * roll, so a coordinator could pick Grade 11 and auto-fill a Masterlist of
+     * Qualified Recipients for learners the programme cannot feed — a form that
+     * looks official and names children who are not beneficiaries. Every form on
+     * this page is an SBFP form, so the whole page is narrowed to the covered
+     * grades, not just the tables that already dropped them.
+     */
+    #[Test]
+    public function the_grade_level_control_offers_only_the_grades_the_programme_covers(): void
+    {
+        $this->makeStudent('Grade 7 / Matiyaga', 'Male', 'Wasted', 'Stunted');
+        $this->makeStudent('Grade 10 / Narra', 'Female', 'Severely Wasted', 'Stunted');
+        $this->makeStudent('Grade 11 / Humss', 'Male', 'Wasted', 'Stunted');
+        $this->makeStudent('Grade 12 / Stem', 'Female', 'Underweight', 'Stunted');
+        $this->makeStudent('Grade 6 / Sampaguita', 'Male', 'Wasted', 'Stunted');
+        $this->makeStudent('', 'Male', 'Wasted', 'Stunted');
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms');
+        $response->assertOk();
+
+        $this->assertSame(['Grade 7', 'Grade 10'], $response->viewData('gradeOptions'));
+
+        // And no form on the page can be auto-filled with one of them.
+        $this->assertSame(
+            ['Grade 7', 'Grade 10'],
+            array_keys($response->viewData('studentsByGrade'))
+        );
+    }
+
+    #[Test]
+    public function a_senior_high_learner_never_reaches_the_masterlist_autofill(): void
+    {
+        $this->makeStudent('Grade 11 / Humss', 'Male', 'Severely Wasted', 'Stunted');
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms');
+
+        $response->assertOk();
+        // Qualifying on status is not enough — the grade decides too.
+        $this->assertSame([], $response->viewData('studentsByGrade'));
+        $response->assertDontSee('Grade 11', false);
+    }
+
+    /** A label typed by hand is a copy of the range that stops changing with it. */
+    #[Test]
+    public function the_bmi_report_options_name_the_range_they_actually_print(): void
+    {
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms');
+
+        $response->assertOk();
+        $response->assertSee(FeedingBeneficiarySummary::gradeRangeLabel(), false);
+        $response->assertSee('Grades 7-10', false);
+        $response->assertDontSee('Grades 7-12', false);
+    }
+
     #[Test]
     public function underweight_is_grouped_under_wasted(): void
     {

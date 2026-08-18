@@ -11,8 +11,8 @@ return new class extends Migration
         Schema::create('medical_certificates', function (Blueprint $table) {
             $table->id();
             $table->foreignId('student_health_condition_id')
-                  ->constrained('student_health_conditions')
-                  ->cascadeOnDelete();
+                ->constrained('student_health_conditions')
+                ->cascadeOnDelete();
             $table->string('file_path');
             $table->string('file_original_name');
             $table->string('doctor_clinic', 255)->nullable();

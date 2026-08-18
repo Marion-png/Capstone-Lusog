@@ -10,16 +10,16 @@ return new class extends Migration
     {
         if (Schema::hasTable('student_health_records')) {
             Schema::table('student_health_records', function (Blueprint $table) {
-                if (!Schema::hasColumn('student_health_records', 'attendance_sessions_count')) {
+                if (! Schema::hasColumn('student_health_records', 'attendance_sessions_count')) {
                     $table->unsignedSmallInteger('attendance_sessions_count')->default(0)->after('endline_recorded_at');
                 }
-                if (!Schema::hasColumn('student_health_records', 'is_at_risk')) {
+                if (! Schema::hasColumn('student_health_records', 'is_at_risk')) {
                     $table->boolean('is_at_risk')->default(false)->after('attendance_sessions_count');
                 }
             });
         }
 
-        if (!Schema::hasTable('feeding_attendances')) {
+        if (! Schema::hasTable('feeding_attendances')) {
             Schema::create('feeding_attendances', function (Blueprint $table) {
                 $table->id();
                 $table->foreignId('student_health_record_id')->constrained('student_health_records')->cascadeOnDelete();

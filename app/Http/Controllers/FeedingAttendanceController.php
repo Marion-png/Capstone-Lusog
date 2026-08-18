@@ -209,6 +209,21 @@ class FeedingAttendanceController extends Controller
         $filters = $this->readFilters($request, $rows);
         $filteredRows = $this->applyFilters($rows, $filters);
 
+        // Whether this session is closed to recording.
+        //
+        // Deliberately read off the UNFILTERED rows: a session's standing is a
+        // fact about the day, and narrowing to one section must never reopen it.
+        // Once a human has confirmed a mark for this date the session is a
+        // record — the sheet reports it, the modal will not reopen it, and a
+        // genuine mistake (or a learner the sheet skipped) is put right on the
+        // learner's own beneficiary record, where the change is attributed and
+        // audited. An UNCONFIRMED scanned mark does not close a session: nobody
+        // has read it, and recording on site is exactly how it gets decided.
+        $sessionLocked = $rows->contains('locked', true);
+        $isFeedingDay = FeedingProgramCycle::isFeedingDay($selectedDate);
+        $withinWindow = $selectedDate <= $window['end']
+            && ($window['start'] === null || $selectedDate >= $window['start']);
+
         $standings = $this->standings($beneficiaries, $byRecord, $rule, count($sessionDates));
         $atRiskCount = collect($standings)->where('at_risk', true)->count();
         // Learners the threshold has not started classifying yet. They are
@@ -260,11 +275,26 @@ class FeedingAttendanceController extends Controller
             'filters' => $filters,
             'filterOptions' => $this->filterOptions($rows),
             'sessionRecorded' => $byDate->has($selectedDate),
-            // How much of this session is settled. When nothing on screen is
-            // still open the sheet becomes a record rather than a form: the
-            // save bar and the bulk marks go, because there is nothing left to
-            // save. A wrong mark is fixed on the learner's own record, where
-            // the correction is attributed and audited.
+            // The sheet is a record, never a form: it reports what was recorded
+            // and offers no control at all. Recording happens in the modal, and
+            // only for a session still open.
+            'sessionLocked' => $sessionLocked,
+            'isFeedingDay' => $isFeedingDay,
+            'canRecord' => ! $sessionLocked
+                && $isFeedingDay
+                && $withinWindow
+                && $beneficiaries->isNotEmpty(),
+            // Why recording is unavailable, in the words the coordinator needs.
+            'recordBlockedReason' => match (true) {
+                $beneficiaries->isEmpty() => 'No beneficiary is enrolled for this school year yet.',
+                ! $isFeedingDay => Carbon::parse($selectedDate)->format('l, F j, Y').' is a weekend. There are no feeding sessions on Saturdays or Sundays.',
+                ! $withinWindow => 'That date is outside the running feeding programme.',
+                $sessionLocked => 'Attendance for '.Carbon::parse($selectedDate)->format('F j, Y').' has already been recorded. Correct a mark on the learner’s beneficiary record.',
+                default => '',
+            },
+            // The modal's roll: every beneficiary, unfiltered, so a coordinator
+            // cannot record half a session because a filter was left on.
+            'recordRows' => $rows,
             'openMarkCount' => $filteredRows->where('locked', false)->count(),
             'lockedMarkCount' => $filteredRows->where('locked', true)->count(),
             'atRisk' => [
@@ -640,7 +670,9 @@ class FeedingAttendanceController extends Controller
             return ['start' => null, 'end' => $today];
         }
 
-        $last = Carbon::parse($start)->addDays(FeedingProgramCycle::DURATION_DAYS - 1)->toDateString();
+        // 120 *feeding* days, not 120 calendar days: weekends are not sessions,
+        // so a calendar window closed the programme about seven weeks early.
+        $last = $cycle->endDateIso() ?? $today;
 
         return ['start' => $start, 'end' => min($last, $today)];
     }
@@ -663,15 +695,22 @@ class FeedingAttendanceController extends Controller
             return $direction < 0 ? end($neighbours) : $neighbours[0];
         }
 
-        $candidate = Carbon::parse($selectedDate)->addDays($direction)->toDateString();
+        // Step over the weekend rather than onto it: Saturday and Sunday are not
+        // feeding days, so "previous day" from a Monday is the Friday before.
+        $cursor = Carbon::parse($selectedDate);
 
-        if ($candidate > $window['end']) {
-            return null;
-        }
+        do {
+            $cursor->addDays($direction);
+            $candidate = $cursor->toDateString();
 
-        if ($window['start'] !== null && $candidate < $window['start']) {
-            return null;
-        }
+            if ($candidate > $window['end']) {
+                return null;
+            }
+
+            if ($window['start'] !== null && $candidate < $window['start']) {
+                return null;
+            }
+        } while (! FeedingProgramCycle::isFeedingDay($cursor));
 
         return $candidate;
     }

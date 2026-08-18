@@ -8,9 +8,12 @@
 @php
 	$segView = $segmentView ?? 'all';
 	$segCounts = $segmentCounts ?? [];
+	// "All Students" is every learner on the roll — the Normal and Obese ones
+	// who will never be beneficiaries included, since they are still the
+	// school's children. Only the qualified rows carry an Enroll action.
 	$segTabs = [
 		['key' => 'all', 'label' => 'All beneficiaries'],
-		['key' => 'pending', 'label' => 'Pending enrollment'],
+		['key' => \App\Http\Controllers\StudentHealthRecordController::VIEW_ALL_STUDENTS, 'label' => 'All Students'],
 		['key' => 'at_risk', 'label' => 'At risk'],
 	];
 	// A tab keeps every filter already applied and changes only the view, so

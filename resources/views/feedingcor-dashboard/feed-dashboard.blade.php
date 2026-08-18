@@ -132,7 +132,7 @@
 			     student_details.gender through FeedingBeneficiarySummary, so
 			     every coordinator tab agrees on the answer. --}}
 			<div class="fc-filter">
-				<label class="field-label" for="filterSex">Sex</label>
+				<label class="field-label" for="filterSex">Gender</label>
 				<select class="select" name="sex" id="filterSex">
 					<option value="">All</option>
 					@foreach ($filterOptions['sexes'] as $sexOption)
@@ -180,7 +180,9 @@
 						<h2 class="card-title">Attendance Monitoring</h2>
 						<p class="card-sub">Today&rsquo;s feeding attendance &middot; <span id="fc-updated">{{ $generatedAt }}</span></p>
 					</div>
-					<a class="btn btn-primary" href="{{ route('feedingcor-program.attendance.record') }}">
+					{{-- Recording lives on the Attendance tab, in its dialog; this
+					     opens that tab with the dialog already up. --}}
+					<a class="btn btn-primary" href="{{ route('dashboard.feedingcor-attendance', ['view' => 'sheet', 'record' => 1]) }}">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
 						Record Today&rsquo;s Attendance
 					</a>
@@ -212,7 +214,7 @@
 					</h2>
 					<p class="card-sub">Beneficiaries below the school&rsquo;s cumulative attendance threshold.</p>
 				</div>
-				<a class="btn btn-secondary" href="{{ route('dashboard.feedingcor-program') }}#atRiskSection">
+				<a class="btn btn-secondary" href="{{ route('dashboard.feedingcor-at-risk') }}">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
 					View At-Risk List
 				</a>

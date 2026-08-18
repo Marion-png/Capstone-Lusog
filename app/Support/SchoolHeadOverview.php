@@ -504,6 +504,7 @@ final class SchoolHeadOverview
         $improved = 0;
         $declined = 0;
         $unchanged = 0;
+        $stillWasted = 0;
 
         foreach ($this->beneficiaries as $record) {
             $baseline = self::phaseStatus($record, 'baseline');
@@ -517,6 +518,14 @@ final class SchoolHeadOverview
 
             if ($endline === 'Normal') {
                 $rehabilitated++;
+            }
+
+            // The learners the programme has not yet moved off the wasting
+            // scale. Counted over the learners actually re-measured — a child
+            // nobody weighed at endline is not "still wasted", they are simply
+            // not measured, and the two are reported separately.
+            if ($endline === 'Severely Wasted' || $endline === 'Wasted') {
+                $stillWasted++;
             }
 
             $from = FeedingNutritionProgress::rank($baseline);
@@ -541,6 +550,10 @@ final class SchoolHeadOverview
             'not_measured' => $total - $measured,
             'rehabilitated' => $rehabilitated,
             'still_undernourished' => $total - $rehabilitated,
+            // Severely Wasted or Wasted at the closing weigh-in. Distinct from
+            // `still_undernourished`, which is every beneficiary not reaching
+            // Normal and therefore sweeps in the ones nobody re-measured.
+            'still_wasted' => $stillWasted,
             'improved' => $improved,
             'unchanged' => $unchanged,
             'declined' => $declined,

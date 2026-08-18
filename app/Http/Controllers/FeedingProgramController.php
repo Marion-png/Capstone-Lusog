@@ -479,7 +479,8 @@ class FeedingProgramController extends Controller
         // No success banner: the page the coordinator lands on already shows the
         // result — the learners, their attendance, and who is flagged at-risk.
         // Only problems worth acting on are reported below.
-        $redirect = redirect()->route('dashboard.feedingcor-program', ['grade' => $selectedGrade]);
+        // The Attendance tab is where imported marks land and are read.
+        $redirect = redirect()->route('dashboard.feedingcor-attendance', ['grade' => $selectedGrade]);
 
         if (! empty($unmatched)) {
             // The names themselves are deliberately not echoed back: a row that
@@ -650,7 +651,8 @@ class FeedingProgramController extends Controller
         // Nothing pending means nothing to look at the photo for.
         $this->purgeScanPhotoIfReviewed($import);
 
-        $redirect = redirect()->route('dashboard.feedingcor-program', ['grade' => $selectedGrade]);
+        // The Attendance tab is where imported marks land and are read.
+        $redirect = redirect()->route('dashboard.feedingcor-attendance', ['grade' => $selectedGrade]);
 
         if ($result['unreadable']) {
             return $redirect->with('error', 'The photo could not be read — every mark for '.$dateSummary.' is waiting for review. '.$result['note']);
@@ -818,12 +820,19 @@ class FeedingProgramController extends Controller
             ->sortBy(fn (array $row) => strtolower($row['name']))
             ->values();
 
+        // A recorded session is closed as a whole, so this screen becomes a
+        // record too: no inputs, no save. The same rule the Attendance tab's
+        // sheet and this endpoint's POST apply, asked in one place.
+        $sessionLocked = $this->sessionIsRecorded($beneficiaries->pluck('id')->map(fn ($id): int => (int) $id)->all(), $sessionDate);
+
         return view('feedingcor-dashboard.record-attendance', [
             'rows' => $rows,
             'sessionDate' => $sessionDate,
             'sessionLabel' => Carbon::parse($sessionDate)->format('M d, Y'),
             'today' => now()->toDateString(),
             'alreadyRecorded' => $existing->count(),
+            'sessionLocked' => $sessionLocked,
+            'isFeedingDay' => FeedingProgramCycle::isFeedingDay($sessionDate),
         ]);
     }
 
@@ -1208,11 +1217,23 @@ class FeedingProgramController extends Controller
         // A session outside the running cycle is a slip, not a decision: a
         // mistyped year would open a feeding day the programme never had and
         // change the denominator every at-risk flag is judged against.
-        $cycleStart = FeedingProgramCycle::forInstitution($institutionId)->startDateIso();
+        $cycle = FeedingProgramCycle::forInstitution($institutionId);
+        $cycleStart = $cycle->startDateIso();
         $requestedDate = Carbon::parse((string) $request->input('session_date'))->toDateString();
 
+        // Nobody is fed on a Saturday or a Sunday, so a weekend mark is not a
+        // session the school held — it is a mistyped date that would add a day
+        // to the denominator every at-risk rate is divided by.
+        if (! FeedingProgramCycle::isFeedingDay($requestedDate)) {
+            return back()->with(
+                'error',
+                Carbon::parse($requestedDate)->format('F j, Y').' is a '
+                    .Carbon::parse($requestedDate)->format('l').'. There are no feeding sessions on weekends.'
+            );
+        }
+
         if ($cycleStart !== null) {
-            $cycleEnd = Carbon::parse($cycleStart)->addDays(self::PROGRAM_DURATION_DAYS - 1)->toDateString();
+            $cycleEnd = $cycle->endDateIso();
 
             if ($requestedDate < $cycleStart || $requestedDate > $cycleEnd) {
                 return back()->with(
@@ -1247,23 +1268,23 @@ class FeedingProgramController extends Controller
             return back()->with('error', 'None of the submitted learners belong to this school.');
         }
 
-        // A mark a human has already recorded for this learner on this day is
-        // settled, and this path will not rewrite it. The sheet renders those
-        // rows without controls, but a form can be replayed and a stale tab can
-        // be submitted, so the refusal has to live here as well — otherwise the
-        // read-only sheet is only a suggestion.
+        // A recorded session is closed, as a whole.
         //
-        // An UNCONFIRMED scanned mark is deliberately not settled: nobody has
-        // read it, and recording on site is exactly how it gets decided.
-        $settledIds = $this->settledMarkIds($marks->keys()->map(fn ($id): int => (int) $id)->all(), $sessionDate);
-
-        $marks = $marks->reject(fn ($mark, $recordId): bool => in_array((int) $recordId, $settledIds, true));
-
-        if ($marks->isEmpty()) {
+        // Once a human has confirmed any mark for this date the session is a
+        // record rather than a form: the sheet reports it, the record dialog will
+        // not reopen it, and this endpoint refuses it — because a stale tab or a
+        // replayed form reaches here all the same, and a read-only screen whose
+        // endpoint still accepts writes is only a suggestion. A wrong mark, and a
+        // learner the session skipped, are both put right on that learner's
+        // beneficiary record, where the change is attributed and audited.
+        //
+        // An UNCONFIRMED scanned mark does not close a session: nobody has read
+        // it, and recording on site is exactly how it gets decided.
+        if ($this->sessionIsRecorded($allowedIds, $sessionDate)) {
             return back()->with(
                 'error',
-                'Attendance for '.Carbon::parse($sessionDate)->format('F j, Y').' has already been recorded for '
-                    .'those learners. Correct a recorded mark on the learner’s beneficiary record.'
+                'Attendance for '.Carbon::parse($sessionDate)->format('F j, Y').' has already been recorded. '
+                    .'Correct a mark on the learner’s beneficiary record.'
             );
         }
 
@@ -1888,6 +1909,22 @@ class FeedingProgramController extends Controller
     private function resolveProgramDay(?int $institutionId = null): int
     {
         return FeedingProgramCycle::forInstitution($institutionId)->day();
+    }
+
+    /**
+     * Whether this session has already been recorded for this school.
+     *
+     * A session is closed by the first confirmed mark on it, not learner by
+     * learner: recording is one act covering the whole roll, so reopening it for
+     * whoever the sheet happened to miss would let two people write the same day
+     * from two screens. The gap is filled on the learner's own record instead,
+     * where the change carries who made it.
+     *
+     * @param  list<int>  $recordIds  the school's own beneficiaries
+     */
+    private function sessionIsRecorded(array $recordIds, string $sessionDate): bool
+    {
+        return $this->settledMarkIds($recordIds, $sessionDate) !== [];
     }
 
     /**

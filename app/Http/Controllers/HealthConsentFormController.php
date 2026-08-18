@@ -401,6 +401,42 @@ class HealthConsentFormController extends Controller
         return view('consent-forms.nurse-show', ['form' => $form]);
     }
 
+    /**
+     * The signed letter, read by the School Head.
+     *
+     * The Consent Compliance tab reports a form's *standing* and never its
+     * contents, which is right for a monitoring table. Opening one specific
+     * signed letter is a different act with a reason behind it — the head
+     * checking that the parent of a named learner really did consent to a
+     * service — so it is its own page, its own click, and its own audit entry.
+     *
+     * Read-only, and only ever a form a parent has actually returned: a draft or
+     * an unanswered letter has no signature to show. Scoped to the head's own
+     * school like every other read.
+     */
+    public function headShow(Request $request, HealthConsentForm $form)
+    {
+        if ($redirect = $this->requireRole($request, ['school_head'])) {
+            return $redirect;
+        }
+
+        $this->assertSameInstitution($request, $form);
+
+        if (! in_array($form->status, [HealthConsentForm::STATUS_SIGNED, HealthConsentForm::STATUS_REVIEWED], true)) {
+            return redirect()->route('dashboard.school-head.consent')
+                ->with('error', 'That form has not been signed by a parent or guardian yet.');
+        }
+
+        $form->addAudit(
+            'Viewed by School Head',
+            (string) $request->session()->get('active_role'),
+            (string) $request->session()->get('active_name', 'School Head'),
+        );
+        $form->save();
+
+        return view('consent-forms.nurse-show', ['form' => $form]);
+    }
+
     /** Print / export-as-PDF view (browser print dialog). */
     public function print(Request $request, HealthConsentForm $form)
     {

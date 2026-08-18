@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\FeedingAttendance;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -163,6 +164,8 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertSee('marks['.$record->id.']', false);
         $response->assertSee('Mark All Present');
         $response->assertSee('Save Attendance');
+        // Both belong to the dialog now; the sheet behind it is a record.
+        $response->assertSee('recordBackdrop', false);
     }
 
     #[Test]
@@ -215,42 +218,93 @@ class FeedingAttendanceTabTest extends TestCase
     }
 
     /**
-     * Once a learner's mark for a day is on file the sheet reports it and
-     * offers no way to change it — no radio, no remark box. A disabled input
-     * would still be a control the browser could re-enable and post; rendering
-     * none at all cannot be.
+     * The sheet is a record, not a form.
+     *
+     * It reports what was recorded and offers no control over it — no radio, no
+     * remark box, no bulk mark, no save bar — and a recorded session closes as
+     * a whole, not learner by learner: one confirmed mark for the day is enough.
+     * A disabled input would still be a control the browser could re-enable and
+     * post; rendering none at all cannot be.
      */
     #[Test]
-    public function a_recorded_learner_is_read_only_on_the_sheet(): void
+    public function a_recorded_session_is_read_only_on_the_sheet(): void
     {
         $recorded = $this->makeStudent(['student_name' => 'Already Recorded']);
-        $open = $this->makeStudent(['student_name' => 'Not Yet Recorded']);
+        $skipped = $this->makeStudent(['student_name' => 'Nobody Marked Me']);
         $this->mark($recorded, now()->toDateString(), false, remarks: 'Sick');
 
         $response = $this->open()->assertOk();
 
-        $response->assertDontSee('marks['.$recorded->id.']', false);
-        $response->assertDontSee('remarks['.$recorded->id.']', false);
         $response->assertSee('Sick');
-        $response->assertSee('already recorded for '.now()->format('F j, Y'));
+        $response->assertSee('has been recorded');
+        $response->assertSee('Not recorded');
 
-        // The learner nobody has marked is still open, and so is the save bar.
-        $response->assertSee('marks['.$open->id.']', false);
-        $response->assertSee('Save Attendance');
+        // No control anywhere, for either learner.
+        foreach ([$recorded, $skipped] as $learner) {
+            $response->assertDontSee('marks['.$learner->id.']', false);
+            $response->assertDontSee('remarks['.$learner->id.']', false);
+        }
+        $response->assertDontSee('Save Attendance');
+        $response->assertDontSee('data-record-all="present"', false);
+        $response->assertDontSee('id="recordBackdrop"', false);
     }
 
+    /** An open session offers exactly one way in: the dialog. */
     #[Test]
-    public function a_fully_recorded_session_offers_nothing_to_save(): void
+    public function an_open_session_records_through_the_dialog(): void
     {
-        $learner = $this->makeStudent();
-        $this->mark($learner, now()->toDateString(), true);
+        $learner = $this->makeStudent(['student_name' => 'Not Yet Recorded']);
 
         $response = $this->open()->assertOk();
 
-        $response->assertDontSee('Save Attendance');
-        // The button, not the phrase — the page's own script mentions it in a
-        // comment, and that is not a control.
+        $response->assertSee('id="recordBackdrop"', false);
+        $response->assertSee('class="btn btn-primary" data-record-open', false);
+        $response->assertSee('marks['.$learner->id.']', false);
+        $response->assertSee('Save Attendance');
+
+        // And the sheet itself still carries no control of its own.
         $response->assertDontSee('data-mark-all="present"', false);
+    }
+
+    /**
+     * The dialog lists the whole roll, whatever the sheet is filtered to.
+     *
+     * Recording is one act covering every beneficiary, and the session closes
+     * when it is saved — so recording through a filtered list would shut the
+     * day on the learners the filter was hiding, with no way back to them.
+     */
+    #[Test]
+    public function the_record_dialog_ignores_the_sheets_filters(): void
+    {
+        $this->makeStudent(['student_name' => 'Grade Seven Learner', 'section' => 'Grade 7 / Maabilidad']);
+        $this->makeStudent(['student_name' => 'Grade Eight Learner', 'section' => 'Grade 8 / Matiyaga']);
+
+        $response = $this->open('?grade='.urlencode('Grade 8'))->assertOk();
+
+        $this->assertSame(
+            ['Grade Eight Learner'],
+            collect($response->viewData('rows'))->pluck('name')->all(),
+            'The sheet shows the filtered session.'
+        );
+        $this->assertEqualsCanonicalizing(
+            ['Grade Seven Learner', 'Grade Eight Learner'],
+            collect($response->viewData('recordRows'))->pluck('name')->all(),
+            'The dialog shows everyone, so a filter cannot close the day on a hidden learner.'
+        );
+    }
+
+    /** A weekend is not a session the school missed — it is not a session. */
+    #[Test]
+    public function a_weekend_offers_no_way_to_record(): void
+    {
+        $this->makeStudent();
+        $saturday = now()->next(Carbon::SATURDAY)->subWeek()->toDateString();
+
+        $response = $this->open('?date='.$saturday)->assertOk();
+
+        $response->assertDontSee('id="recordBackdrop"', false);
+        $response->assertDontSee('Save Attendance');
+        $response->assertSee('no feeding sessions on Saturdays or Sundays');
     }
 
     /**
@@ -275,10 +329,11 @@ class FeedingAttendanceTabTest extends TestCase
         $this->makeStudent(['student_name' => 'Grade Seven Learner', 'section' => 'Grade 7 / Maabilidad']);
         $this->makeStudent(['student_name' => 'Grade Eight Learner', 'section' => 'Grade 8 / Matiyaga']);
 
-        $response = $this->open('?grade='.urlencode('Grade 8'))->assertOk();
+        $rows = collect($this->open('?grade='.urlencode('Grade 8'))->assertOk()->viewData('rows'));
 
-        $response->assertSee('Grade Eight Learner');
-        $response->assertDontSee('Grade Seven Learner');
+        // Asserted on the sheet's own rows: the record dialog on the same page
+        // deliberately lists every beneficiary, filter or no filter.
+        $this->assertSame(['Grade Eight Learner'], $rows->pluck('name')->all());
     }
 
     #[Test]

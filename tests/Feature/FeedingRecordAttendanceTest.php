@@ -6,6 +6,7 @@ use App\Models\AttendanceImport;
 use App\Models\FeedingAttendance;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
@@ -80,6 +81,39 @@ class FeedingRecordAttendanceTest extends TestCase
             ->viewData('rows');
 
         $this->assertCount(1, $rows);
+    }
+
+    /**
+     * The rail must point at the tab that owns the thing on screen.
+     *
+     * Recording a mark belongs to Attendance. This screen used to highlight
+     * Feeding Program — the tab that reads the marks and deliberately offers no
+     * way to change one — so the rail named the one tab that cannot do what the
+     * screen is for.
+     */
+    #[Test]
+    public function recording_a_mark_sits_under_the_attendance_tab_not_feeding_program(): void
+    {
+        $this->makeStudent();
+
+        $html = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-program/attendance/record')
+            ->assertOk()
+            ->getContent();
+
+        $attendanceLink = route('dashboard.feedingcor-attendance');
+        $programLink = route('dashboard.feedingcor-program');
+
+        $this->assertMatchesRegularExpression(
+            '~<a href="'.preg_quote($attendanceLink, '~').'" class="asb-link active"~',
+            $html,
+            'The Attendance rail item should be the active one.'
+        );
+        $this->assertDoesNotMatchRegularExpression(
+            '~<a href="'.preg_quote($programLink, '~').'" class="asb-link active"~',
+            $html,
+            'Feeding Program should not be highlighted while recording a mark.'
+        );
     }
 
     #[Test]
@@ -168,11 +202,16 @@ class FeedingRecordAttendanceTest extends TestCase
     }
 
     /**
-     * A session recorded in two passes still works: only the learners already
-     * on file are refused, so finishing an incomplete sheet is unaffected.
+     * A recorded session is closed as a whole, not learner by learner.
+     *
+     * Recording is one act covering the entire roll, so the first confirmed mark
+     * closes the day: a second pass cannot add a learner the first one missed,
+     * and cannot rewrite one it recorded. That gap is filled on the learner's own
+     * beneficiary record, where the change carries who made it and is audited —
+     * rather than by two people writing the same day from two screens.
      */
     #[Test]
-    public function learners_left_unmarked_can_still_be_recorded_afterwards(): void
+    public function a_recorded_session_is_closed_to_a_second_save(): void
     {
         $first = $this->makeStudent();
         $second = $this->makeStudent();
@@ -187,12 +226,30 @@ class FeedingRecordAttendanceTest extends TestCase
         $this->withSession($this->coordinatorSession())
             ->post('/dashboard/feedingcor-program/attendance/record', [
                 'session_date' => $today,
-                // The settled learner is re-posted and ignored; the new one lands.
                 'marks' => [$first->id => 'absent', $second->id => 'absent'],
-            ]);
+            ])
+            ->assertSessionHas('error');
 
+        // The first pass stands, and the second wrote nothing at all.
         $this->assertTrue((bool) FeedingAttendance::where('student_health_record_id', $first->id)->first()->is_present);
-        $this->assertFalse((bool) FeedingAttendance::where('student_health_record_id', $second->id)->first()->is_present);
+        $this->assertNull(FeedingAttendance::where('student_health_record_id', $second->id)->first());
+    }
+
+    /** A weekend is not a feeding day, so it can never become one. */
+    #[Test]
+    public function a_weekend_session_is_refused(): void
+    {
+        $learner = $this->makeStudent();
+        $saturday = now()->startOfWeek(Carbon::MONDAY)->subDays(2)->toDateString();
+
+        $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-program/attendance/record', [
+                'session_date' => $saturday,
+                'marks' => [$learner->id => 'present'],
+            ])
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseCount('feeding_attendances', 0);
     }
 
     /** Saving is what confirms an unread scanned mark — and it clears the queue. */

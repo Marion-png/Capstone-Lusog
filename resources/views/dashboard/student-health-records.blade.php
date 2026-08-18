@@ -134,7 +134,7 @@
                     </div>
 
                     <div class="shr-filter-group">
-                        <label class="shr-filter-label" for="shrSexFilter">Sex</label>
+                        <label class="shr-filter-label" for="shrSexFilter">Gender</label>
                         <select class="shr-select" id="shrSexFilter" data-filter="sex">
                             <option value="all">All ({{ count($records) }})</option>
                             @foreach ($sexOptions as $sex => $count)
@@ -171,7 +171,7 @@
                             <tr>
                                 <th>LRN</th>
                                 <th>Student Name</th>
-                                <th>Sex</th>
+                                <th>Gender</th>
                                 <th>Age</th>
                                 <th>Section</th>
                                 <th>Health Status</th>
@@ -266,7 +266,7 @@
                 <div class="sp-class" id="pGrade">-</div>
                 <div class="sp-meta">
                     <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="8.5" cy="10" r="2"/><path d="M5 17c.7-1.7 2-2.5 3.5-2.5S11.3 15.3 12 17"/><line x1="15" y1="9" x2="19" y2="9"/><line x1="15" y1="13" x2="19" y2="13"/></svg>LRN: <b id="pLrn">-</b></span>
-                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="14" r="5"/><path d="M19 5l-5.4 5.4M15 5h4v4"/></svg>Sex: <b id="pSex">-</b></span>
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="14" r="5"/><path d="M19 5l-5.4 5.4M15 5h4v4"/></svg>Gender: <b id="pSex">-</b></span>
                     <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Age: <b id="pAge">-</b></span>
                     <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>DOB: <b id="pDob">-</b></span>
                 </div>

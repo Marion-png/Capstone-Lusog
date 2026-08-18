@@ -18,6 +18,12 @@ use Tests\TestCase;
  * the adviser had not measured one. Each of those made the page disagree with
  * the Dashboard, the Beneficiaries tab, or the truth. These tests keep the page
  * reading from the same rule and the same marks as everything else.
+ *
+ * The page is now the **School Nurse's** read-only window onto the programme —
+ * the Feeding Coordinator's tab of the same name was retired, because the cycle,
+ * the at-risk list and the roll all live on tabs that own them outright and a
+ * fourth rendering of the three is how screens start disagreeing. The figures
+ * are the same figures, so these guards moved with it rather than being deleted.
  */
 class FeedingProgramPageTest extends TestCase
 {
@@ -29,6 +35,14 @@ class FeedingProgramPageTest extends TestCase
     {
         parent::setUp();
         $this->institution = Institution::create(['name' => 'Test School', 'status' => 'active']);
+    }
+
+    /** The page is the nurse's now; the coordinator no longer has one. */
+    private function nurseSession(): array
+    {
+        return [
+            'active_role' => 'school_nurse',
+        ] + $this->coordinatorSession();
     }
 
     private function coordinatorSession(): array
@@ -71,7 +85,7 @@ class FeedingProgramPageTest extends TestCase
 
     private function page()
     {
-        return $this->withSession($this->coordinatorSession())->get('/dashboard/feedingcor-program');
+        return $this->withSession($this->nurseSession())->get('/dashboard/school-nurse/feeding-program');
     }
 
     #[Test]
@@ -193,12 +207,14 @@ class FeedingProgramPageTest extends TestCase
         $this->mark($record, now()->toDateString(), true);
 
         foreach ([
-            '/dashboard/feedingcor-program',
-            '/dashboard/feedingcor-dashboard',
-            '/dashboard/feedingcor-health-records',
-            '/dashboard/feedingcor-program/beneficiary/'.$record->id,
-        ] as $url) {
-            $html = $this->withSession($this->coordinatorSession())->get($url)->assertOk()->getContent();
+            [$this->nurseSession(), '/dashboard/school-nurse/feeding-program'],
+            [$this->coordinatorSession(), '/dashboard/feedingcor-dashboard'],
+            [$this->coordinatorSession(), '/dashboard/feedingcor-health-records'],
+            [$this->coordinatorSession(), '/dashboard/feedingcor-attendance'],
+            [$this->coordinatorSession(), '/dashboard/feedingcor-at-risk'],
+            [$this->coordinatorSession(), '/dashboard/feedingcor-program/beneficiary/'.$record->id],
+        ] as [$session, $url]) {
+            $html = $this->withSession($session)->get($url)->assertOk()->getContent();
 
             // The DepEd form facsimile keeps its own rules; the app's own
             // chrome never underlines a word, hovered or at rest.

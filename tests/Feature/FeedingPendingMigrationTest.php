@@ -86,8 +86,9 @@ class FeedingPendingMigrationTest extends TestCase
     {
         $this->makeStudent('Alpha Learner');
 
-        $this->withSession($this->coordinatorSession())
-            ->get('/dashboard/feedingcor-program')
+        // The nurse's read-only page is where this view lives now.
+        $this->withSession(['active_role' => 'school_nurse'] + $this->coordinatorSession())
+            ->get('/dashboard/school-nurse/feeding-program')
             ->assertOk();
     }
 

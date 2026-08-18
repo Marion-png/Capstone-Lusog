@@ -241,8 +241,9 @@ class FeedingEnrollmentTest extends TestCase
             ->assertSee($enrolled->student_name)
             ->assertDontSee($waiting->student_name);
 
+        // Same question of the Attendance tab, which lists the enrolled roll.
         $this->withSession($this->coordinatorSession())
-            ->get('/dashboard/feedingcor-program')
+            ->get('/dashboard/feedingcor-attendance')
             ->assertOk()
             ->assertSee($enrolled->student_name)
             ->assertDontSee($waiting->student_name);

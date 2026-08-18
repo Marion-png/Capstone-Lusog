@@ -362,8 +362,8 @@
 						{{-- The at-risk list above already filters by sex; the roll
 						     it is drawn from now does too, so the two read the
 						     same population. --}}
-						<select class="select risk-filter" id="rosterGenderFilter" aria-label="Filter recorded attendance by sex">
-							<option value="all">Sex</option>
+						<select class="select risk-filter" id="rosterGenderFilter" aria-label="Filter recorded attendance by gender">
+							<option value="all">Gender</option>
 							@foreach (\App\Support\FeedingBeneficiarySummary::SEX_OPTIONS as $sexOption)
 								<option value="{{ strtolower($sexOption) }}">{{ $sexOption }}</option>
 							@endforeach
@@ -1522,10 +1522,8 @@
 
 	if (uploadAttendanceBtn && uploadAttendanceBackdrop) {
 		uploadAttendanceBtn.addEventListener('click', () => setModal(uploadAttendanceBackdrop, true));
-		// Arriving from the dashboard's "Record attendance" action.
-		if (window.location.hash === '#record-attendance') {
-			setModal(uploadAttendanceBackdrop, true);
-		}
+		// The "#record-attendance" hand-off that used to open this modal is gone:
+		// recording a mark is the Attendance tab's, and nothing links here for it.
 	}
 	[closeUploadAttendanceModal, cancelUploadAttendanceModal].forEach((btn) => {
 		if (btn) {

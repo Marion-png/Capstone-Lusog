@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Institution;
-use App\Models\ReportReview;
 use App\Models\StudentHealthRecord;
 use App\Support\BmiAssessmentReport;
 use App\Support\FeedingBeneficiarySummary;
@@ -252,34 +251,14 @@ class SchoolHeadReportExportTest extends TestCase
         $this->assertStringContainsString('Principal', $text);
     }
 
+    /**
+     * The form carries no review block at all.
+     *
+     * Approve / Return / Lock are gone, so a report has no decision on it to
+     * print — and an empty review block would read as a decision nobody made.
+     */
     #[Test]
-    public function a_reviewed_report_carries_the_decision_and_who_made_it(): void
-    {
-        $this->makeLearner();
-
-        ReportReview::create([
-            'institution_id' => $this->institution->id,
-            'school_year' => StudentHealthRecord::currentSchoolYear(),
-            'report_key' => 'baseline',
-            'status' => ReportReview::STATUS_APPROVED,
-            'remarks' => 'Checked against the class records.',
-            'reviewed_by_name' => 'Welito I. Rosal',
-            'reviewed_by_role' => 'school_head',
-            'reviewed_at' => now(),
-        ]);
-
-        $text = $this->flatten($this->sheets($this->withSession($this->headSession())
-            ->get('/dashboard/school-head/reports/export?report=baseline')
-            ->assertOk()
-            ->streamedContent())['Baseline BMI']);
-
-        $this->assertStringContainsString('Approved', $text);
-        $this->assertStringContainsString('Welito I. Rosal', $text);
-        $this->assertStringContainsString('Checked against the class records.', $text);
-    }
-
-    #[Test]
-    public function an_unreviewed_report_claims_no_decision(): void
+    public function the_form_carries_no_review_block(): void
     {
         $this->makeLearner();
 
@@ -288,9 +267,11 @@ class SchoolHeadReportExportTest extends TestCase
             ->assertOk()
             ->streamedContent())['Baseline BMI']);
 
-        // A report nobody has decided on must not print a review block: an empty
-        // one would read as a decision that was never made.
         $this->assertStringNotContainsString('REVIEW', $text);
+        $this->assertStringNotContainsString('Reviewed by', $text);
+        // The signature block is untouched: it is the school's own staff.
+        $this->assertStringContainsString('Prepared by:', $text);
+        $this->assertStringContainsString('Noted by:', $text);
     }
 
     #[Test]
@@ -312,7 +293,9 @@ class SchoolHeadReportExportTest extends TestCase
     #[Test]
     public function the_packet_carries_both_assessments_and_the_accomplishment_report(): void
     {
-        $this->makeLearner();
+        // The packet holds both assessment forms, so both weighings have to be
+        // finished before it can be exported at all.
+        $this->makeLearner(['feeding_enrolled_at' => now(), 'endline_nutritional_status' => 'Normal']);
 
         $sheets = $this->sheets($this->withSession($this->headSession())
             ->get('/dashboard/school-head/reports/export?report=packet')

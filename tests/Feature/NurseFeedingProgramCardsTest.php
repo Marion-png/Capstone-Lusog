@@ -76,16 +76,19 @@ class NurseFeedingProgramCardsTest extends TestCase
         $this->assertStringContainsString('class="kpi-grid cols-3"', $html);
     }
 
+    /**
+     * The coordinator still gets the improvement figure — on their Dashboard's
+     * Nutritional Progress panel, which owns the baseline-to-endline comparison.
+     * They have no Feeding Program tab to carry a card any more.
+     */
     #[Test]
-    public function the_feeding_coordinator_keeps_the_improving_card(): void
+    public function the_feeding_coordinator_keeps_the_improvement_figure(): void
     {
         $html = $this->withSession($this->sessionFor('feeding_coor'))
-            ->get(route('dashboard.feedingcor-program'))
+            ->get(route('dashboard.feedingcor-dashboard'))
             ->assertOk()
             ->getContent();
 
-        $this->assertStringContainsString('>Improving</div>', $html);
-        // …and their row stays four-up.
-        $this->assertStringContainsString('class="kpi-grid "', $html);
+        $this->assertStringContainsString('Improved Nutritional Status', $html);
     }
 }

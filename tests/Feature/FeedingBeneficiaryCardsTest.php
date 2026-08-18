@@ -401,13 +401,15 @@ class FeedingBeneficiaryCardsTest extends TestCase
             $this->markAttendance($flagged, now()->subDays(13 - $day)->toDateString(), $day <= 3);
         }
 
-        $expected = ['all' => 2, 'pending' => 2, 'at_risk' => 1];
+        // All Students is the whole roll — the Normal learner who will never be
+        // a beneficiary included, because they are still the school's child.
+        $expected = ['all' => 2, 'all_students' => 5, 'at_risk' => 1];
 
         $counts = $this->withSession($this->coordinatorSession())
             ->get('/dashboard/feedingcor-health-records')
             ->assertOk()
             ->assertSee('All beneficiaries')
-            ->assertSee('Pending enrollment')
+            ->assertSee('All Students')
             ->assertSee('At risk')
             ->viewData('segmentCounts');
 
@@ -422,6 +424,44 @@ class FeedingBeneficiaryCardsTest extends TestCase
 
             $this->assertCount($count, $rows, "The {$view} view lists what its tab counts.");
         }
+    }
+
+    /** The view this one replaced still resolves, so old links keep working. */
+    #[Test]
+    public function the_old_pending_view_lands_on_all_students(): void
+    {
+        $this->makeStudent('Grade 7 / Sampaguita', 'Wasted');
+        $this->makeStudent('Grade 10 / Acacia', 'Normal');
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records?view=pending')
+            ->assertOk();
+
+        $this->assertSame('all_students', $response->viewData('segmentView'));
+        $this->assertCount(2, $response->viewData('records'));
+    }
+
+    /**
+     * A learner the measurement does not qualify is listed and cannot be
+     * enrolled: the programme feeds the wasted, and All Students exists to
+     * show the rest rather than to widen who may be enrolled.
+     */
+    #[Test]
+    public function an_unqualified_learner_is_listed_with_no_enroll_action(): void
+    {
+        $normal = $this->makeStudent('Grade 10 / Acacia', 'Normal', enrolled: false);
+        $waiting = $this->makeStudent('Grade 9 / Ilang', 'Wasted', enrolled: false);
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records?view=all_students')
+            ->assertOk();
+
+        $response->assertSee($normal->student_name);
+        $response->assertSee('Not qualified');
+        // The qualified learner carries the action; the Normal one does not.
+        $response->assertSee('data-enroll="'.$waiting->id.'"', false);
+        $response->assertDontSee('data-enroll="'.$normal->id.'"', false);
+        $response->assertDontSee('data-select="'.$normal->id.'"', false);
     }
 
     /** An unknown view falls back to the roll rather than emptying the page. */
@@ -450,14 +490,14 @@ class FeedingBeneficiaryCardsTest extends TestCase
         $this->makeStudent('Grade 8 / Ilang', 'Wasted', enrolled: false);
 
         $response = $this->withSession($this->coordinatorSession())
-            ->get('/dashboard/feedingcor-health-records?view=pending&grade_level=Grade+8')
+            ->get('/dashboard/feedingcor-health-records?view=all_students&grade_level=Grade+8')
             ->assertOk();
 
-        $this->assertSame('pending', $response->viewData('segmentView'));
+        $this->assertSame('all_students', $response->viewData('segmentView'));
         $this->assertCount(2, $response->viewData('records'));
         // The tabs carry the grade forward, and the filter form carries the view.
         $response->assertSee('grade_level=Grade+8', false)
-            ->assertSee('<input type="hidden" name="view" value="pending">', false);
+            ->assertSee('<input type="hidden" name="view" value="all_students">', false);
     }
 
     /**
@@ -596,7 +636,9 @@ class FeedingBeneficiaryCardsTest extends TestCase
             ->assertSee('School Year')
             ->assertSee('Grade Level')
             ->assertSee('Section')
-            ->assertSee('Sex')
+            // The filter is labelled Gender; the value behind it is still the
+            // `sex` query key and student_details.gender.
+            ->assertSee('Gender')
             ->assertSee('Baseline Nutritional Status')
             ->assertSee('Attendance Status')
             ->assertSee('Beneficiary Status')

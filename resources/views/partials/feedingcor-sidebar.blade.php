@@ -43,10 +43,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
             <span class="asb-link-text">At-Risk Students</span>
         </a>
-        <a href="{{ route('dashboard.feedingcor-program') }}" class="asb-link {{ $active === 'program' ? 'active' : '' }}" title="Feeding Program">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v7c0 1.1.9 2 2 2h1a2 2 0 0 0 2-2V2"/><path d="M6 11v11"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>
-            <span class="asb-link-text">Feeding Program</span>
-        </a>
+        {{-- No Feeding Program tab: the cycle and the session figures live on
+             Attendance, the threshold list on At-Risk Students and the roll on
+             Beneficiaries. A page repeating all three is how two screens start
+             reporting different numbers for one programme. --}}
         <a href="{{ route('dashboard.feedingcor-sbfp-forms') }}" class="asb-link {{ $active === 'forms' ? 'active' : '' }}" title="SBFP Forms">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
             <span class="asb-link-text">SBFP Forms</span>

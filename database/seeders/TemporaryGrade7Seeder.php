@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -100,7 +101,7 @@ class TemporaryGrade7Seeder extends Seeder
         }
     }
 
-    private function studentTemplates(): \Illuminate\Support\Collection
+    private function studentTemplates(): Collection
     {
         return collect([
             ['last' => 'Bautista',    'first' => 'Andrei',  'middle' => 'Morales',   'section' => 'Sampaguita', 'gender' => 'Male',   'status' => 'Severely Wasted', 'bmi' => 13.8, 'weight' => 30.5, 'height' => 148.0],

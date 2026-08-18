@@ -16,7 +16,10 @@ class FeedingAttendanceImportTest extends TestCase
 
     private const IMPORT_ROUTE = '/dashboard/feedingcor-program/attendance/import';
 
-    private const PROGRAM_ROUTE = '/dashboard/feedingcor-program';
+    // The roster these assertions read is the School Nurse's read-only
+    // Feeding Program page — the coordinator's tab of that name was retired,
+    // but the rendering the import feeds is unchanged and lives there.
+    private const PROGRAM_ROUTE = '/dashboard/school-nurse/feeding-program';
 
     private Institution $institution;
 
@@ -34,6 +37,12 @@ class FeedingAttendanceImportTest extends TestCase
             'status' => 'active',
             'feeding_min_observation_days' => 1,
         ]);
+    }
+
+    /** The roster page belongs to the nurse now; the import is still the coordinator's. */
+    private function nurseSession(): array
+    {
+        return ['active_role' => 'school_nurse'] + $this->coordinatorSession();
     }
 
     private function coordinatorSession(): array
@@ -127,7 +136,7 @@ class FeedingAttendanceImportTest extends TestCase
         // not add a second listing of them.
         $this->assertSame(1, $this->rosterRowsFor('Bautista, Andrei M.'));
 
-        $this->withSession($this->coordinatorSession())
+        $this->withSession($this->nurseSession())
             ->get(self::PROGRAM_ROUTE)
             ->assertOk()
             ->assertSee('75%'); // 3 of 4 sessions attended.
@@ -184,7 +193,7 @@ class FeedingAttendanceImportTest extends TestCase
      */
     private function rosterRowText(string $name): string
     {
-        $html = $this->withSession($this->coordinatorSession())
+        $html = $this->withSession($this->nurseSession())
             ->get(self::PROGRAM_ROUTE)
             ->assertOk()
             ->getContent();
@@ -225,7 +234,7 @@ class FeedingAttendanceImportTest extends TestCase
      */
     private function rosterRowsFor(string $name): int
     {
-        $html = $this->withSession($this->coordinatorSession())
+        $html = $this->withSession($this->nurseSession())
             ->get(self::PROGRAM_ROUTE)
             ->assertOk()
             ->getContent();
@@ -263,7 +272,7 @@ class FeedingAttendanceImportTest extends TestCase
             'source' => FeedingAttendance::SOURCE_PHOTO_SCAN,
         ]);
 
-        $this->withSession($this->coordinatorSession())
+        $this->withSession($this->nurseSession())
             ->get(self::PROGRAM_ROUTE)
             ->assertOk()
             ->assertSee('100%')          // 2 of 2 confirmed, not 2 of 3.
@@ -330,7 +339,7 @@ class FeedingAttendanceImportTest extends TestCase
         $response->assertSessionHas('error');
         $this->assertStringNotContainsString('Ghostwriter', (string) session('error'));
 
-        $this->withSession($this->coordinatorSession())
+        $this->withSession($this->nurseSession())
             ->get(self::PROGRAM_ROUTE)
             ->assertOk()
             ->assertSee('Bautista, Andrei M.')

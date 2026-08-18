@@ -150,6 +150,28 @@
 .ns-count { font-size: .92rem; font-weight: 700; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
 .ns-table tr.is-eligible td { background: var(--lg-rail); }
 
+/* ── Population switch ──────────────────────────────────────────────
+   Beneficiaries or All Students. A link group rather than a <select>:
+   the panel is replaced wholesale by the live refresh, and a select's
+   selection would not survive that. ── */
+.ns-controls { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.ns-controls .ns-total { flex: 1 1 auto; border-bottom: none; margin: 4px 0 0; padding-bottom: 0; }
+.ns-switch { display: inline-flex; border: 1px solid var(--lg-border); border-radius: var(--lg-r-btn); overflow: hidden; background: var(--lg-card); }
+.ns-switch-opt {
+	padding: 6px 12px;
+	font-size: .74rem;
+	font-weight: 600;
+	color: var(--lg-ink-soft);
+	text-decoration: none;
+	border-right: 1px solid var(--lg-border);
+}
+.ns-switch-opt:last-child { border-right: none; }
+.ns-switch-opt:hover { background: var(--lg-mint); color: var(--lg-emerald-deep); }
+.ns-switch-opt.is-active { background: var(--lg-emerald); color: #fff; }
+.ns-table { border-top: 1px solid var(--lg-border); }
+.ns-table tfoot td { padding-top: 10px; border-top: 1px solid var(--lg-border); }
+.ns-foot-label { font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); }
+
 /* ── Attendance at risk ─────────────────────────────────────────────
    The threshold is printed above the table because it is school-set: the
    same list means different things at 75% and 85%, and a reader cannot
