@@ -13,8 +13,10 @@ use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
 use App\Support\PriorityHealthRule;
+use App\Support\ProfileCompletionRule;
 use App\Support\RequestMemo;
 use App\Support\SchemaCache;
+use App\Support\StudentDataCompleteness;
 use App\Support\StudentMedicalDocuments;
 use App\Support\StudentRosterSync;
 use Illuminate\Http\JsonResponse;
@@ -155,11 +157,7 @@ class StudentHealthRecordController extends Controller
             // measurement below the form. Resolved here so the section can
             // post against a real record and read the baseline it closes.
             'editRecord' => $this->resolveEditRecord($request, $records),
-            'cycle' => FeedingProgramCycle::forInstitution(
-                $request->session()->get('active_institution_id')
-                    ? (int) $request->session()->get('active_institution_id')
-                    : null
-            ),
+            'cycle' => $this->adviserCycle($request->session()->get('active_institution_id')),
         ]);
     }
 
@@ -215,7 +213,7 @@ class StudentHealthRecordController extends Controller
 
         // Endline opens only once the cycle has run its full length — see
         // storeEndline(), which enforces the same rule server-side.
-        $cycle = FeedingProgramCycle::forInstitution($institutionId ? (int) $institutionId : null);
+        $cycle = $this->adviserCycle($institutionId);
 
         return view('adviser-dashboard.student-profile', [
             'prototypeRecord' => $record,
@@ -225,6 +223,8 @@ class StudentHealthRecordController extends Controller
                 'has_assessment' => false,
                 'consent' => 'pending',
                 'at_risk' => false,
+                'programme_complete' => false,
+                'completion_outstanding' => '',
                 'consent_detail' => [],
                 'feeding' => [],
                 'documents' => collect(),
@@ -241,6 +241,49 @@ class StudentHealthRecordController extends Controller
      *
      * @return array<string, array{has_assessment: bool, consent: string, at_risk: bool}>
      */
+    /**
+     * The school's feeding cycle, read once per request.
+     *
+     * Three things on this page need it — the endline section, the roster
+     * meta's Profile Status, and the overview's Completed Program count —
+     * and each round trip to a hosted database is expensive enough that
+     * AdviserDashboardQueryBudgetTest fails the build over a repeat.
+     */
+    private function adviserCycle(mixed $institutionId): FeedingProgramCycle
+    {
+        $id = $institutionId ? (int) $institutionId : null;
+
+        return $this->memo('cycle:'.($id ?? 'none'), fn () => FeedingProgramCycle::forInstitution($id));
+    }
+
+    /**
+     * The record ids with at least one CONFIRMED present session.
+     *
+     * One grouped query for the whole roster rather than a query per learner.
+     * NULL is a scanned mark nobody has read, so it proves nothing either
+     * way and is excluded — never folded into "absent" (see FeedingAtRiskRule).
+     *
+     * @param  Collection<string, StudentHealthRecord>  $records
+     * @return Collection<int, bool>
+     */
+    private function recordsWithConfirmedAttendance(Collection $records): Collection
+    {
+        $ids = $records->pluck('id')->filter()->map(fn ($id) => (int) $id)->sort()->values();
+
+        if ($ids->isEmpty() || ! SchemaCache::hasTable('feeding_attendances')) {
+            return collect();
+        }
+
+        // The overview and the roster meta both need this. Keyed on the ids
+        // themselves, so a reuse is only ever a reuse of the identical read.
+        return $this->memo('attended:'.md5($ids->implode(',')), fn () => FeedingAttendance::query()
+            ->whereIn('student_health_record_id', $ids)
+            ->where('is_present', true)
+            ->distinct()
+            ->pluck('student_health_record_id')
+            ->mapWithKeys(fn ($id) => [(int) $id => true]));
+    }
+
     private function buildRosterMeta(Request $request): array
     {
         $institutionId = $request->session()->get('active_institution_id');
@@ -275,6 +318,12 @@ class StudentHealthRecordController extends Controller
         // staff are the only roles that may write them.
         $clinicNotesByLrn = $this->clinicNotesForRoster($lrns, $institutionId);
 
+        // Profile Status is closed out by the END of the feeding programme,
+        // so the cycle and each learner's participation decide it — see
+        // App\Support\ProfileCompletionRule.
+        $cycle = $this->adviserCycle($institutionId);
+        $attendedIds = $this->recordsWithConfirmedAttendance($shRecords);
+
         $meta = [];
         foreach ($lrns as $lrn) {
             $shRecord = $shRecords->get($lrn);
@@ -300,6 +349,16 @@ class StudentHealthRecordController extends Controller
                     'endline_status' => $shRecord?->endline_nutritional_status,
                     'sessions' => (int) ($shRecord?->attendance_sessions_count ?? 0),
                 ],
+                'programme_complete' => ProfileCompletionRule::isComplete(
+                    $cycle,
+                    $shRecord,
+                    $shRecord !== null && $attendedIds->has($shRecord->id),
+                ),
+                'completion_outstanding' => ProfileCompletionRule::outstanding(
+                    $cycle,
+                    $shRecord,
+                    $shRecord !== null && $attendedIds->has($shRecord->id),
+                ),
                 'assessment_date' => $assessment?->date_of_assessment?->toDateString(),
                 'documents' => $documentsByLrn->get($lrn, collect())->values(),
                 'consultations' => $consultationsByLrn->get($lrn, collect())->values(),
@@ -454,8 +513,8 @@ class StudentHealthRecordController extends Controller
     }
 
     /**
-     * Redesigned dashboard data: real per-class totals, a "needs attention"
-     * list (consent declined/pending, no health profile, at-risk), and a
+     * Redesigned dashboard data: real per-class totals, an incomplete-data
+     * count, a priority list, and a
      * recent-activity feed — all derived from this adviser's own roster
      * (session, scoped to their assigned grade/section) joined against the
      * DB-backed consent and assessment records.
@@ -470,7 +529,7 @@ class StudentHealthRecordController extends Controller
             'total' => 0,
             'complete' => 0,
             'pending' => 0,
-            'needs_followup' => 0,
+            'incomplete' => 0,
             'priority' => 0,
             'priority_students' => collect(),
             'recent_activity' => collect(),
@@ -485,8 +544,14 @@ class StudentHealthRecordController extends Controller
         $consentForms = $ctx['consents'];
         $assessments = $ctx['assessments'];
 
+        // Complete Profiles is the same reading the My Students filter uses,
+        // so the card and the list cannot report different numbers for one
+        // class — see App\Support\ProfileCompletionRule.
+        $cycle = $this->adviserCycle($request->session()->get('active_institution_id'));
+        $attendedIds = $this->recordsWithConfirmedAttendance($shRecords);
+
         $complete = 0;
-        $needsFollowup = 0;
+        $incomplete = 0;
         $priorityStudents = collect();
 
         foreach ($roster as $row) {
@@ -499,14 +564,18 @@ class StudentHealthRecordController extends Controller
             $assessment = $shRecord ? $assessments->get($shRecord->id) : null;
             $consent = $consentForms->get($lrn);
 
-            $hasAssessment = $assessment !== null;
-            if ($hasAssessment) {
+            // A card is closed out by the END of the feeding programme, so
+            // mid-cycle nobody is complete and every learner falls to
+            // Pending Assessment. It used to key on the health assessment
+            // form alone, which read "Complete" on day 3 of 120 with no
+            // closing measurement anywhere.
+            if (ProfileCompletionRule::isComplete(
+                $cycle,
+                $shRecord,
+                $shRecord !== null && $attendedIds->has($shRecord->id),
+            )) {
                 $complete++;
             }
-
-            $atRisk = (bool) ($shRecord?->is_at_risk);
-            $consentDenied = $consent && $consent->consent_choice === HealthConsentForm::CONSENT_DENY;
-            $consentPending = $consent && $consent->status === HealthConsentForm::STATUS_SENT;
 
             // Chronic or life-threatening condition recorded EITHER on the
             // Health Assessment form or in the student profile's Health
@@ -515,8 +584,13 @@ class StudentHealthRecordController extends Controller
             $priorityReasons = PriorityHealthRule::reasonsFor($assessment, $shRecord);
             $isPriority = $priorityReasons !== [];
 
-            if ($consentDenied || $atRisk || $isPriority) {
-                $needsFollowup++;
+            // Data entry left to do on this learner's School Health Card.
+            // Not "needs follow-up", which this used to be: at risk, wasted
+            // or consent-denied are real conditions but not ones the adviser
+            // fixes by typing, and the nurse and coordinator own screens for
+            // them already. See App\Support\StudentDataCompleteness.
+            if (StudentDataCompleteness::isIncomplete($row)) {
+                $incomplete++;
             }
 
             if ($isPriority) {
@@ -538,7 +612,7 @@ class StudentHealthRecordController extends Controller
             'total' => $roster->count(),
             'complete' => $complete,
             'pending' => max(0, $roster->count() - $complete),
-            'needs_followup' => $needsFollowup,
+            'incomplete' => $incomplete,
             'priority' => $priorityStudents->count(),
             // Most conditions first, then most recently touched.
             'priority_students' => $priorityStudents
@@ -1230,7 +1304,7 @@ class StudentHealthRecordController extends Controller
         // anything once the programme has run its full length. Enforced here
         // and not only in the form: the field being disabled on screen is a
         // courtesy, this is the rule.
-        $cycle = FeedingProgramCycle::forInstitution($institutionId ? (int) $institutionId : null);
+        $cycle = $this->adviserCycle($institutionId);
 
         if (! $cycle->isComplete()) {
             $remaining = $cycle->hasStarted()

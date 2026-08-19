@@ -117,7 +117,7 @@ class AdviserDashboardOverviewTest extends TestCase
         $response = $this->withSession($this->adviserSession())->get('/dashboard/class-adviser');
 
         $response->assertStatus(200);
-        $response->assertSee('id="asbSearchDropdown"', false);
+        $response->assertSee('id="lsearchResults"', false);
         $response->assertSee('Gomez, Jose');
         $response->assertSee('LRN001');
     }

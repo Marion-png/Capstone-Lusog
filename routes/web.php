@@ -29,6 +29,7 @@ use App\Http\Controllers\SchoolHeadMasterlistController;
 use App\Http\Controllers\SchoolHeadProgramController;
 use App\Http\Controllers\SchoolHeadReportsController;
 use App\Http\Controllers\StudentHealthRecordController;
+use App\Http\Controllers\StudentIncidentReportController;
 use App\Http\Controllers\StudentMedicalDocumentController;
 use App\Models\AuditLog;
 use App\Models\Consultation;
@@ -39,7 +40,6 @@ use App\Models\MedicineDispense;
 use App\Models\StudentHealthRecord;
 use App\Support\AuditTrail;
 use App\Support\FeedingAtRiskRule;
-use App\Support\StudentRosterSync;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -267,34 +267,9 @@ Route::get('/dashboard/school-nurse', function (Request $request) {
             ->get();
     }
 
-    // Roster for the dashboard's learner search. Names are encrypted, so the
-    // search cannot run in SQL — the list is embedded and filtered in the
-    // browser, exactly as the adviser's topbar search does.
-    StudentRosterSync::syncToSession($request);
-
-    $learnerSearchRoster = collect($request->session()->get('school_health_card_records', []))
-        ->map(function ($row) {
-            $middle = trim((string) ($row['middle_name'] ?? ''));
-            $name = trim(
-                trim((string) ($row['last_name'] ?? '')).', '.
-                trim((string) ($row['first_name'] ?? '')).
-                ($middle !== '' ? ' '.strtoupper(substr($middle, 0, 1)).'.' : '')
-            );
-
-            return [
-                'lrn' => (string) ($row['lrn'] ?? ''),
-                'name' => trim($name, ' ,'),
-                'section' => trim(trim((string) ($row['grade_level'] ?? '')).' - '.trim((string) ($row['section'] ?? '')), ' -'),
-            ];
-        })
-        ->filter(fn (array $row) => $row['lrn'] !== '' && $row['name'] !== '')
-        ->sortBy('name')
-        ->values();
-
     return view('dashboard.school-nurse', compact(
         'totalRecords', 'consultationsToday', 'atRiskCount', 'lowStockCount',
-        'recentConsultations', 'topConditions', 'lowStockMedicines',
-        'learnerSearchRoster'
+        'recentConsultations', 'topConditions', 'lowStockMedicines'
     ));
 })->name('dashboard.school-nurse');
 
@@ -804,6 +779,16 @@ Route::get('/health-records/student-documents/{id}/download', [StudentMedicalDoc
     ->whereNumber('id')->name('student-documents.download');
 Route::delete('/health-records/student-documents/{id}', [StudentMedicalDocumentController::class, 'destroy'])
     ->whereNumber('id')->name('student-documents.destroy');
+
+// Incident reports on a learner's student profile (class_adviser only; the
+// adviser's own class is enforced in the controller, not here). Under
+// /health-records/* for the same reason as the documents routes above.
+Route::get('/health-records/students/{lrn}/incidents', [StudentIncidentReportController::class, 'index'])
+    ->name('student-incidents.index');
+Route::post('/health-records/students/{lrn}/incidents', [StudentIncidentReportController::class, 'store'])
+    ->name('student-incidents.store');
+Route::delete('/health-records/students/{lrn}/incidents/{id}', [StudentIncidentReportController::class, 'destroy'])
+    ->whereNumber('id')->name('student-incidents.destroy');
 
 // Parental consent form upload (class_adviser only, own class enforced in controller)
 Route::post('/adviser/parental-consent', [ParentalConsentFormController::class, 'store'])

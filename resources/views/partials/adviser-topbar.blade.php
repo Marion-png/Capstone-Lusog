@@ -51,12 +51,15 @@
         </div>
     </div>
 
-    <form method="GET" action="{{ route('dashboard.class-adviser') }}" class="asb-search" id="asbSearchForm">
-        <input type="hidden" name="tab" value="saved">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="search" name="q" id="asbSearchInput" placeholder="Search students..." value="{{ request('q') }}" autocomplete="off">
-        <div class="asb-search-dropdown" id="asbSearchDropdown"></div>
-    </form>
+    {{-- Shared with the School Nurse: partials/learner-search. Pressing
+         Enter still searches the list, since several learners can match a
+         partial name; clicking a result opens that learner. --}}
+    @include('partials.learner-search', [
+        'roster' => $asbSearchRoster,
+        'hrefPattern' => url('dashboard/class-adviser/students').'/{lrn}',
+        'formAction' => route('dashboard.class-adviser'),
+        'formFields' => ['tab' => 'saved'],
+    ])
 
     <div class="asb-topbar-right">
         @include('partials.live-clock')
@@ -72,87 +75,3 @@
 
 @include('partials.adviser-toast')
 
-<script>
-(() => {
-    const roster = @json($asbSearchRoster);
-    const input = document.getElementById('asbSearchInput');
-    const dropdown = document.getElementById('asbSearchDropdown');
-    const searchBox = document.getElementById('asbSearchForm');
-
-    if (!input || !dropdown || !searchBox || !roster.length) {
-        return;
-    }
-
-    // A search result opens that learner's profile directly. It used to
-    // land on the My Students list filtered to their LRN, which meant
-    // picking a named student and then having to click them again.
-    const studentsUrl = (lrn) => `{{ url('dashboard/class-adviser/students') }}/${encodeURIComponent(lrn)}`;
-
-    const render = (query) => {
-        const term = query.trim().toLowerCase();
-        if (term === '') {
-            dropdown.classList.remove('show');
-            dropdown.innerHTML = '';
-            return;
-        }
-
-        const results = roster.filter((s) => (
-            s.name.toLowerCase().includes(term) || s.lrn.toLowerCase().includes(term)
-        ));
-
-        if (results.length === 0) {
-            dropdown.innerHTML = `
-                <div class="asb-no-results">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    <p>No students found matching "${term}"</p>
-                </div>
-            `;
-            dropdown.classList.add('show');
-            return;
-        }
-
-        const countLabel = results.length === 1 ? '1 result' : `${results.length} results`;
-        const items = results.slice(0, 8).map((s) => {
-            const parts = s.name.split(',');
-            const last = (parts[0] || '').trim();
-            const first = (parts[1] || '').trim();
-            const initials = ((first.charAt(0) || last.charAt(0) || '?') + (last.charAt(0) || '')).toUpperCase();
-            return `
-                <a href="${studentsUrl(s.lrn)}" class="asb-result-item">
-                    <div class="asb-result-avatar">${initials}</div>
-                    <div class="asb-result-info">
-                        <div class="asb-result-name">${s.name}</div>
-                        <div class="asb-result-meta">
-                            <span>${s.lrn}</span>
-                            <span>${s.section}</span>
-                            <span>${s.sex}</span>
-                        </div>
-                    </div>
-                </a>
-            `;
-        }).join('');
-
-        dropdown.innerHTML = `<div class="asb-result-count">${countLabel}</div>${items}`;
-        dropdown.classList.add('show');
-    };
-
-    input.addEventListener('input', () => render(input.value));
-
-    input.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter') {
-            return;
-        }
-        const first = dropdown.querySelector('.asb-result-item');
-        if (first) {
-            e.preventDefault();
-            window.location.href = first.href;
-        }
-    });
-
-    document.addEventListener('click', (e) => {
-        if (!searchBox.contains(e.target)) {
-            dropdown.classList.remove('show');
-        }
-    });
-})();
-</script>

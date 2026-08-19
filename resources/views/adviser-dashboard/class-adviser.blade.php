@@ -179,9 +179,9 @@
                 <p class="hero-sub">{{ $ov['grade_section'] }} &middot; Manage your students' health profiles and track their well-being.</p>
                 <div class="hero-stats">
                     <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>{{ $ov['total'] }} Total students</span>
-                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>{{ $ov['complete'] }} Complete profiles</span>
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>{{ $ov['complete'] }} Completed program</span>
                     <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>{{ $ov['pending'] }} Pending</span>
-                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>{{ $ov['needs_followup'] }} Needs follow-up</span>
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>{{ $ov['incomplete'] }} Incomplete data</span>
                     <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>{{ $ov['priority'] }} Priority</span>
                 </div>
             </div>
@@ -193,15 +193,15 @@
                 </article>
                 <article class="card dashboard-stat-card dashboard-complete">
                     <div class="dsc-icon dsc-icon-complete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
-                    <div><b>{{ $ov['complete'] }}</b><span>Complete Profiles</span><small>Full health assessment done</small></div>
+                    <div><b>{{ $ov['complete'] }}</b><span>Completed Program</span><small>{{ $cycle->isComplete() ? '120 feeding days done, endline recorded' : 'Opens when the 120 feeding days are done' }}</small></div>
                 </article>
                 <article class="card dashboard-stat-card dashboard-pending">
                     <div class="dsc-icon dsc-icon-pending"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
                     <div><b>{{ $ov['pending'] }}</b><span>Pending Assessments</span><small>Health assessment needed</small></div>
                 </article>
-                <article class="card dashboard-stat-card dashboard-wasted">
-                    <div class="dsc-icon dsc-icon-alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
-                    <div><b>{{ $ov['needs_followup'] }}</b><span>Needs Follow-up</span><small>Requires medical attention</small></div>
+                <article class="card dashboard-stat-card dashboard-incomplete">
+                    <div class="dsc-icon dsc-icon-incomplete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></div>
+                    <div><b>{{ $ov['incomplete'] }}</b><span>Incomplete Data</span><small>Missing required card details</small></div>
                 </article>
             </div>
 
@@ -316,18 +316,14 @@
 
         <section id="prototype-saved-panel" class="section-panel {{ $adviserTab === 'saved' ? 'active' : '' }}" style="margin-top:12px;">
             @php
-                $needsFollowupTotal = $prototypeRecords->filter(function ($row) use ($rosterMeta) {
-                    $status = strtolower((string) ($row['nutritional_status_bmi_for_age'] ?? ''));
-                    $atRisk = (bool) ($rosterMeta[(string) ($row['lrn'] ?? '')]['at_risk'] ?? false);
-
-                    return $atRisk
-                        || str_contains($status, 'wasted')
-                        || str_contains($status, 'underweight')
-                        || str_contains($status, 'obese');
-                })->count();
+                // The same rule the Dashboard tab counts with, so the two
+                // cannot report different numbers for one class. This used to
+                // be a private filter on nutritional status, which measured
+                // the learners' health rather than the adviser's data entry.
+                $incompleteTotal = \App\Support\StudentDataCompleteness::countIncomplete($prototypeRecords);
 
                 $profileBadges = [
-                    'complete' => 'Complete',
+                    'complete' => 'Completed',
                     'partial' => 'Partial',
                     'pending' => 'Pending',
                 ];
@@ -359,15 +355,15 @@
                 </div>
                 <div class="ms-stat">
                     <div class="ms-stat-icon ms-icon-complete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
-                    <div><div class="ms-stat-number">{{ $ov['complete'] }}</div><div class="ms-stat-label">Complete Profiles</div></div>
+                    <div><div class="ms-stat-number">{{ $ov['complete'] }}</div><div class="ms-stat-label">Completed Program</div></div>
                 </div>
                 <div class="ms-stat">
                     <div class="ms-stat-icon ms-icon-pending"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
                     <div><div class="ms-stat-number">{{ $ov['pending'] }}</div><div class="ms-stat-label">Pending Assessments</div></div>
                 </div>
                 <div class="ms-stat">
-                    <div class="ms-stat-icon ms-icon-alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
-                    <div><div class="ms-stat-number">{{ $needsFollowupTotal }}</div><div class="ms-stat-label">Needs Follow-up</div></div>
+                    <div class="ms-stat-icon ms-icon-incomplete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></div>
+                    <div><div class="ms-stat-number">{{ $incompleteTotal }}</div><div class="ms-stat-label">Incomplete Data</div></div>
                 </div>
             </div>
 
@@ -385,7 +381,7 @@
                         </div>
                         <select id="studentsStatusFilter" class="ms-filter-select" aria-label="Filter by profile status">
                             <option value="all">All Students</option>
-                            <option value="complete">Complete Profile</option>
+                            <option value="complete">Completed Program</option>
                             <option value="partial">Partial Profile</option>
                             <option value="pending">Pending Assessment</option>
                         </select>
@@ -413,9 +409,14 @@
                                     $middleInitial = $middle !== '' ? (' ' . strtoupper(substr($middle, 0, 1)) . '.') : '';
                                     $fullName = trim(($prototypeRecord['last_name'] ?? '') . ', ' . ($prototypeRecord['first_name'] ?? '') . $middleInitial);
                                     $rowLrn = (string) ($prototypeRecord['lrn'] ?? '');
-                                    $meta = $rosterMeta[$rowLrn] ?? ['has_assessment' => false, 'consent' => 'pending', 'at_risk' => false];
+                                    $meta = $rosterMeta[$rowLrn] ?? ['has_assessment' => false, 'consent' => 'pending', 'at_risk' => false, 'programme_complete' => false, 'completion_outstanding' => ''];
                                     $isExamined = !empty($prototypeRecord['examination']);
-                                    $profileKey = $meta['has_assessment'] ? 'complete' : ($isExamined ? 'partial' : 'pending');
+                                    // Complete means the feeding programme closed this card out:
+                                    // 120 days done, endline recorded, and — for a beneficiary —
+                                    // fed. Mid-cycle nobody qualifies, so the bucket is empty and
+                                    // its learners fall through to Partial or Pending.
+                                    $profileKey = ($meta['programme_complete'] ?? false) ? 'complete' : ($isExamined ? 'partial' : 'pending');
+                                    $profileWhy = (string) ($meta['completion_outstanding'] ?? '');
                                     $consentKey = $meta['consent'];
                                     $healthStatus = trim((string) ($prototypeRecord['nutritional_status_bmi_for_age'] ?? ''));
                                 @endphp
@@ -428,7 +429,7 @@
                                     <td>{{ $prototypeRecord['gender'] ?? '-' }}</td>
                                     <td>{{ $prototypeRecord['age'] ?? '-' }}</td>
                                     <td>{{ $healthStatus !== '' ? $healthStatus : 'Not assessed' }}</td>
-                                    <td><span class="ms-badge ms-profile-{{ $profileKey }}">{{ $profileBadges[$profileKey] }}</span></td>
+                                    <td><span class="ms-badge ms-profile-{{ $profileKey }}"@if ($profileKey !== 'complete' && $profileWhy !== '') title="{{ $profileWhy }}"@endif>{{ $profileBadges[$profileKey] }}</span></td>
                                     <td><span class="ms-badge ms-consent-{{ $consentKey }}">{{ $consentBadges[$consentKey] }}</span></td>
                                     <td>
                                         <div class="ms-actions">
@@ -674,7 +675,23 @@
                     $srText = fn (string $key, string $default = '') => $srPosted ? (string) ($sr[$key] ?? '') : $default;
                 @endphp
 
+                {{-- Sheet 2 is read-only once a learner exists. The systems review
+                     is taken at enrolment; opening a saved learner from their
+                     profile is reading their record, not re-examining them, and
+                     re-posting the whole sheet through the browser on every edit is
+                     how a finding gets quietly overwritten. The guarantee is
+                     server-side in AdviserController::store, which keeps the stored
+                     review whenever the learner is already on file — so a disabled
+                     control re-enabled in devtools still changes nothing. --}}
                 <div class="sheet-panel" id="sheetPanel2" role="tabpanel" aria-labelledby="sheetTab2">
+                    <div class="sheet2-readonly-note" id="sheet2ReadonlyNote" hidden>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <div>
+                            <strong>View only</strong>
+                            <span>This learner's systems review was recorded when they were enrolled. It is shown here as it stands and cannot be changed from this form.</span>
+                        </div>
+                    </div>
+                    <fieldset class="sheet2-fieldset" id="sheet2Fieldset">
                     <div class="student-section">
                         <h4>Systems Review</h4>
 
@@ -805,6 +822,7 @@
                             <div class="field"><label for="sr_examiner_date">Date</label><input id="sr_examiner_date" name="systems_review[examiner_date]" type="date" value="{{ $srText('examiner_date') }}"></div>
                         </div>
                     </div>
+                    </fieldset>
                 </div>{{-- end Sheet 2 --}}
 
                 <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
@@ -1555,8 +1573,19 @@ window.showAdviserSheet = (panelId) => {
         return { x: event.clientX - rect.left, y: event.clientY - rect.top };
     };
 
+    // Sheet 2 goes read-only when an existing learner is opened, and a
+    // canvas is not a form control — the disabled fieldset around it stops
+    // the inputs but never the pad, so it is gated here instead.
+    let padEnabled = true;
+
+    window.setSignaturePadEnabled = (enabled) => {
+        padEnabled = Boolean(enabled);
+        canvas.classList.toggle('is-locked', !padEnabled);
+        document.getElementById('signatureUploadArea')?.classList.toggle('is-locked', !padEnabled);
+    };
+
     canvas.addEventListener('pointerdown', (event) => {
-        if (!ensureCanvas()) {
+        if (!padEnabled || !ensureCanvas()) {
             return;
         }
         drawing = true;
@@ -1622,9 +1651,10 @@ window.showAdviserSheet = (panelId) => {
         });
     });
 
-    uploadArea?.addEventListener('click', () => fileInput?.click());
+    // A div, so the disabled fieldset does not reach its click handler either.
+    uploadArea?.addEventListener('click', () => { if (padEnabled) fileInput?.click(); });
     uploadArea?.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
+        if (padEnabled && (event.key === 'Enter' || event.key === ' ')) {
             event.preventDefault();
             fileInput?.click();
         }
@@ -1707,6 +1737,19 @@ window.showAdviserSheet = (panelId) => {
         if (sub) sub.textContent = editing ? EDIT_SUB : ENROL_SUB;
         if (lrnInput) lrnInput.readOnly = editing;
         form.dataset.mode = editing ? 'edit' : 'enrol';
+
+        // Sheet 2 is the learner's record once they exist, not a field to
+        // re-type. The server enforces it; this is what the adviser sees.
+        const sheet2 = document.getElementById('sheet2Fieldset');
+        const sheet2Note = document.getElementById('sheet2ReadonlyNote');
+        if (sheet2) {
+            sheet2.disabled = editing;
+            sheet2.setAttribute('aria-readonly', editing ? 'true' : 'false');
+        }
+        if (sheet2Note) sheet2Note.hidden = !editing;
+        // The pad is a canvas, not a form control, so `disabled` does not
+        // reach it — it has to be told separately.
+        window.setSignaturePadEnabled?.(!editing);
     };
 
     const fillForm = (record) => {

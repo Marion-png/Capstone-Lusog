@@ -76,16 +76,22 @@ class AdviserSearchOpensProfileTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        // The Blade expression is rendered server-side, so assert on the
-        // resolved URL rather than the source it was written as.
+        // The href pattern is handed to the shared partial and rendered
+        // server-side, so assert on the resolved URL rather than the Blade
+        // source it was written as.
+        $pattern = json_encode(url('dashboard/class-adviser/students').'/{lrn}');
         $this->assertStringContainsString(
-            url('dashboard/class-adviser/students').'/${encodeURIComponent(lrn)}',
+            $pattern.".replace('{lrn}', encodeURIComponent(lrn))",
             $html
         );
-        $this->assertStringContainsString('${studentsUrl(s.lrn)}', $html);
 
-        // …not the filtered list it used to open.
-        $this->assertStringNotContainsString('?tab=saved&q=${encodeURIComponent(lrn)}', $html);
+        // …not the filtered list it used to open. Scoped to the search's own
+        // script: the My Students tab links to that list legitimately, and it
+        // is only a result row pointing there that was the bug.
+        $start = strpos($html, "const box = document.getElementById('lsearchBox');");
+        $this->assertNotFalse($start);
+        $script = substr($html, $start, (int) strpos($html, '</script>', $start) - $start);
+        $this->assertStringNotContainsString('tab=saved', $script);
     }
 
     #[Test]
@@ -121,8 +127,12 @@ class AdviserSearchOpensProfileTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertStringContainsString('id="asbSearchForm"', $html);
+        $this->assertStringContainsString(
+            '<form method="GET" action="'.route('dashboard.class-adviser').'" class="lsearch" id="lsearchBox">',
+            $html
+        );
         $this->assertStringContainsString('<input type="hidden" name="tab" value="saved">', $html);
+        $this->assertStringContainsString('name="q"', $html);
     }
 
     /** A learner outside this adviser's class is turned away. */

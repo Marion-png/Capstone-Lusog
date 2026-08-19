@@ -1,0 +1,136 @@
+/* ══════════════════════════════════════════════════════════════════════
+   Learner search — shared by the Class Adviser and School Nurse topbars
+   ──────────────────────────────────────────────────────────────────────
+   One control, one look. The two roles each grew their own version and
+   drifted apart — different field shape, avatar size, result fields and
+   empty state — so both now include partials/learner-search.
+
+   Written against the --lg-* tokens, which both shells provide: nurse
+   pages inline css/lusog-theme.css, adviser pages css/lusog-palette.css.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.lsearch {
+	position: relative;
+	flex: 1 1 auto;
+	max-width: 420px;
+	/* Auto on both sides: the adviser topbar is a plain flex row and needs
+	   the search to push the icon group to the right edge; the nurse topbar
+	   is space-between and is unaffected. */
+	margin-left: auto;
+	margin-right: auto;
+	display: flex;
+	align-items: center;
+}
+.lsearch > svg {
+	position: absolute;
+	left: 12px;
+	width: 15px;
+	height: 15px;
+	color: var(--lg-ink-soft, #6B7C72);
+	pointer-events: none;
+}
+.lsearch input {
+	width: 100%;
+	font: inherit;
+	font-size: .82rem;
+	color: var(--lg-ink, #1F2D25);
+	background: var(--lg-page, #F6F9F7);
+	border: 1px solid var(--lg-border, #DCE8E0);
+	border-radius: var(--lg-r-pill, 999px);
+	padding: 8px 14px 8px 34px;
+}
+.lsearch input::placeholder { color: #9AAEA4; }
+.lsearch input:focus {
+	outline: none;
+	background: var(--lg-card, #fff);
+	border-color: var(--lg-emerald, #1F8A4C);
+	box-shadow: 0 0 0 3px rgba(31, 138, 76, .2);
+}
+
+/* Results hang below the field, over the page. */
+.lsearch-dropdown {
+	display: none;
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: calc(100% + 7px);
+	z-index: 1000;
+	max-height: 360px;
+	overflow-y: auto;
+	background: var(--lg-card, #fff);
+	border: 1px solid var(--lg-border-strong, #C7DCCE);
+	border-radius: var(--lg-r-card, 12px);
+	box-shadow: 0 16px 40px rgba(16, 32, 24, .16);
+	padding: 5px;
+}
+.lsearch-dropdown.show { display: block; }
+
+.lsearch-count {
+	padding: 6px 10px 8px;
+	font-size: .64rem;
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft, #6B7C72);
+}
+.lsearch-row {
+	display: flex;
+	align-items: center;
+	gap: 11px;
+	padding: 8px 10px;
+	border-radius: var(--lg-r-input, 8px);
+	text-decoration: none;
+	color: inherit;
+}
+.lsearch-row:hover, .lsearch-row:focus-visible { background: var(--lg-mint, #E7F5EC); outline: none; }
+.lsearch-avatar {
+	width: 34px;
+	height: 34px;
+	flex: 0 0 auto;
+	border-radius: 50%;
+	background: var(--lg-emerald-deep, #126B3A);
+	color: #fff;
+	display: grid;
+	place-items: center;
+	font-size: .72rem;
+	font-weight: 700;
+}
+.lsearch-info { min-width: 0; flex: 1; }
+.lsearch-name {
+	font-size: .83rem;
+	font-weight: 700;
+	color: var(--lg-ink, #1F2D25);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.lsearch-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 1px;
+	font-size: .71rem;
+	color: var(--lg-ink-soft, #6B7C72);
+	font-variant-numeric: tabular-nums;
+}
+.lsearch-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 7px;
+	padding: 18px 12px;
+	text-align: center;
+	font-size: .8rem;
+	color: var(--lg-ink-soft, #6B7C72);
+}
+.lsearch-empty svg { width: 26px; height: 26px; opacity: .4; }
+
+@media (max-width: 900px) {
+	.lsearch { display: none; }
+}
+
+/* The two legacy nurse pages (Consent Forms, Health Assessments) are on an
+   older dark-bar shell whose Back link claims the right edge with its own
+   margin-left:auto. Give it back, or the two autos split the gap and the
+   link stops sitting flush. */
+.cf-topbar .lsearch { margin-right: 0; }

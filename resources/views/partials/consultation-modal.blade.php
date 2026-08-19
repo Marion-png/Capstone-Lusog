@@ -88,10 +88,20 @@
                     @endif
                 </div>
 
-                <div class="bmodal-field">
+                {{-- Opened from a learner's profile, the grade and section are
+                     that learner's own — the dialog fills them in and locks
+                     them, because a consultation typed against a section the
+                     record does not have is a consultation filed under the
+                     wrong class. Opened cold from the Consultation Log there
+                     is no record to read, so the nurse still types it. --}}
+                <div class="bmodal-field" id="cm_grade_section_field">
                     <label for="cm_grade_section">Grade and section</label>
                     <input id="cm_grade_section" type="text" name="grade_section"
                            value="{{ old('grade_section') }}" placeholder="e.g. Grade 10 - Rizal" required autocomplete="off">
+                    <div class="bmodal-note">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <span>From the learner's record. Correct it on their profile.</span>
+                    </div>
                     @if ($errors->consultation->has('grade_section'))
                         <div class="bmodal-error">{{ $errors->consultation->first('grade_section') }}</div>
                     @endif
@@ -183,17 +193,39 @@
 (() => {
     const nameField = document.getElementById('cm_student_name');
     const sectionField = document.getElementById('cm_grade_section');
+    const sectionWrap = document.getElementById('cm_grade_section_field');
+
+    // Read-only, never disabled: a disabled input posts nothing, so the
+    // section would arrive empty and fail its own required rule.
+    const lockSection = (locked) => {
+        if (!sectionField) return;
+        sectionField.readOnly = locked;
+        sectionField.setAttribute('aria-readonly', locked ? 'true' : 'false');
+        if (sectionWrap) sectionWrap.classList.toggle('is-locked', locked);
+    };
 
     // Called by the profile's "New Consultation" button.
     window.openConsultationFor = (name, section) => {
         if (nameField) nameField.value = name || '';
         if (sectionField) sectionField.value = section || '';
 
+        // A learner with no section on file is still a learner the nurse
+        // must be able to log, so lock only what the record actually gave.
+        lockSection(String(section || '').trim() !== '');
+
+        // The Consultation Log's own trigger carries no learner, and this
+        // borrows it to open the dialog. Flag the open so the delegated
+        // handler below does not read that as "opened cold" and unlock what
+        // was just filled in.
+        window.__consultPrefilled = true;
+
         const trigger = document.querySelector('[data-bmodal-open="consultModal"]');
         if (trigger) {
             trigger.click();
             return;
         }
+
+        window.__consultPrefilled = false;
 
         // No trigger on this page — open it directly.
         const modal = document.getElementById('consultModal');
@@ -231,7 +263,15 @@
         }
         if (trigger.dataset.consultSection !== undefined && sectionField) {
             sectionField.value = trigger.dataset.consultSection || '';
+            lockSection(String(trigger.dataset.consultSection || '').trim() !== '');
+        } else if (!window.__consultPrefilled) {
+            // Opened cold — the Consultation Log's own button. One dialog
+            // serves both, so a lock left over from a previous open has to
+            // be cleared or the nurse cannot type a section at all.
+            lockSection(false);
         }
+
+        window.__consultPrefilled = false;
     }, true);
 })();
 </script>

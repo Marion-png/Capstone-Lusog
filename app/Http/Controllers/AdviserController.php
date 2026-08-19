@@ -175,11 +175,25 @@ class AdviserController extends Controller
         $nutritionalStatusBmiForAge = $this->classifyBmiForAge($bmi, $age);
         $nutritionalStatusHeightForAge = $this->classifyHeightForAge($heightCm, $age);
 
+        // Sheet 2 is written once, when the learner is enrolled.
+        //
+        // Opening a learner from their profile is reading their record, not
+        // re-examining them, so an edit keeps the systems review exactly as it
+        // stands and ignores whatever the form posted. The sheet renders
+        // read-only for an existing learner, but a disabled control is only a
+        // suggestion — a stale tab, a replayed form or devtools all reach this
+        // endpoint the same way, and a finding that a browser round-trip can
+        // silently overwrite is not a record.
+        //
         // Read the raw input, not $validated: adding a rule for the nested
         // systems_review.examiner_signature key makes validated() return only
         // that key for systems_review. normaliseSystemsReview() whitelists
         // every key it keeps, so unvalidated input cannot leak through.
-        $systemsReview = $this->normaliseSystemsReview((array) $request->input('systems_review', []));
+        $storedReview = $existingRecord?->student_details['systems_review'] ?? null;
+
+        $systemsReview = is_array($storedReview)
+            ? $this->normaliseSystemsReview($storedReview)
+            : $this->normaliseSystemsReview((array) $request->input('systems_review', []));
 
         // The roster carries no copy of the signature image, so the pad is blank
         // whenever an existing learner is edited. Blank means "keep what is on

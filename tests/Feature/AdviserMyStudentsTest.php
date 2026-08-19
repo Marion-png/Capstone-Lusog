@@ -282,7 +282,7 @@ class AdviserMyStudentsTest extends TestCase
 
         // The shared adviser chrome is still present — this is a full page,
         // not a bare fragment.
-        $this->assertStringContainsString('id="asbSearchInput"', $html);
+        $this->assertStringContainsString('id="lsearchInput"', $html);
         $this->assertStringContainsString('class="asb-sidebar"', $html);
 
         // Isolate the profile card and assert it carries no way to edit the
@@ -292,18 +292,36 @@ class AdviserMyStudentsTest extends TestCase
         $this->assertNotFalse($start);
         $card = substr($html, $start, $end - $start);
 
+        // The Incident Report tab is the one panel that writes, and what it
+        // writes is a NEW record about something that happened — not an edit
+        // of the learner's health card, which is what this guard protects.
+        // It is cut out here and checked on its own below, so the ban still
+        // covers Sheet 1, Sheet 2, Consent, Feeding, Notes, Consultations and
+        // Documents: a control appearing in any of those still fails.
+        $incidentAt = strpos($card, 'id="vpTabIncidents"');
+        $this->assertNotFalse($incidentAt, 'The Incident Report panel is missing.');
+        $readOnlyCard = substr($card, 0, $incidentAt);
+
         foreach (['<form', '<select', '<textarea'] as $editable) {
             $this->assertStringNotContainsString(
                 $editable,
-                $card,
-                "The read-only student profile must not contain {$editable}."
+                $readOnlyCard,
+                "The read-only part of the student profile must not contain {$editable}."
             );
         }
 
-        // The one exception is the Medical Documents file picker: the adviser
-        // files documents here, but no health field is editable.
-        $this->assertSame(1, substr_count($card, '<input'), 'The only input on the profile is the document picker.');
-        $this->assertStringContainsString('id="sdInput"', $card);
+        // The one input outside the incident panel is the Medical Documents
+        // file picker: the adviser files documents here, but no health field
+        // is editable.
+        $this->assertSame(1, substr_count($readOnlyCard, '<input'), 'The only input on the read-only profile is the document picker.');
+        $this->assertStringContainsString('id="sdInput"', $readOnlyCard);
+
+        // And the incident panel writes only to its own endpoint — it is not
+        // a back door into the health record.
+        $incidentPanel = substr($card, $incidentAt);
+        $this->assertStringContainsString(route('student-incidents.store', '123456789012'), $incidentPanel);
+        $this->assertSame(1, substr_count($card, '<form'), 'The incident report is the only form on the profile.');
+        $this->assertStringNotContainsString(route('adviser.store'), $card);
 
         $this->assertStringNotContainsString(route('health-assessment.store'), $card);
         $this->assertStringNotContainsString('Save Health Assessment', $card);
@@ -350,7 +368,7 @@ class AdviserMyStudentsTest extends TestCase
 
         $expected = [
             'vpTabSheet1', 'vpTabSheet2', 'vpTabConsent', 'vpTabFeeding',
-            'vpTabNotes', 'vpTabConsultations', 'vpTabDocuments',
+            'vpTabNotes', 'vpTabConsultations', 'vpTabDocuments', 'vpTabIncidents',
         ];
 
         preg_match_all('/data-panel="([^"]+)"/', $html, $tabs);
@@ -436,7 +454,13 @@ class AdviserMyStudentsTest extends TestCase
         $row = $roster->first();
         $this->assertSame('456 Rizal St., Davao City', $row['address']);
         $this->assertSame('09998887777', $row['telephone_no']);
-        $this->assertTrue($row['systems_review']['dental_caries']);
+
+        // Sheet 2 is written once, at enrolment. An edit is reading the
+        // learner's record, not re-examining them, so the review the
+        // second post carried is ignored and the first one stands.
+        // AdviserSheetTwoReadOnlyTest owns that rule.
+        $this->assertTrue($row['systems_review']['resp_cough']);
+        $this->assertFalse($row['systems_review']['dental_caries']);
 
         $record = StudentHealthRecord::where('student_id', '123456789012')->first();
         $this->assertSame('456 Rizal St., Davao City', $record->student_details['address']);
@@ -550,8 +574,18 @@ class AdviserMyStudentsTest extends TestCase
         );
     }
 
-    /** @test */
-    public function a_new_signature_replaces_the_stored_one(): void
+    /**
+     * The signature is the examiner attesting to the findings above it, so
+     * it is frozen with them: once a learner is on file, an edit cannot
+     * re-sign Sheet 2 any more than it can change what was found.
+     *
+     * This test used to assert the opposite. Re-signing from the edit form
+     * was how a stored signature got replaced, and with Sheet 2 read-only
+     * there is deliberately no path to it from the adviser's side.
+     *
+     * @test
+     */
+    public function a_signature_cannot_be_replaced_from_an_edit(): void
     {
         $this->enrol(['systems_review' => ['examiner_signature' => $this->signature()]]);
 
@@ -559,7 +593,11 @@ class AdviserMyStudentsTest extends TestCase
         $this->enrol(['systems_review' => ['examiner_signature' => $replacement]]);
 
         $record = StudentHealthRecord::where('student_id', '123456789012')->first();
-        $this->assertSame($replacement, $record->student_details['systems_review']['examiner_signature']);
+        $this->assertSame(
+            $this->signature(),
+            $record->student_details['systems_review']['examiner_signature'],
+            'The signature taken at enrolment is the one on file.'
+        );
     }
 
     /** @test */

@@ -57,6 +57,8 @@
 <div class="main">
     <header class="topbar">
         <div class="topbar-bc"><span>{{ session('active_role') === 'clinic_staff' ? 'Clinic Staff' : 'School Nurse' }}</span><span class="bc-sep">&rsaquo;</span><span>Health Records</span></div>
+
+        @include('partials.nurse-learner-search')
         <div class="topbar-spacer"></div>
         <div class="topbar-chip"><span class="dot"></span>{{ $schoolName }} &middot; SY {{ $schoolYear }}</div>
         @include('partials.live-clock')
@@ -1407,7 +1409,11 @@
     if (consultLink) {
         consultLink.addEventListener('click', () => {
             const name = document.getElementById('pName')?.textContent?.trim() || '';
-            const section = document.getElementById('pGrade')?.textContent?.trim() || '';
+            // The panel prints an em-less dash where the record has nothing.
+            // Passing that through would lock the dialog's section field on
+            // a placeholder, leaving the nurse no way to enter the real one.
+            const shown = document.getElementById('pGrade')?.textContent?.trim() || '';
+            const section = shown === '-' ? '' : shown;
 
             closeProfile();
 

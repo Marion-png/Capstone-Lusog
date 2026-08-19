@@ -66,15 +66,14 @@ class NurseLearnerSearchTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertStringContainsString('id="learnerFind"', $html);
-        $this->assertStringContainsString('id="learnerFindResults"', $html);
-
-        // It sits in the topbar with a dropdown, like the adviser's.
-        $this->assertStringContainsString('id="nurseSearchBox"', $html);
+        // It is the shared control the adviser uses — partials/learner-search.
+        $this->assertStringContainsString('id="lsearchInput"', $html);
+        $this->assertStringContainsString('id="lsearchResults"', $html);
+        $this->assertStringContainsString('id="lsearchBox"', $html);
         $this->assertStringContainsString('placeholder="Search students..."', $html);
 
         $topbarEnd = strpos($html, '</header>');
-        $searchAt = strpos($html, 'id="nurseSearchBox"');
+        $searchAt = strpos($html, 'id="lsearchBox"');
         $this->assertNotFalse($topbarEnd);
         $this->assertLessThan($topbarEnd, $searchAt, 'The search belongs in the topbar, not the page body.');
     }

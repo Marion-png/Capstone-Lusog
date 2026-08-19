@@ -29,6 +29,8 @@
 
     <header class="topbar">
         <div class="topbar-bc"><span>{{ session('active_role') === 'clinic_staff' ? 'Clinic Staff' : 'School Nurse' }}</span><span class="bc-sep">&rsaquo;</span><span>Medicine Inventory</span></div>
+
+        @include('partials.nurse-learner-search')
         <div class="topbar-spacer"></div>
         <div class="topbar-chip"><span class="dot"></span>{{ $schoolName }} &middot; SY {{ $schoolYear }}</div>
         @include('partials.live-clock')

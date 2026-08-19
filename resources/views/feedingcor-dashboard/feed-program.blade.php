@@ -128,6 +128,8 @@
 <div class="main">
 	<header class="topbar">
 		<div class="topbar-bc"><span>{{ $isReadOnly ? 'School Nurse' : 'Dashboard' }}</span><span class="bc-sep">&rsaquo;</span><span>Feeding Program</span></div>
+
+		@include('partials.nurse-learner-search')
 	    @include('partials.live-clock')
 	</header>
 

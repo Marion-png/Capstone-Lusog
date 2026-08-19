@@ -29,6 +29,8 @@
 
     <header class="topbar">
         <div class="topbar-bc"><span>School Nurse</span><span class="bc-sep">&rsaquo;</span><span>Data Visualization</span></div>
+
+        @include('partials.nurse-learner-search')
         <div class="topbar-spacer"></div>
         <div class="topbar-chip"><span class="dot"></span>{{ $schoolName }} &middot; SY {{ $schoolYear }}</div>
         @include('partials.live-clock')

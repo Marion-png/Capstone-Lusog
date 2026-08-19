@@ -100,6 +100,26 @@
     .bmodal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .bmodal-error { color: #b91c1c; font-size: .74rem; margin-top: 5px; }
 
+    /* A field the dialog filled in from a record. Read-only, not disabled:
+       a disabled input posts nothing, so the value would vanish on save. */
+    .bmodal-body input[readonly] {
+        background: #eef3f0;
+        color: #3E5348;
+        border-color: #DCE8E0;
+        cursor: default;
+    }
+    .bmodal-body input[readonly]:focus { border-color: #DCE8E0; box-shadow: none; }
+    .bmodal-note {
+        display: none;
+        align-items: center;
+        gap: 5px;
+        margin-top: 5px;
+        font-size: .72rem;
+        color: #6B7C72;
+    }
+    .bmodal-note svg { width: 12px; height: 12px; flex: 0 0 auto; }
+    .bmodal-field.is-locked .bmodal-note { display: flex; }
+
     .bmodal-foot {
         display: flex;
         justify-content: flex-end;

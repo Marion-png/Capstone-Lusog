@@ -124,7 +124,7 @@
                         <input id="feedingSearch" class="ms-search-input" type="text" placeholder="Search by name or LRN..." autocomplete="off">
                     </div>
                     <select id="feedingProgramFilter" class="ms-filter-select" aria-label="Filter by feeding program">
-                        <option value="all">All Programs</option>
+                        <option value="all">All Students</option>
                         <option value="enrolled">Enrolled</option>
                         <option value="not-enrolled">Not Enrolled</option>
                         <option value="ongoing">Ongoing</option>

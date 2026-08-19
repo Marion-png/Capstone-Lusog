@@ -76,6 +76,7 @@
                 <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabNotes">Clinic Notes <span class="sp-tab-badge" id="vpNotesTabBadge">0</span></button>
                 <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabConsultations">Consultation Log <span class="sp-tab-badge" id="vpConsultationsTabBadge">0</span></button>
                 <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabDocuments">Medical Documents <span class="sp-tab-badge" id="vpDocumentsTabBadge">0</span></button>
+                <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabIncidents">Incident Report <span class="sp-tab-badge" id="vpIncidentsTabBadge">0</span></button>
             </div>
 
             <div class="student-profile-body">
@@ -213,12 +214,19 @@
                     @include('partials.student-documents-panel')
                 </section>
             </div>
+
+            {{-- The one tab on this page the adviser writes. Everything else
+                 here is another desk's record and is read-only. --}}
+            <div class="sp-panel" id="vpTabIncidents" role="tabpanel">
+                @include('partials.student-incidents-panel', ['lrn' => $lrn])
+            </div>
             </div>
         </div>
     </div>
 </div>
 
 @include('partials.student-documents-script')
+@include('partials.student-incidents-script', ['lrn' => $lrn])
 
 <script>
 const STUDENT_PROFILE_RECORD = @json($prototypeRecord);
