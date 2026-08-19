@@ -651,7 +651,7 @@ const STUDENT_PROFILE_LRN = @json($lrn);
 
         setText('vpWeight', weightKg ? `${weightKg} kg` : '-');
         setText('vpHeight', heightM ? `${heightM.toFixed(2)} m` : '-');
-        setText('vpHeightSquared', heightSquared ? heightSquared.toFixed(4) : '-');
+        setText('vpHeightSquared', heightSquared ? heightSquared.toFixed(2) : '-');
         setText('vpBmi', bmi ? bmi.toFixed(1) : '-');
         setText('vpNutri', record.nutritional_status_bmi_for_age || '-');
         setText('vpHfa', record.nutritional_status_height_for_age || '-');

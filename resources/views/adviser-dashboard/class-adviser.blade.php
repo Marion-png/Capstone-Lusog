@@ -1187,7 +1187,7 @@ window.switchAdviserTab = (targetId) => {
         const heightSquared = heightM * heightM;
         const bmi = weightKg / heightSquared;
 
-        heightSquaredOut.textContent = heightSquared.toFixed(4);
+        heightSquaredOut.textContent = heightSquared.toFixed(2);
         bmiOut.textContent = bmi.toFixed(2);
         bmiAgeOut.textContent = classifyBmiForAge(bmi, age);
         hfaOut.textContent = classifyHeightForAge(heightM, age);
