@@ -116,7 +116,20 @@ class StudentHealthRecordController extends Controller
             ->filter(fn (StudentHealthRecord $record) => optional($record->updated_at)?->isToday())
             ->count();
 
-        $avgBmi = $records->avg('bmi_value') ?: 0;
+        // Average only what is actually a number.
+        //
+        // `bmi_value` is encrypted, and the cast deliberately falls back to the
+        // raw value rather than throwing when it cannot read one — so a row
+        // written under a different APP_KEY arrives as ciphertext, and a
+        // learner nobody measured arrives empty. Handing either to avg() ends
+        // the request with "Unsupported operand types: int + string" and takes
+        // the whole adviser dashboard down over one unreadable row.
+        $bmiValues = $records
+            ->map(fn (StudentHealthRecord $record) => $record->bmi_value)
+            ->filter(fn ($value) => is_numeric($value))
+            ->map(fn ($value) => (float) $value);
+
+        $avgBmi = $bmiValues->isEmpty() ? 0 : $bmiValues->avg();
 
         $flaggedCount = $records
             ->filter(function (StudentHealthRecord $record): bool {
