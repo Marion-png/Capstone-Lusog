@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\StudentHealthRecord;
 use App\Support\SchemaCache;
 use App\Support\StudentRosterSync;
+use App\Support\StudentVitalSigns;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -139,9 +140,10 @@ class AdviserController extends Controller
             // A 2MB image is roughly 2.8M characters once base64-encoded.
             'systems_review.examiner_signature' => ['nullable', 'string', 'max:2900000'],
             'health_history' => ['nullable', 'array'],
-            'temperature_c' => ['nullable', 'numeric', 'between:25,45'],
-            'pulse_bpm' => ['nullable', 'integer', 'between:20,250'],
-            'blood_pressure' => ['nullable', 'string', 'max:20'],
+            // Temperature, pulse and blood pressure are deliberately absent.
+            // They are the school nurse's fields — see App\Support\StudentVitalSigns
+            // and StudentVitalSignsController. Whatever a form posts for them
+            // is ignored and the stored reading is carried across instead.
         ]);
 
         $assignedGradeLevel = (string) $request->session()->get('assigned_grade_level', '');
@@ -220,9 +222,8 @@ class AdviserController extends Controller
             'gender' => $validated['gender'] ?? null,
             'height_cm' => $validated['height_cm'],
             'weight_kg' => $validated['weight_kg'],
-            'temperature_c' => $validated['temperature_c'] ?? null,
-            'pulse_bpm' => $validated['pulse_bpm'] ?? null,
-            'blood_pressure' => $validated['blood_pressure'] ?? null,
+            // Vital signs are filled in from the record by StudentVitalSigns
+            // ::preserve() below, never from this request.
             'health_history' => $this->normaliseHealthHistory((array) $request->input('health_history', [])),
             'age' => $age,
             'bmi_value' => $bmi,
@@ -233,6 +234,11 @@ class AdviserController extends Controller
             'systems_review' => $systemsReview,
             'examination' => [],
         ];
+
+        // The adviser's form rebuilds the whole card on every save, so the
+        // nurse's reading has to be carried across explicitly or a teacher
+        // correcting a phone number would wipe it.
+        $sessionRow = StudentVitalSigns::preserve($sessionRow, $existingRecord);
 
         // Editing a learner re-posts their LRN. Replace that roster row rather
         // than appending, or My Students would list the learner twice — the DB

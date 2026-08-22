@@ -31,6 +31,7 @@ use App\Http\Controllers\SchoolHeadReportsController;
 use App\Http\Controllers\StudentHealthRecordController;
 use App\Http\Controllers\StudentIncidentReportController;
 use App\Http\Controllers\StudentMedicalDocumentController;
+use App\Http\Controllers\StudentVitalSignsController;
 use App\Models\AuditLog;
 use App\Models\Consultation;
 use App\Models\Institution;
@@ -789,6 +790,14 @@ Route::post('/health-records/students/{lrn}/incidents', [StudentIncidentReportCo
     ->name('student-incidents.store');
 Route::delete('/health-records/students/{lrn}/incidents/{id}', [StudentIncidentReportController::class, 'destroy'])
     ->whereNumber('id')->name('student-incidents.destroy');
+
+// Vital signs (temperature, pulse, blood pressure). The school nurse is the
+// only role that may write one — the class adviser measures height and weight
+// and reads these. Enforced in the controller, not here.
+Route::get('/health-records/students/{lrn}/vitals', [StudentVitalSignsController::class, 'show'])
+    ->name('student-vitals.show');
+Route::post('/health-records/students/{lrn}/vitals', [StudentVitalSignsController::class, 'store'])
+    ->name('student-vitals.store');
 
 // Parental consent form upload (class_adviser only, own class enforced in controller)
 Route::post('/adviser/parental-consent', [ParentalConsentFormController::class, 'store'])

@@ -153,3 +153,16 @@
 	.qa-card { transition: none !important; }
 	.qa-card:hover { transform: none; }
 }
+
+/* ── Vital signs panel (student profile) ──
+   The nurse records temperature, pulse and blood pressure; the class adviser
+   reads them on their own form. The form stays closed until asked for — a
+   profile is opened to read far more often than to record. */
+.vitals-form{margin-top:14px;padding:14px;border:1px solid var(--lg-border-strong,#C7DCCE);border-radius:12px;background:var(--lg-page,#F6F9F7)}
+.vitals-form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+.vitals-form-grid label{display:block;font-size:.72rem;font-weight:600;color:var(--lg-ink-soft,#6B7C72);margin-bottom:4px}
+.vitals-form-grid input{width:100%;font:inherit;font-size:.84rem;color:var(--lg-ink,#1F2D25);background:#fff;border:1px solid var(--lg-border,#DCE8E0);border-radius:8px;padding:8px 10px;font-variant-numeric:tabular-nums lining-nums slashed-zero}
+.vitals-form-grid input:focus{outline:none;border-color:var(--lg-emerald,#1F8A4C);box-shadow:0 0 0 3px rgba(31,138,76,.16)}
+.vitals-form-error{margin-top:11px;padding:9px 12px;border-radius:8px;background:#FCECEC;color:#b91c1c;font-size:.78rem}
+.vitals-form-foot{display:flex;justify-content:flex-end;gap:9px;margin-top:12px}
+@media (max-width:640px){.vitals-form-grid{grid-template-columns:1fr}}

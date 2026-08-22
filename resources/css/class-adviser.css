@@ -893,3 +893,21 @@ tbody tr:hover td{background:#f3fbf6}
 .incident-facts b{font-weight:600;color:var(--lg-ink,#1F2D25)}
 
 @media (max-width:640px){.incident-form-grid{grid-template-columns:1fr}}
+
+/* ── Vital signs, read-only on the adviser's form ──
+   Height and weight are the adviser's; temperature, pulse and blood pressure
+   belong to the school nurse. This panel reports and never asks, so it is
+   styled as a readout rather than as disabled inputs — a greyed-out field
+   still reads as "something you could fill in", which is the wrong idea. */
+.vitals-readonly-note{display:flex;gap:11px;align-items:flex-start;padding:11px 13px;margin-bottom:12px;border-radius:10px;background:var(--lg-mint,#E7F5EC);border:1px solid var(--lg-border-strong,#C7DCCE)}
+.vitals-readonly-note svg{width:15px;height:15px;flex:0 0 auto;margin-top:2px;color:var(--lg-emerald-deep,#126B3A)}
+.vitals-readonly-note strong{display:block;font-size:.8rem;color:var(--lg-ink,#1F2D25);margin-bottom:2px}
+.vitals-readonly-note span{font-size:.76rem;line-height:1.45;color:var(--lg-ink-soft,#6B7C72)}
+.vitals-readout{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.vitals-item{display:flex;flex-direction:column;gap:2px;padding:11px 13px;border:1px solid var(--lg-border,#DCE8E0);border-radius:10px;background:var(--lg-page,#F6F9F7)}
+.vitals-label{font-size:.7rem;font-weight:600;letter-spacing:.02em;color:var(--lg-ink-soft,#6B7C72)}
+.vitals-value{font-size:1.15rem;font-weight:700;color:var(--lg-ink,#1F2D25);font-variant-numeric:tabular-nums lining-nums slashed-zero;line-height:1.15}
+.vitals-value.is-empty{color:var(--lg-ink-soft,#6B7C72);font-weight:600}
+.vitals-unit{font-size:.68rem;color:var(--lg-ink-soft,#6B7C72)}
+.vitals-attribution{margin-top:9px;font-size:.72rem;color:var(--lg-ink-soft,#6B7C72)}
+@media (max-width:640px){.vitals-readout{grid-template-columns:1fr}}

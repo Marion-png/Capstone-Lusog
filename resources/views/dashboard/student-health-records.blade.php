@@ -332,6 +332,50 @@
                     <div class="kv"><div class="k">Medical Alerts:</div><div class="v" id="paStatus">Pending School Nurse review.</div></div>
                 </div>
 
+                {{-- Vital signs are this role's to record. Height and weight are
+                     the class adviser's — they are what the feeding programme's
+                     BMI is built from and a teacher takes them with a tape and a
+                     scale. Temperature, pulse and blood pressure are a clinical
+                     observation, so the adviser's form shows them and only this
+                     panel writes one. Clinic staff see it read-only. --}}
+                <div class="student-profile-section" id="vitalsSection">
+                    <div class="sp-panel-head">
+                        <h4>Vital Signs</h4>
+                        <button type="button" class="btn btn-secondary" id="vitalsEditBtn">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+                            Record Vital Signs
+                        </button>
+                    </div>
+
+                    <div class="kv"><div class="k">Temperature:</div><div class="v" id="pvTemperature">-</div></div>
+                    <div class="kv"><div class="k">Pulse rate:</div><div class="v" id="pvPulse">-</div></div>
+                    <div class="kv"><div class="k">Blood pressure:</div><div class="v" id="pvBloodPressure">-</div></div>
+                    <div class="sp-note" id="pvAttribution">No vital signs recorded yet.</div>
+
+                    <div class="vitals-form" id="vitalsForm" hidden>
+                        <div class="vitals-form-grid">
+                            <div class="field">
+                                <label for="vfTemperature">Temperature (&deg;C)</label>
+                                <input type="number" id="vfTemperature" step="0.1" min="25" max="45" placeholder="e.g. 36.5" autocomplete="off">
+                            </div>
+                            <div class="field">
+                                <label for="vfPulse">Pulse rate (bpm)</label>
+                                <input type="number" id="vfPulse" step="1" min="20" max="250" placeholder="e.g. 72" autocomplete="off">
+                            </div>
+                            <div class="field">
+                                <label for="vfBloodPressure">Blood pressure (mmHg)</label>
+                                <input type="text" id="vfBloodPressure" maxlength="20" placeholder="e.g. 110/70" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="vitals-form-error" id="vitalsError" hidden></div>
+                        <div class="vitals-form-foot">
+                            <button type="button" class="btn btn-secondary" id="vitalsCancel">Cancel</button>
+                            <button type="button" class="btn" id="vitalsSave">Save Vital Signs</button>
+                        </div>
+                        <div class="sp-note">Leave a field blank to record no reading for it.</div>
+                    </div>
+                </div>
+
                 <div class="student-profile-section">
                     <h4>Growth &amp; Nutrition</h4>
                     <div class="kv"><div class="k">Height:</div><div class="v" id="pgHeight">-</div></div>
@@ -762,6 +806,7 @@
         setText('psGrade', record.grade_level || '-');
         setText('psStatus', examined ? 'Examined by School Nurse' : 'Pending School Nurse Examination');
 
+        window.renderVitals?.(record);
         setText('pgHeight', (record.height_cm || '-') + ' cm');
         setText('pgWeight', (record.weight_kg || '-') + ' kg');
         drawGrowthTrend(record);
@@ -1498,5 +1543,129 @@
 
 @include('partials.consultation-modal')
 @include('partials.nurse-page-transition')
+{{-- Vital signs: this role records them, and the class adviser reads them.
+     Written through student-vitals.store, the one endpoint that touches
+     these three fields — the adviser's save ignores them entirely. --}}
+<script>
+(() => {
+    const section = document.getElementById('vitalsSection');
+    if (!section) return;
+
+    const form = document.getElementById('vitalsForm');
+    const editBtn = document.getElementById('vitalsEditBtn');
+    const cancelBtn = document.getElementById('vitalsCancel');
+    const saveBtn = document.getElementById('vitalsSave');
+    const errorBox = document.getElementById('vitalsError');
+    const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const canRecord = @json(session('active_role') === 'school_nurse');
+
+    // Clinic staff read this panel; only the nurse writes. The server refuses
+    // either way — this is what the desk sees, not what protects the field.
+    if (!canRecord && editBtn) editBtn.hidden = true;
+
+    let lrn = '';
+
+    const urlFor = (id) => @json(url('health-records/students')) + '/' + encodeURIComponent(id) + '/vitals';
+
+    const setText = (id, value) => {
+        const node = document.getElementById(id);
+        if (node) node.textContent = value;
+    };
+
+    const paint = (vitals) => {
+        const v = vitals && typeof vitals === 'object' ? vitals : {};
+        const dash = '\u2014';
+
+        // An em dash, never a zero: a reading nobody took is not a
+        // temperature of nothing.
+        setText('pvTemperature', v.temperature_c ? v.temperature_c + ' \u00b0C' : dash);
+        setText('pvPulse', v.pulse_bpm ? v.pulse_bpm + ' bpm' : dash);
+        setText('pvBloodPressure', v.blood_pressure ? v.blood_pressure + ' mmHg' : dash);
+
+        setText('pvAttribution', v.has_any
+            ? 'Recorded by ' + (v.recorded_by || 'the school nurse') + (v.recorded_at ? ' \u00b7 ' + v.recorded_at : '')
+            : 'No vital signs recorded yet.');
+
+        const field = (id, value) => {
+            const node = document.getElementById(id);
+            if (node) node.value = value ?? '';
+        };
+        field('vfTemperature', v.temperature_c);
+        field('vfPulse', v.pulse_bpm);
+        field('vfBloodPressure', v.blood_pressure);
+    };
+
+    const showError = (message) => {
+        if (!errorBox) return;
+        errorBox.textContent = message;
+        errorBox.hidden = message === '';
+    };
+
+    const setOpen = (open) => {
+        if (form) form.hidden = !open;
+        if (editBtn) editBtn.hidden = open || !canRecord;
+        if (open) document.getElementById('vfTemperature')?.focus();
+    };
+
+    // Called by openProfile: the panel follows whichever learner is on screen.
+    window.renderVitals = (record) => {
+        lrn = String(record?.lrn || '').trim();
+        setOpen(false);
+        showError('');
+        paint(record);
+
+        if (lrn === '') return;
+
+        // Re-read from the server rather than trusting the row: the adviser's
+        // roster copy can be stale, and this figure is clinical.
+        fetch(urlFor(lrn), { headers: { Accept: 'application/json' } })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data) => { if (data?.vitals) paint(data.vitals); })
+            .catch(() => {});
+    };
+
+    editBtn?.addEventListener('click', () => { showError(''); setOpen(true); });
+    cancelBtn?.addEventListener('click', () => { showError(''); setOpen(false); });
+
+    saveBtn?.addEventListener('click', async () => {
+        if (lrn === '') return;
+        showError('');
+        saveBtn.disabled = true;
+
+        const body = new FormData();
+        body.append('temperature_c', document.getElementById('vfTemperature')?.value ?? '');
+        body.append('pulse_bpm', document.getElementById('vfPulse')?.value ?? '');
+        body.append('blood_pressure', document.getElementById('vfBloodPressure')?.value ?? '');
+
+        try {
+            const response = await fetch(urlFor(lrn), {
+                method: 'POST',
+                headers: { Accept: 'application/json', 'X-CSRF-TOKEN': token },
+                body,
+            });
+
+            if (response.status === 422) {
+                const data = await response.json();
+                const first = Object.values(data.errors || {})[0];
+                showError(Array.isArray(first) ? first[0] : 'Please check the readings and try again.');
+                return;
+            }
+
+            if (!response.ok) {
+                showError('The reading could not be saved. Please try again.');
+                return;
+            }
+
+            const data = await response.json();
+            paint(data.vitals || {});
+            setOpen(false);
+        } catch (_) {
+            showError('The reading could not be saved. Please try again.');
+        } finally {
+            saveBtn.disabled = false;
+        }
+    });
+})();
+</script>
 </body>
 </html>

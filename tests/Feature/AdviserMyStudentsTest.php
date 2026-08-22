@@ -628,13 +628,16 @@ class AdviserMyStudentsTest extends TestCase
         $this->assertNull(StudentHealthRecord::where('student_id', '123456789012')->first());
     }
 
-    /** @test */
-    public function sheet_one_captures_medical_history_appearance_and_the_new_vitals(): void
+    /**
+     * Sheet 1 still captures the medical and family history the adviser
+     * fills in — but no longer the vital signs. Those moved to the school
+     * nurse; AdviserVitalSignsTest owns that rule.
+     *
+     * @test
+     */
+    public function sheet_one_captures_medical_history_and_appearance(): void
     {
         $this->enrol([
-            'temperature_c' => 36.5,
-            'pulse_bpm' => 72,
-            'blood_pressure' => '110/70',
             'health_history' => [
                 'med_seizure' => '1',
                 'med_allergies' => '1',
@@ -650,10 +653,6 @@ class AdviserMyStudentsTest extends TestCase
         ]);
 
         $details = StudentHealthRecord::where('student_id', '123456789012')->first()->student_details;
-
-        $this->assertEquals(36.5, $details['temperature_c']);
-        $this->assertEquals(72, $details['pulse_bpm']);
-        $this->assertSame('110/70', $details['blood_pressure']);
 
         $history = $details['health_history'];
         $this->assertTrue($history['med_seizure']);
@@ -677,7 +676,6 @@ class AdviserMyStudentsTest extends TestCase
             ->first(fn ($r) => ($r['lrn'] ?? '') === '123456789012');
 
         $this->assertSame('Peanuts', $row['health_history']['allergies_detail']);
-        $this->assertSame('110/70', $row['blood_pressure']);
     }
 
     /** @test */
@@ -693,13 +691,24 @@ class AdviserMyStudentsTest extends TestCase
         $response->assertSee('name="health_history[med_asthma]"', false);
         $response->assertSee('name="health_history[fam_hypertension]"', false);
         $response->assertSee('name="health_history[consciousness]"', false);
-        $response->assertSee('name="temperature_c"', false);
-        $response->assertSee('name="pulse_bpm"', false);
-        $response->assertSee('name="blood_pressure"', false);
+
+        // Vital signs are the school nurse's. The adviser sees them as a
+        // readout and has no field to type one into.
+        $response->assertDontSee('name="temperature_c"', false);
+        $response->assertDontSee('name="pulse_bpm"', false);
+        $response->assertDontSee('name="blood_pressure"', false);
+        $response->assertSee('id="vitalTemperature"', false);
     }
 
-    /** @test */
-    public function out_of_range_vitals_are_rejected(): void
+    /**
+     * An adviser posting vitals is simply ignored — the fields are not on
+     * their form and not in their validator, so the save succeeds and the
+     * readings are not written. The range rules moved to the nurse's
+     * endpoint with the fields; AdviserVitalSignsTest covers them there.
+     *
+     * @test
+     */
+    public function vitals_posted_by_an_adviser_are_ignored(): void
     {
         $this->withSession($this->adviserSession())
             ->post(route('adviser.store'), [
@@ -713,9 +722,13 @@ class AdviserMyStudentsTest extends TestCase
                 'temperature_c' => 120,
                 'pulse_bpm' => 900,
             ])
-            ->assertSessionHasErrors(['temperature_c', 'pulse_bpm']);
+            ->assertSessionHasNoErrors();
 
-        $this->assertNull(StudentHealthRecord::where('student_id', '123456789012')->first());
+        $record = StudentHealthRecord::where('student_id', '123456789012')->first();
+
+        $this->assertNotNull($record, 'The learner still saves — the vitals are dropped, not the record.');
+        $this->assertNull($record->student_details['temperature_c'] ?? null);
+        $this->assertNull($record->student_details['pulse_bpm'] ?? null);
     }
 
     /** @test */

@@ -628,13 +628,10 @@
                 </div>
 
                 <div class="student-section">
-                    <h4>Vital Signs</h4>
+                    <h4>Measurements</h4>
                     <div class="student-grid" style="margin-bottom:10px;">
                         <div class="field"><label for="weight">Weight (kg) <span style="color:#D95C5C">*</span></label><input id="weight" name="weight_kg" type="number" step="0.1" min="0.1" max="200" placeholder="e.g., 34" value="{{ old('weight_kg') }}" required><div class="muted" style="font-size:.7rem;">Valid range: 0.1 - 200 kg</div></div>
                         <div class="field"><label for="height">Height (m) <span style="color:#D95C5C">*</span></label><input id="height" name="height_m" type="number" step="0.01" min="0.50" max="2.50" placeholder="e.g., 1.27" value="{{ old('height_cm') ? number_format(old('height_cm') / 100, 2, '.', '') : '' }}" required><div class="muted" style="font-size:.7rem;">Convert cm to m: 127 cm = 1.27 m | Valid range: 0.50 - 2.50 m</div></div>
-                        <div class="field"><label for="temperature">Temp (&deg;C)</label><input id="temperature" name="temperature_c" type="number" step="0.1" min="25" max="45" placeholder="e.g., 36.5" value="{{ old('temperature_c') }}"></div>
-                        <div class="field"><label for="pulse">Pulse (BPM)</label><input id="pulse" name="pulse_bpm" type="number" step="1" min="20" max="250" placeholder="e.g., 72" value="{{ old('pulse_bpm') }}"></div>
-                        <div class="field"><label for="bloodPressure">BP (mmHg)</label><input id="bloodPressure" name="blood_pressure" type="text" maxlength="20" placeholder="e.g., 110/70" value="{{ old('blood_pressure') }}"></div>
                     </div>
 
                     {{-- Computed from weight, height and date of birth as they
@@ -662,6 +659,45 @@
                             <span class="bmi-value is-text" id="hfaDisplay">-</span>
                         </div>
                     </div>
+                </div>
+
+                {{-- Vital signs are the school nurse's, not the adviser's.
+                     Height and weight are the two readings a teacher takes,
+                     and they are what the feeding programme's BMI is built
+                     from; temperature, pulse and blood pressure are a clinical
+                     observation. So this panel reports and never asks — there
+                     is no input here, and AdviserController::store ignores
+                     these three whatever a form posts. --}}
+                <div class="student-section">
+                    <h4>Vital Signs</h4>
+
+                    <div class="vitals-readonly-note">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <div>
+                            <strong>Recorded by the school nurse</strong>
+                            <span>Temperature, pulse rate and blood pressure are taken by the school nurse. You can see them here; you do not enter them.</span>
+                        </div>
+                    </div>
+
+                    <div class="vitals-readout">
+                        <div class="vitals-item">
+                            <span class="vitals-label">Temperature</span>
+                            <span class="vitals-value" id="vitalTemperature">&mdash;</span>
+                            <span class="vitals-unit">&deg;C</span>
+                        </div>
+                        <div class="vitals-item">
+                            <span class="vitals-label">Pulse rate</span>
+                            <span class="vitals-value" id="vitalPulse">&mdash;</span>
+                            <span class="vitals-unit">bpm</span>
+                        </div>
+                        <div class="vitals-item">
+                            <span class="vitals-label">Blood pressure</span>
+                            <span class="vitals-value" id="vitalBloodPressure">&mdash;</span>
+                            <span class="vitals-unit">mmHg</span>
+                        </div>
+                    </div>
+
+                    <div class="vitals-attribution" id="vitalsAttribution">No vital signs have been recorded for this learner yet.</div>
                 </div>
                 </div>{{-- end Sheet 1 --}}
 
@@ -1281,13 +1317,13 @@ window.switchAdviserTab = (targetId) => {
                 ],
             },
             {
-                title: 'Vital Signs',
+                // Vital signs are not on this list: the review screen reports
+                // what is about to be saved, and the nurse's readings are not
+                // part of an adviser's save.
+                title: 'Measurements',
                 rows: [
                     ['Weight', `${byId('weight')?.value || '-'} kg`],
                     ['Height', `${byId('height')?.value || '-'} m`],
-                    ['Temperature', byId('temperature')?.value ? `${byId('temperature').value} °C` : '-'],
-                    ['Pulse', byId('pulse')?.value ? `${byId('pulse').value} bpm` : '-'],
-                    ['Blood Pressure', byId('bloodPressure')?.value || '-'],
                     ['(Height)^2', byId('heightSquared')?.textContent || '-'],
                     ['BMI', `${byId('bmiDisplay')?.textContent || '-'} kg/m^2`],
                     ['Nutritional Status', byId('nutriStatusDisplay')?.textContent || '-'],
@@ -1752,6 +1788,42 @@ window.showAdviserSheet = (panelId) => {
         window.setSignaturePadEnabled?.(!editing);
     };
 
+    // Vital signs are read-only for this role: show what the nurse recorded,
+    // and say plainly when nobody has. An em dash, never a zero — a reading
+    // nobody took is not a temperature of nothing.
+    const renderVitalSigns = (record) => {
+        const data = record && typeof record === 'object' ? record : {};
+
+        const show = (id, value) => {
+            const node = document.getElementById(id);
+            if (!node) return;
+            const text = value === null || value === undefined || String(value).trim() === ''
+                ? '\u2014'
+                : String(value).trim();
+            node.textContent = text;
+            node.classList.toggle('is-empty', text === '\u2014');
+        };
+
+        show('vitalTemperature', data.temperature_c);
+        show('vitalPulse', data.pulse_bpm);
+        show('vitalBloodPressure', data.blood_pressure);
+
+        const note = document.getElementById('vitalsAttribution');
+        if (!note) return;
+
+        const taken = [data.temperature_c, data.pulse_bpm, data.blood_pressure]
+            .some((v) => v !== null && v !== undefined && String(v).trim() !== '');
+
+        if (!taken) {
+            note.textContent = 'No vital signs have been recorded for this learner yet.';
+            return;
+        }
+
+        const by = String(data.vitals_recorded_by || '').trim();
+        const at = String(data.vitals_recorded_at || '').trim();
+        note.textContent = 'Recorded by ' + (by || 'the school nurse') + (at ? ' \u00b7 ' + at : '');
+    };
+
     const fillForm = (record) => {
         setValue('proto_last_name', record.last_name);
         setValue('proto_first_name', record.first_name);
@@ -1763,9 +1835,7 @@ window.showAdviserSheet = (panelId) => {
         setValue('proto_telephone_no', record.telephone_no);
         setValue('proto_address', record.address);
         setValue('weight', record.weight_kg);
-        setValue('temperature', record.temperature_c);
-        setValue('pulse', record.pulse_bpm);
-        setValue('bloodPressure', record.blood_pressure);
+        renderVitalSigns(record);
 
         const heightCm = Number(record.height_cm);
         setValue('height', Number.isFinite(heightCm) && heightCm > 0 ? (heightCm / 100).toFixed(2) : '');
@@ -1801,6 +1871,7 @@ window.showAdviserSheet = (panelId) => {
 
     window.openEnrolmentForm = () => {
         form.reset();
+        renderVitalSigns({});
         // form.reset() restores input values but not the canvas bitmap.
         window.clearSignaturePad?.();
         setMode(false);
