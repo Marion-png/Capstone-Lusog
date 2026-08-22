@@ -51,7 +51,7 @@
 		</div>
 		{{-- Opens the per-beneficiary roll with the flag already applied, so the
 		     list the coordinator lands on is exactly the one counted here. --}}
-		<a class="btn btn-secondary" href="{{ $pageUrl(['view' => 'beneficiary', 'status' => 'at_risk']) }}">View At-Risk Beneficiaries</a>
+		<a class="btn btn-secondary" href="{{ $pageUrl(['view' => 'beneficiary', 'standing' => 'at_risk', 'status' => '']) }}">View At-Risk Beneficiaries</a>
 	</div>
 @endif
 
@@ -64,6 +64,6 @@
 				<span>At-risk classification begins after {{ $atRisk['minimumObservationDays'] }} recorded feeding days &middot; {{ $cumulative['sessions'] }} recorded so far.</span>
 			</div>
 		</div>
-		<a class="btn btn-secondary" href="{{ $pageUrl(['view' => 'beneficiary', 'status' => 'early_monitoring']) }}">View Under Observation</a>
+		<a class="btn btn-secondary" href="{{ $pageUrl(['view' => 'beneficiary', 'standing' => 'early_monitoring', 'status' => '']) }}">View Under Observation</a>
 	</div>
 @endif

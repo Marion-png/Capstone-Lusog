@@ -32,13 +32,6 @@
 	// A view keeps every filter already chosen and changes only the view, so
 	// switching never silently drops the grade the coordinator was reading.
 	$viewUrl = fn (string $key): string => $pageUrl(['view' => $key]);
-
-	$marks = [
-		'present' => ['badge-normal', '✓', 'Present'],
-		'absent' => ['badge-critical', '✕', 'Absent'],
-		'unconfirmed' => ['badge-monitor', '?', 'Unconfirmed'],
-		'unmarked' => ['badge-neutral', '–', 'Not yet recorded'],
-	];
 @endphp
 
 <div class="main">
@@ -136,14 +129,18 @@
 		<form method="GET" class="card fa-toolbar" id="faToolbar">
 			<input type="hidden" name="view" value="{{ $view }}">
 
-			@if ($view === 'sheet')
+			@if ($view === 'sheet' || $view === 'beneficiary')
 				{{-- Previous and Next step to the neighbouring recorded session
 				     where there is one, and the picker refuses a date outside
 				     the running programme — a mistyped year would open a
-				     feeding day the programme never had. --}}
+				     feeding day the programme never had.
+
+				     By Beneficiary carries it too: its Session column and the
+				     attendance filter both read this date, and a control that
+				     decides what a list contains must not be invisible. --}}
 				<div class="fa-dategroup">
 					<a class="fa-step {{ $previousDate === null ? 'is-disabled' : '' }}"
-						@if ($previousDate !== null) href="{{ $pageUrl(['view' => 'sheet', 'date' => $previousDate]) }}" @endif
+						@if ($previousDate !== null) href="{{ $pageUrl(['view' => $view, 'date' => $previousDate]) }}" @endif
 						@if ($previousDate === null) aria-disabled="true" @endif
 						aria-label="Previous feeding day">&lsaquo;</a>
 
@@ -154,7 +151,7 @@
 						max="{{ $window['end'] }}">
 
 					<a class="fa-step {{ $nextDate === null ? 'is-disabled' : '' }}"
-						@if ($nextDate !== null) href="{{ $pageUrl(['view' => 'sheet', 'date' => $nextDate]) }}" @endif
+						@if ($nextDate !== null) href="{{ $pageUrl(['view' => $view, 'date' => $nextDate]) }}" @endif
 						@if ($nextDate === null) aria-disabled="true" @endif
 						aria-label="Next feeding day">&rsaquo;</a>
 				</div>
@@ -194,18 +191,35 @@
 					@endforeach
 				</select>
 			</div>
+			{{-- Three answers, because a confirmed mark has three: everyone,
+			     the ones who came, the ones who did not. A learner nobody
+			     wrote down and a scanned mark nobody has read are printed on
+			     their rows but are not answers to "who came today". --}}
 			<div class="fa-filter">
 				<label class="field-label" for="faStatus">Attendance</label>
 				<select class="select" name="status" id="faStatus">
 					<option value="">All</option>
 					<option value="present" @selected($filters['status'] === 'present')>Present</option>
 					<option value="absent" @selected($filters['status'] === 'absent')>Absent</option>
-					<option value="unmarked" @selected($filters['status'] === 'unmarked')>Not yet recorded</option>
-					<option value="unconfirmed" @selected($filters['status'] === 'unconfirmed')>Unconfirmed</option>
-					<option value="at_risk" @selected($filters['status'] === 'at_risk')>At risk (cumulative)</option>
-					<option value="early_monitoring" @selected($filters['status'] === 'early_monitoring')>Early monitoring (cumulative)</option>
 				</select>
 			</div>
+
+			@if ($view === 'beneficiary')
+				{{-- A verdict across the programme is a different question from a
+				     mark on one day, so it is a different control — and it only
+				     appears on the roll it applies to. The at-risk notice above
+				     lands here with it already set. --}}
+				<div class="fa-filter">
+					<label class="field-label" for="faStanding">Standing</label>
+					<select class="select" name="standing" id="faStanding">
+						<option value="">All</option>
+						<option value="at_risk" @selected($filters['standing'] === 'at_risk')>At risk</option>
+						<option value="early_monitoring" @selected($filters['standing'] === 'early_monitoring')>Early monitoring</option>
+					</select>
+				</div>
+			@else
+				<input type="hidden" name="standing" value="{{ $filters['standing'] }}">
+			@endif
 
 			{{-- No-JS fallback: without it the selects would be unreachable
 			     controls on a page that never reloads. --}}

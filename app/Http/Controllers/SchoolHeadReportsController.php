@@ -8,6 +8,7 @@ use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchoolHeadOverview;
 use App\Support\SchoolHeadPulse;
+use App\Support\SchoolLetterhead;
 use App\Support\SchoolSignatories;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -267,6 +268,10 @@ class SchoolHeadReportsController extends Controller
 
         $overview = SchoolHeadOverview::for($institutionId, $schoolYear);
         $schoolName = (string) $request->session()->get('active_school_name', 'School');
+        // The DepEd heading these forms open under, read through the one class
+        // that holds it so a head's export and the coordinator's printed sheet
+        // head the same school the same way.
+        $letterhead = SchoolLetterhead::for($institutionId, $schoolName);
 
         if ($report !== 'packet' && ! in_array($report, $this->reportKeys($overview), true)) {
             return back()->with('error', 'That report does not exist for this school year.');
@@ -309,18 +314,18 @@ class SchoolHeadReportsController extends Controller
             // One workbook, one sheet per report: the Division asks for the set
             // together, and three separate files is three chances to send the
             // wrong year.
-            $this->writeAssessmentForm($writer, $overview, $schoolName, 'baseline', $bmiValues, $signatories, 'Baseline BMI');
+            $this->writeAssessmentForm($writer, $overview, $letterhead, 'baseline', $bmiValues, $signatories, 'Baseline BMI');
             $writer->addNewSheetAndMakeItCurrent();
-            $this->writeAssessmentForm($writer, $overview, $schoolName, 'endline', $bmiValues, $signatories, 'Final BMI');
+            $this->writeAssessmentForm($writer, $overview, $letterhead, 'endline', $bmiValues, $signatories, 'Final BMI');
             $writer->addNewSheetAndMakeItCurrent();
-            $this->writeAccomplishmentSheet($writer, $overview, $schoolName, null, $signatories);
+            $this->writeAccomplishmentSheet($writer, $overview, $letterhead, null, $signatories);
             $writer->addNewSheetAndMakeItCurrent();
             $this->writeSupportingSheet($writer, $overview, 'endline');
         } elseif (str_starts_with($report, 'monthly')) {
             $this->writeAccomplishmentSheet(
                 $writer,
                 $overview,
-                $schoolName,
+                $letterhead,
                 substr($report, strlen('monthly:')),
                 $signatories,
             );
@@ -328,7 +333,7 @@ class SchoolHeadReportsController extends Controller
             $this->writeAssessmentForm(
                 $writer,
                 $overview,
-                $schoolName,
+                $letterhead,
                 $report,
                 $bmiValues,
                 $signatories,
@@ -734,7 +739,7 @@ class SchoolHeadReportsController extends Controller
     private function writeAssessmentForm(
         XlsxWriter $writer,
         SchoolHeadOverview $overview,
-        string $schoolName,
+        array $letterhead,
         string $phase,
         array $bmiValues,
         array $signatories,
@@ -754,10 +759,16 @@ class SchoolHeadReportsController extends Controller
         $ruledHead = (new Style)->withFontBold(true)->withBorder($this->hairline())
             ->withCellAlignment(CellAlignment::CENTER);
 
-        $writer->addRow($this->line([$schoolName], $title));
-        // Left blank deliberately: the school address is typed onto the form and
-        // the app does not hold it. An invented line would be worse than a gap.
-        $writer->addRow($this->line(['School address:']));
+        // The DepEd heading, from the one class that holds it — so this sheet
+        // and the coordinator's printed form head the same school the same way.
+        foreach (SchoolLetterhead::lines($letterhead) as $headingLine) {
+            $writer->addRow($this->line([$headingLine]));
+        }
+
+        $writer->addRow($this->line([$letterhead['school']], $title));
+        // The address the school is on file with. A school with none gets an
+        // empty line to write on, never a neighbouring school's street.
+        $writer->addRow($this->line([$letterhead['address']]));
         $writer->addRow($this->line([$banner], $heading));
         $writer->addRow($this->line(['S.Y. '.$overview->schoolYear]));
         $writer->addRow($this->line(['']));
@@ -913,7 +924,7 @@ class SchoolHeadReportsController extends Controller
     private function writeAccomplishmentSheet(
         XlsxWriter $writer,
         SchoolHeadOverview $overview,
-        string $schoolName,
+        array $letterhead,
         ?string $onlyMonth = null,
         array $signatories = ['prepared' => '', 'noted' => ''],
     ): void {
@@ -927,8 +938,12 @@ class SchoolHeadReportsController extends Controller
 
         // The same heading block the assessment sheets carry, so every report a
         // head exports reads as one school's set of forms.
-        $writer->addRow($this->line([$schoolName], $title));
-        $writer->addRow($this->line(['School address:']));
+        foreach (SchoolLetterhead::lines($letterhead) as $headingLine) {
+            $writer->addRow($this->line([$headingLine]));
+        }
+
+        $writer->addRow($this->line([$letterhead['school']], $title));
+        $writer->addRow($this->line([$letterhead['address']]));
         $writer->addRow($this->line(['Monthly Accomplishment Report'], $heading));
         $writer->addRow($this->line(['S.Y. '.$overview->schoolYear]));
         $writer->addRow($this->line([

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
+use App\Support\BmiAssessmentReport;
 use App\Support\FeedingBeneficiarySummary;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -277,5 +278,182 @@ class FeedingBmiReportTest extends TestCase
         $this->assertSame('Jacqueline L. Tenizo', $response->viewData('nurseName'));
         $response->assertSee('value="Jacqueline L. Tenizo"', false);
         $response->assertDontSee('Wrong School Nurse');
+    }
+
+    /**
+     * Every form on this page opens under the DepEd heading, and every form
+     * reads it from one place — four copies of a letterhead are four chances
+     * for the same school to be headed four different ways.
+     */
+    #[Test]
+    public function every_form_opens_under_the_deped_letterhead(): void
+    {
+        $this->institution->update(['address' => 'Damaso Suazo St., Brgy. 28-C, Davao City']);
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms');
+
+        $response->assertOk();
+        $response->assertSee('Republic of the Philippines');
+        $response->assertSee('Department of Education');
+        $response->assertSee('Region XI');
+        $response->assertSee('Schools Division of Davao City');
+        // The school's own address, from institutions.address.
+        $response->assertSee('value="Damaso Suazo St., Brgy. 28-C, Davao City"', false);
+
+        // Two seal slots per form — drawn as placeholders until the school
+        // drops its files in, so the heading keeps its shape either way.
+        $letterhead = $response->viewData('letterhead');
+        $this->assertSame('Test School', $letterhead['school']);
+        $this->assertArrayHasKey('deped', $response->viewData('seals'));
+        $this->assertArrayHasKey('school', $response->viewData('seals'));
+    }
+
+    /**
+     * A school with no address on file gets an empty line to write on. Printing
+     * a neighbouring school's street onto a submitted government form is the
+     * error the letterhead exists to avoid.
+     */
+    #[Test]
+    public function a_school_with_no_address_prints_a_blank_line(): void
+    {
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms');
+
+        $response->assertOk();
+        $this->assertSame('', $response->viewData('letterhead')['address']);
+    }
+
+    /**
+     * The grid counted again per section, so choosing one narrows the report to
+     * the learners in it — and it is the same computation the grade grid uses,
+     * so a section and its grade can never disagree about the same children.
+     */
+    #[Test]
+    public function the_grid_is_counted_per_section_as_well_as_per_grade(): void
+    {
+        $this->makeStudent('Grade 7 / Matiyaga', 'Male', 'Wasted', 'Stunted');
+        $this->makeStudent('Grade 7 / Matiyaga', 'Female', 'Severely Wasted', 'Stunted');
+        $this->makeStudent('Grade 7 / Masigla', 'Male', 'Normal', 'Normal Height-for-Age');
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms');
+        $response->assertOk();
+
+        $sets = $response->viewData('bmiValueSets');
+
+        // The whole school.
+        $this->assertSame(3, $sets['']['bmib_g7_total_nst']);
+
+        // One section on its own.
+        $this->assertArrayHasKey('Grade 7 / Matiyaga', $sets);
+        $this->assertSame(2, $sets['Grade 7 / Matiyaga']['bmib_g7_total_nst']);
+        $this->assertSame(1, $sets['Grade 7 / Matiyaga']['bmib_g7_total_sw']);
+        $this->assertSame(1, $sets['Grade 7 / Masigla']['bmib_g7_total_n']);
+
+        // And the control offers each grade its own sections, never the whole
+        // school's list — a section belongs to one grade.
+        $this->assertSame(['Masigla', 'Matiyaga'], $response->viewData('sectionsByGrade')['Grade 7']);
+    }
+
+    /**
+     * Each grid gets a clustered column chart under it, at the foot of the
+     * form — and it prints with the form, because that is what it is for.
+     */
+    #[Test]
+    public function each_grid_carries_a_bar_chart_at_the_foot_of_the_form(): void
+    {
+        $this->makeStudent('Grade 7 / Matiyaga', 'Male', 'Wasted', 'Stunted');
+        $this->makeStudent('Grade 7 / Matiyaga', 'Female', 'Normal', 'Normal Height-for-Age');
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms');
+
+        $response->assertOk();
+        $response->assertSee('Data Visualization &mdash; Baseline Nutritional Assessment', false);
+        $response->assertSee('Data Visualization &mdash; Endline Nutritional Assessment', false);
+
+        // One chart per grid, keyed to the grid it pictures, so the grade
+        // filter moves a chart and its table together.
+        foreach (FeedingBeneficiarySummary::GRADE_LEVELS as $grade) {
+            $response->assertSee('data-chart-grade="g'.$grade.'"', false);
+        }
+        $response->assertSee('data-chart-grade="overall"', false);
+
+        // Three series and eleven columns — the grid's own rows and columns.
+        foreach (['male', 'female', 'total'] as $sex) {
+            $response->assertSee('data-chart-col="'.$sex.'"', false);
+        }
+        foreach (array_keys(BmiAssessmentReport::chartColumns()) as $column) {
+            $response->assertSee('data-chart-group="'.$column.'"', false);
+        }
+
+        // Identity is never colour-alone, and the value is on the column.
+        $response->assertSee('chart-legend', false);
+        $response->assertSee('MALE');
+        $response->assertSee('FEMALE');
+        $response->assertSee('TOTAL');
+
+        // Server-rendered heights, so the printed copy is right without JS.
+        $response->assertSee('class="chart-col is-male" data-chart-col="male"', false);
+
+        // The chart is part of the form now: print no longer drops it.
+        $response->assertDontSee('.bmi-viz { display: none !important; }', false);
+    }
+
+    /**
+     * Every gridline has to be a whole multiple of one step, or the axis is
+     * labelled 5, 4, 3, 1, 0 — four gaps of three different sizes, which is
+     * worse than drawing no axis at all. The same stepping is mirrored in the
+     * page's repaint script.
+     */
+    #[Test]
+    public function the_chart_axis_steps_to_even_gridlines(): void
+    {
+        $scale = fn (int $peak): array => BmiAssessmentReport::axisScale($peak);
+
+        // A chart of nothing still draws a baseline to sit on.
+        $this->assertSame([1, 0], $scale(0)['ticks']);
+        $this->assertSame([4, 3, 2, 1, 0], $scale(4)['ticks']);
+        $this->assertSame([8, 6, 4, 2, 0], $scale(7)['ticks']);
+        $this->assertSame([15, 10, 5, 0], $scale(11)['ticks']);
+        $this->assertSame([200, 150, 100, 50, 0], $scale(180)['ticks']);
+        $this->assertSame([2000, 1500, 1000, 500, 0], $scale(1700)['ticks']);
+
+        foreach ([0, 1, 3, 4, 7, 11, 26, 99, 180, 412, 1700, 9001] as $peak) {
+            $axis = $scale($peak);
+            $this->assertGreaterThanOrEqual($peak, $axis['max'], "axis tops out below the tallest column ($peak)");
+            $this->assertLessThanOrEqual(5, count($axis['ticks']), "too many gridlines for $peak");
+
+            // Even gaps, all the way down.
+            $gaps = [];
+            for ($i = 1; $i < count($axis['ticks']); $i++) {
+                $gaps[] = $axis['ticks'][$i - 1] - $axis['ticks'][$i];
+            }
+            $this->assertSame([$axis['step']], array_values(array_unique($gaps)), "uneven gridlines for $peak");
+        }
+    }
+
+    /**
+     * Which weighing the grid reports is a filter, so a coordinator who wants
+     * both does not have to open the page twice.
+     */
+    #[Test]
+    public function the_nutritional_report_filter_offers_baseline_endline_and_both(): void
+    {
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms');
+
+        $response->assertOk();
+        $response->assertSee('Nutritional Report');
+        $response->assertSee('<option value="baseline">Baseline</option>', false);
+        $response->assertSee('<option value="endline">Endline</option>', false);
+        $response->assertSee('<option value="both">Both Baseline and Endline</option>', false);
+
+        // Both panels are always in the document; the filter only decides which
+        // is on screen, so a chart and a grid can never be built from a
+        // different reading than the one beside it.
+        $response->assertSee('id="bmiBaselinePanel"', false);
+        $response->assertSee('id="bmiFinalPanel"', false);
     }
 }

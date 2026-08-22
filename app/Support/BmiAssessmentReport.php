@@ -59,6 +59,9 @@ final class BmiAssessmentReport
     /** The two weighings the sheet exists in, and the field prefix each uses. */
     public const PHASES = ['baseline' => 'bmib', 'endline' => 'bmif'];
 
+    /** The most gridlines a count axis is drawn with, the baseline excluded. */
+    private const AXIS_INTERVALS = 4;
+
     /** The rows of each grid. TOTAL is a sum, never an entry. */
     public const SEX_ROWS = ['male' => 'MALE', 'female' => 'FEMALE', 'total' => 'TOTAL'];
 
@@ -143,6 +146,69 @@ final class BmiAssessmentReport
         }
 
         return $values;
+    }
+
+    /**
+     * The chart's columns, in the order the grid rules them: the five BMI-for-age
+     * columns, their total, the four height-for-age columns, their total.
+     *
+     * The bar chart under each grid is a picture of that grid, so it reads the
+     * same eleven columns in the same order from the same place. Typing the list
+     * again in the chart would let the two drift apart the first time a column
+     * was added.
+     *
+     * @return array<string, string>
+     */
+    public static function chartColumns(): array
+    {
+        return self::NS_COLUMNS
+            + ['nst' => 'Total']
+            + self::HFA_COLUMNS
+            + ['hfat' => 'Total'];
+    }
+
+    /**
+     * A clean scale for a count axis: the smallest 1, 2 or 5 × 10ⁿ **step** that
+     * covers the tallest column in at most four intervals.
+     *
+     * The step is chosen before the top, not after it, and that is the whole
+     * point. Rounding the top to 1/2/5 × 10ⁿ and then cutting it into quarters
+     * gives an axis labelled 5, 4, 3, 1, 0 — four gaps of three different
+     * sizes, which is worse than no axis at all. Stepping first makes every
+     * gridline a whole multiple of the step, so a column's height can actually
+     * be read off the rules: 1700 becomes 0/500/1000/1500/2000, and 4 becomes
+     * 0/1/2/3/4.
+     *
+     * Mirrored in the SBFP Forms page's repaint script, which redraws the same
+     * chart when the grade or section changes — keep the two in step.
+     *
+     * @return array{max: int, step: int, ticks: list<int>} ticks run top down
+     */
+    public static function axisScale(int $peak): array
+    {
+        $peak = max(0, $peak);
+        $step = 1;
+
+        // 1, 2, 5, 10, 20, 50, 100 … until four of them clear the tallest bar.
+        while ((int) ceil($peak / $step) > self::AXIS_INTERVALS) {
+            $magnitude = 10 ** (int) floor(log10($step));
+            $step = match ((int) ($step / $magnitude)) {
+                1 => 2 * $magnitude,
+                2 => 5 * $magnitude,
+                default => 10 * $magnitude,
+            };
+        }
+
+        // An axis of nothing still needs one interval to draw a baseline against.
+        $intervals = max(1, (int) ceil($peak / $step));
+        $max = $step * $intervals;
+
+        $ticks = [];
+        for ($t = $intervals; $t >= 0; $t--) {
+            $ticks[] = $step * $t;
+        }
+
+        return ['max' => $max, 'step' => $step, 'ticks' => $ticks];
     }
 
     /**

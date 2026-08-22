@@ -142,8 +142,8 @@
 	justify-content: space-between;
 	gap: 12px;
 	flex-wrap: wrap;
-	margin-top: 16px;
-	padding: 12px 18px;
+	margin-top: 18px;
+	padding: 14px 18px;
 }
 .fa-search input { min-width: 240px; }
 .fa-bulk-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -155,7 +155,19 @@
 .fa-idx { width: 44px; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; }
 .fa-name { min-width: 190px; }
 .fa-table + .fa-table { margin-top: 0; }
-.table-card { margin-top: 16px; }
+.table-card { margin-top: 14px; }
+
+/* What a scoped panel is a slice of. It sits above the table rather than inside
+   it, because "18 of 96 beneficiaries" is a fact about the reading, not a row
+   in it — and a coordinator who filtered to one section needs to know the
+   counts moved with them. */
+.fa-scopenote {
+	margin: 14px 0 0;
+	font-size: .78rem;
+	color: var(--lg-ink-soft);
+}
+.fa-scopenote strong { color: var(--lg-ink); font-weight: 600; }
+.fa-scopenote + .table-card { margin-top: 10px; }
 
 .fa-datelink { color: inherit; text-decoration: none; }
 .fa-datelink:hover { color: var(--lg-emerald-dark); }
@@ -217,7 +229,22 @@
 }
 .fa-locked svg { width: 12px; height: 12px; }
 .fa-remark-read { font-size: .78rem; color: var(--lg-ink-soft); }
-.fa-lockbar { margin-bottom: 12px; }
+
+/* The read-only session's own notice.
+
+   It used to carry a bottom margin and no top one, so it sat flush against the
+   search bar above it and 28px clear of the table below — two cards touching,
+   then a gap. The rhythm inside the sheet is one value, set here and on
+   .table-card, so the search bar, this notice and the roll are evenly spaced;
+   the padding matches the notices pane above, or the same component would be
+   roomy at the top of the page and cramped halfway down it. */
+.fa-lockbar {
+	margin-top: 14px;
+	margin-bottom: 0;
+	padding: 15px 18px;
+}
+.fa-lockbar .alert-body { gap: 13px; padding-right: 12px; }
+.fa-lockbar strong + span { display: block; margin-top: 3px; }
 
 .fa-remark { width: 100%; min-width: 150px; font-size: .78rem; }
 .fa-remark:disabled { background: var(--lg-rail); color: var(--lg-ink-soft); }
@@ -236,8 +263,8 @@
 	justify-content: space-between;
 	gap: 12px;
 	flex-wrap: wrap;
-	margin-top: 16px;
-	padding: 12px 18px;
+	margin-top: 14px;
+	padding: 14px 18px;
 }
 .fa-tally { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .fa-total { font-size: .82rem; font-weight: 600; color: var(--lg-ink); }

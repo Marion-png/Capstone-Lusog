@@ -136,9 +136,12 @@ class SchoolHeadReportExportTest extends TestCase
         $form = $sheets['Baseline BMI'];
         $text = $this->flatten($form);
 
-        // The heading block the printed sheet opens on.
-        $this->assertSame('Sta. Ana National High School', $form[0][0]);
-        $this->assertStringContainsString('School address:', $text);
+        // The heading block the printed sheet opens on: the DepEd letterhead,
+        // then the school and the address it is on file with.
+        $this->assertSame('Republic of the Philippines', $form[0][0]);
+        $this->assertStringContainsString('Department of Education', $text);
+        $this->assertStringContainsString('Schools Division of Davao City', $text);
+        $this->assertStringContainsString('Sta. Ana National High School', $text);
         $this->assertStringContainsString('Baseline Nutritional Assessment (BMI) Report', $text);
         $this->assertStringContainsString('S.Y. '.StudentHealthRecord::currentSchoolYear(), $text);
 

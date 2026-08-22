@@ -80,6 +80,34 @@
 .designation-input:focus, .cell-input:focus { outline: none; border-color: var(--lg-emerald); box-shadow: 0 0 0 2px rgba(31, 138, 76, .18); }
 .cell-input[readonly] { background: #f3f4f6; color: #334155; font-weight: 700; }
 
+/* ── Letterhead ──────────────────────────────────────────────────────
+   The seals sit either side of the heading lines, as they do on the printed
+   form: three columns, the middle one centred and elastic. A school with no
+   seal file gets a dashed placeholder of the same size, so the heading keeps
+   its shape and the page does not reflow the day the file is dropped in. ── */
+.lh-block {
+	display: grid;
+	grid-template-columns: 78px minmax(0, 1fr) 78px;
+	align-items: center;
+	gap: 10px;
+	text-align: center;
+}
+.lh-seal { display: flex; align-items: center; justify-content: center; }
+.lh-seal img { width: 72px; height: 72px; object-fit: contain; }
+.lh-seal-slot {
+	width: 72px; height: 72px;
+	display: flex; align-items: center; justify-content: center;
+	border: 1px dashed #9ca3af; border-radius: 50%;
+	font-size: .6rem; font-weight: 700; letter-spacing: .06em;
+	text-transform: uppercase; color: #9ca3af;
+}
+.lh-lines { min-width: 0; }
+.lh-republic { font-size: .78rem; color: #0f172a; }
+.lh-department { font-size: .92rem; font-weight: 700; color: #0f172a; }
+.lh-region, .lh-division { font-size: .74rem; color: #0f172a; }
+.lh-division { margin-bottom: 2px; }
+.lh-address { font-size: .76rem; font-style: italic; color: #0f172a; min-height: 1.1em; }
+
 .report-head { padding: 14px 12px 12px; border-bottom: 1px solid #111827; text-align: center; }
 .report-school { font-size: 1.05rem; font-weight: 700; color: #0f172a; text-transform: uppercase; }
 .report-addr-input { display: block; margin: 4px auto 0; width: min(420px, 90%); font: inherit; border: none; border-bottom: 1px dashed #9ca3af; padding: 3px 2px; font-size: .76rem; color: #0f172a; text-align: center; background: transparent; }
@@ -121,11 +149,186 @@
 .foot-line { margin-top: 28px; border-bottom: 1px solid #111827; height: 1px; }
 .foot-role { margin-top: 6px; font-size: .82rem; font-weight: 700; color: #0f172a; }
 
+/* ══ Data visualization ══════════════════════════════════════════════
+   A clustered column chart per grid, at the foot of the form — and it
+   prints with the form, because that is what it is for.
+
+   It is a picture of the grid it follows: the same eleven columns in the
+   same order, the same three rows. So the table above is also this
+   chart's table view, and every value a column encodes is printed as
+   text a few centimetres higher on the same sheet.
+
+   MALE and FEMALE are the validated --sh-ob blue and --sh-w orange from
+   the School Head's status set. TOTAL is a deliberate NEUTRAL rather
+   than a third hue: it is the sum of the two beside it, not a peer
+   category, and painting a rollup like a series invites it to be read as
+   one. The trio passes the CVD, normal-vision and contrast checks on the
+   white sheet (worst all-pairs ΔE 15.0 CVD / 15.2 normal, all ≥ 3:1) —
+   re-run the dataviz validator before changing any of the three. ══ */
+.bmi-charts { margin-top: 22px; page-break-inside: auto; }
+.bmi-charts-head {
+	text-align: center;
+	font-size: .82rem;
+	font-weight: 700;
+	color: #0f172a;
+	text-transform: uppercase;
+	letter-spacing: .04em;
+	padding-bottom: 6px;
+	border-bottom: 1px solid #111827;
+	margin-bottom: 14px;
+}
+
+.bmi-chart { margin: 0 0 22px; padding: 0; }
+.bmi-chart:last-child { margin-bottom: 0; }
+.chart-title {
+	text-align: center;
+	font-size: .82rem;
+	font-weight: 700;
+	color: #0f172a;
+	text-transform: uppercase;
+	margin-bottom: 10px;
+}
+.chart-sy { display: block; font-size: .72rem; font-weight: 600; color: #334155; }
+
+.chart-body { display: flex; gap: 8px; }
+
+/* The tick labels, laid out so each sits ON its rule rather than between
+   two of them: the first and last are pulled half a line inwards. */
+.chart-yaxis {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	align-items: flex-end;
+	width: 44px;
+	height: 190px;
+	flex: 0 0 auto;
+}
+.chart-tick { font-size: .64rem; color: #64748b; line-height: 1; transform: translateY(-50%); }
+.chart-tick:first-child { transform: translateY(0); }
+.chart-tick:last-child { transform: translateY(-100%); }
+
+.chart-plot { position: relative; flex: 1 1 auto; min-width: 0; height: 190px; }
+/* Recessive rules the eye reads a height against. The data sits over
+   them, never behind them. */
+.chart-rules {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	pointer-events: none;
+}
+.chart-rules i { display: block; height: 1px; background: #e2e8f0; }
+.chart-rules i:last-child { background: #94a3b8; }
+
+.chart-groups {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: flex-end;
+	gap: 2px;
+}
+.chart-group {
+	flex: 1 1 0;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-end;
+	height: 100%;
+}
+/* The grid rules a line between BMI-for-age and height-for-age, so the
+   chart does too. */
+.chart-group.is-band-start { border-left: 1px dashed #cbd5e1; padding-left: 4px; margin-left: 4px; }
+
+.chart-cluster {
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	/* 2px of surface between adjacent fills, so two columns never read as
+	   one wide one. */
+	gap: 2px;
+	height: 100%;
+}
+.chart-col {
+	position: relative;
+	flex: 1 1 0;
+	min-width: 0;
+	max-width: 18px;
+	/* Anchored to the baseline with rounded data-ends: a zero-height
+	   column draws nothing, which is the honest reading of a zero. */
+	border-radius: 3px 3px 0 0;
+	align-self: flex-end;
+}
+.chart-col.is-male { background: #2F6FB3; }
+.chart-col.is-female { background: #D0741C; }
+.chart-col.is-total { background: #4B5A52; }
+
+/* The value above its own column: magnitude is readable without the
+   axis, and without colour. A zero prints nothing — a row of noughts
+   over an empty axis is noise. */
+.chart-figure {
+	position: absolute;
+	bottom: 100%;
+	left: 50%;
+	transform: translateX(-50%);
+	margin-bottom: 2px;
+	font-size: .58rem;
+	font-weight: 600;
+	color: #334155;
+	line-height: 1;
+	white-space: nowrap;
+}
+
+.chart-xlabel {
+	margin-top: 6px;
+	font-size: .58rem;
+	line-height: 1.15;
+	color: #334155;
+	text-align: center;
+	overflow-wrap: break-word;
+	hyphens: auto;
+}
+
+.chart-legend {
+	display: flex;
+	justify-content: center;
+	gap: 16px;
+	flex-wrap: wrap;
+	margin-top: 8px;
+	font-size: .66rem;
+	color: #334155;
+}
+.chart-legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.chart-swatch { width: 10px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
+.chart-swatch.is-male { background: #2F6FB3; }
+.chart-swatch.is-female { background: #D0741C; }
+.chart-swatch.is-total { background: #4B5A52; }
+
+/* The scope the sheet was filled for, printed on the form itself so a filed
+   copy says which children it counted rather than reading as the whole
+   school. Empty when nothing is narrowed. */
+.report-scope { margin-top: 4px; font-size: .74rem; font-weight: 700; color: #0f172a; text-transform: uppercase; }
+.report-scope:empty { display: none; }
+
 /* ── Print: only the sheet survives ── */
 @media print {
 	* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 	html, body { height: auto; overflow: visible; background: #fff; }
 	.asb-sidebar, .topbar, .sheet-tools, .page-header, .selector-wrap, .placeholder-panel, .auto-note { display: none !important; }
+	/* The chart is part of the form now, so it prints with it. A little
+	   shorter on paper, and never split across a page break — half a chart
+	   over a fold is not a reading of anything. */
+	.bmi-chart { break-inside: avoid; page-break-inside: avoid; margin-bottom: 16px; }
+	.chart-yaxis, .chart-plot { height: 150px; }
+	.chart-figure { font-size: 6pt; }
+	.chart-xlabel, .chart-tick { font-size: 6pt; }
+	.chart-legend { font-size: 7pt; }
+	.bmi-charts-head, .chart-title { break-after: avoid; page-break-after: avoid; }
+	/* A seal placeholder is a hint to the coordinator, not part of the form:
+	   paper gets the space it will occupy, never a dashed circle. */
+	.lh-seal-slot { border-color: transparent; color: transparent; }
+	.lh-seal img { width: 62px; height: 62px; }
+	.lh-block { grid-template-columns: 68px minmax(0, 1fr) 68px; }
 	.main { margin: 0 !important; height: auto; overflow: visible; display: block; opacity: 1 !important; transform: none !important; }
 	.content { overflow: visible; padding: 0 !important; }
 	.sheet-wrap { margin: 0; border: none; box-shadow: none; padding: 0; border-radius: 0; }

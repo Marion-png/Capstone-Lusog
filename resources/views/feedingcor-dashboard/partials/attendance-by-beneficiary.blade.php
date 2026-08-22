@@ -14,7 +14,32 @@
      The rate printed beside a learner, the state beside it and the flag it
      carries come from one reading of one set of marks, so a row can never show
      92% next to a warning — or 25% next to At Risk before the school's
-     observation window says a rate means anything. --}}
+     observation window says a rate means anything.
+
+     The Session column is the one thing here that is not cumulative: it is this
+     learner's mark on the day the toolbar is set to, and it is what the
+     attendance filter narrows on. It is printed rather than left implicit so a
+     filtered roll says why each row is in it.
+
+     That filter also decides which of the two count columns is drawn: ask for
+     absences and you read a table of absences, rather than hunting the right
+     column in a table of both. "Not marked", Rate and Status never move — they
+     answer the same question whichever way the filter is set. --}}
+@php
+	$sessionMarks = [
+		'present' => ['badge-normal', 'Present'],
+		'absent' => ['badge-critical', 'Absent'],
+		'unconfirmed' => ['badge-monitor', 'Unconfirmed'],
+	];
+
+	$mark = $filters['status'] ?? '';
+	$showPresent = $mark === '' || $mark === 'present';
+	$showAbsent = $mark === '' || $mark === 'absent';
+
+	// Student, Grade, Section, Session, Not marked, Rate, Status, plus whichever
+	// of Present / Absent the filter left standing.
+	$columnCount = 7 + (int) $showPresent + (int) $showAbsent;
+@endphp
 <div class="table-card">
 	<div class="table-scroll">
 		<table class="fa-table">
@@ -23,8 +48,9 @@
 					<th>Student</th>
 					<th>Grade</th>
 					<th>Section</th>
-					<th class="num">Present</th>
-					<th class="num">Absent</th>
+					<th>Session &middot; {{ \Carbon\Carbon::parse($selectedDate)->format('M j') }}</th>
+					@if ($showPresent)<th class="num">Present</th>@endif
+					@if ($showAbsent)<th class="num">Absent</th>@endif
 					<th class="num">Not marked</th>
 					<th class="num">Rate</th>
 					<th>Status</th>
@@ -36,8 +62,16 @@
 						<td class="fa-name"><strong>{{ $row['name'] }}</strong></td>
 						<td>{{ $row['grade_number'] !== '' ? $row['grade_number'] : '—' }}</td>
 						<td>{{ $row['section'] }}</td>
-						<td class="num tnum">{{ $row['present'] }}</td>
-						<td class="num tnum">{{ $row['absent'] }}</td>
+						<td>
+							@if (isset($sessionMarks[$row['session_status']]))
+								<span class="badge {{ $sessionMarks[$row['session_status']][0] }}">{{ $sessionMarks[$row['session_status']][1] }}</span>
+							@else
+								{{-- Nobody wrote this learner down for that day. Never an absence. --}}
+								<span class="fa-unmarked">Not marked</span>
+							@endif
+						</td>
+						@if ($showPresent)<td class="num tnum">{{ $row['present'] }}</td>@endif
+						@if ($showAbsent)<td class="num tnum">{{ $row['absent'] }}</td>@endif
 						{{-- Feeding days nobody recorded this learner on. Shown
 						     because a coordinator reading 1 of 4 needs to know
 						     whether the other sixteen days are absences or
@@ -60,13 +94,19 @@
 						</td>
 					</tr>
 				@empty
-					<tr><td colspan="8" class="table-empty">
-						@switch($filters['status'] ?? '')
+					<tr><td colspan="{{ $columnCount }}" class="table-empty">
+						@switch(($filters['standing'] ?? '') !== '' ? $filters['standing'] : $mark)
 							@case('at_risk')
 								No beneficiary is below the threshold.
 								@break
 							@case('early_monitoring')
 								Every beneficiary has enough recorded attendance to be classified.
+								@break
+							@case('present')
+								No beneficiary was marked present on {{ $selectedDateLabel }}.
+								@break
+							@case('absent')
+								No beneficiary was marked absent on {{ $selectedDateLabel }}.
 								@break
 							@default
 								No beneficiaries match these filters.

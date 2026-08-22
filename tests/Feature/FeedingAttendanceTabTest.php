@@ -7,6 +7,7 @@ use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use OpenSpout\Reader\XLSX\Reader;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -139,8 +140,9 @@ class FeedingAttendanceTabTest extends TestCase
 
         $response = $this->open()->assertOk();
 
-        // One present, nobody absent, one still to record.
-        $response->assertSee('Not yet recorded');
+        // One present, nobody absent, one still to record. The learner nobody
+        // wrote down reads "Not recorded" on their row — never "Absent".
+        $response->assertSee('Not recorded');
         $response->assertSee('1 not yet recorded');
         $response->assertSee('Attendance incomplete');
     }
@@ -350,6 +352,157 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertDontSee('Present Learner');
     }
 
+    /**
+     * Grade, section and gender are scope, so they move every panel together —
+     * the same split the Dashboard uses. Before this the history and the
+     * calendar read the whole school whatever the toolbar said, so a
+     * coordinator narrowed to one section still saw every other section's
+     * turnout counted into each feeding day.
+     */
+    #[Test]
+    public function the_scope_filters_narrow_the_history_counts(): void
+    {
+        $seven = $this->makeStudent(['student_name' => 'Seven Learner', 'section' => 'Grade 7 / Maabilidad']);
+        $eight = $this->makeStudent(['student_name' => 'Eight Learner', 'section' => 'Grade 8 / Matiyaga']);
+
+        $yesterday = now()->subDay()->toDateString();
+        $this->mark($seven, $yesterday, true);
+        $this->mark($eight, $yesterday, false);
+
+        $whole = $this->open('?view=history')->assertOk()->viewData('history');
+        $this->assertSame(1, $whole[0]['present']);
+        $this->assertSame(1, $whole[0]['absent']);
+        $this->assertSame(2, $whole[0]['expected']);
+
+        $scoped = $this->open('?view=history&grade='.urlencode('Grade 7'))->assertOk()->viewData('history');
+        $this->assertSame(1, $scoped[0]['present']);
+        $this->assertSame(0, $scoped[0]['absent'], 'Grade 8 absence is outside the scope.');
+        $this->assertSame(1, $scoped[0]['expected']);
+    }
+
+    /**
+     * Choosing Present leaves the sessions somebody was present at; choosing
+     * Absent leaves the ones that carried an absence. The two are different
+     * lists, which is the whole point of the control.
+     */
+    #[Test]
+    public function the_attendance_filter_narrows_the_history_to_matching_sessions(): void
+    {
+        $record = $this->makeStudent();
+        $allPresent = now()->subDays(2)->toDateString();
+        $allAbsent = now()->subDay()->toDateString();
+        $this->mark($record, $allPresent, true);
+        $this->mark($record, $allAbsent, false);
+
+        $present = $this->open('?view=history&status=present')->assertOk()->viewData('history');
+        $this->assertSame([$allPresent], array_column($present, 'date'));
+
+        $absent = $this->open('?view=history&status=absent')->assertOk()->viewData('history');
+        $this->assertSame([$allAbsent], array_column($absent, 'date'));
+    }
+
+    /**
+     * The same control on the per-beneficiary roll: it reads each learner's
+     * mark on the session the toolbar is set to. Present and Absent are
+     * exclusive, so they produce two disjoint rolls.
+     */
+    #[Test]
+    public function the_attendance_filter_narrows_the_by_beneficiary_roll(): void
+    {
+        $present = $this->makeStudent(['student_name' => 'Present Learner']);
+        $absent = $this->makeStudent(['student_name' => 'Absent Learner']);
+        $this->makeStudent(['student_name' => 'Unmarked Learner']);
+
+        $this->mark($present, now()->toDateString(), true);
+        $this->mark($absent, now()->toDateString(), false);
+
+        $response = $this->open('?view=beneficiary&status=present')->assertOk();
+        $this->assertSame(
+            ['Present Learner'],
+            array_column($response->viewData('beneficiaryRows'), 'name')
+        );
+        $response->assertSee('Present Learner');
+        $response->assertDontSee('Absent Learner');
+        // A learner no sheet covered is never swept in as absent either.
+        $response->assertDontSee('Unmarked Learner');
+
+        $this->assertSame(
+            ['Absent Learner'],
+            array_column($this->open('?view=beneficiary&status=absent')->assertOk()->viewData('beneficiaryRows'), 'name')
+        );
+    }
+
+    /**
+     * Three answers, because a confirmed mark has three. "Not yet recorded" and
+     * "Unconfirmed" are states a row can be in — both are printed on the row —
+     * but neither is an answer to "who came today", and a cumulative verdict is
+     * a different question that gets its own control.
+     */
+    #[Test]
+    public function the_attendance_control_offers_only_all_present_and_absent(): void
+    {
+        $this->makeStudent();
+
+        $response = $this->open('?view=beneficiary')->assertOk();
+
+        $response->assertSee('<option value="present"', false);
+        $response->assertSee('<option value="absent"', false);
+        $response->assertDontSee('<option value="unmarked"', false);
+        $response->assertDontSee('<option value="unconfirmed"', false);
+        $response->assertDontSee('At risk (cumulative)');
+        $response->assertDontSee('Early monitoring (cumulative)');
+
+        // The standings kept a visible home rather than becoming a URL nobody
+        // can reach from the page.
+        $response->assertSee('name="standing"', false);
+        $response->assertSee('Standing');
+
+        // A dropped value is ignored, never honoured off the wire.
+        $this->assertSame('', $this->open('?status=unconfirmed')->assertOk()->viewData('filters')['status']);
+    }
+
+    /**
+     * Asking for absences should give a table of absences, not a table of both
+     * with the answer somewhere in it.
+     */
+    #[Test]
+    public function choosing_a_mark_drops_the_other_count_column(): void
+    {
+        $record = $this->makeStudent();
+        $this->mark($record, now()->toDateString(), false);
+
+        foreach (['history', 'beneficiary'] as $view) {
+            $both = $this->open('?view='.$view)->assertOk();
+            $both->assertSee('<th class="num">Present</th>', false);
+            $both->assertSee('<th class="num">Absent</th>', false);
+
+            $absent = $this->open('?view='.$view.'&status=absent')->assertOk();
+            $absent->assertSee('<th class="num">Absent</th>', false);
+            $absent->assertDontSee('<th class="num">Present</th>', false);
+
+            $present = $this->open('?view='.$view.'&status=present')->assertOk();
+            $present->assertSee('<th class="num">Present</th>', false);
+            $present->assertDontSee('<th class="num">Absent</th>', false);
+
+            // The filing gap and the rate answer the same question either way.
+            $absent->assertSee('<th class="num">Not marked</th>', false);
+            $absent->assertSee('<th class="num">Rate</th>', false);
+        }
+    }
+
+    /** Narrowing to one grade must not delete the others from the control. */
+    #[Test]
+    public function the_filter_options_are_built_from_the_whole_roll(): void
+    {
+        $this->makeStudent(['section' => 'Grade 7 / Maabilidad']);
+        $this->makeStudent(['section' => 'Grade 8 / Matiyaga']);
+
+        $options = $this->open('?grade='.urlencode('Grade 7'))->assertOk()->viewData('filterOptions');
+
+        $this->assertSame(['Grade 7', 'Grade 8'], $options['grades']);
+        $this->assertSame(['Maabilidad', 'Matiyaga'], $options['sections']);
+    }
+
     #[Test]
     public function the_history_view_lists_every_feeding_day(): void
     {
@@ -459,7 +612,7 @@ class FeedingAttendanceTabTest extends TestCase
         $this->markRun($settled, 12, 12);
         $this->markRun($newcomer, 3, 3);
 
-        $response = $this->open('?view=beneficiary&status=early_monitoring')->assertOk();
+        $response = $this->open('?view=beneficiary&standing=early_monitoring')->assertOk();
 
         $response->assertSee('Newly Enrolled');
         $response->assertDontSee('Settled Learner');
@@ -496,7 +649,7 @@ class FeedingAttendanceTabTest extends TestCase
         $this->markRun($good, 12, 12);
         $this->markRun($risky, 12, 0);
 
-        $response = $this->open('?view=beneficiary&status=at_risk')->assertOk();
+        $response = $this->open('?view=beneficiary&standing=at_risk')->assertOk();
 
         $response->assertSee('Missing Learner');
         $response->assertDontSee('Reliable Learner');
@@ -555,6 +708,85 @@ class FeedingAttendanceTabTest extends TestCase
             $response->headers->get('content-type')
         );
         $this->assertStringContainsString('.xlsx', (string) $response->headers->get('content-disposition'));
+    }
+
+    /**
+     * The export is the form, not a dump of the table.
+     *
+     * A coordinator who has to retype the letterhead, rule the grid and add the
+     * signature block has not been handed a form they can sign — so the
+     * workbook carries the whole document, read from the same SchoolLetterhead
+     * and SchoolSignatories the printed sheet reads.
+     */
+    #[Test]
+    public function the_exported_sheet_carries_the_whole_deped_form(): void
+    {
+        $record = $this->makeStudent(['student_name' => 'John Dave A. Sumod-ong']);
+        $yesterday = now()->subDay()->toDateString();
+        $this->mark($record, $yesterday, true);
+        $this->mark($record, now()->toDateString(), false);
+
+        $body = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-attendance/export')
+            ->assertOk()
+            ->streamedContent();
+
+        $rows = $this->readWorkbook($body);
+        $text = implode("\n", array_map(
+            static fn (array $row): string => implode(' | ', array_map('strval', $row)),
+            $rows
+        ));
+
+        // The letterhead, in the order the printed form sets it.
+        $this->assertSame('Republic of the Philippines', (string) $rows[0][0]);
+        $this->assertStringContainsString('Department of Education', $text);
+        $this->assertStringContainsString('Schools Division of Davao City', $text);
+        $this->assertStringContainsString('LISTS OF IDENTIFIED SEVERELY WASTED AND WASTED STUDENTS', $text);
+        $this->assertStringContainsString('S.Y. '.StudentHealthRecord::currentSchoolYear(), $text);
+
+        // The ruled grid, then the signature block the form ends in.
+        $this->assertStringContainsString('NO. | NAME | GRADE | SECTION', $text);
+        $this->assertStringContainsString('John Dave A. Sumod-ong', $text);
+        $this->assertStringContainsString('TOTAL SERVED', $text);
+        $this->assertStringContainsString('Prepared by:', $text);
+        $this->assertStringContainsString('Feeding Coordinator', $text);
+        $this->assertStringContainsString('School Head', $text);
+
+        // A tick for served, A for a confirmed absence — the sheet's own marks.
+        $learner = null;
+        foreach ($rows as $row) {
+            if (($row[1] ?? '') === 'John Dave A. Sumod-ong') {
+                $learner = $row;
+            }
+        }
+        $this->assertNotNull($learner);
+        $this->assertSame('✓', (string) $learner[4]);
+        $this->assertSame('A', (string) $learner[5]);
+    }
+
+    /**
+     * @return list<list<mixed>>
+     */
+    private function readWorkbook(string $body): array
+    {
+        $path = tempnam(sys_get_temp_dir(), 'sbfp-test-').'.xlsx';
+        file_put_contents($path, $body);
+
+        $reader = new Reader;
+        $reader->open($path);
+
+        $rows = [];
+        foreach ($reader->getSheetIterator() as $sheet) {
+            foreach ($sheet->getRowIterator() as $row) {
+                $rows[] = $row->toArray();
+            }
+            break;
+        }
+
+        $reader->close();
+        @unlink($path);
+
+        return $rows;
     }
 
     #[Test]

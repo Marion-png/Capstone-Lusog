@@ -10,6 +10,7 @@ use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingNutritionProgress;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
+use App\Support\SchoolLetterhead;
 use App\Support\SchoolSignatories;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -49,6 +50,7 @@ class FeedingCoordinatorController extends Controller
         // Names and statuses are encrypted at rest, so the grouping and sorting
         // happen in PHP after fetch (the plain "section" column holds the grade).
         $studentsByGrade = [];
+        $sectionsByGrade = [];
         foreach ($records as $record) {
             [$grade, $section] = $this->splitSection((string) $record->section);
             $status = $this->normalizeStatus((string) $record->nutritional_status);
@@ -61,6 +63,10 @@ class FeedingCoordinatorController extends Controller
                 'bmi' => $record->bmi_value !== null ? (string) $record->bmi_value : '',
                 'qualified' => $this->isQualifiedForFeeding($status),
             ];
+
+            if ($section !== '') {
+                $sectionsByGrade[$grade][$section] = true;
+            }
         }
 
         uksort($studentsByGrade, fn (string $a, string $b): int => strnatcasecmp($a, $b));
@@ -69,13 +75,57 @@ class FeedingCoordinatorController extends Controller
             $studentsByGrade[$grade] = $rows;
         }
 
+        // Each grade's own sections, so the Section control offers what the
+        // grade actually runs rather than every section in the school.
+        uksort($sectionsByGrade, fn (string $a, string $b): int => strnatcasecmp($a, $b));
+        foreach ($sectionsByGrade as $grade => $sections) {
+            $names = array_keys($sections);
+            usort($names, 'strnatcasecmp');
+            $sectionsByGrade[$grade] = $names;
+        }
+
         return view('feedingcor-dashboard.sbfp-forms', [
             'studentsByGrade' => $studentsByGrade,
             'gradeOptions' => array_keys($studentsByGrade),
+            'sectionsByGrade' => $sectionsByGrade,
             'bmiValues' => BmiAssessmentReport::values($records),
+            // The same grid, counted again over each section on its own. It is
+            // precomputed rather than fetched per choice because every field it
+            // reads is encrypted at rest: the counting has to happen in PHP
+            // whatever triggers it, and doing it once here means the section a
+            // coordinator picks is drawn from the same reading as the grade —
+            // one computation, so a section grid and its grade grid can never
+            // disagree about the same children.
+            'bmiValueSets' => $this->bmiValueSetsBySection($records),
             'schoolYear' => StudentHealthRecord::currentSchoolYear(),
             'nurseName' => $this->resolveSchoolNurseName($institutionId, (string) $request->session()->get('active_school_name', '')),
+            // The DepEd heading every form on this page opens under.
+            'letterhead' => SchoolLetterhead::for($institutionId, (string) $request->session()->get('active_school_name', '')),
+            'seals' => SchoolLetterhead::seals(),
         ]);
+    }
+
+    /**
+     * The BMI grid computed once per section, keyed by the section string the
+     * roster stores ("Grade 7 / Matiyaga"), with '' holding the whole school.
+     *
+     * @param  Collection<int, StudentHealthRecord>  $records
+     * @return array<string, array<string, int|string>>
+     */
+    private function bmiValueSetsBySection(Collection $records): array
+    {
+        $sets = ['' => BmiAssessmentReport::values($records)];
+
+        foreach ($records->groupBy(fn (StudentHealthRecord $record): string => trim((string) $record->section)) as $key => $group) {
+            // A learner with no section on file has no section grid to sit in.
+            if ((string) $key === '') {
+                continue;
+            }
+
+            $sets[(string) $key] = BmiAssessmentReport::values($group);
+        }
+
+        return $sets;
     }
 
     /**

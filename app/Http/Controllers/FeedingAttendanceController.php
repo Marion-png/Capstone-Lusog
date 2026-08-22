@@ -8,13 +8,27 @@ use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
+use App\Support\SchoolLetterhead;
+use App\Support\SchoolSignatories;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
+use OpenSpout\Common\Entity\Cell;
 use OpenSpout\Common\Entity\Row;
+use OpenSpout\Common\Entity\Style\Border;
+use OpenSpout\Common\Entity\Style\BorderName;
+use OpenSpout\Common\Entity\Style\BorderPart;
+use OpenSpout\Common\Entity\Style\BorderWidth;
+use OpenSpout\Common\Entity\Style\CellAlignment;
+use OpenSpout\Common\Entity\Style\CellVerticalAlignment;
+use OpenSpout\Common\Entity\Style\Style;
+use OpenSpout\Writer\XLSX\Options as XlsxOptions;
+use OpenSpout\Writer\XLSX\Options\PageOrientation;
+use OpenSpout\Writer\XLSX\Options\PageSetup;
+use OpenSpout\Writer\XLSX\Options\PaperSize;
 use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -58,6 +72,18 @@ class FeedingAttendanceController extends Controller
     /** The four readings of attendance this tab offers. */
     private const VIEWS = ['sheet', 'history', 'beneficiary', 'calendar'];
 
+    /**
+     * What the Attendance control can ask, beyond "All".
+     *
+     * Exactly the two things a confirmed mark can be. A learner nobody wrote
+     * down and a scanned mark nobody has read are both printed on their rows,
+     * but neither is an answer to "who came today".
+     */
+    private const MARK_FILTERS = ['present', 'absent'];
+
+    /** What the Standing control can ask — a verdict across the programme. */
+    private const STANDING_FILTERS = ['at_risk', 'early_monitoring'];
+
     public function index(Request $request): View|RedirectResponse
     {
         if (! $this->isCoordinator($request)) {
@@ -100,6 +126,26 @@ class FeedingAttendanceController extends Controller
      * column per feeding date, in the DepEd "identified severely wasted and
      * wasted students" layout the school already prints.
      *
+     * **It is written as the form, not as a dump of the table.** The point of
+     * the export is that it can be signed and handed in; a coordinator who has
+     * to merge the title, rule the grid, widen the name column and retype the
+     * signature block has not been given a form, they have been given data and
+     * an evening's work. So the workbook carries the whole document: the DepEd
+     * letterhead centred across the sheet, the school and its address, the
+     * ruled `NO. | NAME | GRADE | SECTION | dates…` grid with the dates set
+     * upright so a hundred-and-twenty-day sheet still fits a page, the tally
+     * row, and the Prepared by / Noted by block signed by the school's own
+     * staff. It opens on A4 landscape with the head row frozen and the columns
+     * already sized.
+     *
+     * The two seals cannot travel: a spreadsheet written by OpenSpout carries
+     * no images. The letterhead text is what makes this the same document as
+     * the printed sheet, and the printed sheet is where the seals are.
+     *
+     * A mark is written exactly as the sheet reads it — a tick for served, `A`
+     * for a confirmed absence, and an empty cell where nobody recorded the
+     * learner. A blank cell is never an absence.
+     *
      * It carries learner names, so it is a read of personal data like any other
      * — the route sits under dashboard/* and is audited by AuditSensitiveAccess.
      */
@@ -110,6 +156,14 @@ class FeedingAttendanceController extends Controller
         }
 
         $data = $this->build($request);
+        $institutionId = $request->session()->get('active_institution_id');
+        $letterhead = SchoolLetterhead::for($institutionId, (string) $data['schoolName']);
+
+        $dates = $data['sessionDates'];
+        $rows = $data['exportRows'];
+        // NO. | NAME | GRADE | SECTION, then one column per feeding day.
+        $width = 4 + count($dates);
+        $lastColumn = $width - 1;
 
         // tempnam() creates the file it names, so the reservation is released
         // before the writer claims the .xlsx path — otherwise every export
@@ -118,43 +172,189 @@ class FeedingAttendanceController extends Controller
         $path = $reserved.'.xlsx';
         @unlink($reserved);
 
-        $writer = new XlsxWriter;
+        $options = new XlsxOptions(
+            pageSetup: new PageSetup(PageOrientation::LANDSCAPE, PaperSize::A4, fitToWidth: 1),
+        );
+        // The columns the coordinator would otherwise drag out by hand.
+        $options->setColumnWidth(6, 1);      // NO.
+        $options->setColumnWidth(34, 2);     // NAME
+        $options->setColumnWidth(9, 3);      // GRADE
+        $options->setColumnWidth(16, 4);     // SECTION
+        if ($dates !== []) {
+            $options->setColumnWidth(5.5, ...range(5, $width));
+        }
+
+        // The heading block spans the whole grid, exactly as the printed form
+        // centres it over the table.
+        $headingRows = 8;
+        for ($row = 1; $row <= $headingRows; $row++) {
+            $options->mergeCells(0, $row, $lastColumn, $row);
+        }
+
+        $writer = new XlsxWriter($options);
         $writer->openToFile($path);
+        $writer->getCurrentSheet()->setName('Attendance Sheet');
 
-        $dates = $data['sessionDates'];
+        $centred = (new Style)->withCellAlignment(CellAlignment::CENTER);
+        $republic = $centred->withFontSize(11);
+        $department = $centred->withFontBold(true)->withFontSize(12);
+        $division = $centred->withFontSize(10);
+        $school = $centred->withFontBold(true)->withFontSize(12);
+        $address = $centred->withFontItalic(true)->withFontSize(10);
+        $title = $centred->withFontBold(true)->withFontSize(12);
 
-        $writer->addRow(Row::fromValues(['LISTS OF IDENTIFIED SEVERELY WASTED AND WASTED STUDENTS']));
-        $writer->addRow(Row::fromValues(['WHO ARE QUALIFIED FOR FEEDING PROGRAM']));
-        $writer->addRow(Row::fromValues([(string) $data['schoolName']]));
-        $writer->addRow(Row::fromValues(['S.Y. '.$data['schoolYear']]));
-        $writer->addRow(Row::fromValues([]));
+        foreach (SchoolLetterhead::lines($letterhead) as $index => $line) {
+            $writer->addRow($this->sheetLine([$line], match ($index) {
+                0 => $republic,
+                1 => $department,
+                default => $division,
+            }, $width));
+        }
 
-        $writer->addRow(Row::fromValues(array_merge(
-            ['NO.', 'NAME', 'GRADE', 'SECTION'],
-            array_map(fn (string $date): string => strtoupper(Carbon::parse($date)->format('F j, Y')), $dates)
+        $writer->addRow($this->sheetLine([strtoupper($letterhead['school'])], $school, $width));
+        // Blank when the school has no address on file: a line to write on,
+        // never another school's street.
+        $writer->addRow($this->sheetLine([$letterhead['address']], $address, $width));
+        $writer->addRow($this->sheetLine(
+            ['LISTS OF IDENTIFIED SEVERELY WASTED AND WASTED STUDENTS WHO ARE QUALIFIED FOR FEEDING PROGRAM'],
+            $title,
+            $width
+        ));
+        $writer->addRow($this->sheetLine(
+            ['S.Y. '.$data['schoolYear'].'  —  ATTENDANCE SHEET  —  FEEDING DAY '.$data['programDay'].' OF '.$data['programDuration']],
+            $centred->withFontBold(true),
+            $width
+        ));
+        $writer->addRow($this->sheetLine([''], null, $width));
+
+        $ruled = (new Style)->withBorder($this->hairline());
+        $head = $ruled->withFontBold(true)
+            ->withCellAlignment(CellAlignment::CENTER)
+            ->withCellVerticalAlignment(CellVerticalAlignment::CENTER)
+            ->withShouldWrapText(true)
+            ->withBackgroundColor('F3F4F6');
+        // Dates run upright so 120 feeding days still fit the width of a page.
+        $dateHead = $head->withTextRotation(90)->withFontSize(9);
+        $markCell = $ruled->withCellAlignment(CellAlignment::CENTER);
+
+        $writer->addRow(new Row(array_merge(
+            array_map(
+                static fn (string $label): Cell => Cell::fromValue($label, $head),
+                ['NO.', 'NAME', 'GRADE', 'SECTION']
+            ),
+            array_map(
+                static fn (string $date): Cell => Cell::fromValue(
+                    strtoupper(Carbon::parse($date)->format('M j')),
+                    $dateHead
+                ),
+                $dates
+            )
         )));
 
-        foreach ($data['exportRows'] as $index => $row) {
-            $writer->addRow(Row::fromValues(array_merge(
-                [$index + 1, $row['name'], $row['grade'], $row['section']],
-                array_map(function (string $date) use ($row): string {
-                    // The template's own marks: a tick for served, A for a
-                    // confirmed absence, and nothing at all where no one
-                    // recorded the learner — a blank cell is not an absence.
-                    return match ($row['marks'][$date] ?? 'unmarked') {
+        foreach ($rows as $index => $row) {
+            $writer->addRow(new Row(array_merge(
+                [
+                    Cell::fromValue($index + 1, $markCell),
+                    Cell::fromValue($row['name'], $ruled),
+                    Cell::fromValue($row['grade'], $markCell),
+                    Cell::fromValue($row['section'], $ruled),
+                ],
+                array_map(
+                    static fn (string $date): Cell => Cell::fromValue(match ($row['marks'][$date] ?? 'unmarked') {
+                        // The template's own marks: a tick for served, A for a
+                        // confirmed absence, and nothing at all where no one
+                        // recorded the learner — a blank cell is not an absence.
                         'present' => '✓',
                         'absent' => 'A',
                         default => '',
-                    };
-                }, $dates)
+                    }, $markCell),
+                    $dates
+                )
             )));
         }
+
+        // The tally the printed sheet carries under the grid: how many were
+        // served each day, over how many the day was recorded for.
+        $writer->addRow(new Row(array_merge(
+            [
+                Cell::fromValue('', $head),
+                Cell::fromValue('TOTAL SERVED', $head),
+                Cell::fromValue('', $head),
+                Cell::fromValue('', $head),
+            ],
+            array_map(
+                static fn (string $date): Cell => Cell::fromValue(
+                    count(array_filter(
+                        $rows,
+                        static fn (array $row): bool => ($row['marks'][$date] ?? '') === 'present'
+                    )),
+                    $head
+                ),
+                $dates
+            )
+        )));
+
+        $writer->addRow($this->sheetLine([''], null, $width));
+        $this->writeSignatureBlock($writer, $institutionId, (string) $data['schoolName'], $width);
 
         $writer->close();
 
         $filename = 'SBFP-Attendance-'.str_replace('/', '-', $data['schoolYear']).'-'.now()->format('Ymd').'.xlsx';
 
         return response()->download($path, $filename)->deleteFileAfterSend();
+    }
+
+    /**
+     * One heading line, padded out to the width of the grid so the merge it
+     * sits in has a cell to occupy in every column.
+     *
+     * @param  list<string>  $values
+     */
+    private function sheetLine(array $values, ?Style $style, int $width): Row
+    {
+        $values = array_pad($values, $width, '');
+
+        return new Row(array_map(
+            static fn ($value): Cell => Cell::fromValue($value, $style),
+            $values
+        ));
+    }
+
+    /**
+     * The Prepared by / Noted by block the form ends in, signed by the school's
+     * own staff through SchoolSignatories — so this sheet and the School Head's
+     * exported report carry the same names rather than two guesses. A name the
+     * app does not hold prints as a blank line to sign.
+     */
+    private function writeSignatureBlock(XlsxWriter $writer, ?int $institutionId, string $schoolName, int $width): void
+    {
+        $label = (new Style)->withFontBold(true);
+        $name = (new Style)->withFontBold(true)->withBorder(new Border(
+            new BorderPart(BorderName::BOTTOM, width: BorderWidth::THIN),
+        ));
+        $role = (new Style)->withFontItalic(true)->withFontSize(10);
+
+        $prepared = SchoolSignatories::preparedBy($institutionId, $schoolName);
+        $noted = SchoolSignatories::notedBy($institutionId, $schoolName);
+
+        $writer->addRow($this->sheetLine(['Prepared by:', '', 'Noted by:'], $label, $width));
+        $writer->addRow($this->sheetLine([''], null, $width));
+        $writer->addRow($this->sheetLine([strtoupper($prepared), '', strtoupper($noted)], $name, $width));
+        $writer->addRow($this->sheetLine(['Feeding Coordinator', '', 'School Head'], $role, $width));
+    }
+
+    /**
+     * A hairline box, as on the printed sheet: the DepEd form is a ruled grid,
+     * and an unruled block of figures is not the same document.
+     */
+    private function hairline(): Border
+    {
+        return new Border(
+            new BorderPart(BorderName::TOP, width: BorderWidth::THIN),
+            new BorderPart(BorderName::BOTTOM, width: BorderWidth::THIN),
+            new BorderPart(BorderName::LEFT, width: BorderWidth::THIN),
+            new BorderPart(BorderName::RIGHT, width: BorderWidth::THIN),
+        );
     }
 
     /**
@@ -175,9 +375,9 @@ class FeedingAttendanceController extends Controller
 
         // The enrolled roll, decided by the one class that decides it. Sorting
         // happens in PHP because student_name is encrypted at rest.
-        $beneficiaries = collect();
+        $allBeneficiaries = collect();
         if (SchemaCache::hasTable('student_health_records')) {
-            $beneficiaries = StudentHealthRecord::query()
+            $allBeneficiaries = StudentHealthRecord::query()
                 ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
                 ->forCurrentSchoolYear($schoolYear)
                 ->get()
@@ -186,9 +386,48 @@ class FeedingAttendanceController extends Controller
                 ->values();
         }
 
-        // One query for every mark these learners carry; everything below is
+        // One query for every mark the whole roll carries; everything below is
         // derived from it in PHP, so no two panels can read different data.
-        $marks = $this->marksFor($beneficiaries);
+        $allMarks = $this->marksFor($allBeneficiaries);
+        $allByDate = $allMarks->groupBy('date')->map(fn (Collection $rows) => $rows->keyBy('record_id'));
+
+        $today = now()->toDateString();
+        $selectedDate = $this->resolveDate(
+            $request,
+            $allMarks->pluck('date')->unique()->sort()->values()->all(),
+            $cycle,
+            $today
+        );
+        $window = $this->programWindow($cycle, $today);
+
+        // The whole roll's sheet for this session. Two things are read off it
+        // and off nothing else: the filter options (narrowing to Grade 7 must
+        // never delete Grade 8 from the dropdown that would get back to it) and
+        // whether the session is closed.
+        $allRows = $this->sheetRows($allBeneficiaries, $allByDate->get($selectedDate, collect()));
+        $filterOptions = $this->filterOptions($allRows);
+        $filters = $this->readFilters($request, $allRows);
+
+        // ── Scope, then narrow — the split the Dashboard already uses ────────
+        // Grade, section and gender are SCOPE: they move every panel together,
+        // so the cards, the sheet, the history, the per-beneficiary roll and the
+        // calendar all report the same population. Attendance status is a
+        // NARROWING filter: it thins the list being read and leaves the scope
+        // alone. Before this the two views below read the whole school whatever
+        // the toolbar said, so a coordinator filtered to one section still saw
+        // every other section's turnout in the history.
+        $scopedIds = $allRows
+            ->filter(fn (array $row): bool => $this->inScope($row, $filters))
+            ->pluck('id')
+            ->flip();
+
+        $beneficiaries = $allBeneficiaries->filter(
+            fn (StudentHealthRecord $record): bool => $scopedIds->has($record->id)
+        )->values();
+
+        $marks = $allMarks->filter(
+            fn (array $row): bool => $scopedIds->has($row['record_id'])
+        )->values();
 
         $sessionDates = $marks
             ->pluck('date')
@@ -197,16 +436,11 @@ class FeedingAttendanceController extends Controller
             ->values()
             ->all();
 
-        $today = now()->toDateString();
-        $selectedDate = $this->resolveDate($request, $sessionDates, $cycle, $today);
-        $window = $this->programWindow($cycle, $today);
-
         // date => [record id => mark row]
         $byDate = $marks->groupBy('date')->map(fn (Collection $rows) => $rows->keyBy('record_id'));
         $byRecord = $marks->groupBy('record_id');
 
-        $rows = $this->sheetRows($beneficiaries, $byDate->get($selectedDate, collect()));
-        $filters = $this->readFilters($request, $rows);
+        $rows = $allRows->filter(fn (array $row): bool => $scopedIds->has($row['id']))->values();
         $filteredRows = $this->applyFilters($rows, $filters);
 
         // Whether this session is closed to recording.
@@ -219,7 +453,7 @@ class FeedingAttendanceController extends Controller
         // learner's own beneficiary record, where the change is attributed and
         // audited. An UNCONFIRMED scanned mark does not close a session: nobody
         // has read it, and recording on site is exactly how it gets decided.
-        $sessionLocked = $rows->contains('locked', true);
+        $sessionLocked = $allRows->contains('locked', true);
         $isFeedingDay = FeedingProgramCycle::isFeedingDay($selectedDate);
         $withinWindow = $selectedDate <= $window['end']
             && ($window['start'] === null || $selectedDate >= $window['start']);
@@ -241,13 +475,17 @@ class FeedingAttendanceController extends Controller
             // and a link built from request()->fullUrl() there would point a
             // date or a tab at the JSON endpoint.
             'pageUrl' => function (array $overrides = []) use ($request): string {
+                // Filtering AFTER the merge is what lets an override clear a
+                // parameter: passing 'status' => '' drops it from the URL
+                // rather than writing an empty one, so the at-risk notice can
+                // land on the roll without carrying the mark filter that was
+                // on screen.
                 $query = array_filter(
-                    $request->query(),
-                    static fn ($value, $name): bool => $value !== '' && is_scalar($value),
-                    ARRAY_FILTER_USE_BOTH
+                    array_merge($request->query(), $overrides),
+                    static fn ($value): bool => $value !== '' && is_scalar($value)
                 );
 
-                return route('dashboard.feedingcor-attendance', array_merge($query, $overrides));
+                return route('dashboard.feedingcor-attendance', $query);
             },
             'schoolYear' => $schoolYear,
             'schoolName' => $request->session()->get('active_school_name', 'School'),
@@ -265,6 +503,10 @@ class FeedingAttendanceController extends Controller
             'previousDate' => $this->stepDate($selectedDate, $sessionDates, $window, -1),
             'nextDate' => $this->stepDate($selectedDate, $sessionDates, $window, 1),
             'beneficiaryCount' => $beneficiaries->count(),
+            // The whole enrolled roll, so a scoped page can still say what it is
+            // a slice of.
+            'rollCount' => $allBeneficiaries->count(),
+            'isScoped' => $filters['grade'] !== '' || $filters['section'] !== '' || $filters['sex'] !== '',
             'rows' => $filteredRows,
             'unfilteredRows' => $rows,
             'tally' => $todayTally,
@@ -273,8 +515,11 @@ class FeedingAttendanceController extends Controller
             // reads today's 100% as the programme's 100%.
             'cumulative' => $cumulative,
             'filters' => $filters,
-            'filterOptions' => $this->filterOptions($rows),
-            'sessionRecorded' => $byDate->has($selectedDate),
+            // Built from the whole roll, never from the scoped rows: options
+            // computed off a filtered list delete the very choice that would
+            // widen it again.
+            'filterOptions' => $filterOptions,
+            'sessionRecorded' => $allByDate->has($selectedDate),
             // The sheet is a record, never a form: it reports what was recorded
             // and offers no control at all. Recording happens in the modal, and
             // only for a session still open.
@@ -283,10 +528,10 @@ class FeedingAttendanceController extends Controller
             'canRecord' => ! $sessionLocked
                 && $isFeedingDay
                 && $withinWindow
-                && $beneficiaries->isNotEmpty(),
+                && $allBeneficiaries->isNotEmpty(),
             // Why recording is unavailable, in the words the coordinator needs.
             'recordBlockedReason' => match (true) {
-                $beneficiaries->isEmpty() => 'No beneficiary is enrolled for this school year yet.',
+                $allBeneficiaries->isEmpty() => 'No beneficiary is enrolled for this school year yet.',
                 ! $isFeedingDay => Carbon::parse($selectedDate)->format('l, F j, Y').' is a weekend. There are no feeding sessions on Saturdays or Sundays.',
                 ! $withinWindow => 'That date is outside the running feeding programme.',
                 $sessionLocked => 'Attendance for '.Carbon::parse($selectedDate)->format('F j, Y').' has already been recorded. Correct a mark on the learner’s beneficiary record.',
@@ -294,7 +539,7 @@ class FeedingAttendanceController extends Controller
             },
             // The modal's roll: every beneficiary, unfiltered, so a coordinator
             // cannot record half a session because a filter was left on.
-            'recordRows' => $rows,
+            'recordRows' => $allRows,
             'openMarkCount' => $filteredRows->where('locked', false)->count(),
             'lockedMarkCount' => $filteredRows->where('locked', true)->count(),
             'atRisk' => [
@@ -308,8 +553,13 @@ class FeedingAttendanceController extends Controller
                 'minimumObservationDays' => $rule->minimumObservationDays(),
                 'observationRule' => $rule->describeObservation(),
             ],
-            'history' => $this->history($beneficiaries, $byDate, $sessionDates),
-            'beneficiaryRows' => $this->beneficiaryRows($beneficiaries, $standings, $filters),
+            'history' => $this->history($beneficiaries, $byDate, $sessionDates, $filters),
+            'beneficiaryRows' => $this->beneficiaryRows(
+                $beneficiaries,
+                $standings,
+                $byDate->get($selectedDate, collect()),
+                $filters
+            ),
             'calendar' => $this->calendar($selectedDate, $byDate, $beneficiaries->count()),
             'exportRows' => $this->exportRows($beneficiaries, $byRecord),
         ];
@@ -449,13 +699,26 @@ class FeedingAttendanceController extends Controller
     /**
      * One row per feeding day: what the school recorded that session.
      *
+     * Every figure here is already scoped — $beneficiaries and $byDate arrive
+     * narrowed to the grade, section and gender the toolbar is set to — so a
+     * coordinator reading one section's history reads that section's turnout,
+     * not the school's.
+     *
+     * The attendance filter then narrows the list itself: choosing Present
+     * keeps only the sessions somebody was actually present at, and choosing
+     * Absent only the ones that carried an absence. The row still prints the
+     * whole tally, because hiding a session's other half would turn a filtered
+     * list into a wrong one.
+     *
      * @param  Collection<int, StudentHealthRecord>  $beneficiaries
      * @param  Collection<string, Collection<int, array<string, mixed>>>  $byDate
      * @param  list<string>  $sessionDates
+     * @param  array<string, string>  $filters
      * @return list<array<string, mixed>>
      */
-    private function history(Collection $beneficiaries, Collection $byDate, array $sessionDates): array
+    private function history(Collection $beneficiaries, Collection $byDate, array $sessionDates, array $filters): array
     {
+        $expected = $beneficiaries->count();
         $history = [];
 
         foreach ($sessionDates as $index => $date) {
@@ -474,16 +737,30 @@ class FeedingAttendanceController extends Controller
                 'present' => $present,
                 'absent' => $absent,
                 'unconfirmed' => $unconfirmed,
+                // Feeding days nobody wrote this population down on. Its own
+                // figure, never added to the absences.
+                'unmarked' => max(0, $expected - $rows->count()),
                 'recorded' => $rows->count(),
-                'expected' => $beneficiaries->count(),
+                'expected' => $expected,
                 'rate' => $confirmed > 0 ? round(($present / $confirmed) * 100, 1) : null,
-                'complete' => $beneficiaries->count() > 0 && $rows->count() >= $beneficiaries->count(),
+                'complete' => $expected > 0 && $rows->count() >= $expected,
             ];
         }
 
         // Newest first: the last session is the one a coordinator opens this
         // view to check.
-        return array_reverse($history);
+        $history = array_reverse($history);
+
+        // A cumulative standing is a verdict on a learner, not on a day, so it
+        // says nothing about which sessions to keep and leaves this list alone.
+        if ($filters['status'] === '') {
+            return $history;
+        }
+
+        return array_values(array_filter(
+            $history,
+            fn (array $session): bool => $session[$filters['status']] > 0
+        ));
     }
 
     /**
@@ -491,12 +768,25 @@ class FeedingAttendanceController extends Controller
      * to. Deliberately carries no baseline, BMI or endline column: a learner's
      * health profile is the Beneficiaries tab's responsibility, not this one's.
      *
+     * Grade, section and gender have already scoped $beneficiaries. What is
+     * left for this method is the attendance filter, and there it means one
+     * learner's mark on the session the toolbar is set to: choosing Present
+     * leaves the learners marked present that day and takes the absent ones
+     * off, and the other way round. Those four states are exclusive, so the
+     * roll a filter produces is exactly the roll it names — and the "Session"
+     * column prints the mark that put each row there, so the list explains
+     * itself rather than being narrowed by something invisible.
+     *
+     * The figures beside it stay cumulative: they are what the school's
+     * threshold judged, and a filter must not change the evidence it read.
+     *
      * @param  Collection<int, StudentHealthRecord>  $beneficiaries
      * @param  array<int, array<string, mixed>>  $standings
+     * @param  Collection<int, array<string, mixed>>  $marksForDate  keyed by record id
      * @param  array<string, string>  $filters
      * @return list<array<string, mixed>>
      */
-    private function beneficiaryRows(Collection $beneficiaries, array $standings, array $filters): array
+    private function beneficiaryRows(Collection $beneficiaries, array $standings, Collection $marksForDate, array $filters): array
     {
         $blank = [
             'present' => 0, 'absent' => 0, 'confirmed' => 0, 'unconfirmed' => 0, 'not_marked' => 0,
@@ -505,7 +795,7 @@ class FeedingAttendanceController extends Controller
         ];
 
         return $beneficiaries
-            ->map(function (StudentHealthRecord $record) use ($standings, $blank): array {
+            ->map(function (StudentHealthRecord $record) use ($standings, $marksForDate, $blank): array {
                 [$grade, $section] = FeedingBeneficiarySummary::splitSection((string) $record->section);
                 $standing = $standings[$record->id] ?? $blank;
 
@@ -516,6 +806,11 @@ class FeedingAttendanceController extends Controller
                     'grade_number' => preg_replace('/^grade\s*/i', '', $grade),
                     'section' => $section,
                     'sex' => FeedingBeneficiarySummary::sexOf($record),
+                    // This learner's mark on the selected session — the one the
+                    // attendance filter narrows on, printed so the row says why
+                    // it is here. A learner no sheet covered is "unmarked",
+                    // never an absence.
+                    'session_status' => $marksForDate->get($record->id)['status'] ?? 'unmarked',
                     'present' => $standing['present'],
                     'absent' => $standing['absent'],
                     'confirmed' => $standing['confirmed'],
@@ -528,17 +823,19 @@ class FeedingAttendanceController extends Controller
                     'sessions_needed' => $standing['sessions_needed'],
                 ];
             })
-            // Grade, section and sex are the tab's scope, so they narrow this
-            // roll exactly as they narrow the sheet.
-            ->filter(fn (array $row): bool => ($filters['grade'] === '' || $row['grade'] === $filters['grade'])
-                && ($filters['section'] === '' || $row['section'] === $filters['section'])
-                && ($filters['sex'] === '' || $row['sex'] === $filters['sex']))
+            // A session's marks are exclusive, so filtering to one of them
+            // leaves exactly that roll — Present takes the absent rows off, and
+            // Absent takes the present ones off.
+            ->when(
+                $filters['status'] !== '',
+                fn (Collection $rows) => $rows->where('session_status', $filters['status'])
+            )
             // "View At-Risk Beneficiaries" lands here with the flag already on.
-            ->when($filters['status'] === 'at_risk', fn (Collection $rows) => $rows->where('at_risk', true))
+            ->when($filters['standing'] === 'at_risk', fn (Collection $rows) => $rows->where('at_risk', true))
             // The learners the observation window is still holding back — who a
             // coordinator asking "why is nobody flagged yet?" is looking for.
             ->when(
-                $filters['status'] === 'early_monitoring',
+                $filters['standing'] === 'early_monitoring',
                 fn (Collection $rows) => $rows->where('status', FeedingAtRiskRule::STATUS_EARLY_MONITORING)
             )
             ->values()
@@ -766,11 +1063,21 @@ class FeedingAttendanceController extends Controller
     }
 
     /**
-     * Grade, section and attendance status. Every one reads an encrypted or
-     * derived value, so all three are applied in PHP after fetch.
+     * Grade, section, gender, the session's mark and the cumulative standing.
+     * Every one reads an encrypted or derived value, so all of them are applied
+     * in PHP after fetch.
+     *
+     * **The mark and the standing are two questions, so they are two controls.**
+     * "Attendance" answers what happened on this session — All, Present, Absent
+     * — and those three are the only answers it has, because they are the only
+     * three a mark can be. Whether a learner is at risk across the programme is
+     * a verdict on twelve sheets rather than a mark on one, so it lives on its
+     * own `standing` control on the roll it applies to. Folding the two into a
+     * single dropdown put "Absent" and "At risk (cumulative)" in one list as
+     * though they answered the same question.
      *
      * @param  Collection<int, array<string, mixed>>  $rows
-     * @return array{grade: string, section: string, status: string}
+     * @return array{grade: string, section: string, sex: string, status: string, standing: string}
      */
     private function readFilters(Request $request, Collection $rows): array
     {
@@ -794,15 +1101,44 @@ class FeedingAttendanceController extends Controller
             $sex = '';
         }
 
+        // The three answers a mark has. "Unmarked" and "unconfirmed" are states
+        // a row can be in, and both are printed on the row, but neither is a
+        // filter: a coordinator asking this control a question is asking who
+        // came and who did not.
         $status = trim((string) $request->query('status', ''));
-        if (! in_array($status, ['present', 'absent', 'unmarked', 'unconfirmed', 'at_risk', 'early_monitoring'], true)) {
+        if (! in_array($status, self::MARK_FILTERS, true)) {
             $status = '';
         }
 
-        return ['grade' => $grade, 'section' => $section, 'sex' => $sex, 'status' => $status];
+        $standing = trim((string) $request->query('standing', ''));
+        if (! in_array($standing, self::STANDING_FILTERS, true)) {
+            $standing = '';
+        }
+
+        return ['grade' => $grade, 'section' => $section, 'sex' => $sex, 'status' => $status, 'standing' => $standing];
     }
 
     /**
+     * Whether a row is inside the tab's scope — grade, section and gender.
+     *
+     * Scope is the one thing every panel shares, so it lives in one predicate
+     * that all of them are built from, rather than being re-typed per view
+     * where two copies could quietly drift apart.
+     *
+     * @param  array<string, mixed>  $row
+     * @param  array<string, string>  $filters
+     */
+    private function inScope(array $row, array $filters): bool
+    {
+        return ($filters['grade'] === '' || $row['grade'] === $filters['grade'])
+            && ($filters['section'] === '' || $row['section'] === $filters['section'])
+            && ($filters['sex'] === '' || $row['sex'] === $filters['sex']);
+    }
+
+    /**
+     * The sheet's own narrowing. Scope has already been applied to $rows, so
+     * what is left is the attendance status.
+     *
      * @param  Collection<int, array<string, mixed>>  $rows
      * @param  array{grade: string, section: string, sex: string, status: string}  $filters
      * @return Collection<int, array<string, mixed>>
@@ -810,13 +1146,11 @@ class FeedingAttendanceController extends Controller
     private function applyFilters(Collection $rows, array $filters): Collection
     {
         return $rows
-            ->when($filters['grade'] !== '', fn (Collection $r) => $r->where('grade', $filters['grade']))
-            ->when($filters['section'] !== '', fn (Collection $r) => $r->where('section', $filters['section']))
-            ->when($filters['sex'] !== '', fn (Collection $r) => $r->where('sex', $filters['sex']))
-            // at_risk is a cumulative standing, not a mark on this session, so
-            // it narrows the per-beneficiary roll rather than the sheet.
+            // A standing is a verdict across the programme, not a mark on this
+            // session, so it narrows the per-beneficiary roll rather than the
+            // sheet.
             ->when(
-                in_array($filters['status'], ['present', 'absent', 'unmarked', 'unconfirmed'], true),
+                $filters['status'] !== '',
                 fn (Collection $r) => $r->where('status', $filters['status'])
             )
             ->values();

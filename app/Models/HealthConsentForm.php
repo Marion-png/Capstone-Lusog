@@ -23,6 +23,8 @@ class HealthConsentForm extends Model
     public const STATUS_REVIEWED = 'reviewed_by_adviser';
 
     // Official header defaults (Sta. Ana National High School Sulat-Pahibalo)
+    public const DEFAULT_REGION = 'Region XI';
+
     public const DEFAULT_DIVISION = 'DAVAO CITY';
 
     public const DEFAULT_SCHOOL_NAME = 'STA. ANA NATIONAL HIGH SCHOOL';

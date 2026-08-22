@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\StudentHealthRecord;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\SchemaCache;
+use App\Support\SchoolLetterhead;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use OpenSpout\Common\Entity\Cell;
@@ -70,7 +71,7 @@ class FeedingMasterlistExportController extends Controller
         $this->writeSheet(
             $writer,
             $rows,
-            (string) $request->session()->get('active_school_name', 'School'),
+            SchoolLetterhead::for($institutionId, (string) $request->session()->get('active_school_name', 'School')),
             $schoolYear,
             (string) $request->session()->get('active_name', '')
         );
@@ -146,7 +147,10 @@ class FeedingMasterlistExportController extends Controller
      *
      * @param  list<array{name: string, grade: string, section: string}>  $rows
      */
-    private function writeSheet(XlsxWriter $writer, array $rows, string $schoolName, string $schoolYear, string $preparedBy): void
+    /**
+     * @param  array<string, string>  $letterhead
+     */
+    private function writeSheet(XlsxWriter $writer, array $rows, array $letterhead, string $schoolYear, string $preparedBy): void
     {
         $title = (new Style)->withFontBold(true)->withFontSize(12);
         $heading = (new Style)->withFontBold(true)->withFontSize(10);
@@ -171,10 +175,17 @@ class FeedingMasterlistExportController extends Controller
             $values
         )));
 
-        $writer->addRow($line([$schoolName], $title));
-        // Left blank deliberately: the school address is typed on the form, and
-        // the app does not hold it. An invented line would be worse than a gap.
-        $writer->addRow($line(['School address:']));
+        // The DepEd heading, read through SchoolLetterhead so this sheet, the
+        // printed SBFP form and the attendance export all head the same school
+        // the same way.
+        foreach (SchoolLetterhead::lines($letterhead) as $headingLine) {
+            $writer->addRow($line([$headingLine], $centered));
+        }
+
+        $writer->addRow($line([$letterhead['school']], $title));
+        // The address the school is on file with. A school with none gets an
+        // empty line to write on, never a neighbouring school's street.
+        $writer->addRow($line([$letterhead['address']], $centered));
         $writer->addRow($line([
             'Masterlists of Identified Severely Wasted and Wasted Students Who Are Qualified for Feeding Program',
         ], $heading));
