@@ -197,7 +197,7 @@
 
                     <div class="sp-readonly-banner">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                        <span><b>Read-Only:</b> Consultation records are added by the school nurse or clinic staff. As a Class Adviser, you can view these records but cannot add or edit them.</span>
+                        <span><b>Date and time only:</b> consultation records are added by the school nurse or clinic staff. You can see that this learner attended the clinic and when. The complaint, diagnosis and treatment are clinical information held by the clinic &mdash; ask the school nurse if there is something you need to act on.</span>
                     </div>
 
                     <div class="sp-subhead">
@@ -550,7 +550,13 @@ const STUDENT_PROFILE_LRN = @json($lrn);
             }
             card.appendChild(head);
 
+            // Date and time only. The complaint, the diagnosis and the
+            // treatment are the clinic's, and the payload this role
+            // receives does not carry them — see
+            // App\Support\ConsultationVisibility. The loop stays so a
+            // desk that MAY see details renders them from the same code.
             [
+                ['Time', visit.time],
                 ['Condition', visit.condition],
                 ['Treatment Given', visit.treatment_given],
                 ['Status', visit.status],

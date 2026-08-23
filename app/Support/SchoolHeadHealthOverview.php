@@ -718,9 +718,11 @@ final class SchoolHeadHealthOverview
                 'grade' => trim((string) $consultation->grade_section) !== ''
                     ? trim((string) $consultation->grade_section)
                     : 'Unassigned',
-                'complaint' => trim((string) $consultation->condition) !== ''
-                    ? trim((string) $consultation->condition)
-                    : 'Not recorded',
+                // No complaint here. The head reads a management summary, and a
+                // principal has no need of a named visit's clinical detail — the
+                // brief is explicit that consultation details stop at the clinic.
+                // School-wide tallies stay: "twelve headaches this month" is a
+                // statistic about the school, not a detail about a learner.
                 'status' => self::DISPOSITIONS[$consultation->status] ?? ucfirst((string) $consultation->status),
                 'badge' => $consultation->status === 'referred' ? 'badge-monitor' : 'badge-normal',
             ])

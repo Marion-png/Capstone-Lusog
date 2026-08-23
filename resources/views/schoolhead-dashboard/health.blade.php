@@ -261,7 +261,6 @@
 								<th>Date</th>
 								<th>Time</th>
 								<th>Grade &amp; section</th>
-								<th>Complaint</th>
 								<th>Disposition</th>
 							</tr>
 						</thead>
@@ -271,7 +270,6 @@
 									<td class="tnum">{{ $row['date'] }}</td>
 									<td class="tnum">{{ $row['time'] }}</td>
 									<td>{{ $row['grade'] }}</td>
-									<td>{{ $row['complaint'] }}</td>
 									<td><span class="badge {{ $row['badge'] }}">{{ $row['status'] }}</span></td>
 								</tr>
 							@endforeach

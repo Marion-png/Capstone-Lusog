@@ -330,7 +330,10 @@ class AdviserMyStudentsTest extends TestCase
         // offered, and each clinic-recorded panel states its read-only intent.
         $this->assertStringContainsString('id="vpPrint"', $card);
         $this->assertStringContainsString('id="vpEditProfile"', $html);
-        $this->assertSame(2, substr_count($html, '<b>Read-Only:</b>'), 'Clinic Notes and Consultation Log each carry the read-only notice.');
+        // Clinic Notes is read-only; Consultation Log is read-only AND redacted,
+        // so it carries its own notice saying what is withheld and why.
+        $this->assertSame(1, substr_count($html, '<b>Read-Only:</b>'), 'Clinic Notes carries the read-only notice.');
+        $this->assertStringContainsString('<b>Date and time only:</b>', $html);
     }
 
     /** @test */

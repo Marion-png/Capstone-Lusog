@@ -170,17 +170,28 @@ class AdviserClinicRecordsTest extends TestCase
     // ── consultation log ────────────────────────────────────────────────────
 
     #[Test]
-    public function consultations_for_the_learner_are_rendered_with_what_the_clinic_records(): void
+    public function consultations_show_the_visit_and_never_the_clinical_detail(): void
     {
         $this->learner();
-        $this->consultation('Dela Cruz, Juan');
+        // Markers that cannot occur anywhere else on the page. 'Asthma' would
+        // not do: it is also a Medical History checkbox label, so asserting on
+        // it would test the checklist rather than the consultation.
+        $this->consultation('Dela Cruz, Juan', [
+            'condition' => 'Zymotic pharyngitis marker',
+            'treatment_given' => 'Placebo lozenge marker',
+        ]);
 
         $html = $this->profile();
 
-        $this->assertStringContainsString('Asthma', $html);
-        $this->assertStringContainsString('Salbutamol inhaler administered', $html);
-        // status is stored lowercase and shown as the clinic log labels it.
-        $this->assertStringContainsString('Referred', $html);
+        // The adviser sees that the learner attended the clinic, and when.
+        $this->assertStringContainsString('vpConsultationsList', $html);
+        $this->assertStringContainsString('<b>Date and time only:</b>', $html);
+
+        // Not what they came for, what was found, or what was done. This is
+        // the whole point: the payload never carries it, so no template can
+        // print it by accident.
+        $this->assertStringNotContainsString('Zymotic pharyngitis marker', $html);
+        $this->assertStringNotContainsString('Placebo lozenge marker', $html);
     }
 
     #[Test]

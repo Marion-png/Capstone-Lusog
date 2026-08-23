@@ -9,6 +9,7 @@ use App\Models\HealthAssessment;
 use App\Models\HealthConsentForm;
 use App\Models\MedicalCertificate;
 use App\Models\StudentHealthRecord;
+use App\Support\ConsultationVisibility;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
@@ -432,14 +433,16 @@ class StudentHealthRecordController extends Controller
                 continue;
             }
 
-            $entry = [
-                'consulted_at' => $consultation->consulted_at?->toDateTimeString(),
-                'consulted_at_label' => $consultation->consulted_at?->format('M j, Y \a\t g:i A'),
-                'grade_section' => $consultation->grade_section,
-                'condition' => $consultation->condition,
-                'treatment_given' => $consultation->treatment_given,
-                'status' => $this->consultationStatusLabel($consultation->status),
-            ];
+            // The class adviser gets the visit, not the clinical narrative:
+            // date, time, and that the learner attended the clinic. The
+            // complaint, the diagnosis and the treatment belong to the desks
+            // treating them. Stripped here, where the payload is built — a
+            // value that reaches the browser has been disclosed whether or
+            // not the template chose to print it.
+            $entry = ConsultationVisibility::present(
+                $consultation,
+                session('active_role'),
+            );
 
             $byLrn->put($match['lrn'], $byLrn->get($match['lrn'], collect())->push($entry));
         }
