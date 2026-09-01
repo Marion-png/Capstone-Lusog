@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\StudentHealthRecord;
 use App\Support\BmiAssessmentReport;
 use App\Support\FeedingBeneficiarySummary;
-use App\Support\FeedingProgramCycle;
 use App\Support\SchoolHeadOverview;
 use App\Support\SchoolHeadPulse;
 use App\Support\SchoolLetterhead;
@@ -947,7 +946,7 @@ class SchoolHeadReportsController extends Controller
         $writer->addRow($this->line(['Monthly Accomplishment Report'], $heading));
         $writer->addRow($this->line(['S.Y. '.$overview->schoolYear]));
         $writer->addRow($this->line([
-            'Feeding day '.$overview->cycle->day().' of '.FeedingProgramCycle::DURATION_DAYS,
+            'Feeding day '.$overview->cycle->day().' of '.$overview->cycle->durationDays(),
             $overview->daysCompleted().' feeding days recorded',
         ]));
         $writer->addRow($this->line(['']));

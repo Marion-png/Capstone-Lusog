@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\FeedingAttendance;
 use App\Models\StudentHealthRecord;
 use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
@@ -75,11 +76,13 @@ class FeedingAttendanceController extends Controller
     /**
      * What the Attendance control can ask, beyond "All".
      *
-     * Exactly the two things a confirmed mark can be. A learner nobody wrote
-     * down and a scanned mark nobody has read are both printed on their rows,
-     * but neither is an answer to "who came today".
+     * Exactly the three things a confirmed mark can be. An excused absence is
+     * one of them: it is a decision somebody recorded about a named session,
+     * and a coordinator chasing the week's buffer needs to be able to list
+     * them. A learner nobody wrote down and a scanned mark nobody has read are
+     * both printed on their rows, but neither is an answer to "who came today".
      */
-    private const MARK_FILTERS = ['present', 'absent'];
+    private const MARK_FILTERS = FeedingAttendanceMark::RECORDABLE;
 
     /** What the Standing control can ask — a verdict across the programme. */
     private const STANDING_FILTERS = ['at_risk', 'early_monitoring'];
@@ -261,11 +264,13 @@ class FeedingAttendanceController extends Controller
                 ],
                 array_map(
                     static fn (string $date): Cell => Cell::fromValue(match ($row['marks'][$date] ?? 'unmarked') {
-                        // The template's own marks: a tick for served, A for a
-                        // confirmed absence, and nothing at all where no one
-                        // recorded the learner — a blank cell is not an absence.
-                        'present' => '✓',
-                        'absent' => 'A',
+                        // The template's own marks: a tick for served, A for an
+                        // unexcused absence, E for one the school excused, and
+                        // nothing at all where no one recorded the learner — a
+                        // blank cell is not an absence.
+                        FeedingAttendanceMark::PRESENT => '✓',
+                        FeedingAttendanceMark::ABSENT => 'A',
+                        FeedingAttendanceMark::EXCUSED => 'E',
                         default => '',
                     }, $markCell),
                     $dates
@@ -286,7 +291,7 @@ class FeedingAttendanceController extends Controller
                 static fn (string $date): Cell => Cell::fromValue(
                     count(array_filter(
                         $rows,
-                        static fn (array $row): bool => ($row['marks'][$date] ?? '') === 'present'
+                        static fn (array $row): bool => ($row['marks'][$date] ?? '') === FeedingAttendanceMark::PRESENT
                     )),
                     $head
                 ),
@@ -497,7 +502,7 @@ class FeedingAttendanceController extends Controller
             // Which feeding day of the cycle the header counts, shared with the
             // Dashboard and the Feeding Program page so all three agree.
             'programDay' => $cycle->day(),
-            'programDuration' => FeedingProgramCycle::DURATION_DAYS,
+            'programDuration' => $cycle->durationDays(),
             'window' => $window,
             'sessionDates' => $sessionDates,
             'previousDate' => $this->stepDate($selectedDate, $sessionDates, $window, -1),
@@ -585,6 +590,9 @@ class FeedingAttendanceController extends Controller
         if (SchemaCache::hasColumn('feeding_attendances', 'needs_review')) {
             $columns[] = 'needs_review';
         }
+        if (SchemaCache::hasColumn('feeding_attendances', 'is_excused')) {
+            $columns[] = 'is_excused';
+        }
         if (SchemaCache::hasColumn('feeding_attendances', 'remarks')) {
             $columns[] = 'remarks';
         }
@@ -597,11 +605,7 @@ class FeedingAttendanceController extends Controller
             ->map(fn (FeedingAttendance $row): array => [
                 'record_id' => (int) $row->student_health_record_id,
                 'date' => optional($row->session_date)->toDateString(),
-                'status' => match (true) {
-                    (bool) ($row->needs_review ?? false), $row->is_present === null => 'unconfirmed',
-                    (bool) $row->is_present => 'present',
-                    default => 'absent',
-                },
+                'status' => FeedingAttendanceMark::state($row),
                 'remarks' => trim((string) ($row->remarks ?? '')),
             ])
             ->filter(fn (array $row): bool => $row['date'] !== null)
@@ -641,7 +645,7 @@ class FeedingAttendanceController extends Controller
                 // change it, here or on the server. An UNCONFIRMED scanned mark
                 // is deliberately not locked — nobody has read it yet, and
                 // recording on site is exactly how it gets decided.
-                'locked' => in_array($status, ['present', 'absent'], true),
+                'locked' => in_array($status, FeedingAttendanceMark::RECORDABLE, true),
             ];
         })->values();
     }
@@ -672,24 +676,37 @@ class FeedingAttendanceController extends Controller
             // Unconfirmed marks become NULL, which the rule keeps out of both
             // the numerator and the denominator.
             $marks = $rows->map(fn (array $row) => match ($row['status']) {
-                'present' => true,
-                'absent' => false,
+                FeedingAttendanceMark::PRESENT => true,
+                FeedingAttendanceMark::ABSENT => false,
+                // Excused and unconfirmed both reach the rule as NULL, for the
+                // same reason: neither is evidence about whether this learner
+                // is turning up when the school expects them.
                 default => null,
             })->all();
 
             $present = $rule->presentCount($marks);
             $confirmed = $rule->confirmedCount($marks);
+            $excused = $rows->where('status', FeedingAttendanceMark::EXCUSED)->count();
 
             $standings[$record->id] = [
                 'present' => $present,
                 'absent' => $confirmed - $present,
                 'confirmed' => $confirmed,
-                'unconfirmed' => count($marks) - $confirmed,
+                // The buffer: absences the school accepted. Its own figure, so
+                // a coordinator can see that a learner's gap is accounted for
+                // rather than reading it as a missing sheet.
+                'excused' => $excused,
+                'unconfirmed' => count($marks) - $confirmed - $excused,
                 'not_marked' => max(0, $sessionCount - count($marks)),
                 'rate' => $rule->attendanceRate($marks),
                 'at_risk' => $rule->isAtRisk($marks),
                 'status' => $rule->status($marks),
                 'sessions_needed' => $rule->sessionsUntilClassification($marks),
+                // The run the unexcused-absence rule judges on, and whether it
+                // has reached the school's removal-review point. Reported here,
+                // never acted on.
+                'absence_run' => $rule->currentAbsenceRun($marks),
+                'needs_removal_review' => $rule->needsRemovalReview($marks),
             ];
         }
 
@@ -723,9 +740,10 @@ class FeedingAttendanceController extends Controller
 
         foreach ($sessionDates as $index => $date) {
             $rows = $byDate->get($date, collect());
-            $present = $rows->where('status', 'present')->count();
-            $absent = $rows->where('status', 'absent')->count();
-            $unconfirmed = $rows->where('status', 'unconfirmed')->count();
+            $present = $rows->where('status', FeedingAttendanceMark::PRESENT)->count();
+            $absent = $rows->where('status', FeedingAttendanceMark::ABSENT)->count();
+            $excused = $rows->where('status', FeedingAttendanceMark::EXCUSED)->count();
+            $unconfirmed = $rows->where('status', FeedingAttendanceMark::UNCONFIRMED)->count();
             $confirmed = $present + $absent;
 
             $history[] = [
@@ -736,6 +754,7 @@ class FeedingAttendanceController extends Controller
                 'day' => $index + 1,
                 'present' => $present,
                 'absent' => $absent,
+                'excused' => $excused,
                 'unconfirmed' => $unconfirmed,
                 // Feeding days nobody wrote this population down on. Its own
                 // figure, never added to the absences.
@@ -789,9 +808,9 @@ class FeedingAttendanceController extends Controller
     private function beneficiaryRows(Collection $beneficiaries, array $standings, Collection $marksForDate, array $filters): array
     {
         $blank = [
-            'present' => 0, 'absent' => 0, 'confirmed' => 0, 'unconfirmed' => 0, 'not_marked' => 0,
+            'present' => 0, 'absent' => 0, 'confirmed' => 0, 'excused' => 0, 'unconfirmed' => 0, 'not_marked' => 0,
             'rate' => null, 'at_risk' => false, 'status' => FeedingAtRiskRule::STATUS_EARLY_MONITORING,
-            'sessions_needed' => 0,
+            'sessions_needed' => 0, 'absence_run' => 0, 'needs_removal_review' => false,
         ];
 
         return $beneficiaries
@@ -814,6 +833,9 @@ class FeedingAttendanceController extends Controller
                     'present' => $standing['present'],
                     'absent' => $standing['absent'],
                     'confirmed' => $standing['confirmed'],
+                    // Absences the school accepted — the buffer. Never counted
+                    // against the learner, and never hidden from the roll.
+                    'excused' => $standing['excused'],
                     // Feeding days no sheet covered this learner on. Its own
                     // column, never added to absences.
                     'not_marked' => $standing['not_marked'],
@@ -821,6 +843,8 @@ class FeedingAttendanceController extends Controller
                     'at_risk' => $standing['at_risk'],
                     'status' => $standing['status'],
                     'sessions_needed' => $standing['sessions_needed'],
+                    'absence_run' => $standing['absence_run'],
+                    'needs_removal_review' => $standing['needs_removal_review'],
                 ];
             })
             // A session's marks are exclusive, so filtering to one of them
@@ -1018,17 +1042,19 @@ class FeedingAttendanceController extends Controller
      */
     private function tally(Collection $rows): array
     {
-        $present = $rows->where('status', 'present')->count();
-        $absent = $rows->where('status', 'absent')->count();
-        $unconfirmed = $rows->where('status', 'unconfirmed')->count();
+        $present = $rows->where('status', FeedingAttendanceMark::PRESENT)->count();
+        $absent = $rows->where('status', FeedingAttendanceMark::ABSENT)->count();
+        $excused = $rows->where('status', FeedingAttendanceMark::EXCUSED)->count();
+        $unconfirmed = $rows->where('status', FeedingAttendanceMark::UNCONFIRMED)->count();
         $confirmed = $present + $absent;
 
         return [
             'present' => $present,
             'absent' => $absent,
+            'excused' => $excused,
             'unconfirmed' => $unconfirmed,
-            'unmarked' => $rows->count() - $present - $absent - $unconfirmed,
-            'recorded' => $present + $absent + $unconfirmed,
+            'unmarked' => $rows->count() - $present - $absent - $excused - $unconfirmed,
+            'recorded' => $present + $absent + $excused + $unconfirmed,
             // Null, not zero: a session nobody has recorded is not 0% turnout.
             'rate' => $confirmed > 0 ? round(($present / $confirmed) * 100, 1) : null,
         ];
@@ -1047,14 +1073,15 @@ class FeedingAttendanceController extends Controller
      */
     private function cumulative(Collection $marks): array
     {
-        $present = $marks->where('status', 'present')->count();
-        $absent = $marks->where('status', 'absent')->count();
+        $present = $marks->where('status', FeedingAttendanceMark::PRESENT)->count();
+        $absent = $marks->where('status', FeedingAttendanceMark::ABSENT)->count();
         $confirmed = $present + $absent;
 
         return [
             'present' => $present,
             'absent' => $absent,
-            'unconfirmed' => $marks->where('status', 'unconfirmed')->count(),
+            'excused' => $marks->where('status', FeedingAttendanceMark::EXCUSED)->count(),
+            'unconfirmed' => $marks->where('status', FeedingAttendanceMark::UNCONFIRMED)->count(),
             'confirmed' => $confirmed,
             'sessions' => $marks->pluck('date')->unique()->count(),
             // Null, not zero: no confirmed session is not a turnout of nothing.

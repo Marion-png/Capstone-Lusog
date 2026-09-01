@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
-use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
 use App\Support\SchoolHeadHealthOverview;
 use App\Support\SchoolHeadOverview;
@@ -209,11 +208,11 @@ class SchoolHeadController extends Controller
         return [
             'started' => $overview->cycle->hasStarted(),
             'day' => $overview->cycle->day(),
-            'duration' => FeedingProgramCycle::DURATION_DAYS,
+            'duration' => $overview->cycle->durationDays(),
             'percent' => $overview->cycle->percent(),
             'days_completed' => $completed,
             'days_remaining' => $overview->daysRemaining(),
-            'completed_percent' => round(($completed / FeedingProgramCycle::DURATION_DAYS) * 100, 1),
+            'completed_percent' => round(($completed / $overview->cycle->durationDays()) * 100, 1),
             'start_date' => $overview->cycle->startDateIso(),
         ];
     }
@@ -516,7 +515,7 @@ class SchoolHeadController extends Controller
                 $items[] = [
                     'severity' => 'high',
                     'title' => $outcome['not_measured'].' '.$this->plural('beneficiary', 'beneficiaries', $outcome['not_measured']).' have no endline measurement',
-                    'detail' => 'The cycle has run its '.FeedingProgramCycle::DURATION_DAYS.' days; the endline report stays a draft until they are measured.',
+                    'detail' => 'The cycle has run its '.$overview->cycle->durationDays().' days; the endline report stays a draft until they are measured.',
                     'action' => ['label' => 'Open reports', 'url' => route('dashboard.school-head.reports')],
                 ];
             } elseif ($overview->cycle->hasStarted() && $overview->cycle->daysRemaining() <= self::ENDLINE_NOTICE_DAYS) {

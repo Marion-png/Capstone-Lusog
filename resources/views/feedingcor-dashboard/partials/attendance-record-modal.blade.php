@@ -36,6 +36,9 @@
 					{{-- Marking everyone present and correcting the few absences is
 					     the fast path. It only touches rows the search leaves on
 					     screen. --}}
+					{{-- No bulk "excused": an excuse is a reason given for one
+					     named learner, and a button that excuses a whole screen
+					     of them at once would record a decision nobody made. --}}
 					<div class="ra-modal-bulk">
 						<button type="button" class="btn btn-secondary" data-record-all="present">Mark All Present</button>
 						<button type="button" class="btn btn-secondary" data-record-all="absent">Mark All Absent</button>
@@ -63,6 +66,10 @@
 									<td>{{ $row['grade_number'] !== '' ? $row['grade_number'] : '—' }}</td>
 									<td>{{ $row['section'] }}</td>
 									<td class="ra-mark-col">
+										{{-- Three answers, because an absence the school
+										     accepted is a different fact from one it did
+										     not: only the unexcused kind counts toward the
+										     at-risk flag. --}}
 										<div class="fa-toggle" role="group" aria-label="Attendance for {{ $row['name'] }}">
 											<label class="fa-opt fa-opt-present">
 												<input type="radio" name="marks[{{ $row['id'] }}]" value="present">
@@ -71,6 +78,10 @@
 											<label class="fa-opt fa-opt-absent">
 												<input type="radio" name="marks[{{ $row['id'] }}]" value="absent">
 												<span>Absent</span>
+											</label>
+											<label class="fa-opt fa-opt-excused">
+												<input type="radio" name="marks[{{ $row['id'] }}]" value="excused">
+												<span>Excused</span>
 											</label>
 										</div>
 										@if ($row['status'] === 'unconfirmed')
@@ -81,7 +92,8 @@
 									</td>
 									<td>
 										{{-- Only an absence carries a reason, so the field opens
-										     when Absent is chosen and clears when it is not. --}}
+										     for either kind and clears when the learner is
+										     marked present. --}}
 										<input type="text" class="input fa-remark" maxlength="255"
 											name="remarks[{{ $row['id'] }}]" value=""
 											aria-label="Reason {{ $row['name'] }} was absent" disabled>
@@ -98,6 +110,7 @@
 				<div class="fa-tally">
 					<span class="badge badge-normal">Present <span data-record-tally="present">0</span></span>
 					<span class="badge badge-critical">Absent <span data-record-tally="absent">0</span></span>
+					<span class="badge badge-monitor">Excused <span data-record-tally="excused">0</span></span>
 					<span class="badge badge-neutral">Unmarked <span data-record-tally="none">{{ count($recordRows) }}</span></span>
 				</div>
 				<div class="modal-actions">

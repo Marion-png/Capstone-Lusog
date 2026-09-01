@@ -6,10 +6,12 @@
      roll answers who is turning up and who is not, and nothing else — which is
      what lets the two tabs stay honest about which one owns what.
 
-     Four columns, four different facts, and none of them folded into another:
-     Present and Absent are what a human confirmed, "Not marked" is the feeding
-     days no sheet covered this learner on (a filing gap, never an absence), and
-     Rate is Present over the confirmed sessions alone.
+     Five columns, five different facts, and none of them folded into another:
+     Present and Absent are what a human confirmed, Excused is the school's own
+     buffer (an absence it accepted, which the at-risk rule never counts against
+     the learner), "Not marked" is the feeding days no sheet covered this learner
+     on (a filing gap, never an absence), and Rate is Present over the
+     unexcused confirmed sessions alone.
 
      The rate printed beside a learner, the state beside it and the flag it
      carries come from one reading of one set of marks, so a row can never show
@@ -29,16 +31,18 @@
 	$sessionMarks = [
 		'present' => ['badge-normal', 'Present'],
 		'absent' => ['badge-critical', 'Absent'],
-		'unconfirmed' => ['badge-monitor', 'Unconfirmed'],
+		'excused' => ['badge-monitor', 'Excused'],
+		'unconfirmed' => ['badge-neutral', 'Unconfirmed'],
 	];
 
 	$mark = $filters['status'] ?? '';
 	$showPresent = $mark === '' || $mark === 'present';
 	$showAbsent = $mark === '' || $mark === 'absent';
+	$showExcused = $mark === '' || $mark === 'excused';
 
 	// Student, Grade, Section, Session, Not marked, Rate, Status, plus whichever
-	// of Present / Absent the filter left standing.
-	$columnCount = 7 + (int) $showPresent + (int) $showAbsent;
+	// of Present / Absent / Excused the filter left standing.
+	$columnCount = 7 + (int) $showPresent + (int) $showAbsent + (int) $showExcused;
 @endphp
 <div class="table-card">
 	<div class="table-scroll">
@@ -51,6 +55,7 @@
 					<th>Session &middot; {{ \Carbon\Carbon::parse($selectedDate)->format('M j') }}</th>
 					@if ($showPresent)<th class="num">Present</th>@endif
 					@if ($showAbsent)<th class="num">Absent</th>@endif
+					@if ($showExcused)<th class="num">Excused</th>@endif
 					<th class="num">Not marked</th>
 					<th class="num">Rate</th>
 					<th>Status</th>
@@ -72,6 +77,9 @@
 						</td>
 						@if ($showPresent)<td class="num tnum">{{ $row['present'] }}</td>@endif
 						@if ($showAbsent)<td class="num tnum">{{ $row['absent'] }}</td>@endif
+						{{-- The buffer: absences the school accepted. Counted, shown,
+						     and never held against the learner by the rule. --}}
+						@if ($showExcused)<td class="num tnum">{{ $row['excused'] }}</td>@endif
 						{{-- Feeding days nobody recorded this learner on. Shown
 						     because a coordinator reading 1 of 4 needs to know
 						     whether the other sixteen days are absences or
@@ -107,6 +115,9 @@
 								@break
 							@case('absent')
 								No beneficiary was marked absent on {{ $selectedDateLabel }}.
+								@break
+							@case('excused')
+								No beneficiary was excused on {{ $selectedDateLabel }}.
 								@break
 							@default
 								No beneficiaries match these filters.

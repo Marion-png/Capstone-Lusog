@@ -103,7 +103,20 @@ final class FeedingBeneficiarySummary
     public static function sexOf(StudentHealthRecord $record): string
     {
         $details = is_array($record->student_details) ? $record->student_details : [];
-        $value = strtolower(trim((string) ($details['gender'] ?? '')));
+
+        return self::normalizeSex((string) ($details['gender'] ?? ''));
+    }
+
+    /**
+     * The same normalizer, for a row that is not a model — the session-fallback
+     * learners the Beneficiaries tab still lists. It exists so those rows are
+     * read by exactly the rule the database rows are, rather than by a second
+     * copy that answers "M" with "M" and drops the learner from every filtered
+     * roll.
+     */
+    public static function normalizeSex(string $gender): string
+    {
+        $value = strtolower(trim($gender));
 
         return match (true) {
             $value === '' => '',
@@ -153,7 +166,33 @@ final class FeedingBeneficiarySummary
      */
     public static function isBeneficiary(StudentHealthRecord $record): bool
     {
-        return $record->feeding_enrolled_at !== null && self::isEligible($record);
+        return self::isEnrolled($record) && self::isEligible($record);
+    }
+
+    /**
+     * Whether this learner currently holds a place in the programme.
+     *
+     * Enrolment and removal are two stamps, not one field: a learner who
+     * transferred out was still fed for eleven weeks, and clearing the
+     * enrolment date would erase that. So the enrolment stays and the removal
+     * sits beside it, and "on the feeding line today" is the pair read
+     * together. Every count, roster and export goes through here, or one screen
+     * will keep feeding somebody another has already replaced.
+     */
+    public static function isEnrolled(StudentHealthRecord $record): bool
+    {
+        return $record->feeding_enrolled_at !== null && self::removedAt($record) === null;
+    }
+
+    /**
+     * When a learner was taken off the active list, if they were.
+     *
+     * Read defensively: the removal migration is additive, and a database that
+     * has not run it has no such attribute at all.
+     */
+    public static function removedAt(StudentHealthRecord $record): mixed
+    {
+        return $record->getAttribute('feeding_removed_at');
     }
 
     /**
@@ -207,6 +246,7 @@ final class FeedingBeneficiarySummary
         }
 
         $hasReviewColumn = SchemaCache::hasColumn('feeding_attendances', 'needs_review');
+        $hasExcusedColumn = SchemaCache::hasColumn('feeding_attendances', 'is_excused');
 
         return FeedingAttendance::query()
             ->whereIn('student_health_record_id', $beneficiaries->pluck('id'))
@@ -214,11 +254,13 @@ final class FeedingBeneficiarySummary
             ->orderBy('session_date')
             ->get(array_merge(
                 ['student_health_record_id', 'session_date', 'is_present'],
-                $hasReviewColumn ? ['needs_review'] : []
+                $hasReviewColumn ? ['needs_review'] : [],
+                $hasExcusedColumn ? ['is_excused'] : []
             ))
             ->groupBy('student_health_record_id')
-            // Before the review migration every mark is confirmed by definition.
-            ->map(fn ($rows) => $rows->map(fn ($row) => ($row->needs_review ?? false) ? null : $row->is_present)->all());
+            // Before the review migration every mark is confirmed by definition,
+            // and before the excused migration none of them is excused.
+            ->map(fn ($rows) => $rows->map(fn ($row) => FeedingAttendanceMark::forRule($row))->all());
     }
 
     /**
@@ -307,7 +349,7 @@ final class FeedingBeneficiarySummary
             ->values();
 
         $beneficiaries = $qualified
-            ->filter(fn (StudentHealthRecord $record): bool => $record->feeding_enrolled_at !== null)
+            ->filter(fn (StudentHealthRecord $record): bool => self::isEnrolled($record))
             ->values();
 
         return self::tally($beneficiaries, FeedingAtRiskRule::forInstitution($institutionId))

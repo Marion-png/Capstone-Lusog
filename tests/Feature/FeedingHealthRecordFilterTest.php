@@ -317,4 +317,61 @@ class FeedingHealthRecordFilterTest extends TestCase
             ->assertSee('Alpha Learner')
             ->assertDontSee('Outsider Learner');
     }
+
+    /**
+     * The reported gender-filter defect.
+     *
+     * This tab used to normalise the encrypted `student_details.gender` itself
+     * with `ucfirst(strtolower(...))`, which answered "M" with "M" — not one of
+     * the two values the filter offers — so every learner an adviser had
+     * recorded with a single letter dropped out of the list the moment a gender
+     * was chosen, and the roster appeared to fall back to whoever happened to
+     * be spelled out in full. It now reads through
+     * FeedingBeneficiarySummary::sexOf(), the one normalizer every coordinator
+     * screen uses.
+     */
+    #[Test]
+    public function the_gender_filter_reads_the_single_letter_an_adviser_typed(): void
+    {
+        $spelled = $this->makeStudent('Alpha Learner', 'Grade 7 / Rizal');
+        $abbreviated = $this->makeStudent('Bravo Learner', 'Grade 7 / Rizal');
+        $abbreviated->update(['student_details' => ['gender' => 'M']]);
+
+        $female = $this->makeStudent('Charlie Learner', 'Grade 7 / Rizal');
+        $female->update(['student_details' => ['gender' => 'f']]);
+
+        $session = $this->coordinatorSession();
+
+        $this->assertSame(1, $this->rowsNaming('Alpha Learner', $session, '?sex=Male'));
+        $this->assertSame(1, $this->rowsNaming('Bravo Learner', $session, '?sex=Male'));
+        $this->assertSame(0, $this->rowsNaming('Charlie Learner', $session, '?sex=Male'));
+
+        $this->assertSame(1, $this->rowsNaming('Charlie Learner', $session, '?sex=Female'));
+    }
+
+    /**
+     * The two halves of the report combine rather than one replacing the other:
+     * choosing a gender after a grade must narrow within that grade, not reset
+     * the list.
+     */
+    #[Test]
+    public function gender_and_grade_narrow_together(): void
+    {
+        $seven = $this->makeStudent('Alpha Learner', 'Grade 7 / Rizal');
+        $seven->update(['student_details' => ['gender' => 'Female']]);
+
+        $eight = $this->makeStudent('Bravo Learner', 'Grade 8 / Mabini');
+        $eight->update(['student_details' => ['gender' => 'Female']]);
+
+        // A male learner in the same grade, so the gender filter has something
+        // to remove rather than passing by default.
+        $this->makeStudent('Charlie Learner', 'Grade 7 / Rizal');
+
+        $session = $this->coordinatorSession();
+        $query = '?grade_level=Grade+7&sex=Female';
+
+        $this->assertSame(1, $this->rowsNaming('Alpha Learner', $session, $query));
+        $this->assertSame(0, $this->rowsNaming('Bravo Learner', $session, $query), 'The grade filter must survive the gender choice.');
+        $this->assertSame(0, $this->rowsNaming('Charlie Learner', $session, $query), 'The gender filter must survive the grade choice.');
+    }
 }

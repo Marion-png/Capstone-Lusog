@@ -178,7 +178,9 @@ class FeedingAtRiskThresholdTest extends TestCase
         $this->withSession($this->adminSession())
             ->get('/dashboard/system-admin')
             ->assertOk()
-            ->assertSee('Feeding At-Risk Threshold');
+            // The panel carries the whole rule now — which kind of rule the
+            // school runs, not only the figure it is set to.
+            ->assertSee('Feeding Program Policy');
 
         $this->withSession($this->adminSession())
             ->post("/dashboard/system-admin/institutions/{$this->institution->id}/at-risk-threshold", ['threshold' => 85])

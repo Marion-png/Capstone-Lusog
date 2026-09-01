@@ -44,9 +44,46 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  * here, because ids off the wire decide nothing on their own. With no ids (a
  * browser with JS off) the export falls back to this school's whole enrolled
  * roll for the year on screen, so the button is never a dead end.
+ *
+ * **Three lists, not one, because the school keeps three.** The coordinator was
+ * explicit that the master list of learners the measurement *qualifies* and the
+ * master list of learners actually *enrolled* are two separate documents with
+ * two separate purposes — qualifying is the adviser's measurement, enrolling is
+ * the coordinator's decision after an interview and whatever the local budget
+ * supports. Printing them under one heading is what let the two be confused for
+ * each other:
+ *
+ *   beneficiaries  the enrolled roll — DepEd Form 1's Master List of
+ *                  Beneficiaries, and the default
+ *   qualified      every learner the measurement qualifies, enrolled or not —
+ *                  the candidate list
+ *   waitlist       the qualified learners nobody has enrolled: the coordinator's
+ *                  "buffer", the list a vacated slot is filled from
+ *
+ * Only the first honours the client's ordering, because only the first is what
+ * was on screen; the other two are computed here from the roll.
  */
 class FeedingMasterlistExportController extends Controller
 {
+    /**
+     * The three lists this endpoint can write, with the DepEd title each one is
+     * filed under and the slug its filename carries.
+     */
+    private const LISTS = [
+        'beneficiaries' => [
+            'Master List of Beneficiaries',
+            'Beneficiaries',
+        ],
+        'qualified' => [
+            'Masterlists of Identified Severely Wasted and Wasted Students Who Are Qualified for Feeding Program',
+            'Qualified',
+        ],
+        'waitlist' => [
+            'Waiting List of Identified Severely Wasted and Wasted Students Not Yet Enrolled',
+            'Waiting-List',
+        ],
+    ];
+
     public function __invoke(Request $request): BinaryFileResponse|RedirectResponse
     {
         if (! $this->isCoordinator($request)) {
@@ -56,7 +93,15 @@ class FeedingMasterlistExportController extends Controller
         $institutionId = $request->session()->get('active_institution_id');
         $schoolYear = trim((string) $request->query('school_year', '')) ?: StudentHealthRecord::currentSchoolYear();
 
-        $rows = $this->rows($request, $institutionId, $schoolYear);
+        // An unrecognised value falls back to the enrolled roll rather than
+        // producing an empty form under a title nobody asked for.
+        $list = (string) $request->input('list', $request->query('list', 'beneficiaries'));
+        if (! array_key_exists($list, self::LISTS)) {
+            $list = 'beneficiaries';
+        }
+        [$title, $slug] = self::LISTS[$list];
+
+        $rows = $this->rows($request, $institutionId, $schoolYear, $list);
 
         // tempnam() creates the file it names, so the reservation is released
         // before the writer claims the .xlsx path — otherwise every export
@@ -73,12 +118,13 @@ class FeedingMasterlistExportController extends Controller
             $rows,
             SchoolLetterhead::for($institutionId, (string) $request->session()->get('active_school_name', 'School')),
             $schoolYear,
-            (string) $request->session()->get('active_name', '')
+            (string) $request->session()->get('active_name', ''),
+            $title
         );
 
         $writer->close();
 
-        $filename = 'SBFP-Masterlist-'.str_replace('/', '-', $schoolYear).'-'.now()->format('Ymd').'.xlsx';
+        $filename = 'SBFP-'.$slug.'-'.str_replace('/', '-', $schoolYear).'-'.now()->format('Ymd').'.xlsx';
 
         return response()->download($path, $filename)->deleteFileAfterSend();
     }
@@ -88,7 +134,7 @@ class FeedingMasterlistExportController extends Controller
      *
      * @return list<array{name: string, grade: string, section: string}>
      */
-    private function rows(Request $request, ?int $institutionId, string $schoolYear): array
+    private function rows(Request $request, ?int $institutionId, string $schoolYear, string $list): array
     {
         if (! SchemaCache::hasTable('student_health_records')) {
             return [];
@@ -96,10 +142,18 @@ class FeedingMasterlistExportController extends Controller
 
         // Ids arrive off the wire, so the roster is re-read and re-scoped: only
         // this school's learners can reach the file, whatever was posted.
-        $requested = collect($request->input('record_ids', []))
-            ->map(fn ($id): int => (int) $id)
-            ->filter()
-            ->values();
+        //
+        // They are honoured for the beneficiary list alone: that list IS the
+        // rows on screen, in the order the coordinator sorted them. The
+        // candidate list and the waiting list are different documents that were
+        // never on screen, so they are computed from the roll here rather than
+        // from whatever the page happened to be showing.
+        $requested = $list === 'beneficiaries'
+            ? collect($request->input('record_ids', []))
+                ->map(fn ($id): int => (int) $id)
+                ->filter()
+                ->values()
+            : collect();
 
         $records = StudentHealthRecord::query()
             ->when($institutionId, fn ($query) => $query->where('institution_id', $institutionId))
@@ -108,11 +162,20 @@ class FeedingMasterlistExportController extends Controller
             ->get();
 
         if ($requested->isEmpty()) {
-            // No client order to honour, so the fallback is the enrolled roll,
+            // No client order to honour, so the list is selected here and
             // sorted the way the printed form reads: by section, then by name.
             // student_name is encrypted at rest, so the sort happens in PHP.
+            $keep = match ($list) {
+                // Every learner the measurement qualifies, enrolled or not.
+                'qualified' => fn (StudentHealthRecord $r): bool => FeedingBeneficiarySummary::isEligible($r),
+                // The buffer: qualified, and nobody has given them a place.
+                'waitlist' => fn (StudentHealthRecord $r): bool => FeedingBeneficiarySummary::isEligible($r)
+                    && ! FeedingBeneficiarySummary::isEnrolled($r),
+                default => fn (StudentHealthRecord $r): bool => FeedingBeneficiarySummary::isBeneficiary($r),
+            };
+
             $records = $records
-                ->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isBeneficiary($record))
+                ->filter($keep)
                 ->sortBy([
                     fn (StudentHealthRecord $a, StudentHealthRecord $b) => strcasecmp((string) $a->section, (string) $b->section),
                     fn (StudentHealthRecord $a, StudentHealthRecord $b) => strcasecmp((string) $a->student_name, (string) $b->student_name),
@@ -150,7 +213,7 @@ class FeedingMasterlistExportController extends Controller
     /**
      * @param  array<string, string>  $letterhead
      */
-    private function writeSheet(XlsxWriter $writer, array $rows, array $letterhead, string $schoolYear, string $preparedBy): void
+    private function writeSheet(XlsxWriter $writer, array $rows, array $letterhead, string $schoolYear, string $preparedBy, string $formTitle): void
     {
         $title = (new Style)->withFontBold(true)->withFontSize(12);
         $heading = (new Style)->withFontBold(true)->withFontSize(10);
@@ -186,9 +249,11 @@ class FeedingMasterlistExportController extends Controller
         // The address the school is on file with. A school with none gets an
         // empty line to write on, never a neighbouring school's street.
         $writer->addRow($line([$letterhead['address']], $centered));
-        $writer->addRow($line([
-            'Masterlists of Identified Severely Wasted and Wasted Students Who Are Qualified for Feeding Program',
-        ], $heading));
+        // The title names WHICH list this is — the enrolled beneficiaries, the
+        // learners the measurement qualifies, or the waiting list. They are
+        // three documents the school keeps separately, and one heading over all
+        // three is how they get filed as each other.
+        $writer->addRow($line([$formTitle], $heading));
         $writer->addRow($line(['S.Y. '.$schoolYear], $centered));
         $writer->addRow($line(['']));
 

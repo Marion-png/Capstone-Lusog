@@ -176,7 +176,7 @@
 			<p>
 				{{ session('active_school_name', 'School') }}
 				&middot; S.Y. {{ \App\Models\StudentHealthRecord::currentSchoolYear() }}
-				&middot; Day {{ (int) explode('/', $programStats['program_day'] ?? '0/120')[0] }} of {{ \App\Support\FeedingProgramCycle::DURATION_DAYS }}
+				&middot; Day {{ (int) explode('/', $programStats['program_day'] ?? '0/120')[0] }} of {{ (int) (explode('/', $programStats['program_day'] ?? '0/120')[1] ?? \App\Support\FeedingProgramCycle::DURATION_DAYS) }}
 			</p>
 			<p>Printed {{ now()->format('F j, Y') }}{{ ($programStats['sessions_held'] ?? 0) > 0 ? ' · '.$programStats['sessions_held'].' feeding sessions recorded' : '' }}</p>
 		</div>

@@ -25,16 +25,18 @@
 	$mark = $filters['status'] ?? '';
 	$showPresent = $mark === '' || $mark === 'present';
 	$showAbsent = $mark === '' || $mark === 'absent';
+	$showExcused = $mark === '' || $mark === 'excused';
 
 	$markFilter = match ($mark) {
 		'present' => 'sessions with someone present',
 		'absent' => 'sessions carrying an absence',
+		'excused' => 'sessions carrying an excused absence',
 		default => null,
 	};
 
 	// Date, Feeding Day, Not marked, Rate, Recorded, plus whichever of
-	// Present / Absent the filter left standing.
-	$columnCount = 5 + (int) $showPresent + (int) $showAbsent;
+	// Present / Absent / Excused the filter left standing.
+	$columnCount = 5 + (int) $showPresent + (int) $showAbsent + (int) $showExcused;
 @endphp
 
 @if ($scopeParts !== [] || $markFilter !== null)
@@ -54,6 +56,10 @@
 					<th class="num">Feeding Day</th>
 					@if ($showPresent)<th class="num">Present</th>@endif
 					@if ($showAbsent)<th class="num">Absent</th>@endif
+					{{-- Absences the school accepted, counted separately from the
+					     ones it did not: only the second kind is evidence the
+					     at-risk rule reads. --}}
+					@if ($showExcused)<th class="num">Excused</th>@endif
 					{{-- Beneficiaries no sheet covered that day. Its own column,
 					     never added to the absences: the difference between "did
 					     not come" and "nobody wrote it down" is the difference
@@ -74,6 +80,7 @@
 						<td class="num tnum">{{ $session['day'] }}</td>
 						@if ($showPresent)<td class="num tnum">{{ $session['present'] }}</td>@endif
 						@if ($showAbsent)<td class="num tnum">{{ $session['absent'] }}</td>@endif
+						@if ($showExcused)<td class="num tnum">{{ $session['excused'] }}</td>@endif
 						<td class="num tnum">{{ $session['unmarked'] }}</td>
 						{{-- Present over confirmed marks: an unconfirmed scan
 						     counts on neither side. --}}
@@ -94,6 +101,9 @@
 						@switch($mark)
 							@case('present')
 								No feeding session in this selection has anyone present.
+								@break
+							@case('excused')
+								No feeding session in this selection carries an excused absence.
 								@break
 							@case('absent')
 								No feeding session in this selection carries an absence.

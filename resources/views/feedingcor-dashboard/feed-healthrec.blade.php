@@ -73,9 +73,20 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
                     Enroll Beneficiaries
                 </button>
-                <button type="button" class="btn btn-secondary" id="exportMasterlistBtn">
+                {{-- Two master lists, because the school keeps two. The
+                     beneficiary list is DepEd Form 1 — the learners actually
+                     enrolled, in the order on screen. The waiting list is the
+                     coordinator's "buffer": the learners the measurement
+                     qualified whom nobody has given a place, and the list a
+                     vacated slot is filled from. One heading over both is how
+                     they end up filed as each other. --}}
+                <button type="button" class="btn btn-secondary" id="exportMasterlistBtn" data-export-list="beneficiaries">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     Export Masterlist
+                </button>
+                <button type="button" class="btn btn-secondary" id="exportWaitlistBtn" data-export-list="waitlist">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Export Waiting List
                 </button>
                 <button type="button" class="btn btn-secondary" id="printMasterlistBtn">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
@@ -765,30 +776,40 @@
     // the coordinator filtered, searched and sorted — so what leaves the page is
     // what they were reading. A short-lived form post is used rather than fetch
     // so the browser handles the download itself.
-    document.getElementById('exportMasterlistBtn').addEventListener('click', () => {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = @json(route('dashboard.feedingcor-health-records.masterlist'));
-        form.style.display = 'none';
+    // Both export buttons post to the one endpoint and differ only in which
+    // list they ask for. Only the beneficiary list carries the rows on screen:
+    // the waiting list was never on screen, so the server computes it from the
+    // roll rather than from whatever the page happened to be showing.
+    document.querySelectorAll('[data-export-list]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const list = button.dataset.exportList;
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = @json(route('dashboard.feedingcor-health-records.masterlist'));
+            form.style.display = 'none';
 
-        const field = (name, value) => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = name;
-            input.value = value;
-            form.appendChild(input);
-        };
+            const field = (name, value) => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = name;
+                input.value = value;
+                form.appendChild(input);
+            };
 
-        field('_token', document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '');
-        // The year on screen, so the heading names the period being exported.
-        field('school_year', new URLSearchParams(window.location.search).get('school_year') ?? '');
+            field('_token', document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '');
+            field('list', list);
+            // The year on screen, so the heading names the period being exported.
+            field('school_year', new URLSearchParams(window.location.search).get('school_year') ?? '');
 
-        rows.filter((row) => row.style.display !== 'none' && row.dataset.recordId)
-            .forEach((row) => field('record_ids[]', row.dataset.recordId));
+            if (list === 'beneficiaries') {
+                rows.filter((row) => row.style.display !== 'none' && row.dataset.recordId)
+                    .forEach((row) => field('record_ids[]', row.dataset.recordId));
+            }
 
-        document.body.appendChild(form);
-        form.submit();
-        form.remove();
+            document.body.appendChild(form);
+            form.submit();
+            form.remove();
+        });
     });
 
     // ── Print Masterlist: the same roster on paper. The print stylesheet

@@ -297,7 +297,10 @@ class FeedingBeneficiaryCardsTest extends TestCase
         // learner — read out of the sheet XML inside the .xlsx.
         $sheet = $this->readSheetXml($response->streamedContent());
 
-        $this->assertStringContainsString('Masterlists of Identified Severely Wasted and Wasted Students', $sheet);
+        // The Beneficiaries tab exports DepEd Form 1's Master List of
+        // Beneficiaries — the enrolled roll. The candidate list of qualified
+        // learners is a separate document under its own title (?list=qualified).
+        $this->assertStringContainsString('Master List of Beneficiaries', $sheet);
         $this->assertStringContainsString('Test School', $sheet);
         $this->assertStringContainsString('Maria Clara Santos', $sheet);
         $this->assertStringContainsString('Sampaguita', $sheet);

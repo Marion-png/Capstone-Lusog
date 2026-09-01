@@ -98,8 +98,12 @@ final class FeedingRiskSeverity
         $atRisk = $rule->isAtRisk($marks);
         $observing = ! $rule->hasEnoughObservation($marks);
         $trend = self::trend($marks);
+        // The learner's current run of unexcused absences. Under the
+        // unexcused-absence rule this — not the percentage — is what the bands
+        // are read against, since that is what the rule itself judges on.
+        $absenceRun = $rule->currentAbsenceRun($marks);
 
-        $severity = self::severity($atRisk, $observing, $rate, $trend, $rule);
+        $severity = self::severity($atRisk, $observing, $rate, $trend, $rule, $absenceRun);
 
         return [
             'present' => $present,
@@ -116,7 +120,13 @@ final class FeedingRiskSeverity
             'severity' => $severity,
             'priority' => self::priority($severity, $rate, $rule),
             'trend' => $trend,
-            'reason' => self::reason($severity, $rate, $trend, $rule),
+            // How long they have been away without an excuse, and whether that
+            // has run far enough for the school's removal review to open. Both
+            // are reported, never acted on: nothing here takes a child off the
+            // feeding line.
+            'absence_run' => $absenceRun,
+            'needs_removal_review' => $rule->needsRemovalReview($marks),
+            'reason' => self::reason($severity, $rate, $trend, $rule, $absenceRun),
         ];
     }
 
@@ -196,13 +206,29 @@ final class FeedingRiskSeverity
         };
     }
 
-    private static function severity(bool $atRisk, bool $observing, ?float $rate, ?string $trend, FeedingAtRiskRule $rule): string
+    private static function severity(bool $atRisk, bool $observing, ?float $rate, ?string $trend, FeedingAtRiskRule $rule, int $absenceRun = 0): string
     {
         // Checked first, and before Watch especially: Watch means "above the
         // threshold", and a learner at 25% of four sessions is not above
         // anything — they are unclassified, which is its own answer.
         if ($observing) {
             return self::OBSERVING;
+        }
+
+        // Under the unexcused-absence rule the bands are read off the run, not
+        // the percentage: a learner who attended for two months and has now
+        // been away a fortnight is at 90-something per cent, and a percentage
+        // band would draw them as Steady on the day they most need chasing.
+        if ($rule->mode() === FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS) {
+            if ($atRisk) {
+                return ($absenceRun >= $rule->absenceRemovalDays() || $trend === 'declining')
+                    ? self::CRITICAL
+                    : self::AT_RISK;
+            }
+
+            // One session short of the flag — the last point at which a phone
+            // call still keeps a learner off the follow-up list.
+            return $absenceRun >= max(1, $rule->absenceFlagDays() - 1) ? self::WATCH : self::STEADY;
         }
 
         if ($atRisk) {
@@ -250,10 +276,28 @@ final class FeedingRiskSeverity
      * and never offers a reason for the absences or a conclusion about the
      * child — that is not something an attendance record can support.
      */
-    private static function reason(string $severity, ?float $rate, ?string $trend, FeedingAtRiskRule $rule): string
+    private static function reason(string $severity, ?float $rate, ?string $trend, FeedingAtRiskRule $rule, int $absenceRun = 0): string
     {
         $threshold = self::format($rule->thresholdPercent());
         $rateLabel = $rate !== null ? self::format($rate).'%' : null;
+
+        // The rule that judged the learner is the rule the sentence has to
+        // name. Telling a coordinator a learner "fell below 80%" when the
+        // school does not run a percentage rule describes a test nobody applied.
+        if ($rule->mode() === FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS && $severity !== self::OBSERVING) {
+            $sessions = $absenceRun === 1 ? '1 feeding session' : $absenceRun.' feeding sessions';
+
+            return match ($severity) {
+                self::CRITICAL, self::AT_RISK => 'Missed '.$sessions.' in a row without an excuse, at or past the school\'s '
+                    .$rule->absenceFlagDays().'-session limit.'
+                    .($absenceRun >= $rule->absenceRemovalDays()
+                        ? ' The absence has run to '.$rule->absenceRemovalDays().' sessions, so removal from the active list is due for review with the class adviser.'
+                        : ''),
+                self::WATCH => 'Missed '.$sessions.' in a row without an excuse, one short of the school\'s '
+                    .$rule->absenceFlagDays().'-session limit.',
+                default => 'No run of unexcused absences approaching the school\'s '.$rule->absenceFlagDays().'-session limit.',
+            };
+        }
 
         if ($severity === self::CRITICAL && $trend === 'declining' && $rate !== null && $rate >= self::criticalThresholdPercent($rule)) {
             return 'Feeding attendance is below the configured '.$threshold.'% threshold and has fallen sharply over recent sessions.';
@@ -266,7 +310,7 @@ final class FeedingRiskSeverity
             // Says what is missing, not what the rate means: too few recorded
             // sessions is a gap in the evidence, never a finding about the child.
             self::OBSERVING => 'Attendance'.($rateLabel ? ' ('.$rateLabel.')' : '').' is still inside the minimum observation period of '
-                .$rule->minimumObservationDays().' recorded feeding days, so the '.$threshold.'% threshold does not classify this learner yet.',
+                .$rule->minimumObservationDays().' recorded feeding days, so '.$rule->describe().' does not classify this learner yet.',
             default => 'Cumulative feeding attendance is above the configured '.$threshold.'% threshold.',
         };
     }

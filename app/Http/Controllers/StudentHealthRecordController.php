@@ -11,6 +11,7 @@ use App\Models\MedicalCertificate;
 use App\Models\StudentHealthRecord;
 use App\Support\ConsultationVisibility;
 use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
 use App\Support\PriorityHealthRule;
@@ -1327,7 +1328,7 @@ class StudentHealthRecordController extends Controller
                 ? $cycle->daysRemaining().' feeding '.Str::plural('day', $cycle->daysRemaining()).' remain'
                 : 'the programme has not started';
 
-            $duration = FeedingProgramCycle::DURATION_DAYS;
+            $duration = $cycle->durationDays();
 
             return back()->with('error', "Endline can only be recorded once the {$duration}-day feeding programme is complete — {$remaining}.");
         }
@@ -1419,9 +1420,12 @@ class StudentHealthRecordController extends Controller
             $todayMarks = FeedingAttendance::query()
                 ->whereIn('student_health_record_id', $records->pluck('id'))
                 ->whereDate('session_date', now()->toDateString())
-                ->get(['student_health_record_id', 'is_present', 'needs_review'])
+                ->get(array_merge(
+                    ['student_health_record_id', 'is_present', 'needs_review'],
+                    SchemaCache::hasColumn('feeding_attendances', 'is_excused') ? ['is_excused'] : []
+                ))
                 ->mapWithKeys(fn ($mark): array => [
-                    $mark->student_health_record_id => ($mark->needs_review ?? false) ? null : $mark->is_present,
+                    $mark->student_health_record_id => FeedingAttendanceMark::state($mark),
                 ]);
         }
 
@@ -1507,13 +1511,25 @@ class StudentHealthRecordController extends Controller
             // database row to carry an enrolment, so it can only be waiting.
             $id = $record->id ?? null;
             $qualified = FeedingBeneficiarySummary::qualifies((string) $record->nutritional_status);
-            $enrolled = ($record->feeding_enrolled_at ?? null) !== null;
+            // Enrolled AND not since removed. A learner the coordinator took
+            // off the active list is back on the waiting list, which is exactly
+            // where the substitute for their slot comes from.
+            $enrolled = $record instanceof StudentHealthRecord
+                ? FeedingBeneficiarySummary::isEnrolled($record)
+                : false;
 
             // Sex lives in the encrypted student_details blob, so it is read
             // here rather than filtered in SQL. A session-fallback row carries
             // no details at all, which reads as "not on file".
-            $details = is_array($record->student_details ?? null) ? $record->student_details : [];
-            $sex = ucfirst(strtolower(trim((string) ($details['gender'] ?? ''))));
+            // Read through the one normalizer every coordinator screen uses.
+            // This tab used to `ucfirst(strtolower(...))` the raw value itself,
+            // which quietly answered "M" with "M" — not one of the two options
+            // the filter offers — so a learner an adviser had recorded as "M"
+            // vanished the moment anybody chose a gender, and the list appeared
+            // to fall back to whoever happened to be spelled out in full.
+            $sex = $record instanceof StudentHealthRecord
+                ? FeedingBeneficiarySummary::sexOf($record)
+                : FeedingBeneficiarySummary::normalizeSex((string) data_get($record, 'student_details.gender', ''));
 
             return (object) [
                 // The record id, for the actions a row can carry. A
@@ -1528,11 +1544,13 @@ class StudentHealthRecordController extends Controller
                 // NULL, not 0: a learner no confirmed session has covered has
                 // no turnout to report, which the table prints as an em dash.
                 'attendance_rate' => $standings[$id]['rate'] ?? null,
-                'sex' => in_array($sex, ['Male', 'Female'], true) ? $sex : '',
-                'attendance_today' => match (true) {
-                    $id === null || ! $todayMarks->has($id) => 'unmarked',
-                    $todayMarks->get($id) === true => 'present',
-                    $todayMarks->get($id) === false => 'absent',
+                'sex' => $sex,
+                'attendance_today' => match ($todayMarks->get($id ?? -1, FeedingAttendanceMark::NOT_MARKED)) {
+                    FeedingAttendanceMark::PRESENT => 'present',
+                    FeedingAttendanceMark::ABSENT => 'absent',
+                    // An absence the school accepted: an answer in its own
+                    // right, never folded into the plain absences.
+                    FeedingAttendanceMark::EXCUSED => 'excused',
                     // A scanned mark no human has confirmed is not an absence.
                     default => 'unmarked',
                 },
@@ -1634,7 +1652,7 @@ class StudentHealthRecordController extends Controller
         if (! in_array($narrow['baseline_status'], self::STATUS_OPTIONS, true)) {
             $narrow['baseline_status'] = '';
         }
-        if (! in_array($narrow['attendance'], ['present', 'absent', 'unmarked'], true)) {
+        if (! in_array($narrow['attendance'], ['present', 'absent', 'excused', 'unmarked'], true)) {
             $narrow['attendance'] = '';
         }
         if (! in_array($narrow['beneficiary_status'], ['enrolled', 'pending', 'not_qualified'], true)) {
@@ -1694,6 +1712,7 @@ class StudentHealthRecordController extends Controller
                 'attendance' => [
                     'present' => 'Present today',
                     'absent' => 'Absent today',
+                    'excused' => 'Excused today',
                     'unmarked' => 'Unmarked today',
                 ],
                 'beneficiary' => [

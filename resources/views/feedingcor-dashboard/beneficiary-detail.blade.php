@@ -21,9 +21,15 @@
 	// The learner's standing: enrolled and turning up, enrolled and under the
 	// school's threshold, qualified and still waiting on the coordinator's
 	// decision, or none of those. Same four readings the roster prints.
+	// A learner taken off the active list is neither an active beneficiary nor
+	// somebody who never was one, so the plate says which — and the record
+	// keeps every figure it earned while they were being fed.
+	$wasRemoved = ($program['removed_at'] ?? null) !== null;
+
 	[$standingLabel, $standingClass] = match (true) {
 		$standing['enrolled'] && $standing['at_risk'] => ['At Risk Beneficiary', 'is-risk'],
 		$standing['enrolled'] => ['Active Beneficiary', 'is-active'],
+		$wasRemoved => ['Removed from Active List', 'is-none'],
 		$standing['qualified'] => ['Pending Enrollment', 'is-pending'],
 		default => ['Not a Beneficiary', 'is-none'],
 	};
@@ -51,13 +57,15 @@
 	// En dash in the school year: it is a range, not a hyphenated word.
 	$yearLabel = str_replace('-', '&ndash;', e($learner['school_year']));
 
-	// Four readings of one session, and only one of them is an absence. A mark
-	// no human has confirmed and a day no sheet covered are each their own
-	// answer — neither is ever drawn as a miss.
+	// Five readings of one session, and only one of them counts against the
+	// learner. An excused absence is the school's own buffer, a mark no human
+	// has confirmed is evidence of nothing, and a day no sheet covered is a
+	// filing gap — none of the three is ever drawn as a miss.
 	$sessionMarks = [
 		'present' => ['badge-normal', '✓', 'Present'],
 		'absent' => ['badge-critical', '✕', 'Absent'],
-		'unconfirmed' => ['badge-monitor', '?', 'Unconfirmed'],
+		'excused' => ['badge-monitor', 'E', 'Excused'],
+		'unconfirmed' => ['badge-neutral', '?', 'Unconfirmed'],
 		'unmarked' => ['badge-neutral', '–', 'Not marked'],
 	];
 @endphp
@@ -107,7 +115,18 @@
 				@if ($standing['qualified'] && ! $standing['enrolled'])
 					<button type="button" class="btn btn-primary" id="bdEnroll">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-						Enroll Beneficiary
+						{{ $wasRemoved ? 'Return to Active List' : 'Enroll Beneficiary' }}
+					</button>
+				@endif
+				@if ($standing['enrolled'])
+					{{-- Leaving the programme is a decision about one learner, so it
+					     is offered on one learner's record and nowhere else. It is
+					     never offered by the At-Risk tab: an attendance figure is a
+					     reason to follow a learner up, never a reason to stop
+					     feeding them. --}}
+					<button type="button" class="btn btn-secondary" data-remove-open>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+						Remove from Active List
 					</button>
 				@endif
 				<button type="button" class="btn btn-secondary" id="bdPrint">
@@ -191,6 +210,24 @@
 							<dd>{{ $program['enrolled_by'] }}</dd>
 						</div>
 					@endif
+					@if ($wasRemoved)
+						{{-- Kept beside the enrolment rather than replacing it: this
+						     learner was fed, and the record has to go on saying so. --}}
+						<div class="bd-fact">
+							<dt>Removed On</dt>
+							<dd>{{ $program['removed_at'] }}</dd>
+						</div>
+						<div class="bd-fact">
+							<dt>Reason</dt>
+							<dd>{{ $program['removal_reason'] !== '' ? $program['removal_reason'] : '—' }}</dd>
+						</div>
+						@if ($program['removed_by'] !== '')
+							<div class="bd-fact">
+								<dt>Removed By</dt>
+								<dd>{{ $program['removed_by'] }}</dd>
+							</div>
+						@endif
+					@endif
 				</dl>
 			</section>
 		</div>
@@ -222,6 +259,9 @@
 				</div>
 				<p class="bd-note">
 					At-risk threshold: <strong>{{ $thresholdLabel }}%</strong>
+					@if ($attendance['excused'] > 0)
+						&middot; {{ $attendance['excused'] }} excused absence(s), counted neither way
+					@endif
 					@if ($attendance['unconfirmed'] > 0)
 						&middot; {{ $attendance['unconfirmed'] }} unconfirmed mark(s), counted neither way
 					@endif
@@ -234,6 +274,21 @@
 							<div>
 								<strong>At Risk</strong>
 								<span>{{ ucfirst($attendance['rule']) }}</span>
+							</div>
+						</div>
+					</div>
+				@endif
+
+				@if ($standing['enrolled'] && ($attendance['needs_removal_review'] ?? false))
+					{{-- The school's second, later threshold. It opens a question for
+					     the class adviser — is this learner coming back? — and
+					     nothing more: no figure on this page removes anybody. --}}
+					<div class="alert-bar bd-alert">
+						<div class="alert-body">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+							<div>
+								<strong>Removal review due</strong>
+								<span>{{ $attendance['absence_run'] }} unexcused {{ \Illuminate\Support\Str::plural('absence', $attendance['absence_run']) }} in a row. Confirm with the class adviser before releasing the slot.</span>
 							</div>
 						</div>
 					</div>
@@ -269,15 +324,20 @@
 										<td class="bd-remark">{{ $row['recorded_by'] !== '' ? $row['recorded_by'] : '—' }}</td>
 										<td class="bd-remark">{{ $row['remarks'] !== '' ? $row['remarks'] : '—' }}</td>
 										<td class="bd-correct-col">
-											{{-- Two posts to one audited endpoint. The
+											{{-- Three posts to one audited endpoint. The
 											     mark a session already reads is not
 											     offered again — there is nothing to
-											     correct it to. --}}
+											     correct it to. Excusing is here rather
+											     than anywhere else because it is a
+											     decision about one named learner on one
+											     named day, and this is the screen that
+											     records it with a reason. --}}
 											<form method="POST" action="{{ route('feedingcor-program.beneficiary.attendance.correct', $learner['id']) }}" class="bd-correct">
 												@csrf
 												<input type="hidden" name="session_date" value="{{ $row['date'] }}">
 												<button type="submit" name="mark" value="present" class="bd-correct-btn is-present" @disabled($row['status'] === 'present')>Present</button>
 												<button type="submit" name="mark" value="absent" class="bd-correct-btn is-absent" @disabled($row['status'] === 'absent')>Absent</button>
+												<button type="submit" name="mark" value="excused" class="bd-correct-btn is-excused" @disabled($row['status'] === 'excused')>Excused</button>
 											</form>
 										</td>
 									</tr>
@@ -333,6 +393,39 @@
 	</div>
 </div>
 
+@if ($standing['enrolled'])
+	{{-- Removing a beneficiary asks for a reason, because the reason is the
+	     thing that will still matter a year from now — "transferred to Davao
+	     City NHS" is what makes the vacated slot explicable. Same dialog
+	     anatomy as the enrolment and follow-up dialogs. --}}
+	<div class="modal-backdrop" id="removeBackdrop">
+		<div class="modal-panel bd-remove-modal" role="dialog" aria-modal="true" aria-labelledby="removeTitle">
+			<form method="POST" action="{{ route('feedingcor-program.enrollment.remove', $learner['id']) }}">
+				@csrf
+				<header class="modal-head">
+					<div>
+						<p class="modal-eyebrow">Beneficiary Record</p>
+						<h2 class="modal-title" id="removeTitle">Remove from Active List</h2>
+						<p class="modal-sub">{{ $learner['name'] }} &middot; {{ $learner['grade'] }}{{ $learner['section'] !== '' ? ' — '.$learner['section'] : '' }}</p>
+					</div>
+					<button type="button" class="modal-close" data-remove-close aria-label="Close">&times;</button>
+				</header>
+				<div class="modal-body">
+					<label class="field-label" for="removeReason">Reason</label>
+					<input type="text" class="input" id="removeReason" name="reason" maxlength="255" required
+						placeholder="Transferred to another school" autocomplete="off">
+				</div>
+				<footer class="modal-foot">
+					<div class="modal-actions">
+						<button type="button" class="btn btn-ghost" data-remove-close>Cancel</button>
+						<button type="submit" class="btn btn-primary">Remove Beneficiary</button>
+					</div>
+				</footer>
+			</form>
+		</div>
+	</div>
+@endif
+
 <script>
 // The rail chooses which reading of the record is on screen; print puts the
 // whole record on paper through the sheet's @media print block; and enrolling
@@ -370,6 +463,32 @@
 	} catch (e) { /* nothing remembered is not an error */ }
 
 	document.getElementById('bdPrint')?.addEventListener('click', () => window.print());
+
+	// Removal: one dialog, one endpoint, one reason. Plain form POST, so it
+	// works with the page's own redirect and flash rather than needing a
+	// second success path.
+	const removeBackdrop = document.getElementById('removeBackdrop');
+	if (removeBackdrop) {
+		const setRemoveOpen = (open) => {
+			removeBackdrop.classList.toggle('open', open);
+			if (open) removeBackdrop.querySelector('#removeReason')?.focus();
+		};
+
+		document.addEventListener('click', (event) => {
+			if (event.target.closest('[data-remove-open]')) {
+				event.preventDefault();
+				setRemoveOpen(true);
+				return;
+			}
+			if (event.target.closest('[data-remove-close]') || event.target === removeBackdrop) {
+				setRemoveOpen(false);
+			}
+		});
+
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape' && removeBackdrop.classList.contains('open')) setRemoveOpen(false);
+		});
+	}
 
 	const page = document.getElementById('bd-page');
 	const button = document.getElementById('bdEnroll');

@@ -6,9 +6,11 @@ use App\Models\FeedingAttendance;
 use App\Models\StudentHealthRecord;
 use App\Support\BmiAssessmentReport;
 use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingNutritionProgress;
 use App\Support\FeedingProgramCycle;
+use App\Support\FeedingReportNarrative;
 use App\Support\SchemaCache;
 use App\Support\SchoolLetterhead;
 use App\Support\SchoolSignatories;
@@ -44,6 +46,11 @@ class FeedingCoordinatorController extends Controller
         $records = $records->filter(
             fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::coversGrade($record)
         )->values();
+
+        // The narrative below reports the programme, and the programme only
+        // feeds covered grades — so it reads the same narrowed set every other
+        // form on this page does.
+        $unfilteredRecords = $records;
 
         // Group adviser-entered students by grade level so each SBFP form is
         // filled with one grade only — Grade 8 is never mixed with Grade 9.
@@ -84,6 +91,8 @@ class FeedingCoordinatorController extends Controller
             $sectionsByGrade[$grade] = $names;
         }
 
+        $letterhead = SchoolLetterhead::for($institutionId, (string) $request->session()->get('active_school_name', ''));
+
         return view('feedingcor-dashboard.sbfp-forms', [
             'studentsByGrade' => $studentsByGrade,
             'gradeOptions' => array_keys($studentsByGrade),
@@ -100,8 +109,25 @@ class FeedingCoordinatorController extends Controller
             'schoolYear' => StudentHealthRecord::currentSchoolYear(),
             'nurseName' => $this->resolveSchoolNurseName($institutionId, (string) $request->session()->get('active_school_name', '')),
             // The DepEd heading every form on this page opens under.
-            'letterhead' => SchoolLetterhead::for($institutionId, (string) $request->session()->get('active_school_name', '')),
+            'letterhead' => $letterhead,
             'seals' => SchoolLetterhead::seals(),
+            // The narrative report's own paragraphs, derived from the same
+            // figures the grids above are drawn from rather than re-typed
+            // beside them. It fills the form as a starting draft the
+            // coordinator edits; a saved draft is never overwritten by it,
+            // because hand-written work outranks a re-fill.
+            //
+            // Built from the WHOLE year's roll, not the grade-filtered set:
+            // this is the school's report on its programme, and a narrative
+            // that silently described one grade would be read as describing
+            // all of them.
+            'narrative' => FeedingReportNarrative::build(
+                $unfilteredRecords,
+                (string) ($letterhead['school'] ?? $request->session()->get('active_school_name', '')),
+                StudentHealthRecord::currentSchoolYear(),
+                FeedingProgramCycle::forInstitution($institutionId),
+                FeedingAtRiskRule::forInstitution($institutionId),
+            ),
         ]);
     }
 
@@ -288,7 +314,7 @@ class FeedingCoordinatorController extends Controller
             // value is dropped rather than emptying the page.
             'sex' => in_array($clean('sex'), FeedingBeneficiarySummary::SEX_OPTIONS, true) ? $clean('sex') : '',
             'status' => $clean('status'),
-            'attendance' => in_array($clean('attendance'), ['present', 'absent', 'unmarked'], true)
+            'attendance' => in_array($clean('attendance'), ['present', 'absent', 'excused', 'unmarked'], true)
                 ? $clean('attendance')
                 : '',
             // Which population the Nutritional Status panel reports on. It moves
@@ -353,7 +379,7 @@ class FeedingCoordinatorController extends Controller
         // measurement decides the first, the coordinator's decision the second.
         // Only enrolled learners are beneficiaries; the rest are waiting.
         $allBeneficiaries = $qualified
-            ->filter(fn (StudentHealthRecord $record): bool => $record->feeding_enrolled_at !== null)
+            ->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isEnrolled($record))
             ->values();
         $awaitingEnrollment = $qualified->count() - $allBeneficiaries->count();
 
@@ -415,7 +441,7 @@ class FeedingCoordinatorController extends Controller
             'programCycle' => [
                 'school_year' => StudentHealthRecord::currentSchoolYear(),
                 'day' => $programDay,
-                'duration' => FeedingProgramCycle::DURATION_DAYS,
+                'duration' => $cycle->durationDays(),
                 'days_remaining' => $cycle->daysRemaining(),
                 'percent' => $cycle->percent(),
                 'started' => $cycle->hasStarted(),
@@ -477,6 +503,7 @@ class FeedingCoordinatorController extends Controller
             'attendance' => [
                 ['value' => 'present', 'label' => 'Present'],
                 ['value' => 'absent', 'label' => 'Absent'],
+                ['value' => 'excused', 'label' => 'Excused'],
                 ['value' => 'unmarked', 'label' => 'Unmarked'],
             ],
         ];
@@ -647,6 +674,9 @@ class FeedingCoordinatorController extends Controller
             if (SchemaCache::hasColumn('feeding_attendances', 'needs_review')) {
                 $columns[] = 'needs_review';
             }
+            if (SchemaCache::hasColumn('feeding_attendances', 'is_excused')) {
+                $columns[] = 'is_excused';
+            }
             if (SchemaCache::hasColumn('feeding_attendances', 'remarks')) {
                 $columns[] = 'remarks';
             }
@@ -658,7 +688,7 @@ class FeedingCoordinatorController extends Controller
                 ->keyBy('student_health_record_id');
         }
 
-        $counts = ['present' => 0, 'absent' => 0, 'unconfirmed' => 0, 'unrecorded' => 0];
+        $counts = ['present' => 0, 'absent' => 0, 'excused' => 0, 'unconfirmed' => 0, 'unrecorded' => 0];
 
         // student_name is encrypted at rest, so sorting happens in PHP.
         $rows = $beneficiaries
@@ -666,12 +696,12 @@ class FeedingCoordinatorController extends Controller
                 $mark = $marks->get($record->id);
                 [$grade, $section] = $this->splitSection((string) $record->section);
 
-                $status = match (true) {
-                    $mark === null => 'unrecorded',
-                    (bool) ($mark->needs_review ?? false), $mark->is_present === null => 'unconfirmed',
-                    (bool) $mark->is_present => 'present',
-                    default => 'absent',
-                };
+                // "unrecorded" rather than the mark class's "not_marked": this
+                // panel has said unrecorded since it shipped, and the two words
+                // mean the same thing to the same reader.
+                $status = $mark === null
+                    ? 'unrecorded'
+                    : FeedingAttendanceMark::state($mark);
                 $counts[$status]++;
 
                 return [
@@ -707,6 +737,9 @@ class FeedingCoordinatorController extends Controller
             'expected' => $expected,
             'present' => $counts['present'],
             'absent' => $counts['absent'],
+            // The buffer, reported apart from the plain absences: the school
+            // accepted these, and the at-risk rule never counts them.
+            'excused' => $counts['excused'],
             'unconfirmed' => $counts['unconfirmed'],
             'unrecorded' => $counts['unrecorded'],
             // Share of the expected headcount confirmed present today. Zero of

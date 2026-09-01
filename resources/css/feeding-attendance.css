@@ -213,6 +213,9 @@
 .fa-opt:hover span { background: var(--lg-rail); }
 .fa-opt-present input:checked + span { background: var(--lg-mint); color: var(--lg-success-ink); }
 .fa-opt-absent input:checked + span { background: var(--lg-danger-tint); color: var(--lg-danger-ink); }
+/* Amber, the monitoring step: an excused absence is neither the good outcome
+   nor the one that counts against a learner. */
+.fa-opt-excused input:checked + span { background: var(--lg-amber-tint); color: var(--lg-amber-ink); }
 .fa-opt input:focus-visible + span { outline: none; box-shadow: var(--lg-focus); }
 .fa-unconfirmed { margin-left: 8px; }
 

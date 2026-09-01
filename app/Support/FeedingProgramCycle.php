@@ -4,11 +4,12 @@ namespace App\Support;
 
 use App\Models\Consultation;
 use App\Models\FeedingAttendance;
+use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use Carbon\Carbon;
 
 /**
- * Where a school currently sits in the 120-day SBFP feeding cycle.
+ * Where a school currently sits in its SBFP feeding cycle.
  *
  * Day 1 is the first recorded feeding session, not the day the coordinator
  * opened the page: the cycle is a fact about the school's attendance history,
@@ -17,16 +18,53 @@ use Carbon\Carbon;
  *
  * A school with no attendance yet has no cycle — day 0, hasStarted() false —
  * rather than a day 1 that nothing supports.
+ *
+ * The LENGTH of the cycle is the school's own. Division policy says 120 feeding
+ * days and 90 has been under discussion, so a figure compiled into the
+ * application is a figure a school cannot correct when its Division settles the
+ * question. `institutions.feeding_cycle_days` overrides the app default
+ * (config/feeding.php); read it through `durationDays()` on the instance —
+ * never through the constant, which is only the fallback.
  */
 class FeedingProgramCycle
 {
+    /** The programme default, for a school that has set no length of its own. */
     public const DURATION_DAYS = 120;
 
-    private function __construct(private readonly ?Carbon $startDate) {}
+    private function __construct(
+        private readonly ?Carbon $startDate,
+        private readonly int $durationDays = self::DURATION_DAYS,
+    ) {}
 
     public static function forInstitution(?int $institutionId = null): self
     {
-        return new self(self::resolveStartDate($institutionId));
+        return new self(self::resolveStartDate($institutionId), self::durationForInstitution($institutionId));
+    }
+
+    /**
+     * The cycle length one school runs, in feeding days.
+     *
+     * NULL in the column means "use the app default", so a school that has set
+     * nothing moves with the programme rather than being pinned to whatever the
+     * figure was the day the column shipped.
+     */
+    public static function durationForInstitution(?int $institutionId = null): int
+    {
+        $default = max(1, (int) config('feeding.cycle_days', self::DURATION_DAYS));
+
+        if (! $institutionId || ! SchemaCache::hasColumn('institutions', 'feeding_cycle_days')) {
+            return $default;
+        }
+
+        $configured = Institution::query()->whereKey($institutionId)->value('feeding_cycle_days');
+
+        return ($configured === null || (int) $configured < 1) ? $default : (int) $configured;
+    }
+
+    /** How many feeding days this cycle runs for. */
+    public function durationDays(): int
+    {
+        return $this->durationDays;
     }
 
     public function hasStarted(): bool
@@ -62,7 +100,7 @@ class FeedingProgramCycle
             return 0;
         }
 
-        return min(self::DURATION_DAYS, self::countFeedingDays($this->startDate, now()));
+        return min($this->durationDays, self::countFeedingDays($this->startDate, now()));
     }
 
     /**
@@ -96,7 +134,7 @@ class FeedingProgramCycle
 
     public function daysRemaining(): int
     {
-        return max(0, self::DURATION_DAYS - $this->day());
+        return max(0, $this->durationDays - $this->day());
     }
 
     /**
@@ -109,13 +147,13 @@ class FeedingProgramCycle
      */
     public function isComplete(): bool
     {
-        return $this->hasStarted() && $this->day() >= self::DURATION_DAYS;
+        return $this->hasStarted() && $this->day() >= $this->durationDays;
     }
 
     /** Share of the cycle elapsed, 0-100, for the progress bar. */
     public function percent(): float
     {
-        return round(($this->day() / self::DURATION_DAYS) * 100, 1);
+        return round(($this->day() / $this->durationDays) * 100, 1);
     }
 
     /** ISO start date, so a long-lived page can advance the day itself. */
@@ -127,7 +165,7 @@ class FeedingProgramCycle
     /**
      * The calendar date of the cycle's last feeding day.
      *
-     * Not `start + 119 days`: 120 school days span about 24 calendar weeks, so a
+     * Not `start + N-1 days`: 120 school days span about 24 calendar weeks, so a
      * calendar-day window closed the programme roughly seven weeks early and
      * refused genuine sessions near the end of the cycle as "outside" it.
      */
@@ -140,7 +178,7 @@ class FeedingProgramCycle
         $cursor = $this->startDate->copy();
         $counted = 1; // The start date is itself a feeding day.
 
-        while ($counted < self::DURATION_DAYS) {
+        while ($counted < $this->durationDays) {
             $cursor->addDay();
             if (self::isFeedingDay($cursor)) {
                 $counted++;

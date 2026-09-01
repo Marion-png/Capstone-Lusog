@@ -10,6 +10,7 @@ use App\Support\AttendanceSheetScanner;
 use App\Support\AuditTrail;
 use App\Support\EncryptedFileStorage;
 use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
@@ -24,10 +25,11 @@ use Throwable;
 
 class FeedingProgramController extends Controller
 {
-    private const PROGRAM_DURATION_DAYS = FeedingProgramCycle::DURATION_DAYS;
-
     /** Memoized per request — see hasReviewColumns(). */
     private ?bool $hasReviewColumns = null;
+
+    /** Memoized per request — see hasExcusedColumn(). */
+    private ?bool $hasExcusedColumn = null;
 
     public function index(Request $request): View
     {
@@ -181,7 +183,7 @@ class FeedingProgramController extends Controller
             'isReadOnly' => $isReadOnly,
             'programStats' => [
                 'enrolled_students' => $studentCount,
-                'program_day' => $programDay.'/'.self::PROGRAM_DURATION_DAYS,
+                'program_day' => $programDay.'/'.FeedingProgramCycle::durationForInstitution($institutionId),
                 'avg_attendance' => $attendanceRate === null ? '—' : $attendanceRate.'%',
                 'improving_rate' => $studentCount > 0 ? (int) round(($improvingCount / $studentCount) * 100).'%' : '0%',
                 'improving_hint' => $improvingCount.' of '.$studentCount.' students',
@@ -248,7 +250,8 @@ class FeedingProgramController extends Controller
                 ->orderBy('session_date')
                 ->get(array_merge(
                     ['student_health_record_id', 'session_date', 'is_present'],
-                    $this->hasReviewColumns() ? ['needs_review'] : []
+                    $this->hasReviewColumns() ? ['needs_review'] : [],
+                    $this->hasExcusedColumn() ? ['is_excused'] : []
                 ))
                 ->groupBy('student_health_record_id')
             : collect();
@@ -285,16 +288,21 @@ class FeedingProgramController extends Controller
                     return $row; // On no sheet yet — listed, with nothing claimed.
                 }
 
-                $isPending = fn ($mark): bool => (bool) ($mark->needs_review ?? false) || $mark->is_present === null;
-                $pending = $marks->filter($isPending);
-                $present = $marks->reject($isPending)->filter(fn ($mark): bool => $mark->is_present === true);
-                $absent = $marks->reject($isPending)->filter(fn ($mark): bool => $mark->is_present === false);
+                // Excused absences leave the rate alone, exactly as unconfirmed
+                // marks do: neither says anything about whether this learner is
+                // turning up when the school expects them.
+                $states = $marks->map(fn ($mark): string => FeedingAttendanceMark::state($mark));
+                $pending = $states->filter(fn (string $state): bool => $state === FeedingAttendanceMark::UNCONFIRMED);
+                $present = $states->filter(fn (string $state): bool => $state === FeedingAttendanceMark::PRESENT);
+                $absent = $states->filter(fn (string $state): bool => $state === FeedingAttendanceMark::ABSENT);
+                $excused = $states->filter(fn (string $state): bool => $state === FeedingAttendanceMark::EXCUSED);
                 $confirmed = $present->count() + $absent->count();
 
                 return array_merge($row, [
                     'sessions' => $marks->count(),
                     'present' => $present->count(),
                     'absent' => $absent->count(),
+                    'excused' => $excused->count(),
                     'pending' => $pending->count(),
                     'rate' => $confirmed > 0 ? (int) round(($present->count() / $confirmed) * 100) : null,
                     'last_session' => optional($marks->last())->session_date,
@@ -320,6 +328,19 @@ class FeedingProgramController extends Controller
         // schema fact for the lifetime of the process.
         return $this->hasReviewColumns ??= SchemaCache::hasTable('feeding_attendances')
             && SchemaCache::hasColumn('feeding_attendances', 'needs_review');
+    }
+
+    /**
+     * Whether the excused-absence migration has been applied here.
+     *
+     * Additive in exactly the same way the review layer is: without the column
+     * an excused absence simply cannot be recorded, and every other reading of
+     * a mark keeps working unchanged.
+     */
+    private function hasExcusedColumn(): bool
+    {
+        return $this->hasExcusedColumn ??= SchemaCache::hasTable('feeding_attendances')
+            && SchemaCache::hasColumn('feeding_attendances', 'is_excused');
     }
 
     /** Scanned marks in this school still waiting on a human decision. */
@@ -809,10 +830,14 @@ class FeedingProgramController extends Controller
                     'section' => $section,
                     // An unconfirmed scanned mark arrives with nothing selected,
                     // so saving this screen is what confirms it.
-                    'mark' => match (true) {
-                        $mark === null, (bool) ($mark->needs_review ?? false), $mark->is_present === null => '',
-                        (bool) $mark->is_present => 'present',
-                        default => 'absent',
+                    'mark' => match (FeedingAttendanceMark::state($mark)) {
+                        // An unconfirmed scanned mark and a learner no sheet has
+                        // covered both arrive with nothing selected, so saving
+                        // this screen is what decides them.
+                        FeedingAttendanceMark::PRESENT => FeedingAttendanceMark::PRESENT,
+                        FeedingAttendanceMark::ABSENT => FeedingAttendanceMark::ABSENT,
+                        FeedingAttendanceMark::EXCUSED => FeedingAttendanceMark::EXCUSED,
+                        default => '',
                     },
                     'remarks' => (string) ($mark->remarks ?? ''),
                 ];
@@ -869,6 +894,9 @@ class FeedingProgramController extends Controller
         if ($this->hasReviewColumns()) {
             $columns[] = 'needs_review';
         }
+        if ($this->hasExcusedColumn()) {
+            $columns[] = 'is_excused';
+        }
         if (SchemaCache::hasColumn('feeding_attendances', 'remarks')) {
             $columns[] = 'remarks';
         }
@@ -885,7 +913,7 @@ class FeedingProgramController extends Controller
         // exact input the rule judges, so this page and the flag agree.
         $marks = $sessions
             ->sortBy('session_date')
-            ->map(fn (FeedingAttendance $row) => ($row->needs_review ?? false) ? null : $row->is_present)
+            ->map(fn (FeedingAttendance $row) => FeedingAttendanceMark::forRule($row))
             ->values()
             ->all();
 
@@ -901,11 +929,7 @@ class FeedingProgramController extends Controller
             ],
             'sessions' => $sessions->map(fn (FeedingAttendance $row): array => [
                 'date' => optional($row->session_date)->format('M d, Y'),
-                'status' => match (true) {
-                    (bool) ($row->needs_review ?? false), $row->is_present === null => 'unconfirmed',
-                    (bool) $row->is_present => 'present',
-                    default => 'absent',
-                },
+                'status' => FeedingAttendanceMark::state($row),
                 'remarks' => trim((string) ($row->remarks ?? '')),
             ])->values(),
             'summary' => [
@@ -965,6 +989,9 @@ class FeedingProgramController extends Controller
             $columns[] = 'needs_review';
             $columns[] = 'reviewed_by_name';
         }
+        if ($this->hasExcusedColumn()) {
+            $columns[] = 'is_excused';
+        }
         if (SchemaCache::hasColumn('feeding_attendances', 'remarks')) {
             $columns[] = 'remarks';
         }
@@ -984,7 +1011,7 @@ class FeedingProgramController extends Controller
         // the exact input the rule judges, so this page and the flag beside the
         // learner's name on the roster always agree.
         $marks = $sessions
-            ->map(fn (FeedingAttendance $row) => ($row->needs_review ?? false) ? null : $row->is_present)
+            ->map(fn (FeedingAttendance $row) => FeedingAttendanceMark::forRule($row))
             ->values()
             ->all();
 
@@ -993,9 +1020,13 @@ class FeedingProgramController extends Controller
 
         $present = $rule->presentCount($marks);
         $confirmed = count(array_filter($marks, static fn ($mark) => $mark !== null));
+        $excused = $sessions
+            ->filter(fn (FeedingAttendance $row): bool => FeedingAttendanceMark::state($row) === FeedingAttendanceMark::EXCUSED)
+            ->count();
 
         $qualified = $this->isAttendanceEligible($learner->nutritional_status);
-        $enrolled = $learner->feeding_enrolled_at !== null;
+        $enrolled = FeedingBeneficiarySummary::isEnrolled($learner);
+        $removedAt = FeedingBeneficiarySummary::removedAt($learner);
         $atRisk = $enrolled && $qualified && $rule->isAtRisk($marks);
 
         // A learner's height, weight and BMI live on the baseline columns once
@@ -1040,19 +1071,33 @@ class FeedingProgramController extends Controller
             'program' => [
                 'enrolled_at' => $learner->feeding_enrolled_at?->format('F j, Y'),
                 'enrolled_by' => trim((string) $learner->feeding_enrolled_by),
+                // A removal is history the record keeps, not a deletion of the
+                // enrolment: this learner was fed, and the page has to say so
+                // as well as saying they no longer are.
+                'removed_at' => $removedAt?->format('F j, Y'),
+                'removed_by' => trim((string) $learner->getAttribute('feeding_removed_by')),
+                'removal_reason' => trim((string) $learner->getAttribute('feeding_removal_reason')),
                 'school_year' => (string) $learner->school_year,
-                'total_days' => self::PROGRAM_DURATION_DAYS,
+                'total_days' => FeedingProgramCycle::durationForInstitution($institutionId),
                 'days_completed' => $this->sessionsHeld($institutionId, (string) $learner->school_year),
             ],
             'attendance' => [
                 'present' => $present,
                 'absent' => $confirmed - $present,
-                'unconfirmed' => count($marks) - $confirmed,
+                // The buffer and the unread scans are counted apart from each
+                // other, because they are different facts: one is a decision
+                // the school made, the other is a mark nobody has read.
+                'excused' => $excused,
+                'unconfirmed' => count($marks) - $confirmed - $excused,
                 'confirmed' => $confirmed,
                 // Null, not zero: no confirmed session is not a 0% turnout.
                 'rate' => $rule->attendanceRate($marks),
                 'threshold' => $rule->thresholdPercent(),
                 'rule' => $rule->describe(),
+                // The run the unexcused-absence rule reads, and whether it has
+                // reached the point at which the school reviews removal.
+                'absence_run' => $rule->currentAbsenceRun($marks),
+                'needs_removal_review' => $rule->needsRemovalReview($marks),
             ],
             // The school's feeding days, newest month first, with this
             // learner's mark on each — see sessionCalendar().
@@ -1104,12 +1149,7 @@ class FeedingProgramController extends Controller
             $months[$day->format('F Y')][] = [
                 'date' => $key,
                 'day_label' => $day->format('M j'),
-                'status' => match (true) {
-                    $row === null => 'unmarked',
-                    (bool) ($row->needs_review ?? false), $row->is_present === null => 'unconfirmed',
-                    (bool) $row->is_present => 'present',
-                    default => 'absent',
-                },
+                'status' => $row === null ? 'unmarked' : FeedingAttendanceMark::state($row),
                 // Who the mark came from: the human who last decided it, else
                 // whoever recorded it, else what the row itself can say.
                 'recorded_by' => $row === null ? '' : $this->attendanceAttribution($row),
@@ -1201,7 +1241,10 @@ class FeedingProgramController extends Controller
         $request->validate([
             'session_date' => ['required', 'date', 'before_or_equal:today'],
             'marks' => ['required', 'array'],
-            'marks.*' => ['nullable', 'in:present,absent'],
+            // Three answers, not two: an absence the school accepted (the
+            // coordinator's "buffer") is a different fact from one it did not,
+            // and only the second counts toward the at-risk flag.
+            'marks.*' => ['nullable', 'in:present,absent,excused'],
             'remarks' => ['nullable', 'array'],
             'remarks.*' => ['nullable', 'string', 'max:255'],
             // Which screen the coordinator saved from, so they land back on it.
@@ -1246,7 +1289,7 @@ class FeedingProgramController extends Controller
         $sessionDate = Carbon::parse((string) $request->input('session_date'))->toDateString();
 
         $submitted = collect($request->input('marks', []))
-            ->filter(fn ($mark): bool => in_array($mark, ['present', 'absent'], true));
+            ->filter(fn ($mark): bool => FeedingAttendanceMark::isRecordable($mark));
 
         if ($submitted->isEmpty()) {
             return back()->with('error', 'No learner was marked, so nothing was recorded.');
@@ -1292,17 +1335,25 @@ class FeedingProgramController extends Controller
         $hasReviewColumns = $this->hasReviewColumns();
         $hasRemarks = SchemaCache::hasColumn('feeding_attendances', 'remarks');
         $hasRecorder = SchemaCache::hasColumn('feeding_attendances', 'recorded_by_name');
+        $hasExcused = SchemaCache::hasColumn('feeding_attendances', 'is_excused');
         $recorder = (string) $request->session()->get('active_name', 'Feeding Coordinator');
         $remarks = collect($request->input('remarks', []));
 
-        $upserts = $marks->map(function ($mark, $recordId) use ($sessionDate, $now, $hasReviewColumns, $hasRemarks, $hasRecorder, $recorder, $remarks): array {
+        $upserts = $marks->map(function ($mark, $recordId) use ($sessionDate, $now, $hasReviewColumns, $hasRemarks, $hasRecorder, $hasExcused, $recorder, $remarks): array {
             $row = [
                 'student_health_record_id' => (int) $recordId,
                 'session_date' => $sessionDate,
-                'is_present' => $mark === 'present',
+                'is_present' => $mark === FeedingAttendanceMark::PRESENT,
                 'created_at' => $now,
                 'updated_at' => $now,
             ];
+
+            if ($hasExcused) {
+                // Beside is_present, never folded into it: an excused learner
+                // was still absent from the feeding line, and the sheet has to
+                // keep saying so.
+                $row['is_excused'] = $mark === FeedingAttendanceMark::EXCUSED;
+            }
 
             if ($hasReviewColumns) {
                 // Typed by the person who was there: confirmed on arrival, and
@@ -1315,7 +1366,7 @@ class FeedingProgramController extends Controller
                 // A remark explains an absence; a learner marked present keeps
                 // none. An upsert bypasses the model's casts, so the value is
                 // encrypted here rather than landing in the column as plaintext.
-                $remark = $mark === 'absent' ? trim((string) ($remarks[$recordId] ?? '')) : '';
+                $remark = $mark === FeedingAttendanceMark::PRESENT ? '' : trim((string) ($remarks[$recordId] ?? ''));
                 $row['remarks'] = $remark === '' ? null : Crypt::encryptString($remark);
             }
 
@@ -1328,10 +1379,14 @@ class FeedingProgramController extends Controller
             return $row;
         })->values()->all();
 
-        $presentCount = $marks->filter(fn ($mark): bool => $mark === 'present')->count();
+        $presentCount = $marks->filter(fn ($mark): bool => $mark === FeedingAttendanceMark::PRESENT)->count();
+        $excusedCount = $marks->filter(fn ($mark): bool => $mark === FeedingAttendanceMark::EXCUSED)->count();
 
-        DB::transaction(function () use ($upserts, $hasReviewColumns, $hasRemarks, $hasRecorder, $institutionId, $sessionDate, $marks, $recorder): void {
+        DB::transaction(function () use ($upserts, $hasReviewColumns, $hasRemarks, $hasRecorder, $hasExcused, $institutionId, $sessionDate, $marks, $recorder): void {
             $updateColumns = ['is_present', 'updated_at'];
+            if ($hasExcused) {
+                $updateColumns[] = 'is_excused';
+            }
             if ($hasReviewColumns) {
                 $updateColumns = array_merge($updateColumns, ['source', 'needs_review']);
             }
@@ -1374,7 +1429,8 @@ class FeedingProgramController extends Controller
             'FeedingAttendance',
             null,
             'Attendance for '.$sessionDate.' recorded on site by '.$recorder
-                .': '.$presentCount.' present, '.($marks->count() - $presentCount).' absent'
+                .': '.$presentCount.' present, '.($marks->count() - $presentCount - $excusedCount).' absent, '
+                .$excusedCount.' excused'
         );
 
         // Back to the screen the marks were entered on, with the same session
@@ -1474,7 +1530,7 @@ class FeedingProgramController extends Controller
 
         $validated = $request->validate([
             'session_date' => ['required', 'date', 'before_or_equal:today'],
-            'mark' => ['required', 'in:present,absent'],
+            'mark' => ['required', 'in:present,absent,excused'],
             'remarks' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -1520,23 +1576,22 @@ class FeedingProgramController extends Controller
             ->whereDate('session_date', $sessionDate)
             ->first();
 
-        $isPresent = $validated['mark'] === 'present';
+        $isPresent = $validated['mark'] === FeedingAttendanceMark::PRESENT;
 
         // What the mark was before this correction — kept for the audit entry,
         // because "changed to present" says nothing without it.
-        $previous = match (true) {
-            $existing === null => 'unmarked',
-            (bool) ($existing->needs_review ?? false), $existing->is_present === null => 'unconfirmed',
-            (bool) $existing->is_present => 'present',
-            default => 'absent',
-        };
+        $previous = $existing === null
+            ? 'unmarked'
+            : FeedingAttendanceMark::state($existing);
 
         if ($previous === $validated['mark'] && trim((string) ($validated['remarks'] ?? '')) === trim((string) ($existing->remarks ?? ''))) {
             return back()->with('success', 'That mark already reads '.$validated['mark'].'.');
         }
 
         $corrector = (string) $request->session()->get('active_name', 'Feeding Coordinator');
-        // A remark explains an absence; a learner marked present keeps none.
+        // A remark explains an absence of either kind; a learner marked present
+        // keeps none. On an excused absence it is the reason the school
+        // accepted, which is the whole point of recording one.
         $remark = $isPresent ? '' : trim((string) ($validated['remarks'] ?? ''));
 
         $attributes = [
@@ -1545,6 +1600,10 @@ class FeedingProgramController extends Controller
             'reviewed_by_name' => $corrector,
             'reviewed_at' => now(),
         ];
+
+        if (SchemaCache::hasColumn('feeding_attendances', 'is_excused')) {
+            $attributes['is_excused'] = $validated['mark'] === FeedingAttendanceMark::EXCUSED;
+        }
 
         if ($this->hasReviewColumns()) {
             // A human has now decided this mark, whatever a scan made of it.
@@ -1854,7 +1913,7 @@ class FeedingProgramController extends Controller
      */
     private function isEnrolledBeneficiary(StudentHealthRecord $record): bool
     {
-        return $record->feeding_enrolled_at !== null
+        return FeedingBeneficiarySummary::isEnrolled($record)
             && $this->isAttendanceEligible($record->nutritional_status);
     }
 
@@ -1988,13 +2047,14 @@ class FeedingProgramController extends Controller
             ->orderBy('session_date')
             ->get(array_merge(
                 ['student_health_record_id', 'session_date', 'is_present'],
-                $this->hasReviewColumns() ? ['needs_review'] : []
+                $this->hasReviewColumns() ? ['needs_review'] : [],
+                $this->hasExcusedColumn() ? ['is_excused'] : []
             ))
             ->groupBy('student_health_record_id')
             ->map(fn ($rows) => $rows
                 // Before the review migration every mark is confirmed by
                 // definition, so nothing is excluded.
-                ->map(fn ($row) => ($row->needs_review ?? false) ? null : $row->is_present)
+                ->map(fn ($row) => FeedingAttendanceMark::forRule($row))
                 ->values()
                 ->all());
 

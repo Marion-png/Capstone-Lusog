@@ -7,7 +7,21 @@ use Illuminate\Database\Eloquent\Model;
 
 class Institution extends Model
 {
-    protected $fillable = ['name', 'address', 'status', 'feeding_at_risk_threshold', 'feeding_min_observation_days'];
+    protected $fillable = [
+        'name',
+        'address',
+        'status',
+        // The school's own feeding policy. Every one of these is NULL by
+        // default, meaning "use the app default", so a school that has set
+        // nothing moves with the programme rather than being pinned to whatever
+        // the figure was the day the column shipped.
+        'feeding_at_risk_threshold',
+        'feeding_min_observation_days',
+        'feeding_at_risk_mode',
+        'feeding_absence_flag_days',
+        'feeding_absence_removal_days',
+        'feeding_cycle_days',
+    ];
 
     protected $casts = [
         // NULL means "use the app default" — see FeedingAtRiskRule::forInstitution().
@@ -15,6 +29,13 @@ class Institution extends Model
         // How many recorded feeding days a learner must have before the
         // threshold classifies them at all. NULL is the app default too.
         'feeding_min_observation_days' => 'integer',
+        // WHICH rule the school runs, not only the figure it is set to: a
+        // school flagging after a week of unexcused absence is not running a
+        // percentage at all.
+        'feeding_absence_flag_days' => 'integer',
+        'feeding_absence_removal_days' => 'integer',
+        // 120 in Division policy, 90 under discussion — see FeedingProgramCycle.
+        'feeding_cycle_days' => 'integer',
     ];
 
     public const DEFAULT_SCHOOLS = [

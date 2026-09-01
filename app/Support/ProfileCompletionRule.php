@@ -75,7 +75,7 @@ class ProfileCompletionRule
     /** Enrolment is the Feeding Coordinator's stamp — qualifying is not it. */
     public static function wasEnrolled(?StudentHealthRecord $record): bool
     {
-        return $record?->feeding_enrolled_at !== null;
+        return $record !== null && FeedingBeneficiarySummary::isEnrolled($record);
     }
 
     /**
@@ -89,7 +89,7 @@ class ProfileCompletionRule
     ): string {
         if (! $cycle->isComplete()) {
             return $cycle->hasStarted()
-                ? 'Feeding programme is on day '.$cycle->day().' of '.FeedingProgramCycle::DURATION_DAYS
+                ? 'Feeding programme is on day '.$cycle->day().' of '.$cycle->durationDays()
                 : 'Feeding programme has not started';
         }
 

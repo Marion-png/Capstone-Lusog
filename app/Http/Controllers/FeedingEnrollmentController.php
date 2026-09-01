@@ -7,6 +7,7 @@ use App\Support\AuditTrail;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\SchemaCache;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,21 @@ use Illuminate\Support\Facades\DB;
  * additive and idempotent — re-enrolling an already-enrolled learner is a no-op
  * rather than a second stamp, so a double-clicked button cannot rewrite when
  * someone joined the programme.
+ *
+ * Leaving is the same decision in reverse, and it lives here for that reason.
+ * A beneficiary who has stopped coming — transferred, moved away, withdrawn —
+ * is taken off the active list once the class adviser has confirmed they are
+ * not returning, and the vacated slot goes to somebody on the waiting list.
+ * Two things that must stay true of it:
+ *
+ * - **Attendance never removes anybody.** Being below the school's threshold is
+ *   a reason to follow a learner up, never a reason to stop feeding them, so no
+ *   rule in this application calls `remove()`. A human does, with a reason, and
+ *   the entry is audited.
+ * - **Removal is a stamp beside the enrolment, never a deletion of it.** The
+ *   learner was fed; the record has to keep saying so. `feeding_removed_at`
+ *   sits next to `feeding_enrolled_at`, and "on the feeding line today" is
+ *   FeedingBeneficiarySummary::isEnrolled() reading the pair.
  */
 class FeedingEnrollmentController extends Controller
 {
@@ -45,7 +61,10 @@ class FeedingEnrollmentController extends Controller
         // one test — status AND a grade the programme covers — so this dialog
         // can never offer a learner the reports would go on to drop.
         $qualified = $records->filter(fn (StudentHealthRecord $r): bool => FeedingBeneficiarySummary::isEligible($r));
-        $waiting = $qualified->filter(fn (StudentHealthRecord $r): bool => $r->feeding_enrolled_at === null);
+        // The waiting list — the coordinator's "buffer". A learner taken off
+        // the active list is back on it, which is exactly where the substitute
+        // for a vacated slot comes from.
+        $waiting = $qualified->filter(fn (StudentHealthRecord $r): bool => ! FeedingBeneficiarySummary::isEnrolled($r));
 
         // student_name is encrypted, so sorting happens in PHP too.
         $rows = $waiting
@@ -64,6 +83,10 @@ class FeedingEnrollmentController extends Controller
                     'status' => $status,
                     'status_short' => $status === 'Severely Wasted' ? 'SW' : 'W',
                     'badge' => $status === 'Severely Wasted' ? 'badge-critical' : 'badge-risk',
+                    // A learner who has been on the programme before is on this
+                    // list for a different reason from one who never has, and a
+                    // coordinator filling a slot needs to see which.
+                    'removed_on' => FeedingBeneficiarySummary::removedAt($record)?->format('j M Y'),
                 ];
             })
             ->sortBy(fn (array $row) => strtolower($row['name']))
@@ -118,7 +141,7 @@ class FeedingEnrollmentController extends Controller
         $eligible = $this->schoolRecords($institutionId)
             ->whereIn('id', $validated['record_ids'])
             ->filter(fn (StudentHealthRecord $r): bool => FeedingBeneficiarySummary::isEligible($r))
-            ->filter(fn (StudentHealthRecord $r): bool => $r->feeding_enrolled_at === null)
+            ->filter(fn (StudentHealthRecord $r): bool => ! FeedingBeneficiarySummary::isEnrolled($r))
             ->values();
 
         if ($eligible->isEmpty()) {
@@ -131,14 +154,27 @@ class FeedingEnrollmentController extends Controller
         $coordinator = (string) $request->session()->get('active_name', 'Feeding Coordinator');
         $now = now();
 
-        DB::transaction(function () use ($eligible, $coordinator, $now): void {
+        $hasRemovalColumns = SchemaCache::hasColumn('student_health_records', 'feeding_removed_at');
+
+        DB::transaction(function () use ($eligible, $coordinator, $now, $hasRemovalColumns): void {
             foreach ($eligible as $record) {
-                // Through the model, so the Auditable trait records each
-                // enrolment against the learner it changed.
-                $record->update([
+                $attributes = [
                     'feeding_enrolled_at' => $now,
                     'feeding_enrolled_by' => $coordinator,
-                ]);
+                ];
+
+                if ($hasRemovalColumns) {
+                    // Re-enrolling is how a slot is refilled and how a removal
+                    // recorded in error is undone, so it clears the removal
+                    // rather than leaving a learner both enrolled and removed.
+                    $attributes['feeding_removed_at'] = null;
+                    $attributes['feeding_removed_by'] = null;
+                    $attributes['feeding_removal_reason'] = null;
+                }
+
+                // Through the model, so the Auditable trait records each
+                // enrolment against the learner it changed.
+                $record->update($attributes);
             }
         });
 
@@ -150,6 +186,77 @@ class FeedingEnrollmentController extends Controller
         );
 
         return response()->json(['enrolled_now' => $eligible->count()]);
+    }
+
+    /**
+     * Takes one learner off the active list, with the reason a human gave.
+     *
+     * The second half of the school's own rule: a week of unexcused absence
+     * flags a beneficiary, and if they still do not return and the class
+     * adviser confirms they are not going to — transferred, moved, withdrawn —
+     * the place is released so a learner on the waiting list can take it.
+     *
+     * Nothing about that is automatic. The at-risk rule can say a removal is
+     * worth *reviewing* (FeedingAtRiskRule::needsRemovalReview) and nothing
+     * more: this endpoint is the only way a learner leaves the programme, it
+     * requires a reason, and it records who decided.
+     */
+    public function remove(Request $request, int $record): RedirectResponse
+    {
+        if (! $this->isCoordinator($request)) {
+            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can remove a beneficiary.');
+        }
+
+        $validated = $request->validate([
+            // Required, and not from a fixed list: "transferred to Davao City
+            // NHS" is the answer that will be needed a year from now, and no
+            // dropdown this application writes would have contained it.
+            'reason' => ['required', 'string', 'max:255'],
+        ]);
+
+        if (! SchemaCache::hasColumn('student_health_records', 'feeding_removed_at')) {
+            return back()->with('error', 'Beneficiary removal is not ready on this database. Run migrations first.');
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+
+        $learner = $this->schoolRecords($institutionId)->firstWhere('id', $record);
+
+        if (! $learner) {
+            return redirect()
+                ->route('dashboard.feedingcor-health-records')
+                ->with('error', 'That learner is not on this school\'s roster.');
+        }
+
+        if (! FeedingBeneficiarySummary::isEnrolled($learner)) {
+            return back()->with('error', 'That learner is not currently on the active list.');
+        }
+
+        $coordinator = (string) $request->session()->get('active_name', 'Feeding Coordinator');
+        $reason = trim($validated['reason']);
+
+        DB::transaction(function () use ($learner, $coordinator, $reason): void {
+            // Through the model: the casts are what keep the staff name and the
+            // reason encrypted at rest, and the Auditable trait records the
+            // change against the learner it was made to.
+            $learner->update([
+                'feeding_removed_at' => now(),
+                'feeding_removed_by' => $coordinator,
+                'feeding_removal_reason' => $reason,
+            ]);
+        });
+
+        AuditTrail::record(
+            'updated',
+            'StudentHealthRecord',
+            $learner->id,
+            'Beneficiary removed from the active feeding list by '.$coordinator.': '.$reason
+        );
+
+        return back()->with(
+            'success',
+            'Removed from the active feeding list. The slot is now open on the waiting list.'
+        );
     }
 
     /**

@@ -7,6 +7,7 @@ use App\Models\FeedingFollowUp;
 use App\Models\StudentHealthRecord;
 use App\Support\AuditTrail;
 use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
 use App\Support\FeedingRiskSeverity;
@@ -325,7 +326,7 @@ class FeedingAtRiskController extends Controller
             'todayLabel' => now()->format('F j, Y'),
             'today' => now()->toDateString(),
             'programDay' => $cycle->day(),
-            'programDuration' => FeedingProgramCycle::DURATION_DAYS,
+            'programDuration' => $cycle->durationDays(),
             'daysRemaining' => $cycle->daysRemaining(),
             'cards' => [
                 'at_risk' => $atRiskCount,
@@ -374,13 +375,17 @@ class FeedingAtRiskController extends Controller
     ): array {
         [$grade, $section] = FeedingBeneficiarySummary::splitSection((string) $record->section);
 
-        // Unconfirmed marks become NULL, which the rule keeps out of both the
-        // numerator and the denominator.
+        // Unconfirmed and excused marks both become NULL, which the rule keeps
+        // out of both the numerator and the denominator — an unread mark is
+        // evidence of nothing, and an absence the school accepted is never held
+        // against the learner.
         $sequence = $marks->map(fn (array $mark) => match ($mark['status']) {
-            'present' => true,
-            'absent' => false,
+            FeedingAttendanceMark::PRESENT => true,
+            FeedingAttendanceMark::ABSENT => false,
             default => null,
         })->values()->all();
+
+        $excused = $marks->where('status', FeedingAttendanceMark::EXCUSED)->count();
 
         $standing = FeedingRiskSeverity::evaluate($sequence, $rule);
         $latest = $followUps->first();
@@ -394,7 +399,11 @@ class FeedingAtRiskController extends Controller
             'present' => $standing['present'],
             'absent' => $standing['absent'],
             'confirmed' => $standing['confirmed'],
-            'unconfirmed' => $standing['unconfirmed'],
+            // The two states the rule discounts are reported apart: an absence
+            // the school accepted is a decision somebody made, and a scanned
+            // mark nobody has read is not.
+            'excused' => $excused,
+            'unconfirmed' => $standing['unconfirmed'] - $excused,
             'rate' => $standing['rate'],
             'at_risk' => $standing['at_risk'],
             'severity' => $standing['severity'],
@@ -450,6 +459,9 @@ class FeedingAtRiskController extends Controller
         if (SchemaCache::hasColumn('feeding_attendances', 'needs_review')) {
             $columns[] = 'needs_review';
         }
+        if (SchemaCache::hasColumn('feeding_attendances', 'is_excused')) {
+            $columns[] = 'is_excused';
+        }
         if (SchemaCache::hasColumn('feeding_attendances', 'remarks')) {
             $columns[] = 'remarks';
         }
@@ -462,11 +474,7 @@ class FeedingAtRiskController extends Controller
             ->map(fn (FeedingAttendance $row): array => [
                 'record_id' => (int) $row->student_health_record_id,
                 'date' => optional($row->session_date)->toDateString(),
-                'status' => match (true) {
-                    (bool) ($row->needs_review ?? false), $row->is_present === null => 'unconfirmed',
-                    (bool) $row->is_present => 'present',
-                    default => 'absent',
-                },
+                'status' => FeedingAttendanceMark::state($row),
                 'remarks' => trim((string) ($row->remarks ?? '')),
             ])
             ->filter(fn (array $row): bool => $row['date'] !== null)
@@ -505,7 +513,9 @@ class FeedingAtRiskController extends Controller
     private function recentAbsences(Collection $marks, array $dayNumbers): array
     {
         return $marks
-            ->where('status', 'absent')
+            // Unexcused absences only: an absence the school accepted is not
+            // one of the sessions that put this learner on the list.
+            ->where('status', FeedingAttendanceMark::ABSENT)
             ->sortByDesc('date')
             ->take(self::RECENT_ABSENCE_COUNT)
             ->map(fn (array $mark): array => [
@@ -538,12 +548,15 @@ class FeedingAtRiskController extends Controller
         $confirmed = 0;
 
         foreach ($marks as $mark) {
-            if ($mark['status'] === 'unconfirmed') {
+            // Only the two states the rule reads move the line. An excused
+            // absence left in here would draw the learner's rate falling on a
+            // session the rule never counted against them.
+            if (! in_array($mark['status'], [FeedingAttendanceMark::PRESENT, FeedingAttendanceMark::ABSENT], true)) {
                 continue;
             }
 
             $confirmed++;
-            if ($mark['status'] === 'present') {
+            if ($mark['status'] === FeedingAttendanceMark::PRESENT) {
                 $present++;
             }
 

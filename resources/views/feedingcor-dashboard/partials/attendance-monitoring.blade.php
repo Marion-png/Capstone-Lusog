@@ -1,11 +1,12 @@
 @php
-	$today = $todayAttendance ?? ['expected' => 0, 'present' => 0, 'absent' => 0, 'unconfirmed' => 0, 'unrecorded' => 0, 'percent' => 0.0, 'recorded' => false, 'filtered' => false, 'rows' => [], 'date_label' => ''];
+	$today = $todayAttendance ?? ['expected' => 0, 'present' => 0, 'absent' => 0, 'excused' => 0, 'unconfirmed' => 0, 'unrecorded' => 0, 'percent' => 0.0, 'recorded' => false, 'filtered' => false, 'rows' => [], 'date_label' => ''];
 	// Present and Absent are the two decisions a recorded session produces.
 	// A scanned mark nobody has read, and a learner today's sheet never
 	// covered, are neither — they render as a dash, never as an absence.
 	$marks = [
 		'present' => ['badge-normal', 'Present'],
 		'absent' => ['badge-critical', 'Absent'],
+		'excused' => ['badge-monitor', 'Excused'],
 	];
 @endphp
 
@@ -17,6 +18,9 @@
 	<div class="att-chips">
 		<span class="badge badge-normal">Present {{ $today['present'] }}</span>
 		<span class="badge badge-critical">Absent {{ $today['absent'] }}</span>
+		@if ($today['excused'] > 0)
+			<span class="badge badge-monitor">Excused {{ $today['excused'] }}</span>
+		@endif
 		@if ($today['unconfirmed'] > 0)
 			<span class="badge badge-monitor">Unconfirmed {{ $today['unconfirmed'] }}</span>
 		@endif

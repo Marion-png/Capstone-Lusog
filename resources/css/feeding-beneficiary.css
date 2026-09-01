@@ -265,6 +265,7 @@
 }
 .bd-correct-btn.is-present:hover:not(:disabled) { background: var(--lg-mint); color: var(--lg-success-ink); border-color: #C4E4D0; }
 .bd-correct-btn.is-absent:hover:not(:disabled) { background: var(--lg-danger-tint); color: var(--lg-danger-ink); border-color: #F2C9C9; }
+.bd-correct-btn.is-excused:hover:not(:disabled) { background: var(--lg-amber-tint); color: var(--lg-amber-ink); border-color: #EFDCB2; }
 .bd-correct-btn:focus-visible { outline: none; box-shadow: var(--lg-focus); }
 /* The mark a session already reads is not offered again — there is nothing
    to correct it to. */
@@ -280,6 +281,47 @@
 	.bd-fact { grid-template-columns: 1fr; gap: 2px; }
 }
 
+/* ── Remove from Active List ───────────────────────────────────────
+   The shared dialog anatomy (.modal-backdrop / .modal-panel / -head / -body /
+   -foot), so a dialog looks the same product-wide. Declared here rather than
+   pulled from another page's sheet: a page sheet carries what is unique to its
+   page, and this record is the one place a beneficiary leaves the programme. */
+.modal-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(21, 40, 31, .48);
+	display: none;
+	align-items: flex-start;
+	justify-content: center;
+	z-index: 250;
+	padding: 16px;
+	overflow-y: auto;
+}
+.modal-backdrop.open { display: flex; }
+.modal-panel {
+	width: min(520px, 100%);
+	max-height: calc(100vh - 32px);
+	background: var(--lg-card);
+	border-radius: var(--lg-r-card);
+	box-shadow: 0 24px 64px rgba(21, 40, 31, .28);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	margin: auto;
+}
+.modal-panel > form { display: flex; flex-direction: column; min-height: 0; }
+.modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 20px 14px; }
+.modal-eyebrow { font-size: .66rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--lg-ink-soft); }
+.modal-title { font-size: 1.02rem; font-weight: 600; letter-spacing: -.01em; color: var(--lg-ink); }
+.modal-sub { margin-top: 4px; font-size: .8rem; color: var(--lg-ink-soft); }
+.modal-close { border: 1px solid var(--lg-border); background: none; font-size: 1.4rem; line-height: 1; color: var(--lg-ink-soft); cursor: pointer; padding: 2px 8px; border-radius: 8px; }
+.modal-close:hover { color: var(--lg-ink); background: var(--lg-rail); }
+.modal-close:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+.modal-body { padding: 16px 20px 20px; border-top: 1px solid var(--lg-border); overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.modal-body .input { width: 100%; margin-top: 6px; }
+.modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; padding: 14px 20px; border-top: 1px solid var(--lg-border); background: var(--lg-card); }
+.modal-actions { display: flex; gap: 8px; margin-left: auto; }
+
 /* Print Beneficiary Record: the chrome and the rail go, and every tab prints —
    paper has no tabs, and a record that printed only one third of itself would
    not be the record. */
@@ -289,6 +331,7 @@
 	.bd-back,
 	.bd-actions,
 	.bd-correct-col,
+	.modal-backdrop,
 	.bd-tabs { display: none !important; }
 
 	/* The app shell is a fixed-height, scrolling window (see lusog-theme):

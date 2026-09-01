@@ -160,6 +160,14 @@
 						<dt>Absent</dt>
 						<dd>{{ $row['absent'] }}</dd>
 					</div>
+					@if (($row['excused'] ?? 0) > 0)
+						{{-- The buffer: an absence the school accepted. Shown, and
+						     counted neither way by the rule. --}}
+						<div class="ar-fact">
+							<dt>Excused</dt>
+							<dd>{{ $row['excused'] }}</dd>
+						</div>
+					@endif
 					@if ($row['unconfirmed'] > 0)
 						{{-- Carried on its own line and counted neither way, never
 						     as an absence. --}}

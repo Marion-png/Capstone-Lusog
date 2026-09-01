@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\FeedingProgramCycle;
 use App\Support\SchoolHeadOverview;
 use App\Support\SchoolHeadPulse;
 use Illuminate\Http\RedirectResponse;
@@ -67,7 +66,7 @@ class SchoolHeadProgramController extends Controller
         $today = now()->toDateString();
         $cells = [];
 
-        for ($day = 1; $day <= FeedingProgramCycle::DURATION_DAYS; $day++) {
+        for ($day = 1; $day <= $overview->cycle->durationDays(); $day++) {
             $session = $sessions->get($day);
 
             if ($session === null) {
@@ -128,7 +127,7 @@ class SchoolHeadProgramController extends Controller
             'turnout' => $overview->averageTurnout(),
             'days_completed' => $overview->daysCompleted(),
             'days_remaining' => $overview->daysRemaining(),
-            'duration' => FeedingProgramCycle::DURATION_DAYS,
+            'duration' => $overview->cycle->durationDays(),
             'day' => $overview->cycle->day(),
             'started' => $overview->cycle->hasStarted(),
             'percent' => $overview->cycle->percent(),

@@ -46,6 +46,9 @@ class StudentHealthRecord extends Model
         'attendance_by_month',
         'feeding_enrolled_at',
         'feeding_enrolled_by',
+        'feeding_removed_at',
+        'feeding_removed_by',
+        'feeding_removal_reason',
     ];
 
     /**
@@ -76,6 +79,12 @@ class StudentHealthRecord extends Model
         // made the decision is personal data, so it is encrypted.
         'feeding_enrolled_at' => 'datetime',
         'feeding_enrolled_by' => EncryptedString::class,
+        // Removal is a stamp beside the enrolment, never a deletion of it: a
+        // learner who leaves the programme was still fed, and the record has
+        // to keep saying so.
+        'feeding_removed_at' => 'datetime',
+        'feeding_removed_by' => EncryptedString::class,
+        'feeding_removal_reason' => EncryptedString::class,
         'examination' => EncryptedArray::class,
         'attendance_by_month' => EncryptedArray::class,
         'student_details' => EncryptedArray::class,

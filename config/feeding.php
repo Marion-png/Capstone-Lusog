@@ -10,8 +10,27 @@ return [
     | At-risk is COMPUTED from feeding-session attendance and nothing else — a
     | learner is never flagged for their nutritional status. Two modes:
     |
-    |   attendance_rate       flag when attended% < `threshold_percent`
-    |   consecutive_absences  flag on a run of >= `consecutive_absences` misses
+    |   attendance_rate        flag when attended% < `threshold_percent`
+    |   consecutive_absences   flag on a run of >= `consecutive_absences` misses
+    |   unexcused_absence_days flag on a run of >= `absence_flag_days` UNEXCUSED
+    |                          misses — one feeding week. This is the rule Sta.
+    |                          Ana actually runs, and it is not a percentage of
+    |                          the cycle at all: a learner who attended every
+    |                          session for two months and then vanished for a
+    |                          week is still above 90% and needs following up
+    |                          today. `absence_removal_days` (two feeding weeks)
+    |                          is the later point at which removal from the
+    |                          active list becomes worth reviewing with the
+    |                          adviser — never an automatic removal.
+    |
+    | An EXCUSED absence — the coordinator's "buffer": fasting during Ramadan,
+    | illness, a family emergency — is recorded on the sheet and deliberately
+    | excluded from every one of these rules, exactly as an unconfirmed mark is
+    | (see App\Support\FeedingAttendanceMark).
+    |
+    | The mode itself is school-configurable (`institutions.feeding_at_risk_mode`),
+    | because which KIND of rule a school runs is local policy just as much as
+    | the figure it is set to.
     |
     | The approved default is 80% cumulative attendance, but the threshold is
     | school-configurable: `institutions.feeding_at_risk_threshold` overrides
@@ -41,6 +60,10 @@ return [
         'mode' => env('FEEDING_AT_RISK_MODE', 'attendance_rate'),
         'threshold_percent' => (float) env('FEEDING_AT_RISK_THRESHOLD_PERCENT', 80),
         'consecutive_absences' => (int) env('FEEDING_AT_RISK_CONSECUTIVE_ABSENCES', 3),
+        // One feeding week and two, in sessions. Monday-Thursday is what the
+        // budget currently covers, so a week is four days, not five.
+        'absence_flag_days' => (int) env('FEEDING_ABSENCE_FLAG_DAYS', 4),
+        'absence_removal_days' => (int) env('FEEDING_ABSENCE_REMOVAL_DAYS', 8),
         'minimum_observation_days' => (int) env('FEEDING_MINIMUM_OBSERVATION_DAYS', 10),
 
         /*
@@ -78,6 +101,24 @@ return [
     */
 
     'rehabilitation_target_percent' => env('FEEDING_REHABILITATION_TARGET_PERCENT'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cycle length
+    |--------------------------------------------------------------------------
+    |
+    | How many feeding days one SBFP cycle runs for. Division policy says 120,
+    | but 90 has been under discussion, and a school whose Division settles on
+    | a different figure must be able to say so without a code change — hence
+    | `institutions.feeding_cycle_days`, with this as the default for a school
+    | that has set nothing.
+    |
+    | Counted in FEEDING days (Mon-Fri school days), never in elapsed calendar
+    | days: read it through App\Support\FeedingProgramCycle, never directly.
+    |
+    */
+
+    'cycle_days' => (int) env('FEEDING_CYCLE_DAYS', 120),
 
     /*
     |--------------------------------------------------------------------------

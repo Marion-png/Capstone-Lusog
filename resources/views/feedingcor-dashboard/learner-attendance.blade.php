@@ -21,7 +21,8 @@
 	$marks = [
 		'present' => ['badge-normal', 'Present'],
 		'absent' => ['badge-critical', 'Absent'],
-		'unconfirmed' => ['badge-monitor', 'Unconfirmed'],
+		'excused' => ['badge-monitor', 'Excused'],
+		'unconfirmed' => ['badge-neutral', 'Unconfirmed'],
 	];
 	$thresholdLabel = rtrim(rtrim(number_format((float) $summary['threshold'], 1), '0'), '.');
 @endphp

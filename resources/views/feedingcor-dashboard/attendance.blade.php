@@ -201,6 +201,7 @@
 					<option value="">All</option>
 					<option value="present" @selected($filters['status'] === 'present')>Present</option>
 					<option value="absent" @selected($filters['status'] === 'absent')>Absent</option>
+					<option value="excused" @selected($filters['status'] === 'excused')>Excused</option>
 				</select>
 			</div>
 
@@ -300,6 +301,11 @@
 												<span class="badge {{ $row['status'] === 'present' ? 'badge-normal' : 'badge-critical' }} has-glyph">
 													<span class="fa-glyph">{{ $row['status'] === 'present' ? '✓' : '✕' }}</span>{{ ucfirst($row['status']) }}
 												</span>
+											@elseif ($row['status'] === 'excused')
+												{{-- Away, with a reason the school accepted. Still an
+												     absence on the sheet, and never counted toward the
+												     at-risk flag. --}}
+												<span class="badge badge-monitor has-glyph"><span class="fa-glyph">E</span>Excused</span>
 											@elseif ($row['status'] === 'unconfirmed')
 												{{-- A scanned mark no human has read. Neither present nor
 												     absent until somebody decides it, so it is neither
@@ -330,6 +336,7 @@
 							<span class="fa-total">{{ $beneficiaryCount }} {{ \Illuminate\Support\Str::plural('beneficiary', $beneficiaryCount) }}</span>
 							<span class="badge badge-normal">Present <span data-tally="present">{{ $tally['present'] }}</span></span>
 							<span class="badge badge-critical">Absent <span data-tally="absent">{{ $tally['absent'] }}</span></span>
+							<span class="badge badge-monitor">Excused <span data-tally="excused">{{ $tally['excused'] }}</span></span>
 							<span class="badge badge-neutral">Not recorded <span data-tally="none">{{ $tally['unmarked'] }}</span></span>
 						</div>
 					</div>
@@ -420,6 +427,7 @@
 		const tallies = {
 			present: recordBackdrop.querySelector('[data-record-tally="present"]'),
 			absent: recordBackdrop.querySelector('[data-record-tally="absent"]'),
+			excused: recordBackdrop.querySelector('[data-record-tally="excused"]'),
 			none: recordBackdrop.querySelector('[data-record-tally="none"]'),
 		};
 
@@ -452,23 +460,27 @@
 			const remark = row.querySelector('.fa-remark');
 			if (!remark) return;
 			const checked = row.querySelector('input[type="radio"]:checked');
-			const isAbsent = checked !== null && checked.value === 'absent';
-			remark.disabled = !isAbsent;
-			if (!isAbsent) remark.value = '';
+			// Either kind of absence carries a reason — on an excused one it is
+			// the reason the school accepted, which is the whole point of
+			// recording it.
+			const isAway = checked !== null && checked.value !== 'present';
+			remark.disabled = !isAway;
+			if (!isAway) remark.value = '';
 		};
 
 		const retally = () => {
-			let present = 0;
-			let absent = 0;
+			const counts = { present: 0, absent: 0, excused: 0 };
 			rows.forEach((row) => {
 				const checked = row.querySelector('input[type="radio"]:checked');
 				if (!checked) return;
-				if (checked.value === 'present') present++;
-				else absent++;
+				if (checked.value in counts) counts[checked.value]++;
 			});
-			if (tallies.present) tallies.present.textContent = String(present);
-			if (tallies.absent) tallies.absent.textContent = String(absent);
-			if (tallies.none) tallies.none.textContent = String(rows.length - present - absent);
+			Object.keys(counts).forEach((key) => {
+				if (tallies[key]) tallies[key].textContent = String(counts[key]);
+			});
+			if (tallies.none) {
+				tallies.none.textContent = String(rows.length - counts.present - counts.absent - counts.excused);
+			}
 		};
 
 		recordBackdrop.addEventListener('change', (event) => {

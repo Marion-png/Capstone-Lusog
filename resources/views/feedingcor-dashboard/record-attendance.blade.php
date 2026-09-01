@@ -109,7 +109,12 @@
 											{{-- The session is a record: the mark is shown and no
 											     input is rendered at all. A disabled control is
 											     still one a browser can re-enable and post. --}}
-											<span class="badge {{ $row['mark'] === 'present' ? 'badge-normal' : ($row['mark'] === 'absent' ? 'badge-critical' : 'badge-neutral') }}">
+											<span class="badge {{ match ($row['mark']) {
+												'present' => 'badge-normal',
+												'absent' => 'badge-critical',
+												'excused' => 'badge-monitor',
+												default => 'badge-neutral',
+											} }}">
 												{{ $row['mark'] === '' ? 'Not recorded' : ucfirst($row['mark']) }}
 											</span>
 										@else
@@ -122,6 +127,14 @@
 													<input type="radio" name="marks[{{ $row['id'] }}]" value="absent" @checked($row['mark'] === 'absent')>
 													<span>Absent</span>
 												</label>
+												{{-- An absence the school accepted — fasting, illness, a
+												     family emergency. Recorded so the sheet is honest
+												     about the gap, and excluded from the at-risk rule so
+												     the learner is never chased for it. --}}
+												<label class="ra-opt ra-opt-excused">
+													<input type="radio" name="marks[{{ $row['id'] }}]" value="excused" @checked($row['mark'] === 'excused')>
+													<span>Excused</span>
+												</label>
 											</div>
 										@endif
 									</td>
@@ -130,11 +143,12 @@
 											<span class="ra-remark-read">{{ $row['remarks'] !== '' ? $row['remarks'] : '—' }}</span>
 										@else
 											{{-- Only an absence carries a reason, so the field opens
-											     when Absent is chosen and clears when it is not. --}}
+											     for either kind and clears when the learner is marked
+											     present. --}}
 											<input type="text" class="input ra-remark" maxlength="255"
 												name="remarks[{{ $row['id'] }}]" value="{{ $row['remarks'] }}"
 												aria-label="Reason {{ $row['name'] }} was absent"
-												@disabled($row['mark'] !== 'absent')>
+												@disabled(! in_array($row['mark'], ['absent', 'excused'], true))>
 										@endif
 									</td>
 								</tr>
@@ -154,6 +168,7 @@
 					<div class="ra-tally">
 						<span class="badge badge-normal">Present <span data-tally="present">0</span></span>
 						<span class="badge badge-critical">Absent <span data-tally="absent">0</span></span>
+						<span class="badge badge-monitor">Excused <span data-tally="excused">0</span></span>
 						<span class="badge badge-neutral">Unmarked <span data-tally="none">{{ $rows->count() }}</span></span>
 					</div>
 					<div class="ra-actions">
@@ -176,6 +191,7 @@
 	const tallies = {
 		present: form.querySelector('[data-tally="present"]'),
 		absent: form.querySelector('[data-tally="absent"]'),
+		excused: form.querySelector('[data-tally="excused"]'),
 		none: form.querySelector('[data-tally="none"]'),
 	};
 
@@ -185,23 +201,25 @@
 		const remark = row.querySelector('.ra-remark');
 		if (!remark) return;
 		const checked = row.querySelector('input[type="radio"]:checked');
-		const isAbsent = checked !== null && checked.value === 'absent';
-		remark.disabled = !isAbsent;
-		if (!isAbsent) remark.value = '';
+		// Either kind of absence carries a reason; being present carries none.
+		const isAway = checked !== null && checked.value !== 'present';
+		remark.disabled = !isAway;
+		if (!isAway) remark.value = '';
 	};
 
 	const retally = () => {
-		let present = 0;
-		let absent = 0;
+		const counts = { present: 0, absent: 0, excused: 0 };
 		rows.forEach((row) => {
 			const checked = row.querySelector('input[type="radio"]:checked');
 			if (!checked) return;
-			if (checked.value === 'present') present++;
-			else absent++;
+			if (checked.value in counts) counts[checked.value]++;
 		});
-		if (tallies.present) tallies.present.textContent = String(present);
-		if (tallies.absent) tallies.absent.textContent = String(absent);
-		if (tallies.none) tallies.none.textContent = String(rows.length - present - absent);
+		Object.keys(counts).forEach((key) => {
+			if (tallies[key]) tallies[key].textContent = String(counts[key]);
+		});
+		if (tallies.none) {
+			tallies.none.textContent = String(rows.length - counts.present - counts.absent - counts.excused);
+		}
 	};
 
 	form.addEventListener('change', (event) => {

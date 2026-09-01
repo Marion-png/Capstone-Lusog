@@ -252,7 +252,7 @@ final class SchoolHeadOverview
 
     public function daysRemaining(): int
     {
-        return max(0, FeedingProgramCycle::DURATION_DAYS - $this->daysCompleted());
+        return max(0, $this->cycle->durationDays() - $this->daysCompleted());
     }
 
     /**
@@ -331,7 +331,9 @@ final class SchoolHeadOverview
 
         $tally = [];
         foreach ($this->sessionDates as $date) {
-            $tally[$date] = ['present' => 0, 'absent' => 0, 'unconfirmed' => 0];
+            // Every state a mark can be in has a slot, so a mark can never
+            // create its own key here and turn a missing bucket into a 1.
+            $tally[$date] = ['present' => 0, 'absent' => 0, 'excused' => 0, 'unconfirmed' => 0];
         }
 
         foreach ($this->marksByRecord as $recordId => $marks) {
@@ -364,8 +366,11 @@ final class SchoolHeadOverview
                 'label' => Carbon::parse($date)->format('M j, Y'),
                 'present' => $counts['present'],
                 'absent' => $counts['absent'],
+                // An absence the school accepted. Its own figure, and never
+                // counted toward the turnout the head reads.
+                'excused' => $counts['excused'],
                 'unconfirmed' => $counts['unconfirmed'],
-                'not_marked' => max(0, $expected - $confirmed - $counts['unconfirmed']),
+                'not_marked' => max(0, $expected - $confirmed - $counts['excused'] - $counts['unconfirmed']),
                 'expected' => $expected,
                 // Null, never 0%: a day whose every mark is still unread is not
                 // a day nobody came to.
@@ -595,7 +600,7 @@ final class SchoolHeadOverview
     {
         return $this->records
             ->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isEligible($record)
-                && $record->feeding_enrolled_at === null)
+                && ! FeedingBeneficiarySummary::isEnrolled($record))
             ->values();
     }
 
@@ -606,7 +611,7 @@ final class SchoolHeadOverview
 
         foreach ($this->marksByRecord as $marks) {
             foreach ($marks as $mark) {
-                if ($mark['status'] === 'unconfirmed') {
+                if ($mark['status'] === FeedingAttendanceMark::UNCONFIRMED) {
                     $count++;
                 }
             }
@@ -720,8 +725,10 @@ final class SchoolHeadOverview
     private static function toSequence(array $marks): array
     {
         return array_map(static fn (array $mark): ?bool => match ($mark['status']) {
-            'present' => true,
-            'absent' => false,
+            FeedingAttendanceMark::PRESENT => true,
+            FeedingAttendanceMark::ABSENT => false,
+            // Excused and unconfirmed both reach the rule as NULL: neither is
+            // evidence about whether this learner is turning up.
             default => null,
         }, $marks);
     }
@@ -746,6 +753,9 @@ final class SchoolHeadOverview
         if (SchemaCache::hasColumn('feeding_attendances', 'needs_review')) {
             $columns[] = 'needs_review';
         }
+        if (SchemaCache::hasColumn('feeding_attendances', 'is_excused')) {
+            $columns[] = 'is_excused';
+        }
 
         $rows = FeedingAttendance::query()
             ->whereIn('student_health_record_id', $records->pluck('id'))
@@ -765,11 +775,7 @@ final class SchoolHeadOverview
 
             $byRecord[(int) $row->student_health_record_id][] = [
                 'date' => $date,
-                'status' => match (true) {
-                    (bool) ($row->needs_review ?? false), $row->is_present === null => 'unconfirmed',
-                    (bool) $row->is_present => 'present',
-                    default => 'absent',
-                },
+                'status' => FeedingAttendanceMark::state($row),
             ];
 
             $dates[$date] = true;

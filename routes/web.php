@@ -41,12 +41,14 @@ use App\Models\MedicineDispense;
 use App\Models\StudentHealthRecord;
 use App\Support\AuditTrail;
 use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingProgramCycle;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 
 Route::get('/', function () {
     return view('auth.login', ['demoAccounts' => []]);
@@ -927,6 +929,14 @@ Route::get('/dashboard/feedingcor-program/enrollment/candidates', [FeedingEnroll
 Route::post('/dashboard/feedingcor-program/enrollment', [FeedingEnrollmentController::class, 'store'])
     ->name('feedingcor-program.enrollment.store');
 
+// Leaving the programme. The only path a learner comes off the active list, and
+// it always carries a reason a human typed — no rule in this application calls
+// it, because being below the attendance threshold is a reason to follow a
+// learner up and never a reason to stop feeding them.
+Route::post('/dashboard/feedingcor-program/enrollment/{record}/remove', [FeedingEnrollmentController::class, 'remove'])
+    ->whereNumber('record')
+    ->name('feedingcor-program.enrollment.remove');
+
 // One beneficiary's own page — what clicking a learner's name opens from the
 // Beneficiaries tab. Keyed by record id, never by name.
 Route::get('/dashboard/feedingcor-program/beneficiary/{record}', [FeedingProgramController::class, 'beneficiaryProfile'])
@@ -994,7 +1004,15 @@ Route::get('/dashboard/system-admin', function () {
     $institutions = Schema::hasTable('institutions')
         ? Institution::query()->orderBy('name')->get(array_merge(
             ['id', 'name', 'feeding_at_risk_threshold'],
-            Schema::hasColumn('institutions', 'feeding_min_observation_days') ? ['feeding_min_observation_days'] : []
+            // Every setting is additive, so each column is asked for only when
+            // its migration has actually run.
+            array_values(array_filter([
+                'feeding_min_observation_days',
+                'feeding_at_risk_mode',
+                'feeding_absence_flag_days',
+                'feeding_absence_removal_days',
+                'feeding_cycle_days',
+            ], fn (string $column): bool => Schema::hasColumn('institutions', $column)))
         ))
         : collect();
 
@@ -1005,17 +1023,43 @@ Route::get('/dashboard/system-admin', function () {
         'institutions' => $institutions,
         'defaultAtRiskThreshold' => FeedingAtRiskRule::fromConfig()->thresholdPercent(),
         'defaultMinObservationDays' => FeedingAtRiskRule::fromConfig()->minimumObservationDays(),
+        'defaultAtRiskMode' => FeedingAtRiskRule::fromConfig()->mode(),
+        'defaultAbsenceFlagDays' => FeedingAtRiskRule::fromConfig()->absenceFlagDays(),
+        'defaultAbsenceRemovalDays' => FeedingAtRiskRule::fromConfig()->absenceRemovalDays(),
+        'defaultCycleDays' => FeedingProgramCycle::durationForInstitution(null),
+        // Which rules a school may be set to, named the way the form should
+        // read them. Read off the class, never re-typed, so a mode added there
+        // cannot go missing here.
+        'atRiskModes' => [
+            FeedingAtRiskRule::MODE_ATTENDANCE_RATE => 'Cumulative attendance below the threshold',
+            FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS => 'A run of unexcused absences (one feeding week)',
+            FeedingAtRiskRule::MODE_CONSECUTIVE_ABSENCES => 'A run of absences of any kind',
+        ],
     ]);
 })->name('dashboard.system-admin');
 
 /**
- * Sets one school's feeding at-risk policy: the attendance threshold, and the
- * minimum observation period the threshold only applies after. Clearing either
- * field returns that school to the app default rather than pinning it to
- * today's number.
+ * Sets one school's feeding policy.
  *
- * The observation period is only touched when the form actually submits it, so
- * a caller that posts a threshold alone cannot silently wipe a school's window.
+ * Five settings, and they are all local policy rather than platform constants:
+ *
+ *   mode                    WHICH rule the school runs. Sta. Ana does not run a
+ *                           percentage at all — a beneficiary there is flagged
+ *                           after one week of unexcused absence — so the kind of
+ *                           rule has to be settable, not only the figure it is
+ *                           set to.
+ *   threshold               how much attendance is enough (rate mode)
+ *   observation period      how much recorded history the rule needs first
+ *   absence flag days       the run that flags (one feeding week)
+ *   absence removal days    the run at which removal is worth reviewing with
+ *                           the class adviser — never an automatic removal
+ *   cycle days              the mandated cycle length: 120 in Division policy,
+ *                           90 under discussion, and a school whose Division
+ *                           settles on either must be able to say so
+ *
+ * Clearing any field returns that school to the app default rather than pinning
+ * it to today's number. Each one is only touched when the form actually submits
+ * it, so a caller posting a threshold alone cannot silently wipe the rest.
  *
  * Raw DB write, so the audit entry is recorded explicitly — and it carries the
  * value it replaced, because "who moved the threshold and from what" is exactly
@@ -1030,6 +1074,10 @@ Route::post('/dashboard/system-admin/institutions/{institution}/at-risk-threshol
         'threshold' => ['nullable', 'numeric', 'min:1', 'max:100'],
         // 0 is a real answer: classify from the very first confirmed session.
         'minimum_observation_days' => ['nullable', 'integer', 'min:0', 'max:120'],
+        'at_risk_mode' => ['nullable', Rule::in(FeedingAtRiskRule::MODES)],
+        'absence_flag_days' => ['nullable', 'integer', 'min:1', 'max:60'],
+        'absence_removal_days' => ['nullable', 'integer', 'min:1', 'max:120'],
+        'cycle_days' => ['nullable', 'integer', 'min:1', 'max:365'],
     ]);
 
     $school = Institution::query()->find($institution);
@@ -1037,19 +1085,27 @@ Route::post('/dashboard/system-admin/institutions/{institution}/at-risk-threshol
         return back()->with('error', 'That school is no longer on file.');
     }
 
-    $previous = $school->feeding_at_risk_threshold;
-    $threshold = $validated['threshold'] === null || $validated['threshold'] === ''
-        ? null
-        : (int) round((float) $validated['threshold']);
+    $changes = [];
+    $notes = [];
 
-    $changes = ['feeding_at_risk_threshold' => $threshold];
-    $notes = ['at-risk threshold for '.$school->name.' set to '
-        .($threshold === null ? 'the app default' : $threshold.'%')
-        .' (was '.($previous === null ? 'the app default' : $previous.'%').')'];
+    // The threshold is only touched when the form actually submits it, exactly
+    // as every other setting below is — a caller posting the cycle length alone
+    // must not silently return the school to the default threshold.
+    if ($request->has('threshold')) {
+        $previous = $school->feeding_at_risk_threshold;
+        $threshold = ($validated['threshold'] ?? null) === null || $validated['threshold'] === ''
+            ? null
+            : (int) round((float) $validated['threshold']);
+
+        $changes['feeding_at_risk_threshold'] = $threshold;
+        $notes[] = 'at-risk threshold for '.$school->name.' set to '
+            .($threshold === null ? 'the app default' : $threshold.'%')
+            .' (was '.($previous === null ? 'the app default' : $previous.'%').')';
+    }
 
     if ($request->has('minimum_observation_days')) {
         $previousDays = $school->feeding_min_observation_days;
-        $days = $validated['minimum_observation_days'] === null || $validated['minimum_observation_days'] === ''
+        $days = ($validated['minimum_observation_days'] ?? null) === null || $validated['minimum_observation_days'] === ''
             ? null
             : (int) $validated['minimum_observation_days'];
 
@@ -1057,6 +1113,39 @@ Route::post('/dashboard/system-admin/institutions/{institution}/at-risk-threshol
         $notes[] = 'minimum observation period set to '
             .($days === null ? 'the app default' : $days.' feeding days')
             .' (was '.($previousDays === null ? 'the app default' : $previousDays.' feeding days').')';
+    }
+
+    // The remaining settings follow one shape, so they are applied in one loop
+    // rather than four near-identical blocks that could drift apart. Each is
+    // only written when the form actually posted it, and each records what it
+    // replaced.
+    $optional = [
+        'at_risk_mode' => ['feeding_at_risk_mode', 'at-risk rule', null],
+        'absence_flag_days' => ['feeding_absence_flag_days', 'unexcused absences before flagging', 'feeding sessions'],
+        'absence_removal_days' => ['feeding_absence_removal_days', 'unexcused absences before removal review', 'feeding sessions'],
+        'cycle_days' => ['feeding_cycle_days', 'cycle length', 'feeding days'],
+    ];
+
+    foreach ($optional as $field => [$column, $label, $unit]) {
+        if (! $request->has($field) || ! Schema::hasColumn('institutions', $column)) {
+            continue;
+        }
+
+        $was = $school->getAttribute($column);
+        $value = ($validated[$field] ?? null) === null || $validated[$field] === ''
+            ? null
+            : ($unit === null ? (string) $validated[$field] : (int) $validated[$field]);
+
+        $say = fn ($v): string => $v === null
+            ? 'the app default'
+            : ($unit === null ? (string) $v : $v.' '.$unit);
+
+        $changes[$column] = $value;
+        $notes[] = $label.' set to '.$say($value).' (was '.$say($was).')';
+    }
+
+    if ($changes === []) {
+        return back()->with('error', 'Nothing was submitted, so no feeding policy was changed.');
     }
 
     $school->update($changes);

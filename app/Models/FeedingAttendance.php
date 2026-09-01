@@ -15,6 +15,7 @@ class FeedingAttendance extends Model
         'student_health_record_id',
         'session_date',
         'is_present',
+        'is_excused',
         'attendance_import_id',
         'source',
         'needs_review',
@@ -33,6 +34,10 @@ class FeedingAttendance extends Model
     protected $casts = [
         'session_date' => 'date',
         'is_present' => 'boolean',
+        // The third state, carried beside is_present rather than folded into
+        // it: an absence with a valid reason (the coordinator's "buffer") is
+        // still an absence, but it never counts toward the at-risk flag.
+        'is_excused' => 'boolean',
         'needs_review' => 'boolean',
         'reviewed_at' => 'datetime',
         // Who the mark came from, and who last decided it. Both are staff

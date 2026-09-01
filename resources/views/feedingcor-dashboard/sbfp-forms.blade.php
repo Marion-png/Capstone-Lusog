@@ -201,6 +201,10 @@
 			<div class="sheet-tools">
 				<div class="sheet-status" id="narrativeDraftStatus">Draft not saved yet.</div>
 				<div class="sheet-btns">
+					{{-- The figures are already computed; typing them out again beside
+					     the grids is how a report ends up disagreeing with its own
+					     tables. This writes the interpretation from them. --}}
+					<button type="button" class="btn btn-secondary" id="generateNarrativeBtn">Generate Interpretation</button>
 					<button type="button" class="btn btn-primary" id="saveNarrativeDraftBtn">Save Draft</button>
 					<button type="button" class="btn btn-ghost" id="printNarrativeBtn">Print Form</button>
 					<button type="button" class="btn btn-warn" id="clearNarrativeDraftBtn">Clear</button>
@@ -218,7 +222,12 @@
 						@foreach (['introduction' => 'Introduction', 'background' => 'Background and Rationale', 'implementation' => 'Implementation', 'results' => 'Results and Impact', 'conclusion' => 'Conclusion and Recommendation'] as $sectionKey => $sectionLabel)
 							<div class="narrative-section">
 								<div class="narrative-label">{{ $sectionLabel }}</div>
-								<textarea class="narrative-textarea" data-field="narr_{{ $sectionKey }}" placeholder="Write the {{ strtolower($sectionLabel) }} here..." aria-label="{{ $sectionLabel }}"></textarea>
+								{{-- The derived draft rides on the element rather than being
+								     its value, so a saved draft always wins on load and the
+								     coordinator can ask for the generated text explicitly. --}}
+								<textarea class="narrative-textarea" data-field="narr_{{ $sectionKey }}"
+									data-derived="{{ $narrative['narr_'.$sectionKey] ?? '' }}"
+									placeholder="Write the {{ strtolower($sectionLabel) }} here..." aria-label="{{ $sectionLabel }}"></textarea>
 							</div>
 						@endforeach
 					</div>
@@ -420,6 +429,8 @@
 		}
 
 		loadDraft();
+
+		return { loadDraft, saveDraft, clearDraft };
 	};
 
 	const printPageStyle = document.getElementById('printPageStyle');
@@ -860,7 +871,7 @@
 		fillMasterlist(scope);
 	};
 
-	initDraftModule({
+	const narrativeDraft = initDraftModule({
 		storageKey: 'feeding_narrative_report_draft_v1',
 		fieldPrefix: 'narr_',
 		statusId: 'narrativeDraftStatus',
@@ -868,6 +879,36 @@
 		clearId: 'clearNarrativeDraftBtn',
 		printId: 'printNarrativeBtn',
 	});
+
+	// ── The derived interpretation ────────────────────────────────────────
+	// Every paragraph is written on the server from the same figures the grids
+	// above are drawn from, so the sentence and the table cannot disagree. It
+	// fills the form only when the coordinator asks, and only over sections
+	// they have not already written — hand-typed work is never overwritten.
+	const narrativeAreas = Array.from(document.querySelectorAll('.narrative-textarea[data-derived]'));
+	const generateNarrativeBtn = document.getElementById('generateNarrativeBtn');
+
+	if (generateNarrativeBtn) {
+		generateNarrativeBtn.addEventListener('click', () => {
+			let filled = 0;
+			narrativeAreas.forEach((area) => {
+				const derived = area.getAttribute('data-derived') || '';
+				if (derived === '' || String(area.value || '').trim() !== '') {
+					return;
+				}
+				area.value = derived;
+				autoGrowNarrative(area);
+				filled++;
+			});
+
+			const status = document.getElementById('narrativeDraftStatus');
+			if (status) {
+				status.textContent = filled === 0
+					? 'Every section already has text. Clear a section to draft it from the figures.'
+					: `${filled} section(s) drafted from the recorded figures. Edit, then save the draft.`;
+			}
+		});
+	}
 
 	if (addMlRowsBtn) {
 		addMlRowsBtn.addEventListener('click', () => {

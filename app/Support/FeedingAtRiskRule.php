@@ -45,6 +45,28 @@ class FeedingAtRiskRule
 
     public const MODE_CONSECUTIVE_ABSENCES = 'consecutive_absences';
 
+    /**
+     * The rule Sta. Ana actually runs: a beneficiary is flagged once they have
+     * missed a week of feeding without an excuse.
+     *
+     * It is not a percentage of the cycle at all. A learner who has attended
+     * every session for two months and then vanishes for a week is 90-something
+     * per cent attended and needs following up today; a rate threshold would
+     * not notice them until weeks later. The unit is the *feeding week*, so the
+     * default is four sessions (Monday-Thursday, the days the budget covers).
+     *
+     * Only unexcused absences count — an excused one is the coordinator's
+     * "buffer" and reaches this class as NULL (see FeedingAttendanceMark).
+     */
+    public const MODE_UNEXCUSED_ABSENCE_DAYS = 'unexcused_absence_days';
+
+    /** The modes a school may be set to; anything else falls back to the rate. */
+    public const MODES = [
+        self::MODE_ATTENDANCE_RATE,
+        self::MODE_CONSECUTIVE_ABSENCES,
+        self::MODE_UNEXCUSED_ABSENCE_DAYS,
+    ];
+
     /** Too little attendance history to classify on — see invariant 3. */
     public const STATUS_EARLY_MONITORING = 'early_monitoring';
 
@@ -60,11 +82,19 @@ class FeedingAtRiskRule
     /** The approved observation window, in confirmed feeding days. */
     public const DEFAULT_MINIMUM_OBSERVATION_DAYS = 10;
 
+    /** One feeding week: Monday to Thursday, the days the budget covers. */
+    public const DEFAULT_ABSENCE_FLAG_DAYS = 4;
+
+    /** Two feeding weeks — the point at which removal is worth reviewing. */
+    public const DEFAULT_ABSENCE_REMOVAL_DAYS = 8;
+
     public function __construct(
         private readonly string $mode,
         private readonly float $thresholdPercent,
         private readonly int $consecutiveAbsences,
         private readonly int $minimumObservationDays,
+        private readonly int $absenceFlagDays = self::DEFAULT_ABSENCE_FLAG_DAYS,
+        private readonly int $absenceRemovalDays = self::DEFAULT_ABSENCE_REMOVAL_DAYS,
     ) {}
 
     public static function fromConfig(): self
@@ -74,6 +104,8 @@ class FeedingAtRiskRule
             (float) config('feeding.at_risk.threshold_percent', self::DEFAULT_THRESHOLD_PERCENT),
             (int) config('feeding.at_risk.consecutive_absences', 3),
             (int) config('feeding.at_risk.minimum_observation_days', self::DEFAULT_MINIMUM_OBSERVATION_DAYS),
+            (int) config('feeding.at_risk.absence_flag_days', self::DEFAULT_ABSENCE_FLAG_DAYS),
+            (int) config('feeding.at_risk.absence_removal_days', self::DEFAULT_ABSENCE_REMOVAL_DAYS),
         );
     }
 
@@ -98,17 +130,23 @@ class FeedingAtRiskRule
             return $rule;
         }
 
-        $columns = array_values(array_filter([
-            SchemaCache::hasColumn('institutions', 'feeding_at_risk_threshold') ? 'feeding_at_risk_threshold' : null,
-            SchemaCache::hasColumn('institutions', 'feeding_min_observation_days') ? 'feeding_min_observation_days' : null,
-        ]));
+        $columns = array_values(array_filter(array_map(
+            fn (string $column): ?string => SchemaCache::hasColumn('institutions', $column) ? $column : null,
+            [
+                'feeding_at_risk_threshold',
+                'feeding_min_observation_days',
+                'feeding_at_risk_mode',
+                'feeding_absence_flag_days',
+                'feeding_absence_removal_days',
+            ]
+        )));
 
         if ($columns === []) {
             return $rule;
         }
 
-        // One read for both settings: this runs on every page of the feeding
-        // module, and they are two halves of one policy. Read off the raw
+        // One read for every setting: this runs on every page of the feeding
+        // module, and they are all halves of one policy. Read off the raw
         // attributes, since a column the migration has not added yet is simply
         // not in the select list.
         $settings = (array) Institution::query()->whereKey($institutionId)->first($columns)?->getAttributes();
@@ -117,12 +155,20 @@ class FeedingAtRiskRule
         // 0 is a real answer here — "classify from the first confirmed session"
         // — so only NULL falls back to the app default.
         $minimum = $settings['feeding_min_observation_days'] ?? null;
+        // Which rule this school runs at all. A school that has chosen nothing
+        // keeps the platform default rather than being switched to somebody
+        // else's policy, and an unrecognised value is treated as unset.
+        $mode = (string) ($settings['feeding_at_risk_mode'] ?? '');
+        $flagDays = $settings['feeding_absence_flag_days'] ?? null;
+        $removalDays = $settings['feeding_absence_removal_days'] ?? null;
 
         return new self(
-            $rule->mode,
+            in_array($mode, self::MODES, true) ? $mode : $rule->mode,
             ($threshold === null || (float) $threshold <= 0) ? $rule->thresholdPercent : (float) $threshold,
             $rule->consecutiveAbsences,
             $minimum === null ? $rule->minimumObservationDays : max(0, (int) $minimum),
+            ($flagDays === null || (int) $flagDays < 1) ? $rule->absenceFlagDays : (int) $flagDays,
+            ($removalDays === null || (int) $removalDays < 1) ? $rule->absenceRemovalDays : (int) $removalDays,
         );
     }
 
@@ -146,9 +192,52 @@ class FeedingAtRiskRule
             return false;
         }
 
-        return $this->mode === self::MODE_CONSECUTIVE_ABSENCES
-            ? $this->hasAbsenceRun($confirmed)
-            : $this->isBelowRate($confirmed);
+        return match ($this->mode) {
+            self::MODE_CONSECUTIVE_ABSENCES => $this->hasAbsenceRun($confirmed, $this->consecutiveAbsences),
+            self::MODE_UNEXCUSED_ABSENCE_DAYS => $this->hasAbsenceRun($confirmed, $this->absenceFlagDays),
+            default => $this->isBelowRate($confirmed),
+        };
+    }
+
+    /**
+     * Whether this learner's absence has run long enough that the school's own
+     * removal review opens — the second, later threshold the coordinator
+     * described: roughly a fortnight of unexcused absence, at which point the
+     * adviser confirms whether the learner is coming back and, if not, the slot
+     * goes to somebody on the waiting list.
+     *
+     * It is deliberately NOT a removal. Nothing in this application takes a
+     * child off the feeding line on the strength of an attendance count; this
+     * only says the question is now worth asking of a human, who records the
+     * answer with a reason (FeedingEnrollmentController::remove).
+     *
+     * @param  list<bool|null>  $marks
+     */
+    public function needsRemovalReview(array $marks): bool
+    {
+        $confirmed = array_values(array_filter($marks, static fn ($m) => $m !== null));
+
+        return $this->hasAbsenceRun($confirmed, $this->absenceRemovalDays);
+    }
+
+    /** The learner's current run of unexcused absences, most recent first. */
+    public function currentAbsenceRun(array $marks): int
+    {
+        $run = 0;
+
+        foreach (array_reverse($marks) as $mark) {
+            if ($mark === null) {
+                // Excused, or nobody has read it: not a data point either way,
+                // so it neither extends the run nor ends it.
+                continue;
+            }
+            if ($mark === true) {
+                break;
+            }
+            $run++;
+        }
+
+        return $run;
     }
 
     /**
@@ -189,13 +278,33 @@ class FeedingAtRiskRule
      */
     public function hasEnoughObservation(array $marks): bool
     {
-        return $this->confirmedCount($marks) >= max(1, $this->minimumObservationDays);
+        return $this->confirmedCount($marks) >= $this->observationDays();
     }
 
     /** How many more confirmed sessions before the threshold starts classifying. */
     public function sessionsUntilClassification(array $marks): int
     {
-        return max(0, max(1, $this->minimumObservationDays) - $this->confirmedCount($marks));
+        return max(0, $this->observationDays() - $this->confirmedCount($marks));
+    }
+
+    /**
+     * The window this mode actually needs, in confirmed sessions.
+     *
+     * For a rate the window is the school's own setting: a percentage over four
+     * sessions is a sample, not a finding. The unexcused-absence rule carries
+     * its own evidence requirement instead — a full week of missed feeding IS
+     * the finding, and holding it back for another six sessions would mean the
+     * coordinator learning about it a fortnight after the child stopped coming,
+     * which is the delay the rule exists to remove. So it needs whichever is
+     * smaller: the school's window, or the run that triggers it.
+     */
+    private function observationDays(): int
+    {
+        $window = max(1, $this->minimumObservationDays);
+
+        return $this->mode === self::MODE_UNEXCUSED_ABSENCE_DAYS
+            ? min($window, max(1, $this->absenceFlagDays))
+            : $window;
     }
 
     /** Sessions a human has decided — the denominator every rate here is taken over. */
@@ -245,12 +354,29 @@ class FeedingAtRiskRule
         return $this->minimumObservationDays;
     }
 
+    /** Unexcused absences in a row that flag a learner — one feeding week. */
+    public function absenceFlagDays(): int
+    {
+        return $this->absenceFlagDays;
+    }
+
+    /** Unexcused absences in a row that open a removal review — two feeding weeks. */
+    public function absenceRemovalDays(): int
+    {
+        return $this->absenceRemovalDays;
+    }
+
     /** A short line the UI can show so staff know what the flag currently means. */
     public function describe(): string
     {
-        $test = $this->mode === self::MODE_CONSECUTIVE_ABSENCES
-            ? $this->consecutiveAbsences.' or more absences in a row'
-            : 'attendance below '.rtrim(rtrim(number_format($this->thresholdPercent, 1), '0'), '.').'%';
+        $test = match ($this->mode) {
+            self::MODE_CONSECUTIVE_ABSENCES => $this->consecutiveAbsences.' or more absences in a row',
+            // Named in weeks as well as days, because that is the unit the
+            // coordinator states the rule in and the days only make sense
+            // against the number of sessions the school actually feeds.
+            self::MODE_UNEXCUSED_ABSENCE_DAYS => $this->absenceFlagDays.' or more unexcused absences in a row',
+            default => 'attendance below '.rtrim(rtrim(number_format($this->thresholdPercent, 1), '0'), '.').'%',
+        };
 
         // A window of 0 or 1 is no window at all, so it is not worth a clause
         // that would only make the sentence longer.
@@ -278,20 +404,24 @@ class FeedingAtRiskRule
     /**
      * A run is counted over confirmed sessions only. An unconfirmed session in
      * the middle of a run does not break it — it is simply not a data point —
-     * which keeps an unreadable photo from masking a genuine streak.
+     * which keeps an unreadable photo from masking a genuine streak. An
+     * *excused* absence reaches this class as NULL for the same reason and
+     * behaves the same way: the buffer means a fasting learner is never pushed
+     * toward the flag, not that a week away resets because one day of it had a
+     * note.
      *
      * @param  list<bool>  $confirmed
      */
-    private function hasAbsenceRun(array $confirmed): bool
+    private function hasAbsenceRun(array $confirmed, int $required): bool
     {
-        if ($this->consecutiveAbsences < 1) {
+        if ($required < 1) {
             return false;
         }
 
         $run = 0;
         foreach ($confirmed as $mark) {
             $run = $mark === false ? $run + 1 : 0;
-            if ($run >= $this->consecutiveAbsences) {
+            if ($run >= $required) {
                 return true;
             }
         }

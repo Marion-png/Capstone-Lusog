@@ -193,7 +193,7 @@
                 </article>
                 <article class="card dashboard-stat-card dashboard-complete">
                     <div class="dsc-icon dsc-icon-complete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
-                    <div><b>{{ $ov['complete'] }}</b><span>Completed Program</span><small>{{ $cycle->isComplete() ? '120 feeding days done, endline recorded' : 'Opens when the 120 feeding days are done' }}</small></div>
+                    <div><b>{{ $ov['complete'] }}</b><span>Completed Program</span><small>{{ $cycle->isComplete() ? $cycle->durationDays().' feeding days done, endline recorded' : 'Opens when the '.$cycle->durationDays().' feeding days are done' }}</small></div>
                 </article>
                 <article class="card dashboard-stat-card dashboard-pending">
                     <div class="dsc-icon dsc-icon-pending"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
@@ -906,10 +906,10 @@
                                 @if ($editRecord->baseline_bmi_value === null)
                                     record the baseline height and weight first; endline is measured against it.
                                 @elseif (! isset($cycle) || ! $cycle->hasStarted())
-                                    the {{ \App\Support\FeedingProgramCycle::DURATION_DAYS }}-day feeding programme has not started.
+                                    the feeding programme has not started.
                                 @else
-                                    endline opens when the {{ \App\Support\FeedingProgramCycle::DURATION_DAYS }}-day programme finishes.
-                                    Day {{ $cycle->day() }} of {{ \App\Support\FeedingProgramCycle::DURATION_DAYS }},
+                                    endline opens when the {{ $cycle->durationDays() }}-day programme finishes.
+                                    Day {{ $cycle->day() }} of {{ $cycle->durationDays() }},
                                     {{ $cycle->daysRemaining() }} {{ \Illuminate\Support\Str::plural('day', $cycle->daysRemaining()) }} to go.
                                 @endif
                             </span>

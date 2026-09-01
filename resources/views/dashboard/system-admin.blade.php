@@ -209,24 +209,35 @@
             </article>
 
             <article class="card section" id="feeding-policy">
-                <h3>Feeding At-Risk Threshold</h3>
-                {{-- School-configurable by requirement, and two settings rather
-                     than one: a programme running four days a week cannot be
-                     judged on the same line as one running five, and neither
-                     can be judged at all on the first few sheets. The threshold
-                     is how much attendance is enough; the observation period is
-                     how much recorded history the threshold needs before it
-                     classifies anyone. An empty field means the school follows
-                     the app default, so it moves with the programme instead of
-                     being pinned to whatever today's number happens to be. --}}
+                <h3>Feeding Program Policy</h3>
+                {{-- School-configurable by requirement, and by field work: the
+                     rule at Sta. Ana is not a percentage of the cycle at all —
+                     a beneficiary there is flagged after one week of unexcused
+                     absence, and after roughly a second week, once the class
+                     adviser has confirmed the learner is not returning, the
+                     place is released to somebody on the waiting list. So the
+                     KIND of rule is settable here, not only the figure it is
+                     set to.
+
+                     An empty field means the school follows the app default, so
+                     it moves with the programme instead of being pinned to
+                     whatever today's number happens to be. --}}
                 <table>
-                    <thead><tr><th>School</th><th>Source</th><th>Threshold &amp; observation period</th></tr></thead>
+                    <thead><tr><th>School</th><th>Source</th><th>Rule</th></tr></thead>
                     <tbody>
                         @forelse(($institutions ?? collect()) as $school)
                             <tr>
                                 <td>{{ $school->name }}</td>
                                 <td>
-                                    @if ($school->feeding_at_risk_threshold === null && ($school->feeding_min_observation_days ?? null) === null)
+                                    @php
+                                        $isDefault = $school->feeding_at_risk_threshold === null
+                                            && ($school->feeding_min_observation_days ?? null) === null
+                                            && ($school->feeding_at_risk_mode ?? null) === null
+                                            && ($school->feeding_absence_flag_days ?? null) === null
+                                            && ($school->feeding_absence_removal_days ?? null) === null
+                                            && ($school->feeding_cycle_days ?? null) === null;
+                                    @endphp
+                                    @if ($isDefault)
                                         <span class="tag">Default {{ (int) ($defaultAtRiskThreshold ?? 80) }}% / {{ (int) ($defaultMinObservationDays ?? 10) }} days</span>
                                     @else
                                         <span class="tag ok">School-set</span>
@@ -249,6 +260,41 @@
                                             aria-label="Minimum observation period in feeding days for {{ $school->name }}"
                                             style="width:84px;">
                                         <span style="color:#6B7C72;">feeding days</span>
+
+                                        {{-- Which rule this school runs. The list is built from
+                                             FeedingAtRiskRule::MODES, so a rule added to the class
+                                             cannot go missing from this form. --}}
+                                        <select name="at_risk_mode" aria-label="At-risk rule for {{ $school->name }}" style="min-width:280px;">
+                                            <option value="">App default &mdash; {{ ($atRiskModes ?? [])[$defaultAtRiskMode ?? ''] ?? 'attendance rate' }}</option>
+                                            @foreach (($atRiskModes ?? []) as $modeValue => $modeLabel)
+                                                <option value="{{ $modeValue }}" @selected(($school->feeding_at_risk_mode ?? null) === $modeValue)>{{ $modeLabel }}</option>
+                                            @endforeach
+                                        </select>
+
+                                        <input type="number" name="absence_flag_days" min="1" max="60" step="1"
+                                            value="{{ $school->feeding_absence_flag_days ?? null }}"
+                                            placeholder="{{ (int) ($defaultAbsenceFlagDays ?? 4) }}"
+                                            aria-label="Unexcused absences before flagging for {{ $school->name }}"
+                                            style="width:84px;">
+                                        <span style="color:#6B7C72;">flag after</span>
+
+                                        <input type="number" name="absence_removal_days" min="1" max="120" step="1"
+                                            value="{{ $school->feeding_absence_removal_days ?? null }}"
+                                            placeholder="{{ (int) ($defaultAbsenceRemovalDays ?? 8) }}"
+                                            aria-label="Unexcused absences before removal review for {{ $school->name }}"
+                                            style="width:84px;">
+                                        <span style="color:#6B7C72;">removal review</span>
+
+                                        {{-- 120 in Division policy, 90 under discussion. A cycle
+                                             length compiled into the application is one a school
+                                             cannot correct when its Division settles the question. --}}
+                                        <input type="number" name="cycle_days" min="1" max="365" step="1"
+                                            value="{{ $school->feeding_cycle_days ?? null }}"
+                                            placeholder="{{ (int) ($defaultCycleDays ?? 120) }}"
+                                            aria-label="Feeding cycle length for {{ $school->name }}"
+                                            style="width:84px;">
+                                        <span style="color:#6B7C72;">cycle days</span>
+
                                         <button type="submit" class="btn btn-secondary">Save</button>
                                     </form>
                                 </td>
