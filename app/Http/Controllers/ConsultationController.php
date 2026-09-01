@@ -4,10 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Condition;
 use App\Models\Consultation;
+use App\Models\Medicine;
+use App\Models\MedicineDispense;
 use App\Models\StudentHealthRecord;
 use App\Support\SchemaCache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class ConsultationController extends Controller
@@ -118,6 +122,11 @@ class ConsultationController extends Controller
             'condition' => ['nullable', 'string', 'max:255'],
             'treatment_given' => ['nullable', 'string', 'max:1000'],
             'status' => ['required', 'in:treated,referred'],
+            // Optional: a medicine handed over during the visit. Recording it
+            // here draws the stock down in the same transaction, so what the
+            // clinic gave out and what the inventory says cannot drift apart.
+            'medicine_id' => ['nullable', 'integer', 'exists:medicines,id'],
+            'medicine_quantity' => ['nullable', 'integer', 'min:1'],
         ]);
 
         // Ensure at least one condition source is provided
@@ -151,22 +160,80 @@ class ConsultationController extends Controller
             }
         }
 
-        Consultation::create([
-            'institution_id' => $request->session()->get('active_institution_id'),
-            'consulted_at' => $validated['consulted_at'],
-            'student_name' => $validated['student_name'],
-            'grade_section' => $validated['grade_section'],
-            'condition' => $conditionName,
-            'condition_id' => $conditionId,
-            // Nullable in the rules above, so it is absent from $validated
-            // when left blank — reading it directly raised a 500.
-            'treatment_given' => $validated['treatment_given'] ?? null,
-            'status' => $validated['status'],
-        ]);
+        $institutionId = $request->session()->get('active_institution_id');
+
+        // Dispensing is the school nurse's, matching MedicineDispenseController:
+        // clinic staff log consultations but are deliberately not admitted to
+        // the dispensing path, and this must not become a way around that.
+        $mayDispense = $request->session()->get('active_role') === 'school_nurse';
+        $medicineId = $mayDispense ? ($validated['medicine_id'] ?? null) : null;
+        $quantity = max(1, (int) ($validated['medicine_quantity'] ?? 1));
+
+        $dispensed = null;
+
+        // One transaction: a consultation that saved without its dispense would
+        // leave the stock overstating what the clinic holds, and a dispense
+        // without its consultation would be a draw nobody can account for.
+        // Either both land or neither does.
+        DB::transaction(function () use ($validated, $conditionName, $conditionId, $institutionId, $medicineId, $quantity, $request, &$dispensed) {
+            Consultation::create([
+                'institution_id' => $institutionId,
+                'consulted_at' => $validated['consulted_at'],
+                'student_name' => $validated['student_name'],
+                'grade_section' => $validated['grade_section'],
+                'condition' => $conditionName,
+                'condition_id' => $conditionId,
+                // Nullable in the rules above, so it is absent from $validated
+                // when left blank — reading it directly raised a 500.
+                'treatment_given' => $validated['treatment_given'] ?? null,
+                'status' => $validated['status'],
+            ]);
+
+            if (! $medicineId) {
+                return;
+            }
+
+            // Lock the row so two nurses dispensing at once cannot both read
+            // the same stock level and drive it negative.
+            $medicine = Medicine::query()
+                ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+                ->lockForUpdate()
+                ->find($medicineId);
+
+            if ($medicine === null) {
+                throw ValidationException::withMessages([
+                    'medicine_id' => 'That medicine is not in this school inventory.',
+                ])->errorBag('consultation');
+            }
+
+            if ($medicine->stock_quantity < $quantity) {
+                throw ValidationException::withMessages([
+                    'medicine_quantity' => "Only {$medicine->stock_quantity} {$medicine->unit} of {$medicine->name} left in stock.",
+                ])->errorBag('consultation');
+            }
+
+            MedicineDispense::create([
+                'institution_id' => $institutionId,
+                'medicine_id' => $medicine->id,
+                'student_lrn' => null,
+                'student_name' => $validated['student_name'],
+                'reason' => $conditionName,
+                'quantity' => $quantity,
+                'dispensed_by_name' => (string) $request->session()->get('active_name', 'School Nurse'),
+                'dispensed_by_role' => (string) $request->session()->get('active_role', 'school_nurse'),
+                'dispensed_at' => now(),
+            ]);
+
+            $medicine->decrement('stock_quantity', $quantity);
+
+            $dispensed = $quantity.' '.$medicine->unit.' of '.$medicine->name;
+        });
 
         return redirect()
             ->route('dashboard.consultation-log')
-            ->with('success', 'Consultation saved successfully.');
+            ->with('success', $dispensed === null
+                ? 'Consultation saved successfully.'
+                : "Consultation saved. {$dispensed} deducted from inventory.");
     }
 
     /**

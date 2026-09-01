@@ -97,20 +97,47 @@
             <div class="forecast-grid">
                 <div class="forecast-main">
                     <div class="page-eyebrow">Predictive Reorder Module</div>
-                    <h2 class="forecast-title">{{ $prediction['medicine_name'] }} stock tends to spike in January.</h2>
-                    <p class="forecast-sub">Based on the latest monthly dispensing pattern, January usage is the highest. The system applies a 20% safety buffer and recommends the next month stock target to reduce stockout risk.</p>
+                    @if ($prediction['has_history'])
+                        <h2 class="forecast-title">{{ $prediction['medicine_name'] }} is going out at about {{ $prediction['average'] }} {{ $prediction['unit'] }} a month.</h2>
+                        {{-- Built as a string rather than with inline @if: a directive
+                             that directly follows a word is not parsed as one, and the
+                             orphaned @endif then closes the block around it. --}}
+                        @php
+                            $forecastNote = 'Read from the dispensing log over the last '.$usage_months.' months';
+                            $forecastNote .= $prediction['peak_month'] ? ', highest in '.$prediction['peak_month'].'.' : '.';
+                            $forecastNote .= " The target applies a 20% safety buffer to the recent rate and never falls below this medicine's own reorder line.";
+
+                            if ($prediction['months_of_cover'] !== null) {
+                                $forecastNote .= ' At that rate the stock on hand lasts about '.$prediction['months_of_cover'].' months.';
+                            }
+                        @endphp
+                        <p class="forecast-sub">{{ $forecastNote }}</p>
+                    @else
+                        {{-- No dispensing on record means no rate, and no rate means no
+                             recommendation. Saying so is the honest answer; a target
+                             invented from an empty log would read as evidence. --}}
+                        <h2 class="forecast-title">Not enough dispensing history yet.</h2>
+                        <p class="forecast-sub">
+                            No medicine has been dispensed in the last {{ $usage_months }} months, so there is no consumption rate to forecast from.
+                            Record dispensing from the clinic and this panel will fill in.
+                        </p>
+                    @endif
                     <div class="fc-stats">
                         <div class="fc-stat">
                             <div class="fc-stat-label">Current Stock</div>
                             <div class="fc-stat-value">{{ $prediction['current_stock'] }} {{ $prediction['unit'] }}</div>
                         </div>
                         <div class="fc-stat">
+                            <div class="fc-stat-label">Used This Month</div>
+                            <div class="fc-stat-value">{{ $prediction['this_month'] }} {{ $prediction['unit'] }}</div>
+                        </div>
+                        <div class="fc-stat">
                             <div class="fc-stat-label">Target For {{ $prediction['next_month'] }}</div>
-                            <div class="fc-stat-value">{{ $prediction['recommended_doses'] }} {{ $prediction['unit'] }}</div>
+                            <div class="fc-stat-value">{{ $prediction['has_history'] ? $prediction['recommended_doses'].' '.$prediction['unit'] : '—' }}</div>
                         </div>
                         <div class="fc-stat">
                             <div class="fc-stat-label">Recommended Order</div>
-                            <div class="fc-stat-value {{ $prediction['recommended_order'] > 0 ? 'is-order' : '' }}">{{ $prediction['recommended_order'] }} {{ $prediction['unit'] }}</div>
+                            <div class="fc-stat-value {{ $prediction['has_history'] && $prediction['recommended_order'] > 0 ? 'is-order' : '' }}">{{ $prediction['has_history'] ? $prediction['recommended_order'].' '.$prediction['unit'] : '—' }}</div>
                         </div>
                     </div>
                 </div>
@@ -160,12 +187,19 @@
                             <polyline points="{{ $linePoints }}" class="usage-line"></polyline>
 
                             @foreach($plotPoints as $point)
-                                <circle cx="{{ $point['x'] }}" cy="{{ $point['y'] }}" r="5" class="usage-point {{ $point['month'] === 'Jan' ? 'peak' : '' }}"></circle>
+                                <circle cx="{{ $point['x'] }}" cy="{{ $point['y'] }}" r="5" class="usage-point {{ $maxUsage > 0 && $point['used'] === $maxUsage ? 'peak' : '' }}"></circle>
+                                <text x="{{ $point['x'] }}" y="{{ $point['y'] - 10 }}" text-anchor="middle" class="axis-text">{{ $point['used'] > 0 ? $point['used'] : '' }}</text>
                                 <text x="{{ $point['x'] }}" y="{{ $chartHeight - 6 }}" text-anchor="middle" class="axis-text">{{ $point['month'] }}</text>
                             @endforeach
                         </svg>
                     </div>
-                    <div class="graph-note">January is highlighted because it had the highest consumption and triggered repeated low-stock events.</div>
+                    <div class="graph-note">
+                        @if ($prediction['has_history'])
+                            Each point is that month's dispensed total from the clinic log; the highest is marked. A month with no dispensing shows as zero, not as a gap.
+                        @else
+                            Nothing has been dispensed in this window, so every month reads zero.
+                        @endif
+                    </div>
                 </div>
             </div>
         </section>
@@ -179,6 +213,11 @@
                             <th>Medicine</th>
                             <th class="num">Stock</th>
                             <th class="num">Minimum</th>
+                            {{-- How fast it is going, beside how much is left: a stock
+                                 figure on its own does not say whether to reorder. --}}
+                            <th class="num">Used This Month</th>
+                            <th class="num">Monthly Avg</th>
+                            <th class="num">Cover</th>
                             <th>Status</th>
                             <th>Updated</th>
                         </tr>
@@ -193,6 +232,17 @@
                             <td><strong>{{ $medicine->name }}</strong></td>
                             <td class="num">{{ $medicine->stock_quantity }} {{ $medicine->unit }}</td>
                             <td class="num">{{ $medicine->minimum_threshold }} {{ $medicine->unit }}</td>
+                            @php
+                                $u = $usage[$medicine->id] ?? ['this_month' => 0, 'average' => 0.0, 'months_of_history' => 0];
+                                // An em dash, not a zero: nothing dispensed and no history
+                                // are different claims, and only one of them is a rate.
+                                $cover = $u['average'] > 0
+                                    ? round($medicine->stock_quantity / $u['average'], 1)
+                                    : null;
+                            @endphp
+                            <td class="num">{{ $u['this_month'] }}</td>
+                            <td class="num">{{ $u['months_of_history'] > 0 ? $u['average'] : '—' }}</td>
+                            <td class="num">{{ $cover !== null ? $cover.' mo' : '—' }}</td>
                             <td>
                                 @if ($isCritical)
                                     <span class="badge badge-critical">Out of Stock</span>
@@ -206,7 +256,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="table-empty">No medicine records yet. Use Add Medicine to create your first item.</td>
+                            <td colspan="8" class="table-empty">No medicine records yet. Use Add Medicine to create your first item.</td>
                         </tr>
                     @endforelse
                     </tbody>

@@ -429,11 +429,21 @@ final class SchoolHeadHealthOverview
             return $this->inventory;
         }
 
+        // How fast each item is going, read from the dispensing log. A stock
+        // level on its own does not tell a head whether to chase a reorder:
+        // twenty paracetamol is a fortnight in one school and a term in
+        // another, and the difference is the consumption rate.
+        $usage = MedicineUsage::monthlyTotals($this->institutionId);
+        $thisMonth = now()->format('Y-m');
+
         $rows = $this->medicines
-            ->map(function (Medicine $medicine): array {
+            ->map(function (Medicine $medicine) use ($usage, $thisMonth): array {
                 $stock = (int) $medicine->stock_quantity;
                 $threshold = max(0, (int) $medicine->minimum_threshold);
                 $state = self::stockState($stock, $threshold);
+
+                $months = $usage->get($medicine->id, collect());
+                $average = $months->isEmpty() ? 0.0 : round($months->sum() / MedicineUsage::MONTHS, 1);
 
                 return [
                     'id' => $medicine->id,
@@ -447,6 +457,12 @@ final class SchoolHeadHealthOverview
                     // Share of the reorder line, capped: the bar answers "how
                     // far below the line", so a well-stocked item fills it.
                     'level' => $threshold > 0 ? min(100, round(($stock / $threshold) * 100, 1)) : ($stock > 0 ? 100.0 : 0.0),
+                    'used_this_month' => (int) $months->get($thisMonth, 0),
+                    'monthly_average' => $average,
+                    // NULL, not infinity: nothing dispensed is "no idea how
+                    // long this lasts", which is a different answer from
+                    // "forever" and matters to somebody deciding to reorder.
+                    'months_of_cover' => $average > 0 ? round($stock / $average, 1) : null,
                 ];
             })
             ->values();

@@ -129,6 +129,12 @@
 								<th class="num">Stock</th>
 								<th>Unit</th>
 								<th class="num">Reorder at</th>
+								{{-- How fast it is going, beside how much is left. "Low" alone
+									 does not say whether a reorder is urgent: twenty paracetamol
+									 is a fortnight in one school and a term in another. --}}
+								<th class="num">Used this month</th>
+								<th class="num">Monthly avg</th>
+								<th class="num">Cover</th>
 								<th>Level</th>
 								<th>Status</th>
 							</tr>
@@ -141,6 +147,11 @@
 									<td class="num tnum">{{ number_format($row['stock']) }}</td>
 									<td>{{ $row['unit'] }}</td>
 									<td class="num tnum">{{ number_format($row['threshold']) }}</td>
+									<td class="num tnum">{{ number_format($row['used_this_month']) }}</td>
+									{{-- An em dash, not a zero: nothing dispensed and no history
+										 are different claims, and only one of them is a rate. --}}
+									<td class="num tnum">{{ $row['monthly_average'] > 0 ? $row['monthly_average'] : '—' }}</td>
+									<td class="num tnum">{{ $row['months_of_cover'] !== null ? $row['months_of_cover'].' mo' : '—' }}</td>
 									<td>
 										<span class="sh-bar-cell">
 											<span class="sh-bar">

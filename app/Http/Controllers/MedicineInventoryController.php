@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Medicine;
+use App\Support\MedicineUsage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -39,23 +40,36 @@ class MedicineInventoryController extends Controller
         $forecastStock = (int) ($forecastMedicine?->stock_quantity ?? 0);
         $minimumThreshold = (int) ($forecastMedicine?->minimum_threshold ?? 20);
 
-        // Functional dummy forecast until dispensing transactions are persisted.
-        $monthlyUsage = $this->buildDummyMonthlyUsage(
-            (string) ($forecastMedicine?->name ?? 'Paracetamol'),
-            $minimumThreshold
-        );
+        // Real consumption, read from the dispensing log. This used to be a
+        // generator that invented six months of "seasonal" figures from a
+        // hash of the medicine's name — a reorder quantity computed from
+        // numbers nobody dispensed is worse than none, because it looks
+        // like evidence. See App\Support\MedicineUsage.
+        $monthlyUsage = $forecastMedicine
+            ? MedicineUsage::monthlyFor((int) $forecastMedicine->id, $institutionId)
+            : [];
 
-        $lastThreeAverage = (float) collect($monthlyUsage)
-            ->slice(-3)
-            ->avg(fn (array $item): int => (int) ($item['used'] ?? 0));
-        $januaryUsage = (int) (collect($monthlyUsage)->firstWhere('month', 'Jan')['used'] ?? 0);
+        $usageSummary = $forecastMedicine
+            ? MedicineUsage::summaryFor((int) $forecastMedicine->id, $institutionId)
+            : ['this_month' => 0, 'average' => 0.0, 'total' => 0, 'months_of_history' => 0];
 
-        $recommendedForNextMonth = max(
-            $minimumThreshold,
-            (int) ceil(max($lastThreeAverage * 1.15, $januaryUsage * 1.1))
-        );
+        // No dispensing on record means no rate, and no rate means no
+        // recommendation. A target invented from an empty log would be the
+        // same mistake in a different shape.
+        $hasHistory = $usageSummary['months_of_history'] > 0;
+
+        $recent = collect($monthlyUsage)->slice(-3)->pluck('used');
+        $recentAverage = $recent->isEmpty() ? 0.0 : (float) $recent->avg();
+
+        // A 20% safety buffer on the recent rate, floored at the clinic's
+        // own reorder line so a quiet month cannot recommend running dry.
+        $recommendedForNextMonth = $hasHistory
+            ? max($minimumThreshold, (int) ceil($recentAverage * 1.2))
+            : 0;
         $recommendedOrder = max(0, $recommendedForNextMonth - $forecastStock);
-        $maxUsage = max(array_column($monthlyUsage, 'used'));
+
+        $peak = collect($monthlyUsage)->sortByDesc('used')->first();
+        $maxUsage = (int) ($peak['used'] ?? 0);
 
         return view('dashboard.medicine-inventory', [
             'medicines' => $medicines,
@@ -64,11 +78,24 @@ class MedicineInventoryController extends Controller
                 'low' => $lowStockCount,
                 'good' => $medicines->count() - $lowStockCount,
             ],
+            // Usage per medicine for the Current Inventory table — one query
+            // for the page, keyed by medicine id.
+            'usage' => $medicines->mapWithKeys(fn (Medicine $m): array => [
+                $m->id => MedicineUsage::summaryFor((int) $m->id, $institutionId),
+            ]),
+            'usage_months' => MedicineUsage::MONTHS,
             'prediction' => [
                 'medicine_name' => $forecastMedicine?->name ?? 'Paracetamol',
+                'has_history' => $hasHistory,
+                'peak_month' => $peak['label'] ?? null,
+                'average' => $usageSummary['average'],
+                'this_month' => $usageSummary['this_month'],
+                'months_of_cover' => $forecastMedicine
+                    ? MedicineUsage::monthsOfCover($forecastMedicine, $institutionId)
+                    : null,
                 'unit' => $forecastUnit,
                 'current_stock' => $forecastStock,
-                'next_month' => 'February',
+                'next_month' => now()->addMonth()->format('F'),
                 'recommended_doses' => $recommendedForNextMonth,
                 'recommended_order' => $recommendedOrder,
                 'monthly_usage' => $monthlyUsage,
@@ -90,27 +117,6 @@ class MedicineInventoryController extends Controller
                 return (float) $medicine->stock_quantity / $minimum;
             })
             ->first();
-    }
-
-    private function buildDummyMonthlyUsage(string $medicineName, int $minimumThreshold): array
-    {
-        $months = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'];
-        $seasonalFactors = [0.84, 0.90, 0.95, 1.00, 1.08, 1.30];
-        $seed = abs((int) crc32(strtolower(trim($medicineName))));
-        $baseline = max(18, (int) round(max(1, $minimumThreshold) * 1.4));
-
-        $usage = [];
-        foreach ($months as $index => $month) {
-            $jitter = (($seed >> ($index * 3)) & 7) - 3;
-            $value = (int) round(($baseline * $seasonalFactors[$index]) + ($jitter * 2));
-
-            $usage[] = [
-                'month' => $month,
-                'used' => max(8, $value),
-            ];
-        }
-
-        return $usage;
     }
 
     public function store(Request $request): RedirectResponse

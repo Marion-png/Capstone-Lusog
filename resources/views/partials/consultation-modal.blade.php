@@ -32,6 +32,23 @@
     $catchAllCategory = $consultConditions->keys()
         ->first(fn ($category) => strcasecmp((string) $category, 'Other') === 0);
 
+    // Medicine dispensed during the visit. Recording it here draws the
+    // stock down in the same transaction as the consultation, so the
+    // inventory cannot drift from what the clinic actually handed over.
+    //
+    // Nurse only, matching MedicineDispenseController: clinic staff log
+    // consultations but are deliberately not admitted to the dispensing
+    // path, and this must not become a way around that.
+    $consultMayDispense = session('active_role') === 'school_nurse';
+
+    $consultMedicines = ($consultMayDispense && \App\Support\SchemaCache::hasTable('medicines'))
+        ? \App\Models\Medicine::query()
+            ->when(session('active_institution_id'), fn ($q, $id) => $q->where('institution_id', $id))
+            ->where('stock_quantity', '>', 0)
+            ->orderBy('name')
+            ->get()
+        : collect();
+
     if ($catchAllCategory !== null) {
         $catchAllGroup = $consultConditions->get($catchAllCategory);
         $consultConditions->forget($catchAllCategory);
@@ -156,6 +173,37 @@
                         <div class="bmodal-error">{{ $errors->consultation->first('treatment_given') }}</div>
                     @endif
                 </div>
+
+                @if ($consultMayDispense && $consultMedicines->isNotEmpty())
+                    {{-- Optional. Choosing one deducts it from stock when the
+                         consultation saves — one action, one transaction, so a
+                         medicine handed over cannot go unrecorded. --}}
+                    <div class="bmodal-grid">
+                        <div class="bmodal-field">
+                            <label for="cm_medicine_id">Medicine dispensed <span class="bmodal-optional">(optional)</span></label>
+                            <select id="cm_medicine_id" name="medicine_id">
+                                <option value="">None</option>
+                                @foreach ($consultMedicines as $medicine)
+                                    <option value="{{ $medicine->id }}" @selected((string) old('medicine_id') === (string) $medicine->id)>
+                                        {{ $medicine->name }} ({{ $medicine->stock_quantity }} {{ $medicine->unit }} left)
+                                    </option>
+                                @endforeach
+                            </select>
+                            @if ($errors->consultation->has('medicine_id'))
+                                <div class="bmodal-error">{{ $errors->consultation->first('medicine_id') }}</div>
+                            @endif
+                        </div>
+                        <div class="bmodal-field">
+                            <label for="cm_medicine_quantity">Quantity</label>
+                            <input id="cm_medicine_quantity" type="number" name="medicine_quantity" min="1" step="1"
+                                   value="{{ old('medicine_quantity') }}" placeholder="e.g. 1" autocomplete="off">
+                            @if ($errors->consultation->has('medicine_quantity'))
+                                <div class="bmodal-error">{{ $errors->consultation->first('medicine_quantity') }}</div>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="bmodal-hint">Deducted from inventory when this consultation is saved.</div>
+                @endif
             </div>
 
             <div class="bmodal-foot">
