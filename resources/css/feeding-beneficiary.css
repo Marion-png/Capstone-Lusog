@@ -174,7 +174,8 @@
 	border-top: 1px solid var(--lg-border);
 	font-size: .78rem;
 	color: var(--lg-ink-soft);
-	font-variant-numeric: tabular-nums;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
 }
 .bd-empty { padding: 6px 0 20px; font-size: .86rem; color: var(--lg-ink-soft); }
 

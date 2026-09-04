@@ -12,8 +12,8 @@
      0%, because no evidence is not a turnout of nothing. --}}
 @php
 	$t = $tally;
-	$rateLabel = $t['rate'] !== null ? number_format($t['rate'], 1).'%' : '—';
-	$cumulativeLabel = $cumulative['rate'] !== null ? number_format($cumulative['rate'], 1).'%' : '—';
+	$rateLabel = $t['rate'] !== null ? number_format($t['rate'], 0).'%' : '—';
+	$cumulativeLabel = $cumulative['rate'] !== null ? number_format($cumulative['rate'], 0).'%' : '—';
 	$rateAccent = match (true) {
 		$t['rate'] === null => 'accent-info',
 		$t['rate'] < $atRisk['threshold'] => 'accent-orange',

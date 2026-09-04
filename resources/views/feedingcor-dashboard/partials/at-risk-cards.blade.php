@@ -10,7 +10,7 @@
      a System Admin moving it moves this card. --}}
 @php
 	$c = $cards;
-	$rateLabel = $c['at_risk_rate'] !== null ? number_format($c['at_risk_rate'], 1).'%' : '—';
+	$rateLabel = $c['at_risk_rate'] !== null ? number_format($c['at_risk_rate'], 0).'%' : '—';
 	$riskAccent = match (true) {
 		$c['critical'] > 0 => 'accent-danger',
 		$c['at_risk'] > 0 => 'accent-orange',

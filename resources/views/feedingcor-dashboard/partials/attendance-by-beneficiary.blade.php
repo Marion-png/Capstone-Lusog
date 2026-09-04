@@ -87,7 +87,7 @@
 						<td class="num tnum">{{ $row['not_marked'] }}</td>
 						{{-- A learner no confirmed session has covered has no
 						     rate to report — an em dash, never 0%. --}}
-						<td class="num tnum">{{ $row['rate'] !== null ? number_format($row['rate'], 1).'%' : '—' }}</td>
+						<td class="num tnum">{{ $row['rate'] !== null ? number_format($row['rate'], 0).'%' : '—' }}</td>
 						<td>
 							@if ($row['at_risk'])
 								<span class="badge badge-risk has-glyph"><span class="fa-glyph">⚠</span>At Risk</span>

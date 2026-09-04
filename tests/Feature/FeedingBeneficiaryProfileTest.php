@@ -127,7 +127,7 @@ class FeedingBeneficiaryProfileTest extends TestCase
 
         // 3 of 4 confirmed sessions — the unconfirmed one is out of both the
         // numerator and the denominator, and is never counted as an absence.
-        $response->assertSee('75.0%');
+        $response->assertSee('75%');
         $response->assertSee('3 / 4');
         $response->assertSee('days attended');
         $response->assertSee('Unconfirmed');
@@ -144,7 +144,7 @@ class FeedingBeneficiaryProfileTest extends TestCase
         // No evidence is not a turnout of nothing, so the rate is an em dash
         // and the learner is not flagged.
         $response->assertSee('0 / 0');
-        $response->assertDontSee('0.0%');
+        $response->assertDontSee('>0%<', false);
         $response->assertDontSee('At Risk Beneficiary');
     }
 

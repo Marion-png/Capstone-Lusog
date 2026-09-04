@@ -22,7 +22,7 @@
 <div class="np-headline">
 	<div class="np-figure">
 		<span class="np-count">{{ $progress['improved'] }} / {{ $progress['total'] }}</span>
-		<span class="np-rate {{ $hasEndline ? '' : 'is-idle' }}">{{ number_format((float) $progress['rate'], 1) }}%</span>
+		<span class="np-rate {{ $hasEndline ? '' : 'is-idle' }}">{{ number_format((float) $progress['rate'], 0) }}%</span>
 	</div>
 	<span class="np-measured">{{ $progress['measured'] }} of {{ $progress['total'] }} measured at endline</span>
 </div>

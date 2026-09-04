@@ -17,7 +17,8 @@
 	font-size: .72rem;
 	font-weight: 600;
 	letter-spacing: .1em;
-	font-variant-numeric: tabular-nums;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
 	color: var(--lg-ink-soft);
 	white-space: nowrap;
 }
@@ -29,7 +30,7 @@
 
 /* Which day of the cycle this is, and what today is — the two facts a
    coordinator checks before opening a sheet. */
-.fa-daymeta { margin-top: 6px; font-size: .82rem; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; }
+.fa-daymeta { margin-top: 6px; font-size: .82rem; color: var(--lg-ink-soft); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 .fa-day { font-weight: 600; color: var(--lg-emerald-deep); }
 .fa-daymeta .fa-sep { color: var(--lg-border-strong); margin: 0 8px; }
 
@@ -111,7 +112,8 @@
 	border-left: 1px solid var(--lg-border);
 	border-right: 1px solid var(--lg-border);
 	padding: 7px 10px;
-	font-variant-numeric: tabular-nums;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
 	font-weight: 600;
 }
 .fa-dateinput:focus-visible { outline: none; box-shadow: var(--lg-focus); }
@@ -152,7 +154,7 @@
 .fa-table { width: 100%; }
 .fa-table th:first-child, .fa-table td:first-child { padding-left: 18px; }
 .fa-table th:last-child, .fa-table td:last-child { padding-right: 18px; }
-.fa-idx { width: 44px; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; }
+.fa-idx { width: 44px; color: var(--lg-ink-soft); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 .fa-name { min-width: 190px; }
 .fa-table + .fa-table { margin-top: 0; }
 .table-card { margin-top: 14px; }
@@ -381,7 +383,8 @@
 	background: var(--lg-card);
 	color: var(--lg-ink);
 	text-decoration: none;
-	font-variant-numeric: tabular-nums;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
 }
 a.fa-cal-day:hover { border-color: var(--lg-emerald); }
 a.fa-cal-day:focus-visible { outline: none; box-shadow: var(--lg-focus); }

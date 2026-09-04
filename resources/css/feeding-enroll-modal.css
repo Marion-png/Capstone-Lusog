@@ -65,7 +65,7 @@
 .enroll-error { margin: 12px 20px; }
 
 .enroll-tally { font-size: .78rem; color: var(--lg-ink-soft); }
-.enroll-tally strong { color: var(--lg-ink); font-variant-numeric: tabular-nums; }
+.enroll-tally strong { color: var(--lg-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 .enroll-sep { color: var(--lg-border-strong); margin: 0 4px; }
 .enroll-foot-actions { display: flex; gap: 8px; margin-left: auto; }
 

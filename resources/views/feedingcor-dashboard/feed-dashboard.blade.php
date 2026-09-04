@@ -65,7 +65,7 @@
 			     shape, and a 10px track reads as a measure rather than a hairline.
 			     The action shares this line, so it sits level with the bar. --}}
 			<div class="sbfp-progress-row">
-				<span class="sbfp-progress-pct" data-cycle-percent>{{ number_format((float) $cycle['percent'], 1) }}%</span>
+				<span class="sbfp-progress-pct" data-cycle-percent>{{ number_format((float) $cycle['percent'], 0) }}%</span>
 				<div class="sbfp-progress" id="sbfpProgress" role="progressbar"
 					aria-valuemin="0" aria-valuemax="{{ $cycleDuration }}" aria-valuenow="{{ $cycleDay }}"
 					aria-valuetext="Feeding day {{ $cycleDay }} of {{ $cycleDuration }}"
@@ -266,10 +266,12 @@
 		const elapsed = Math.floor((today.getTime() - startMs) / 86400000) + 1;
 		const day = Math.max(0, Math.min(duration, elapsed));
 		const remaining = Math.max(0, duration - day);
-		const percent = ((day / duration) * 100).toFixed(1);
+		const percent = (day / duration) * 100;
 
-		if (fill) fill.style.width = percent + '%';
-		if (percentEl) percentEl.textContent = percent + '%';
+		// The bar keeps the exact fraction; the label beside it is read, not
+		// measured, so it is whole — as every percentage in this role is.
+		if (fill) fill.style.width = percent.toFixed(1) + '%';
+		if (percentEl) percentEl.textContent = Math.round(percent) + '%';
 		if (dayEl) dayEl.textContent = String(day);
 		if (remainingEl) remainingEl.textContent = remaining + (remaining === 1 ? ' day remaining' : ' days remaining');
 		bar.setAttribute('aria-valuenow', String(day));
