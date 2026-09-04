@@ -259,10 +259,10 @@ class FeedingExcusedAbsenceTest extends TestCase
      *
      * Filtering to "Excused" and reading a list of names is only half an
      * answer: an excused absence is defined by the reason the school accepted,
-     * so a screen that can narrow to the excused and cannot say why has
-     * narrowed to a list nobody can act on. Both halves are asserted together
-     * here, because a filter that works without its remark is exactly the state
-     * this test exists to prevent coming back.
+     * so a screen that prints the mark and not the reason has shown half of
+     * it. Both halves are asserted together here, because a filter that works
+     * without its remark is exactly the state this test exists to prevent
+     * coming back.
      */
     #[Test]
     public function every_attendance_status_filter_finds_the_excused_and_says_why(): void
@@ -281,23 +281,29 @@ class FeedingExcusedAbsenceTest extends TestCase
 
         $session = $this->coordinatorSession();
 
-        // The three surfaces that carry an Attendance Status control over one
-        // session's marks. Each narrows to the excused learner, drops the one
-        // who came, and prints the reason.
-        $filtered = [
+        // The surfaces that print the mark itself also print the reason beside
+        // it: an excused absence read without its reason is indistinguishable
+        // from one nobody explained.
+        foreach ([
             '/dashboard/feedingcor-dashboard?attendance=excused',
-            '/dashboard/feedingcor-health-records?attendance=excused',
             '/dashboard/feedingcor-attendance?status=excused&date='.$date,
             '/dashboard/feedingcor-attendance?view=beneficiary&status=excused&date='.$date,
-        ];
-
-        foreach ($filtered as $url) {
+        ] as $url) {
             $this->withSession($session)->get($url)
                 ->assertOk()
                 ->assertSee($excused->student_name)
                 ->assertDontSee($present->student_name)
                 ->assertSee('Fasting for Ramadan');
         }
+
+        // The Beneficiaries tab narrows to the same learner but deliberately
+        // prints no mark and no reason. Attendance in its table is the
+        // cumulative rate — a different question — so the tab keeps its
+        // standing anatomy and the reason is read where the mark is.
+        $this->withSession($session)->get('/dashboard/feedingcor-health-records?attendance=excused')
+            ->assertOk()
+            ->assertSee($excused->student_name)
+            ->assertDontSee($present->student_name);
 
         // The history is a list of days, not of learners, so it answers the
         // same question by keeping the session that carried an excused absence.
@@ -321,13 +327,17 @@ class FeedingExcusedAbsenceTest extends TestCase
     }
 
     /**
-     * Today's mark is drawn on the Beneficiaries tab only while the filter is
-     * asking about it. Attendance there is the cumulative rate — a different
-     * question — so the column appears to answer the one that was asked and
-     * leaves the tab's standing anatomy alone the rest of the time.
+     * The Beneficiaries table keeps its nine columns whatever the attendance
+     * filter is set to.
+     *
+     * The filter narrows the list and nothing else. Attendance in this table is
+     * the cumulative rate, and a second attendance column carrying today's mark
+     * would put two different questions under one heading — so the reason an
+     * absence was excused is read on the Attendance tab and on the learner's
+     * own record, where the mark itself lives.
      */
     #[Test]
-    public function the_beneficiaries_tab_shows_todays_mark_only_when_asked(): void
+    public function the_beneficiaries_table_keeps_its_columns_under_every_attendance_filter(): void
     {
         $learner = $this->makeStudent();
 
@@ -341,14 +351,16 @@ class FeedingExcusedAbsenceTest extends TestCase
 
         $session = $this->coordinatorSession();
 
-        $this->withSession($session)->get('/dashboard/feedingcor-health-records')
-            ->assertOk()
-            ->assertSee($learner->student_name)
-            ->assertDontSee('Confined at hospital');
+        foreach (['', '?attendance=excused', '?attendance=present'] as $query) {
+            $body = $this->withSession($session)
+                ->get('/dashboard/feedingcor-health-records'.$query)
+                ->assertOk()
+                ->assertDontSee('Confined at hospital')
+                ->getContent();
 
-        $this->withSession($session)->get('/dashboard/feedingcor-health-records?attendance=excused')
-            ->assertOk()
-            ->assertSee('Confined at hospital');
+            // No "Today" column, however the filter is set.
+            $this->assertStringNotContainsString('>Today', $body);
+        }
     }
 
     /**

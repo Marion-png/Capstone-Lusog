@@ -267,19 +267,6 @@ th.sortable:focus-visible { outline: 2px solid var(--lg-emerald); outline-offset
 .bnf-table td.num { font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); white-space: nowrap; }
 /* Nothing to report reads as an em dash, never as a zero or a blank. */
 .bnf-none { color: var(--lg-border-strong); }
-
-/* Today's mark, drawn only while the attendance filter is asking about it.
-   The reason sits under its badge rather than beside it, so the column reads
-   as one answer — the state, and why — instead of two competing values. */
-.bnf-today { white-space: normal; }
-.bnf-remark {
-	display: block;
-	margin-top: 3px;
-	max-width: 200px;
-	font-size: .72rem;
-	line-height: 1.35;
-	color: var(--lg-ink-soft);
-}
 .badge-icon { width: 12px; height: 12px; margin-right: 1px; flex: 0 0 auto; }
 /* A badge that carries a glyph drops the theme's status dot: one mark, not two. */
 .badge.has-icon::before { display: none; }
