@@ -95,9 +95,27 @@ final class SchoolLetterhead
         ];
     }
 
+    /**
+     * The seal's path, stamped with the file's own modification time.
+     *
+     * A seal is dropped in by hand and often replaced a second time — the first
+     * copy still has its white box, or it was cropped too tight. Without the
+     * stamp the browser keeps serving the copy it cached under the same
+     * filename, and the school concludes the form is broken when what they are
+     * looking at is yesterday's file. The name is what the app looks up; the
+     * stamp is only what the browser caches against.
+     */
     private static function sealPath(string $relative): ?string
     {
-        return is_file(public_path($relative)) ? $relative : null;
+        $absolute = public_path($relative);
+
+        if (! is_file($absolute)) {
+            return null;
+        }
+
+        $stamp = @filemtime($absolute);
+
+        return $stamp ? $relative.'?v='.$stamp : $relative;
     }
 
     /**

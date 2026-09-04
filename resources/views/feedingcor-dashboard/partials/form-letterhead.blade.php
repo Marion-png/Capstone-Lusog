@@ -21,7 +21,11 @@
 <div class="lh-block">
 	<div class="lh-seal lh-seal-left">
 		@if (! empty($seals['deped']))
-			<img src="{{ asset($seals['deped']) }}" alt="Department of Education">
+			{{-- Sized in the markup as well as the sheet so the heading reserves
+			     the seal's box before the file loads: a form that reflows as its
+			     seals arrive is a form somebody prints mid-shift. Never lazy —
+			     a deferred image is a blank square on paper. --}}
+			<img src="{{ asset($seals['deped']) }}" alt="Department of Education" width="72" height="72" loading="eager" decoding="sync">
 		@else
 			<span class="lh-seal-slot" aria-hidden="true">DepEd</span>
 		@endif
@@ -45,7 +49,7 @@
 
 	<div class="lh-seal lh-seal-right">
 		@if (! empty($seals['school']))
-			<img src="{{ asset($seals['school']) }}" alt="{{ $letterhead['school'] }}">
+			<img src="{{ asset($seals['school']) }}" alt="{{ $letterhead['school'] }}" width="72" height="72" loading="eager" decoding="sync">
 		@else
 			<span class="lh-seal-slot" aria-hidden="true">School</span>
 		@endif
