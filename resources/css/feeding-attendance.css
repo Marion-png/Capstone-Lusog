@@ -182,6 +182,18 @@
    than beside it: the state is the answer, the count is the footnote. */
 .fa-substatus { display: block; margin-top: 3px; font-size: .7rem; color: var(--lg-ink-soft); }
 
+/* The session mark, and under it the reason an absence was excused. Set as
+   one cell rather than two so the state and its explanation read together. */
+.fa-session-col { white-space: normal; }
+.fa-session-remark {
+	display: block;
+	margin-top: 3px;
+	max-width: 200px;
+	font-size: .72rem;
+	line-height: 1.35;
+	color: var(--lg-ink-soft);
+}
+
 /* ── The mark toggle ────────────────────────────────────────────────
    Two states, one tap, no dropdown: the whole point of this screen is
    encoding a day's attendance without opening anything. ── */

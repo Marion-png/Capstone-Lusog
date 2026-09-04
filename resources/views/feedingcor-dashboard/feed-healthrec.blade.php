@@ -349,6 +349,23 @@
                  nurse's screen, not this one. --}}
             <div class="table-card">
                 <div class="table-scroll">
+                    @php
+                        // Today's mark is not part of this tab's standing anatomy —
+                        // Attendance here is the cumulative rate, and the two are
+                        // different questions. But a control that decides what a
+                        // list contains must not be invisible: when the coordinator
+                        // filters on today's mark, the mark that put each learner in
+                        // the list is printed beside them, and an excused absence
+                        // carries the reason the school accepted. Asked, then
+                        // answered — and gone again when nothing was asked.
+                        $showToday = ($ff['attendance'] ?? '') !== '';
+                        $todayBadges = [
+                            'present' => ['badge-normal', 'Present'],
+                            'absent' => ['badge-critical', 'Absent'],
+                            'excused' => ['badge-monitor', 'Excused'],
+                        ];
+                        $bnfColumnCount = 9 + (int) $showToday;
+                    @endphp
                     <table id="recordsTable" class="bnf-table">
                         <thead>
                             <tr>
@@ -359,6 +376,9 @@
                                 <th class="sortable" data-sort="text" tabindex="0" role="button">Gender</th>
                                 <th class="sortable" data-sort="text" tabindex="0" role="button">Baseline</th>
                                 <th class="sortable num" data-sort="number" tabindex="0" role="button">Attendance</th>
+                                @if ($showToday)
+                                    <th class="sortable" data-sort="text" tabindex="0" role="button">Today &middot; {{ now()->format('M j') }}</th>
+                                @endif
                                 <th class="sortable" data-sort="text" tabindex="0" role="button">Status</th>
                                 <th class="sortable" data-sort="text" tabindex="0" role="button">Endline</th>
                             </tr>
@@ -409,6 +429,28 @@
                                     <td><span class="badge {{ $statusBadge($baselineStatus) }}">{{ $baselineStatus ?: 'Not set' }}</span></td>
                                     {{-- No confirmed session is not a 0% turnout. --}}
                                     <td class="num" data-value="{{ $rate ?? '' }}">{{ ! is_null($rate) ? $rate.'%' : '—' }}</td>
+                                    @if ($showToday)
+                                        @php
+                                            $today = (string) ($record->attendance_today ?? 'unmarked');
+                                            $todayRemark = trim((string) ($record->attendance_today_remarks ?? ''));
+                                        @endphp
+                                        <td class="bnf-today">
+                                            @isset ($todayBadges[$today])
+                                                <span class="badge {{ $todayBadges[$today][0] }}">{{ $todayBadges[$today][1] }}</span>
+                                                {{-- The reason the school accepted, on the row
+                                                     it belongs to. An absence with no remark
+                                                     stays a bare badge rather than an em dash
+                                                     pretending a reason was recorded. --}}
+                                                @if ($todayRemark !== '')
+                                                    <span class="bnf-remark">{{ $todayRemark }}</span>
+                                                @endif
+                                            @else
+                                                {{-- No sheet covered this learner today, or the
+                                                     scan is still unread. Never an absence. --}}
+                                                <span class="bnf-none">&mdash;</span>
+                                            @endisset
+                                        </td>
+                                    @endif
                                     <td>
                                         {{-- The warning glyph replaces the badge's
                                              own dot rather than joining it. --}}
@@ -430,9 +472,9 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="9" class="table-empty">{{ $activeFilters ? 'No beneficiaries match these filters.' : 'No beneficiaries yet.' }}</td></tr>
+                                <tr><td colspan="{{ $bnfColumnCount }}" class="table-empty">{{ $activeFilters ? 'No beneficiaries match these filters.' : 'No beneficiaries yet.' }}</td></tr>
                             @endforelse
-                            <tr id="recordsNoMatch" style="display:none;"><td colspan="9" class="table-empty">No beneficiaries match this search.</td></tr>
+                            <tr id="recordsNoMatch" style="display:none;"><td colspan="{{ $bnfColumnCount }}" class="table-empty">No beneficiaries match this search.</td></tr>
                         </tbody>
                     </table>
                 </div>

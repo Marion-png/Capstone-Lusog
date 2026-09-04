@@ -10,9 +10,11 @@ use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
 use App\Support\FeedingReportNarrative;
+use App\Support\SchemaCache;
 use App\Support\SchoolHeadOverview;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -190,6 +192,163 @@ class FeedingExcusedAbsenceTest extends TestCase
             ->assertRedirect();
 
         $this->assertNull(FeedingAttendance::where('student_health_record_id', $learner->id)->first()->remarks);
+    }
+
+    /**
+     * A database without the is_excused column refuses the excuse; it never
+     * quietly records an unexcused absence instead.
+     *
+     * `is_present` is false for both kinds of absence, so on a deployment whose
+     * migrations have not caught up an excused mark lands as an unexcused one:
+     * it reads "Absent" everywhere, the Excused filter finds nothing, and the
+     * at-risk rule counts it against the learner — the single thing the buffer
+     * exists to prevent. This is not a hypothetical: it is what a pending
+     * migration on the live database actually did.
+     */
+    #[Test]
+    public function an_excuse_this_database_cannot_store_is_refused_not_downgraded(): void
+    {
+        $learner = $this->makeStudent();
+        $date = $this->feedingDay();
+
+        // Exactly the state a lagging deployment is in.
+        Schema::table('feeding_attendances', function ($table): void {
+            $table->dropColumn('is_excused');
+        });
+        SchemaCache::flush();
+
+        $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-program/attendance/record', [
+                'session_date' => $date,
+                'marks' => [$learner->id => 'excused'],
+                'remarks' => [$learner->id => 'Fasting for Ramadan'],
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        // Nothing was written at all — and above all, not an absence.
+        $this->assertSame(0, FeedingAttendance::where('student_health_record_id', $learner->id)->count());
+
+        // The correction path refuses on the same terms. It needs a session on
+        // file to correct, so record a plain absence first.
+        $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-program/attendance/record', [
+                'session_date' => $date,
+                'marks' => [$learner->id => 'absent'],
+            ])
+            ->assertRedirect();
+
+        $this->withSession($this->coordinatorSession())
+            ->post("/dashboard/feedingcor-program/beneficiary/{$learner->id}/attendance", [
+                'session_date' => $date,
+                'mark' => 'excused',
+                'remarks' => 'Fasting for Ramadan',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $mark = FeedingAttendance::where('student_health_record_id', $learner->id)->first();
+        $this->assertFalse((bool) $mark->is_present);
+        // Still the plain absence it was recorded as, never relabelled.
+        $this->assertSame(FeedingAttendanceMark::ABSENT, FeedingAttendanceMark::state($mark));
+    }
+
+    /**
+     * Every Attendance Status control in the role can ask for the excused, and
+     * every one of them answers with the reason.
+     *
+     * Filtering to "Excused" and reading a list of names is only half an
+     * answer: an excused absence is defined by the reason the school accepted,
+     * so a screen that can narrow to the excused and cannot say why has
+     * narrowed to a list nobody can act on. Both halves are asserted together
+     * here, because a filter that works without its remark is exactly the state
+     * this test exists to prevent coming back.
+     */
+    #[Test]
+    public function every_attendance_status_filter_finds_the_excused_and_says_why(): void
+    {
+        $excused = $this->makeStudent();
+        $present = $this->makeStudent();
+        $date = $this->feedingDay();
+
+        $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-program/attendance/record', [
+                'session_date' => $date,
+                'marks' => [$excused->id => 'excused', $present->id => 'present'],
+                'remarks' => [$excused->id => 'Fasting for Ramadan'],
+            ])
+            ->assertRedirect();
+
+        $session = $this->coordinatorSession();
+
+        // The three surfaces that carry an Attendance Status control over one
+        // session's marks. Each narrows to the excused learner, drops the one
+        // who came, and prints the reason.
+        $filtered = [
+            '/dashboard/feedingcor-dashboard?attendance=excused',
+            '/dashboard/feedingcor-health-records?attendance=excused',
+            '/dashboard/feedingcor-attendance?status=excused&date='.$date,
+            '/dashboard/feedingcor-attendance?view=beneficiary&status=excused&date='.$date,
+        ];
+
+        foreach ($filtered as $url) {
+            $this->withSession($session)->get($url)
+                ->assertOk()
+                ->assertSee($excused->student_name)
+                ->assertDontSee($present->student_name)
+                ->assertSee('Fasting for Ramadan');
+        }
+
+        // The history is a list of days, not of learners, so it answers the
+        // same question by keeping the session that carried an excused absence.
+        $this->withSession($session)->get('/dashboard/feedingcor-attendance?view=history&status=excused')
+            ->assertOk()
+            ->assertSee(Carbon::parse($date)->format('M j, Y'));
+
+        // And the filter is exclusive both ways: asking who came must not
+        // return the learner who was excused, nor leak their reason.
+        foreach ([
+            '/dashboard/feedingcor-dashboard?attendance=present',
+            '/dashboard/feedingcor-health-records?attendance=present',
+            '/dashboard/feedingcor-attendance?view=beneficiary&status=present&date='.$date,
+        ] as $url) {
+            $this->withSession($session)->get($url)
+                ->assertOk()
+                ->assertSee($present->student_name)
+                ->assertDontSee($excused->student_name)
+                ->assertDontSee('Fasting for Ramadan');
+        }
+    }
+
+    /**
+     * Today's mark is drawn on the Beneficiaries tab only while the filter is
+     * asking about it. Attendance there is the cumulative rate — a different
+     * question — so the column appears to answer the one that was asked and
+     * leaves the tab's standing anatomy alone the rest of the time.
+     */
+    #[Test]
+    public function the_beneficiaries_tab_shows_todays_mark_only_when_asked(): void
+    {
+        $learner = $this->makeStudent();
+
+        $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-program/attendance/record', [
+                'session_date' => $this->feedingDay(),
+                'marks' => [$learner->id => 'excused'],
+                'remarks' => [$learner->id => 'Confined at hospital'],
+            ])
+            ->assertRedirect();
+
+        $session = $this->coordinatorSession();
+
+        $this->withSession($session)->get('/dashboard/feedingcor-health-records')
+            ->assertOk()
+            ->assertSee($learner->student_name)
+            ->assertDontSee('Confined at hospital');
+
+        $this->withSession($session)->get('/dashboard/feedingcor-health-records?attendance=excused')
+            ->assertOk()
+            ->assertSee('Confined at hospital');
     }
 
     /**

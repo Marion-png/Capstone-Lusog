@@ -1339,6 +1339,24 @@ class FeedingProgramController extends Controller
         $recorder = (string) $request->session()->get('active_name', 'Feeding Coordinator');
         $remarks = collect($request->input('remarks', []));
 
+        // An excuse this database cannot store is refused, never downgraded.
+        //
+        // `is_present` is false for both kinds of absence, so without the
+        // column an excused mark lands as an *unexcused* one: it reads as
+        // "Absent" on every screen, the Excused filter finds nothing, and — the
+        // part that actually harms somebody — the at-risk rule counts it
+        // against the learner, which is the one thing the buffer exists to
+        // prevent. Recording a child as unexcused when the coordinator excused
+        // them is worse than recording nothing, so the session is refused whole
+        // and the coordinator is told why.
+        if (! $hasExcused && $marks->contains(FeedingAttendanceMark::EXCUSED)) {
+            return back()->with(
+                'error',
+                'This database cannot record an excused absence yet, and marking one as a plain absence '
+                    .'would count it against the learner. Run "php artisan migrate", then record the session again.'
+            );
+        }
+
         $upserts = $marks->map(function ($mark, $recordId) use ($sessionDate, $now, $hasReviewColumns, $hasRemarks, $hasRecorder, $hasExcused, $recorder, $remarks): array {
             $row = [
                 'student_health_record_id' => (int) $recordId,
@@ -1536,6 +1554,17 @@ class FeedingProgramController extends Controller
 
         if (! SchemaCache::hasTable('feeding_attendances')) {
             return back()->with('error', 'Attendance tracking tables are not ready. Run migrations first.');
+        }
+
+        // Same refusal the recording path makes, for the same reason: correcting
+        // a mark to Excused on a database with no is_excused column would write
+        // a plain absence and hold it against the learner.
+        if ($validated['mark'] === FeedingAttendanceMark::EXCUSED && ! $this->hasExcusedColumn()) {
+            return back()->with(
+                'error',
+                'This database cannot record an excused absence yet, and marking one as a plain absence '
+                    .'would count it against the learner. Run "php artisan migrate", then correct the mark again.'
+            );
         }
 
         $institutionId = $request->session()->get('active_institution_id');

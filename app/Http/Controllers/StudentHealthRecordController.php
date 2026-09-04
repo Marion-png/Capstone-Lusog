@@ -1415,6 +1415,11 @@ class StudentHealthRecordController extends Controller
         // Today's marks, for the attendance filter. A learner no sheet has
         // covered is unmarked, and a scanned mark nobody has confirmed is NULL
         // — neither is an absence, so both read as "unmarked" here.
+        //
+        // The remark rides along with the state because an excused absence is
+        // only half an answer without it: a coordinator who filters this tab to
+        // "Excused today" is asking who was away with the school's blessing,
+        // and the reason is the other half of what they asked for.
         $todayMarks = collect();
         if ($records->isNotEmpty() && SchemaCache::hasTable('feeding_attendances')) {
             $todayMarks = FeedingAttendance::query()
@@ -1422,10 +1427,14 @@ class StudentHealthRecordController extends Controller
                 ->whereDate('session_date', now()->toDateString())
                 ->get(array_merge(
                     ['student_health_record_id', 'is_present', 'needs_review'],
-                    SchemaCache::hasColumn('feeding_attendances', 'is_excused') ? ['is_excused'] : []
+                    SchemaCache::hasColumn('feeding_attendances', 'is_excused') ? ['is_excused'] : [],
+                    SchemaCache::hasColumn('feeding_attendances', 'remarks') ? ['remarks'] : []
                 ))
                 ->mapWithKeys(fn ($mark): array => [
-                    $mark->student_health_record_id => FeedingAttendanceMark::state($mark),
+                    $mark->student_health_record_id => [
+                        'state' => FeedingAttendanceMark::state($mark),
+                        'remarks' => trim((string) ($mark->remarks ?? '')),
+                    ],
                 ]);
         }
 
@@ -1545,7 +1554,7 @@ class StudentHealthRecordController extends Controller
                 // no turnout to report, which the table prints as an em dash.
                 'attendance_rate' => $standings[$id]['rate'] ?? null,
                 'sex' => $sex,
-                'attendance_today' => match ($todayMarks->get($id ?? -1, FeedingAttendanceMark::NOT_MARKED)) {
+                'attendance_today' => match ($todayMarks->get($id ?? -1)['state'] ?? FeedingAttendanceMark::NOT_MARKED) {
                     FeedingAttendanceMark::PRESENT => 'present',
                     FeedingAttendanceMark::ABSENT => 'absent',
                     // An absence the school accepted: an answer in its own
@@ -1554,6 +1563,9 @@ class StudentHealthRecordController extends Controller
                     // A scanned mark no human has confirmed is not an absence.
                     default => 'unmarked',
                 },
+                // Why the learner was away, as the coordinator wrote it. Empty
+                // for a learner who came, and for one nobody recorded.
+                'attendance_today_remarks' => $todayMarks->get($id ?? -1)['remarks'] ?? '',
                 'student_name' => $record->student_name,
                 'grade_level' => $grade,
                 'section_name' => $section,
