@@ -5,6 +5,7 @@ use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\ClinicNoteController;
 use App\Http\Controllers\ConditionController;
 use App\Http\Controllers\ConsultationController;
+use App\Http\Controllers\ConsultationPhotoController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\FeedingAtRiskController;
 use App\Http\Controllers\FeedingAttendanceController;
@@ -800,6 +801,21 @@ Route::get('/health-records/students/{lrn}/vitals', [StudentVitalSignsController
     ->name('student-vitals.show');
 Route::post('/health-records/students/{lrn}/vitals', [StudentVitalSignsController::class, 'store'])
     ->name('student-vitals.store');
+
+// Photographs attached to a consultation — a cut, a rash, a swelling, so an
+// injury can be seen rather than described. The clinic takes them; the class
+// adviser sees only the ones the nurse chose to share, because consultation
+// detail otherwise stops at the clinic. Enforced in the controller.
+Route::get('/health-records/consultations/{consultation}/photos', [ConsultationPhotoController::class, 'index'])
+    ->whereNumber('consultation')->name('consultation-photos.index');
+Route::post('/health-records/consultations/{consultation}/photos', [ConsultationPhotoController::class, 'store'])
+    ->whereNumber('consultation')->name('consultation-photos.store');
+Route::get('/health-records/consultation-photos/{photo}', [ConsultationPhotoController::class, 'view'])
+    ->whereNumber('photo')->name('consultation-photos.view');
+Route::post('/health-records/consultation-photos/{photo}/share', [ConsultationPhotoController::class, 'share'])
+    ->whereNumber('photo')->name('consultation-photos.share');
+Route::delete('/health-records/consultation-photos/{photo}', [ConsultationPhotoController::class, 'destroy'])
+    ->whereNumber('photo')->name('consultation-photos.destroy');
 
 // Parental consent form upload (class_adviser only, own class enforced in controller)
 Route::post('/adviser/parental-consent', [ParentalConsentFormController::class, 'store'])

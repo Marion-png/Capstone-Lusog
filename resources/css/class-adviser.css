@@ -911,3 +911,13 @@ tbody tr:hover td{background:#f3fbf6}
 .vitals-unit{font-size:.68rem;color:var(--lg-ink-soft,#6B7C72)}
 .vitals-attribution{margin-top:9px;font-size:.72rem;color:var(--lg-ink-soft,#6B7C72)}
 @media (max-width:640px){.vitals-readout{grid-template-columns:1fr}}
+
+/* ── Shared consultation photos (student profile) ──
+   The school nurse decides, per photo, whether the class adviser sees it.
+   Nothing appears here unless they did — see App\Support\ConsultationVisibility. */
+.clog-photos{margin-top:10px;padding-top:9px;border-top:1px dashed var(--lg-border,#DCE8E0)}
+.clog-photos-label{font-size:.7rem;font-weight:700;letter-spacing:.03em;color:var(--lg-ink-soft,#6B7C72);margin-bottom:7px}
+.clog-photo-strip{display:flex;flex-wrap:wrap;gap:8px}
+.clog-photo-strip a{display:block;border:1px solid var(--lg-border,#DCE8E0);border-radius:9px;overflow:hidden;line-height:0}
+.clog-photo-strip a:hover{border-color:var(--lg-emerald,#1F8A4C)}
+.clog-photo-strip img{width:104px;height:78px;object-fit:cover;display:block}

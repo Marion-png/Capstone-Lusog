@@ -43,9 +43,14 @@
             Health Records
             @if ($nurseSbPending > 0)<span class="sb-count alert">{{ $nurseSbPending }}</span>@endif
         </a>
+        {{-- One entry, not two. This and the old "Health Assessments" tab were
+             the same job under different names — the nurse reading what the
+             class advisers submitted — so the rail now names it once. The
+             route behind it is unchanged (nurse.index); only the label moved.
+             health-assessments.nurse-index is still live for old links. --}}
         <a href="{{ route('nurse.index') }}" class="sb-link {{ $active === 'queue' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
-            Review Queue
+            Health Assessment
         </a>
         <a href="{{ route('dashboard.consultation-log') }}" class="sb-link {{ $active === 'consultations' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
@@ -66,10 +71,11 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
             Consent Forms
         </a>
-        <a href="{{ route('health-assessments.nurse-index') }}" class="sb-link {{ $active === 'assessments' ? 'active' : '' }}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-            Health Assessments
-        </a>
+        {{-- Health Assessments is deliberately not listed. It and the Review
+             Queue were two names for one job, so the rail carries it once, as
+             "Health Assessment", under Clinic. The page and its routes are
+             still live at health-assessments.nurse-index — only the duplicate
+             rail entry is gone, exactly as Deworming was handled above. --}}
 
         <div class="sb-section-label">Inventory</div>
         <a href="{{ route('dashboard.medicine-inventory') }}" class="sb-link {{ $active === 'inventory' ? 'active' : '' }}">

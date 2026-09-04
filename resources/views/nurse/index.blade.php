@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
-    <title>Review Queue - SIGLA</title>
+    <title>Health Assessment - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
@@ -32,7 +32,7 @@
     @endphp
 
     <header class="topbar">
-        <div class="topbar-bc"><span>School Nurse</span><span class="bc-sep">&rsaquo;</span><span>Review Queue</span></div>
+        <div class="topbar-bc"><span>School Nurse</span><span class="bc-sep">&rsaquo;</span><span>Health Assessment</span></div>
 
         @include('partials.nurse-learner-search')
         <div class="topbar-spacer"></div>
@@ -50,7 +50,7 @@
 
         <div class="page-header">
             <div class="page-eyebrow">Adviser Submissions</div>
-            <h1 class="page-title">Review <span>Queue</span></h1>
+            <h1 class="page-title">Health <span>Assessment</span></h1>
             <p class="page-sub">Health cards submitted by class advisers, waiting for the clinic's medical examination.</p>
         </div>
 

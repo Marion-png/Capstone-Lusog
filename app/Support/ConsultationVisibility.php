@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Consultation;
+use App\Models\ConsultationPhoto;
 
 /**
  * Who may see what a learner came to the clinic for.
@@ -54,12 +55,19 @@ class ConsultationVisibility
     {
         // The visit itself — that it happened, and when. Never redacted: this
         // is the part a class adviser is entitled to.
+        //
+        // The id rides along because it is not clinical: it is what the photo
+        // endpoints are keyed by, and the adviser's tab needs it to fetch the
+        // photographs the nurse deliberately shared. Those endpoints do their
+        // own checking — an id here grants nothing on its own.
         $visit = [
+            'id' => $consultation->id,
             'consulted_at' => $consultation->consulted_at?->toDateTimeString(),
             'date' => $consultation->consulted_at?->format('M j, Y'),
             'time' => $consultation->consulted_at?->format('g:i A'),
             'consulted_at_label' => $consultation->consulted_at?->format('M j, Y \a\t g:i A'),
             'details_visible' => self::maySeeDetails($role),
+            'shared_photo_count' => self::sharedPhotoCount($consultation),
         ];
 
         if (! self::maySeeDetails($role)) {
@@ -72,6 +80,25 @@ class ConsultationVisibility
             'treatment_given' => (string) $consultation->treatment_given,
             'status' => (string) $consultation->status,
         ];
+    }
+
+    /**
+     * How many photographs on this visit the nurse shared with the adviser.
+     *
+     * Zero for a visit with none, and zero before the table exists — a count
+     * is not clinical detail, it is what tells the adviser's tab whether to
+     * offer anything at all.
+     */
+    public static function sharedPhotoCount(Consultation $consultation): int
+    {
+        if (! SchemaCache::hasTable('consultation_photos')) {
+            return 0;
+        }
+
+        return ConsultationPhoto::query()
+            ->where('consultation_id', $consultation->id)
+            ->sharedWithAdviser()
+            ->count();
     }
 
     /**

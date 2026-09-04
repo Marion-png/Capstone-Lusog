@@ -579,6 +579,48 @@ const STUDENT_PROFILE_LRN = @json($lrn);
                 card.appendChild(row);
             });
 
+            // Photographs the school nurse deliberately shared for this
+            // visit — a cut or a graze the adviser needs to know about.
+            // Nothing loads unless the nurse shared something: the count
+            // comes from the server, and the endpoint checks again.
+            if (Number(visit.shared_photo_count) > 0 && visit.id) {
+                const shelf = document.createElement('div');
+                shelf.className = 'clog-photos';
+                shelf.appendChild(Object.assign(document.createElement('div'), {
+                    className: 'clog-photos-label',
+                    textContent: 'Photos shared by the school nurse',
+                }));
+
+                const strip = document.createElement('div');
+                strip.className = 'clog-photo-strip';
+                shelf.appendChild(strip);
+                card.appendChild(shelf);
+
+                fetch(@json(url('health-records/consultations')) + '/' + encodeURIComponent(visit.id) + '/photos',
+                    { headers: { Accept: 'application/json' } })
+                    .then((r) => (r.ok ? r.json() : null))
+                    .then((data) => {
+                        (data?.photos || []).forEach((photo) => {
+                            const link = document.createElement('a');
+                            link.href = photo.url;
+                            link.target = '_blank';
+                            link.rel = 'noopener';
+                            link.title = photo.caption || 'Photo shared by the school nurse';
+
+                            const img = document.createElement('img');
+                            img.src = photo.url;
+                            // Captions are typed by staff, so this is set as
+                            // text through the DOM, never interpolated.
+                            img.alt = photo.caption || 'Photo shared by the school nurse';
+                            img.loading = 'lazy';
+
+                            link.appendChild(img);
+                            strip.appendChild(link);
+                        });
+                    })
+                    .catch(() => {});
+            }
+
             host.appendChild(card);
         });
     };

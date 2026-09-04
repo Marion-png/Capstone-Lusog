@@ -109,7 +109,7 @@
         </a>
         <a href="{{ route('nurse.index') }}" class="nsb-item {{ $active === 'queue' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
-            <span>Review Queue</span>
+            <span>Health Assessment</span>
         </a>
         <a href="{{ route('dashboard.consultation-log') }}" class="nsb-item {{ $active === 'consultations' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
@@ -127,10 +127,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
             <span>Consent Forms</span>
         </a>
-        <a href="{{ route('health-assessments.nurse-index') }}" class="nsb-item {{ $active === 'assessments' ? 'active' : '' }}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-            <span>Health Assessments</span>
-        </a>
+        {{-- Health Assessments is deliberately not listed. It and the Review
+             Queue were two names for one job, so the rail carries it once, as
+             "Health Assessment", under Clinic. The page and its routes are
+             still live at health-assessments.nurse-index. --}}
 
         <div class="nsb-label">Inventory</div>
         <a href="{{ route('dashboard.medicine-inventory') }}" class="nsb-item {{ $active === 'inventory' ? 'active' : '' }}">

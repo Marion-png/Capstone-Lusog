@@ -263,7 +263,10 @@ class SchoolNurseDashboardTest extends TestCase
 
         $nurse->assertSee('Ana Reyes')
             ->assertSee('Sta. Ana NHS')
-            ->assertSee('Review Queue')
+            // One entry, not two: the Review Queue and the old Health
+            // Assessments tab were the same job, so the rail names it once.
+            ->assertSee('Health Assessment')
+            ->assertDontSee('Review Queue')
             ->assertSee('Medicine Inventory')
             // The avatar carries one initial per name part, as everywhere
             // else in the LUSOG system — "Ana Reyes" reads AR.

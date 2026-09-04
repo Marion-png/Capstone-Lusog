@@ -177,6 +177,7 @@
                             <th>Condition</th>
                             <th>Treatment Given</th>
                             <th>Status</th>
+                            <th>Photos</th>
                         </tr>
                     </thead>
                     <tbody id="consultationRows">
@@ -200,14 +201,24 @@
                                         <span class="badge badge-normal">Treated</span>
                                     @endif
                                 </td>
+                                <td>
+                                    {{-- A photograph of an injury is clinical information, so it
+                                         opens from here and is never printed into the row. --}}
+                                    <button type="button" class="clog-photo-btn"
+                                            data-photos-open="{{ $consultation->id }}"
+                                            data-photos-student="{{ $rowName !== '' ? $rowName : 'this learner' }}">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                                        Photos
+                                    </button>
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="table-empty">No consultations yet. Use New Consultation to add the first entry.</td>
+                                <td colspan="7" class="table-empty">No consultations yet. Use New Consultation to add the first entry.</td>
                             </tr>
                         @endforelse
                         <tr id="logNoMatch" hidden>
-                            <td colspan="6" class="table-empty">No consultations match your search.</td>
+                            <td colspan="7" class="table-empty">No consultations match your search.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -221,6 +232,8 @@
 </div>
 
 @include('partials.consultation-modal')
+@include('partials.consultation-photos-modal')
+@include('partials.consultation-photos-script')
 @include('partials.nurse-page-transition')
 
 <script>
