@@ -4,7 +4,7 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="csrf-token" content="{{ csrf_token() }}">
-	<title>Masterlist - School Head - SIGLA</title>
+	<title>Nutritional Health Status of All Learners - School Head - SIGLA</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
@@ -47,7 +47,7 @@
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>School Head</span><span class="bc-sep">&rsaquo;</span><span>Masterlist</span></div>
+		<div class="topbar-bc"><span>School Head</span><span class="bc-sep">&rsaquo;</span><span>Nutritional Health Status of All Learners</span></div>
 		@include('partials.live-clock')
 	</header>
 
@@ -56,7 +56,7 @@
 		<div class="page-header sh-header">
 			<div class="sh-headline">
 				<div class="sh-title-row">
-					<h1 class="page-title">Learner <span>Masterlist</span></h1>
+					<h1 class="page-title">Nutritional Health Status <span>of All Learners</span></h1>
 					<span class="sh-year tnum">S.Y. {!! $shYear !!}</span>
 				</div>
 				<p class="sh-meta">
@@ -68,17 +68,17 @@
 			<div class="sh-actions">
 				<a class="btn btn-secondary" href="{{ route('dashboard.school-head.masterlist.export', request()->query()) }}">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-					Export masterlist
+					Export list
 				</a>
 				<button type="button" class="btn btn-secondary" id="shPrint">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
-					Print masterlist
+					Print list
 				</button>
 			</div>
 		</div>
 
 		<div class="print-masthead" aria-hidden="true">
-			<h2>Learner Masterlist</h2>
+			<h2>Nutritional Health Status of All Learners</h2>
 			<p>{{ $schoolName }} &middot; S.Y. {{ $schoolYear }}</p>
 			<p>Printed {{ $todayLabel }}</p>
 		</div>

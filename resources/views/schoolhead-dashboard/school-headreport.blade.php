@@ -4,7 +4,7 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="csrf-token" content="{{ csrf_token() }}">
-	<title>Reports - School Head - SIGLA</title>
+	<title>Health Reports - School Head - SIGLA</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
@@ -26,7 +26,7 @@
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>School Head</span><span class="bc-sep">&rsaquo;</span><span>Reports</span></div>
+		<div class="topbar-bc"><span>School Head</span><span class="bc-sep">&rsaquo;</span><span>Health Reports</span></div>
 		@include('partials.live-clock')
 	</header>
 
@@ -46,7 +46,7 @@
 		<div class="page-header sh-header">
 			<div class="sh-headline">
 				<div class="sh-title-row">
-					<h1 class="page-title">SBFP <span>Reports</span></h1>
+					<h1 class="page-title">Health <span>Reports</span></h1>
 					<span class="sh-year tnum">S.Y. {!! $shYear !!}</span>
 				</div>
 				<p class="sh-meta">
@@ -65,19 +65,15 @@
 					</select>
 					<noscript><button type="submit" class="btn btn-secondary">Apply</button></noscript>
 				</form>
-				<a class="btn btn-primary" href="{{ route('dashboard.school-head.reports.export', ['report' => 'packet', 'school_year' => $schoolYear]) }}">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-					Division submission packet
-				</a>
 				<button type="button" class="btn btn-secondary" id="shPrint">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
-					Print reports
+					Print health reports
 				</button>
 			</div>
 		</div>
 
 		<div class="print-masthead" aria-hidden="true">
-			<h2>School-Based Feeding Program &mdash; Reports</h2>
+			<h2>Health Reports</h2>
 			<p>{{ $schoolName }} &middot; S.Y. {{ $schoolYear }}</p>
 			<p>Printed {{ $todayLabel }}</p>
 		</div>
@@ -256,7 +252,7 @@
 		     it was handed in. The endpoint refuses it too. ── --}}
 		<section class="card section">
 			<div class="section-head">
-				<h2 class="section-title">Reports</h2>
+				<h2 class="section-title">Health Reports</h2>
 				<div class="section-meta">Exports are .xlsx workbooks &middot; print a view for a PDF</div>
 			</div>
 
@@ -303,7 +299,7 @@
 							<span class="badge badge-info">Always current</span>
 						</div>
 						<p class="sh-report-sub">The identified Severely Wasted and Wasted learners qualified for the programme.</p>
-						<p class="sh-report-detail">Filtered and searched on the Masterlist tab.</p>
+						<p class="sh-report-detail">Filtered and searched on the Nutritional Health Status of All Learners tab.</p>
 					</div>
 					<div class="sh-report-actions">
 						<a class="btn btn-secondary" href="{{ route('dashboard.school-head.reports.view', ['report' => 'masterlist', 'school_year' => $schoolYear]) }}">View</a>
@@ -313,96 +309,6 @@
 			</ul>
 		</section>
 
-		{{-- ── Monthly accomplishment ──────────────────────────────────── --}}
-		@if (! empty($monthly))
-			<section class="card section">
-				<div class="section-head">
-					<h2 class="section-title">Monthly Accomplishment</h2>
-					<div class="section-meta tnum">
-						@if ($turnout['average'] !== null)
-							{{ $shPct($turnout['average']) }} average turnout
-						@else
-							No confirmed mark yet
-						@endif
-					</div>
-				</div>
-
-				{{-- ── Turnout month by month ───────────────────────────
-				     A fixed 0–100 axis, because a percentage's scale is not
-				     the data's to choose, with the programme's full-turnout
-				     line drawn across it: the gap between a column and that
-				     line is the reading. A month whose marks are all still
-				     unconfirmed draws nothing rather than a zero. ── --}}
-				<div class="sh-turnout">
-					<div class="sh-turnout-axis" aria-hidden="true">
-						@foreach ($turnout['ticks'] as $tick)
-							<span class="tnum">{{ $tick }}%</span>
-						@endforeach
-					</div>
-					<div class="sh-turnout-plot">
-						<div class="sh-turnout-grid" aria-hidden="true">
-							@foreach ($turnout['ticks'] as $tick)
-								<span class="sh-turnout-line" style="bottom:{{ $tick }}%"></span>
-							@endforeach
-							<span class="sh-turnout-target" style="bottom:{{ $turnout['full_turnout'] }}%"
-							      data-label="{{ rtrim(rtrim(number_format($turnout['full_turnout'], 1), '0'), '.') }}%"></span>
-						</div>
-						<div class="sh-turnout-cols">
-							@foreach ($turnout['columns'] as $column)
-								<div class="sh-turnout-col" tabindex="0"
-								     title="{{ $column['full_label'] }} &middot; {{ $column['days_fed'] }} {{ \Illuminate\Support\Str::plural('day', $column['days_fed']) }} fed &middot; {{ number_format($column['meals']) }} meals"
-								     aria-label="{{ $column['full_label'] }}: {{ $column['rate'] === null ? 'no confirmed mark' : $shPct($column['rate']).' turnout' }}">
-									@if ($column['rate'] !== null)
-										<span class="sh-turnout-cap tnum" style="bottom:calc({{ $column['rate'] }}% + 6px)">{{ $shPct($column['rate']) }}</span>
-										<span class="sh-turnout-bar {{ $column['rate'] < $turnout['full_turnout'] ? 'is-low' : '' }}"
-										      style="height:{{ $column['rate'] }}%"></span>
-									@endif
-								</div>
-							@endforeach
-						</div>
-					</div>
-					<div class="sh-turnout-labels" aria-hidden="true">
-						@foreach ($turnout['columns'] as $column)
-							<span>{{ $column['label'] }}</span>
-						@endforeach
-					</div>
-				</div>
-
-				@foreach ($monthly as $month)
-					<div class="sh-month">
-						<div class="sh-month-head">
-							<strong>{{ $month['label'] }}</strong>
-							<span class="tnum">
-								{{ $month['days_fed'] }} {{ \Illuminate\Support\Str::plural('day', $month['days_fed']) }} fed
-								&middot; {{ number_format($month['meals_served']) }} meals
-								&middot; {{ $shPct($month['turnout']) }} turnout
-							</span>
-						</div>
-						@if (! empty($month['grades']))
-							<div class="table-card">
-								<div class="table-scroll">
-									<table>
-										<thead>
-											<tr><th>Grade</th><th class="num">Present</th><th class="num">Confirmed marks</th><th class="num">Turnout</th></tr>
-										</thead>
-										<tbody>
-											@foreach ($month['grades'] as $grade)
-												<tr>
-													<td><strong>{{ $grade['label'] }}</strong></td>
-													<td class="num">{{ number_format($grade['present']) }}</td>
-													<td class="num">{{ number_format($grade['confirmed']) }}</td>
-													<td class="num">{{ $shPct($grade['rate']) }}</td>
-												</tr>
-											@endforeach
-										</tbody>
-									</table>
-								</div>
-							</div>
-						@endif
-					</div>
-				@endforeach
-			</section>
-		@endif
 		</div>
 	</div>
 </div>

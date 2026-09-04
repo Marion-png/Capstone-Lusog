@@ -293,30 +293,36 @@ class SchoolHeadReportExportTest extends TestCase
         $this->assertStringNotContainsString('Juan Dela Cruz', $this->flatten($sheets['Baseline BMI']));
     }
 
+    /**
+     * Each assessment exports on its own, and there is no bundle.
+     *
+     * The Division submission packet was removed along with the monthly
+     * accomplishment report it carried: it wrote one workbook holding both
+     * forms plus a sheet nobody asked for, so the head now exports the form
+     * they mean and the file says which one it is.
+     */
     #[Test]
-    public function the_packet_carries_both_assessments_and_the_accomplishment_report(): void
+    public function the_endline_exports_as_its_own_form_and_the_packet_is_gone(): void
     {
-        // The packet holds both assessment forms, so both weighings have to be
-        // finished before it can be exported at all.
         $this->makeLearner(['feeding_enrolled_at' => now(), 'endline_nutritional_status' => 'Normal']);
 
         $sheets = $this->sheets($this->withSession($this->headSession())
-            ->get('/dashboard/school-head/reports/export?report=packet')
+            ->get('/dashboard/school-head/reports/export?report=endline')
             ->assertOk()
             ->streamedContent());
 
-        $this->assertArrayHasKey('Baseline BMI', $sheets);
         $this->assertArrayHasKey('Final BMI', $sheets);
-        $this->assertArrayHasKey('Accomplishment', $sheets);
-
+        $this->assertArrayNotHasKey('Accomplishment', $sheets);
         $this->assertStringContainsString(
             'Final Nutritional Assessment (BMI) Report',
             $this->flatten($sheets['Final BMI'])
         );
-        $this->assertStringContainsString(
-            'Monthly Accomplishment Report',
-            $this->flatten($sheets['Accomplishment'])
-        );
+
+        // The endpoint refuses the packet, not merely the button that named it.
+        $this->withSession($this->headSession())
+            ->get('/dashboard/school-head/reports/export?report=packet')
+            ->assertRedirect()
+            ->assertSessionHas('error');
     }
 
     #[Test]

@@ -43,16 +43,18 @@
             <span class="asb-link-text">Health Overview</span>
         </a>
 
-        <div class="asb-nav-label">Students</div>
-        <a href="{{ route('dashboard.school-head.masterlist') }}" class="asb-link {{ $active === 'masterlist' ? 'active' : '' }}" title="Masterlist">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
-            <span class="asb-link-text">Masterlist</span>
-        </a>
-
+        {{-- The learner roll sits under Feeding Program rather than in a
+             "Students" group of its own: it reports every learner's
+             nutritional status, which is what the programme is judged on, and
+             a group holding one item was a heading standing in for a section. --}}
         <div class="asb-nav-label">Feeding Program</div>
         <a href="{{ route('dashboard.school-head.program') }}" class="asb-link {{ $active === 'program' ? 'active' : '' }}" title="Feeding Program">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>
             <span class="asb-link-text">Feeding Program</span>
+        </a>
+        <a href="{{ route('dashboard.school-head.masterlist') }}" class="asb-link {{ $active === 'masterlist' ? 'active' : '' }}" title="Nutritional Health Status of All Learners">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
+            <span class="asb-link-text">Nutritional Health Status of All Learners</span>
         </a>
 
         <div class="asb-nav-label">Compliance</div>
@@ -66,9 +68,9 @@
         </a>
 
         <div class="asb-nav-label">Oversight</div>
-        <a href="{{ route('dashboard.school-head.reports') }}" class="asb-link {{ $active === 'reports' ? 'active' : '' }}" title="Reports">
+        <a href="{{ route('dashboard.school-head.reports') }}" class="asb-link {{ $active === 'reports' ? 'active' : '' }}" title="Health Reports">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg>
-            <span class="asb-link-text">Reports</span>
+            <span class="asb-link-text">Health Reports</span>
         </a>
     </nav>
 

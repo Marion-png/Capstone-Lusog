@@ -34,7 +34,7 @@
 <div class="main">
 	<header class="topbar">
 		<div class="topbar-bc">
-			<a href="{{ route('dashboard.school-head.reports', ['school_year' => $schoolYear]) }}">Reports</a>
+			<a href="{{ route('dashboard.school-head.reports', ['school_year' => $schoolYear]) }}">Health Reports</a>
 			<span class="bc-sep">&rsaquo;</span><span>{{ $reportLabel }}</span>
 		</div>
 		@include('partials.live-clock')
@@ -136,29 +136,6 @@
 										<td>{{ $entry['section'] ?? '' }}</td>
 									</tr>
 								@endfor
-							</tbody>
-						</table>
-					@elseif ($monthly)
-						<table class="template-table" aria-label="Monthly accomplishment">
-							<thead>
-								<tr>
-									<th>Grade</th>
-									<th class="num">Present</th>
-									<th class="num">Confirmed marks</th>
-									<th class="num">Turnout</th>
-								</tr>
-							</thead>
-							<tbody>
-								@forelse ($monthly['grades'] as $grade)
-									<tr>
-										<td>{{ $grade['label'] }}</td>
-										<td class="num">{{ number_format($grade['present']) }}</td>
-										<td class="num">{{ number_format($grade['confirmed']) }}</td>
-										<td class="num">{{ $grade['rate'] === null ? '—' : rtrim(rtrim(number_format($grade['rate'], 1), '0'), '.').'%' }}</td>
-									</tr>
-								@empty
-									<tr><td colspan="4">No confirmed mark for this month.</td></tr>
-								@endforelse
 							</tbody>
 						</table>
 					@endif

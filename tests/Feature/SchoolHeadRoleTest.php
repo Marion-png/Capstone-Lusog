@@ -466,44 +466,39 @@ class SchoolHeadRoleTest extends TestCase
             ->assertDontSee('sh-shift-bar is-endline', false);
     }
 
+    /**
+     * Health Reports carries the two nutritional assessments and nothing that
+     * accrues by the calendar.
+     *
+     * The monthly accomplishment reports and the turnout chart were removed:
+     * they grew a new card every month whether or not anybody asked for one,
+     * and the tab is a place to open the school's assessment forms, not a
+     * running log of the feeding cycle — the Feeding Program tab reports that.
+     */
     #[Test]
-    public function the_turnout_chart_runs_oldest_month_first_on_a_fixed_axis(): void
+    public function health_reports_lists_only_the_two_assessments(): void
     {
         $learner = $this->makeLearner(['feeding_enrolled_at' => now()]);
-        // Two months: one fully attended, one half.
         $this->mark($learner, now()->subMonth()->startOfMonth()->addDays(4)->toDateString(), true);
         $this->mark($learner, now()->startOfMonth()->addDays(2)->toDateString(), true);
-        $this->mark($learner, now()->startOfMonth()->addDays(3)->toDateString(), false);
 
-        $turnout = $this->withSession($this->headSession())
-            ->get('/dashboard/school-head/reports')->assertOk()->viewData('turnout');
+        $response = $this->withSession($this->headSession())
+            ->get('/dashboard/school-head/reports')->assertOk();
 
-        $this->assertCount(2, $turnout['columns']);
-        // Time reads left to right, so the older month is the first column.
         $this->assertSame(
-            now()->subMonth()->format('M'),
-            $turnout['columns'][0]['label']
+            ['baseline', 'endline'],
+            array_column($response->viewData('reports'), 'key')
         );
-        $this->assertSame(100.0, $turnout['columns'][0]['rate']);
-        // A percentage sits on a 0–100 axis, never one scaled to the data.
-        $this->assertSame([100, 75, 50, 25, 0], $turnout['ticks']);
-        // The monitoring line comes from the shared constant, not a literal.
-        $this->assertSame(SchoolHeadOverview::FULL_TURNOUT_PERCENT, $turnout['full_turnout']);
-    }
 
-    #[Test]
-    public function a_month_with_no_confirmed_mark_draws_nothing_rather_than_zero(): void
-    {
-        $learner = $this->makeLearner(['feeding_enrolled_at' => now()]);
-        $this->mark($learner, now()->toDateString(), null);
+        // No month accrues a card of its own, and no chart of them is drawn.
+        $response->assertDontSee('accomplishment')
+            ->assertDontSee('Monthly Accomplishment')
+            ->assertDontSee('sh-turnout', false);
 
-        $turnout = $this->withSession($this->headSession())
-            ->get('/dashboard/school-head/reports')->assertOk()->viewData('turnout');
-
-        $this->assertNull($turnout['average']);
-        foreach ($turnout['columns'] as $column) {
-            $this->assertNull($column['rate']);
-        }
+        // The Division submission packet went with them: the head exports each
+        // form on its own.
+        $response->assertDontSee('Division submission packet')
+            ->assertDontSee('report=packet', false);
     }
 
     /**
@@ -641,7 +636,7 @@ class SchoolHeadRoleTest extends TestCase
         ]);
         $this->mark($learner, now()->toDateString(), true);
 
-        foreach (['baseline', 'endline', 'packet', 'monthly:'.now()->format('Y-m')] as $report) {
+        foreach (['baseline', 'endline'] as $report) {
             $this->withSession($this->headSession())
                 ->get('/dashboard/school-head/reports/export?report='.urlencode($report))
                 ->assertOk()

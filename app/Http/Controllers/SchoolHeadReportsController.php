@@ -71,7 +71,6 @@ class SchoolHeadReportsController extends Controller
         }
 
         $overview = SchoolHeadOverview::for($institutionId, $schoolYear);
-        $monthly = $this->monthlyReports($overview);
 
         return view('schoolhead-dashboard.school-headreport', [
             'schoolName' => $request->session()->get('active_school_name', 'School'),
@@ -80,11 +79,9 @@ class SchoolHeadReportsController extends Controller
             'todayLabel' => now()->format('j F Y'),
             'comparison' => $this->comparison($overview),
             'shift' => $this->buildShiftChart($overview),
-            'turnout' => $this->buildTurnoutChart($monthly),
             'outcome' => $overview->outcome(),
             'target' => $this->target(),
-            'monthly' => $monthly,
-            'reports' => $this->reportCards($overview, $monthly),
+            'reports' => $this->reportCards($overview),
             'headName' => trim((string) $request->session()->get('active_name', '')) ?: 'School Head',
         ]);
     }
@@ -96,8 +93,7 @@ class SchoolHeadReportsController extends Controller
      * grid — the same sheet the Feeding Coordinator's SBFP Forms page prints,
      * from the same `BmiAssessmentReport` computation, so what the head reads
      * and what downloads cannot report different numbers for the same school.
-     * The Masterlist renders the school's masterlist form. Monthly reports
-     * render their accomplishment table.
+     * The Masterlist renders the school's masterlist form.
      *
      * Everything is derived at read time, and the page carries the head's live
      * pulse: an adviser recording a weighing while this is open updates it
@@ -121,14 +117,13 @@ class SchoolHeadReportsController extends Controller
         $overview = SchoolHeadOverview::for($institutionId, $schoolYear);
         $report = trim((string) $request->query('report', 'baseline'));
 
-        if ($report !== 'masterlist' && ! in_array($report, $this->reportKeys($overview), true)) {
+        if ($report !== 'masterlist' && ! in_array($report, $this->reportKeys(), true)) {
             return redirect()
                 ->route('dashboard.school-head.reports', ['school_year' => $schoolYear])
                 ->with('error', 'That report does not exist for this school year.');
         }
 
         $schoolName = (string) $request->session()->get('active_school_name', 'School');
-        $monthly = $this->monthlyReports($overview);
         $readiness = $this->readiness($overview);
 
         return view('schoolhead-dashboard.report-view', [
@@ -140,7 +135,6 @@ class SchoolHeadReportsController extends Controller
             'overview' => $overview,
             // The one computation both this page and the export read.
             'bmiValues' => BmiAssessmentReport::values($overview->records),
-            'monthly' => collect($monthly)->firstWhere('key', $report),
             'readiness' => $readiness[$report] ?? ['complete' => true, 'label' => '', 'blocked_reason' => ''],
             'signatories' => [
                 'prepared' => SchoolSignatories::preparedBy($institutionId, $schoolName),
@@ -186,9 +180,6 @@ class SchoolHeadReportsController extends Controller
      * The rule is asked here once and read by the tab (which does not offer the
      * button), the view page and `export()` (which refuses it), so a stale tab
      * cannot download an unfinished form.
-     *
-     * Monthly accomplishment reports are never gated: they record what happened
-     * in a month that has already happened.
      *
      * @return array<string, array{complete: bool, label: string, blocked_reason: string}>
      */
@@ -256,7 +247,7 @@ class SchoolHeadReportsController extends Controller
             return redirect()->route('login')->with('error', 'Only the School Head can export a report.');
         }
 
-        $report = trim((string) $request->query('report', 'packet'));
+        $report = trim((string) $request->query('report', 'baseline'));
         $institutionId = $request->session()->get('active_institution_id');
         $years = SchoolHeadOverview::schoolYears($institutionId);
 
@@ -272,22 +263,18 @@ class SchoolHeadReportsController extends Controller
         // head the same school the same way.
         $letterhead = SchoolLetterhead::for($institutionId, $schoolName);
 
-        if ($report !== 'packet' && ! in_array($report, $this->reportKeys($overview), true)) {
+        if (! in_array($report, $this->reportKeys(), true)) {
             return back()->with('error', 'That report does not exist for this school year.');
         }
 
         // A weighing that is not finished is not a report. The tab does not
         // offer the button and the view page says why, but a bookmarked URL or
         // a stale tab reaches this endpoint all the same — so the rule lives
-        // here too, or the button is only a suggestion. The packet holds both
-        // assessment forms, so it needs both weighings finished.
+        // here too, or the button is only a suggestion.
         $readiness = $this->readiness($overview);
-        $required = $report === 'packet' ? ['baseline', 'endline'] : [$report];
 
-        foreach ($required as $key) {
-            if (isset($readiness[$key]) && ! $readiness[$key]['complete']) {
-                return back()->with('error', $readiness[$key]['blocked_reason']);
-            }
+        if (isset($readiness[$report]) && ! $readiness[$report]['complete']) {
+            return back()->with('error', $readiness[$report]['blocked_reason']);
         }
 
         // The cells of the DepEd grid, computed from this school's own records.
@@ -309,38 +296,17 @@ class SchoolHeadReportsController extends Controller
         $writer = new XlsxWriter;
         $writer->openToFile($path);
 
-        if ($report === 'packet') {
-            // One workbook, one sheet per report: the Division asks for the set
-            // together, and three separate files is three chances to send the
-            // wrong year.
-            $this->writeAssessmentForm($writer, $overview, $letterhead, 'baseline', $bmiValues, $signatories, 'Baseline BMI');
-            $writer->addNewSheetAndMakeItCurrent();
-            $this->writeAssessmentForm($writer, $overview, $letterhead, 'endline', $bmiValues, $signatories, 'Final BMI');
-            $writer->addNewSheetAndMakeItCurrent();
-            $this->writeAccomplishmentSheet($writer, $overview, $letterhead, null, $signatories);
-            $writer->addNewSheetAndMakeItCurrent();
-            $this->writeSupportingSheet($writer, $overview, 'endline');
-        } elseif (str_starts_with($report, 'monthly')) {
-            $this->writeAccomplishmentSheet(
-                $writer,
-                $overview,
-                $letterhead,
-                substr($report, strlen('monthly:')),
-                $signatories,
-            );
-        } else {
-            $this->writeAssessmentForm(
-                $writer,
-                $overview,
-                $letterhead,
-                $report,
-                $bmiValues,
-                $signatories,
-                $report === 'baseline' ? 'Baseline BMI' : 'Final BMI',
-            );
-            $writer->addNewSheetAndMakeItCurrent();
-            $this->writeSupportingSheet($writer, $overview, $report);
-        }
+        $this->writeAssessmentForm(
+            $writer,
+            $overview,
+            $letterhead,
+            $report,
+            $bmiValues,
+            $signatories,
+            $report === 'baseline' ? 'Baseline BMI' : 'Final BMI',
+        );
+        $writer->addNewSheetAndMakeItCurrent();
+        $this->writeSupportingSheet($writer, $overview, $report);
 
         $writer->close();
 
@@ -460,44 +426,6 @@ class SchoolHeadReportsController extends Controller
     }
 
     /**
-     * Turnout month by month — whether attendance is holding up over the cycle.
-     *
-     * One column per month the school actually fed in, on a fixed 0–100 axis
-     * because a percentage's scale is not the data's to choose, with the
-     * programme's full-turnout line drawn across it: the gap between a column
-     * and that line is what the eye reads, not the number.
-     *
-     * A month whose every mark is still unconfirmed has no turnout to draw and
-     * is left empty rather than plotted at zero.
-     *
-     * @param  list<array<string, mixed>>  $monthly
-     * @return array<string, mixed>
-     */
-    private function buildTurnoutChart(array $monthly): array
-    {
-        // monthlyReports() is newest first; time reads left to right.
-        $columns = array_map(fn (array $month): array => [
-            'label' => Carbon::parse($month['month'].'-01')->format('M'),
-            'full_label' => $month['label'],
-            'rate' => $month['turnout'],
-            'days_fed' => $month['days_fed'],
-            'meals' => $month['meals_served'],
-        ], array_reverse($monthly));
-
-        $rates = array_values(array_filter(
-            array_column($columns, 'rate'),
-            static fn (?float $rate): bool => $rate !== null
-        ));
-
-        return [
-            'columns' => $columns,
-            'average' => $rates === [] ? null : round(array_sum($rates) / count($rates), 1),
-            'full_turnout' => SchoolHeadOverview::FULL_TURNOUT_PERCENT,
-            'ticks' => [100, 75, 50, 25, 0],
-        ];
-    }
-
-    /**
      * The tallest bar rounded up to a clean multiple of four, so the four
      * gridlines above the baseline all land on whole learners — "12 learners"
      * never sits between two lines.
@@ -565,80 +493,11 @@ class SchoolHeadReportsController extends Controller
     }
 
     /**
-     * One row per month the school actually fed in, with turnout by grade.
+     * The report cards — the two nutritional assessments the school files.
      *
      * @return list<array<string, mixed>>
      */
-    private function monthlyReports(SchoolHeadOverview $overview): array
-    {
-        $sessionsByMonth = collect($overview->sessions())->groupBy(
-            fn (array $session): string => substr($session['date'], 0, 7)
-        );
-
-        if ($sessionsByMonth->isEmpty()) {
-            return [];
-        }
-
-        // Marks bucketed by month and grade, in one pass over the roll.
-        $byMonthGrade = [];
-        foreach ($overview->beneficiaries as $record) {
-            $grade = FeedingBeneficiarySummary::gradeNumber((string) $record->section);
-            $label = $grade !== null ? 'Grade '.$grade : 'Unassigned';
-
-            foreach ($overview->marksFor($record->id) as $mark) {
-                if ($mark['status'] === 'unconfirmed') {
-                    continue;
-                }
-
-                $month = substr($mark['date'], 0, 7);
-                $bucket = $byMonthGrade[$month][$label] ?? ['present' => 0, 'confirmed' => 0];
-                $bucket['confirmed']++;
-                if ($mark['status'] === 'present') {
-                    $bucket['present']++;
-                }
-                $byMonthGrade[$month][$label] = $bucket;
-            }
-        }
-
-        return $sessionsByMonth
-            ->map(function ($sessions, string $month) use ($byMonthGrade, $overview): array {
-                $rates = $sessions->pluck('rate')->filter(fn ($rate) => $rate !== null);
-                $grades = collect($byMonthGrade[$month] ?? [])
-                    ->map(fn (array $bucket, string $label): array => [
-                        'label' => $label,
-                        'present' => $bucket['present'],
-                        'confirmed' => $bucket['confirmed'],
-                        'rate' => $bucket['confirmed'] > 0
-                            ? round(($bucket['present'] / $bucket['confirmed']) * 100, 1)
-                            : null,
-                    ])
-                    ->sortBy('label', SORT_NATURAL)
-                    ->values()
-                    ->all();
-
-                return [
-                    'key' => 'monthly:'.$month,
-                    'month' => $month,
-                    'label' => Carbon::parse($month.'-01')->format('F Y'),
-                    'days_fed' => $sessions->count(),
-                    'meals_served' => (int) $sessions->sum('present'),
-                    'beneficiaries' => $overview->beneficiaries->count(),
-                    'turnout' => $rates->isEmpty() ? null : round($rates->avg(), 1),
-                    'grades' => $grades,
-                ];
-            })
-            ->sortKeysDesc()
-            ->values()
-            ->all();
-    }
-
-    /**
-     * The report cards, each with the head's decision on it.
-     *
-     * @param  list<array<string, mixed>>  $monthly
-     * @return list<array<string, mixed>>
-     */
-    private function reportCards(SchoolHeadOverview $overview, array $monthly): array
+    private function reportCards(SchoolHeadOverview $overview): array
     {
         $readiness = $this->readiness($overview);
         $cards = [];
@@ -658,49 +517,21 @@ class SchoolHeadReportsController extends Controller
                 .($overview->cycle->isComplete() ? '' : ' · cycle still running'),
         ] + $readiness['endline'];
 
-        foreach ($monthly as $month) {
-            $cards[] = [
-                'key' => $month['key'],
-                'name' => $month['label'].' accomplishment',
-                'summary' => 'Days fed, meals served, turnout by grade level.',
-                'detail' => $month['days_fed'].' feeding '.($month['days_fed'] === 1 ? 'day' : 'days')
-                    .' · '.number_format($month['meals_served']).' meals served'
-                    .($month['turnout'] !== null ? ' · '.$this->percent($month['turnout']).'% turnout' : ''),
-                // A month that has happened is a record of what happened; there
-                // is no weighing left to finish before it can be handed in.
-                'complete' => true,
-                'label' => '',
-                'blocked_reason' => '',
-            ];
-        }
-
         return $cards;
     }
 
     /**
-     * The report keys that exist for this school year — what a decision or an
-     * export is allowed to name.
+     * The report keys an export is allowed to name.
      *
      * @return list<string>
      */
-    private function reportKeys(SchoolHeadOverview $overview): array
+    private function reportKeys(): array
     {
-        return array_merge(
-            self::FIXED_REPORTS,
-            array_column($this->monthlyReports($overview), 'key'),
-        );
+        return self::FIXED_REPORTS;
     }
 
     private function reportLabel(string $key): string
     {
-        if ($key === 'packet') {
-            return 'Division submission packet';
-        }
-
-        if (str_starts_with($key, 'monthly:')) {
-            return Carbon::parse(substr($key, strlen('monthly:')).'-01')->format('F Y').' accomplishment';
-        }
-
         return ucfirst($key);
     }
 
@@ -917,69 +748,6 @@ class SchoolHeadReportsController extends Controller
             new BorderPart(BorderName::LEFT, width: BorderWidth::THIN),
             new BorderPart(BorderName::RIGHT, width: BorderWidth::THIN),
         );
-    }
-
-    /** The monthly accomplishment sheet: one block per month, newest first. */
-    private function writeAccomplishmentSheet(
-        XlsxWriter $writer,
-        SchoolHeadOverview $overview,
-        array $letterhead,
-        ?string $onlyMonth = null,
-        array $signatories = ['prepared' => '', 'noted' => ''],
-    ): void {
-        $writer->getCurrentSheet()->setName('Accomplishment');
-
-        $title = (new Style)->withFontBold(true)->withFontSize(12);
-        $heading = (new Style)->withFontBold(true)->withFontSize(11);
-        $label = (new Style)->withFontBold(true);
-        $ruled = (new Style)->withBorder($this->hairline());
-        $ruledHead = (new Style)->withFontBold(true)->withBorder($this->hairline());
-
-        // The same heading block the assessment sheets carry, so every report a
-        // head exports reads as one school's set of forms.
-        foreach (SchoolLetterhead::lines($letterhead) as $headingLine) {
-            $writer->addRow($this->line([$headingLine]));
-        }
-
-        $writer->addRow($this->line([$letterhead['school']], $title));
-        $writer->addRow($this->line([$letterhead['address']]));
-        $writer->addRow($this->line(['Monthly Accomplishment Report'], $heading));
-        $writer->addRow($this->line(['S.Y. '.$overview->schoolYear]));
-        $writer->addRow($this->line([
-            'Feeding day '.$overview->cycle->day().' of '.$overview->cycle->durationDays(),
-            $overview->daysCompleted().' feeding days recorded',
-        ]));
-        $writer->addRow($this->line(['']));
-
-        foreach ($this->monthlyReports($overview) as $month) {
-            if ($onlyMonth !== null && $month['month'] !== $onlyMonth) {
-                continue;
-            }
-
-            $writer->addRow($this->line([strtoupper($month['label'])], $label));
-            $writer->addRow($this->line(['Days fed', $month['days_fed']]));
-            $writer->addRow($this->line(['Beneficiaries', $month['beneficiaries']]));
-            $writer->addRow($this->line(['Meals served', $month['meals_served']]));
-            $writer->addRow($this->line([
-                'Average turnout',
-                $month['turnout'] !== null ? $this->percent($month['turnout']).'%' : '—',
-            ]));
-            $writer->addRow($this->line(['']));
-            $writer->addRow($this->line(['GRADE LEVEL', 'PRESENT', 'CONFIRMED MARKS', 'TURNOUT'], $ruledHead));
-
-            foreach ($month['grades'] as $grade) {
-                $writer->addRow($this->line([
-                    $grade['label'],
-                    $grade['present'],
-                    $grade['confirmed'],
-                    $grade['rate'] !== null ? $this->percent($grade['rate']).'%' : '—',
-                ], $ruled));
-            }
-
-            $writer->addRow($this->line(['']));
-        }
-
-        $this->writeSignatureBlock($writer, $signatories);
     }
 
     private function percent(float $value): string

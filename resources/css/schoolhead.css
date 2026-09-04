@@ -535,48 +535,6 @@
 	color: var(--lg-ink-soft);
 }
 
-/* ── Turnout month by month ─────────────────────────────────────────
-   A fixed 0–100 axis: a percentage's scale is not the data's to choose,
-   and a truncated one exaggerates every difference. The programme's
-   full-turnout line is drawn across the plot, so the gap between a
-   column and that line is what the eye reads rather than the number. ── */
-.sh-turnout {
-	display: grid;
-	grid-template-columns: 40px minmax(0, 1fr);
-	grid-template-rows: 180px auto;
-	column-gap: 10px;
-	row-gap: 8px;
-	margin-bottom: 22px;
-}
-.sh-turnout-axis { grid-column: 1; grid-row: 1; position: relative; display: flex; flex-direction: column-reverse; justify-content: space-between; align-items: flex-end; font-size: .66rem; color: var(--lg-ink-soft); }
-.sh-turnout-plot { grid-column: 2; grid-row: 1; position: relative; }
-.sh-turnout-grid { position: absolute; inset: 0; }
-.sh-turnout-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--lg-border); }
-/* The target reads as a rule with a value, not as a third series. */
-.sh-turnout-target { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed var(--lg-orange); }
-.sh-turnout-target::after {
-	content: attr(data-label);
-	position: absolute;
-	right: 0;
-	top: -14px;
-	font-size: .62rem;
-	font-weight: 600;
-	color: var(--lg-orange-ink);
-	font-variant-numeric: var(--lg-figures);
-}
-.sh-turnout-cols, .sh-turnout-labels { display: flex; align-items: flex-end; gap: 10px; height: 100%; }
-.sh-turnout-labels { grid-column: 2; grid-row: 2; height: auto; }
-.sh-turnout-labels span { flex: 1 1 0; min-width: 0; text-align: center; font-size: .7rem; color: var(--lg-ink-soft); }
-.sh-turnout-col { flex: 1 1 0; min-width: 0; max-width: 72px; height: 100%; position: relative; display: flex; align-items: flex-end; justify-content: center; outline: none; }
-.sh-turnout-col:focus-visible { box-shadow: var(--lg-focus); border-radius: 5px; }
-.sh-turnout-bar { width: min(28px, 80%); border-radius: 4px 4px 0 0; background: var(--series-healthy); }
-/* Below the full-turnout line: the fill changes AND the column sits under
-   the dashed rule, so the state is legible without the colour. It borrows
-   the theme's generic risk series, not a nutritional-status fill — those
-   five colours mean a child's status and nothing else. */
-.sh-turnout-bar.is-low { background: var(--series-risk); }
-.sh-turnout-cap { position: absolute; left: 50%; transform: translateX(-50%); font-size: .7rem; font-weight: 600; color: var(--lg-ink); line-height: 1; white-space: nowrap; }
-
 .sh-compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
 .sh-panel { min-width: 0; }
 .sh-panel-note { margin-top: 12px; font-size: .76rem; line-height: 1.5; color: var(--lg-ink-soft); }
@@ -600,12 +558,6 @@
 .sh-report-remark { display: block; margin-top: 3px; color: var(--lg-ink); font-style: italic; }
 .sh-report-actions { display: flex; flex-wrap: wrap; gap: 8px; flex: 0 0 auto; margin-left: auto; }
 .sh-report-locked { font-size: .76rem; font-weight: 600; color: var(--lg-info-ink); align-self: center; }
-
-.sh-month { margin-bottom: 18px; }
-.sh-month:last-child { margin-bottom: 0; }
-.sh-month-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 9px; }
-.sh-month-head strong { font-size: .84rem; font-weight: 600; color: var(--lg-ink); }
-.sh-month-head span { font-size: .76rem; color: var(--lg-ink-soft); }
 
 /* ══ Masterlist ═════════════════════════════════════════════════════ */
 
