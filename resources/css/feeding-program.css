@@ -39,7 +39,7 @@
 	transform: translateX(-1px);
 	border-radius: 1px;
 }
-.prog-day { margin-top: 12px; font-size: .82rem; font-weight: 600; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
+.prog-day { margin-top: 12px; font-size: .82rem; font-weight: 600; color: var(--lg-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 .prog-labels { margin-top: 4px; display: flex; justify-content: space-between; font-size: .74rem; color: var(--lg-ink-soft); }
 
 /* ── Sections ─────────────────────────────────────────────────────── */

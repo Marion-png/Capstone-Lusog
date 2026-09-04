@@ -84,7 +84,7 @@
 						<td class="num tnum">{{ $session['unmarked'] }}</td>
 						{{-- Present over confirmed marks: an unconfirmed scan
 						     counts on neither side. --}}
-						<td class="num tnum">{{ $session['rate'] !== null ? number_format($session['rate'], 1).'%' : '—' }}</td>
+						<td class="num tnum">{{ $session['rate'] !== null ? number_format($session['rate'], 0).'%' : '—' }}</td>
 						<td>
 							@if ($session['complete'])
 								<span class="badge badge-normal">Complete</span>

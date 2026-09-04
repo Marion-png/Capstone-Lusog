@@ -830,6 +830,10 @@ class FeedingAttendanceController extends Controller
                     // it is here. A learner no sheet covered is "unmarked",
                     // never an absence.
                     'session_status' => $marksForDate->get($record->id)['status'] ?? 'unmarked',
+                    // And why, where the coordinator gave a reason. An excused
+                    // absence without its reason is only half the mark: the
+                    // reason is what makes it an excuse rather than an absence.
+                    'session_remarks' => $marksForDate->get($record->id)['remarks'] ?? '',
                     'present' => $standing['present'],
                     'absent' => $standing['absent'],
                     'confirmed' => $standing['confirmed'],

@@ -127,8 +127,9 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertSee('Absent Today');
         // Today's rate is 2/3; the programme's is 5/6 — two different figures,
         // and the card names which is which.
-        $response->assertSee('66.7%');
-        $response->assertSee('Cumulative: 83.3%');
+        // Rates read as whole percentages throughout this role.
+        $response->assertSee('67%');
+        $response->assertSee('Cumulative: 83%');
     }
 
     #[Test]
@@ -515,8 +516,10 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertSee('Feeding Day');
         $response->assertSee(now()->subDays(2)->format('M j, Y'));
         $response->assertSee(now()->subDay()->format('M j, Y'));
-        $response->assertSee('100.0%');
-        $response->assertSee('0.0%');
+        // Whole percentages, matched as the whole cell so "0%" cannot be
+        // satisfied by the "80%" in the threshold line.
+        $response->assertSee('>100%<', false);
+        $response->assertSee('>0%<', false);
     }
 
     /**
@@ -550,7 +553,7 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertSee('Missing Learner');
         $response->assertSee('At Risk');
         $response->assertSee('Good');
-        $response->assertSee('25.0%');
+        $response->assertSee('25%');
         // The threshold is the school's own, never written into the page.
         $response->assertSee('below the 80% attendance threshold');
 
@@ -580,7 +583,7 @@ class FeedingAttendanceTabTest extends TestCase
         $this->assertFalse($response->viewData('beneficiaryRows')[0]['at_risk']);
 
         // The window suppresses the verdict, never the figure.
-        $response->assertSee('25.0%');
+        $response->assertSee('25%');
         // And the coordinator is told why nobody is flagged, in its own notice.
         $response->assertSee('currently under observation');
         $response->assertSee('At-risk classification begins after 10 recorded feeding days');

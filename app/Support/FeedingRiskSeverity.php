@@ -279,7 +279,9 @@ final class FeedingRiskSeverity
     private static function reason(string $severity, ?float $rate, ?string $trend, FeedingAtRiskRule $rule, int $absenceRun = 0): string
     {
         $threshold = self::format($rule->thresholdPercent());
-        $rateLabel = $rate !== null ? self::format($rate).'%' : null;
+        // A computed rate reads whole, the way it does on every panel; the
+        // threshold beside it keeps the school's own figure as configured.
+        $rateLabel = $rate !== null ? number_format($rate, 0).'%' : null;
 
         // The rule that judged the learner is the rule the sentence has to
         // name. Telling a coordinator a learner "fell below 80%" when the

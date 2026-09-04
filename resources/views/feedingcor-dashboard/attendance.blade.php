@@ -20,7 +20,7 @@
 @php
 	// En dash in the school year: it is a range, not a hyphenated word.
 	$faYear = str_replace('-', '&ndash;', e($schoolYear));
-	$cycleShare = $programDuration > 0 ? round(($programDay / $programDuration) * 100, 1) : 0;
+	$cycleShare = $programDuration > 0 ? (int) round(($programDay / $programDuration) * 100) : 0;
 
 	$views = [
 		'sheet' => 'Attendance Sheet',

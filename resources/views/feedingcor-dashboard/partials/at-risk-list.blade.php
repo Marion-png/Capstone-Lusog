@@ -64,7 +64,7 @@
 					<tr class="ar-row" data-row="{{ $row['id'] }}"
 						data-name="{{ $row['name'] }}"
 						data-meta="{{ trim($row['grade'].($row['section'] !== '' ? ' — '.$row['section'] : '')) }}"
-						data-rate="{{ $row['rate'] !== null ? number_format($row['rate'], 1).'%' : '—' }}"
+						data-rate="{{ $row['rate'] !== null ? number_format($row['rate'], 0).'%' : '—' }}"
 						data-standing="{{ \App\Support\FeedingRiskSeverity::severityLabel($row['severity']) }}"
 						data-standing-badge="{{ $severityBadge[$row['severity']] ?? 'badge-neutral' }}"
 						data-search="{{ strtolower(trim($row['name'].' '.$row['grade'].' '.$row['section'])) }}">
@@ -87,7 +87,7 @@
 						<td>{{ $row['section'] }}</td>
 						<td class="num tnum">{{ $row['present'] }}</td>
 						<td class="num tnum">{{ $row['absent'] }}</td>
-						<td class="num tnum">{{ $row['rate'] !== null ? number_format($row['rate'], 1).'%' : '—' }}</td>
+						<td class="num tnum">{{ $row['rate'] !== null ? number_format($row['rate'], 0).'%' : '—' }}</td>
 						<td class="num tnum">{{ $row['days_remaining'] }}</td>
 						<td>
 							<span class="badge {{ $severityBadge[$row['severity']] ?? 'badge-neutral' }}">
@@ -146,7 +146,7 @@
 				<dl class="ar-facts">
 					<div class="ar-fact">
 						<dt>Attendance</dt>
-						<dd class="{{ $row['at_risk'] ? 'is-risk' : '' }}">{{ $row['rate'] !== null ? number_format($row['rate'], 1).'%' : '—' }}</dd>
+						<dd class="{{ $row['at_risk'] ? 'is-risk' : '' }}">{{ $row['rate'] !== null ? number_format($row['rate'], 0).'%' : '—' }}</dd>
 					</div>
 					<div class="ar-fact">
 						<dt>Threshold</dt>
@@ -197,14 +197,14 @@
 				<p class="ar-panel-title">Attendance trend</p>
 				@if ($lastPoint !== null)
 					<p class="ar-trendline">
-						<span class="ar-trend-value {{ $row['at_risk'] ? 'is-risk' : '' }}">{{ number_format((float) $lastPoint['rate'], 1) }}%</span>
+						<span class="ar-trend-value {{ $row['at_risk'] ? 'is-risk' : '' }}">{{ number_format((float) $lastPoint['rate'], 0) }}%</span>
 						@if ($row['trend'] !== null)
 							<span class="ar-trend-tag is-{{ $row['trend'] }}">{{ $trendLabel[$row['trend']] ?? '' }}</span>
 						@endif
 					</p>
 					<svg class="ar-chart" viewBox="0 0 {{ $chartW }} {{ $chartH }}" width="{{ $chartW }}" height="{{ $chartH }}"
 						role="img"
-						aria-label="Cumulative attendance across {{ $pointCount }} confirmed {{ \Illuminate\Support\Str::plural('session', $pointCount) }}, ending at {{ number_format((float) $lastPoint['rate'], 1) }} percent, against a {{ $cards['threshold_label'] }} percent threshold">
+						aria-label="Cumulative attendance across {{ $pointCount }} confirmed {{ \Illuminate\Support\Str::plural('session', $pointCount) }}, ending at {{ number_format((float) $lastPoint['rate'], 0) }} percent, against a {{ $cards['threshold_label'] }} percent threshold">
 						{{-- The threshold, so the gap is what the eye reads. --}}
 						<line x1="0" y1="{{ $plotY((float) $row['threshold']) }}" x2="{{ $chartW }}" y2="{{ $plotY((float) $row['threshold']) }}"
 							stroke="var(--lg-ink-soft)" stroke-width="1" stroke-dasharray="4 4"/>

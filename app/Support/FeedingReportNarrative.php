@@ -228,8 +228,12 @@ final class FeedingReportNarrative
         return $n.' '.($n === 1 ? $singular : $plural);
     }
 
+    /**
+     * Rates read as whole percentages throughout this role — a narrative that
+     * says "78%" beside a panel that says "78.4%" reads as two figures.
+     */
     private static function percent(float $value): string
     {
-        return rtrim(rtrim(number_format($value, 1), '0'), '.');
+        return number_format($value, 0);
     }
 }

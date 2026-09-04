@@ -48,7 +48,7 @@
 	$metres = fn (?float $cm) => $cm === null ? null : number_format($cm / 100, 2).' m';
 
 	$thresholdLabel = rtrim(rtrim(number_format((float) $attendance['threshold'], 1), '0'), '.');
-	$rateLabel = $attendance['rate'] !== null ? number_format((float) $attendance['rate'], 1).'%' : '—';
+	$rateLabel = $attendance['rate'] !== null ? number_format((float) $attendance['rate'], 0).'%' : '—';
 	$hasEndline = $endline['status'] !== ''
 		|| $endline['height_cm'] !== null
 		|| $endline['weight_kg'] !== null

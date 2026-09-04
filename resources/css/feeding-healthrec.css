@@ -22,7 +22,8 @@
 	font-size: .72rem;
 	font-weight: 600;
 	letter-spacing: .1em;
-	font-variant-numeric: tabular-nums;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
 	color: var(--lg-ink-soft);
 	white-space: nowrap;
 }
@@ -79,7 +80,8 @@
 	color: var(--lg-ink-soft);
 	font-size: .72rem;
 	font-weight: 700;
-	font-variant-numeric: tabular-nums;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
 	text-align: center;
 }
 .seg-tab.is-active .seg-tab-count { background: var(--lg-mint); color: var(--lg-success-ink); }
@@ -177,7 +179,8 @@ th.sortable:focus-visible { outline: 2px solid var(--lg-emerald); outline-offset
 	text-align: right;
 	padding-right: 14px !important;
 	color: var(--lg-ink-soft);
-	font-variant-numeric: tabular-nums;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
 	font-size: .8rem;
 }
 .bnf-name { min-width: 190px; }
@@ -221,7 +224,8 @@ th.sortable:focus-visible { outline: 2px solid var(--lg-emerald); outline-offset
 	border: 1px solid #EFDCB2;
 	border-radius: var(--lg-r-pill);
 	padding: 4px 12px;
-	font-variant-numeric: tabular-nums;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
 	white-space: nowrap;
 }
 
@@ -258,9 +262,9 @@ th.sortable:focus-visible { outline: 2px solid var(--lg-emerald); outline-offset
 	border-radius: var(--lg-r-card);
 	background: var(--lg-rail);
 }
-.bulk-count { font-size: .8rem; font-weight: 600; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; }
+.bulk-count { font-size: .8rem; font-weight: 600; color: var(--lg-ink-soft); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 .bulk-error { margin-bottom: 12px; }
-.bnf-table td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bnf-table td.num { font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); white-space: nowrap; }
 /* Nothing to report reads as an em dash, never as a zero or a blank. */
 .bnf-none { color: var(--lg-border-strong); }
 .badge-icon { width: 12px; height: 12px; margin-right: 1px; flex: 0 0 auto; }
@@ -269,7 +273,7 @@ th.sortable:focus-visible { outline: 2px solid var(--lg-emerald); outline-offset
 
 /* Baseline → endline movement. Green for a gain, coral for a loss, grey
    while endline is still outstanding; every one carries its own words. */
-.delta { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.delta { font-weight: 600; font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); white-space: nowrap; }
 .delta-up { color: var(--lg-success-ink); }
 .delta-down { color: var(--lg-danger-ink); }
 .delta-none { color: var(--lg-ink-soft); font-weight: 500; }

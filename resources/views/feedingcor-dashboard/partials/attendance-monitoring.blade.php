@@ -13,7 +13,7 @@
 <div class="att-headline">
 	<div class="att-figure">
 		<span class="att-count">{{ $today['present'] }} / {{ $today['expected'] }}</span>
-		<span class="att-percent {{ $today['recorded'] ? '' : 'is-idle' }}">{{ number_format((float) $today['percent'], 1) }}%</span>
+		<span class="att-percent {{ $today['recorded'] ? '' : 'is-idle' }}">{{ number_format((float) $today['percent'], 0) }}%</span>
 	</div>
 	<div class="att-chips">
 		<span class="badge badge-normal">Present {{ $today['present'] }}</span>

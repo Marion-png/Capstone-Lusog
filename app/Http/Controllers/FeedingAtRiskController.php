@@ -145,7 +145,7 @@ class FeedingAtRiskController extends Controller
                 $row['present'],
                 $row['absent'],
                 // An em dash, never 0%: no confirmed session is not a turnout of nothing.
-                $row['rate'] !== null ? number_format($row['rate'], 1).'%' : '—',
+                $row['rate'] !== null ? number_format($row['rate'], 0).'%' : '—',
                 $row['days_remaining'],
                 FeedingRiskSeverity::severityLabel($row['severity']),
                 $row['follow_up']['status_label'],

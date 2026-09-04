@@ -67,9 +67,15 @@
 						<td class="fa-name"><strong>{{ $row['name'] }}</strong></td>
 						<td>{{ $row['grade_number'] !== '' ? $row['grade_number'] : '—' }}</td>
 						<td>{{ $row['section'] }}</td>
-						<td>
+						<td class="fa-session-col">
 							@if (isset($sessionMarks[$row['session_status']]))
 								<span class="badge {{ $sessionMarks[$row['session_status']][0] }}">{{ $sessionMarks[$row['session_status']][1] }}</span>
+								{{-- The reason the school accepted, under the mark it
+								     belongs to. An excused absence read without it is
+								     indistinguishable from one nobody explained. --}}
+								@if (($row['session_remarks'] ?? '') !== '')
+									<span class="fa-session-remark">{{ $row['session_remarks'] }}</span>
+								@endif
 							@else
 								{{-- Nobody wrote this learner down for that day. Never an absence. --}}
 								<span class="fa-unmarked">Not marked</span>
@@ -87,7 +93,7 @@
 						<td class="num tnum">{{ $row['not_marked'] }}</td>
 						{{-- A learner no confirmed session has covered has no
 						     rate to report — an em dash, never 0%. --}}
-						<td class="num tnum">{{ $row['rate'] !== null ? number_format($row['rate'], 1).'%' : '—' }}</td>
+						<td class="num tnum">{{ $row['rate'] !== null ? number_format($row['rate'], 0).'%' : '—' }}</td>
 						<td>
 							@if ($row['at_risk'])
 								<span class="badge badge-risk has-glyph"><span class="fa-glyph">⚠</span>At Risk</span>

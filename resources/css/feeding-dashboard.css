@@ -21,14 +21,15 @@
 	font-size: .72rem;
 	font-weight: 600;
 	letter-spacing: .1em;
-	font-variant-numeric: tabular-nums;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
 	color: var(--lg-ink-soft);
 	white-space: nowrap;
 }
 .sbfp-year::before { content: ""; position: absolute; left: 0; top: -1px; bottom: 1px; width: 1px; background: var(--lg-border-strong); }
 
 .sbfp-day { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; font-size: .82rem; color: var(--lg-ink-soft); }
-.sbfp-day strong { color: var(--lg-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.sbfp-day strong { color: var(--lg-ink); font-weight: 700; font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 .sbfp-sep { color: var(--lg-border-strong); }
 .sbfp-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lg-emerald); flex: 0 0 auto; }
 /* Idle is amber, not green: nothing is running yet. */
@@ -50,7 +51,8 @@
 	font-weight: 700;
 	letter-spacing: -.01em;
 	color: var(--lg-emerald-deep);
-	font-variant-numeric: tabular-nums;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
 }
 .sbfp-progress {
 	position: relative;
@@ -71,7 +73,7 @@
 	box-shadow: inset -1px 0 0 rgba(255, 255, 255, .6);
 	transition: width .4s ease;
 }
-.sbfp-progress-end { flex: 0 0 auto; font-size: .72rem; font-weight: 600; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sbfp-progress-end { flex: 0 0 auto; font-size: .72rem; font-weight: 600; color: var(--lg-ink-soft); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); white-space: nowrap; }
 
 .sbfp-actions { display: flex; gap: 8px; flex-wrap: wrap; flex: 0 0 auto; }
 
@@ -119,8 +121,8 @@
 
 .att-headline { display: flex; align-items: center; justify-content: space-between; gap: 12px 18px; flex-wrap: wrap; margin: 14px 0 4px; }
 .att-figure { display: flex; align-items: baseline; gap: 10px; }
-.att-count { font-size: 1.9rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
-.att-percent { font-size: .95rem; font-weight: 600; color: var(--lg-emerald-deep); font-variant-numeric: tabular-nums; }
+.att-count { font-size: 1.9rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; color: var(--lg-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
+.att-percent { font-size: .95rem; font-weight: 600; color: var(--lg-emerald-deep); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 /* Before the session is recorded the figure is a real 0 of N, but it is
    not a turnout anyone measured — so it reads grey until it is. */
 .att-percent.is-idle { color: var(--lg-ink-soft); }
@@ -143,11 +145,11 @@
 .ns-card { padding: var(--lg-pad-card); display: flex; flex-direction: column; }
 .ns-total { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 4px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--lg-border); }
 .ns-total-label { font-size: .78rem; font-weight: 600; color: var(--lg-ink-soft); }
-.ns-total-value { font-size: 1.7rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
+.ns-total-value { font-size: 1.7rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; color: var(--lg-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 .ns-table { width: 100%; }
 .ns-table th { font-size: .68rem; }
 .ns-table td { padding-top: 9px; padding-bottom: 9px; }
-.ns-count { font-size: .92rem; font-weight: 700; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
+.ns-count { font-size: .92rem; font-weight: 700; color: var(--lg-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 .ns-table tr.is-eligible td { background: var(--lg-rail); }
 
 /* ── Population switch ──────────────────────────────────────────────
@@ -183,7 +185,7 @@
 
 .risk-headline { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin: 14px 0 4px; }
 .risk-threshold { font-size: .82rem; color: var(--lg-ink-soft); }
-.risk-threshold strong { color: var(--lg-ink); font-variant-numeric: tabular-nums; }
+.risk-threshold strong { color: var(--lg-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 .risk-count { font-size: .78rem; font-weight: 600; color: var(--lg-orange-ink); }
 /* Why the list may be empty: learners the rule has not started judging. Set
    quieter than the flagged count — it is context, not an alarm. */
@@ -195,7 +197,7 @@
 .risk-table th:last-child, .risk-table td:last-child { padding-right: 20px; }
 .risk-table thead th { position: sticky; top: 0; z-index: 1; background: var(--lg-rail); }
 /* The rate is the number the flag turned on, so it carries the weight. */
-.risk-rate { font-weight: 700; color: var(--lg-orange-ink); font-variant-numeric: tabular-nums; }
+.risk-rate { font-weight: 700; color: var(--lg-orange-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 /* Never underlined — the colour deepening is the affordance. */
 .risk-view { font-size: .78rem; font-weight: 600; color: var(--lg-emerald); text-decoration: none; }
 .risk-view:hover { color: var(--lg-emerald-dark); text-decoration: none; }
@@ -209,8 +211,8 @@
 .np-card { padding: var(--lg-pad-card); margin-top: 16px; }
 .np-headline { display: flex; align-items: baseline; justify-content: space-between; gap: 12px 18px; flex-wrap: wrap; margin: 14px 0 2px; }
 .np-figure { display: flex; align-items: baseline; gap: 10px; }
-.np-count { font-size: 1.9rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
-.np-rate { font-size: .95rem; font-weight: 600; color: var(--lg-emerald-deep); font-variant-numeric: tabular-nums; }
+.np-count { font-size: 1.9rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; color: var(--lg-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
+.np-rate { font-size: .95rem; font-weight: 600; color: var(--lg-emerald-deep); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 /* No endline reading yet: 0 improved is a real count, but not a result. */
 .np-rate.is-idle { color: var(--lg-ink-soft); }
 .np-measured { font-size: .76rem; color: var(--lg-ink-soft); }
@@ -231,14 +233,14 @@
 .np-bar { height: 12px; border-radius: 0 4px 4px 0; min-width: 2px; transition: width .5s cubic-bezier(.22,.61,.36,1); }
 .np-bar-baseline { background: var(--series-risk); }
 .np-bar-endline { background: var(--series-healthy); }
-.np-value { font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.np-value { font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); flex: 0 0 auto; }
 
 .np-table { margin-top: 16px; }
 .np-table summary { font-size: .76rem; color: var(--lg-ink-soft); cursor: pointer; font-weight: 500; padding: 4px 0; width: fit-content; }
 .np-table summary:hover { color: var(--lg-emerald); }
 
 .la-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.tnum { font-variant-numeric: tabular-nums; }
+.tnum { font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 
 @media (max-width: 620px) {
 	.np-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }

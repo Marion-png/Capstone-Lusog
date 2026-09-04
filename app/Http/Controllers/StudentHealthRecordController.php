@@ -1415,6 +1415,12 @@ class StudentHealthRecordController extends Controller
         // Today's marks, for the attendance filter. A learner no sheet has
         // covered is unmarked, and a scanned mark nobody has confirmed is NULL
         // — neither is an absence, so both read as "unmarked" here.
+        //
+        // The state alone, deliberately: this tab filters on today's mark but
+        // does not print it. Attendance in its table is the cumulative rate,
+        // which is a different question, and the reason an absence was excused
+        // is read where the mark itself is — the Attendance tab, and the
+        // learner's own beneficiary record.
         $todayMarks = collect();
         if ($records->isNotEmpty() && SchemaCache::hasTable('feeding_attendances')) {
             $todayMarks = FeedingAttendance::query()

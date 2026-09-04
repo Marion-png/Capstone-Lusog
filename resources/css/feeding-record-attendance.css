@@ -71,7 +71,7 @@
 	background: var(--lg-card);
 	box-shadow: var(--lg-shadow-lift);
 }
-.ra-tally { display: flex; gap: 6px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.ra-tally { display: flex; gap: 6px; flex-wrap: wrap; font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 .ra-actions { display: flex; gap: 8px; margin-left: auto; }
 
 @media (max-width: 620px) {

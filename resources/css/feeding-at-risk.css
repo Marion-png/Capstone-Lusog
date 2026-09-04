@@ -23,7 +23,8 @@
 	font-size: .72rem;
 	font-weight: 600;
 	letter-spacing: .1em;
-	font-variant-numeric: tabular-nums;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
 	color: var(--lg-ink-soft);
 	white-space: nowrap;
 }
@@ -35,7 +36,7 @@
 
 /* Where the programme stands, and how much of it is left to recover a
    shortfall in — the two facts a coordinator checks before working the list. */
-.ar-daymeta { margin-top: 6px; font-size: .82rem; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; }
+.ar-daymeta { margin-top: 6px; font-size: .82rem; color: var(--lg-ink-soft); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 .ar-day { font-weight: 600; color: var(--lg-emerald-deep); }
 .ar-daymeta .ar-sep { color: var(--lg-border-strong); margin: 0 8px; }
 
@@ -75,7 +76,7 @@
 	padding: 16px 18px 14px;
 	border-bottom: 1px solid var(--lg-border);
 }
-.ar-listhead .card-sub { font-variant-numeric: tabular-nums; }
+.ar-listhead .card-sub { font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 .ar-search input { min-width: 240px; }
 
 .ar-table { width: 100%; }
@@ -170,7 +171,8 @@
 	font-size: .86rem;
 	font-weight: 600;
 	color: var(--lg-ink);
-	font-variant-numeric: tabular-nums;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
 	font-family: ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
 }
 .ar-fact dd.is-risk { color: var(--lg-danger-ink); }
@@ -207,7 +209,8 @@
 	font-size: 1.3rem;
 	font-weight: 700;
 	color: var(--lg-ink);
-	font-variant-numeric: tabular-nums;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
 	font-family: ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
 }
 .ar-trend-value.is-risk { color: var(--lg-danger-ink); }
@@ -234,7 +237,8 @@
 	max-width: 320px;
 	font-size: .68rem;
 	color: var(--lg-ink-soft);
-	font-variant-numeric: tabular-nums;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
 }
 
 .ar-mini { width: 100%; margin-top: 10px; border-collapse: collapse; }
@@ -259,7 +263,7 @@
 .ar-timeline { margin-top: 12px; display: grid; gap: 12px; list-style: none; }
 .ar-entry { padding-left: 12px; border-left: 2px solid var(--lg-border-strong); }
 .ar-entry-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.ar-entry-date { font-size: .78rem; font-weight: 600; color: var(--lg-ink); font-variant-numeric: tabular-nums; }
+.ar-entry-date { font-size: .78rem; font-weight: 600; color: var(--lg-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 .ar-entry-line { margin-top: 4px; font-size: .78rem; line-height: 1.5; color: var(--lg-ink-soft); }
 .ar-entry-line strong { color: var(--lg-ink); font-weight: 600; }
 .ar-entry-by { margin-top: 5px; font-size: .72rem; color: var(--lg-ink-soft); }
@@ -306,7 +310,7 @@
 .ar-detail-modal .ar-detail { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 .ar-detail-body { border-top: 1px solid var(--lg-border); }
 .ar-detail-ident { min-width: 0; }
-.ar-modal-meta { margin-top: 5px; font-size: .8rem; color: var(--lg-ink-soft); font-variant-numeric: tabular-nums; }
+.ar-modal-meta { margin-top: 5px; font-size: .8rem; color: var(--lg-ink-soft); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 .ar-detail-modal .modal-foot .badge { margin-right: auto; }
 
 .ar-modal-eyebrow { font-size: .66rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--lg-ink-soft); }

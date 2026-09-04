@@ -6,6 +6,7 @@ use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Support\BmiAssessmentReport;
 use App\Support\FeedingBeneficiarySummary;
+use App\Support\SchoolLetterhead;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
@@ -307,6 +308,88 @@ class FeedingBmiReportTest extends TestCase
         $this->assertSame('Test School', $letterhead['school']);
         $this->assertArrayHasKey('deped', $response->viewData('seals'));
         $this->assertArrayHasKey('school', $response->viewData('seals'));
+    }
+
+    /**
+     * The seals are files, and dropping them in is the whole installation.
+     *
+     * Nothing about the heading changes when a school adds its own seals: the
+     * placeholder becomes an image at the same size, in the same box, on every
+     * form on the page. This renders the real thing — two PNG files under
+     * public/images — and reads the markup back, because the alternative is
+     * discovering on the morning of a submission that the file is there and the
+     * form still shows a dashed circle.
+     */
+    #[Test]
+    public function the_forms_carry_the_schools_seals_once_the_files_are_dropped_in(): void
+    {
+        [$deped, $school] = $this->installSeals();
+
+        try {
+            $response = $this->withSession($this->coordinatorSession())
+                ->get('/dashboard/feedingcor-sbfp-forms')
+                ->assertOk();
+
+            $seals = $response->viewData('seals');
+            $this->assertNotNull($seals['deped']);
+            $this->assertNotNull($seals['school']);
+
+            // Every form on the page opens under the same heading, and the four
+            // of them carry the two seals between them.
+            $body = $response->getContent();
+            $this->assertSame(4, substr_count($body, 'alt="Department of Education"'));
+            $this->assertStringContainsString('images/deped-logo.png?v=', $body);
+            $this->assertStringContainsString('images/school-logo.png?v=', $body);
+
+            // The stamp is what makes a replaced seal actually appear: the name
+            // is the lookup, the modification time is what the browser caches
+            // against.
+            $this->assertStringContainsString('?v='.filemtime($deped), $seals['deped']);
+
+            // The placeholder is gone — a form does not carry both. Matched as
+            // the element, since the class itself still lives in the inlined
+            // stylesheet whether or not anything wears it.
+            $this->assertStringNotContainsString('class="lh-seal-slot"', $body);
+        } finally {
+            @unlink($deped);
+            @unlink($school);
+        }
+    }
+
+    /**
+     * The two seal files, written for the length of one test and removed after.
+     *
+     * A 1x1 fully transparent PNG: the letterhead asks whether the file is
+     * there, never what is in it, so the smallest valid image proves the wiring
+     * without shipping a school's artwork into the repository.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function installSeals(): array
+    {
+        $png = base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk'
+            .'YPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+        );
+
+        $paths = [];
+        foreach ([SchoolLetterhead::DEPED_LOGO, SchoolLetterhead::SCHOOL_LOGO] as $relative) {
+            $path = public_path($relative);
+
+            // Never write over a seal the school has actually installed.
+            if (is_file($path)) {
+                $this->markTestSkipped('A real seal is already installed at '.$relative.'.');
+            }
+
+            if (! is_dir(dirname($path))) {
+                mkdir(dirname($path), 0777, true);
+            }
+
+            file_put_contents($path, $png);
+            $paths[] = $path;
+        }
+
+        return $paths;
     }
 
     /**
