@@ -190,6 +190,19 @@ Every access and action on personal/sensitive personal information is logged to 
 - Audit entries are evidence: never update or delete `audit_logs` rows from application code (`AuditLog` has no updated_at and no edit path). The System Admin views them at `/dashboard/system-admin/audit-logs`.
 - `AuditTrailTest` guards this invariant; keep it passing.
 
+### Promotion Updates, It Never Deletes (invariant)
+
+A learner moving Grade 7 → 8 keeps everything from Grade 7. Their record is not overwritten and not removed — prior-year data stays retrievable and traceable, because a health history that resets each August is not a health history.
+
+The mechanism is already the schema's: `student_health_records` is keyed by **`student_id` + `institution_id` + `school_year`**, and each school year is its own row. `AdviserController::store` scopes its `updateOrCreate` to `StudentHealthRecord::currentSchoolYear()`, so enrolling the same learner in a new year writes a **new row** rather than editing last year's. Nothing anywhere deletes a `StudentHealthRecord`, and nothing should start.
+
+Two consequences to preserve in every change:
+
+- **Never widen a write to span school years.** Dropping `school_year` from that `updateOrCreate` scope would silently make promotion overwrite the prior year — the exact failure this invariant exists to prevent, and one nothing would report.
+- **Retrievable means a screen can reach it.** Retention is not the same as access. The School Head (Dashboard, Masterlist, Health Overview, Consent, Reports) and the Feeding Coordinator both carry a school-year filter and can read an earlier year. **The class adviser cannot** — `StudentRosterSync` and the adviser dashboard read `currentYearForInstitution()` only, so a teacher has no way to open last year's card for a learner they now teach. That is a known gap, not a decision; if the adviser is meant to see prior years, it needs a year selector rather than a widened query.
+
+How long a record is kept after a learner **stops** appearing (dropout, transfer, no return) is deliberately **not** settled here — see `docs/open-decisions.md`, entry 2. Today the answer is "forever", by omission rather than by choice.
+
 ### Multi-School Data Separation (invariant)
 
 Data separation covers **all** modules and records — health records, consultations, medicine inventory, deworming, consent forms, health assessments, feeding attendance, and accounts. Rules to preserve in every change:

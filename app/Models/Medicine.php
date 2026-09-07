@@ -12,9 +12,15 @@ class Medicine extends Model
     protected $fillable = [
         'institution_id',
         'name',
+        'off_catalogue',
+        'off_catalogue_reason',
         'stock_quantity',
         'minimum_threshold',
         'unit',
         'notes',
+    ];
+
+    protected $casts = [
+        'off_catalogue' => 'boolean',
     ];
 }

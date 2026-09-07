@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Medicine;
+use App\Support\MedicineCatalogue;
 use App\Support\MedicineUsage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -125,8 +126,24 @@ class MedicineInventoryController extends Controller
             return $redirect;
         }
 
+        // The name comes from the DepEd catalogue, or is typed as an
+        // explicit off-list entry with a reason — see App\Support\MedicineCatalogue.
+        $resolved = MedicineCatalogue::resolve(
+            $request->input('catalogue_name'),
+            $request->input('custom_name'),
+        );
+
+        $request->merge(['name' => $resolved['name']]);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:medicines,name'],
+            // A reason is required only when the medicine is off the list.
+            // Refusing an off-list entry outright would not stop the practice,
+            // it would only stop the stock record being true.
+            'off_catalogue_reason' => [
+                $resolved['off_catalogue'] ? 'required' : 'nullable',
+                'string', 'max:255',
+            ],
             'stock_quantity' => ['required', 'integer', 'min:0'],
             'minimum_threshold' => ['required', 'integer', 'min:0'],
             'unit' => ['required', 'string', 'max:20'],
@@ -135,6 +152,7 @@ class MedicineInventoryController extends Controller
 
         Medicine::create([
             ...$validated,
+            'off_catalogue' => $resolved['off_catalogue'],
             'institution_id' => $request->session()->get('active_institution_id'),
         ]);
 

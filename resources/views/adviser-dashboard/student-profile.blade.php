@@ -45,7 +45,18 @@
             <div class="sp-cover"></div>
 
             <div class="sp-identity">
-                <div class="sp-avatar" id="vpInitials">&ndash;</div>
+                {{-- The avatar shows the learner's photo when there is one and
+                     their initials when there is not, so the profile never has
+                     an empty hole where a face should be. The adviser sets it;
+                     the nurse and clinic staff see it. --}}
+                <div class="sp-avatar-wrap">
+                    <div class="sp-avatar sp-avatar-blank" id="vpPhotoPlaceholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M19 21v-2a5 5 0 0 0-5-5h-4a5 5 0 0 0-5 5v2"/><circle cx="12" cy="8" r="4"/></svg></div>
+                    <img class="sp-avatar sp-avatar-photo" id="vpPhoto" alt="" hidden>
+                    <button type="button" class="sp-avatar-set" id="vpPhotoBtn" title="Set profile photo" aria-label="Set profile photo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    </button>
+                    <input type="file" id="vpPhotoInput" accept="image/jpeg,image/png,image/webp" hidden>
+                </div>
                 <div class="sp-identity-body">
                     <div class="sp-name" id="vpName">-</div>
                     <div class="sp-class" id="vpGradeSection">-</div>
@@ -227,6 +238,70 @@
 
 @include('partials.student-documents-script')
 @include('partials.student-incidents-script', ['lrn' => $lrn])
+{{-- Profile photo. The adviser sets it; everyone permitted sees it in place
+     of the initials. Nothing here trusts the browser: the endpoints re-check
+     the school and the adviser's own class on every call. --}}
+<script>
+(() => {
+    const wrap = document.querySelector('.sp-avatar-wrap');
+    if (!wrap) return;
+
+    const blank = document.getElementById('vpPhotoPlaceholder');
+    const img = document.getElementById('vpPhoto');
+    const button = document.getElementById('vpPhotoBtn');
+    const input = document.getElementById('vpPhotoInput');
+    const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+    const base = @json(url('health-records/students/'.$lrn.'/photo'));
+
+    const paint = (state) => {
+        const has = Boolean(state?.has_photo);
+        if (has) img.src = state.url;
+        img.hidden = !has;
+        blank.hidden = has;
+        // Only the learner's own adviser gets the camera button.
+        if (button) button.hidden = !state?.may_manage;
+        wrap.classList.toggle('has-photo', has);
+    };
+
+    fetch(base + '/status', { headers: { Accept: 'application/json' } })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((state) => { if (state) paint(state); })
+        .catch(() => {});
+
+    button?.addEventListener('click', () => input?.click());
+
+    input?.addEventListener('change', async () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+
+        const body = new FormData();
+        body.append('photo', file);
+
+        try {
+            const response = await fetch(base, {
+                method: 'POST',
+                headers: { Accept: 'application/json', 'X-CSRF-TOKEN': token },
+                body,
+            });
+
+            if (!response.ok) {
+                window.alert(response.status === 422
+                    ? 'That file could not be used. Choose a JPG, PNG or WebP under 4 MB.'
+                    : 'The photo could not be saved. Please try again.');
+                return;
+            }
+
+            const state = await response.json();
+            paint({ ...state, may_manage: true });
+        } catch (_) {
+            window.alert('The photo could not be saved. Please try again.');
+        } finally {
+            input.value = '';
+        }
+    });
+})();
+</script>
 
 <script>
 const STUDENT_PROFILE_RECORD = @json($prototypeRecord);
@@ -643,7 +718,6 @@ const STUDENT_PROFILE_LRN = @json($lrn);
             ? ((record.first_name || ' ').charAt(0) + (record.last_name || ' ').charAt(0)).toUpperCase()
             : '--';
 
-        setText('vpInitials', initials);
         setText('vpName', fullName || '-');
         setText('vpLrn', record.lrn || '-');
         setText('vpAge', record.age || '-');

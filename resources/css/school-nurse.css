@@ -204,3 +204,5 @@
 .cphoto-check{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--lg-ink,#1F2D25)}
 .cphoto-error{padding:9px 12px;border-radius:8px;background:#FCECEC;color:#b91c1c;font-size:.78rem}
 .cphoto-foot{display:flex;justify-content:flex-end;gap:9px;padding:13px 18px;border-top:1px solid var(--lg-border,#DCE8E0);background:#f7faf8}
+
+

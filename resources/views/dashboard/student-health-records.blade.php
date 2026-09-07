@@ -262,7 +262,14 @@
         <div class="sp-cover"></div>
 
         <div class="sp-identity">
-            <div class="sp-avatar" id="pAvatar">&ndash;</div>
+            {{-- The learner's photo where the clinic can see it. Putting a face to
+                 a name is the point of it when a child arrives and cannot
+                 explain who they are. The class adviser sets it; this role
+                 only looks. --}}
+            <div class="sp-avatar-wrap">
+                <div class="sp-avatar sp-avatar-blank" id="pAvatarPlaceholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M19 21v-2a5 5 0 0 0-5-5h-4a5 5 0 0 0-5 5v2"/><circle cx="12" cy="8" r="4"/></svg></div>
+                <img class="sp-avatar sp-avatar-photo" id="pAvatarPhoto" alt="" hidden>
+            </div>
             <div class="sp-identity-body">
                 <div class="sp-name" id="pName">-</div>
                 <div class="sp-class" id="pGrade">-</div>
@@ -786,7 +793,6 @@
         const examined = record.examination && Object.keys(record.examination).length > 0;
 
         const initials = ((record.first_name || '').charAt(0) + (record.last_name || '').charAt(0)).toUpperCase();
-        setText('pAvatar', initials || '?');
         setText('pName', fullName || '-');
         setText('pLrn', record.lrn || '-');
         setText('pSex', record.gender || '-');
@@ -807,6 +813,7 @@
         setText('psStatus', examined ? 'Examined by School Nurse' : 'Pending School Nurse Examination');
 
         window.renderVitals?.(record);
+        window.renderLearnerPhoto?.(record);
         setText('pgHeight', (record.height_cm || '-') + ' cm');
         setText('pgWeight', (record.weight_kg || '-') + ' kg');
         drawGrowthTrend(record);
@@ -1665,6 +1672,44 @@
             saveBtn.disabled = false;
         }
     });
+})();
+</script>
+{{-- Learner photo, read-only for this role. --}}
+<script>
+(() => {
+    const img = document.getElementById('pAvatarPhoto');
+    const blank = document.getElementById('pAvatarPlaceholder');
+    if (!img || !blank) return;
+
+    const base = @json(url('health-records/students'));
+
+    window.renderLearnerPhoto = (record) => {
+        const lrn = String(record?.lrn || '').trim();
+
+        // Reset first: the panel is reused for every learner, and a stale
+        // face on the wrong child's record is the worst failure here.
+        img.hidden = true;
+        img.removeAttribute('src');
+        blank.hidden = false;
+
+        if (lrn === '') return;
+
+        const url = base + '/' + encodeURIComponent(lrn) + '/photo';
+
+        fetch(url + '/status', { headers: { Accept: 'application/json' } })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((state) => {
+                // Guard against a slow response landing after the nurse has
+                // moved on to a different learner.
+                if (!state?.has_photo) return;
+                if (String(document.getElementById('pLrn')?.textContent || '').trim() !== lrn) return;
+
+                img.src = state.url;
+                img.hidden = false;
+                blank.hidden = true;
+            })
+            .catch(() => {});
+    };
 })();
 </script>
 </body>

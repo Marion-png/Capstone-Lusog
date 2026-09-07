@@ -291,3 +291,19 @@
     .sp-panel { display: block !important; break-inside: avoid; }
     .student-profile-body { overflow: visible !important; }
 }
+
+/* ── Learner profile photo ──
+   The avatar IS the photo. No initials: a name is already printed beside
+   it, and two renderings of the same identity in one header is one too
+   many. A learner with no picture yet gets a neutral silhouette holding
+   the space, so the header never collapses or shows an empty disc.
+
+   `.sp-avatar` sets display:grid, which outranks the browser's own
+   `[hidden] { display: none }` — both the photo and the placeholder carry
+   that class and are toggled against each other, so the rule has to name
+   the class itself or the hidden one still paints. */
+.sp-avatar[hidden]{display:none !important}
+.sp-avatar-wrap{position:relative;flex-shrink:0;line-height:0}
+.sp-avatar-photo{object-fit:cover;display:block;padding:0}
+.sp-avatar-blank{background:var(--lg-mint,#E7F5EC);color:var(--lg-emerald-deep,#126B3A)}
+.sp-avatar-blank svg{width:52%;height:52%}

@@ -28,11 +28,36 @@ use App\Models\ConsultationPhoto;
  * The redaction happens where the payload is built, never in the template: a
  * value that reaches the browser has been disclosed whether or not a view
  * chose to print it.
+ *
+ * ---------------------------------------------------------------------------
+ * CONTESTED — the class adviser's line is NOT settled. See
+ * docs/open-decisions.md, entry 1.
+ *
+ * What is written above is Ma'am Nanette's guidance (minimum necessary: a
+ * teacher needs to know a pupil was out of class, not why). The school nurse
+ * disagrees on the record: she argues the adviser is the "second parent sa
+ * school", holds the direct line to the parents, and cannot inform them
+ * properly without the detail.
+ *
+ * Both positions are coherent and they are incompatible. This file implements
+ * one of them because the code had to do something; that is a default, not a
+ * ruling. It is Ma'am Nanette's to decide.
+ *
+ * If it goes the nurse's way the change is one line — add 'class_adviser' to
+ * DETAIL_ROLES — plus the assertions in ConsultationPrivacyTest that currently
+ * pin the redaction. Do not make that change on your own judgement, and do not
+ * widen the School Head at the same time: the parent-contact argument does not
+ * apply to a principal.
+ * ---------------------------------------------------------------------------
  */
 class ConsultationVisibility
 {
     /**
      * The desks that treat the learner, and therefore read the record.
+     *
+     * CONTESTED: whether 'class_adviser' belongs here is an open question for
+     * Ma'am Nanette — docs/open-decisions.md, entry 1. Do not add it without
+     * her ruling.
      *
      * @var list<string>
      */

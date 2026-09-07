@@ -310,11 +310,14 @@ class AdviserMyStudentsTest extends TestCase
             );
         }
 
-        // The one input outside the incident panel is the Medical Documents
-        // file picker: the adviser files documents here, but no health field
-        // is editable.
-        $this->assertSame(1, substr_count($readOnlyCard, '<input'), 'The only input on the read-only profile is the document picker.');
+        // Two inputs outside the incident panel, both file pickers, both
+        // named: Medical Documents and the learner's profile photo. The
+        // adviser files things here; no health field is editable. Counting
+        // them keeps the guard's force — a third input means somebody added
+        // a way to edit the record from a page that is supposed to read it.
+        $this->assertSame(2, substr_count($readOnlyCard, '<input'), 'Only the document and photo pickers may be inputs here.');
         $this->assertStringContainsString('id="sdInput"', $readOnlyCard);
+        $this->assertStringContainsString('id="vpPhotoInput"', $readOnlyCard);
 
         // And the incident panel writes only to its own endpoint — it is not
         // a back door into the health record.

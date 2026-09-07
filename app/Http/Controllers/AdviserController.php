@@ -179,6 +179,12 @@ class AdviserController extends Controller
 
         // Sheet 2 is written once, when the learner is enrolled.
         //
+        // CONTESTED: Ma'am Nanette's confirmation is "editable only by nurse",
+        // which this does not satisfy — the adviser still writes it here at
+        // enrolment, and no nurse-side form for it exists. Switching this off
+        // without building one would leave Sheet 2 blank for every learner
+        // enrolled afterwards. See docs/open-decisions.md, entry 3.
+        //
         // Opening a learner from their profile is reading their record, not
         // re-examining them, so an edit keeps the systems review exactly as it
         // stands and ignores whatever the form posted. The sheet renders

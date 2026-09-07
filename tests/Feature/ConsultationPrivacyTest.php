@@ -29,6 +29,16 @@ use Tests\TestCase;
  * The redaction happens where the payload is built, never in a template: a
  * value that reaches the browser has been disclosed whether or not the view
  * chose to print it. These tests assert on the rendered page for that reason.
+ *
+ * CONTESTED — the class adviser's line is not settled, and these tests are
+ * currently what holds it in place. Ma'am Nanette's guidance is date and time
+ * only; the school nurse argues on the record that the adviser is the
+ * "second parent sa school" and needs the full record to inform parents.
+ * See docs/open-decisions.md, entry 1.
+ *
+ * If a test in the class-adviser section below starts failing, check whether
+ * somebody has implemented the other side of that argument before you "fix"
+ * the code to match the test.
  */
 class ConsultationPrivacyTest extends TestCase
 {

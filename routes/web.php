@@ -4,6 +4,7 @@ use App\Http\Controllers\AdviserController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\ClinicNoteController;
 use App\Http\Controllers\ConditionController;
+use App\Http\Controllers\ConsentFormScanController;
 use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\ConsultationPhotoController;
 use App\Http\Controllers\EventController;
@@ -32,6 +33,7 @@ use App\Http\Controllers\SchoolHeadReportsController;
 use App\Http\Controllers\StudentHealthRecordController;
 use App\Http\Controllers\StudentIncidentReportController;
 use App\Http\Controllers\StudentMedicalDocumentController;
+use App\Http\Controllers\StudentPhotoController;
 use App\Http\Controllers\StudentVitalSignsController;
 use App\Models\AuditLog;
 use App\Models\Consultation;
@@ -816,6 +818,28 @@ Route::post('/health-records/consultation-photos/{photo}/share', [ConsultationPh
     ->whereNumber('photo')->name('consultation-photos.share');
 Route::delete('/health-records/consultation-photos/{photo}', [ConsultationPhotoController::class, 'destroy'])
     ->whereNumber('photo')->name('consultation-photos.destroy');
+
+// Reads a photographed, signed Sulat-Pahibalo and hands the class adviser a
+// filled-in DRAFT of the consent form. It records nothing: a parent's consent
+// authorises medical procedures on a child, so the adviser checks the draft
+// against the paper and saves it through the normal write path. Needs
+// ANTHROPIC_API_KEY; without one the endpoint reports itself unavailable and
+// the form is filled in by hand exactly as before.
+Route::post('/health-records/consent-forms/scan', [ConsentFormScanController::class, 'scan'])
+    ->name('consent-forms.scan');
+
+// A learner's profile photograph. The class adviser sets it — they enrol the
+// learner and know which face belongs to which name; the nurse and clinic
+// staff see it, because putting a face to a name is the point of it when a
+// child arrives at the clinic. Keyed by LRN so it survives grade promotion.
+Route::get('/health-records/students/{lrn}/photo', [StudentPhotoController::class, 'show'])
+    ->name('student-photo.show');
+Route::get('/health-records/students/{lrn}/photo/status', [StudentPhotoController::class, 'status'])
+    ->name('student-photo.status');
+Route::post('/health-records/students/{lrn}/photo', [StudentPhotoController::class, 'store'])
+    ->name('student-photo.store');
+Route::delete('/health-records/students/{lrn}/photo', [StudentPhotoController::class, 'destroy'])
+    ->name('student-photo.destroy');
 
 // Parental consent form upload (class_adviser only, own class enforced in controller)
 Route::post('/adviser/parental-consent', [ParentalConsentFormController::class, 'store'])
