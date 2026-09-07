@@ -26,7 +26,7 @@ class InstitutionSectionCatalogTest extends TestCase
     {
         parent::setUp();
 
-        $this->school = Institution::create(['name' => 'Sta. Ana National High School', 'status' => 'active']);
+        $this->school = Institution::create(['name' => Institution::REGISTRATION_SCHOOL, 'status' => 'active']);
 
         foreach ([
             'Grade 7' => ['MATIYAGA', 'MASIPAG'],
@@ -166,7 +166,12 @@ class InstitutionSectionCatalogTest extends TestCase
     /** @test */
     public function a_school_without_a_catalog_still_accepts_a_typed_section(): void
     {
-        $other = Institution::create(['name' => 'Unpublished National High School', 'status' => 'active']);
+        // Registration is limited to one school, so the school with no
+        // published catalogue has to be that same school — which is exactly the
+        // state of a fresh deployment before InstitutionSectionSeeder has run.
+        // The fallback must still let an adviser type their section, or nobody
+        // could register at all until somebody seeded the sections.
+        InstitutionSection::where('institution_id', $this->school->id)->delete();
 
         $this->post('/account-request', [
             'name' => 'Typed Section',
@@ -174,7 +179,7 @@ class InstitutionSectionCatalogTest extends TestCase
             'password' => 'password1',
             'password_confirmation' => 'password1',
             'role' => 'class_adviser',
-            'institution_id' => $other->id,
+            'institution_id' => $this->school->id,
             'assigned_grade_level' => 'Grade 4/SPED',
             'assigned_section' => 'SPED-A',
         ])->assertSessionHasNoErrors();

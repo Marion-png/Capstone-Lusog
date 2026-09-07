@@ -112,9 +112,19 @@ class PerSchoolAccountTest extends TestCase
     }
 
     /** @test */
-    public function registration_rejects_a_duplicate_username_only_within_the_same_school(): void
+    public function registration_rejects_a_duplicate_username_and_every_other_school(): void
     {
-        $this->makeAccount($this->schoolA);
+        // Self-service registration is limited to one school, so this is the
+        // only institution a request may name. Usernames stay unique *per
+        // school* in the `accounts` table itself — that invariant is guarded by
+        // the_same_username_can_hold_one_account_per_school and the login tests
+        // above, which reach it without going through this form.
+        $school = Institution::firstOrCreate(
+            ['name' => Institution::REGISTRATION_SCHOOL],
+            ['status' => 'active']
+        );
+
+        $this->makeAccount($school);
 
         // Same username, same school -> rejected
         $sameSchool = $this->post('/account-request', [
@@ -123,16 +133,16 @@ class PerSchoolAccountTest extends TestCase
             'password' => 'secret123',
             'password_confirmation' => 'secret123',
             'role' => 'class_adviser',
-            'institution_id' => $this->schoolA->id,
+            'institution_id' => $school->id,
             'assigned_grade_level' => 'Grade 2',
             'assigned_section' => 'Rosal',
         ]);
         $sameSchool->assertSessionHasErrors('username');
 
-        // Same username, different school -> accepted
+        // Any other school -> refused outright, whatever the username.
         $otherSchool = $this->post('/account-request', [
-            'name' => 'Teacher Ana',
-            'username' => 'teacher.ana',
+            'name' => 'Teacher Bea',
+            'username' => 'teacher.bea',
             'password' => 'secret123',
             'password_confirmation' => 'secret123',
             'role' => 'class_adviser',
@@ -140,7 +150,7 @@ class PerSchoolAccountTest extends TestCase
             'assigned_grade_level' => 'Grade 2',
             'assigned_section' => 'Rosal',
         ]);
-        $otherSchool->assertSessionHasNoErrors();
-        $this->assertSame(1, DB::table('account_requests')->where('username', 'teacher.ana')->where('institution_id', $this->schoolB->id)->count());
+        $otherSchool->assertSessionHasErrors('institution_id');
+        $this->assertSame(0, DB::table('account_requests')->where('institution_id', $this->schoolB->id)->count());
     }
 }

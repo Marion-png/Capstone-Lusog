@@ -220,6 +220,14 @@ class SchoolHeadRoleTest extends TestCase
     #[Test]
     public function an_account_request_is_not_blocked_by_a_stale_school_head_session(): void
     {
+        // Registration is limited to one school (see Institution::REGISTRATION_SCHOOL);
+        // which school is incidental here — the subject is that a stale
+        // school_head session does not block the request.
+        $school = Institution::firstOrCreate(
+            ['name' => Institution::REGISTRATION_SCHOOL],
+            ['status' => 'active']
+        );
+
         $this->withSession($this->headSession())
             ->post('/account-request', [
                 'name' => 'New Coordinator',
@@ -227,7 +235,7 @@ class SchoolHeadRoleTest extends TestCase
                 'password' => 'password1',
                 'password_confirmation' => 'password1',
                 'role' => 'feeding_coor',
-                'institution_id' => $this->institution->id,
+                'institution_id' => $school->id,
             ])
             ->assertSessionHasNoErrors();
 

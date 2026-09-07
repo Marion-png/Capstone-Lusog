@@ -73,7 +73,10 @@ Route::get('/account-request', function () {
             Institution::seedDefaults();
         }
 
-        $institutions = Institution::active()->orderBy('name')->get(['id', 'name']);
+        // The deployment serves one school, so the form offers one school.
+        // The POST below re-checks it — a dropdown with a single option is a
+        // convenience, never the constraint.
+        $institutions = collect([Institution::registrationSchool()])->filter()->values();
     }
 
     return view('auth.account-request', ['institutions' => $institutions]);
@@ -83,13 +86,24 @@ Route::post('/account-request', function (Request $request) {
     $scopedRoles = ['school_nurse', 'clinic_staff', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor'];
 
     $validated = $request->validate([
-        'name' => ['required', 'string', 'max:255'],
-        'username' => ['required', 'string', 'max:255'],
-        'password' => ['required', 'string', 'min:6', 'confirmed'],
+        // A person's name: letters, spaces, hyphens, apostrophes and the dots
+        // in "Jr." or an initial. Digits and symbols are junk data here.
+        'name' => ['required', 'string', 'min:2', 'max:100', 'regex:/^[\pL\pM][\pL\pM\s\'\-\.]*$/u'],
+        // Usernames are compared lowercased and trimmed throughout (see the
+        // duplicate check below), so the stored form is constrained to what
+        // that comparison can round-trip.
+        'username' => ['required', 'string', 'min:4', 'max:32', 'regex:/^[a-z0-9][a-z0-9._]*$/'],
+        // At least one letter and one digit, so "password" and "12345678" are
+        // both refused.
+        'password' => ['required', 'string', 'min:8', 'max:72', 'confirmed', 'regex:/^(?=.*[\pL])(?=.*\d).+$/u'],
         'role' => ['required', 'in:school_nurse,clinic_staff,class_adviser,school_head,feeding_coor,nutricor'],
         'institution_id' => ['nullable', 'integer', 'exists:institutions,id'],
         'assigned_grade_level' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:50'],
         'assigned_section' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:100'],
+    ], [
+        'name.regex' => 'Enter your name using letters, spaces, hyphens or apostrophes only.',
+        'username.regex' => 'Use lowercase letters, numbers, dots and underscores only, starting with a letter or number.',
+        'password.regex' => 'Passwords must contain at least one letter and one number.',
     ]);
 
     $role = $validated['role'];
@@ -99,6 +113,21 @@ Route::post('/account-request', function (Request $request) {
         return back()
             ->withErrors(['institution_id' => 'Please select your school.'])
             ->withInput();
+    }
+
+    // One school, enforced on the server. The form offers a single option, but
+    // an institution id off the wire decides nothing: anyone can post another
+    // one, and every other row in `institutions` is catalogue data that no
+    // account may be registered against.
+    $registrationSchool = Institution::registrationSchool();
+
+    if (! empty($validated['institution_id'])) {
+        if ($registrationSchool === null
+            || (int) $validated['institution_id'] !== (int) $registrationSchool->id) {
+            return back()
+                ->withErrors(['institution_id' => 'Accounts may only be registered for '.Institution::REGISTRATION_SCHOOL.'.'])
+                ->withInput();
+        }
     }
 
     $username = strtolower(trim($validated['username']));
@@ -446,16 +475,23 @@ Route::post('/dashboard/consultation-log', [ConsultationController::class, 'stor
     ->name('consultations.store');
 
 // API: list active institutions for registration dropdown
+// The account-request form's school list is this endpoint's only consumer, and
+// registration is limited to one school — so it returns that one school rather
+// than the whole catalogue. Widening it here would silently reopen the form:
+// the page overwrites its server-rendered dropdown with whatever this returns.
 Route::get('/api/institutions', function () {
     if (! Schema::hasTable('institutions')) {
         return response()->json([]);
     }
 
-    if (Schema::hasTable('institutions') && ! Institution::active()->exists()) {
+    if (! Institution::active()->exists()) {
         Institution::seedDefaults();
     }
 
-    return Institution::active()->orderBy('name')->get(['id', 'name']);
+    return collect([Institution::registrationSchool()])
+        ->filter()
+        ->map(fn (Institution $school) => ['id' => $school->id, 'name' => $school->name])
+        ->values();
 })->name('api.institutions.index');
 
 // API: the sections one school runs, grouped by grade level, for the cascading

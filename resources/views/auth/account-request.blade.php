@@ -149,19 +149,19 @@
                 <div class="grid">
                     <div class="field">
                         <label for="name">Full Name</label>
-                        <input id="name" name="name" type="text" value="{{ old('name') }}" required>
+                        <input id="name" name="name" type="text" value="{{ old('name') }}" minlength="2" maxlength="100" required>
                     </div>
                     <div class="field">
                         <label for="username">Username / Employee ID</label>
-                        <input id="username" name="username" type="text" value="{{ old('username') }}" required>
+                        <input id="username" name="username" type="text" value="{{ old('username') }}" minlength="4" maxlength="32" required>
                     </div>
                     <div class="field">
                         <label for="password">Password</label>
-                        <input id="password" name="password" type="password" minlength="6" required>
+                        <input id="password" name="password" type="password" minlength="8" maxlength="72" required>
                     </div>
                     <div class="field">
                         <label for="password_confirmation">Confirm Password</label>
-                        <input id="password_confirmation" name="password_confirmation" type="password" minlength="6" required>
+                        <input id="password_confirmation" name="password_confirmation" type="password" minlength="8" maxlength="72" required>
                     </div>
                     <div class="field full">
                         <label for="role">Role</label>
@@ -177,10 +177,15 @@
                     </div>
                     <div class="field full" id="schoolField" style="display:none;">
                         <label for="institution_id">School / Institution <span style="color:#dc2626;">*</span></label>
+                        @php($schools = ($institutions ?? collect()))
                         <select id="institution_id" name="institution_id" style="height:42px;border-radius:10px;border:1px solid var(--line);padding:0 12px;font:inherit;color:var(--text);background:#fff;">
-                            <option value="" disabled {{ old('institution_id') ? '' : 'selected' }}>Select your school…</option>
-                            @foreach (($institutions ?? collect()) as $institution)
-                                <option value="{{ $institution->id }}" {{ (string) old('institution_id') === (string) $institution->id ? 'selected' : '' }}>
+                            @if ($schools->count() !== 1)
+                                <option value="" disabled {{ old('institution_id') ? '' : 'selected' }}>Select your school…</option>
+                            @endif
+                            @foreach ($schools as $institution)
+                                {{-- One school is offered, so it is the selection rather than
+                                     something to choose; the server checks it regardless. --}}
+                                <option value="{{ $institution->id }}" {{ $schools->count() === 1 || (string) old('institution_id') === (string) $institution->id ? 'selected' : '' }}>
                                     {{ $institution->name }}
                                 </option>
                             @endforeach
@@ -263,19 +268,31 @@
                 return;
             }
 
-            institutionSel.innerHTML = '<option value="" disabled>Select your school…</option>';
+            // Registration is limited to one school. When that is all the API
+            // returns, it is the selection — offering a "Select your school…"
+            // placeholder above a single option would leave the form invalid
+            // until the user picked the only thing there was to pick.
+            const single = institutions.length === 1;
+
+            institutionSel.innerHTML = single
+                ? ''
+                : '<option value="" disabled>Select your school…</option>';
 
             institutions.forEach(function (inst) {
                 const opt = document.createElement('option');
                 opt.value = inst.id;
                 opt.textContent = inst.name;
-                if (String(inst.id) === oldInstitutionId) opt.selected = true;
+                if (single || String(inst.id) === oldInstitutionId) opt.selected = true;
                 institutionSel.appendChild(opt);
             });
 
-            if (!oldInstitutionId) {
+            if (!single && !oldInstitutionId) {
                 institutionSel.selectedIndex = 0;
             }
+
+            // A programmatic selection fires no change event, so the grade and
+            // section cascade would never load for a Class Adviser.
+            institutionSel.dispatchEvent(new Event('change'));
         }
 
         // Refresh institutions from API when available; keep server-rendered schools if it fails.
@@ -387,6 +404,12 @@
                 institutionSel.setCustomValidity('');
                 sectionCatalog = {};
                 renderGrades();
+            } else if (!institutionSel.value && institutionSel.options.length === 1) {
+                // Registration is limited to one school, and the branch above
+                // cleared it while the role was unscoped. It is the only answer
+                // available, so restore it rather than making the user pick it.
+                institutionSel.selectedIndex = 0;
+                loadSections();
             }
             if (!isClassAdviser) {
                 gradeSelect.selectedIndex = 0;
@@ -449,9 +472,11 @@
 
         syncRoleFields();
 
-        // A rejected submission comes back with the school already chosen; load
-        // its sections so the adviser's grade and section are restored, not lost.
-        if (oldInstitutionId) {
+        // Either a rejected submission coming back with the school already
+        // chosen, or the single permitted school rendered pre-selected. Both
+        // put a school on screen whose sections have not been fetched yet, and
+        // neither fires a change event on its own.
+        if (institutionSel.value) {
             loadSections();
         }
     </script>

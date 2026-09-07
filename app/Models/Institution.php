@@ -100,9 +100,31 @@ class Institution extends Model
         'Wireless ES',
     ];
 
+    /**
+     * The only school an account may be registered against.
+     *
+     * The system is deployed for one school, so the registration form offers
+     * one choice and the server refuses every other institution id. This is
+     * the single declaration of that name — never re-type it, and never widen
+     * the registration form to `Institution::active()` again: the 59 other
+     * rows in DEFAULT_SCHOOLS exist for the catalogue, not for sign-up.
+     */
+    public const REGISTRATION_SCHOOL = 'Sta. Ana National High School';
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('status', 'active');
+    }
+
+    /**
+     * The one institution registrations are allowed against, or null when it
+     * is missing from the database entirely.
+     */
+    public static function registrationSchool(): ?self
+    {
+        return self::query()
+            ->where('name', self::REGISTRATION_SCHOOL)
+            ->first();
     }
 
     public static function seedDefaults(): void
@@ -110,5 +132,11 @@ class Institution extends Model
         foreach (self::DEFAULT_SCHOOLS as $name) {
             self::firstOrCreate(['name' => $name], ['status' => 'active']);
         }
+
+        // The school this system is deployed for is not in the catalogue above,
+        // and it is the only school a registration may name — so a database
+        // seeded from the defaults alone would otherwise offer an empty school
+        // dropdown and refuse every account request.
+        self::firstOrCreate(['name' => self::REGISTRATION_SCHOOL], ['status' => 'active']);
     }
 }
