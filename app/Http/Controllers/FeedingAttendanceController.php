@@ -563,6 +563,7 @@ class FeedingAttendanceController extends Controller
                 $beneficiaries,
                 $standings,
                 $byDate->get($selectedDate, collect()),
+                $byRecord,
                 $filters
             ),
             'calendar' => $this->calendar($selectedDate, $byDate, $beneficiaries->count()),
@@ -802,11 +803,17 @@ class FeedingAttendanceController extends Controller
      * @param  Collection<int, StudentHealthRecord>  $beneficiaries
      * @param  array<int, array<string, mixed>>  $standings
      * @param  Collection<int, array<string, mixed>>  $marksForDate  keyed by record id
+     * @param  Collection<int, Collection<int, array<string, mixed>>>  $byRecord  every mark, keyed by record id
      * @param  array<string, string>  $filters
      * @return list<array<string, mixed>>
      */
-    private function beneficiaryRows(Collection $beneficiaries, array $standings, Collection $marksForDate, array $filters): array
-    {
+    private function beneficiaryRows(
+        Collection $beneficiaries,
+        array $standings,
+        Collection $marksForDate,
+        Collection $byRecord,
+        array $filters
+    ): array {
         $blank = [
             'present' => 0, 'absent' => 0, 'confirmed' => 0, 'excused' => 0, 'unconfirmed' => 0, 'not_marked' => 0,
             'rate' => null, 'at_risk' => false, 'status' => FeedingAtRiskRule::STATUS_EARLY_MONITORING,
@@ -814,7 +821,7 @@ class FeedingAttendanceController extends Controller
         ];
 
         return $beneficiaries
-            ->map(function (StudentHealthRecord $record) use ($standings, $marksForDate, $blank): array {
+            ->map(function (StudentHealthRecord $record) use ($standings, $marksForDate, $byRecord, $blank): array {
                 [$grade, $section] = FeedingBeneficiarySummary::splitSection((string) $record->section);
                 $standing = $standings[$record->id] ?? $blank;
 
@@ -849,8 +856,30 @@ class FeedingAttendanceController extends Controller
                     'sessions_needed' => $standing['sessions_needed'],
                     'absence_run' => $standing['absence_run'],
                     'needs_removal_review' => $standing['needs_removal_review'],
+                    // Every mark this learner carries, keyed by session date —
+                    // what the history dialog reads when the row is opened. It
+                    // is the same reading the counts beside it came from, so
+                    // the dialog and the row can never disagree; the school's
+                    // feeding days the learner has no mark on are filled in
+                    // from `sessionDates`, as "Not marked" and never an
+                    // absence.
+                    'marks' => $byRecord->get($record->id, collect())
+                        ->mapWithKeys(fn (array $mark): array => [$mark['date'] => [
+                            'status' => $mark['status'],
+                            'remarks' => $mark['remarks'],
+                        ]])
+                        ->all(),
                 ];
             })
+            // The roll's search: one learner by name, or a grade or section
+            // typed rather than picked. Matched on the decrypted row, since
+            // every field it reads is encrypted at rest.
+            ->when($filters['q'] !== '', fn (Collection $rows) => $rows->filter(
+                fn (array $row): bool => str_contains(
+                    mb_strtolower($row['name'].' '.$row['grade'].' '.$row['section']),
+                    mb_strtolower($filters['q'])
+                )
+            ))
             // A session's marks are exclusive, so filtering to one of them
             // leaves exactly that roll — Present takes the absent rows off, and
             // Absent takes the present ones off.
@@ -1108,7 +1137,7 @@ class FeedingAttendanceController extends Controller
      * though they answered the same question.
      *
      * @param  Collection<int, array<string, mixed>>  $rows
-     * @return array{grade: string, section: string, sex: string, status: string, standing: string}
+     * @return array{grade: string, section: string, sex: string, status: string, standing: string, q: string}
      */
     private function readFilters(Request $request, Collection $rows): array
     {
@@ -1146,7 +1175,25 @@ class FeedingAttendanceController extends Controller
             $standing = '';
         }
 
-        return ['grade' => $grade, 'section' => $section, 'sex' => $sex, 'status' => $status, 'standing' => $standing];
+        // By Beneficiary's own control: a coordinator looking for one learner
+        // on a roll of ninety is asking a different question from anyone
+        // narrowing it by grade, so it searches the name as typed. Name, grade
+        // and section are encrypted or derived, so it is matched in PHP after
+        // fetch and never lands in a WHERE. A term nobody matches empties the
+        // roll and says so — it never widens back to the whole school.
+        $search = trim((string) $request->query('q', ''));
+        if (mb_strlen($search) > 60) {
+            $search = mb_substr($search, 0, 60);
+        }
+
+        return [
+            'grade' => $grade,
+            'section' => $section,
+            'sex' => $sex,
+            'status' => $status,
+            'standing' => $standing,
+            'q' => $search,
+        ];
     }
 
     /**

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\FeedingAttendance;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -145,9 +146,9 @@ class FeedingCoordinatorDashboardTest extends TestCase
     }
 
     /**
-     * Grade and section scope every panel; the nutritional and attendance
-     * filters narrow the roll alone, so the headline keeps counting everyone
-     * expected today rather than only what is on screen.
+     * Grade and section scope every panel; the attendance filter narrows the
+     * roll alone, so the headline keeps counting everyone expected today
+     * rather than only what is on screen.
      */
     #[Test]
     public function grade_and_section_scope_the_cards_and_both_panels(): void
@@ -198,6 +199,166 @@ class FeedingCoordinatorDashboardTest extends TestCase
 
         $this->assertCount(1, $unmarked['rows']);
         $this->assertSame('unrecorded', $unmarked['rows'][0]['status']);
+    }
+
+    /**
+     * The toolbar asks five questions, not six. Nutritional Status was a
+     * narrowing filter on the attendance roll — a control that answered a
+     * question the Nutritional Status panel below it already answers, and
+     * answered it about a different population. It is gone, and nothing off
+     * the wire brings it back.
+     */
+    #[Test]
+    public function the_toolbar_carries_no_nutritional_status_filter(): void
+    {
+        $present = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', 15.1);
+        $this->makeStudent('Grade 8 / Ilang', 'Severely Wasted', 13.1);
+        $this->markAttendance($present, now()->toDateString(), true);
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-dashboard')
+            ->assertOk();
+
+        // The enrolment dialog on this page has a status filter of its own, so
+        // the control is named rather than its options: this is the toolbar's.
+        $response->assertDontSee('id="filterStatus"', false);
+        $response->assertDontSee('name="status"', false);
+        $this->assertArrayNotHasKey('status', $response->viewData('filters'));
+        $this->assertArrayNotHasKey('statuses', $response->viewData('filterOptions'));
+
+        // The panel that does answer this question keeps its heading, and now
+        // says which learners it is counting.
+        $response->assertSee('Nutritional Status');
+        $response->assertSee('Learners by baseline status.');
+        $response->assertDontSee('Beneficiaries by baseline status.');
+
+        // A status off the query string decides nothing.
+        $panel = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-dashboard?status=Wasted')
+            ->assertOk()
+            ->viewData('todayAttendance');
+
+        $this->assertCount(2, $panel['rows'], 'The roll is unnarrowed by a filter that no longer exists.');
+        $this->assertFalse($panel['filtered']);
+    }
+
+    /**
+     * "Record Today's Attendance" records today's attendance.
+     *
+     * It used to send the coordinator to the Attendance tab so they could press
+     * a second button there — a tab change and a page load to reach the control
+     * this one already names. The dialog opens here instead, and it is the
+     * *shared* partial: the same markup, the same endpoint and the same audited
+     * write the Attendance tab uses, never a copy.
+     */
+    #[Test]
+    public function record_todays_attendance_opens_the_dialog_on_the_dashboard(): void
+    {
+        $learner = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', 15.1);
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-dashboard')
+            ->assertOk();
+
+        $response->assertSee('Record Today&rsquo;s Attendance', false);
+        $response->assertSee('data-record-open', false);
+        $response->assertSee('id="recordBackdrop"', false);
+        $response->assertSee(route('feedingcor-program.attendance.record.store'), false);
+        // The whole enrolled roll, so a filter left on cannot close the day on
+        // the learners it was hiding.
+        $response->assertSee($learner->student_name);
+        // The read-back before the write, the same one every other surface has.
+        $response->assertSee('id="confirmBackdrop"', false);
+        // The save comes back here rather than landing on another tab.
+        $response->assertSee('name="return_to" value="dashboard"', false);
+        // It no longer hands the coordinator off to the Attendance tab.
+        $response->assertDontSee('record=1', false);
+
+        $this->assertTrue($response->viewData('canRecordToday'));
+        $this->assertCount(1, $response->viewData('recordRows'));
+    }
+
+    /**
+     * A recorded session is closed as a whole — but the control stays.
+     *
+     * A button that vanishes once the day is done leaves a coordinator with
+     * nothing to press and no way to tell "already recorded" from "broken", so
+     * the same dialog opens on the session as a *record*: the marks it came to,
+     * the reasons filed with them, and why nothing more can be entered. Nothing
+     * writable is rendered — no form, no radios, no Save — and
+     * `storeRecordedAttendance` refuses the write regardless.
+     */
+    #[Test]
+    public function a_recorded_day_still_opens_the_dialog_but_as_a_record(): void
+    {
+        $learner = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', 15.1);
+        $this->markAttendance($learner, now()->toDateString(), true);
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-dashboard')
+            ->assertOk();
+
+        $this->assertFalse($response->viewData('canRecordToday'));
+
+        // The way in is still there, and it still opens a dialog rather than
+        // sending the coordinator to another tab.
+        $response->assertSee('Record Today&rsquo;s Attendance', false);
+        $response->assertSee('data-record-open', false);
+        $response->assertSee('id="recordBackdrop"', false);
+        $response->assertSee('has already been recorded');
+        $response->assertSee($learner->student_name);
+
+        // The dialog's markup alone: its script names the radios it drives on
+        // a day that has any, so the slice stops where the markup does.
+        $html = $response->getContent();
+        $dialog = substr($html, strpos($html, 'id="recordBackdrop"'));
+        $dialog = substr($dialog, 0, strpos($dialog, '<script>'));
+
+        // Nothing on screen could post: no form action, no radios, no remark
+        // field, no Save, and no read-back to confirm.
+        $this->assertStringNotContainsString('id="recordForm"', $dialog);
+        $this->assertStringNotContainsString(route('feedingcor-program.attendance.record.store'), $dialog);
+        $this->assertStringNotContainsString('type="radio"', $dialog);
+        $this->assertStringNotContainsString('name="marks[', $dialog);
+        $this->assertStringNotContainsString('Save Attendance', $dialog);
+        $this->assertStringNotContainsString('id="confirmBackdrop"', $html);
+    }
+
+    /** A weekend is not a session, so the dialog reports that rather than offering to write one. */
+    #[Test]
+    public function a_weekend_opens_the_dialog_as_a_closed_day(): void
+    {
+        $this->travelTo(Carbon::parse('2026-09-12')->next(Carbon::SATURDAY)->setTime(9, 0));
+
+        $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', 15.1);
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-dashboard')
+            ->assertOk();
+
+        $this->assertFalse($response->viewData('canRecordToday'));
+        $response->assertSee('Record Today&rsquo;s Attendance', false);
+        $response->assertSee('There are no feeding sessions on Saturdays or Sundays.');
+
+        $this->travelBack();
+    }
+
+    /**
+     * An unconfirmed scanned mark does not close a session: nobody has read it,
+     * and recording on site is exactly how it gets decided.
+     */
+    #[Test]
+    public function an_unconfirmed_mark_leaves_todays_session_open(): void
+    {
+        $learner = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', 15.1);
+        $this->markAttendance($learner, now()->toDateString(), null, true);
+
+        $this->assertTrue(
+            $this->withSession($this->coordinatorSession())
+                ->get('/dashboard/feedingcor-dashboard')
+                ->assertOk()
+                ->viewData('canRecordToday')
+        );
     }
 
     #[Test]
@@ -269,7 +430,6 @@ class FeedingCoordinatorDashboardTest extends TestCase
             ->get('/dashboard/feedingcor-dashboard')
             ->assertOk()
             ->assertSee('Attendance Monitoring')
-            ->assertSee('Record Today&rsquo;s Attendance', false)
             ->viewData('todayAttendance');
 
         $this->assertSame(4, $panel['expected']);

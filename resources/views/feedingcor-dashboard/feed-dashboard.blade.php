@@ -16,6 +16,11 @@
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
     <style>{!! file_get_contents(resource_path('css/feeding-enroll-modal.css')) !!}</style>
+    {{-- "Record Today's Attendance" opens the dialog here, so this page loads
+         the same two sheets the Attendance tab does. One dialog, one sheet:
+         never a copy of these rules in feeding-dashboard.css. --}}
+    <style>{!! file_get_contents(resource_path('css/feeding-record-modal.css')) !!}</style>
+    <style>{!! file_get_contents(resource_path('css/feeding-attendance-confirm.css')) !!}</style>
     <style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
 </head>
 <body>
@@ -95,11 +100,11 @@
 			@include('feedingcor-dashboard.partials.kpi-cards')
 		</section>
 
-		{{-- One coordinated set: school year, grade and section scope the whole
-		     page — the cards above these controls as well as the panels below —
-		     while nutritional and attendance status narrow the attendance roll.
-		     The section list is rebuilt server-side for the chosen grade, so
-		     Grade 8's sections are never selectable under Grade 7. --}}
+		{{-- One coordinated set: school year, grade, section and gender scope
+		     the whole page — the cards above these controls as well as the
+		     panels below — while attendance status narrows the attendance roll
+		     alone. The section list is rebuilt server-side for the chosen
+		     grade, so Grade 8's sections are never selectable under Grade 7. --}}
 		<form method="GET" class="card fc-filters" id="fcFilters">
 			<div class="fc-filter">
 				<label class="field-label" for="filterSchoolYear">School Year</label>
@@ -141,15 +146,6 @@
 				</select>
 			</div>
 			<div class="fc-filter">
-				<label class="field-label" for="filterStatus">Nutritional Status</label>
-				<select class="select" name="status" id="filterStatus">
-					<option value="">All statuses</option>
-					@foreach ($filterOptions['statuses'] as $status)
-						<option value="{{ $status }}" @selected($filters['status'] === $status)>{{ $status }}</option>
-					@endforeach
-				</select>
-			</div>
-			<div class="fc-filter">
 				<label class="field-label" for="filterAttendance">Attendance Status</label>
 				<select class="select" name="attendance" id="filterAttendance">
 					<option value="">All</option>
@@ -165,7 +161,7 @@
 				<noscript><button type="submit" class="btn btn-primary">Apply</button></noscript>
 				{{-- A school year other than the current one counts as a filter
 				     too, or there would be no way back from it. --}}
-				@if ($filters['grade'] !== '' || $filters['section'] !== '' || $filters['sex'] !== '' || $filters['status'] !== '' || $filters['attendance'] !== '' || $filters['school_year'] !== \App\Models\StudentHealthRecord::currentSchoolYear())
+				@if ($filters['grade'] !== '' || $filters['section'] !== '' || $filters['sex'] !== '' || $filters['attendance'] !== '' || $filters['school_year'] !== \App\Models\StudentHealthRecord::currentSchoolYear())
 					<a class="btn btn-ghost" href="{{ route('dashboard.feedingcor-dashboard') }}">Clear</a>
 				@endif
 			</div>
@@ -180,9 +176,27 @@
 						<h2 class="card-title">Attendance Monitoring</h2>
 						<p class="card-sub">Today&rsquo;s feeding attendance &middot; <span id="fc-updated">{{ $generatedAt }}</span></p>
 					</div>
-					{{-- Recording lives on the Attendance tab, in its dialog; this
-					     opens that tab with the dialog already up. --}}
-					<a class="btn btn-primary" href="{{ route('dashboard.feedingcor-attendance', ['view' => 'sheet', 'record' => 1]) }}">
+					{{-- The dialog opens here. It used to send the coordinator to
+					     the Attendance tab to press a second button, which is a
+					     tab change and a page load to reach the control this one
+					     already names. It is the same shared dialog, the same
+					     endpoint and the same audited write; only the page it is
+					     opened from differs, and the save returns here.
+
+					     An anchor, not a button, so without JavaScript it still
+					     lands on the standalone screen that posts to the same
+					     endpoint.
+
+					     It is drawn every day, recorded or not. Once today's
+					     session is closed the same dialog opens on it as a
+					     record — the marks it came to and why nothing more can
+					     be entered — because a control that disappears leaves a
+					     coordinator with nothing to press and no way to tell
+					     "already done" from "broken". Nothing writable is
+					     rendered on a closed day, and the endpoint refuses the
+					     write regardless. --}}
+					<a class="btn btn-primary" data-record-open
+						href="{{ route('feedingcor-program.attendance.record') }}">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
 						Record Today&rsquo;s Attendance
 					</a>
@@ -196,7 +210,7 @@
 				<div class="card-head">
 					<div>
 						<h2 class="card-title">Nutritional Status</h2>
-						<p class="card-sub">Beneficiaries by baseline status.</p>
+						<p class="card-sub">Learners by baseline status.</p>
 					</div>
 				</div>
 				<div class="live-pane" id="fc-nutrition">
@@ -240,6 +254,33 @@
 </div>
 
 @include('partials.feeding-enroll-modal')
+
+{{-- Today's Record Attendance dialog, and the read-back that confirms it.
+     Both are the shared partials the Attendance tab includes — never a copy —
+     so a mark entered from either screen is the same mark, entered the same
+     way, through the one audited endpoint. They sit outside .main because the
+     page transition puts a transform on it, which would make a fixed backdrop
+     a child of that box rather than of the viewport. --}}
+@include('feedingcor-dashboard.partials.attendance-record-modal', [
+	'selectedDate' => $recordSelectedDate,
+	'selectedDateLabel' => $recordSelectedDateLabel,
+	'beneficiaryCount' => $recordBeneficiaryCount,
+	'programDay' => $programCycle['day'],
+	'programDuration' => $programCycle['duration'],
+	'recordRows' => $recordRows,
+	// The save lands back on the Dashboard, the screen it was opened from.
+	'recordReturnTo' => 'dashboard',
+	// On a closed day the dialog renders no form, no radios and no Save — it
+	// reports the session instead of offering to write it.
+	'recordCanSave' => $canRecordToday,
+	'recordBlockedReason' => $recordBlockedReason,
+])
+{{-- The read-back only exists where there is something to write. --}}
+@if ($canRecordToday)
+	@include('feedingcor-dashboard.partials.attendance-confirm-modal', [
+		'confirmSessionLabel' => $recordSelectedDateLabel,
+	])
+@endif
 <script>
 // Feeding-day progress. The bar ships filled from the server; this only keeps
 // it honest on a page nobody reloads — at midnight the day advances by itself.

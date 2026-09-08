@@ -297,7 +297,13 @@
 
 			{{-- Every feeding day the school held, newest month first. A day no
 			     sheet covered this learner reads "Not marked" — never an
-			     absence — and can be corrected here like any other. --}}
+			     absence.
+
+			     **This record reads; it does not write.** The Correct column
+			     that posted three marks to `beneficiary.attendance.correct` is
+			     gone: a mark is entered once, in the Record Attendance dialog,
+			     on the day it belongs to, and this page reports what that came
+			     to. Do not re-add an editing control here. --}}
 			@forelse ($sessionMonths as $month)
 				<section class="card bd-card bd-sessions">
 					<p class="bd-card-title">{{ $month['label'] }}</p>
@@ -306,10 +312,9 @@
 							<thead>
 								<tr>
 									<th>Date</th>
-									<th>Status</th>
+									<th>Attendance</th>
 									<th>Recorded By</th>
 									<th>Remarks</th>
-									<th class="bd-correct-col">Correct</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -323,23 +328,6 @@
 										</td>
 										<td class="bd-remark">{{ $row['recorded_by'] !== '' ? $row['recorded_by'] : '—' }}</td>
 										<td class="bd-remark">{{ $row['remarks'] !== '' ? $row['remarks'] : '—' }}</td>
-										<td class="bd-correct-col">
-											{{-- Three posts to one audited endpoint. The
-											     mark a session already reads is not
-											     offered again — there is nothing to
-											     correct it to. Excusing is here rather
-											     than anywhere else because it is a
-											     decision about one named learner on one
-											     named day, and this is the screen that
-											     records it with a reason. --}}
-											<form method="POST" action="{{ route('feedingcor-program.beneficiary.attendance.correct', $learner['id']) }}" class="bd-correct">
-												@csrf
-												<input type="hidden" name="session_date" value="{{ $row['date'] }}">
-												<button type="submit" name="mark" value="present" class="bd-correct-btn is-present" @disabled($row['status'] === 'present')>Present</button>
-												<button type="submit" name="mark" value="absent" class="bd-correct-btn is-absent" @disabled($row['status'] === 'absent')>Absent</button>
-												<button type="submit" name="mark" value="excused" class="bd-correct-btn is-excused" @disabled($row['status'] === 'excused')>Excused</button>
-											</form>
-										</td>
 									</tr>
 								@endforeach
 							</tbody>
@@ -435,9 +423,9 @@
 	const tabs = Array.from(document.querySelectorAll('.bd-tab'));
 	const panels = Array.from(document.querySelectorAll('.bd-panel'));
 
-	// Correcting a mark posts and comes back, so the rail remembers which
-	// reading was open — a coordinator fixing a session should not be returned
-	// to the Overview between corrections.
+	// Enrolling posts and comes back, so the rail remembers which reading was
+	// open — a coordinator reading the attendance should not be returned to the
+	// Overview by an action taken from it.
 	const memory = 'bd-tab:' + (document.getElementById('bd-page')?.dataset.record ?? '');
 
 	const show = (name, remember = true) => {

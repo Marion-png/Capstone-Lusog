@@ -12,6 +12,10 @@
 	<script>document.documentElement.classList.add('js');</script>
 	<style>{!! file_get_contents(resource_path('css/lusog-theme.css')) !!}</style>
 	<style>{!! file_get_contents(resource_path('css/feeding-attendance.css')) !!}</style>
+	{{-- The Record Attendance dialog is one dialog with one sheet, shared with
+	     the Dashboard, which opens the same one. --}}
+	<style>{!! file_get_contents(resource_path('css/feeding-record-modal.css')) !!}</style>
+	<style>{!! file_get_contents(resource_path('css/feeding-attendance-confirm.css')) !!}</style>
 	<style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
 </head>
 <body>
@@ -71,20 +75,15 @@
 			</div>
 
 			<div class="sbfp-actions">
-				{{-- Recording opens the dialog. It is an anchor, not a button, so
-				     without JavaScript it still lands on the standalone screen
-				     that posts to the same endpoint. It is not drawn at all once
-				     the session is recorded — Task: a recorded day offers no
-				     action, anywhere. --}}
-				@if ($canRecord)
-					<a class="btn btn-primary" data-record-open
-						href="{{ route('feedingcor-program.attendance.record', ['date' => $selectedDate]) }}">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg>
-						@if ($isToday) Record Today&rsquo;s Attendance @else Record Attendance @endif
-					</a>
-				@endif
-				{{-- Attendance History is a view on the rail below, so the
-				     header does not carry a second way in. --}}
+				{{-- Recording is offered on the Attendance Sheet, beside the
+				     session it belongs to, and nowhere else on this page. A
+				     second button up here sat next to Export and Print — two
+				     actions that read the session — and read as a third way of
+				     doing the same kind of thing, while being the only one that
+				     writes. The Dashboard opens the same dialog for today.
+
+				     Attendance History is a view on the rail below, so the
+				     header does not carry a second way in either. --}}
 				<a class="btn btn-secondary" href="{{ route('dashboard.feedingcor-attendance.export', request()->query()) }}">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
 					Export Attendance Sheet
@@ -129,15 +128,11 @@
 		<form method="GET" class="card fa-toolbar" id="faToolbar">
 			<input type="hidden" name="view" value="{{ $view }}">
 
-			@if ($view === 'sheet' || $view === 'beneficiary')
+			@if ($view === 'sheet')
 				{{-- Previous and Next step to the neighbouring recorded session
 				     where there is one, and the picker refuses a date outside
 				     the running programme — a mistyped year would open a
-				     feeding day the programme never had.
-
-				     By Beneficiary carries it too: its Session column and the
-				     attendance filter both read this date, and a control that
-				     decides what a list contains must not be invisible. --}}
+				     feeding day the programme never had. --}}
 				<div class="fa-dategroup">
 					<a class="fa-step {{ $previousDate === null ? 'is-disabled' : '' }}"
 						@if ($previousDate !== null) href="{{ $pageUrl(['view' => $view, 'date' => $previousDate]) }}" @endif
@@ -159,6 +154,31 @@
 				{{-- The other views carry the session forward without showing
 				     it, so returning to the sheet lands on the same day. --}}
 				<input type="hidden" name="date" value="{{ $selectedDate }}">
+			@endif
+
+			{{-- By Beneficiary is a roll, not a session: a coordinator opens it
+			     to find one learner among ninety, so the control that leads it
+			     is a search rather than a date picker. The day it reads is
+			     still named on the Session column's own heading, and it is
+			     chosen where a session is chosen — on the sheet.
+
+			     It is a server-side search because names are encrypted at rest
+			     and because this pane is re-rendered by the live refresh: a
+			     filter held only in the browser would be wiped every time a
+			     mark landed elsewhere in the school. --}}
+			@if ($view === 'beneficiary')
+				<div class="fa-filter fa-queryfilter">
+					<label class="field-label" for="faQuery">Search</label>
+					<div class="lg-search">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+						<input type="search" class="input" id="faQuery" name="q"
+							value="{{ $filters['q'] }}" maxlength="60"
+							placeholder="Name, grade or section" autocomplete="off"
+							aria-label="Search beneficiaries by name, grade or section">
+					</div>
+				</div>
+			@else
+				<input type="hidden" name="q" value="{{ $filters['q'] }}">
 			@endif
 
 			{{-- Grade and section scope every view; attendance status narrows
@@ -362,6 +382,17 @@
      the other views are readings of their own. --}}
 @if ($view === 'sheet' && $canRecord)
 	@include('feedingcor-dashboard.partials.attendance-record-modal')
+	{{-- A recorded session cannot be reopened, so the marks are read back and
+	     confirmed before they are posted. --}}
+	@include('feedingcor-dashboard.partials.attendance-confirm-modal', [
+		'confirmSessionLabel' => $selectedDateLabel,
+	])
+@endif
+
+{{-- The roll's own dialog: one learner's sessions, read from the row that
+     opened it. It belongs to By Beneficiary and is drawn nowhere else. --}}
+@if ($view === 'beneficiary')
+	@include('feedingcor-dashboard.partials.attendance-learner-modal')
 @endif
 
 <script>
@@ -391,6 +422,32 @@
 		});
 	});
 
+	// The roll's search applies itself too, a beat after the typing stops:
+	// the term is answered by the server (names are encrypted, so only it can
+	// match them), and asking on every keystroke would ask ten questions to
+	// get one answer. The caret comes back where it was, so the reload does
+	// not interrupt a coordinator mid-word.
+	const query = document.getElementById('faQuery');
+	if (query) {
+		let timer = null;
+		query.addEventListener('input', () => {
+			window.clearTimeout(timer);
+			timer = window.setTimeout(() => {
+				query.form.requestSubmit ? query.form.requestSubmit() : query.form.submit();
+			}, 350);
+		});
+		query.addEventListener('keydown', (event) => {
+			if (event.key !== 'Enter') return;
+			event.preventDefault();
+			window.clearTimeout(timer);
+			query.form.requestSubmit ? query.form.requestSubmit() : query.form.submit();
+		});
+		if (query.value !== '') {
+			query.focus();
+			query.setSelectionRange(query.value.length, query.value.length);
+		}
+	}
+
 	// ── The sheet: a record, so the only thing to do to it is search it. ──
 	const sheet = document.getElementById('faSheet');
 	if (sheet) {
@@ -418,109 +475,6 @@
 			if (noMatch) noMatch.style.display = shown === 0 && rows.length > 0 ? '' : 'none';
 			renumber();
 		});
-	}
-
-	// ── Record Attendance dialog: the one place a mark is entered. ──
-	const recordBackdrop = document.getElementById('recordBackdrop');
-	if (recordBackdrop) {
-		const rows = Array.from(recordBackdrop.querySelectorAll('tbody tr[data-search]'));
-		const tallies = {
-			present: recordBackdrop.querySelector('[data-record-tally="present"]'),
-			absent: recordBackdrop.querySelector('[data-record-tally="absent"]'),
-			excused: recordBackdrop.querySelector('[data-record-tally="excused"]'),
-			none: recordBackdrop.querySelector('[data-record-tally="none"]'),
-		};
-
-		const setOpen = (open) => {
-			recordBackdrop.classList.toggle('open', open);
-			if (open) recordBackdrop.querySelector('#raModalSearch')?.focus();
-		};
-
-		// Any control marked data-record-open opens it, so a page can offer the
-		// action without repeating the wiring.
-		document.addEventListener('click', (event) => {
-			const opener = event.target.closest('[data-record-open]');
-			if (opener) {
-				event.preventDefault();
-				setOpen(true);
-				return;
-			}
-			if (event.target.closest('[data-record-close]') || event.target === recordBackdrop) {
-				setOpen(false);
-			}
-		});
-
-		document.addEventListener('keydown', (event) => {
-			if (event.key === 'Escape' && recordBackdrop.classList.contains('open')) setOpen(false);
-		});
-
-		// A remark belongs to an absence. Marking a learner present clears and
-		// closes theirs, so a stale reason can never survive the correction.
-		const syncRemark = (row) => {
-			const remark = row.querySelector('.fa-remark');
-			if (!remark) return;
-			const checked = row.querySelector('input[type="radio"]:checked');
-			// Either kind of absence carries a reason — on an excused one it is
-			// the reason the school accepted, which is the whole point of
-			// recording it.
-			const isAway = checked !== null && checked.value !== 'present';
-			remark.disabled = !isAway;
-			if (!isAway) remark.value = '';
-		};
-
-		const retally = () => {
-			const counts = { present: 0, absent: 0, excused: 0 };
-			rows.forEach((row) => {
-				const checked = row.querySelector('input[type="radio"]:checked');
-				if (!checked) return;
-				if (checked.value in counts) counts[checked.value]++;
-			});
-			Object.keys(counts).forEach((key) => {
-				if (tallies[key]) tallies[key].textContent = String(counts[key]);
-			});
-			if (tallies.none) {
-				tallies.none.textContent = String(rows.length - counts.present - counts.absent - counts.excused);
-			}
-		};
-
-		recordBackdrop.addEventListener('change', (event) => {
-			if (!event.target.matches('input[type="radio"]')) return;
-			syncRemark(event.target.closest('tr'));
-			retally();
-		});
-
-		// Bulk marks only touch rows the search leaves on screen.
-		recordBackdrop.querySelectorAll('[data-record-all]').forEach((button) => {
-			button.addEventListener('click', () => {
-				const value = button.dataset.recordAll;
-				rows.forEach((row) => {
-					if (row.style.display === 'none') return;
-					row.querySelectorAll('input[type="radio"]').forEach((input) => {
-						input.checked = value !== '' && input.value === value;
-					});
-					syncRemark(row);
-				});
-				retally();
-			});
-		});
-
-		const modalSearch = document.getElementById('raModalSearch');
-		const modalNoMatch = document.getElementById('raModalNoMatch');
-		modalSearch?.addEventListener('input', () => {
-			const term = modalSearch.value.trim().toLowerCase();
-			let shown = 0;
-			rows.forEach((row) => {
-				const hit = term === '' || row.dataset.search.includes(term);
-				row.style.display = hit ? '' : 'none';
-				if (hit) shown++;
-			});
-			if (modalNoMatch) modalNoMatch.style.display = shown === 0 && rows.length > 0 ? '' : 'none';
-		});
-
-		retally();
-
-		// Arriving from the Dashboard's "Record Today's Attendance".
-		if (new URLSearchParams(window.location.search).get('record') === '1') setOpen(true);
 	}
 
 	// ── Live refresh ───────────────────────────────────────────────────

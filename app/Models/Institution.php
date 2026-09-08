@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\FeedingAtRiskRule;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -137,6 +138,17 @@ class Institution extends Model
         // and it is the only school a registration may name — so a database
         // seeded from the defaults alone would otherwise offer an empty school
         // dropdown and refuse every account request.
-        self::firstOrCreate(['name' => self::REGISTRATION_SCHOOL], ['status' => 'active']);
+        //
+        // It runs a week of unexcused absence rather than a share of the cycle,
+        // which is the school's own policy and so lives on its row rather than
+        // in config: a learner who attended every session for two months and
+        // then vanished for a week is above 90% attended and needs following up
+        // today. A migration fills the same value on a database seeded before
+        // this line existed; neither ever overrules a mode already chosen
+        // through the System Admin form.
+        self::firstOrCreate(
+            ['name' => self::REGISTRATION_SCHOOL],
+            ['status' => 'active', 'feeding_at_risk_mode' => FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS]
+        );
     }
 }

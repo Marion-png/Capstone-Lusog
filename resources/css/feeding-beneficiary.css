@@ -250,27 +250,6 @@
 .badge.has-glyph::before { display: none; }
 .bd-glyph { font-weight: 700; margin-right: 5px; }
 
-.bd-correct-col { width: 1%; white-space: nowrap; text-align: right; }
-.bd-correct { display: inline-flex; gap: 6px; justify-content: flex-end; }
-.bd-correct-btn {
-	font: inherit;
-	font-size: .72rem;
-	font-weight: 600;
-	padding: 4px 10px;
-	border-radius: var(--lg-r-btn);
-	border: 1px solid var(--lg-border);
-	background: var(--lg-card);
-	color: var(--lg-ink-soft);
-	cursor: pointer;
-	transition: background .12s ease, color .12s ease, border-color .12s ease;
-}
-.bd-correct-btn.is-present:hover:not(:disabled) { background: var(--lg-mint); color: var(--lg-success-ink); border-color: #C4E4D0; }
-.bd-correct-btn.is-absent:hover:not(:disabled) { background: var(--lg-danger-tint); color: var(--lg-danger-ink); border-color: #F2C9C9; }
-.bd-correct-btn.is-excused:hover:not(:disabled) { background: var(--lg-amber-tint); color: var(--lg-amber-ink); border-color: #EFDCB2; }
-.bd-correct-btn:focus-visible { outline: none; box-shadow: var(--lg-focus); }
-/* The mark a session already reads is not offered again — there is nothing
-   to correct it to. */
-.bd-correct-btn:disabled { opacity: .35; cursor: default; }
 
 @media (max-width: 1000px) {
 	.bd-panel.cols-2 { grid-template-columns: 1fr; }
@@ -331,7 +310,6 @@
 	.topbar,
 	.bd-back,
 	.bd-actions,
-	.bd-correct-col,
 	.modal-backdrop,
 	.bd-tabs { display: none !important; }
 

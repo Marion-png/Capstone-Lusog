@@ -94,9 +94,12 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertSee('School-Based Feeding Program');
         $response->assertSee('Feeding Day 2 of 120');
         $response->assertSee('Today: '.now()->format('F j, Y'));
-        $response->assertSee('Record Today&rsquo;s Attendance', false);
         $response->assertSee('Export Attendance Sheet');
         $response->assertSee('Print Attendance Sheet');
+        // Recording is offered on the sheet, beside the session it belongs to.
+        // The header's two actions read the session; a third one that wrote it
+        // sat among them as though it were the same kind of thing.
+        $response->assertDontSee('Record Today&rsquo;s Attendance', false);
         // History is a view on the rail, not a header action — one way in.
         $response->assertDontSee('View Attendance History');
         $response->assertSee('Attendance History');
@@ -847,6 +850,131 @@ class FeedingAttendanceTabTest extends TestCase
         ]);
 
         $this->open()->assertOk()->assertDontSee('Other School Learner');
+    }
+
+    /**
+     * By Beneficiary is a roll, not a session. A coordinator opens it to find
+     * one learner among ninety, so the control that leads it is a search; the
+     * sheet keeps the date picker, because the sheet is where a session is
+     * chosen. The day the Session column reads is still named on its own
+     * heading, so nothing about the roll is decided invisibly.
+     */
+    #[Test]
+    public function the_by_beneficiary_roll_leads_with_a_search_not_a_date_picker(): void
+    {
+        $this->makeStudent();
+
+        $roll = $this->open('?view=beneficiary')->assertOk();
+        $roll->assertSee('id="faQuery"', false);
+        $roll->assertSee('name="q"', false);
+        $roll->assertDontSee('id="faDate"', false);
+        $roll->assertSee('Session &middot; '.now()->format('M j, Y'), false);
+
+        // The sheet is unchanged: it is a session, and a session has a date.
+        $sheet = $this->open('?view=sheet')->assertOk();
+        $sheet->assertSee('id="faDate"', false);
+        $sheet->assertDontSee('id="faQuery"', false);
+    }
+
+    /**
+     * The search is answered by the server, because every field it matches on —
+     * the name, the grade, the section — is encrypted at rest or derived from a
+     * column that is. A term nobody matches empties the roll and says so; it
+     * never widens back to the whole school.
+     */
+    #[Test]
+    public function the_roll_search_narrows_to_the_learner_asked_for(): void
+    {
+        $wanted = $this->makeStudent(['student_name' => 'Amihan Reyes']);
+        $other = $this->makeStudent(['student_name' => 'Bayani Cruz']);
+
+        $found = $this->open('?view=beneficiary&q=amihan')->assertOk();
+        $this->assertSame(
+            ['Amihan Reyes'],
+            array_column($found->viewData('beneficiaryRows'), 'name')
+        );
+        $found->assertDontSee($other->student_name);
+
+        // The section is searchable too — a grade or a section typed rather
+        // than picked is the same question.
+        $this->assertCount(
+            2,
+            $this->open('?view=beneficiary&q=maabilidad')->assertOk()->viewData('beneficiaryRows')
+        );
+
+        $none = $this->open('?view=beneficiary&q=zzzz')->assertOk();
+        $this->assertSame([], $none->viewData('beneficiaryRows'));
+        $none->assertSee('No beneficiary matches');
+        $none->assertDontSee($wanted->student_name);
+    }
+
+    /**
+     * The roll's counts raise a question they cannot answer: 1 of 4 — which
+     * four, and what was written beside them. Opening the learner's name
+     * answers it, from the row's own reading, and the dialog offers no way to
+     * change a mark: that happens on the beneficiary record, where it is
+     * attributed and audited.
+     */
+    #[Test]
+    public function a_learners_name_opens_their_attendance_history(): void
+    {
+        $learner = $this->makeStudent(['student_name' => 'Amihan Reyes']);
+        $yesterday = now()->subDay()->toDateString();
+        $today = now()->toDateString();
+
+        $this->mark($learner, $yesterday, true);
+        $this->mark($learner, $today, false, false, 'Fever');
+
+        $response = $this->open('?view=beneficiary')->assertOk();
+
+        $response->assertSee('id="learnerBackdrop"', false);
+        $response->assertSee('data-learner-open', false);
+        $response->assertSee('Beneficiary Attendance');
+        // The reason travels with the mark: an excused or explained absence
+        // read without it is indistinguishable from one nobody explained.
+        $response->assertSee('Fever');
+        // The school's feeding days, so a session no sheet covered this learner
+        // on can read "Not marked" rather than vanishing.
+        $response->assertSee('data-session-dates', false);
+        $response->assertSee($today, false);
+
+        $marks = $response->viewData('beneficiaryRows')[0]['marks'];
+        $this->assertSame('present', $marks[$yesterday]['status']);
+        $this->assertSame('absent', $marks[$today]['status']);
+        $this->assertSame('Fever', $marks[$today]['remarks']);
+
+        // A reading, never a form: the tab still writes marks in one place.
+        $response->assertDontSee('data-learner-correct', false);
+    }
+
+    /**
+     * One way in. Recording belongs to the Attendance Sheet, beside the session
+     * it writes; the header carries Export and Print, which read that session,
+     * and a write action among them read as a third of the same kind.
+     */
+    #[Test]
+    public function the_header_offers_no_record_action_but_the_sheet_does(): void
+    {
+        $this->makeStudent();
+
+        $html = $this->open('?view=sheet')->assertOk()->getContent();
+
+        // The sheet offers it, once, beside the session it writes.
+        $this->assertSame(
+            1,
+            substr_count($html, '<button type="button" class="btn btn-primary" data-record-open>Record Attendance</button>'),
+            'The Attendance Sheet is where a mark is entered.'
+        );
+
+        // The header offers it not at all — only the two actions that read the
+        // session it sits above. The actions block holds anchors and buttons
+        // and no nested div, so its first closing tag is its own.
+        $actions = substr($html, strpos($html, '<div class="sbfp-actions">'));
+        $actions = substr($actions, 0, strpos($actions, '</div>'));
+        $this->assertStringNotContainsString('data-record-open', $actions);
+        $this->assertStringNotContainsString('Record Attendance', $actions);
+        $this->assertStringContainsString('Export Attendance Sheet', $actions);
+        $this->assertStringContainsString('Print Attendance Sheet', $actions);
     }
 
     #[Test]

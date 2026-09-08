@@ -116,6 +116,55 @@ class FeedingRecordAttendanceTest extends TestCase
         );
     }
 
+    /**
+     * A recorded session is closed as a whole: the first confirmed mark ends the
+     * day, and a wrong one is only put right afterwards on the learner's own
+     * beneficiary record. So the save is read back before it is made — every
+     * learner named, with the mark entered for them — on both surfaces that
+     * carry the form, since both post to the same endpoint.
+     */
+    #[Test]
+    public function the_marks_are_confirmed_before_they_are_saved(): void
+    {
+        $learner = $this->makeStudent();
+
+        foreach ([
+            '/dashboard/feedingcor-program/attendance/record',
+            '/dashboard/feedingcor-attendance?view=sheet',
+        ] as $url) {
+            $response = $this->withSession($this->coordinatorSession())->get($url)->assertOk();
+
+            $response->assertSee('id="confirmBackdrop"', false);
+            $response->assertSee('Confirm Attendance');
+            $response->assertSee('data-confirm-submit', false);
+            // The dialog is built from the form, so the row carries the learner
+            // and their class for it to read back.
+            $response->assertSee('data-name="'.$learner->student_name.'"', false);
+        }
+    }
+
+    /**
+     * Nothing to read back on a day nobody can record: the dialog is not drawn
+     * once a session is closed, exactly as the record form is not.
+     */
+    #[Test]
+    public function a_recorded_session_offers_no_confirmation_dialog(): void
+    {
+        $learner = $this->makeStudent();
+        FeedingAttendance::create([
+            'student_health_record_id' => $learner->id,
+            'session_date' => now()->toDateString(),
+            'is_present' => true,
+            'needs_review' => false,
+            'source' => 'manual_entry',
+        ]);
+
+        $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-program/attendance/record')
+            ->assertOk()
+            ->assertDontSee('id="confirmBackdrop"', false);
+    }
+
     #[Test]
     public function saving_writes_one_confirmed_mark_per_learner_and_gates_the_period(): void
     {

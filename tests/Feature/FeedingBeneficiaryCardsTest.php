@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\FeedingAttendance;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
+use App\Support\FeedingAtRiskRule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -783,5 +784,68 @@ class FeedingBeneficiaryCardsTest extends TestCase
         $this->assertSame($stats['attendance_sessions'], $cards['attendance_sessions']);
         $this->assertSame($panel['Severely Wasted'], $cards['severely_wasted']);
         $this->assertSame($panel['Wasted'], $cards['wasted']);
+    }
+
+    /**
+     * The At Risk card names the rule the school actually runs.
+     *
+     * It used to print "Below 80% attendance" whatever the school was set to,
+     * so at a school flagged on a week of unexcused absence — which is what the
+     * deployment school runs — the hint named a threshold nothing was judged
+     * against. The label and the figure above it now come from one reading of
+     * one rule.
+     */
+    #[Test]
+    public function the_at_risk_card_names_the_schools_own_rule(): void
+    {
+        $this->makeStudent('Grade 7 / Sampaguita', 'Wasted');
+
+        // A school on the app default is judged on the rate, and says so.
+        $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records')
+            ->assertOk()
+            ->assertSee('Attendance below 80%')
+            ->assertDontSee('Below 80% attendance');
+
+        // A school flagged on a week of unexcused absence runs no percentage at
+        // all, and the card must not name one.
+        $this->institution->update([
+            'feeding_at_risk_mode' => FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS,
+        ]);
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records')
+            ->assertOk();
+
+        $response->assertSee('1 week of consecutive unexcused absences');
+        $response->assertDontSee('80%');
+
+        $this->assertSame(
+            '1 week of consecutive unexcused absences',
+            $response->viewData('beneficiarySummary')['at_risk_threshold_label']
+        );
+    }
+
+    /**
+     * The school this system is deployed for runs the week rule, not the rate —
+     * so a database seeded from the defaults says so without anybody setting it
+     * in the System Admin form.
+     */
+    #[Test]
+    public function the_deployment_school_is_seeded_on_the_week_rule(): void
+    {
+        Institution::seedDefaults();
+
+        $school = Institution::registrationSchool();
+
+        $this->assertNotNull($school);
+        $this->assertSame(
+            FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS,
+            $school->feeding_at_risk_mode
+        );
+        $this->assertSame(
+            '1 week of consecutive unexcused absences',
+            FeedingAtRiskRule::forInstitution($school->id)->describeThreshold()
+        );
     }
 }

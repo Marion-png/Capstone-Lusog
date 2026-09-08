@@ -82,11 +82,21 @@ class FeedingAtRiskRule
     /** The approved observation window, in confirmed feeding days. */
     public const DEFAULT_MINIMUM_OBSERVATION_DAYS = 10;
 
+    /**
+     * One feeding week, in sessions.
+     *
+     * Monday to Thursday is what the budget covers, so a feeding week is four
+     * days and not five. It is a constant rather than a figure typed into each
+     * sentence because the rule is *stated* in weeks — "a week of unexcused
+     * absence" — and only counted in days.
+     */
+    public const FEEDING_DAYS_PER_WEEK = 4;
+
     /** One feeding week: Monday to Thursday, the days the budget covers. */
-    public const DEFAULT_ABSENCE_FLAG_DAYS = 4;
+    public const DEFAULT_ABSENCE_FLAG_DAYS = self::FEEDING_DAYS_PER_WEEK;
 
     /** Two feeding weeks — the point at which removal is worth reviewing. */
-    public const DEFAULT_ABSENCE_REMOVAL_DAYS = 8;
+    public const DEFAULT_ABSENCE_REMOVAL_DAYS = self::FEEDING_DAYS_PER_WEEK * 2;
 
     public function __construct(
         private readonly string $mode,
@@ -369,20 +379,52 @@ class FeedingAtRiskRule
     /** A short line the UI can show so staff know what the flag currently means. */
     public function describe(): string
     {
-        $test = match ($this->mode) {
-            self::MODE_CONSECUTIVE_ABSENCES => $this->consecutiveAbsences.' or more absences in a row',
-            // Named in weeks as well as days, because that is the unit the
-            // coordinator states the rule in and the days only make sense
-            // against the number of sessions the school actually feeds.
-            self::MODE_UNEXCUSED_ABSENCE_DAYS => $this->absenceFlagDays.' or more unexcused absences in a row',
-            default => 'attendance below '.rtrim(rtrim(number_format($this->thresholdPercent, 1), '0'), '.').'%',
-        };
+        $test = $this->describeThreshold();
 
         // A window of 0 or 1 is no window at all, so it is not worth a clause
         // that would only make the sentence longer.
         return $this->minimumObservationDays > 1
             ? $test.', after at least '.$this->minimumObservationDays.' recorded feeding days'
             : $test;
+    }
+
+    /**
+     * The test on its own, without the observation clause — what a KPI card's
+     * hint has room for.
+     *
+     * One `match`, so a card and a sentence can never name different rules;
+     * a card that wants sentence case applies `ucfirst()` to it.
+     */
+    public function describeThreshold(): string
+    {
+        return match ($this->mode) {
+            self::MODE_CONSECUTIVE_ABSENCES => $this->consecutiveAbsences.' or more absences in a row',
+            // Said in weeks, because that is the unit the rule was written in
+            // and the one a coordinator checks against a calendar; the days
+            // only mean anything against the sessions the school actually
+            // feeds.
+            self::MODE_UNEXCUSED_ABSENCE_DAYS => $this->runLabel($this->absenceFlagDays).' of consecutive unexcused absences',
+            default => 'attendance below '.rtrim(rtrim(number_format($this->thresholdPercent, 1), '0'), '.').'%',
+        };
+    }
+
+    /**
+     * A run of feeding days, said the way the coordinator says it.
+     *
+     * A whole number of feeding weeks is stated in weeks — a run of four is
+     * "1 week", not "4 days" — because that is how the rule is written and
+     * checked. Anything that is not a whole number of weeks is stated in days,
+     * since rounding it to one would misstate the rule.
+     */
+    private function runLabel(int $days): string
+    {
+        if ($days >= self::FEEDING_DAYS_PER_WEEK && $days % self::FEEDING_DAYS_PER_WEEK === 0) {
+            $weeks = intdiv($days, self::FEEDING_DAYS_PER_WEEK);
+
+            return $weeks.' '.($weeks === 1 ? 'week' : 'weeks');
+        }
+
+        return $days.' '.($days === 1 ? 'day' : 'days');
     }
 
     /** The observation window on its own, for a screen that names it separately. */

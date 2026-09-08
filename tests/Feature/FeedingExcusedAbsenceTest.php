@@ -285,7 +285,6 @@ class FeedingExcusedAbsenceTest extends TestCase
         // it: an excused absence read without its reason is indistinguishable
         // from one nobody explained.
         foreach ([
-            '/dashboard/feedingcor-dashboard?attendance=excused',
             '/dashboard/feedingcor-attendance?status=excused&date='.$date,
             '/dashboard/feedingcor-attendance?view=beneficiary&status=excused&date='.$date,
         ] as $url) {
@@ -295,6 +294,19 @@ class FeedingExcusedAbsenceTest extends TestCase
                 ->assertDontSee($present->student_name)
                 ->assertSee('Fasting for Ramadan');
         }
+
+        // The Dashboard's roll narrows the same way. It is read off the panel
+        // rather than off the page, because the page also carries the Record
+        // Attendance dialog, which lists the whole enrolled roll on purpose —
+        // recording through a filtered list would close the day on the learners
+        // the filter was hiding.
+        $panel = $this->withSession($session)
+            ->get('/dashboard/feedingcor-dashboard?attendance=excused')
+            ->assertOk()
+            ->assertSee('Fasting for Ramadan')
+            ->viewData('todayAttendance');
+
+        $this->assertSame([$excused->student_name], array_column($panel['rows'], 'name'));
 
         // The Beneficiaries tab narrows to the same learner but deliberately
         // prints no mark and no reason. Attendance in its table is the
@@ -314,7 +326,6 @@ class FeedingExcusedAbsenceTest extends TestCase
         // And the filter is exclusive both ways: asking who came must not
         // return the learner who was excused, nor leak their reason.
         foreach ([
-            '/dashboard/feedingcor-dashboard?attendance=present',
             '/dashboard/feedingcor-health-records?attendance=present',
             '/dashboard/feedingcor-attendance?view=beneficiary&status=present&date='.$date,
         ] as $url) {
@@ -324,6 +335,15 @@ class FeedingExcusedAbsenceTest extends TestCase
                 ->assertDontSee($excused->student_name)
                 ->assertDontSee('Fasting for Ramadan');
         }
+
+        // Read off the panel again, for the same reason: the Record Attendance
+        // dialog beside it lists the whole enrolled roll by design.
+        $present_only = $this->withSession($session)
+            ->get('/dashboard/feedingcor-dashboard?attendance=present')
+            ->assertOk()
+            ->viewData('todayAttendance');
+
+        $this->assertSame([$present->student_name], array_column($present_only['rows'], 'name'));
     }
 
     /**

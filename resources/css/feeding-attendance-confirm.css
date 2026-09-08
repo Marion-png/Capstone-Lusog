@@ -1,0 +1,43 @@
+/* ── Confirm Attendance dialog ──────────────────────────────────────
+   The read-back a coordinator sees before a session is closed. It is
+   drawn on the shared dialog anatomy (backdrop / panel / head / body /
+   foot) from `feeding-record-modal.css`, which every page carrying this
+   dialog inlines before it, so only what is particular to this dialog
+   lives here.
+
+   It stacks above the Record Attendance dialog rather than replacing it:
+   Back has to return the coordinator to the marks they were reading, so
+   those marks must still be on screen behind this panel. ── */
+.ac-backdrop { z-index: 260; }
+.ac-modal { width: min(760px, 100%); }
+
+/* The tally is the whole submission in one line, above the names: a
+   coordinator who only wants the shape of the save reads it here and
+   never scrolls. Same four chips, in the same order, as the record
+   dialog's own footer. */
+.ac-tally {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	padding: 12px 20px;
+	border-top: 1px solid var(--lg-border);
+	border-bottom: 1px solid var(--lg-border);
+	background: var(--lg-page);
+}
+
+.ac-scroll { max-height: 46vh; }
+.ac-table { width: 100%; }
+.ac-table th:first-child, .ac-table td:first-child { padding-left: 20px; }
+.ac-table th:last-child, .ac-table td:last-child { padding-right: 20px; }
+.ac-table thead th { position: sticky; top: 0; z-index: 1; background: var(--lg-card); }
+.ac-idx { width: 40px; color: var(--lg-ink-soft); }
+.ac-name { white-space: nowrap; }
+.ac-mark-col { white-space: nowrap; }
+.ac-remark { color: var(--lg-ink-soft); font-size: .78rem; }
+
+/* The confirm dialog is a step in a save, never a document: it is not on
+   the sheet a school files, so paper never sees it. */
+@media print {
+	.ac-backdrop { display: none !important; }
+}

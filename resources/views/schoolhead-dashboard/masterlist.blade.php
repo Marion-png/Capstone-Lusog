@@ -4,7 +4,7 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="csrf-token" content="{{ csrf_token() }}">
-	<title>Nutritional Health Status of All Learners - School Head - SIGLA</title>
+	<title>Nutritional Health Status - School Head - SIGLA</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
@@ -47,7 +47,7 @@
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>School Head</span><span class="bc-sep">&rsaquo;</span><span>Nutritional Health Status of All Learners</span></div>
+		<div class="topbar-bc"><span>School Head</span><span class="bc-sep">&rsaquo;</span><span>Nutritional Health Status</span></div>
 		@include('partials.live-clock')
 	</header>
 
@@ -56,7 +56,7 @@
 		<div class="page-header sh-header">
 			<div class="sh-headline">
 				<div class="sh-title-row">
-					<h1 class="page-title">Nutritional Health Status <span>of All Learners</span></h1>
+					<h1 class="page-title">Nutritional <span>Health Status</span></h1>
 					<span class="sh-year tnum">S.Y. {!! $shYear !!}</span>
 				</div>
 				<p class="sh-meta">
@@ -78,7 +78,7 @@
 		</div>
 
 		<div class="print-masthead" aria-hidden="true">
-			<h2>Nutritional Health Status of All Learners</h2>
+			<h2>Nutritional Health Status</h2>
 			<p>{{ $schoolName }} &middot; S.Y. {{ $schoolYear }}</p>
 			<p>Printed {{ $todayLabel }}</p>
 		</div>

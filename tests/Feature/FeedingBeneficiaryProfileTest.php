@@ -68,13 +68,14 @@ class FeedingBeneficiaryProfileTest extends TestCase
         ], $attributes));
     }
 
-    private function mark(StudentHealthRecord $record, string $date, ?bool $present, bool $needsReview = false): void
+    private function mark(StudentHealthRecord $record, string $date, ?bool $present, bool $needsReview = false, string $remarks = ''): void
     {
         FeedingAttendance::create([
             'student_health_record_id' => $record->id,
             'session_date' => $date,
             'is_present' => $present,
             'needs_review' => $needsReview,
+            'remarks' => $remarks !== '' ? $remarks : null,
             'source' => 'manual_entry',
         ]);
     }
@@ -285,6 +286,39 @@ class FeedingBeneficiaryProfileTest extends TestCase
             ->assertRedirect();
 
         $this->openRecord($record)->assertOk()->assertSee('Test Coordinator');
+    }
+
+    /**
+     * The record reads; it does not write.
+     *
+     * The sessions table used to carry a Correct column posting three marks to
+     * the correction endpoint. A mark is entered once, in the Record Attendance
+     * dialog, on the day it belongs to — this page reports what that came to,
+     * under a column headed for what it holds.
+     */
+    #[Test]
+    public function the_attendance_record_is_not_editable(): void
+    {
+        $record = $this->makeStudent();
+        $this->mark($record, '2026-08-10', false, remarks: 'Fever');
+
+        $response = $this->openRecord($record)->assertOk();
+
+        // The column says what it holds.
+        $response->assertSee('<th>Attendance</th>', false);
+        $response->assertDontSee('<th class="bd-correct-col">Correct</th>', false);
+
+        // And nothing on it could post a mark.
+        $response->assertDontSee(
+            route('feedingcor-program.beneficiary.attendance.correct', $record->id),
+            false
+        );
+        $response->assertDontSee('bd-correct-btn', false);
+        $response->assertDontSee('name="mark"', false);
+
+        // What it does report is unchanged: the mark, who took it, and why.
+        $response->assertSee('Absent');
+        $response->assertSee('Fever');
     }
 
     #[Test]

@@ -36,6 +36,22 @@
 	];
 
 	$mark = $filters['status'] ?? '';
+	$query = trim((string) ($filters['q'] ?? ''));
+
+	// The school's own feeding days, newest first, with the label each is
+	// printed under. The history dialog walks this list rather than the
+	// learner's marks, so a day the school fed but no sheet covered this child
+	// reads "Not marked" instead of vanishing — the only way a coordinator can
+	// see a gap. Formatted here so the dialog and the roll date a session the
+	// same way.
+	$sessionIndex = collect($sessionDates)
+		->sortDesc()
+		->values()
+		->map(fn (string $date): array => [
+			'd' => $date,
+			'l' => \Carbon\Carbon::parse($date)->format('M j, Y'),
+		])
+		->all();
 	$showPresent = $mark === '' || $mark === 'present';
 	$showAbsent = $mark === '' || $mark === 'absent';
 	$showExcused = $mark === '' || $mark === 'excused';
@@ -44,7 +60,7 @@
 	// of Present / Absent / Excused the filter left standing.
 	$columnCount = 7 + (int) $showPresent + (int) $showAbsent + (int) $showExcused;
 @endphp
-<div class="table-card">
+<div class="table-card" data-session-dates="{{ json_encode($sessionIndex) }}">
 	<div class="table-scroll">
 		<table class="fa-table">
 			<thead>
@@ -52,7 +68,10 @@
 					<th>Student</th>
 					<th>Grade</th>
 					<th>Section</th>
-					<th>Session &middot; {{ \Carbon\Carbon::parse($selectedDate)->format('M j') }}</th>
+					{{-- The day this column reads. It is named here rather than
+					     in the toolbar, which carries the roll's search instead:
+					     a session is chosen on the sheet, where the sheet is. --}}
+					<th>Session &middot; {{ \Carbon\Carbon::parse($selectedDate)->format('M j, Y') }}</th>
 					@if ($showPresent)<th class="num">Present</th>@endif
 					@if ($showAbsent)<th class="num">Absent</th>@endif
 					@if ($showExcused)<th class="num">Excused</th>@endif
@@ -64,7 +83,30 @@
 			<tbody>
 				@forelse ($beneficiaryRows as $row)
 					<tr>
-						<td class="fa-name"><strong>{{ $row['name'] }}</strong></td>
+						{{-- The whole name cell opens this learner's attendance
+						     history — every session the school held, the mark on
+						     each and the reason recorded with it. The figures the
+						     dialog reports are the row's own, carried on the
+						     button, so the two are one render and cannot
+						     disagree. --}}
+						<td class="fa-name is-link">
+							<button type="button" class="fa-namebtn" data-learner-open
+								data-name="{{ $row['name'] }}"
+								data-grade="{{ $row['grade_number'] !== '' ? $row['grade_number'] : '—' }}"
+								data-section="{{ $row['section'] }}"
+								data-sex="{{ $row['sex'] }}"
+								data-present="{{ $row['present'] }}"
+								data-absent="{{ $row['absent'] }}"
+								data-excused="{{ $row['excused'] }}"
+								data-not-marked="{{ $row['not_marked'] }}"
+								data-rate="{{ $row['rate'] !== null ? number_format($row['rate'], 0).'%' : '—' }}"
+								data-standing="{{ $row['at_risk'] ? 'At Risk' : ($row['status'] === \App\Support\FeedingAtRiskRule::STATUS_EARLY_MONITORING ? 'Early Monitoring' : 'Good') }}"
+								data-standing-badge="{{ $row['at_risk'] ? 'badge-risk' : ($row['status'] === \App\Support\FeedingAtRiskRule::STATUS_EARLY_MONITORING ? 'badge-monitor' : 'badge-normal') }}"
+								data-record-url="{{ route('feedingcor-program.beneficiary', ['record' => $row['id']]) }}"
+								data-marks="{{ json_encode($row['marks']) }}">
+								<strong>{{ $row['name'] }}</strong>
+							</button>
+						</td>
 						<td>{{ $row['grade_number'] !== '' ? $row['grade_number'] : '—' }}</td>
 						<td>{{ $row['section'] }}</td>
 						<td class="fa-session-col">
@@ -109,6 +151,9 @@
 					</tr>
 				@empty
 					<tr><td colspan="{{ $columnCount }}" class="table-empty">
+						@if ($query !== '')
+							No beneficiary matches &ldquo;{{ $query }}&rdquo;.
+						@else
 						@switch(($filters['standing'] ?? '') !== '' ? $filters['standing'] : $mark)
 							@case('at_risk')
 								No beneficiary is below the threshold.
@@ -128,6 +173,7 @@
 							@default
 								No beneficiaries match these filters.
 						@endswitch
+						@endif
 					</td></tr>
 				@endforelse
 			</tbody>

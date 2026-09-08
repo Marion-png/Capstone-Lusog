@@ -47,7 +47,11 @@
 		<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div>
 	</div>
 	<div class="kpi-value">{{ (int) ($bs['at_risk'] ?? 0) }}</div>
-	<div class="kpi-hint">Below {{ rtrim(rtrim(number_format((float) ($bs['at_risk_threshold'] ?? 80), 1), '0'), '.') }}% attendance</div>
+	{{-- The rule the school actually runs, read off FeedingAtRiskRule and never
+	     typed here: this card used to print "Below 80% attendance" whatever the
+	     school was set to, so at a school flagged on a week of unexcused
+	     absence the hint named a threshold nothing was judged against. --}}
+	<div class="kpi-hint">{{ $bs['at_risk_threshold_label'] ?? '' }}</div>
 </article>
 <article class="card kpi accent-info">
 	<div class="kpi-top">

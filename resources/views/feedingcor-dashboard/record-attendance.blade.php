@@ -12,6 +12,11 @@
 	<script>document.documentElement.classList.add('js');</script>
 	<style>{!! file_get_contents(resource_path('css/lusog-theme.css')) !!}</style>
 	<style>{!! file_get_contents(resource_path('css/feeding-record-attendance.css')) !!}</style>
+	{{-- The shared dialog sheet: this screen carries the confirmation dialog,
+	     and the anatomy it is drawn on belongs in one file, not a copy per
+	     page. --}}
+	<style>{!! file_get_contents(resource_path('css/feeding-record-modal.css')) !!}</style>
+	<style>{!! file_get_contents(resource_path('css/feeding-attendance-confirm.css')) !!}</style>
 	<style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
 </head>
 <body>
@@ -100,7 +105,13 @@
 						</thead>
 						<tbody>
 							@forelse ($rows as $row)
-								<tr data-search="{{ strtolower(trim($row['name'].' '.$row['grade'].' '.$row['section'])) }}">
+								{{-- Name, grade and section are carried on the row so the
+								     confirmation dialog reads them back from the form
+								     rather than from a second query. --}}
+								<tr data-search="{{ strtolower(trim($row['name'].' '.$row['grade'].' '.$row['section'])) }}"
+									data-name="{{ $row['name'] }}"
+									data-grade="{{ $row['grade'] }}"
+									data-section="{{ $row['section'] ?: '—' }}">
 									<td><strong>{{ $row['name'] }}</strong></td>
 									<td>{{ $row['grade'] }}</td>
 									<td>{{ $row['section'] ?: '—' }}</td>
@@ -180,6 +191,18 @@
 		</form>
 	</div>
 </div>
+
+{{-- Outside .main on purpose: the page transition puts a transform on it,
+     which would make this fixed backdrop a child of that box rather than of
+     the viewport. Every dialog in this role sits here for the same reason. --}}
+@if ($rows->isNotEmpty() && ! $sessionLocked && $isFeedingDay)
+	{{-- A recorded session cannot be reopened, so the marks are read back and
+	     confirmed before they are posted. Same dialog the Attendance tab uses,
+	     wired to the same form id. --}}
+	@include('feedingcor-dashboard.partials.attendance-confirm-modal', [
+		'confirmSessionLabel' => $sessionLabel,
+	])
+@endif
 <script>
 (() => {
 	const form = document.getElementById('recordForm');

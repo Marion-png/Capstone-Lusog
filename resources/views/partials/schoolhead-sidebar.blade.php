@@ -52,9 +52,9 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>
             <span class="asb-link-text">Feeding Program</span>
         </a>
-        <a href="{{ route('dashboard.school-head.masterlist') }}" class="asb-link {{ $active === 'masterlist' ? 'active' : '' }}" title="Nutritional Health Status of All Learners">
+        <a href="{{ route('dashboard.school-head.masterlist') }}" class="asb-link {{ $active === 'masterlist' ? 'active' : '' }}" title="Nutritional Health Status">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>
-            <span class="asb-link-text">Nutritional Health Status of All Learners</span>
+            <span class="asb-link-text">Nutritional Health Status</span>
         </a>
 
         <div class="asb-nav-label">Compliance</div>

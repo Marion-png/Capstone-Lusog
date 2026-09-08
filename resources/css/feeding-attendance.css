@@ -95,6 +95,13 @@
 .fa-filter { min-width: 132px; }
 .fa-filter .select { width: 100%; }
 
+/* By Beneficiary leads with a search where the sheet leads with a date:
+   it is a roll of ninety learners, and the question asked of it is which
+   one. Given the room the date group gives up, so the control the view
+   is driven by is the widest thing in the toolbar. */
+.fa-queryfilter { flex: 1 1 260px; min-width: 220px; }
+.fa-queryfilter .lg-search input { width: 100%; }
+
 /* The date and its two steps read as one control, so they are drawn as
    one: a single bordered group rather than three separate widgets. */
 .fa-dategroup {
@@ -156,6 +163,32 @@
 .fa-table th:last-child, .fa-table td:last-child { padding-right: 18px; }
 .fa-idx { width: 44px; color: var(--lg-ink-soft); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 .fa-name { min-width: 190px; }
+
+/* On the roll the name opens the learner's attendance history, and the
+   whole cell is the target: a coordinator aims at the column, not at the
+   glyphs. The button fills the cell's padding box, so the click area is
+   the column rather than the text inside it — the same anatomy the
+   At-Risk and Beneficiaries rosters use, so every roster behaves alike.
+
+   Never underlined: the cell lifts and the name takes the brand colour on
+   hover, which says "open me" without ruling a line through the list. */
+.fa-name.is-link { padding: 0; }
+.fa-namebtn {
+	display: block;
+	width: 100%;
+	padding: 11px 14px 11px 18px;
+	border: none;
+	background: none;
+	font: inherit;
+	font-size: .78rem;
+	text-align: left;
+	color: inherit;
+	cursor: pointer;
+}
+.fa-namebtn strong { color: var(--lg-ink); font-weight: 600; }
+.fa-namebtn:hover { background: var(--lg-mint); }
+.fa-namebtn:hover strong { color: var(--lg-emerald-dark); }
+.fa-namebtn:focus-visible { outline: none; box-shadow: var(--lg-focus); border-radius: 3px; }
 .fa-table + .fa-table { margin-top: 0; }
 .table-card { margin-top: 14px; }
 
@@ -194,43 +227,8 @@
 	color: var(--lg-ink-soft);
 }
 
-/* ── The mark toggle ────────────────────────────────────────────────
-   Two states, one tap, no dropdown: the whole point of this screen is
-   encoding a day's attendance without opening anything. ── */
+/* The sheet's Status column: one mark, one line. */
 .fa-mark-col { width: 1%; white-space: nowrap; }
-.fa-toggle {
-	display: inline-flex;
-	border: 1px solid var(--lg-border);
-	border-radius: var(--lg-r-btn);
-	overflow: hidden;
-	background: var(--lg-card);
-}
-.fa-opt { position: relative; display: inline-flex; }
-.fa-opt input {
-	position: absolute;
-	opacity: 0;
-	width: 100%;
-	height: 100%;
-	margin: 0;
-	cursor: pointer;
-}
-.fa-opt span {
-	display: inline-flex;
-	align-items: center;
-	padding: 6px 14px;
-	font-size: .76rem;
-	font-weight: 600;
-	color: var(--lg-ink-soft);
-	transition: background .12s ease, color .12s ease;
-}
-.fa-opt + .fa-opt span { border-left: 1px solid var(--lg-border); }
-.fa-opt:hover span { background: var(--lg-rail); }
-.fa-opt-present input:checked + span { background: var(--lg-mint); color: var(--lg-success-ink); }
-.fa-opt-absent input:checked + span { background: var(--lg-danger-tint); color: var(--lg-danger-ink); }
-/* Amber, the monitoring step: an excused absence is neither the good outcome
-   nor the one that counts against a learner. */
-.fa-opt-excused input:checked + span { background: var(--lg-amber-tint); color: var(--lg-amber-ink); }
-.fa-opt input:focus-visible + span { outline: none; box-shadow: var(--lg-focus); }
 .fa-unconfirmed { margin-left: 8px; }
 
 /* A settled row: the mark stands, and the lock says why there is nothing to
@@ -263,9 +261,6 @@
 .fa-lockbar .alert-body { gap: 13px; padding-right: 12px; }
 .fa-lockbar strong + span { display: block; margin-top: 3px; }
 
-.fa-remark { width: 100%; min-width: 150px; font-size: .78rem; }
-.fa-remark:disabled { background: var(--lg-rail); color: var(--lg-ink-soft); }
-
 /* ── Save bar ──────────────────────────────────────────────────────
    The three counts and the one act, together: nothing is saved until
    the coordinator has seen what they are saving.
@@ -283,7 +278,6 @@
 	margin-top: 14px;
 	padding: 14px 18px;
 }
-.fa-tally { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .fa-total { font-size: .82rem; font-weight: 600; color: var(--lg-ink); }
 /* Nothing to save from the sheet — the bar is a summary of the session. */
 .fa-savebar.is-readonly { justify-content: flex-start; }
@@ -293,60 +287,66 @@
 /* A learner nobody wrote down. Never styled as an absence. */
 .fa-unmarked { font-size: .78rem; color: var(--lg-ink-soft); }
 
-/* ── Record Attendance dialog ───────────────────────────────────────
-   The one place a mark is entered. Same anatomy as the enrolment and
-   follow-up dialogs (backdrop / panel / head / body / foot), so a dialog
-   looks like a dialog everywhere in the product. ── */
-.modal-backdrop {
-	position: fixed;
-	inset: 0;
-	background: rgba(21, 40, 31, .48);
-	display: none;
-	align-items: flex-start;
-	justify-content: center;
-	z-index: 250;
-	padding: 16px;
-	overflow-y: auto;
+/* ── One beneficiary's attendance history ───────────────────────────
+   What the roll's counts cannot say: 1 of 4 — which four, and what was
+   written beside them. It is drawn on the shared dialog anatomy this page
+   inlines from `feeding-record-modal.css`, so only what is particular to
+   this reading lives here.
+
+   It is narrower than the record dialog on purpose: three columns of
+   dates and reasons, not a sheet to be worked through. ── */
+.al-modal { width: min(600px, 100%); }
+
+/* The standing in five figures, above the sessions that produced it. Set
+   as label-over-value so the row reads across at a glance and the numbers
+   line up down the strip. */
+.al-figures {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 1px;
+	padding: 0;
+	border-top: 1px solid var(--lg-border);
+	border-bottom: 1px solid var(--lg-border);
+	background: var(--lg-border);
 }
-.modal-backdrop.open { display: flex; }
-.modal-panel {
-	width: min(920px, 100%);
-	max-height: calc(100vh - 32px);
-	background: var(--lg-card);
-	border-radius: var(--lg-r-card);
-	box-shadow: 0 24px 64px rgba(21, 40, 31, .28);
-	overflow: hidden;
+.al-figure {
 	display: flex;
 	flex-direction: column;
-	margin: auto;
+	gap: 3px;
+	padding: 12px 14px;
+	background: var(--lg-page);
 }
-.modal-panel form { display: flex; flex-direction: column; min-height: 0; }
-.modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 20px 14px; }
-.modal-eyebrow { font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--lg-ink-soft); }
-.modal-title { margin-top: 6px; font-size: 1.18rem; font-weight: 700; letter-spacing: -.01em; color: var(--lg-ink); }
-.modal-sub { margin-top: 6px; font-size: .8rem; line-height: 1.5; color: var(--lg-ink-soft); }
-.modal-close { background: none; font-size: 1.4rem; line-height: 1; color: var(--lg-ink-soft); cursor: pointer; padding: 2px 8px; border-radius: 8px; border: 1px solid var(--lg-border); }
-.modal-close:hover { color: var(--lg-ink); background: var(--lg-rail); }
-.modal-body { padding: 0; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
-.modal-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 20px; border-top: 1px solid var(--lg-border); background: var(--lg-card); }
-.modal-actions { display: flex; gap: 8px; margin-left: auto; }
+.al-figure-label {
+	font-size: .66rem;
+	font-weight: 700;
+	letter-spacing: .08em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft);
+}
+.al-figure-value {
+	font-size: 1.02rem;
+	font-weight: 700;
+	color: var(--lg-ink);
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
+}
 
-.ra-modal-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 14px 20px; border-top: 1px solid var(--lg-border); border-bottom: 1px solid var(--lg-border); background: var(--lg-page); }
-.ra-modal-search { flex: 1 1 220px; }
-.ra-modal-bulk { display: flex; gap: 8px; flex-wrap: wrap; }
-.ra-modal-scroll { max-height: 48vh; }
-.ra-modal-table { width: 100%; }
-.ra-modal-table th:first-child, .ra-modal-table td:first-child { padding-left: 20px; }
-.ra-modal-table th:last-child, .ra-modal-table td:last-child { padding-right: 20px; }
-.ra-modal-table thead th { position: sticky; top: 0; z-index: 1; background: var(--lg-card); }
-.ra-idx { width: 40px; color: var(--lg-ink-soft); }
-.ra-mark-col { white-space: nowrap; }
+.al-scroll { max-height: 46vh; }
+.al-table { width: 100%; }
+.al-table th:first-child, .al-table td:first-child { padding-left: 20px; }
+.al-table th:last-child, .al-table td:last-child { padding-right: 20px; }
+.al-table thead th { position: sticky; top: 0; z-index: 1; background: var(--lg-card); }
+.al-date {
+	white-space: nowrap;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
+}
+/* The reason recorded with an absence. Set quieter than the mark it
+   belongs to: the mark is the fact, the reason is the note on it. */
+.al-remark { color: var(--lg-ink-soft); line-height: 1.4; }
 
 @media (max-width: 620px) {
-	.ra-modal-bulk { width: 100%; }
-	.ra-modal-bulk .btn { flex: 1 1 auto; justify-content: center; }
-	.modal-actions { width: 100%; }
-	.modal-actions .btn { flex: 1 1 auto; justify-content: center; }
+	.al-figures { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 /* ── Calendar ───────────────────────────────────────────────────────
@@ -489,6 +489,11 @@ a.fa-cal-day:focus-visible { outline: none; box-shadow: var(--lg-focus); }
 
 	.badge { background: transparent !important; color: #000 !important; border: 1px solid #666 !important; }
 	.badge::before { display: none; }
+
+	/* The name is a control on screen and plain text on paper, so it gives
+	   its padding back to the cell the rest of the row is set in. */
+	.fa-name.is-link { padding: 5px 6px; }
+	.fa-namebtn { padding: 0; }
 
 	.fa-cal-day { min-height: 40px; border-color: #999 !important; background: transparent !important; }
 	.fa-cal-day.fa-day-complete, .fa-cal-day.fa-day-partial { background: transparent !important; }

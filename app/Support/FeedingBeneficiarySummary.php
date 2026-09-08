@@ -271,7 +271,7 @@ final class FeedingBeneficiarySummary
      * once instead of waiting for the next import to recompute the flags.
      *
      * @param  Collection<int, StudentHealthRecord>  $beneficiaries
-     * @return array{beneficiaries: int, severely_wasted: int, wasted: int, at_risk: int, attendance_rate: ?int, attendance_sessions: int, at_risk_rule: string, at_risk_threshold: float}
+     * @return array{beneficiaries: int, severely_wasted: int, wasted: int, at_risk: int, attendance_rate: ?int, attendance_sessions: int, at_risk_rule: string, at_risk_threshold_label: string, at_risk_threshold: float}
      */
     public static function tally(Collection $beneficiaries, FeedingAtRiskRule $rule): array
     {
@@ -314,6 +314,11 @@ final class FeedingBeneficiarySummary
                 : null,
             'attendance_sessions' => $confirmedSessions,
             'at_risk_rule' => $rule->describe(),
+            // The test on its own, for the At Risk card's hint. It names the
+            // rule the school actually runs — never "below 80%" at a school
+            // that runs no percentage — so the label and the figure above it
+            // are always answering the same question.
+            'at_risk_threshold_label' => ucfirst($rule->describeThreshold()),
             'at_risk_threshold' => $rule->thresholdPercent(),
         ];
     }
@@ -326,7 +331,7 @@ final class FeedingBeneficiarySummary
      * either empty counts the whole school.
      *
      * @param  array{school_year?: string, grade?: string, section?: string, sex?: string}  $filters
-     * @return array{beneficiaries: int, severely_wasted: int, wasted: int, at_risk: int, pending: int, attendance_rate: ?int, attendance_sessions: int, at_risk_rule: string, at_risk_threshold: float}
+     * @return array{beneficiaries: int, severely_wasted: int, wasted: int, at_risk: int, pending: int, attendance_rate: ?int, attendance_sessions: int, at_risk_rule: string, at_risk_threshold_label: string, at_risk_threshold: float}
      */
     public static function forInstitution(?int $institutionId, array $filters = []): array
     {

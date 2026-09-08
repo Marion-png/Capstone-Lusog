@@ -1,0 +1,137 @@
+/* ══ Record Attendance dialog ═══════════════════════════════════════
+   The one place a mark is entered, and one sheet for one dialog — the
+   same arrangement `feeding-enroll-modal.css` gives the enrolment
+   dialog. Both the Feeding Coordinator's Dashboard and the Attendance
+   tab inline this beside their own page sheet, so the dialog they open
+   is the same dialog to the pixel; a copy of these rules on either page
+   is how two screens start drawing one control differently.
+
+   It carries the shared dialog anatomy (backdrop / panel / head / body /
+   foot) as well as the record dialog's own, because the Dashboard's page
+   sheet does not declare it and the anatomy is what makes a dialog look
+   like a dialog everywhere in the product. ══ */
+
+/* ── The mark toggle ────────────────────────────────────────────────
+   Two states, one tap, no dropdown: the whole point of this screen is
+   encoding a day's attendance without opening anything. ── */
+.fa-toggle {
+	display: inline-flex;
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-btn);
+	overflow: hidden;
+	background: var(--lg-card);
+}
+.fa-opt { position: relative; display: inline-flex; }
+.fa-opt input {
+	position: absolute;
+	opacity: 0;
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	cursor: pointer;
+}
+.fa-opt span {
+	display: inline-flex;
+	align-items: center;
+	padding: 6px 14px;
+	font-size: .76rem;
+	font-weight: 600;
+	color: var(--lg-ink-soft);
+	transition: background .12s ease, color .12s ease;
+}
+.fa-opt + .fa-opt span { border-left: 1px solid var(--lg-border); }
+.fa-opt:hover span { background: var(--lg-rail); }
+.fa-opt-present input:checked + span { background: var(--lg-mint); color: var(--lg-success-ink); }
+.fa-opt-absent input:checked + span { background: var(--lg-danger-tint); color: var(--lg-danger-ink); }
+/* Amber, the monitoring step: an excused absence is neither the good outcome
+   nor the one that counts against a learner. */
+.fa-opt-excused input:checked + span { background: var(--lg-amber-tint); color: var(--lg-amber-ink); }
+.fa-opt input:focus-visible + span { outline: none; box-shadow: var(--lg-focus); }
+
+/* The reason an absence carries. Closed and cleared while a learner is
+   marked present, so a stale reason never survives a correction. */
+.fa-remark { width: 100%; min-width: 150px; font-size: .78rem; }
+.fa-remark:disabled { background: var(--lg-rail); color: var(--lg-ink-soft); }
+
+/* The three counts, in the dialog's footer and again under the sheet: one
+   summary, drawn one way. */
+.fa-tally { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ── The dialog shell ───────────────────────────────────────
+   Backdrop / panel / head / body / foot, the anatomy every dialog in the
+   product shares. The values are the enrolment dialog's exactly, so a page
+   loading both sheets gets one answer whichever order they land in — the
+   record dialog takes the extra width it needs on its own `.ra-modal`
+   modifier rather than by widening `.modal-panel` under everyone else. ── */
+.modal-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(21, 40, 31, .48);
+	display: none;
+	align-items: flex-start;
+	justify-content: center;
+	z-index: 250;
+	padding: 16px;
+	overflow-y: auto;
+}
+.modal-backdrop.open { display: flex; }
+.modal-panel {
+	width: min(760px, 100%);
+	max-height: calc(100vh - 32px);
+	background: var(--lg-card);
+	border-radius: var(--lg-r-card);
+	box-shadow: 0 24px 64px rgba(21, 40, 31, .28);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	margin: auto;
+}
+/* The dialog's one child, whichever it is: a form on a day that can be
+   written, a plain container on one that cannot. */
+.modal-panel form, .modal-panel .ra-modal-shell { display: flex; flex-direction: column; min-height: 0; }
+.modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 20px 14px; }
+.modal-eyebrow { font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--lg-ink-soft); }
+.modal-title { margin-top: 6px; font-size: 1.18rem; font-weight: 700; letter-spacing: -.01em; color: var(--lg-ink); }
+.modal-sub { margin-top: 6px; font-size: .8rem; line-height: 1.5; color: var(--lg-ink-soft); }
+.modal-close { background: none; font-size: 1.4rem; line-height: 1; color: var(--lg-ink-soft); cursor: pointer; padding: 2px 8px; border-radius: 8px; border: 1px solid var(--lg-border); }
+.modal-close:hover { color: var(--lg-ink); background: var(--lg-rail); }
+.modal-body { padding: 0; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.modal-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 20px; border-top: 1px solid var(--lg-border); background: var(--lg-card); }
+.modal-actions { display: flex; gap: 8px; margin-left: auto; }
+
+/* The roll is six columns wide and read across, so this one dialog asks for
+   more room than the shell's default. */
+.ra-modal { width: min(920px, 100%); }
+
+.ra-modal-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 14px 20px; border-top: 1px solid var(--lg-border); border-bottom: 1px solid var(--lg-border); background: var(--lg-page); }
+.ra-modal-search { flex: 1 1 220px; }
+.ra-modal-bulk { display: flex; gap: 8px; flex-wrap: wrap; }
+.ra-modal-scroll { max-height: 48vh; }
+.ra-modal-table { width: 100%; }
+.ra-modal-table th:first-child, .ra-modal-table td:first-child { padding-left: 20px; }
+.ra-modal-table th:last-child, .ra-modal-table td:last-child { padding-right: 20px; }
+.ra-modal-table thead th { position: sticky; top: 0; z-index: 1; background: var(--lg-card); }
+.ra-idx { width: 40px; color: var(--lg-ink-soft); }
+.ra-mark-col { white-space: nowrap; }
+
+/* ── A day that is already closed ───────────────────────────────────
+   The same dialog, opened on the session as a record: the marks it came
+   to, the reasons recorded with them, and why nothing can be entered.
+   The control that opens it is drawn every day, because a button that
+   vanishes leaves nothing to press and nothing to read. ── */
+.ra-modal-notice { margin: 0 20px 14px; }
+/* A learner nobody wrote down. Never styled as an absence. */
+.ra-unmarked { font-size: .78rem; color: var(--lg-ink-soft); }
+.ra-remark-read { font-size: .78rem; color: var(--lg-ink-soft); }
+
+@media (max-width: 620px) {
+	.ra-modal-bulk { width: 100%; }
+	.ra-modal-bulk .btn { flex: 1 1 auto; justify-content: center; }
+	.modal-actions { width: 100%; }
+	.modal-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
+
+/* The dialog is a control, and paper has none. */
+@media print {
+	.modal-backdrop { display: none !important; }
+}

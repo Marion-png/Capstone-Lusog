@@ -200,7 +200,128 @@ class FeedingCoordinatorController extends Controller
             'feedingcor-dashboard.feed-dashboard',
             $this->buildDashboardMetrics($institutionId, $this->readFilters($request))
                 + ['stamp' => $this->metricsStamp($institutionId)]
+                // "Record Today's Attendance" opens the dialog here rather than
+                // sending the coordinator to another tab to press a second
+                // button. It is built on the first paint only, never on the
+                // 20-second pulse: it holds marks nobody has saved yet, so
+                // re-rendering it under the coordinator would be worse than
+                // being a few seconds stale.
+                + $this->buildRecordSession($institutionId)
         );
+    }
+
+    /**
+     * Today's Record Attendance dialog, for the Dashboard.
+     *
+     * The same payload the Attendance tab's `build()` hands the shared partial,
+     * for the same dialog and the same endpoint — the Dashboard renders it so
+     * "Record Today's Attendance" records today's attendance, instead of
+     * landing on a tab where the coordinator has to find the button again.
+     *
+     * Three rules it inherits rather than re-decides:
+     *
+     * - **The roll is the whole enrolled roll, unfiltered.** Recording through
+     *   the page's grade/section/gender filter would close the day on the
+     *   learners the filter was hiding, with no way back to them.
+     * - **A recorded session is closed as a whole.** The first confirmed mark
+     *   for the date ends it, so the dialog is not rendered thereafter — and
+     *   `storeRecordedAttendance` refuses the write regardless, because a
+     *   read-only screen whose endpoint still accepts writes is a suggestion.
+     *   An *unconfirmed* scanned mark does not close a session: nobody has read
+     *   it, and recording on site is exactly how it gets decided.
+     * - **A weekend is not a feeding day**, and neither is a date outside the
+     *   running cycle.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildRecordSession(?int $institutionId): array
+    {
+        $today = now()->toDateString();
+        $cycle = FeedingProgramCycle::forInstitution($institutionId);
+
+        // The enrolled roll for the year being recorded — always the current
+        // one, whatever year the page's filter is reading, because the mark
+        // being written is today's.
+        $beneficiaries = collect();
+        if (SchemaCache::hasTable('student_health_records')) {
+            $beneficiaries = StudentHealthRecord::query()
+                ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+                ->forCurrentSchoolYear(StudentHealthRecord::currentSchoolYear())
+                ->get()
+                ->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isBeneficiary($record))
+                // student_name is encrypted at rest, so the sort is in PHP.
+                ->sortBy(fn (StudentHealthRecord $record): string => strtolower((string) $record->student_name))
+                ->values();
+        }
+
+        $marks = collect();
+        if ($beneficiaries->isNotEmpty() && SchemaCache::hasTable('feeding_attendances')) {
+            $columns = ['student_health_record_id', 'is_present'];
+            foreach (['needs_review', 'is_excused', 'remarks'] as $column) {
+                if (SchemaCache::hasColumn('feeding_attendances', $column)) {
+                    $columns[] = $column;
+                }
+            }
+
+            $marks = FeedingAttendance::query()
+                ->whereIn('student_health_record_id', $beneficiaries->pluck('id'))
+                ->whereDate('session_date', $today)
+                ->get($columns)
+                ->keyBy('student_health_record_id');
+        }
+
+        $rows = $beneficiaries->map(function (StudentHealthRecord $record) use ($marks): array {
+            [$grade, $section] = FeedingBeneficiarySummary::splitSection((string) $record->section);
+            $mark = $marks->get($record->id);
+
+            return [
+                'id' => $record->id,
+                'name' => (string) $record->student_name,
+                // Both spellings, because the shared partial reads both: the
+                // full "Grade 7" into the row's search key, the bare number
+                // into the column.
+                'grade' => $grade,
+                'grade_number' => preg_replace('/^grade\s*/i', '', $grade),
+                'section' => $section,
+                'status' => $mark === null ? 'unmarked' : FeedingAttendanceMark::state($mark),
+                // The reason recorded with a mark, for a closed session the
+                // dialog reports rather than writes.
+                'remarks' => trim((string) ($mark->remarks ?? '')),
+            ];
+        })->values();
+
+        // A mark a human has already confirmed closes the day. An unconfirmed
+        // scanned one deliberately does not.
+        $locked = $rows->contains(
+            fn (array $row): bool => in_array($row['status'], FeedingAttendanceMark::RECORDABLE, true)
+        );
+
+        $start = $cycle->startDateIso();
+        $end = $cycle->endDateIso() ?? $today;
+        $withinWindow = $start === null || ($today >= $start && $today <= $end);
+
+        $isFeedingDay = FeedingProgramCycle::isFeedingDay($today);
+        $canRecord = ! $locked && $isFeedingDay && $withinWindow && $beneficiaries->isNotEmpty();
+
+        return [
+            'recordSelectedDate' => $today,
+            'recordSelectedDateLabel' => now()->format('F j, Y'),
+            'recordRows' => $rows->all(),
+            'recordBeneficiaryCount' => $beneficiaries->count(),
+            'canRecordToday' => $canRecord,
+            // Why the day is closed, in the words the coordinator needs. The
+            // button is drawn either way and the dialog opens either way: on a
+            // closed day it opens on the session as a record rather than as a
+            // form, which is a different answer from a control that quietly
+            // disappears out from under the reader.
+            'recordBlockedReason' => match (true) {
+                $canRecord => '',
+                $beneficiaries->isEmpty() => 'No beneficiary is enrolled for this school year yet.',
+                ! $isFeedingDay => now()->format('l, F j, Y').' is a weekend. There are no feeding sessions on Saturdays or Sundays.',
+                ! $withinWindow => 'Today is outside the running feeding programme.',
+                default => 'Attendance for '.now()->format('F j, Y').' has already been recorded.',
+            },
+        ];
     }
 
     /**
@@ -296,10 +417,10 @@ class FeedingCoordinatorController extends Controller
 
     /**
      * The filters the dashboard reads off the query string. Only the school
-     * year touches the database; grade, section and the two status filters are
+     * year touches the database; grade, section, sex and attendance status are
      * applied in PHP, because the columns they read are encrypted at rest.
      *
-     * @return array{school_year: string, grade: string, section: string, status: string, attendance: string}
+     * @return array{school_year: string, grade: string, section: string, sex: string, attendance: string}
      */
     private function readFilters(Request $request): array
     {
@@ -313,7 +434,6 @@ class FeedingCoordinatorController extends Controller
             // describe rather than which of them are listed. An unrecognised
             // value is dropped rather than emptying the page.
             'sex' => in_array($clean('sex'), FeedingBeneficiarySummary::SEX_OPTIONS, true) ? $clean('sex') : '',
-            'status' => $clean('status'),
             'attendance' => in_array($clean('attendance'), ['present', 'absent', 'excused', 'unmarked'], true)
                 ? $clean('attendance')
                 : '',
@@ -329,7 +449,7 @@ class FeedingCoordinatorController extends Controller
     }
 
     /**
-     * @param  array{school_year: string, grade: string, section: string, status: string, attendance: string}|null  $filters
+     * @param  array{school_year: string, grade: string, section: string, sex: string, attendance: string}|null  $filters
      * @return array<string, mixed>
      */
     private function buildDashboardMetrics(?int $institutionId, ?array $filters = null): array
@@ -339,7 +459,6 @@ class FeedingCoordinatorController extends Controller
             'grade' => '',
             'section' => '',
             'sex' => '',
-            'status' => '',
             'attendance' => '',
             'population' => self::POPULATION_BENEFICIARIES,
         ];
@@ -498,7 +617,6 @@ class FeedingCoordinatorController extends Controller
             // data, which would offer an option only if someone had already
             // been filed under it.
             'sexes' => FeedingBeneficiarySummary::SEX_OPTIONS,
-            'statuses' => array_column($this->nutritionScale(), 'label'),
             'populations' => self::populationOptions(),
             'attendance' => [
                 ['value' => 'present', 'label' => 'Present'],
@@ -708,7 +826,6 @@ class FeedingCoordinatorController extends Controller
                     'name' => (string) $record->student_name,
                     'grade' => $grade,
                     'section' => $section,
-                    'nutritional_status' => $this->panelStatus($record),
                     'status' => $status,
                     'remarks' => trim((string) ($mark->remarks ?? '')),
                 ];
@@ -718,12 +835,9 @@ class FeedingCoordinatorController extends Controller
 
         $expected = $beneficiaries->count();
 
-        // The headline counts everyone expected today; the two list filters
-        // narrow only which of them the table draws.
+        // The headline counts everyone expected today; the attendance filter
+        // narrows only which of them the table draws.
         $visible = $rows
-            ->when($filters['status'] !== '', fn ($rows) => $rows->filter(
-                fn (array $row): bool => $row['nutritional_status'] === $filters['status']
-            ))
             ->when($filters['attendance'] !== '', fn ($rows) => $rows->filter(
                 fn (array $row): bool => $filters['attendance'] === 'unmarked'
                     ? in_array($row['status'], ['unconfirmed', 'unrecorded'], true)
@@ -749,7 +863,7 @@ class FeedingCoordinatorController extends Controller
                 ? round(($counts['present'] / $expected) * 100, 1)
                 : 0.0,
             'recorded' => $counts['unrecorded'] < $expected,
-            'filtered' => $filters['status'] !== '' || $filters['attendance'] !== '',
+            'filtered' => $filters['attendance'] !== '',
             'rows' => $visible,
         ];
     }

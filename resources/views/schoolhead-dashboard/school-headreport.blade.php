@@ -299,7 +299,7 @@
 							<span class="badge badge-info">Always current</span>
 						</div>
 						<p class="sh-report-sub">The identified Severely Wasted and Wasted learners qualified for the programme.</p>
-						<p class="sh-report-detail">Filtered and searched on the Nutritional Health Status of All Learners tab.</p>
+						<p class="sh-report-detail">Filtered and searched on the Nutritional Health Status tab.</p>
 					</div>
 					<div class="sh-report-actions">
 						<a class="btn btn-secondary" href="{{ route('dashboard.school-head.reports.view', ['report' => 'masterlist', 'school_year' => $schoolYear]) }}">View</a>
