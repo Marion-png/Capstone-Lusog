@@ -940,3 +940,21 @@ tbody tr:hover td{background:#f3fbf6}
 .sp-avatar-set{position:absolute;right:0;bottom:4px;width:30px;height:30px;border-radius:50%;border:2px solid var(--card,#fff);background:var(--g900,#126B3A);color:#fff;display:grid;place-items:center;cursor:pointer;padding:0;box-shadow:0 2px 6px rgba(16,32,24,.24)}
 .sp-avatar-set:hover{background:var(--g700,#1F8A4C)}
 .sp-avatar-set svg{width:14px;height:14px}
+
+/* ── Dialogs leave, they do not vanish ──
+   The confirmation overlay is held on screen while it fades, matching the
+   shared .bmodal timings so one product does not feel like several. Out is
+   quicker than in and travels less: arriving is worth watching, leaving is
+   only worth following. */
+.confirm-overlay.open, .confirm-overlay.is-closing { display: flex; }
+.confirm-overlay.open { animation: ca-overlay-in .18s ease both; }
+.confirm-overlay.is-closing { animation: ca-overlay-out .14s ease both; }
+.confirm-overlay.open .confirm-modal { animation: ca-modal-in .18s cubic-bezier(.22,.61,.36,1) both; }
+.confirm-overlay.is-closing .confirm-modal { animation: ca-modal-out .14s cubic-bezier(.4,0,1,1) both; }
+@keyframes ca-modal-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px) scale(.99); } }
+@keyframes ca-overlay-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ca-overlay-out { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+    .confirm-overlay.open, .confirm-overlay.is-closing,
+    .confirm-overlay.open .confirm-modal, .confirm-overlay.is-closing .confirm-modal { animation: none; }
+}

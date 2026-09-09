@@ -1284,13 +1284,36 @@ window.switchAdviserTab = (targetId) => {
     const byId = (id) => document.getElementById(id);
 
     const openModal = () => {
+        // Cancel a leave still in flight rather than letting the two
+        // animations fight over the same element.
+        modal.classList.remove('is-closing');
         modal.classList.add('open');
         modal.setAttribute('aria-hidden', 'false');
     };
 
+    // Held on screen while it fades, matching the shared .bmodal dialogs. A
+    // confirmation that vanishes on the frame the button is pressed reads as
+    // a glitch — the eye loses where it went.
+    const stillMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
     const closeModal = () => {
-        modal.classList.remove('open');
-        modal.setAttribute('aria-hidden', 'true');
+        if (!modal.classList.contains('open') || modal.classList.contains('is-closing')) return;
+
+        const finish = () => {
+            modal.classList.remove('open', 'is-closing');
+            modal.setAttribute('aria-hidden', 'true');
+        };
+
+        if (stillMotion.matches) { finish(); return; }
+
+        modal.classList.add('is-closing');
+
+        let done = false;
+        const settle = () => { if (!done) { done = true; finish(); } };
+
+        // The timeout is a backstop: animationend never fires on a hidden tab.
+        modal.querySelector('.confirm-modal')?.addEventListener('animationend', settle, { once: true });
+        setTimeout(settle, 300);
     };
 
     const buildSummary = () => {

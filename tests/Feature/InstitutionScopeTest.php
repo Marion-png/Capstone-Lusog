@@ -6,6 +6,7 @@ use App\Models\Consultation;
 use App\Models\Institution;
 use App\Models\Medicine;
 use App\Models\StudentHealthRecord;
+use App\Support\MedicineCatalogue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -135,7 +136,13 @@ class InstitutionScopeTest extends TestCase
             'active_role' => 'school_nurse',
             'active_institution_id' => $this->schoolA->id,
         ])->post('/dashboard/medicine-inventory', [
-            'name' => 'Amoxicillin',
+            // The name comes from the DepEd catalogue choice, never from a
+            // posted `name` — see App\Support\MedicineCatalogue. Amoxicillin
+            // is an antibiotic and is not on the list, so it goes in as an
+            // explicit off-list entry, which is the path the nurse described.
+            'catalogue_name' => MedicineCatalogue::OTHER,
+            'custom_name' => 'Amoxicillin',
+            'off_catalogue_reason' => 'Prescribed course dispensed at the clinic',
             'stock_quantity' => 100,
             'minimum_threshold' => 20,
             'unit' => 'capsules',

@@ -14,6 +14,16 @@ class Announcement extends Model
      */
     public const POSTER_ROLES = ['school_nurse'];
 
+    /**
+     * How many announcements the dashboard board shows at once.
+     *
+     * The single declaration of the board's capacity — the partial, the
+     * "showing N of M" line and the tests all read it, so the number cannot
+     * be raised in one place and left behind in another. Anything older than
+     * this stays on the record and is reached through the archive.
+     */
+    public const BOARD_LIMIT = 4;
+
     public const PRIORITY_NORMAL = 'normal';
 
     public const PRIORITY_IMPORTANT = 'important';
@@ -49,6 +59,8 @@ class Announcement extends Model
         'audience',
         'posted_by_name',
         'posted_by_role',
+        'archived_at',
+        'archived_by_name',
     ];
 
     /**
@@ -60,7 +72,36 @@ class Announcement extends Model
     {
         return [
             'audience' => 'array',
+            'archived_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Announcements still on the board.
+     *
+     * Guarded on the column rather than assuming it: the boards render on
+     * every role's dashboard, and a machine that has pulled this code but not
+     * yet run the migration must show its announcements rather than 500.
+     */
+    public function scopeActive(Builder $query): Builder
+    {
+        return self::supportsArchiving() ? $query->whereNull('archived_at') : $query;
+    }
+
+    /** Announcements the nurse has archived — off the board, still on record. */
+    public function scopeArchived(Builder $query): Builder
+    {
+        return self::supportsArchiving() ? $query->whereNotNull('archived_at') : $query->whereRaw('1 = 0');
+    }
+
+    public static function supportsArchiving(): bool
+    {
+        return \App\Support\SchemaCache::hasColumn('announcements', 'archived_at');
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
     }
 
     /**

@@ -7,16 +7,47 @@
 --}}
 @php
     use App\Models\HealthConsentForm;
+    use App\Support\SchoolLetterhead;
+    use App\Support\SchoolSignatories;
+
     $editServices = ($mode === 'adviser-edit');
     $editConsent  = ($mode === 'parent');
+
+    // The printed form heads DepEd on the left and DOH on the right — the two
+    // departments that run these services together. The app's own logo used to
+    // sit here, which put a product mark on a government document.
+    $docSeals = SchoolLetterhead::seals();
+
+    // The head who signs the letter is this school's, read from `accounts` the
+    // same way every other DepEd form in this app reads its signatories. It was
+    // a hardcoded name, so every school's letter went out over one school
+    // principal's signature. A head the app does not know prints a blank line
+    // to sign, never an invented signatory.
+    $docPrincipal = SchoolSignatories::notedBy($form->institution_id, (string) $form->school_name);
+
+    // Whether the parent ticked the allergy heading at all. Derived from the
+    // three write-ins under it rather than stored, so the box and its children
+    // cannot disagree.
+    $hasAllergy = filled($form->allergy_food) || filled($form->allergy_medicine) || filled($form->prev_immunization);
 @endphp
 
 <div class="doc">
     <div class="doc-header">
-        <img src="{{ asset('images/lusog-logo.png') }}" alt="School Seal" class="doc-seal">
+        @if (! empty($docSeals['deped']))
+            <img src="{{ asset($docSeals['deped']) }}" alt="Department of Education" class="doc-seal doc-seal-left">
+        @else
+            <span class="doc-seal doc-seal-left doc-seal-placeholder" aria-hidden="true"></span>
+        @endif
+
         <div class="doc-rp">Republic of the Philippines</div>
-        <div>Region XI</div>
+        <div>{{ HealthConsentForm::DEFAULT_REGION }}</div>
         <div class="doc-form-title">SULAT-PAHIBALO</div>
+
+        @if (! empty($docSeals['doh']))
+            <img src="{{ asset($docSeals['doh']) }}" alt="Department of Health" class="doc-seal doc-seal-right">
+        @else
+            <span class="doc-seal doc-seal-right doc-seal-placeholder" aria-hidden="true"></span>
+        @endif
     </div>
 
     <div class="doc-field"><label>DIVISION:</label><span class="doc-line">{{ $form->division }}</span></div>
@@ -72,7 +103,7 @@
     <div class="doc-sign-block">
         <div class="doc-sign-inner">
             <div style="margin-bottom:26px;">Matinahuron,</div>
-            <div class="doc-sign-name">{{ HealthConsentForm::PRINCIPAL_NAME }}</div>
+            <div class="doc-sign-name">{{ $docPrincipal !== '' ? $docPrincipal : '' }}</div>
             <div class="doc-sign-caption">(Pangalan ug Pirma Sa Principal / School Head)</div>
         </div>
     </div>
@@ -141,19 +172,29 @@
         </div>
     </div>
 
-    <p class="doc-allergy-note">Kon adunay Allergy ang bata, palihug butang ug tsek (&#10003;) sa kahon kon unsang klase:</p>
-
+    {{--
+        The paper form nests this block, and the nesting carries meaning: the
+        three write-ins are *kinds of allergy* under one heading, while
+        "Kasamtangang Sakit / Other Illnesses" is a sibling of that heading, not
+        a fourth allergy. Rendering all four flat, as this did, reads as though
+        an illness were something the child is allergic to.
+    --}}
     @php
-        $allergyFields = [
+        $allergyKinds = [
             'allergy_food' => 'Pagkaon/Food (isulat unsang klaseng pagkaon)',
             'allergy_medicine' => 'Tambal/Medicines (isulat unsang klaseng tambal)',
             'prev_immunization' => 'Nahatag nga Bakuna/Previous Immunization (isulat unsang klaseng bakuna)',
-            'other_illness' => 'Kasamtangang Sakit or Gibati / Other Illnesses',
         ];
     @endphp
-    <div class="doc-consent-options">
-        @foreach ($allergyFields as $field => $label)
-            <div class="doc-consent-option">
+
+    <div class="doc-consent-options doc-allergy-block">
+        <div class="doc-consent-option">
+            <span class="doc-box">{!! $hasAllergy ? '&#10003;' : '' !!}</span>
+            <span style="flex:1;">Kon adunay Allergy ang bata, palihug butang ug tsek (&#10003;) sa kahon kon unsang klase:</span>
+        </div>
+
+        @foreach ($allergyKinds as $field => $label)
+            <div class="doc-consent-option doc-allergy-child">
                 @if ($editConsent)
                     <span class="doc-box">{!! old($field, $form->$field) ? '&#10003;' : '' !!}</span>
                     <label style="flex:1;">
@@ -169,8 +210,26 @@
                 @endif
             </div>
         @endforeach
+
+        {{-- A sibling of the allergy heading, exactly as on the paper form. --}}
+        <div class="doc-consent-option">
+            @if ($editConsent)
+                <span class="doc-box">{!! old('other_illness', $form->other_illness) ? '&#10003;' : '' !!}</span>
+                <label style="flex:1;">
+                    Kasamtangang Sakit or Gibati / Other Illnesses
+                    <input type="text" name="other_illness" class="doc-writein" value="{{ old('other_illness', $form->other_illness) }}">
+                </label>
+            @else
+                <span class="doc-box">{!! $form->other_illness ? '&#10003;' : '' !!}</span>
+                <span style="flex:1;">
+                    Kasamtangang Sakit or Gibati / Other Illnesses
+                    <span class="doc-line" style="display:block;">{{ $form->other_illness }}</span>
+                </span>
+            @endif
+        </div>
     </div>
-    <p style="font-style:italic; font-size:.85rem;">(Kon adunay Medical Certificate nga nagpamatuod sa kahimtang panglawas, palihug attach)</p>
+
+    <p class="doc-attach-note">(Kon adunay Medical Certificate nga nagpamatuod sa kahimtang panglawas, palihug attach)</p>
 
     {{-- Parent signature area --}}
     <div class="doc-sign-block">

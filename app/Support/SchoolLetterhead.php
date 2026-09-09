@@ -43,6 +43,18 @@ final class SchoolLetterhead
     public const SCHOOL_LOGO = 'images/school-logo.png';
 
     /**
+     * The Department of Health seal.
+     *
+     * Most forms here are DepEd's alone and carry the department seal beside
+     * the school's. The Sulat-Pahibalo is the exception: the health services
+     * it consents to are run with the DOH and the LGU, so the printed form
+     * heads DepEd on the left and DOH on the right. Looked up the same way as
+     * the others, so a school that drops the file in gets it with no code
+     * change and one that has not is drawn a placeholder.
+     */
+    public const DOH_LOGO = 'images/doh-logo.png';
+
+    /**
      * The heading for the school a session is scoped to.
      *
      * @return array{school: string, address: string, region: string, division: string, republic: string, department: string}
@@ -85,13 +97,14 @@ final class SchoolLetterhead
      * instead of a broken image and a school without seals still prints a
      * correctly-shaped heading.
      *
-     * @return array{deped: ?string, school: ?string}
+     * @return array{deped: ?string, school: ?string, doh: ?string}
      */
     public static function seals(): array
     {
         return [
             'deped' => self::sealPath(self::DEPED_LOGO),
             'school' => self::sealPath(self::SCHOOL_LOGO),
+            'doh' => self::sealPath(self::DOH_LOGO),
         ];
     }
 

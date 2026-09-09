@@ -56,39 +56,44 @@ class ConsultationConditionDropdownTest extends TestCase
             ->getContent();
     }
 
+    /**
+     * The dropdown became a search box — 33 items across seven categories
+     * is faster to type than to scroll. How that box behaves is
+     * ConsultationConditionSearchTest's subject; what this file still
+     * cares about is that the whole catalogue reaches it, because a
+     * condition the nurse cannot find is one they will file under Others.
+     */
     #[Test]
-    public function the_condition_field_is_a_dropdown_of_the_catalogue(): void
+    public function the_condition_field_searches_the_catalogue(): void
     {
         $this->seedCatalogue();
 
         $html = $this->log();
 
-        $this->assertMatchesRegularExpression(
-            '/<select id="cm_condition_id" name="condition_id"[^>]*>/',
-            $html
-        );
+        $this->assertStringContainsString('id="cm_condition_search"', $html);
 
-        // Common high-school clinic complaints are all offered.
+        // Common high-school clinic complaints are all findable.
         foreach (['Headache', 'Fever', 'Toothache', 'Abdominal Pain', 'Dysmenorrhea', 'Skin allergy'] as $condition) {
-            $this->assertStringContainsString('>'.$condition.'</option>', $html);
+            $this->assertStringContainsString($condition, $html);
         }
     }
 
-    /** 33 items in a flat list is unreadable; they are grouped by category. */
+    /** Each entry carries its category, so the search matches on it too. */
     #[Test]
-    public function the_conditions_are_grouped_by_category(): void
+    public function the_conditions_carry_their_category(): void
     {
         $this->seedCatalogue();
 
         $html = $this->log();
 
         foreach (['Respiratory', 'Gastrointestinal', 'Injury', 'Neurological', 'Skin'] as $category) {
-            $this->assertStringContainsString('<optgroup label="'.$category.'">', $html);
+            $this->assertStringContainsString('"category":"'.$category.'"', $html);
         }
     }
 
+    /** Every seeded condition reaches the browser, not just the common ones. */
     #[Test]
-    public function every_seeded_condition_is_offered(): void
+    public function every_seeded_condition_is_searchable(): void
     {
         $this->seedCatalogue();
 
@@ -96,9 +101,9 @@ class ConsultationConditionDropdownTest extends TestCase
 
         foreach (Condition::all() as $condition) {
             $this->assertStringContainsString(
-                'value="'.$condition->id.'"',
+                '"id":'.$condition->id.',',
                 $html,
-                "{$condition->name} is missing from the dropdown."
+                "{$condition->name} is missing from the searchable catalogue."
             );
         }
     }
@@ -133,21 +138,18 @@ class ConsultationConditionDropdownTest extends TestCase
 
         $html = $this->log();
 
-        $this->assertStringContainsString('>Others</option>', $html);
-        // The select knows which option is the catch-all…
+        // "Others" is in the searchable catalogue like everything else;
+        // the search offers it by name, and offers it outright when a
+        // term matches nothing at all.
+        $this->assertStringContainsString('"name":"Others"', $html);
+        // The combo knows which entry is the catch-all…
         $this->assertStringContainsString('data-catch-all="'.$others->id.'"', $html);
 
-        // …and it is the last option, so a reader scans the real complaints
-        // first and falls through to it only when none of them fit.
-        $selectStart = strpos($html, '<select id="cm_condition_id"');
-        $selectEnd = strpos($html, '</select>', $selectStart);
-        $select = substr($html, $selectStart, $selectEnd - $selectStart);
-
-        $this->assertSame(
-            1,
-            preg_match('/>Others<\/option>\s*<\/optgroup>\s*$/', trim($select)),
-            'Others must be the final option in the dropdown.'
-        );
+        // …and pins it to the bottom of the results, always. It used to be
+        // the final <option> for the same reason: the real complaints come
+        // first, and the way out sits under them in one predictable place.
+        $this->assertStringContainsString('if (otherCondition) {', $html);
+        $this->assertStringContainsString('Type the condition yourself', $html);
         // …and a describe-it field is present, hidden until it is chosen.
         $this->assertStringContainsString('id="cm_condition_other_wrap" hidden', $html);
         $this->assertStringContainsString('placeholder="Describe the condition"', $html);

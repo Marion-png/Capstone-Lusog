@@ -28,7 +28,12 @@
         -webkit-backdrop-filter: blur(6px);
         backdrop-filter: blur(6px);
     }
-    .bmodal.open { display: flex; }
+    /* Held on screen while it leaves. A dialog that vanishes on the frame
+       the button is pressed reads as a glitch — the eye loses where it went,
+       and on a blurred backdrop the whole page appears to jump. */
+    .bmodal.open, .bmodal.is-closing { display: flex; }
+    .bmodal { animation: bmodalBackdropIn .18s ease both; }
+    .bmodal.is-closing { animation: bmodalBackdropOut .14s ease both; }
 
     .bmodal-panel {
         width: 100%;
@@ -43,10 +48,21 @@
         overflow: hidden;
         animation: bmodalIn .18s cubic-bezier(.22, .61, .36, 1);
     }
+    /* Out is quicker than in and travels less. Arriving is worth watching;
+       leaving is only worth following. */
+    .bmodal.is-closing .bmodal-panel {
+        animation: bmodalOut .14s cubic-bezier(.4, 0, 1, 1) both;
+    }
     @keyframes bmodalIn {
         from { opacity: 0; transform: translateY(10px) scale(.99); }
         to   { opacity: 1; transform: none; }
     }
+    @keyframes bmodalOut {
+        from { opacity: 1; transform: none; }
+        to   { opacity: 0; transform: translateY(6px) scale(.99); }
+    }
+    @keyframes bmodalBackdropIn  { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes bmodalBackdropOut { from { opacity: 1; } to { opacity: 0; } }
 
     .bmodal-head {
         display: flex;
@@ -118,6 +134,66 @@
         color: #6B7C72;
     }
     .bmodal-note svg { width: 12px; height: 12px; flex: 0 0 auto; }
+
+    /* Condition search — type to find, not a list to scroll.
+       The results hang over the fields below rather than pushing them down,
+       so the dialog does not resize under the nurse's hands while typing. */
+    .cmcombo { position: relative; display: flex; align-items: center; }
+    .cmcombo > svg {
+        position: absolute;
+        left: 11px;
+        width: 15px;
+        height: 15px;
+        color: #6B7C72;
+        pointer-events: none;
+    }
+    .cmcombo input[type="text"] { padding-left: 33px; }
+    .cmcombo-list {
+        display: none;
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: calc(100% + 5px);
+        z-index: 20;
+        max-height: 260px;
+        overflow-y: auto;
+        background: #fff;
+        border: 1px solid #C7DCCE;
+        border-radius: 10px;
+        box-shadow: 0 14px 34px rgba(16, 32, 24, .16);
+        padding: 4px;
+    }
+    .cmcombo-list.show { display: block; }
+    .cmcombo-row {
+        display: flex;
+        align-items: baseline;
+        gap: 9px;
+        width: 100%;
+        text-align: left;
+        border: none;
+        background: none;
+        font: inherit;
+        cursor: pointer;
+        padding: 8px 10px;
+        border-radius: 7px;
+    }
+    .cmcombo-row:hover, .cmcombo-row:focus-visible { background: #E7F5EC; outline: none; }
+    .cmcombo-name { font-size: .84rem; font-weight: 600; color: #1F2D25; }
+    /* The category is context, not the answer — it never competes with the name. */
+    .cmcombo-cat { margin-left: auto; font-size: .7rem; color: #6B7C72; }
+    .cmcombo-empty { padding: 13px 11px; text-align: center; font-size: .8rem; color: #6B7C72; }
+    /* "Others" is pinned to the bottom of the list, always. The rule marks it
+       as the way out rather than one more match — and it sits in the same
+       place every time, so the nurse is not chasing it up and down the list
+       as the results change. */
+    .cmcombo-row-other {
+        margin-top: 4px;
+        border-top: 1px solid #DCE8E0;
+        border-radius: 0 0 7px 7px;
+        padding-top: 10px;
+    }
+    .cmcombo-row-other .cmcombo-name { color: #126B3A; }
+    .cmcombo-row-other .cmcombo-cat { font-style: italic; }
     .bmodal-field.is-locked .bmodal-note { display: flex; }
 
     .bmodal-foot {
@@ -142,7 +218,9 @@
         .bmodal-grid { grid-template-columns: 1fr; }
     }
     @media (prefers-reduced-motion: reduce) {
-        .bmodal-panel { animation: none; }
+        .bmodal, .bmodal-panel, .bmodal.is-closing, .bmodal.is-closing .bmodal-panel {
+            animation: none;
+        }
     }
 </style>
 
@@ -160,9 +238,16 @@
 
     let lastFocused = null;
 
+    // Somebody who has asked their system for less motion gets none: the
+    // dialog simply goes.
+    const stillMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
     const open = (modal) => {
         if (!modal) return;
         lastFocused = document.activeElement;
+        // Re-opening mid-exit: cancel the leave rather than letting the two
+        // animations fight over the same element.
+        modal.classList.remove('is-closing');
         modal.classList.add('open');
         lockBody();
         // Focus the first real field so the dialog is usable from the
@@ -172,11 +257,34 @@
     };
 
     const close = (modal) => {
-        if (!modal) return;
-        modal.classList.remove('open');
-        unlockBody();
-        // Send focus back where it came from, not to the top of the page.
-        if (lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
+        // Already gone, or already leaving — Escape and a backdrop click can
+        // both land before the animation ends.
+        if (!modal || !modal.classList.contains('open')) return;
+        if (modal.classList.contains('is-closing')) return;
+
+        const finish = () => {
+            modal.classList.remove('open', 'is-closing');
+            unlockBody();
+            // Send focus back where it came from, not to the top of the page.
+            if (lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
+        };
+
+        if (stillMotion.matches) { finish(); return; }
+
+        // The dialog keeps `open` while it leaves, so the body stays locked
+        // and the page behind cannot scroll under a half-faded panel.
+        modal.classList.add('is-closing');
+
+        let done = false;
+        const settle = () => { if (!done) { done = true; finish(); } };
+
+        const panel = modal.querySelector('.bmodal-panel');
+        (panel || modal).addEventListener('animationend', settle, { once: true });
+
+        // A backstop. animationend never fires on a hidden tab or an element
+        // whose animation was interrupted, and a dialog stuck half-closed
+        // would block the whole page.
+        setTimeout(settle, 300);
     };
 
     // Delegated from document on purpose. This block is emitted by whichever

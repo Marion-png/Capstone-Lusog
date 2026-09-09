@@ -74,3 +74,20 @@
 	.enroll-foot-actions { width: 100%; }
 	.enroll-foot-actions .btn { flex: 1 1 auto; justify-content: center; }
 }
+
+/* ── The dialog leaves, it does not vanish ──
+   Same timings as the shared .bmodal system, so the enrolment and follow-up
+   dialogs close the way every other dialog in the product does. */
+.modal-backdrop.open, .modal-backdrop.is-closing { display: flex; }
+.modal-backdrop.open { animation: fc-modal-backdrop-in .18s ease both; }
+.modal-backdrop.is-closing { animation: fc-modal-backdrop-out .14s ease both; }
+.modal-backdrop.open .modal-panel { animation: fc-modal-in .18s cubic-bezier(.22, .61, .36, 1) both; }
+.modal-backdrop.is-closing .modal-panel { animation: fc-modal-out .14s cubic-bezier(.4, 0, 1, 1) both; }
+@keyframes fc-modal-in  { from { opacity: 0; transform: translateY(10px) scale(.99); } to { opacity: 1; transform: none; } }
+@keyframes fc-modal-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px) scale(.99); } }
+@keyframes fc-modal-backdrop-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fc-modal-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+	.modal-backdrop.open, .modal-backdrop.is-closing,
+	.modal-backdrop.open .modal-panel, .modal-backdrop.is-closing .modal-panel { animation: none; }
+}

@@ -275,15 +275,47 @@
 		}
 	};
 
+	// Held on screen while it fades, matching the shared .bmodal dialogs. A
+	// dialog that vanishes on the frame the button is pressed reads as a
+	// glitch, and the page behind appears to jump.
+	const stillMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
 	const setOpen = (state) => {
-		open = state;
-		backdrop.classList.toggle('open', state);
-		backdrop.setAttribute('aria-hidden', state ? 'false' : 'true');
-		document.body.style.overflow = state ? 'hidden' : '';
 		if (state) {
+			open = true;
+			// Cancel a leave still in flight rather than letting the two
+			// animations fight over the same element.
+			backdrop.classList.remove('is-closing');
+			backdrop.classList.add('open');
+			backdrop.setAttribute('aria-hidden', 'false');
+			document.body.style.overflow = 'hidden';
 			setError(null);
 			load().then(() => search?.focus());
+			return;
 		}
+
+		if (!open || backdrop.classList.contains('is-closing')) return;
+
+		// `open` goes false at once so Escape and the pulse stop acting on a
+		// dialog that is on its way out; the classes follow the animation.
+		open = false;
+
+		const finish = () => {
+			backdrop.classList.remove('open', 'is-closing');
+			backdrop.setAttribute('aria-hidden', 'true');
+			document.body.style.overflow = '';
+		};
+
+		if (stillMotion.matches) { finish(); return; }
+
+		backdrop.classList.add('is-closing');
+
+		let done = false;
+		const settle = () => { if (!done) { done = true; finish(); } };
+
+		// The timeout is a backstop: animationend never fires on a hidden tab.
+		backdrop.querySelector('.modal-panel')?.addEventListener('animationend', settle, { once: true });
+		setTimeout(settle, 300);
 	};
 
 	openers.forEach((opener) => opener.addEventListener('click', () => setOpen(true)));

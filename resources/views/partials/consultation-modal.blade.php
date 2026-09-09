@@ -25,13 +25,6 @@
         ? Condition::orderBy('category')->orderBy('name')->get()->groupBy('category')
         : collect();
 
-    // Categories sort alphabetically, which would leave the catch-all
-    // stranded between "Oral" and "Reproductive". Move it to the end: a
-    // reader scans the real complaints first and falls through to "Others"
-    // only when none of them fit.
-    $catchAllCategory = $consultConditions->keys()
-        ->first(fn ($category) => strcasecmp((string) $category, 'Other') === 0);
-
     // Medicine dispensed during the visit. Recording it here draws the
     // stock down in the same transaction as the consultation, so the
     // inventory cannot drift from what the clinic actually handed over.
@@ -49,11 +42,6 @@
             ->get()
         : collect();
 
-    if ($catchAllCategory !== null) {
-        $catchAllGroup = $consultConditions->get($catchAllCategory);
-        $consultConditions->forget($catchAllCategory);
-        $consultConditions->put($catchAllCategory, $catchAllGroup);
-    }
 @endphp
 
 @include('partials.board-modal-assets')
@@ -96,10 +84,20 @@
                     </div>
                 </div>
 
-                <div class="bmodal-field">
+                {{-- Locked for the same reason the grade and section below are,
+                     and locked with them: the nurse searched for this learner
+                     and opened their profile, so the name is the record's, not
+                     something to retype. A name that can be edited beside a
+                     frozen section is how a visit ends up filed against a
+                     mismatched pair — the wrong child on the right class. --}}
+                <div class="bmodal-field" id="cm_student_name_field">
                     <label for="cm_student_name">Student name</label>
                     <input id="cm_student_name" type="text" name="student_name"
                            value="{{ old('student_name') }}" placeholder="e.g. Dela Cruz, Juan" required autocomplete="off">
+                    <div class="bmodal-note">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <span>From the learner's record. Correct it on their profile.</span>
+                    </div>
                     @if ($errors->consultation->has('student_name'))
                         <div class="bmodal-error">{{ $errors->consultation->first('student_name') }}</div>
                     @endif
@@ -142,16 +140,56 @@
                                 $consultConditions->flatten()->first(fn ($c) => strcasecmp($c->name, 'Others') === 0)
                             )->id;
                         @endphp
-                        <select id="cm_condition_id" name="condition_id" required data-catch-all="{{ $catchAllId }}">
-                            <option value="" disabled @selected(! old('condition_id'))>Select a condition...</option>
-                            @foreach ($consultConditions as $category => $group)
-                                <optgroup label="{{ $category }}">
-                                    @foreach ($group as $condition)
-                                        <option value="{{ $condition->id }}" @selected((int) old('condition_id') === $condition->id)>{{ $condition->name }}</option>
-                                    @endforeach
-                                </optgroup>
-                            @endforeach
-                        </select>
+                        @php
+                            // The catalogue, flattened for the browser to search.
+                            // It is embedded rather than fetched: it is small,
+                            // fixed, and a nurse typing should not wait on a
+                            // round trip per keystroke.
+                            //
+                            // Sorted by name across every category, not grouped
+                            // by one. The nurse types the complaint, so what
+                            // orders the results is the complaint — grouping
+                            // mattered when this was a list to scan, and a
+                            // search that returns "Fever" above "Abdominal pain"
+                            // because one is Respiratory reads as unordered.
+                            $conditionIndex = $consultConditions
+                                ->flatMap(fn ($group, $category) => $group->map(fn ($c) => [
+                                    'id' => $c->id,
+                                    'name' => $c->name,
+                                    'category' => $category,
+                                ]))
+                                ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+                                ->values();
+
+                            $selectedName = old('condition_id')
+                                ? optional($conditionIndex->firstWhere('id', (int) old('condition_id')))['name']
+                                : null;
+                        @endphp
+
+                        {{-- A search box, not a list. The catalogue runs to
+                             dozens of entries across seven categories, and
+                             scrolling one to find "Headache" is slower than
+                             typing it. Nothing is shown until the nurse types:
+                             an open list on focus covers the fields below and
+                             is a menu to be read rather than an answer to be
+                             found. --}}
+                        <div class="cmcombo" id="cm_condition_combo" data-catch-all="{{ $catchAllId }}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text"
+                                   id="cm_condition_search"
+                                   placeholder="Type to search conditions…"
+                                   value="{{ $selectedName }}"
+                                   autocomplete="off"
+                                   role="combobox"
+                                   aria-expanded="false"
+                                   aria-autocomplete="list"
+                                   aria-controls="cm_condition_results"
+                                   required>
+                            {{-- What actually posts. The visible box is for
+                                 finding; this is the answer. --}}
+                            <input type="hidden" id="cm_condition_id" name="condition_id" value="{{ old('condition_id') }}">
+                            <div class="cmcombo-list" id="cm_condition_results" role="listbox"></div>
+                        </div>
 
                         {{-- Revealed only when "Others" is chosen. --}}
                         <div id="cm_condition_other_wrap" hidden style="margin-top:9px">
@@ -240,16 +278,27 @@
 // Open the dialog with a learner already filled in.
 (() => {
     const nameField = document.getElementById('cm_student_name');
+    const nameWrap = document.getElementById('cm_student_name_field');
     const sectionField = document.getElementById('cm_grade_section');
     const sectionWrap = document.getElementById('cm_grade_section_field');
 
-    // Read-only, never disabled: a disabled input posts nothing, so the
-    // section would arrive empty and fail its own required rule.
-    const lockSection = (locked) => {
-        if (!sectionField) return;
-        sectionField.readOnly = locked;
-        sectionField.setAttribute('aria-readonly', locked ? 'true' : 'false');
-        if (sectionWrap) sectionWrap.classList.toggle('is-locked', locked);
+    // Read-only, never disabled: a disabled input posts nothing, so the field
+    // would arrive empty and fail its own required rule.
+    const setLock = (field, wrap, locked) => {
+        if (!field) return;
+        field.readOnly = locked;
+        field.setAttribute('aria-readonly', locked ? 'true' : 'false');
+        if (wrap) wrap.classList.toggle('is-locked', locked);
+    };
+
+    // The learner's identity is one decision, so the two fields lock together
+    // — an editable name beside a frozen section files the wrong child on the
+    // right class. Each is still locked only on what the record actually gave:
+    // a learner with no section on file is still a learner the nurse must be
+    // able to log.
+    const lockLearner = (name, section) => {
+        setLock(nameField, nameWrap, String(name || '').trim() !== '');
+        setLock(sectionField, sectionWrap, String(section || '').trim() !== '');
     };
 
     // Called by the profile's "New Consultation" button.
@@ -257,9 +306,7 @@
         if (nameField) nameField.value = name || '';
         if (sectionField) sectionField.value = section || '';
 
-        // A learner with no section on file is still a learner the nurse
-        // must be able to log, so lock only what the record actually gave.
-        lockSection(String(section || '').trim() !== '');
+        lockLearner(name, section);
 
         // The Consultation Log's own trigger carries no learner, and this
         // borrows it to open the dialog. Flag the open so the delegated
@@ -281,23 +328,196 @@
     };
 
     // "Others" asks for the detail; every other condition does not.
-    const conditionSelect = document.getElementById('cm_condition_id');
+    // ── Condition search ─────────────────────────────────────────────
+    //
+    // Type to find, rather than scroll to find. The list stays closed until
+    // the nurse types something: opening it on focus would cover the fields
+    // below with a menu to be read, when what they want is one answer.
+    //
+    // The visible box finds; the hidden input answers. Editing the text after
+    // a pick clears the pick, because a name on screen that no longer matches
+    // the id underneath it is the one state this must never submit in.
+    const combo = document.getElementById('cm_condition_combo');
     const otherWrap = document.getElementById('cm_condition_other_wrap');
     const otherInput = document.getElementById('cm_condition_other');
 
-    if (conditionSelect && otherWrap && otherInput) {
-        const catchAll = String(conditionSelect.dataset.catchAll || '');
+    if (combo && otherWrap && otherInput) {
+        const search = document.getElementById('cm_condition_search');
+        const hidden = document.getElementById('cm_condition_id');
+        const list = document.getElementById('cm_condition_results');
+        const catchAll = String(combo.dataset.catchAll || '');
+        const conditions = @json($conditionIndex ?? []);
 
+        const close = () => {
+            list.classList.remove('show');
+            search.setAttribute('aria-expanded', 'false');
+        };
+
+        // Revealed only when "Others" is chosen — "Others" alone tells a
+        // later reader nothing.
         const syncOther = () => {
-            const isOther = catchAll !== '' && conditionSelect.value === catchAll;
+            const isOther = catchAll !== '' && hidden.value === catchAll;
             otherWrap.hidden = !isOther;
-            // Required only while it is on screen, or the browser would
-            // block submission on a hidden field it cannot focus.
             otherInput.required = isOther;
             if (!isOther) otherInput.value = '';
         };
 
-        conditionSelect.addEventListener('change', syncOther);
+        const choose = (condition) => {
+            hidden.value = condition.id;
+            search.value = condition.name;
+            search.setCustomValidity('');
+            close();
+            syncOther();
+            if (otherInput.required) otherInput.focus();
+        };
+
+        // The catalogue entry "Others" is never listed among the matches —
+        // it is pinned to the bottom instead, so it is in the same place
+        // every time rather than moving up and down the list as the nurse
+        // types. Excluding it here is what stops it appearing twice.
+        const otherCondition = conditions.find((c) => String(c.id) === catchAll) || null;
+
+        // Built from DOM nodes, never innerHTML: these names come out of the
+        // database and a template string would run any markup inside one.
+        const conditionRow = (condition, label, hint) => {
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'cmcombo-row';
+            row.setAttribute('role', 'option');
+
+            row.appendChild(Object.assign(document.createElement('span'), {
+                className: 'cmcombo-name',
+                textContent: label,
+            }));
+            row.appendChild(Object.assign(document.createElement('span'), {
+                className: 'cmcombo-cat',
+                textContent: hint,
+            }));
+
+            row.addEventListener('click', () => choose(condition));
+            return row;
+        };
+
+        const render = (matches, term) => {
+            list.textContent = '';
+
+            if (matches.length === 0) {
+                list.appendChild(Object.assign(document.createElement('div'), {
+                    className: 'cmcombo-empty',
+                    textContent: 'No condition matches "' + term + '".',
+                }));
+            }
+
+            matches.slice(0, 8).forEach((condition) => {
+                list.appendChild(conditionRow(condition, condition.name, condition.category));
+            });
+
+            // Always last, whether the search found anything or not. A
+            // condition the catalogue does not carry is a real answer, and
+            // the nurse should not have to discover that by first failing
+            // to find one.
+            if (otherCondition) {
+                const other = conditionRow(
+                    otherCondition,
+                    'Others',
+                    'Type the condition yourself'
+                );
+                other.classList.add('cmcombo-row-other');
+                list.appendChild(other);
+            }
+        };
+
+        const apply = () => {
+            const raw = search.value.trim();
+            const term = raw.toLowerCase();
+
+            // A pick the nurse has typed over is no longer the answer.
+            if (hidden.value !== '') {
+                const picked = conditions.find((c) => String(c.id) === hidden.value);
+                if (!picked || picked.name.toLowerCase() !== term) {
+                    hidden.value = '';
+                    syncOther();
+                }
+            }
+
+            if (term === '') {
+                list.textContent = '';
+                close();
+                return;
+            }
+
+            // Matched from the start of a word, not anywhere inside one.
+            // A substring match on a single letter returned almost the whole
+            // catalogue — "a" brought back Headache and Toothache — so the
+            // first keystroke told the nurse nothing.
+            //
+            // Ranked rather than narrowed, because a nurse types both ways:
+            // "a" should bring the A conditions, and "pain" should still find
+            // "Abdominal pain".
+            //   1. the name starts with what was typed
+            //   2. a later word in the name starts with it
+            //   3. the category starts with it
+            // Each tier is already alphabetical, so the order within one holds.
+            const startsWith = (value) => String(value).toLowerCase().startsWith(term);
+            const wordStartsWith = (value) =>
+                String(value).toLowerCase().split(/[^a-z0-9]+/).some((word) => word.startsWith(term));
+
+            const tiers = [[], [], []];
+
+            conditions.forEach((c) => {
+                // Pinned to the bottom by render(), so never a match here.
+                if (String(c.id) === catchAll) return;
+
+                if (startsWith(c.name)) tiers[0].push(c);
+                else if (wordStartsWith(c.name)) tiers[1].push(c);
+                else if (startsWith(c.category)) tiers[2].push(c);
+            });
+
+            render(tiers[0].concat(tiers[1], tiers[2]), raw);
+
+            list.classList.add('show');
+            search.setAttribute('aria-expanded', 'true');
+        };
+
+        search.addEventListener('input', () => {
+            search.setCustomValidity('');
+            apply();
+        });
+
+        // Deliberately no focus handler: the list opens on typing alone.
+        search.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') { close(); return; }
+
+            // Enter takes the only match, so a nurse who typed the whole
+            // name never has to reach for the mouse.
+            if (event.key === 'Enter' && hidden.value === '') {
+                // Real matches only — the pinned "Others" is always present,
+                // and Enter must not quietly file a typo under it.
+                const rows = list.querySelectorAll('.cmcombo-row:not(.cmcombo-row-other)');
+                if (rows.length === 1) { event.preventDefault(); rows[0].click(); }
+            }
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!combo.contains(event.target)) close();
+        });
+
+        // A typed name nobody picked is not a condition. The browser cannot
+        // see that on its own — the visible box is full and the hidden one
+        // is empty — so say why rather than letting the server reject it.
+        combo.closest('form')?.addEventListener('submit', (event) => {
+            if (hidden.value === '') {
+                event.preventDefault();
+                search.setCustomValidity(
+                    search.value.trim() === ''
+                        ? 'Search for the condition and choose it from the list.'
+                        : 'Choose a condition from the list, or record it under "Others".'
+                );
+                search.reportValidity();
+                apply();
+            }
+        });
+
         syncOther();
     }
 
@@ -306,17 +526,22 @@
         const trigger = event.target.closest('[data-bmodal-open="consultModal"]');
         if (!trigger) return;
 
-        if (trigger.dataset.consultName !== undefined && nameField) {
-            nameField.value = trigger.dataset.consultName || '';
-        }
-        if (trigger.dataset.consultSection !== undefined && sectionField) {
-            sectionField.value = trigger.dataset.consultSection || '';
-            lockSection(String(trigger.dataset.consultSection || '').trim() !== '');
+        const carriesLearner = trigger.dataset.consultName !== undefined
+            || trigger.dataset.consultSection !== undefined;
+
+        if (carriesLearner) {
+            const name = trigger.dataset.consultName ?? '';
+            const section = trigger.dataset.consultSection ?? '';
+
+            if (trigger.dataset.consultName !== undefined && nameField) nameField.value = name;
+            if (trigger.dataset.consultSection !== undefined && sectionField) sectionField.value = section;
+
+            lockLearner(name, section);
         } else if (!window.__consultPrefilled) {
             // Opened cold — the Consultation Log's own button. One dialog
             // serves both, so a lock left over from a previous open has to
-            // be cleared or the nurse cannot type a section at all.
-            lockSection(false);
+            // be cleared or the nurse cannot type a learner in at all.
+            lockLearner('', '');
         }
 
         window.__consultPrefilled = false;

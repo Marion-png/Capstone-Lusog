@@ -107,15 +107,39 @@
         if (shareInput) shareInput.checked = false;
         if (sub) sub.textContent = student ? 'Photos for ' + student : '';
         list.textContent = '';
+        // Cancel a leave still in flight rather than letting the two
+        // animations fight over the same element.
+        backdrop.classList.remove('is-closing');
         backdrop.hidden = false;
         document.body.classList.add('bmodal-open');
         load();
     };
 
+    // Held on screen while it fades, the way the shared .bmodal dialogs are.
+    // A dialog that vanishes on the frame the button is pressed reads as a
+    // glitch, and on a blurred backdrop the whole page appears to jump.
+    const stillMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
     const close = () => {
-        backdrop.hidden = true;
-        consultationId = null;
-        document.body.classList.remove('bmodal-open');
+        if (backdrop.hidden || backdrop.classList.contains('is-closing')) return;
+
+        const finish = () => {
+            backdrop.classList.remove('is-closing');
+            backdrop.hidden = true;
+            consultationId = null;
+            document.body.classList.remove('bmodal-open');
+        };
+
+        if (stillMotion.matches) { finish(); return; }
+
+        backdrop.classList.add('is-closing');
+
+        let done = false;
+        const settle = () => { if (!done) { done = true; finish(); } };
+
+        // The timeout is a backstop: animationend never fires on a hidden tab.
+        backdrop.querySelector('.cphoto-panel')?.addEventListener('animationend', settle, { once: true });
+        setTimeout(settle, 300);
     };
 
     document.addEventListener('click', (event) => {

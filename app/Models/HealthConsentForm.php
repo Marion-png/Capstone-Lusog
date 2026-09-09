@@ -31,7 +31,16 @@ class HealthConsentForm extends Model
 
     public const DEFAULT_SCHOOL_ADDRESS = 'DAMASO SUAZO ST., BRGY. 28-C, DAVAO CITY';
 
-    public const PRINCIPAL_NAME = 'WELITO I. ROSAL';
+    /**
+     * There is deliberately no PRINCIPAL_NAME here any more.
+     *
+     * It held one school's principal, and the document printed it on every
+     * school's letter — so a parent at another school was handed a consent
+     * form signed by a head they have never met. The name is read per school
+     * from `accounts` through `App\Support\SchoolSignatories::notedBy()`, the
+     * same lookup every other DepEd form in this app uses, and a head the app
+     * does not know prints a blank line to sign.
+     */
 
     // Consent choices
     public const CONSENT_ALL = 'all';

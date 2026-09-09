@@ -60,24 +60,74 @@ class AnnouncementController extends Controller
     }
 
     /**
+     * Archive an announcement: off the board, still on the record.
+     *
+     * The nurse's answer to "this has already happened". Deleting is the
+     * other answer and still means gone — see destroy(). Archiving stamps
+     * the row rather than removing it, so last term's deworming notice stays
+     * retrievable as what the school actually told its staff.
+     */
+    public function archive(Request $request, Announcement $announcement): RedirectResponse
+    {
+        $this->authorizeManaging($request, $announcement, 'archive');
+
+        // Already archived is a no-op, not a second stamp — a double-submit
+        // or a stale tab must not rewrite who archived it and when.
+        if (! $announcement->isArchived()) {
+            $announcement->forceFill([
+                'archived_at' => now(),
+                'archived_by_name' => (string) $request->session()->get('active_name', 'School Nurse'),
+            ])->save();
+        }
+
+        return back()->with('announcement_success', 'Announcement archived.');
+    }
+
+    /**
+     * Put an archived announcement back on the board.
+     */
+    public function restore(Request $request, Announcement $announcement): RedirectResponse
+    {
+        $this->authorizeManaging($request, $announcement, 'restore');
+
+        $announcement->forceFill([
+            'archived_at' => null,
+            'archived_by_name' => null,
+        ])->save();
+
+        return back()->with('announcement_success', 'Announcement restored to the board.');
+    }
+
+    /**
      * Remove an announcement. Restricted to poster roles and the
      * announcement's own school — a nurse can never delete another
      * school's announcement even if they somehow knew its ID.
      */
     public function destroy(Request $request, Announcement $announcement): RedirectResponse
     {
+        $this->authorizeManaging($request, $announcement, 'remove');
+
+        $announcement->delete();
+
+        return back()->with('announcement_success', 'Announcement removed.');
+    }
+
+    /**
+     * The one guard on every write to an existing announcement: a poster role,
+     * and the announcement's own school. Kept in one place so archive, restore
+     * and delete cannot drift apart — a third copy of a scope check is a third
+     * chance to forget the school and hand a nurse another school's notices.
+     */
+    private function authorizeManaging(Request $request, Announcement $announcement, string $verb): void
+    {
         $role = (string) $request->session()->get('active_role', '');
 
-        abort_unless(Announcement::canPost($role), 403, 'Only the School Nurse may remove announcements.');
+        abort_unless(Announcement::canPost($role), 403, "Only the School Nurse may {$verb} announcements.");
 
         $institutionId = $request->session()->get('active_institution_id');
         abort_if(
             $institutionId && (int) $announcement->institution_id !== (int) $institutionId,
             404
         );
-
-        $announcement->delete();
-
-        return back()->with('announcement_success', 'Announcement removed.');
     }
 }

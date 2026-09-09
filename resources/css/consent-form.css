@@ -53,8 +53,17 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
 
 /* ── The official document ───────────────────────────────────── */
 .doc { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 34px 40px; font-family: 'Times New Roman', Times, serif; font-size: .92rem; line-height: 1.45; color: #111; }
-.doc-header { text-align: center; margin-bottom: 18px; position: relative; }
-.doc-header img.doc-seal { position: absolute; left: 0; top: 0; width: 58px; height: 58px; object-fit: contain; }
+/* The heading carries two government seals — DepEd left, DOH right — with the
+   Republic / Region / title stack centred between them. Padding, not margin,
+   keeps the centred text from running under either seal on a narrow sheet. */
+.doc-header { text-align: center; margin-bottom: 18px; position: relative; min-height: 58px; padding: 0 66px; }
+.doc-header .doc-seal { position: absolute; top: 0; width: 58px; height: 58px; object-fit: contain; }
+.doc-header .doc-seal-left { left: 0; }
+.doc-header .doc-seal-right { right: 0; }
+/* A seal the school has not supplied holds its space rather than collapsing
+   the heading; the outline is drawn on screen and dropped on paper, where a
+   dashed box would read as part of the form. */
+.doc-header .doc-seal-placeholder { display: block; border: 1px dashed #b6c3bb; border-radius: 50%; }
 .doc-header .doc-rp { font-weight: 700; }
 .doc-header .doc-form-title { font-weight: 700; text-decoration: underline; letter-spacing: .02em; }
 .doc-field { display: flex; gap: 6px; align-items: baseline; margin: 2px 0; flex-wrap: wrap; }
@@ -86,6 +95,12 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
 .doc-writein[readonly] { background: transparent; }
 .doc-allergy-note { font-style: italic; font-size: .85rem; margin-top: 10px; }
 
+/* The allergy block sits at the left margin like the paper form, with the
+   three kinds of allergy indented under their heading. */
+.doc-allergy-block { margin-top: 14px; margin-left: 0; }
+.doc-consent-option.doc-allergy-child { margin-left: 34px; }
+.doc-attach-note { font-style: italic; font-weight: 700; font-size: .85rem; margin-left: 34px; }
+
 /* Parent signature display */
 .doc-signature-img { max-height: 90px; display: block; margin: 0 auto; }
 
@@ -108,10 +123,16 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
 /* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 720px) {
     .doc { padding: 20px 16px; font-size: .84rem; }
-    .doc-header img.doc-seal { display: none; }
+    /* Both seals and the space held for them, so the heading text keeps the
+       full width on a phone. Matches .doc-seal, not img.doc-seal — the
+       placeholder is a span and would otherwise stay behind. */
+    .doc-header .doc-seal { display: none; }
+    .doc-header { padding: 0; }
     .doc-services { margin-left: 8px; }
     .doc-service.doc-child { margin-left: 24px; }
     .doc-consent-options { margin-left: 4px; }
+    .doc-consent-option.doc-allergy-child { margin-left: 20px; }
+    .doc-attach-note { margin-left: 20px; }
     .cf-table thead { display: none; }
     .cf-table tr { display: block; border-bottom: 1px solid var(--border); padding: 8px 0; }
     .cf-table td { display: block; border: none; padding: 4px 12px; }
@@ -154,4 +175,7 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
     .cf-topbar, .cf-actions, .cf-page-title, .cf-page-sub, .cf-card, .cf-flash, .cf-share, .no-print { display: none !important; }
     .cf-wrap { max-width: none; padding: 0; }
     .doc { border: none; box-shadow: none; border-radius: 0; padding: 10mm 12mm; font-size: 11pt; }
+    /* The space a missing seal holds is kept; its outline is not, or a school
+       with no seal file would file a form with a dashed circle printed on it. */
+    .doc-header .doc-seal-placeholder { border: none; }
 }

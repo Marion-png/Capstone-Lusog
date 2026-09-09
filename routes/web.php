@@ -949,6 +949,15 @@ Route::post('/announcements', [AnnouncementController::class, 'store'])
 Route::post('/announcements/{announcement}/delete', [AnnouncementController::class, 'destroy'])
     ->whereNumber('announcement')
     ->name('announcements.destroy');
+// Archiving takes a notice off the board without destroying it; restoring
+// puts it back. Both named, like every write route — an unnamed POST matches
+// nothing on RestrictSchoolHeadWrites' allow list.
+Route::post('/announcements/{announcement}/archive', [AnnouncementController::class, 'archive'])
+    ->whereNumber('announcement')
+    ->name('announcements.archive');
+Route::post('/announcements/{announcement}/restore', [AnnouncementController::class, 'restore'])
+    ->whereNumber('announcement')
+    ->name('announcements.restore');
 
 // Dashboard upcoming events — create/remove restricted to Event::CREATOR_ROLES (school_nurse for now)
 Route::post('/events', [EventController::class, 'store'])

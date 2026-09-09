@@ -10,22 +10,25 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Opened from a learner's profile, the New Consultation dialog fills the
- * grade and section from that learner's record and locks the field.
+ * Opened from a learner's profile, the New Consultation dialog fills in that
+ * learner and locks who the visit is for — the name and the grade/section
+ * together.
  *
- * The pair is already on the profile, and a consultation typed against a
- * section the record does not have is a consultation filed under the wrong
- * class — the clinic log matches a visit to a learner by name and section,
- * so a mistyped one silently drops out of the school head's grade figures.
+ * Both are already on the profile the nurse searched for and opened, so
+ * neither is something to retype. They lock together because the learner's
+ * identity is one decision: an editable name beside a frozen section files
+ * the wrong child on the right class, and the clinic log matches a visit to
+ * a learner by exactly that pair — so a mistyped one silently drops out of
+ * the school head's grade figures.
  *
- * Read-only, never disabled: a disabled input posts nothing, so the section
+ * Read-only, never disabled: a disabled input posts nothing, so the field
  * would arrive empty and fail its own required rule.
  *
  * Opened cold from the Consultation Log there is no record to read, so the
- * nurse still types it — and the same dialog serves both, so the lock has
- * to clear between opens.
+ * nurse still types both — and the same dialog serves both cases, so the
+ * lock has to clear between opens.
  */
-class ConsultationSectionLockTest extends TestCase
+class ConsultationLearnerLockTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -71,15 +74,33 @@ class ConsultationSectionLockTest extends TestCase
             ->getContent();
     }
 
-    /** The dialog can lock the field, and knows which one. */
+    /** The dialog can lock the learner, and knows which fields that is. */
     #[Test]
-    public function the_dialog_carries_a_lock_for_the_section_field(): void
+    public function the_dialog_carries_a_lock_for_the_learner_fields(): void
     {
         $html = $this->recordsPage();
 
+        $this->assertStringContainsString('id="cm_student_name_field"', $html);
         $this->assertStringContainsString('id="cm_grade_section_field"', $html);
-        $this->assertStringContainsString('const lockSection = (locked) =>', $html);
-        $this->assertStringContainsString('sectionField.readOnly = locked;', $html);
+        $this->assertStringContainsString('const lockLearner = (name, section) =>', $html);
+        $this->assertStringContainsString('field.readOnly = locked;', $html);
+    }
+
+    /**
+     * The two move together. A name the nurse can edit beside a section
+     * they cannot is the mismatched pair this exists to prevent, so one
+     * call locks both rather than two callers each remembering to.
+     */
+    #[Test]
+    public function the_name_and_the_section_lock_together(): void
+    {
+        $html = $this->recordsPage();
+
+        $this->assertStringContainsString('setLock(nameField, nameWrap,', $html);
+        $this->assertStringContainsString('setLock(sectionField, sectionWrap,', $html);
+
+        // One entry point, so a later caller cannot lock half of it.
+        $this->assertSame(1, substr_count($html, 'const lockLearner = (name, section) =>'));
     }
 
     /**
@@ -93,18 +114,23 @@ class ConsultationSectionLockTest extends TestCase
     {
         $html = $this->recordsPage();
 
+        $this->assertStringNotContainsString('field.disabled', $html);
         $this->assertStringNotContainsString('sectionField.disabled', $html);
-        $this->assertStringNotContainsString("sectionField.setAttribute('disabled'", $html);
+        $this->assertStringNotContainsString('nameField.disabled', $html);
+        $this->assertStringNotContainsString("setAttribute('disabled'", $html);
     }
 
-    /** Opening for a learner locks it. */
+    /** Opening for a learner locks both fields. */
     #[Test]
-    public function opening_for_a_learner_locks_the_field(): void
+    public function opening_for_a_learner_locks_the_fields(): void
     {
         $html = $this->recordsPage();
 
+        $this->assertStringContainsString('lockLearner(name, section);', $html);
+
+        // Each is still locked only on what the record actually gave.
         $this->assertStringContainsString(
-            "lockSection(String(section || '').trim() !== '');",
+            "setLock(nameField, nameWrap, String(name || '').trim() !== '');",
             $html
         );
     }
@@ -139,7 +165,7 @@ class ConsultationSectionLockTest extends TestCase
         );
 
         // And a lock left over from a previous open is cleared.
-        $this->assertStringContainsString('lockSection(false);', $html);
+        $this->assertStringContainsString("lockLearner('', '');", $html);
     }
 
     /**
