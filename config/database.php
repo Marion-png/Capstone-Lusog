@@ -97,6 +97,24 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+
+            /*
+             * Opening a connection to a hosted Postgres reached through a
+             * tunnel costs a TCP handshake, a TLS handshake and an
+             * authentication exchange - several round trips before the first
+             * query is even sent, paid again by every page view and every
+             * twenty-second poll. A persistent connection is reused by the next
+             * request in the same PHP process instead.
+             *
+             * Off by default because it is not free of consequence: a request
+             * that dies inside a transaction hands the next one a connection
+             * with that transaction still open. Turn it on where the latency is
+             * worth that (a tunnelled or otherwise remote database), leave it
+             * off against a local server, where a handshake costs nothing.
+             */
+            'options' => array_filter([
+                PDO::ATTR_PERSISTENT => env('DB_PERSISTENT', false),
+            ]),
         ],
 
         'sqlsrv' => [

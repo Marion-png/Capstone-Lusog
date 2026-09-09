@@ -36,6 +36,19 @@ class FeedingProgramCycle
         private readonly int $durationDays = self::DURATION_DAYS,
     ) {}
 
+    /**
+     * Forget the memoized per-school cycle settings.
+     *
+     * The duration and the start date are read once per request, which is only
+     * safe while they have not moved. A request that changes a school's
+     * configured cycle length (the System Admin's form) has moved one of them.
+     */
+    public static function forgetInstitutionSettings(): void
+    {
+        RequestMemo::forgetPrefix('cycle:days:');
+        RequestMemo::forgetPrefix('cycle:start:');
+    }
+
     public static function forInstitution(?int $institutionId = null): self
     {
         return new self(self::resolveStartDate($institutionId), self::durationForInstitution($institutionId));
@@ -56,7 +69,13 @@ class FeedingProgramCycle
             return $default;
         }
 
-        $configured = Institution::query()->whereKey($institutionId)->value('feeding_cycle_days');
+        // Read once per request: this is asked by the header, the cycle bar,
+        // the adviser's endline gate and every screen that says "day N of M",
+        // and a school's configured length cannot change mid-request.
+        $configured = RequestMemo::remember(
+            'cycle:days:'.$institutionId,
+            fn () => Institution::query()->whereKey($institutionId)->value('feeding_cycle_days'),
+        );
 
         return ($configured === null || (int) $configured < 1) ? $default : (int) $configured;
     }
@@ -193,6 +212,17 @@ class FeedingProgramCycle
      * schools whose attendance predates the feeding_attendances table.
      */
     private static function resolveStartDate(?int $institutionId): ?Carbon
+    {
+        // The first recorded session is day 1, and several panels build a cycle
+        // each. Two aggregate queries per panel over a hosted database is worth
+        // memoizing; the answer cannot change while one request is served.
+        return RequestMemo::remember(
+            'cycle:start:'.($institutionId ?? '-'),
+            fn (): ?Carbon => self::readStartDate($institutionId),
+        );
+    }
+
+    private static function readStartDate(?int $institutionId): ?Carbon
     {
         $todayDate = now()->toDateString();
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\DecryptedValues;
 use App\Support\RequestMemo;
 use App\Support\SchemaCache;
 use Closure;
@@ -23,6 +24,7 @@ class FreshRequestState
 {
     public function handle(Request $request, Closure $next): Response
     {
+        DecryptedValues::flush();
         RequestMemo::flush();
         SchemaCache::flush();
 

@@ -24,9 +24,13 @@
 			event.preventDefault();
 			main.classList.remove('page-ready');
 			main.classList.add('page-exit');
-			// Matches the .3s transition on `.sidebar ~ .main`, cut short so
-			// the navigation does not feel held back by the animation.
-			window.setTimeout(() => { window.location.href = href; }, 220);
+			// The fade is feedback that the click landed, not something the
+			// navigation waits on: the browser keeps painting this page (still
+			// fading) until the next document commits, so the request is sent
+			// now rather than a third of a second from now. Waiting for the
+			// animation first added that delay to every single tab switch, on
+			// top of however long the page itself took to come back.
+			requestAnimationFrame(() => { window.location.href = href; });
 		});
 	});
 })();

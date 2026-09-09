@@ -26,6 +26,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('web', AuditSensitiveAccess::class);
         // Last, and after the audit: a School Head write that is about to be
         // refused is still an attempt worth recording before it is turned away.
+        // AuditSensitiveAccess decides what to record here, on the way in, and
+        // writes the row in terminate() once the response has been sent - so a
+        // refused attempt is recorded exactly as before, without the reader
+        // waiting on an INSERT before their page begins to render.
         $middleware->appendToGroup('web', RestrictSchoolHeadWrites::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

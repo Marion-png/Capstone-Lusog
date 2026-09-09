@@ -2,8 +2,8 @@
 
 namespace App\Casts;
 
+use App\Support\DecryptedValues;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
-use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Crypt;
 
@@ -20,13 +20,13 @@ class EncryptedBoolean implements CastsAttributes
             return null;
         }
 
-        try {
-            return Crypt::decryptString($value) === '1';
-        } catch (DecryptException) {
-            // Plain 0/1 written by a column default or before encryption
-            // at rest was introduced.
-            return (bool) $value;
-        }
+        $stored = (string) $value;
+
+        // Plain 0/1 written by a column default or before encryption at rest
+        // was introduced reads as itself; anything decryptable reads as '1'.
+        return DecryptedValues::isEncrypted($stored)
+            ? DecryptedValues::plaintext($stored) === '1'
+            : (bool) $value;
     }
 
     public function set(Model $model, string $key, mixed $value, array $attributes): ?string

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\HealthConsentForm;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
+use App\Support\AdviserClassScope;
 use App\Support\SchemaCache;
 use App\Support\StudentRosterSync;
 use Illuminate\Http\RedirectResponse;
@@ -456,18 +457,11 @@ class HealthConsentFormController extends Controller
         // expiry, re-login, and server restarts.
         StudentRosterSync::syncToSession($request);
 
-        $grade = (string) $request->session()->get('assigned_grade_level', '');
-        $section = (string) $request->session()->get('assigned_section', '');
-
-        return collect($request->session()->get('school_health_card_records', []))
-            ->filter(function ($row) use ($grade, $section) {
-                if ($grade === '' || $section === '') {
-                    return true;
-                }
-
-                return (string) ($row['grade_level'] ?? '') === $grade
-                    && strcasecmp(trim((string) ($row['section'] ?? '')), trim($section)) === 0;
-            })
+        // Narrowed by role, not by whether an assignment happens to be filled
+        // in: this picker is shared with the school nurse and clinic staff, who
+        // have no class and read the whole school, while a class adviser reads
+        // their own class only.
+        return AdviserClassScope::rosterRows($request)
             ->map(fn ($row) => [
                 'lrn' => (string) ($row['lrn'] ?? ''),
                 'name' => trim(($row['last_name'] ?? '').', '.($row['first_name'] ?? '').' '.($row['middle_name'] ?? '')),

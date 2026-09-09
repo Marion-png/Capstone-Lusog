@@ -155,11 +155,33 @@ class StudentHealthRecord extends Model
      */
     public static function currentYearForInstitution(?int $institutionId)
     {
+        return static::rosterFor($institutionId);
+    }
+
+    /**
+     * A school's learners for one school year, read once per request.
+     *
+     * The same roster is wanted several times over on a single page — the
+     * Feeding Coordinator's dashboard reads it once for its panels and again to
+     * build the Record Attendance dialog, and the year filter usually names the
+     * current year, so the two are the identical query. Every column worth
+     * filtering on is encrypted, so each of those reads also re-hydrates and
+     * re-decrypts the whole roll. Memoizing the read is the difference between
+     * paying that once and paying it per caller.
+     *
+     * Callers treat the result as read-only; nothing here writes to a model.
+     *
+     * @return Collection<int, self>
+     */
+    public static function rosterFor(?int $institutionId, ?string $schoolYear = null)
+    {
+        $year = $schoolYear ?: static::currentSchoolYear();
+
         return RequestMemo::remember(
-            'student_health_records:'.($institutionId ?? 'all'),
+            'student_health_records:'.($institutionId ?? 'all').':'.$year,
             fn () => static::query()
                 ->when($institutionId, fn (Builder $q, $id) => $q->where('institution_id', $id))
-                ->forCurrentSchoolYear()
+                ->forCurrentSchoolYear($year)
                 ->get()
         );
     }

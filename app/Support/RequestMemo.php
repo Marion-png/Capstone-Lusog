@@ -34,11 +34,37 @@ class RequestMemo
     {
         $memo = app(self::class);
 
-        return $memo->values[$key] ??= $resolve();
+        // array_key_exists, not ??=: a resolver that legitimately returns null
+        // (no cycle start date yet, no configured cycle length) would otherwise
+        // be re-run on every call and the memo would cache nothing at all.
+        if (! array_key_exists($key, $memo->values)) {
+            $memo->values[$key] = $resolve();
+        }
+
+        return $memo->values[$key];
     }
 
     public static function flush(): void
     {
         app(self::class)->values = [];
+    }
+
+    /**
+     * Drop every memo whose key starts with $prefix.
+     *
+     * A memo is only ever safe while the data behind it has not moved. A
+     * request that writes and then reads the same thing has moved it, so the
+     * write path says so explicitly rather than relying on nobody ever adding a
+     * read after it.
+     */
+    public static function forgetPrefix(string $prefix): void
+    {
+        $memo = app(self::class);
+
+        foreach (array_keys($memo->values) as $key) {
+            if (str_starts_with((string) $key, $prefix)) {
+                unset($memo->values[$key]);
+            }
+        }
     }
 }

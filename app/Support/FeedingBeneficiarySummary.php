@@ -245,11 +245,39 @@ final class FeedingBeneficiarySummary
             return collect();
         }
 
+        $ids = $beneficiaries->pluck('id')->filter()->sort()->values();
+
+        // The same roll's marks are wanted by the cards, the standings and the
+        // panels below them, and each asked the database again — one read of
+        // every mark in the programme, several times over on one page. Keyed by
+        // the roll itself, so a different set of learners is a different read.
+        return RequestMemo::remember(
+            'feeding:marks:'.md5($ids->implode(',')),
+            fn (): Collection => self::readMarksByRecord($ids),
+        );
+    }
+
+    /**
+     * Forget the memoized marks. Call this after writing to
+     * feeding_attendances, so anything reading them later in the same request
+     * sees the marks that were just saved rather than the ones before.
+     */
+    public static function forgetMarks(): void
+    {
+        RequestMemo::forgetPrefix('feeding:marks:');
+    }
+
+    /**
+     * @param  Collection<int, int>  $ids
+     * @return Collection<int, list<bool|null>>
+     */
+    private static function readMarksByRecord(Collection $ids): Collection
+    {
         $hasReviewColumn = SchemaCache::hasColumn('feeding_attendances', 'needs_review');
         $hasExcusedColumn = SchemaCache::hasColumn('feeding_attendances', 'is_excused');
 
         return FeedingAttendance::query()
-            ->whereIn('student_health_record_id', $beneficiaries->pluck('id'))
+            ->whereIn('student_health_record_id', $ids)
             ->whereDate('session_date', '<=', now()->toDateString())
             ->orderBy('session_date')
             ->get(array_merge(
@@ -338,10 +366,11 @@ final class FeedingBeneficiarySummary
         $records = collect();
 
         if (SchemaCache::hasTable('student_health_records')) {
-            $records = StudentHealthRecord::query()
-                ->when($institutionId, fn ($query) => $query->where('institution_id', $institutionId))
-                ->forCurrentSchoolYear($filters['school_year'] ?? null)
-                ->get();
+            // The shared per-request read: the page that asks for these cards
+            // has almost always just read the same roll for its own table, and
+            // every column worth filtering on here is encrypted, so a second
+            // fetch is a second decryption of the whole school as well.
+            $records = StudentHealthRecord::rosterFor($institutionId, $filters['school_year'] ?? null);
         }
 
         // Grade, section and sex are all scope: they narrow which learners the

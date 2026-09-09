@@ -2,8 +2,6 @@
 
 namespace App\Support;
 
-use Illuminate\Support\Facades\DB;
-
 /**
  * Change detection for every School Head screen.
  *
@@ -61,33 +59,10 @@ final class SchoolHeadPulse
 
     public static function stamp(?int $institutionId): string
     {
-        $parts = [];
-
-        foreach (self::WATCHED_TABLES as $table) {
-            if (! SchemaCache::hasTable($table)) {
-                $parts[] = '-';
-
-                continue;
-            }
-
-            $query = DB::table($table);
-
-            // The child tables inherit their school scope from the parent
-            // record, so only the owning tables filter. A neighbouring school's
-            // write can therefore cost one needless refetch — never a missed
-            // change, and nothing of theirs is ever read.
-            if ($institutionId && SchemaCache::hasColumn($table, 'institution_id')) {
-                $query->where('institution_id', $institutionId);
-            }
-
-            // An append-only table has no updated_at to read, so the newest row
-            // stands in for "last touched".
-            $touched = SchemaCache::hasColumn($table, 'updated_at') ? 'updated_at' : 'created_at';
-
-            $row = $query->selectRaw('COUNT(*) as row_count, MAX('.$touched.') as last_touched')->first();
-            $parts[] = ((int) ($row->row_count ?? 0)).'@'.((string) ($row->last_touched ?? ''));
-        }
-
-        return md5(implode('|', $parts));
+        // One round trip for all ten tables. This is polled every twenty
+        // seconds by every open School Head tab, so its cost is paid over and
+        // over; a query per table made a "cheap" poll the most expensive thing
+        // the role did.
+        return ChangeStamp::forTables(self::WATCHED_TABLES, $institutionId);
     }
 }

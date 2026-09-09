@@ -1367,11 +1367,13 @@
 				event.preventDefault();
 				main.classList.remove('page-ready');
 				main.classList.add('page-exit');
-				// Coordinator fade is --asb-page-out in role-sidebar.css;
-				// the nurse keeps this page's own shorter transition.
-				window.setTimeout(() => {
-					window.location.href = href;
-				}, {{ $isReadOnly ? 220 : 340 }});
+				// The fade is feedback that the click landed, not something the
+				// navigation waits on: the browser keeps painting this page (still
+				// fading) until the next document commits, so the request is sent
+				// now rather than a third of a second from now. Waiting for the
+				// animation first added that delay to every single tab switch, on
+				// top of however long the page itself took to come back.
+				requestAnimationFrame(() => { window.location.href = href; });
 			});
 		});
 	}

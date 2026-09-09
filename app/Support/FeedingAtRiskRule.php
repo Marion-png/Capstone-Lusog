@@ -132,6 +132,16 @@ class FeedingAtRiskRule
      * Everything that computes, displays, or explains at-risk must go through
      * here, or two screens will disagree about who is flagged.
      */
+    /**
+     * Forget the memoized per-school rule settings. The System Admin's
+     * threshold form changes them, and must not then be answered from the copy
+     * read before the change.
+     */
+    public static function forgetInstitutionSettings(): void
+    {
+        RequestMemo::forgetPrefix('at-risk:settings:');
+    }
+
     public static function forInstitution(?int $institutionId): self
     {
         $rule = self::fromConfig();
@@ -159,7 +169,13 @@ class FeedingAtRiskRule
         // module, and they are all halves of one policy. Read off the raw
         // attributes, since a column the migration has not added yet is simply
         // not in the select list.
-        $settings = (array) Institution::query()->whereKey($institutionId)->first($columns)?->getAttributes();
+        // Every feeding screen builds this rule, several of them more than once
+        // (a card, a list and an export can each ask). The school's policy row
+        // cannot change while one request is being served, so it is read once.
+        $settings = RequestMemo::remember(
+            'at-risk:settings:'.$institutionId.':'.implode(',', $columns),
+            fn (): array => (array) Institution::query()->whereKey($institutionId)->first($columns)?->getAttributes(),
+        );
 
         $threshold = $settings['feeding_at_risk_threshold'] ?? null;
         // 0 is a real answer here — "classify from the first confirmed session"

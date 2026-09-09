@@ -3,11 +3,32 @@
 namespace App\Models;
 
 use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingProgramCycle;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class Institution extends Model
 {
+    /**
+     * A school's feeding settings are read once per request, because every
+     * screen in the feeding module asks for them and several ask twice. Saving
+     * this row is what makes those copies wrong, so it is also what discards
+     * them — the System Admin can change a threshold and see the new figure on
+     * the page the change redirects to.
+     */
+    protected static function booted(): void
+    {
+        static::saved(static function (): void {
+            FeedingAtRiskRule::forgetInstitutionSettings();
+            FeedingProgramCycle::forgetInstitutionSettings();
+        });
+
+        static::deleted(static function (): void {
+            FeedingAtRiskRule::forgetInstitutionSettings();
+            FeedingProgramCycle::forgetInstitutionSettings();
+        });
+    }
+
     protected $fillable = [
         'name',
         'address',

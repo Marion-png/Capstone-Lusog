@@ -2060,6 +2060,11 @@ class FeedingProgramController extends Controller
      */
     private function refreshAttendanceRiskFlags(?int $institutionId = null): void
     {
+        // This runs immediately after every write to feeding_attendances, which
+        // makes it the one moment the marks are known to have moved. Anything
+        // memoized from before the write is stale from here on.
+        FeedingBeneficiarySummary::forgetMarks();
+
         // The school's own threshold decides its learners — never the platform
         // default, or a school that set 90% would still be flagged at 80%.
         $rule = FeedingAtRiskRule::forInstitution($institutionId);

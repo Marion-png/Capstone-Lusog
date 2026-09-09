@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
+use App\Support\AdviserClassScope;
 use App\Support\SchemaCache;
 use App\Support\StudentRosterSync;
 use App\Support\StudentVitalSigns;
@@ -165,6 +166,27 @@ class AdviserController extends Controller
                 ->where('school_year', StudentHealthRecord::currentSchoolYear())
                 ->first()
             : null;
+
+        // An LRN already on file for this school and year, but in another
+        // class, is not this adviser's to write.
+        //
+        // The lookup above is keyed on LRN alone, and the grade and section
+        // posted with the form were just overwritten with this adviser's own —
+        // so without this check, submitting a colleague's learner overwrote
+        // their record and moved the learner into the submitting adviser's
+        // class. Every read is scoped to one class (AdviserClassScope); the
+        // write has to be too, or the scope only holds until somebody types an
+        // LRN.
+        //
+        // Enrolling a new learner is unaffected: there is no existing row to
+        // belong to anyone. A learner genuinely moving between sections has no
+        // path here and never did — that needs a transfer the two advisers and
+        // the record can be held accountable for, not a silent overwrite.
+        if ($existingRecord !== null && ! AdviserClassScope::coversRecord($request, $existingRecord)) {
+            return back()
+                ->withInput()
+                ->with('error', 'LRN '.$validated['lrn'].' is already enrolled in another class at this school. Ask the School Head or System Admin to transfer the learner.');
+        }
 
         $birthYear = (int) $validated['birth_year'];
         $birthMonth = (int) $validated['birth_month'];

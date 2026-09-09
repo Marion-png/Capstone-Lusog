@@ -9,6 +9,8 @@ use App\Models\HealthAssessment;
 use App\Models\HealthConsentForm;
 use App\Models\MedicalCertificate;
 use App\Models\StudentHealthRecord;
+use App\Support\AdviserClassScope;
+use App\Support\ChangeStamp;
 use App\Support\ConsultationVisibility;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceMark;
@@ -109,9 +111,14 @@ class StudentHealthRecordController extends Controller
         if (SchemaCache::hasTable('student_health_records')) {
             // Shares the roster sync's read of the same rows; sorting a handful
             // of already-loaded models costs nothing next to a second query.
-            $records = StudentHealthRecord::currentYearForInstitution(
-                $request->session()->get('active_institution_id')
-            )->sortByDesc('updated_at')->values();
+            //
+            // Narrowed to the adviser's own class before anything counts it: an
+            // adviser is scoped to one "Grade 7 / MATIYAGA" pair, and this list
+            // is both the roster on screen and the population behind the three
+            // figures above it, so reading the whole school here showed a
+            // teacher every other teacher's learners and averaged the school's
+            // BMI into their card.
+            $records = AdviserClassScope::records($request)->sortByDesc('updated_at')->values();
         }
 
         $todayCount = $records
@@ -207,7 +214,12 @@ class StudentHealthRecordController extends Controller
 
         StudentRosterSync::syncToSession($request);
 
-        $record = collect($request->session()->get('school_health_card_records', []))
+        // The learner is looked for in the adviser's own class, not in the
+        // whole-school session roster: this page is reached by putting an LRN
+        // in the URL, so an unnarrowed lookup let any adviser open any learner
+        // in the school - which is exactly what the redirect below has always
+        // claimed it prevented.
+        $record = AdviserClassScope::rosterRows($request)
             ->first(fn ($row) => (string) ($row['lrn'] ?? '') === $lrn);
 
         if ($record === null) {
@@ -303,7 +315,10 @@ class StudentHealthRecordController extends Controller
     {
         $institutionId = $request->session()->get('active_institution_id');
 
-        $roster = collect($request->session()->get('school_health_card_records', []));
+        // The adviser's own class, not the whole-school session roster: this
+        // meta is drawn beside each learner on the dashboard, so it has to
+        // describe the same learners the dashboard lists.
+        $roster = AdviserClassScope::rosterRows($request);
 
         $lrns = $roster
             ->pluck('lrn')
@@ -663,17 +678,7 @@ class StudentHealthRecordController extends Controller
         $section = (string) $request->session()->get('assigned_section', '');
         $institutionId = $request->session()->get('active_institution_id');
 
-        $roster = collect($request->session()->get('school_health_card_records', []))
-            ->filter(function ($row) use ($grade, $section) {
-                if ($grade === '' || $section === '') {
-                    return true;
-                }
-
-                return (string) ($row['grade_level'] ?? '') === $grade
-                    && strcasecmp(trim((string) ($row['section'] ?? '')), trim($section)) === 0;
-            })
-            ->unique(fn ($row) => (string) ($row['lrn'] ?? ''))
-            ->values();
+        $roster = AdviserClassScope::rosterRows($request);
 
         $lrns = $roster->pluck('lrn')->filter()->map(fn ($lrn) => (string) $lrn)->values();
 
@@ -956,31 +961,14 @@ class StudentHealthRecordController extends Controller
     {
         $institutionId = $request->session()->get('active_institution_id');
 
-        // One stamp costs four aggregate queries, and the overview asks for it
-        // on both its empty and its populated path — compute it once per request.
-        return $this->memo('stamp:'.$institutionId, function () use ($institutionId): string {
-            $parts = [];
-
-            foreach (['student_health_records', 'health_consent_forms', 'health_assessments', 'medical_certificates'] as $table) {
-                if (! SchemaCache::hasTable($table)) {
-                    $parts[] = '-';
-
-                    continue;
-                }
-
-                $query = DB::table($table);
-                // health_assessments and medical_certificates inherit their school
-                // scope from the parent record, so only the owning tables filter.
-                if ($institutionId && SchemaCache::hasColumn($table, 'institution_id')) {
-                    $query->where('institution_id', $institutionId);
-                }
-
-                $row = $query->selectRaw('COUNT(*) as row_count, MAX(updated_at) as last_touched')->first();
-                $parts[] = ((int) ($row->row_count ?? 0)).'@'.((string) ($row->last_touched ?? ''));
-            }
-
-            return md5(implode('|', $parts));
-        });
+        // health_assessments and medical_certificates inherit their school scope
+        // from the parent record, so only the owning tables filter. All four
+        // counts come back in one round trip, and the result is memoized because
+        // the overview asks for the stamp on both its empty and populated path.
+        return ChangeStamp::forTables(
+            ['student_health_records', 'health_consent_forms', 'health_assessments', 'medical_certificates'],
+            $institutionId,
+        );
     }
 
     /**
@@ -1003,15 +991,7 @@ class StudentHealthRecordController extends Controller
         $section = (string) $request->session()->get('assigned_section', '');
         $institutionId = $request->session()->get('active_institution_id');
 
-        $lrns = collect($request->session()->get('school_health_card_records', []))
-            ->filter(function ($row) use ($grade, $section) {
-                if ($grade === '' || $section === '') {
-                    return true;
-                }
-
-                return (string) ($row['grade_level'] ?? '') === $grade
-                    && strcasecmp(trim((string) ($row['section'] ?? '')), trim($section)) === 0;
-            })
+        $lrns = AdviserClassScope::rosterRows($request)
             ->pluck('lrn')
             ->filter()
             ->unique()
@@ -1392,7 +1372,9 @@ class StudentHealthRecordController extends Controller
             $schoolYears = $scope()->distinct()->orderByDesc('school_year')->pluck('school_year')->values();
 
             // student_name is encrypted at rest, so sorting happens in PHP.
-            $records = $scope()->forCurrentSchoolYear($yearFilter)->get()->sortBy([
+            // The roll itself comes from the shared per-request read, so the
+            // cards partial and this table are one query rather than two.
+            $records = StudentHealthRecord::rosterFor($institutionId, $yearFilter)->sortBy([
                 ['section', 'asc'],
                 ['student_name', 'asc'],
             ])->values();

@@ -49,6 +49,15 @@ class AuditSensitiveAccess
         'health-records/students/*/documents/pulse',
     ];
 
+    /**
+     * Request attribute carrying what this request should record.
+     *
+     * It is held on the request, not on the middleware: Laravel resolves a
+     * fresh middleware instance to call terminate(), so anything stored on
+     * `$this` in handle() is gone by then. The request object is the same one.
+     */
+    private const PENDING = 'audit.pending';
+
     public function handle(Request $request, Closure $next): Response
     {
         if ($this->shouldAudit($request)) {
@@ -64,16 +73,47 @@ class AuditSensitiveAccess
                     : (string) $value)
                 ->all();
 
-            AuditTrail::record(
-                $action,
-                null,
-                null,
-                ucfirst($action).' '.$request->path(),
-                $parameters !== [] ? ['route_parameters' => $parameters] : null,
-            );
+            // Decided here, written in terminate(): the row itself is an
+            // INSERT, and against a hosted database that is a round trip the
+            // reader was waiting on before their page had even started
+            // rendering. What gets recorded is fixed at this point, so moving
+            // the write later changes when the entry lands, never whether it
+            // does or what it says.
+            $request->attributes->set(self::PENDING, [
+                'action' => $action,
+                'description' => ucfirst($action).' '.$request->path(),
+                'details' => $parameters !== [] ? ['route_parameters' => $parameters] : null,
+            ]);
         }
 
         return $next($request);
+    }
+
+    /**
+     * Writes the entry after the response has been sent to the client.
+     *
+     * Every access is still recorded, including one that was refused: the
+     * decision was taken in handle(), before the action ran, so a School Head
+     * write that RestrictSchoolHeadWrites turned away is logged exactly as it
+     * was before. Failures are swallowed by AuditTrail, as they always were.
+     */
+    public function terminate(Request $request, Response $response): void
+    {
+        $pending = $request->attributes->get(self::PENDING);
+
+        if (! is_array($pending)) {
+            return;
+        }
+
+        $request->attributes->remove(self::PENDING);
+
+        AuditTrail::record(
+            $pending['action'],
+            null,
+            null,
+            $pending['description'],
+            $pending['details'],
+        );
     }
 
     private function shouldAudit(Request $request): bool

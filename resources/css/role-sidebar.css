@@ -89,8 +89,9 @@
 /* ── Page swap: content eases out when a tab is picked, eases back in on the
    next page. Scoped through .asb-sidebar so it outranks the margin rule above
    (and the plainer `html.js .main` copies in feeding-dashboard/-program.css).
-   --asb-page-out must stay in step with the navigation timeout in
-   partials/role-page-transition.blade.php. ── */
+   --asb-page-out no longer gates anything: the click issues the navigation
+   straight away and this fade plays over the request rather than before it, so
+   the duration is free to change without adding to how long a tab takes. ── */
 :root{--asb-page-out:.34s;--asb-page-in:.42s;--asb-page-in-delay:.08s}
 html.js .asb-sidebar ~ .main{opacity:0;transform:translateY(12px);transition:opacity var(--asb-page-out) var(--asb-ease),transform var(--asb-page-out) var(--asb-ease)}
 /* Incoming page: slower and slightly delayed, so it settles instead of popping. */

@@ -2,8 +2,8 @@
 
 namespace App\Casts;
 
+use App\Support\DecryptedValues;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
-use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Crypt;
 
@@ -20,11 +20,10 @@ class EncryptedArray implements CastsAttributes
             return null;
         }
 
-        try {
-            $decoded = json_decode(Crypt::decryptString($value), true);
-        } catch (DecryptException) {
-            $decoded = json_decode((string) $value, true);
-        }
+        // DecryptedValues returns the stored value unchanged when it was
+        // written as plain JSON before encryption at rest, so one json_decode
+        // covers both paths.
+        $decoded = json_decode(DecryptedValues::plaintext((string) $value), true);
 
         return is_array($decoded) ? $decoded : null;
     }

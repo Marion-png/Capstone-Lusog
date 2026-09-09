@@ -5,19 +5,20 @@ namespace App\Http\Controllers;
 use App\Models\FeedingAttendance;
 use App\Models\StudentHealthRecord;
 use App\Support\BmiAssessmentReport;
+use App\Support\ChangeStamp;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingNutritionProgress;
 use App\Support\FeedingProgramCycle;
 use App\Support\FeedingReportNarrative;
+use App\Support\RequestMemo;
 use App\Support\SchemaCache;
 use App\Support\SchoolLetterhead;
 use App\Support\SchoolSignatories;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class FeedingCoordinatorController extends Controller
@@ -244,31 +245,14 @@ class FeedingCoordinatorController extends Controller
         // being written is today's.
         $beneficiaries = collect();
         if (SchemaCache::hasTable('student_health_records')) {
-            $beneficiaries = StudentHealthRecord::query()
-                ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-                ->forCurrentSchoolYear(StudentHealthRecord::currentSchoolYear())
-                ->get()
+            $beneficiaries = StudentHealthRecord::rosterFor($institutionId)
                 ->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isBeneficiary($record))
                 // student_name is encrypted at rest, so the sort is in PHP.
                 ->sortBy(fn (StudentHealthRecord $record): string => strtolower((string) $record->student_name))
                 ->values();
         }
 
-        $marks = collect();
-        if ($beneficiaries->isNotEmpty() && SchemaCache::hasTable('feeding_attendances')) {
-            $columns = ['student_health_record_id', 'is_present'];
-            foreach (['needs_review', 'is_excused', 'remarks'] as $column) {
-                if (SchemaCache::hasColumn('feeding_attendances', $column)) {
-                    $columns[] = $column;
-                }
-            }
-
-            $marks = FeedingAttendance::query()
-                ->whereIn('student_health_record_id', $beneficiaries->pluck('id'))
-                ->whereDate('session_date', $today)
-                ->get($columns)
-                ->keyBy('student_health_record_id');
-        }
+        $marks = $this->marksForSession($beneficiaries, $today);
 
         $rows = $beneficiaries->map(function (StudentHealthRecord $record) use ($marks): array {
             [$grade, $section] = FeedingBeneficiarySummary::splitSection((string) $record->section);
@@ -473,7 +457,10 @@ class FeedingCoordinatorController extends Controller
             // school_year is a plain lookup column, so the year list and the
             // year filter are the only parts of this that SQL may decide.
             $schoolYears = $scope()->distinct()->orderByDesc('school_year')->pluck('school_year')->values();
-            $students = $scope()->forCurrentSchoolYear($filters['school_year'])->get();
+            // Shared with the Record Attendance dialog below, which wants this
+            // same roll: on the usual path (the filter naming the current year)
+            // the two are one read rather than two.
+            $students = StudentHealthRecord::rosterFor($institutionId, $filters['school_year']);
         }
 
         if ($schoolYears->doesntContain($filters['school_year'])) {
@@ -785,26 +772,7 @@ class FeedingCoordinatorController extends Controller
     private function buildTodayAttendance(Collection $beneficiaries, array $filters): array
     {
         $today = now()->toDateString();
-        $marks = collect();
-
-        if ($beneficiaries->isNotEmpty() && SchemaCache::hasTable('feeding_attendances')) {
-            $columns = ['student_health_record_id', 'is_present'];
-            if (SchemaCache::hasColumn('feeding_attendances', 'needs_review')) {
-                $columns[] = 'needs_review';
-            }
-            if (SchemaCache::hasColumn('feeding_attendances', 'is_excused')) {
-                $columns[] = 'is_excused';
-            }
-            if (SchemaCache::hasColumn('feeding_attendances', 'remarks')) {
-                $columns[] = 'remarks';
-            }
-
-            $marks = FeedingAttendance::query()
-                ->whereIn('student_health_record_id', $beneficiaries->pluck('id'))
-                ->whereDate('session_date', $today)
-                ->get($columns)
-                ->keyBy('student_health_record_id');
-        }
+        $marks = $this->marksForSession($beneficiaries, $today);
 
         $counts = ['present' => 0, 'absent' => 0, 'excused' => 0, 'unconfirmed' => 0, 'unrecorded' => 0];
 
@@ -873,31 +841,57 @@ class FeedingCoordinatorController extends Controller
      * last-touched timestamps only, never a column holding personal data, so
      * the polling endpoint stays free of it.
      */
-    private function metricsStamp(?int $institutionId): string
+    /**
+     * One session's marks for a roll of learners, keyed by record id.
+     *
+     * The dashboard asks this twice - once to build the Record Attendance
+     * dialog over the whole enrolled roll, once for the Attendance Monitoring
+     * panel over the filtered one - and with no filter set those are the same
+     * question. Memoized on the session and the roll, so the identical ask is
+     * one read and a different roll is still its own.
+     *
+     * @param  Collection<int, StudentHealthRecord>  $beneficiaries
+     * @return Collection<int, FeedingAttendance>
+     */
+    private function marksForSession(Collection $beneficiaries, string $sessionDate): Collection
     {
-        $parts = [now()->toDateString()];
-
-        foreach (['student_health_records', 'feeding_attendances'] as $table) {
-            if (! SchemaCache::hasTable($table)) {
-                $parts[] = '-';
-
-                continue;
-            }
-
-            $query = DB::table($table);
-            // feeding_attendances inherits its school scope from the parent
-            // record, so only the owning table filters. A neighbouring school's
-            // write can cost one needless refetch — never a missed change, and
-            // nothing of theirs is ever read.
-            if ($institutionId && SchemaCache::hasColumn($table, 'institution_id')) {
-                $query->where('institution_id', $institutionId);
-            }
-
-            $row = $query->selectRaw('COUNT(*) as row_count, MAX(updated_at) as last_touched')->first();
-            $parts[] = ((int) ($row->row_count ?? 0)).'@'.((string) ($row->last_touched ?? ''));
+        if ($beneficiaries->isEmpty() || ! SchemaCache::hasTable('feeding_attendances')) {
+            return collect();
         }
 
-        return md5(implode('|', $parts));
+        $ids = $beneficiaries->pluck('id')->filter()->sort()->values();
+
+        return RequestMemo::remember(
+            'feeding:session-marks:'.$sessionDate.':'.md5($ids->implode(',')),
+            function () use ($ids, $sessionDate): Collection {
+                $columns = ['student_health_record_id', 'is_present'];
+
+                foreach (['needs_review', 'is_excused', 'remarks'] as $column) {
+                    if (SchemaCache::hasColumn('feeding_attendances', $column)) {
+                        $columns[] = $column;
+                    }
+                }
+
+                return FeedingAttendance::query()
+                    ->whereIn('student_health_record_id', $ids)
+                    ->whereDate('session_date', $sessionDate)
+                    ->get($columns)
+                    ->keyBy('student_health_record_id');
+            },
+        );
+    }
+
+    private function metricsStamp(?int $institutionId): string
+    {
+        // feeding_attendances inherits its school scope from the parent record,
+        // so only the owning table filters. A neighbouring school's write can
+        // cost one needless refetch - never a missed change, and nothing of
+        // theirs is ever read. Both counts come back in one round trip.
+        return ChangeStamp::forTables(
+            ['student_health_records', 'feeding_attendances'],
+            $institutionId,
+            [now()->toDateString()],
+        );
     }
 
     private function isCoordinator(Request $request): bool
