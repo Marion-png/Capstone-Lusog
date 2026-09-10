@@ -12,11 +12,19 @@ use Illuminate\Validation\Rule;
 /**
  * Incident reports on a learner's student profile: list, file, withdraw.
  *
- * The class adviser is the one in the room when something happens, so this
- * is their tab and their write. It is scoped twice, like every other adviser
- * surface: to the school, and within it to the adviser's own class — an LRN
- * off the wire decides nothing, because the learner is re-read and re-checked
- * against the session's assigned grade and section on every call.
+ * **The nurse writes; the adviser reads.** The report is charted in FDAR —
+ * Focus / Data / Action / Response — which is clinical documentation: reading
+ * what happened to a learner, recording what was done and whether it worked is
+ * the nurse's assessment to make. The class adviser sees the same reports on
+ * their own profile, read-only, because an incident involving a learner in
+ * their class is something they have to know about.
+ *
+ * Both roles are scoped to their school. The adviser is scoped a second time,
+ * like every other adviser surface, to their own class — an LRN off the wire
+ * decides nothing, because the learner is re-read and re-checked against the
+ * session's assigned grade and section on every call. The nurse holds no class,
+ * so the school is their whole scope; that is stated here rather than falling
+ * out of an empty assignment, which is how it used to pass.
  *
  * Routes sit under /health-records/*, not /adviser/*, for the same reason the
  * medical-documents ones do: EnsureActiveSession seeds a demo session for
@@ -25,21 +33,24 @@ use Illuminate\Validation\Rule;
  */
 class StudentIncidentReportController extends Controller
 {
-    /** Only the adviser files these; the nurse and clinic have their own logs. */
-    private const WRITE_ROLES = ['class_adviser'];
-
     public function index(Request $request, string $lrn): JsonResponse
     {
         if (! $this->mayRead($request, $lrn)) {
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
-        return response()->json(['reports' => $this->listFor($request, $lrn)]);
+        return response()->json([
+            'reports' => $this->listFor($request, $lrn),
+            // The panel draws its write controls from this rather than from a
+            // role check of its own, so the form and the endpoint cannot
+            // disagree about who may file.
+            'can_file' => $this->mayWrite($request, $lrn),
+        ]);
     }
 
     public function store(Request $request, string $lrn): JsonResponse
     {
-        if (! $this->mayRead($request, $lrn)) {
+        if (! $this->mayWrite($request, $lrn)) {
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
@@ -54,15 +65,29 @@ class StudentIncidentReportController extends Controller
             'category' => ['required', Rule::in(array_keys(StudentIncidentReport::CATEGORIES))],
             'severity' => ['required', Rule::in(array_keys(StudentIncidentReport::SEVERITIES))],
             'location' => ['nullable', 'string', 'max:255'],
+            // FDAR: Data is what was observed, and it is the one part of the
+            // chart that cannot be left out — a report with no data is not a
+            // record of anything.
             'description' => ['required', 'string', 'max:2000'],
             'action_taken' => ['nullable', 'string', 'max:2000'],
+            // FDAR: Response. Nullable because a report filed the moment
+            // something happens has no outcome yet, and refusing it until one
+            // exists would lose the record of the incident itself.
+            'response' => ['nullable', 'string', 'max:2000'],
             'witnesses' => ['nullable', 'string', 'max:500'],
             'guardian_notified' => ['nullable', 'boolean'],
         ]);
 
+        // The Response is dropped where the column has not been migrated yet,
+        // so an un-migrated machine charts F, D and A rather than failing the
+        // save outright. See StudentIncidentReport::supportsResponse().
+        $response = StudentIncidentReport::supportsResponse()
+            ? ['response' => $validated['response'] ?? null]
+            : [];
+
         // Written through the model, never a raw insert: the casts are what
         // keep the description, the action taken and the staff name encrypted.
-        $report = StudentIncidentReport::create([
+        $report = StudentIncidentReport::create($response + [
             'institution_id' => $request->session()->get('active_institution_id'),
             'student_lrn' => $lrn,
             'school_year' => StudentHealthRecord::currentSchoolYear(),
@@ -87,16 +112,18 @@ class StudentIncidentReportController extends Controller
     }
 
     /**
-     * Withdrawing a report the adviser filed by mistake.
+     * Withdrawing a report the nurse filed by mistake.
      *
-     * Deliberately hard-scoped: the row must belong to this school AND to the
-     * learner in the URL, whose class this adviser holds. The delete is
-     * audited by the Auditable trait, so a withdrawn report leaves a record
-     * that it existed — an incident log you can silently empty is not one.
+     * Whoever may file may withdraw, and nobody else — an adviser reading the
+     * panel has no delete, on the endpoint or on the page. Deliberately
+     * hard-scoped besides: the row must belong to this school AND to the
+     * learner in the URL. The delete is audited by the Auditable trait, so a
+     * withdrawn report leaves a record that it existed — an incident log you
+     * can silently empty is not one.
      */
     public function destroy(Request $request, string $lrn, int $id): JsonResponse
     {
-        if (! $this->mayRead($request, $lrn)) {
+        if (! $this->mayWrite($request, $lrn)) {
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
@@ -118,16 +145,24 @@ class StudentIncidentReportController extends Controller
     }
 
     /**
-     * The adviser must hold this learner's class.
+     * Who may see this learner's reports.
      *
-     * Two locks on one door: the learner has to exist in this school, and
-     * their grade/section has to match the adviser's assignment. An adviser
-     * who somehow reaches a colleague's learner gets the same 403 as an
-     * outsider.
+     * Two locks on one door for the adviser: the learner has to exist in this
+     * school, and their grade/section has to match the adviser's assignment.
+     * An adviser who somehow reaches a colleague's learner gets the same 403
+     * as an outsider.
+     *
+     * The nurse holds no class — they serve the whole school — so the school
+     * is their whole scope. That is checked by role rather than by finding an
+     * empty assignment in the session: an adviser whose assignment happens to
+     * be blank must not quietly acquire the run of the school through the same
+     * branch.
      */
     private function mayRead(Request $request, string $lrn): bool
     {
-        if (! in_array((string) $request->session()->get('active_role'), self::WRITE_ROLES, true)) {
+        $role = (string) $request->session()->get('active_role');
+
+        if (! StudentIncidentReport::canView($role)) {
             return false;
         }
 
@@ -143,6 +178,10 @@ class StudentIncidentReportController extends Controller
             return false;
         }
 
+        if ($role !== 'class_adviser') {
+            return true;
+        }
+
         $grade = trim((string) $request->session()->get('assigned_grade_level', ''));
         $section = trim((string) $request->session()->get('assigned_section', ''));
 
@@ -153,6 +192,19 @@ class StudentIncidentReportController extends Controller
         }
 
         return strcasecmp(trim((string) $record->section), trim($grade.' / '.$section)) === 0;
+    }
+
+    /**
+     * Who may file or withdraw one: the nurse, on a learner they may read.
+     *
+     * Reading is the wider permission and writing is a subset of it, so this
+     * is deliberately mayRead() plus the role rather than a second scope
+     * check that could drift from the first.
+     */
+    private function mayWrite(Request $request, string $lrn): bool
+    {
+        return StudentIncidentReport::canFile((string) $request->session()->get('active_role'))
+            && $this->mayRead($request, $lrn);
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -185,8 +237,11 @@ class StudentIncidentReportController extends Controller
             'severity' => $report->severity,
             'severity_label' => $report->severityLabel(),
             'location' => (string) $report->location,
+            // FDAR, in the order it is charted: the category is the Focus, the
+            // description the Data, then the Action and the Response.
             'description' => (string) $report->description,
             'action_taken' => (string) $report->action_taken,
+            'response' => StudentIncidentReport::supportsResponse() ? (string) $report->response : '',
             'witnesses' => (string) $report->witnesses,
             'guardian_notified' => (bool) $report->guardian_notified,
             'reported_by' => (string) $report->reported_by_name,

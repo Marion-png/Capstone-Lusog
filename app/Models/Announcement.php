@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\SchemaCache;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -96,7 +97,7 @@ class Announcement extends Model
 
     public static function supportsArchiving(): bool
     {
-        return \App\Support\SchemaCache::hasColumn('announcements', 'archived_at');
+        return SchemaCache::hasColumn('announcements', 'archived_at');
     }
 
     public function isArchived(): bool

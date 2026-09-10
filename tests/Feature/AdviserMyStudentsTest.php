@@ -297,7 +297,8 @@ class AdviserMyStudentsTest extends TestCase
         // of the learner's health card, which is what this guard protects.
         // It is cut out here and checked on its own below, so the ban still
         // covers Sheet 1, Sheet 2, Consent, Feeding, Notes, Consultations and
-        // Documents: a control appearing in any of those still fails.
+        // Documents: a control appearing in any of those still fails. The
+        // incident panel is now read-only too, and the check below pins that.
         $incidentAt = strpos($card, 'id="vpTabIncidents"');
         $this->assertNotFalse($incidentAt, 'The Incident Report panel is missing.');
         $readOnlyCard = substr($card, 0, $incidentAt);
@@ -319,11 +320,20 @@ class AdviserMyStudentsTest extends TestCase
         $this->assertStringContainsString('id="sdInput"', $readOnlyCard);
         $this->assertStringContainsString('id="vpPhotoInput"', $readOnlyCard);
 
-        // And the incident panel writes only to its own endpoint — it is not
-        // a back door into the health record.
+        // The Incident Report panel used to be the one thing the adviser wrote
+        // here, and the only form on the page. It is charted in FDAR by the
+        // school nurse now and the adviser reads it, so the profile has no
+        // form at all — which makes the read-only claim in this test's name
+        // literally true for the first time.
+        // Not asserted on the store URL: it and the index share one URI and
+        // differ only by method, so its absence would prove nothing. What
+        // proves it is that there is no form to post one — on this panel or
+        // anywhere else on the page.
         $incidentPanel = substr($card, $incidentAt);
-        $this->assertStringContainsString(route('student-incidents.store', '123456789012'), $incidentPanel);
-        $this->assertSame(1, substr_count($card, '<form'), 'The incident report is the only form on the profile.');
+        $this->assertStringContainsString('id="incidentReadOnly"', $incidentPanel);
+        $this->assertStringNotContainsString('id="incidentForm"', $incidentPanel);
+        $this->assertStringNotContainsString('File an Incident Report', $incidentPanel);
+        $this->assertSame(0, substr_count($card, '<form'), 'The student profile writes nothing at all.');
         $this->assertStringNotContainsString(route('adviser.store'), $card);
 
         $this->assertStringNotContainsString(route('health-assessment.store'), $card);

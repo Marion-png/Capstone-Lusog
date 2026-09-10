@@ -62,6 +62,21 @@
 /* ── Profile modal ── */
 .profile-backdrop { position: fixed; inset: 0; background: rgba(6,26,14,.42); display: none; align-items: center; justify-content: center; z-index: 1400; }
 .profile-backdrop.open { display: flex; }
+
+/* ── The consultation dialog stacked over the profile ──
+   A nurse who opens a learner and logs a visit must come back to that learner,
+   so the profile stays open behind the dialog and only its own Back button
+   closes it. Two rules make the stack readable, both set by the page script
+   when it opens the dialog:
+
+   1. .bmodal is z-index 900 and this backdrop is 1400, so without the lift the
+      dialog would open *behind* the profile — invisible, which is why the
+      profile used to be closed first.
+   2. Two scrims over one page dim it twice and the profile reads as though it
+      had been dismissed. The dialog's own scrim is the one that stays; this
+      one steps back to nothing while it is up. */
+body.sn-profile-stacked .bmodal { z-index: 1500; }
+body.sn-profile-stacked .profile-backdrop.open { background: transparent; }
 .profile-modal { width: min(1000px, 95vw); max-height: 90vh; overflow: auto; background: #fff; border-radius: 14px; border: 1px solid var(--border); box-shadow: 0 24px 50px rgba(6,26,14,.28); }
 .profile-head { background: linear-gradient(90deg, var(--g900), #1f5c3e); color: #fff; padding: 14px 18px; display: flex; justify-content: space-between; align-items: flex-start; }
 .profile-title { font-family: 'DM Serif Display', serif; font-size: 1.5rem; line-height: 1.15; }

@@ -858,41 +858,11 @@ tbody tr:hover td{background:#f3fbf6}
    chips are the theme's monitoring/at-risk/critical steps — never green,
    which is the healthy signal and would read as "a good incident". */
 .incident-form{margin:6px 0 18px;padding:16px;border:1px solid var(--lg-border-strong,#C7DCCE);border-radius:12px;background:var(--lg-page,#F6F9F7)}
-.incident-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.incident-form-grid .field.full{grid-column:1/-1}
-.incident-form-grid label{display:block;font-size:.74rem;font-weight:600;color:var(--lg-ink-soft,#6B7C72);margin-bottom:4px}
-.incident-form-grid input[type=text],
-.incident-form-grid input[type=date],
-.incident-form-grid select,
-.incident-form-grid textarea{width:100%;font:inherit;font-size:.84rem;color:var(--lg-ink,#1F2D25);background:#fff;border:1px solid var(--lg-border,#DCE8E0);border-radius:8px;padding:8px 10px}
-.incident-form-grid textarea{resize:vertical}
-.incident-form-grid input:focus,
-.incident-form-grid select:focus,
-.incident-form-grid textarea:focus{outline:none;border-color:var(--lg-emerald,#1F8A4C);box-shadow:0 0 0 3px rgba(31,138,76,.16)}
-.incident-check{display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--lg-ink,#1F2D25);margin:0}
-.incident-check input{width:auto}
-.incident-check span{font-weight:500}
-.incident-form-error{margin-top:12px;padding:9px 12px;border-radius:8px;background:#FCECEC;color:#b91c1c;font-size:.78rem}
-.incident-form-foot{display:flex;justify-content:flex-end;gap:9px;margin-top:14px}
+/* The Incident Report panel's styles, FDAR included, moved to
+   resources/css/student-incidents.css: the panel is shared with the school
+   nurse's profile, which does not load this sheet. The partial inlines it
+   itself, so nothing here needs to. */
 
-.incident-card{border:1px solid var(--lg-border,#DCE8E0);border-radius:12px;padding:13px 15px;margin-bottom:10px;background:#fff}
-.incident-card-head{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-bottom:8px}
-.incident-date{font-size:.8rem;font-weight:700;color:var(--lg-ink,#1F2D25);font-variant-numeric:tabular-nums}
-.incident-type{font-size:.74rem;color:var(--lg-ink-soft,#6B7C72)}
-.incident-sev{font-size:.68rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:3px 9px;border-radius:999px}
-.incident-sev-minor{background:var(--lg-amber-tint,#FDF4E2);color:var(--lg-amber-ink,#8A5A06)}
-.incident-sev-moderate{background:var(--lg-orange-tint,#FDF0E4);color:var(--lg-orange-ink,#9A4E10)}
-.incident-sev-serious{background:#FCECEC;color:#b91c1c}
-.incident-flag{font-size:.68rem;font-weight:600;color:var(--lg-emerald-deep,#126B3A);background:var(--lg-mint,#E7F5EC);padding:3px 9px;border-radius:999px}
-.incident-remove{margin-left:auto;border:none;background:none;font:inherit;font-size:.74rem;font-weight:600;color:var(--muted,#6B7C72);cursor:pointer;padding:3px 7px;border-radius:6px}
-.incident-remove:hover{background:#FCECEC;color:#b91c1c}
-.incident-desc{margin:0;font-size:.84rem;line-height:1.5;color:var(--lg-ink,#1F2D25);white-space:pre-line}
-.incident-facts{margin-top:9px;padding-top:9px;border-top:1px dashed var(--lg-border,#DCE8E0);display:grid;gap:4px}
-.incident-facts div{display:flex;gap:7px;font-size:.77rem}
-.incident-facts span{color:var(--lg-ink-soft,#6B7C72);flex:0 0 auto}
-.incident-facts b{font-weight:600;color:var(--lg-ink,#1F2D25)}
-
-@media (max-width:640px){.incident-form-grid{grid-template-columns:1fr}}
 
 /* ── Vital signs, read-only on the adviser's form ──
    Height and weight are the adviser's; temperature, pulse and blood pressure

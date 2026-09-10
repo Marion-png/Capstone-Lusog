@@ -1,0 +1,70 @@
+/* Incident Reports, charted in FDAR.
+ *
+ * One sheet for one component: partials/student-incidents-panel is rendered on
+ * both the school nurse's profile (which writes) and the class adviser's (which
+ * reads), and those two pages load different stylesheets. The panel inlines this
+ * itself, the same way the shared documents panel does, so adding it to a page is
+ * the include and nothing else. It lived in class-adviser.css, where the nurse's
+ * page could not reach it. */
+
+.incident-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.incident-form-grid .field.full{grid-column:1/-1}
+.incident-form-grid label{display:block;font-size:.74rem;font-weight:600;color:var(--lg-ink-soft,#6B7C72);margin-bottom:4px}
+.incident-form-grid input[type=text],
+.incident-form-grid input[type=date],
+.incident-form-grid select,
+.incident-form-grid textarea{width:100%;font:inherit;font-size:.84rem;color:var(--lg-ink,#1F2D25);background:#fff;border:1px solid var(--lg-border,#DCE8E0);border-radius:8px;padding:8px 10px}
+.incident-form-grid textarea{resize:vertical}
+.incident-form-grid input:focus,
+.incident-form-grid select:focus,
+.incident-form-grid textarea:focus{outline:none;border-color:var(--lg-emerald,#1F8A4C);box-shadow:0 0 0 3px rgba(31,138,76,.16)}
+.incident-check{display:flex;align-items:center;gap:8px;font-size:.82rem;color:var(--lg-ink,#1F2D25);margin:0}
+.incident-check input{width:auto}
+.incident-check span{font-weight:500}
+.incident-form-error{margin-top:12px;padding:9px 12px;border-radius:8px;background:#FCECEC;color:#b91c1c;font-size:.78rem}
+.incident-form-foot{display:flex;justify-content:flex-end;gap:9px;margin-top:14px}
+
+.incident-card{border:1px solid var(--lg-border,#DCE8E0);border-radius:12px;padding:13px 15px;margin-bottom:10px;background:#fff}
+.incident-card-head{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-bottom:8px}
+.incident-date{font-size:.8rem;font-weight:700;color:var(--lg-ink,#1F2D25);font-variant-numeric:tabular-nums}
+.incident-type{font-size:.74rem;color:var(--lg-ink-soft,#6B7C72)}
+.incident-sev{font-size:.68rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:3px 9px;border-radius:999px}
+.incident-sev-minor{background:var(--lg-amber-tint,#FDF4E2);color:var(--lg-amber-ink,#8A5A06)}
+.incident-sev-moderate{background:var(--lg-orange-tint,#FDF0E4);color:var(--lg-orange-ink,#9A4E10)}
+.incident-sev-serious{background:#FCECEC;color:#b91c1c}
+.incident-flag{font-size:.68rem;font-weight:600;color:var(--lg-emerald-deep,#126B3A);background:var(--lg-mint,#E7F5EC);padding:3px 9px;border-radius:999px}
+.incident-remove{margin-left:auto;border:none;background:none;font:inherit;font-size:.74rem;font-weight:600;color:var(--muted,#6B7C72);cursor:pointer;padding:3px 7px;border-radius:6px}
+.incident-remove:hover{background:#FCECEC;color:#b91c1c}
+.incident-desc{margin:0;font-size:.84rem;line-height:1.5;color:var(--lg-ink,#1F2D25);white-space:pre-line}
+.incident-facts{margin-top:9px;padding-top:9px;border-top:1px dashed var(--lg-border,#DCE8E0);display:grid;gap:4px}
+.incident-facts div{display:flex;gap:7px;font-size:.77rem}
+.incident-facts span{color:var(--lg-ink-soft,#6B7C72);flex:0 0 auto}
+.incident-facts b{font-weight:600;color:var(--lg-ink,#1F2D25)}
+
+/* ── FDAR ──
+   Focus / Data / Action / Response, charted and read back in that order. The
+   letter is the anchor: a nurse scanning a learner's history looks for D or R,
+   not for a paragraph, so it is set as a fixed gutter down the left of both
+   the form and the card and the sections align on it. Emerald carries "this is
+   the chart" and nothing else — it is not a status here. */
+.fdar{margin:14px 0 4px;display:grid;gap:12px}
+.fdar-row{display:grid;grid-template-columns:26px 1fr;gap:11px;align-items:start}
+.fdar-letter{width:26px;height:26px;display:grid;place-items:center;border-radius:8px;background:var(--lg-mint,#E7F5EC);color:var(--lg-emerald-deep,#126B3A);font-size:.8rem;font-weight:700;line-height:1}
+.fdar-body label{display:block;font-size:.78rem;font-weight:700;color:var(--lg-ink,#1F2D25);margin-bottom:2px}
+.fdar-hint{margin:0 0 6px;font-size:.72rem;color:var(--lg-ink-soft,#6B7C72)}
+.fdar-body select,
+.fdar-body textarea{width:100%;font:inherit;font-size:.84rem;color:var(--lg-ink,#1F2D25);background:#fff;border:1px solid var(--lg-border,#DCE8E0);border-radius:8px;padding:8px 10px}
+.fdar-body textarea{resize:vertical}
+.fdar-body select:focus,
+.fdar-body textarea:focus{outline:none;border-color:var(--lg-emerald,#1F8A4C);box-shadow:0 0 0 3px rgba(31,138,76,.16)}
+
+/* The same four sections read back on a filed report. */
+.fdar-read{display:grid;gap:9px}
+.fdar-read-row{display:grid;grid-template-columns:26px 1fr;gap:11px;align-items:start}
+.fdar-read-body{min-width:0}
+.fdar-read-label{display:block;font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--lg-ink-soft,#6B7C72)}
+.fdar-read-value{margin:2px 0 0;font-size:.84rem;line-height:1.5;color:var(--lg-ink,#1F2D25);white-space:pre-line}
+
+.incident-readonly{margin:4px 0}
+
+@media (max-width:640px){.incident-form-grid{grid-template-columns:1fr}}

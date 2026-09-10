@@ -193,7 +193,10 @@ class NurseHealthRecordsPageTest extends TestCase
         // The tab strip reads in the order the school asked for, and the panels
         // are laid out in the same order so a printed profile follows the tabs.
         $html = $response->getContent();
-        $expected = ['p-sheet1', 'p-sheet2', 'p-consent', 'p-clinic-notes', 'p-consultation', 'p-documents'];
+        // Incident Reports closes the strip: it is the nurse's FDAR chart of
+        // something that happened to this learner, and the adviser reads the
+        // same panel on their own profile.
+        $expected = ['p-sheet1', 'p-sheet2', 'p-consent', 'p-clinic-notes', 'p-consultation', 'p-documents', 'p-incidents'];
 
         preg_match_all('/data-panel="([^"]+)"/', $html, $tabs);
         $this->assertSame($expected, $tabs[1]);

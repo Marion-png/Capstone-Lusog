@@ -1,16 +1,24 @@
 {{--
-    Incident Report panel behaviour. Expects $lrn.
+    Behaviour for partials/student-incidents-panel. Exposes window.StudentIncidents:
 
-    Every value rendered here was typed by a person about a child, so the
-    list is built from DOM nodes and never innerHTML — a template string
-    would run any markup inside a description.
+      StudentIncidents.load(lrn)     fetch and render that learner's reports
+
+    $lrn is optional. The adviser's profile is a page and can pass its learner
+    straight in; the nurse's is a dialog whose learner changes with every row,
+    so the URLs are built from templates the same way partials/student-documents
+    -script does it.
+
+    Every value rendered here was typed by a person about a child, so the list
+    is built from DOM nodes and never innerHTML — a template string would run
+    any markup inside a description.
 --}}
 <script>
-(() => {
-    const form = document.getElementById('incidentForm');
+window.StudentIncidents = (() => {
     const list = document.getElementById('vpIncidentsList');
-    if (!form || !list) return;
+    if (!list) return { load: () => {} };
 
+    const form = document.getElementById('incidentForm');
+    const readOnlyBox = document.getElementById('incidentReadOnly');
     const newBtn = document.getElementById('incidentNewBtn');
     const cancelBtn = document.getElementById('incidentCancel');
     const submitBtn = document.getElementById('incidentSubmit');
@@ -19,7 +27,25 @@
     const tabBadge = document.getElementById('vpIncidentsTabBadge');
     const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
+    // {lrn} is filled in per learner, because the nurse's profile is a modal
+    // that serves whichever row was clicked.
+    const URL_TEMPLATES = {
+        index: @json(route('student-incidents.index', ['lrn' => '__LRN__'])),
+        store: @json(route('student-incidents.store', ['lrn' => '__LRN__'])),
+    };
+
+    const urlFor = (kind, lrn) => URL_TEMPLATES[kind].replace('__LRN__', encodeURIComponent(lrn));
+
+    // The page may name its learner at render time (the adviser's profile) or
+    // hand one over on every open (the nurse's dialog).
+    let currentLrn = @json((string) ($lrn ?? ''));
+
+    // Whether this session may file. The server decides and says so on every
+    // list; until it has answered, the panel is whatever the page rendered.
+    let canFile = !!form;
+
     const setOpen = (open) => {
+        if (!form) return;
         form.hidden = !open;
         if (newBtn) newBtn.hidden = open;
         if (open) document.getElementById('incidentDate')?.focus();
@@ -38,6 +64,23 @@
         return node;
     };
 
+    // One charted section: the letter, its name, and what was written under it.
+    const fdarRow = (letter, label, value) => {
+        const row = el('div', 'fdar-read-row');
+        row.append(
+            el('span', 'fdar-letter', letter),
+            (() => {
+                const body = el('div', 'fdar-read-body');
+                body.append(
+                    el('span', 'fdar-read-label', label),
+                    el('p', 'fdar-read-value', value),
+                );
+                return body;
+            })(),
+        );
+        return row;
+    };
+
     const renderRow = (report) => {
         const card = el('article', 'incident-card');
         card.dataset.id = report.id;
@@ -45,7 +88,6 @@
         const head = el('div', 'incident-card-head');
         head.append(
             el('span', 'incident-date', report.occurred_label || report.occurred_at || '-'),
-            el('span', 'incident-type', report.category_label),
             el('span', 'incident-sev incident-sev-' + report.severity, report.severity_label),
         );
 
@@ -53,16 +95,29 @@
             head.appendChild(el('span', 'incident-flag', 'Guardian informed'));
         }
 
-        // Withdrawing is for a report filed by mistake. The delete is audited,
-        // so a withdrawn report still leaves a record that it existed.
-        const remove = el('button', 'incident-remove', 'Withdraw');
-        remove.type = 'button';
-        remove.dataset.remove = report.id;
-        head.appendChild(remove);
+        // Withdrawing is for a report filed by mistake, and it belongs to
+        // whoever may file. An adviser reading the panel gets no button —
+        // and the endpoint refuses them regardless of what is drawn.
+        if (canFile) {
+            const remove = el('button', 'incident-remove', 'Withdraw');
+            remove.type = 'button';
+            remove.dataset.remove = report.id;
+            head.appendChild(remove);
+        }
 
         card.appendChild(head);
-        card.appendChild(el('p', 'incident-desc', report.description));
 
+        // The chart itself, in FDAR order. Focus and Data are always there;
+        // an Action or Response nobody has recorded yet is left out rather
+        // than printed as an empty heading.
+        const chart = el('div', 'fdar-read');
+        chart.appendChild(fdarRow('F', 'Focus', report.category_label));
+        chart.appendChild(fdarRow('D', 'Data', report.description));
+        if (report.action_taken) chart.appendChild(fdarRow('A', 'Action', report.action_taken));
+        if (report.response) chart.appendChild(fdarRow('R', 'Response', report.response));
+        card.appendChild(chart);
+
+        // Everything that is not part of the chart.
         const facts = el('div', 'incident-facts');
         const addFact = (label, value) => {
             if (!value) return;
@@ -71,9 +126,8 @@
             facts.appendChild(row);
         };
         addFact('Where:', report.location);
-        addFact('Action taken:', report.action_taken);
         addFact('Witnesses:', report.witnesses);
-        addFact('Filed by:', [report.reported_by, report.filed_label].filter(Boolean).join(' · '));
+        addFact('Charted by:', [report.reported_by, report.filed_label].filter(Boolean).join(' · '));
 
         if (facts.childElementCount > 0) card.appendChild(facts);
 
@@ -95,64 +149,80 @@
         reports.forEach((report) => list.appendChild(renderRow(report)));
     };
 
-    const load = async () => {
+    const load = async (lrn) => {
+        if (lrn !== undefined && lrn !== null) currentLrn = String(lrn || '');
+        if (currentLrn === '') return;
+
         try {
-            const response = await fetch(form.dataset.index, { headers: { Accept: 'application/json' } });
+            const response = await fetch(urlFor('index', currentLrn), { headers: { Accept: 'application/json' } });
             if (!response.ok) return;
             const data = await response.json();
+
+            // The server is the authority on who may write, so a panel that
+            // rendered a form for the wrong session loses it here.
+            if (typeof data.can_file === 'boolean') {
+                canFile = data.can_file;
+                if (!canFile) {
+                    setOpen(false);
+                    if (newBtn) newBtn.hidden = true;
+                }
+            }
+
             render(Array.isArray(data.reports) ? data.reports : []);
         } catch (_) {
             // Leave whatever is on screen rather than blanking the history.
         }
     };
 
-    newBtn?.addEventListener('click', () => { showError(''); setOpen(true); });
-    cancelBtn?.addEventListener('click', () => { form.reset(); showError(''); setOpen(false); });
+    if (form) {
+        newBtn?.addEventListener('click', () => { showError(''); setOpen(true); });
+        cancelBtn?.addEventListener('click', () => { form.reset(); showError(''); setOpen(false); });
 
-    form.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        showError('');
-        if (submitBtn) submitBtn.disabled = true;
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            showError('');
+            if (submitBtn) submitBtn.disabled = true;
 
-        try {
-            const response = await fetch(form.dataset.store, {
-                method: 'POST',
-                headers: { Accept: 'application/json', 'X-CSRF-TOKEN': token },
-                body: new FormData(form),
-            });
+            try {
+                const response = await fetch(urlFor('store', currentLrn), {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', 'X-CSRF-TOKEN': token },
+                    body: new FormData(form),
+                });
 
-            if (response.status === 422) {
+                if (response.status === 422) {
+                    const data = await response.json();
+                    const first = Object.values(data.errors || {})[0];
+                    showError(Array.isArray(first) ? first[0] : 'Please check the form and try again.');
+                    return;
+                }
+
+                if (!response.ok) {
+                    showError('The report could not be saved. Please try again.');
+                    return;
+                }
+
                 const data = await response.json();
-                const first = Object.values(data.errors || {})[0];
-                showError(Array.isArray(first) ? first[0] : 'Please check the form and try again.');
-                return;
-            }
-
-            if (!response.ok) {
+                render(Array.isArray(data.reports) ? data.reports : []);
+                form.reset();
+                setOpen(false);
+            } catch (_) {
                 showError('The report could not be saved. Please try again.');
-                return;
+            } finally {
+                if (submitBtn) submitBtn.disabled = false;
             }
-
-            const data = await response.json();
-            render(Array.isArray(data.reports) ? data.reports : []);
-            form.reset();
-            setOpen(false);
-        } catch (_) {
-            showError('The report could not be saved. Please try again.');
-        } finally {
-            if (submitBtn) submitBtn.disabled = false;
-        }
-    });
+        });
+    }
 
     list.addEventListener('click', async (event) => {
         const button = event.target.closest('[data-remove]');
-        if (!button) return;
+        if (!button || !canFile || currentLrn === '') return;
 
         if (!window.confirm('Withdraw this incident report? This is recorded in the audit trail.')) return;
 
         try {
             const response = await fetch(
-                @json(url('health-records/students/'.$lrn.'/incidents')) + '/' + button.dataset.remove,
+                urlFor('index', currentLrn) + '/' + button.dataset.remove,
                 { method: 'DELETE', headers: { Accept: 'application/json', 'X-CSRF-TOKEN': token } }
             );
             if (!response.ok) return;
@@ -163,6 +233,10 @@
         }
     });
 
-    load();
+    // A page that already knows its learner loads straight away; the nurse's
+    // dialog calls load(lrn) when a row is opened.
+    if (currentLrn !== '') load(currentLrn);
+
+    return { load, render };
 })();
 </script>

@@ -307,6 +307,7 @@
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-clinic-notes">Clinic Notes <span class="sp-tab-badge" id="pNotesBadge">0</span></button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-consultation">Consultation Log <span class="sp-tab-badge" id="pConsultBadge">0</span></button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-documents">Documents <span class="sp-tab-badge" id="pDocsBadge">0</span></button>
+            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-incidents">Incident Reports <span class="sp-tab-badge" id="vpIncidentsTabBadge">0</span></button>
         </div>
         <div class="student-profile-body">
             <section id="p-sheet1" class="sp-panel active">
@@ -511,11 +512,19 @@
                     </div>
                 </div>
             </section>
+
+            {{-- The nurse charts an incident in FDAR here; the same component
+                 renders on the class adviser's profile without its write
+                 controls, so the adviser reads what the nurse filed. --}}
+            <section id="p-incidents" class="sp-panel">
+                @include('partials.student-incidents-panel')
+            </section>
         </div>{{-- /.student-profile-body --}}
     </div>{{-- /.student-profile-modal --}}
 </div>{{-- /.profile-backdrop --}}
 
 @include('partials.student-documents-script')
+@include('partials.student-incidents-script')
 
 <script>
 (() => {
@@ -829,6 +838,9 @@
         }
 
         StudentDocuments.load(lrn);
+        // The dialog serves whichever row was clicked, so the incident panel is
+        // told its learner on every open rather than at render time.
+        window.StudentIncidents?.load(lrn);
         loadConditions(lrn);
         loadConsentStatus(lrn);
         loadHealthAssessment(lrn);
@@ -1455,9 +1467,24 @@
         printBtn.addEventListener('click', () => window.print());
     }
 
-    // The profile is itself a dialog, so close it before opening the
-    // consultation one — two stacked backdrops would blur twice and trap
-    // focus between them.
+    // ── The consultation dialog stacks over the profile ──────────────
+    // The nurse opened this learner deliberately, so logging a visit must not
+    // throw that away: the profile stays open underneath and only its own
+    // Back button closes it. Closing the dialog therefore returns the nurse to
+    // the learner they were reading, not to the list.
+    //
+    // Two things make the stack work, and both are why this used to close the
+    // profile instead. The profile backdrop is z-index 1400 and .bmodal is
+    // 900, so the dialog would open *behind* it — `sn-profile-stacked` on the
+    // body lifts it over (see school-nurse-student-health-records.css), and
+    // the same class drops the profile's own scrim so the page is dimmed once
+    // rather than twice.
+    const consultModal = document.getElementById('consultModal');
+
+    const setStacked = (stacked) => {
+        document.body.classList.toggle('sn-profile-stacked', stacked);
+    };
+
     if (consultLink) {
         consultLink.addEventListener('click', () => {
             const name = document.getElementById('pName')?.textContent?.trim() || '';
@@ -1467,22 +1494,51 @@
             const shown = document.getElementById('pGrade')?.textContent?.trim() || '';
             const section = shown === '-' ? '' : shown;
 
-            closeProfile();
+            setStacked(true);
 
             if (typeof window.openConsultationFor === 'function') {
                 window.openConsultationFor(name, section);
             }
         });
     }
+
+    // The shared dialog controller (partials/board-modal-assets) closes on its
+    // own X, on Escape and on a backdrop click, and announces none of them —
+    // so the class it toggles is what we watch. Every close path ends in the
+    // same place: unstack, and hand focus back to the profile the nurse is
+    // still looking at.
+    if (consultModal && 'MutationObserver' in window) {
+        new MutationObserver(() => {
+            if (consultModal.classList.contains('open')) return;
+
+            if (document.body.classList.contains('sn-profile-stacked')) {
+                setStacked(false);
+
+                if (backdrop.classList.contains('open') && consultLink) {
+                    consultLink.focus();
+                }
+            }
+        }).observe(consultModal, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    const consultIsOpen = () => !!consultModal && consultModal.classList.contains('open');
+
     backdrop.addEventListener('click', (event) => {
-        if (event.target === backdrop) {
+        // While the dialog is stacked its own backdrop is on top and takes the
+        // click; this guard is the second lock on the same door.
+        if (event.target === backdrop && !consultIsOpen()) {
             closeProfile();
         }
     });
     document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && backdrop.classList.contains('open')) {
-            closeProfile();
-        }
+        if (event.key !== 'Escape' || !backdrop.classList.contains('open')) return;
+
+        // Escape belongs to the topmost dialog. Without this both handlers
+        // fire on one press and the profile closes underneath the consultation
+        // dialog the nurse was actually dismissing.
+        if (consultIsOpen()) return;
+
+        closeProfile();
     });
 
     // ── Grade / sex / section chips + search over the rendered rows ──

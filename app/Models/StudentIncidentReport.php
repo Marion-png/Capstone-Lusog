@@ -4,11 +4,18 @@ namespace App\Models;
 
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
+use App\Support\SchemaCache;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * An incident involving one learner, filed by their class adviser.
+ * An incident involving one learner, charted by the school nurse in FDAR.
+ *
+ * Focus / Data / Action / Response, in that order: the category is the focus,
+ * the description the data, then what was done and how the learner responded.
+ * Severity, location, witnesses and whether the guardian was told sit outside
+ * the chart — they are not FDAR, but they are what makes a report findable and
+ * followable afterwards.
  *
  * Keyed by the plain `student_lrn` + `institution_id` pair, like medical
  * certificates, so the profile can list a learner's reports without ever
@@ -18,6 +25,52 @@ use Illuminate\Database\Eloquent\Model;
 class StudentIncidentReport extends Model
 {
     use Auditable;
+
+    /**
+     * Who files one, and who may read it.
+     *
+     * The report is charted in FDAR — a clinical documentation format — so the
+     * **school nurse** writes it: assessing a learner and recording what was
+     * done and how they responded is the nurse's work, not the adviser's. The
+     * **class adviser reads it**, because an incident involving a learner in
+     * their class is something they have to know about, and their profile is
+     * where they would look.
+     *
+     * Declared here rather than on the controller so the endpoints and the two
+     * profiles that render the panel read one list. A view that decides for
+     * itself who may write is a view that eventually disagrees with the
+     * endpoint, and the disagreement always favours drawing a control that
+     * then 403s.
+     *
+     * @var list<string>
+     */
+    public const WRITE_ROLES = ['school_nurse'];
+
+    /** @var list<string> */
+    public const READ_ROLES = ['school_nurse', 'class_adviser'];
+
+    public static function canFile(?string $role): bool
+    {
+        return in_array((string) $role, self::WRITE_ROLES, true);
+    }
+
+    public static function canView(?string $role): bool
+    {
+        return in_array((string) $role, self::READ_ROLES, true);
+    }
+
+    /**
+     * Whether the Response column is on this database yet.
+     *
+     * Guarded rather than assumed: a machine that has pulled this code but not
+     * yet run the migration must chart F, D and A rather than 500 on save. The
+     * form drops its R section and the controller drops the field, so the
+     * report still files — an incomplete chart being better than none.
+     */
+    public static function supportsResponse(): bool
+    {
+        return SchemaCache::hasColumn('student_incident_reports', 'response');
+    }
 
     /**
      * What kind of incident. A fixed catalogue rather than free text: the
@@ -58,6 +111,7 @@ class StudentIncidentReport extends Model
         'location',
         'description',
         'action_taken',
+        'response',
         'witnesses',
         'reported_by_name',
         'reported_by_role',
@@ -70,6 +124,7 @@ class StudentIncidentReport extends Model
         'location' => EncryptedString::class,
         'description' => EncryptedString::class,
         'action_taken' => EncryptedString::class,
+        'response' => EncryptedString::class,
         'witnesses' => EncryptedString::class,
         'reported_by_name' => EncryptedString::class,
     ];
