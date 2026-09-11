@@ -37,11 +37,15 @@ class StudentHealthRecordController extends Controller
      * The nutritional statuses the Beneficiaries filters offer, in scale order
      * (worst first). This is what the app's own classifier emits — it never
      * produces "Obese", so that label is deliberately absent rather than
-     * offered as a filter that can only ever return nothing.
+     * offered as a filter that can only ever return nothing. "Underweight" is
+     * absent too: the coordinator's screens fold it into Wasted exactly as the
+     * DepEd sheets do, so choosing Wasted here matches both spellings
+     * (`filterStatus()`) rather than offering a fifth label the cards never
+     * print.
      *
      * @var list<string>
      */
-    private const STATUS_OPTIONS = ['Severely Wasted', 'Wasted', 'Underweight', 'Normal', 'Overweight'];
+    private const STATUS_OPTIONS = ['Severely Wasted', 'Wasted', 'Normal', 'Overweight'];
 
     /** @var list<string> */
     private const SEX_OPTIONS = ['Male', 'Female'];
@@ -1646,7 +1650,7 @@ class StudentHealthRecordController extends Controller
         if (! in_array($narrow['beneficiary_status'], ['enrolled', 'pending', 'not_qualified'], true)) {
             $narrow['beneficiary_status'] = '';
         }
-        if (! in_array($narrow['endline_status'], array_merge(self::STATUS_OPTIONS, ['not_measured']), true)) {
+        if (! in_array($narrow['endline_status'], self::STATUS_OPTIONS, true)) {
             $narrow['endline_status'] = '';
         }
 
@@ -1654,7 +1658,7 @@ class StudentHealthRecordController extends Controller
             $records = $records->where('sex', $narrow['sex']);
         }
         if ($narrow['baseline_status'] !== '') {
-            $records = $records->filter(fn ($row): bool => FeedingBeneficiarySummary::normalize(
+            $records = $records->filter(fn ($row): bool => self::filterStatus(
                 (string) ($row->baseline_nutritional_status ?: $row->nutritional_status)
             ) === $narrow['baseline_status']);
         }
@@ -1669,15 +1673,12 @@ class StudentHealthRecordController extends Controller
             });
         }
         if ($narrow['endline_status'] !== '') {
-            $records = $records->filter(function ($row) use ($narrow): bool {
-                $endline = trim((string) $row->endline_nutritional_status);
-
-                // "Not yet measured" is a real answer, not a missing one: it is
-                // the learners the endline weigh-in has still to reach.
-                return $narrow['endline_status'] === 'not_measured'
-                    ? $endline === ''
-                    : FeedingBeneficiarySummary::normalize($endline) === $narrow['endline_status'];
-            });
+            // A learner nobody has re-measured has no endline status and so
+            // matches none of the options; the Endline column still reads
+            // "Not yet measured" on the row itself.
+            $records = $records->filter(fn ($row): bool => self::filterStatus(
+                (string) $row->endline_nutritional_status
+            ) === $narrow['endline_status']);
         }
 
         $records = $records->values();
@@ -1761,5 +1762,20 @@ class StudentHealthRecordController extends Controller
         }
 
         return 'Normal';
+    }
+
+    /**
+     * A stored status reduced to the label the filters offer.
+     *
+     * The classifier's "Underweight" is folded into Wasted, exactly as the
+     * cards, the Dashboard panel and the DepEd BMI sheets fold it, so the
+     * Baseline and Endline filters answer with the same learners those figures
+     * count. An empty reading stays empty and so matches no option.
+     */
+    private static function filterStatus(string $status): string
+    {
+        $normalized = FeedingBeneficiarySummary::normalize(trim($status));
+
+        return $normalized === 'Underweight' ? 'Wasted' : $normalized;
     }
 }

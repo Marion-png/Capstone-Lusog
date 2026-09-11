@@ -74,6 +74,16 @@ class FeedingAttendanceController extends Controller
     private const VIEWS = ['sheet', 'history', 'beneficiary', 'calendar'];
 
     /**
+     * The views that carry no toolbar. Attendance History and the Calendar
+     * read the whole programme — every feeding day over the whole enrolled
+     * roll — and so draw no filter at all. Because they draw none, they
+     * honour none: a `grade=` left on the URL by the sheet is ignored here
+     * rather than silently narrowing a table with no control to show for it,
+     * and it survives the detour so the sheet still has it on return.
+     */
+    private const UNFILTERED_VIEWS = ['history', 'calendar'];
+
+    /**
      * What the Attendance control can ask, beyond "All".
      *
      * Exactly the three things a confirmed mark can be. An excused absence is
@@ -411,16 +421,16 @@ class FeedingAttendanceController extends Controller
         // whether the session is closed.
         $allRows = $this->sheetRows($allBeneficiaries, $allByDate->get($selectedDate, collect()));
         $filterOptions = $this->filterOptions($allRows);
-        $filters = $this->readFilters($request, $allRows);
+        $view = in_array($request->query('view'), self::VIEWS, true) ? (string) $request->query('view') : 'sheet';
+        $filters = $this->readFilters($request, $allRows, $view);
 
         // ── Scope, then narrow — the split the Dashboard already uses ────────
         // Grade, section and gender are SCOPE: they move every panel together,
-        // so the cards, the sheet, the history, the per-beneficiary roll and the
-        // calendar all report the same population. Attendance status is a
-        // NARROWING filter: it thins the list being read and leaves the scope
-        // alone. Before this the two views below read the whole school whatever
-        // the toolbar said, so a coordinator filtered to one section still saw
-        // every other section's turnout in the history.
+        // so the cards, the sheet and the per-beneficiary roll all report the
+        // same population. Attendance status is a NARROWING filter: it thins
+        // the list being read and leaves the scope alone. History and the
+        // Calendar carry no toolbar, so readFilters() has already blanked every
+        // filter for them and both read the whole roll.
         $scopedIds = $allRows
             ->filter(fn (array $row): bool => $this->inScope($row, $filters))
             ->pluck('id')
@@ -474,7 +484,9 @@ class FeedingAttendanceController extends Controller
         $todayTally = $this->tally($rows);
 
         return [
-            'view' => in_array($request->query('view'), self::VIEWS, true) ? (string) $request->query('view') : 'sheet',
+            'view' => $view,
+            // Whether the view draws the toolbar at all.
+            'hasToolbar' => ! in_array($view, self::UNFILTERED_VIEWS, true),
             // Links are built against the tab's own route, never the current
             // one: these partials are re-rendered by the metrics endpoint too,
             // and a link built from request()->fullUrl() there would point a
@@ -558,7 +570,7 @@ class FeedingAttendanceController extends Controller
                 'minimumObservationDays' => $rule->minimumObservationDays(),
                 'observationRule' => $rule->describeObservation(),
             ],
-            'history' => $this->history($beneficiaries, $byDate, $sessionDates, $filters),
+            'history' => $this->history($beneficiaries, $byDate, $sessionDates),
             'beneficiaryRows' => $this->beneficiaryRows(
                 $beneficiaries,
                 $standings,
@@ -717,24 +729,16 @@ class FeedingAttendanceController extends Controller
     /**
      * One row per feeding day: what the school recorded that session.
      *
-     * Every figure here is already scoped — $beneficiaries and $byDate arrive
-     * narrowed to the grade, section and gender the toolbar is set to — so a
-     * coordinator reading one section's history reads that section's turnout,
-     * not the school's.
-     *
-     * The attendance filter then narrows the list itself: choosing Present
-     * keeps only the sessions somebody was actually present at, and choosing
-     * Absent only the ones that carried an absence. The row still prints the
-     * whole tally, because hiding a session's other half would turn a filtered
-     * list into a wrong one.
+     * The view carries no toolbar (UNFILTERED_VIEWS), so $beneficiaries and
+     * $byDate arrive as the whole enrolled roll and every row is the school's
+     * own tally for that day, never a slice of it.
      *
      * @param  Collection<int, StudentHealthRecord>  $beneficiaries
      * @param  Collection<string, Collection<int, array<string, mixed>>>  $byDate
      * @param  list<string>  $sessionDates
-     * @param  array<string, string>  $filters
      * @return list<array<string, mixed>>
      */
-    private function history(Collection $beneficiaries, Collection $byDate, array $sessionDates, array $filters): array
+    private function history(Collection $beneficiaries, Collection $byDate, array $sessionDates): array
     {
         $expected = $beneficiaries->count();
         $history = [];
@@ -769,18 +773,7 @@ class FeedingAttendanceController extends Controller
 
         // Newest first: the last session is the one a coordinator opens this
         // view to check.
-        $history = array_reverse($history);
-
-        // A cumulative standing is a verdict on a learner, not on a day, so it
-        // says nothing about which sessions to keep and leaves this list alone.
-        if ($filters['status'] === '') {
-            return $history;
-        }
-
-        return array_values(array_filter(
-            $history,
-            fn (array $session): bool => $session[$filters['status']] > 0
-        ));
+        return array_reverse($history);
     }
 
     /**
@@ -1136,11 +1129,19 @@ class FeedingAttendanceController extends Controller
      * single dropdown put "Absent" and "At risk (cumulative)" in one list as
      * though they answered the same question.
      *
+     * A view with no toolbar (UNFILTERED_VIEWS) gets every filter blank
+     * whatever the URL carries: a control that decides what a table contains
+     * must be on screen, and there is none there.
+     *
      * @param  Collection<int, array<string, mixed>>  $rows
      * @return array{grade: string, section: string, sex: string, status: string, standing: string, q: string}
      */
-    private function readFilters(Request $request, Collection $rows): array
+    private function readFilters(Request $request, Collection $rows, string $view): array
     {
+        if (in_array($view, self::UNFILTERED_VIEWS, true)) {
+            return ['grade' => '', 'section' => '', 'sex' => '', 'status' => '', 'standing' => '', 'q' => ''];
+        }
+
         $options = $this->filterOptions($rows);
 
         $grade = trim((string) $request->query('grade', ''));

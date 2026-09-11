@@ -124,7 +124,13 @@
 		     The date and the filters were two full-width cards for six
 		     controls; they are one row now, and every control applies itself
 		     on change — an Apply button nobody presses is a filter that
-		     silently does nothing. ── --}}
+		     silently does nothing.
+
+		     Attendance History and the Calendar draw no toolbar at all: both
+		     read the whole programme over the whole roll, and the controller
+		     ignores any filter left on their URL, so a filter chosen on the
+		     sheet survives the detour and is applied again on return. ── --}}
+		@if ($hasToolbar)
 		<form method="GET" class="card fa-toolbar" id="faToolbar">
 			<input type="hidden" name="view" value="{{ $view }}">
 
@@ -229,9 +235,10 @@
 				{{-- A verdict across the programme is a different question from a
 				     mark on one day, so it is a different control — and it only
 				     appears on the roll it applies to. The at-risk notice above
-				     lands here with it already set. --}}
+				     lands here with it already set. Labelled "Status" to match
+				     the column it narrows; the query key stays `standing`. --}}
 				<div class="fa-filter">
-					<label class="field-label" for="faStanding">Standing</label>
+					<label class="field-label" for="faStanding">Status</label>
 					<select class="select" name="standing" id="faStanding">
 						<option value="">All</option>
 						<option value="at_risk" @selected($filters['standing'] === 'at_risk')>At risk</option>
@@ -246,6 +253,7 @@
 			     controls on a page that never reloads. --}}
 			<noscript><button type="submit" class="btn btn-secondary">Apply</button></noscript>
 		</form>
+		@endif
 
 		@if ($view === 'sheet')
 			{{-- ── The sheet is a record, not a form. ──

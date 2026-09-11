@@ -357,14 +357,13 @@ class FeedingAttendanceTabTest extends TestCase
     }
 
     /**
-     * Grade, section and gender are scope, so they move every panel together —
-     * the same split the Dashboard uses. Before this the history and the
-     * calendar read the whole school whatever the toolbar said, so a
-     * coordinator narrowed to one section still saw every other section's
-     * turnout counted into each feeding day.
+     * Grade, section and gender are scope on the sheet and the per-beneficiary
+     * roll. Attendance History and the Calendar carry no toolbar at all, so
+     * they read the whole roll — and a filter left on their URL by the sheet
+     * is ignored rather than silently narrowing a table with no control on it.
      */
     #[Test]
-    public function the_scope_filters_narrow_the_history_counts(): void
+    public function the_history_and_calendar_carry_no_toolbar_and_ignore_filters(): void
     {
         $seven = $this->makeStudent(['student_name' => 'Seven Learner', 'section' => 'Grade 7 / Maabilidad']);
         $eight = $this->makeStudent(['student_name' => 'Eight Learner', 'section' => 'Grade 8 / Matiyaga']);
@@ -373,36 +372,67 @@ class FeedingAttendanceTabTest extends TestCase
         $this->mark($seven, $yesterday, true);
         $this->mark($eight, $yesterday, false);
 
-        $whole = $this->open('?view=history')->assertOk()->viewData('history');
-        $this->assertSame(1, $whole[0]['present']);
-        $this->assertSame(1, $whole[0]['absent']);
-        $this->assertSame(2, $whole[0]['expected']);
+        foreach (['history', 'calendar'] as $view) {
+            $response = $this->open('?view='.$view.'&grade='.urlencode('Grade 7').'&status=absent')->assertOk();
+            $response->assertDontSee('id="faToolbar"', false);
+            $response->assertDontSee('id="faGrade"', false);
+            $response->assertDontSee('id="faStatus"', false);
+            $this->assertFalse($response->viewData('hasToolbar'));
+            $this->assertSame('', $response->viewData('filters')['grade']);
+            $this->assertSame('', $response->viewData('filters')['status']);
+            $this->assertSame(2, $response->viewData('beneficiaryCount'), 'The whole roll, whatever the URL carries.');
+        }
 
-        $scoped = $this->open('?view=history&grade='.urlencode('Grade 7'))->assertOk()->viewData('history');
-        $this->assertSame(1, $scoped[0]['present']);
-        $this->assertSame(0, $scoped[0]['absent'], 'Grade 8 absence is outside the scope.');
-        $this->assertSame(1, $scoped[0]['expected']);
+        $history = $this->open('?view=history&grade='.urlencode('Grade 7').'&status=present')->assertOk()->viewData('history');
+        $this->assertCount(1, $history);
+        $this->assertSame(1, $history[0]['present']);
+        $this->assertSame(1, $history[0]['absent']);
+        $this->assertSame(2, $history[0]['expected']);
+
+        // The sheet and the roll still draw the toolbar and still honour it.
+        foreach (['sheet', 'beneficiary'] as $view) {
+            $response = $this->open('?view='.$view.'&grade='.urlencode('Grade 7'))->assertOk();
+            $response->assertSee('id="faToolbar"', false);
+            $this->assertTrue($response->viewData('hasToolbar'));
+            $this->assertSame('Grade 7', $response->viewData('filters')['grade']);
+            $this->assertSame(1, $response->viewData('beneficiaryCount'));
+        }
     }
 
     /**
-     * Choosing Present leaves the sessions somebody was present at; choosing
-     * Absent leaves the ones that carried an absence. The two are different
-     * lists, which is the whole point of the control.
+     * The roll prints each learner's gender beside grade and section — the
+     * value the Gender filter reads, normalised by the same reading — so a
+     * roll narrowed to one gender says why every row is in it.
      */
     #[Test]
-    public function the_attendance_filter_narrows_the_history_to_matching_sessions(): void
+    public function the_by_beneficiary_roll_carries_a_gender_column(): void
+    {
+        $this->makeStudent(['student_name' => 'Male Learner', 'student_details' => ['gender' => 'm']]);
+        $this->makeStudent(['student_name' => 'Female Learner', 'student_details' => ['gender' => 'Female']]);
+
+        $response = $this->open('?view=beneficiary')->assertOk();
+        $response->assertSee('<th>Gender</th>', false);
+        $response->assertSee('<td>Male</td>', false);
+        $response->assertSee('<td>Female</td>', false);
+
+        $female = $this->open('?view=beneficiary&sex=Female')->assertOk();
+        $this->assertSame(['Female Learner'], array_column($female->viewData('beneficiaryRows'), 'name'));
+        $female->assertDontSee('<td>Male</td>', false);
+    }
+
+    /** The history prints every count column, since nothing narrows it. */
+    #[Test]
+    public function the_history_always_prints_every_count_column(): void
     {
         $record = $this->makeStudent();
-        $allPresent = now()->subDays(2)->toDateString();
-        $allAbsent = now()->subDay()->toDateString();
-        $this->mark($record, $allPresent, true);
-        $this->mark($record, $allAbsent, false);
+        $this->mark($record, now()->toDateString(), false);
 
-        $present = $this->open('?view=history&status=present')->assertOk()->viewData('history');
-        $this->assertSame([$allPresent], array_column($present, 'date'));
-
-        $absent = $this->open('?view=history&status=absent')->assertOk()->viewData('history');
-        $this->assertSame([$allAbsent], array_column($absent, 'date'));
+        $response = $this->open('?view=history&status=absent')->assertOk();
+        $response->assertSee('<th class="num">Present</th>', false);
+        $response->assertSee('<th class="num">Absent</th>', false);
+        $response->assertSee('<th class="num">Excused</th>', false);
+        $response->assertSee('<th class="num">Not marked</th>', false);
+        $response->assertSee('<th class="num">Rate</th>', false);
     }
 
     /**
@@ -457,9 +487,11 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertDontSee('Early monitoring (cumulative)');
 
         // The standings kept a visible home rather than becoming a URL nobody
-        // can reach from the page.
+        // can reach from the page. The control is labelled "Status", after
+        // the column it narrows; the query key stays `standing`.
         $response->assertSee('name="standing"', false);
-        $response->assertSee('Standing');
+        $response->assertSee('<label class="field-label" for="faStanding">Status</label>', false);
+        $response->assertDontSee('>Standing</label>', false);
 
         // A dropped value is ignored, never honoured off the wire.
         $this->assertSame('', $this->open('?status=unconfirmed')->assertOk()->viewData('filters')['status']);
@@ -475,7 +507,7 @@ class FeedingAttendanceTabTest extends TestCase
         $record = $this->makeStudent();
         $this->mark($record, now()->toDateString(), false);
 
-        foreach (['history', 'beneficiary'] as $view) {
+        foreach (['beneficiary'] as $view) {
             $both = $this->open('?view='.$view)->assertOk();
             $both->assertSee('<th class="num">Present</th>', false);
             $both->assertSee('<th class="num">Absent</th>', false);

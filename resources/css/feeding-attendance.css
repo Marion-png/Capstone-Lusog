@@ -192,18 +192,6 @@
 .fa-table + .fa-table { margin-top: 0; }
 .table-card { margin-top: 14px; }
 
-/* What a scoped panel is a slice of. It sits above the table rather than inside
-   it, because "18 of 96 beneficiaries" is a fact about the reading, not a row
-   in it — and a coordinator who filtered to one section needs to know the
-   counts moved with them. */
-.fa-scopenote {
-	margin: 14px 0 0;
-	font-size: .78rem;
-	color: var(--lg-ink-soft);
-}
-.fa-scopenote strong { color: var(--lg-ink); font-weight: 600; }
-.fa-scopenote + .table-card { margin-top: 10px; }
-
 .fa-datelink { color: inherit; text-decoration: none; }
 .fa-datelink:hover { color: var(--lg-emerald-dark); }
 .fa-datelink:focus-visible { outline: none; box-shadow: var(--lg-focus); border-radius: 4px; }

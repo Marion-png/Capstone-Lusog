@@ -264,7 +264,11 @@ class FeedingBeneficiaryCardsTest extends TestCase
             ->assertForbidden();
     }
 
-    /** The tab's three primary actions, with enrolment leading. */
+    /**
+     * The tab's three primary actions, with enrolment leading. The waiting
+     * list is still a document the export endpoint serves, but it no longer
+     * has a button here.
+     */
     #[Test]
     public function the_tab_offers_enrol_export_and_print(): void
     {
@@ -275,7 +279,9 @@ class FeedingBeneficiaryCardsTest extends TestCase
             ->assertSee('Export Masterlist')
             ->assertSee('Print Masterlist')
             ->assertSee('id="exportMasterlistBtn"', false)
-            ->assertSee('id="printMasterlistBtn"', false);
+            ->assertSee('id="printMasterlistBtn"', false)
+            ->assertDontSee('Export Waiting List')
+            ->assertDontSee('data-export-list="waitlist"', false);
     }
 
     /**
@@ -646,8 +652,53 @@ class FeedingBeneficiaryCardsTest extends TestCase
             ->assertSee('Baseline Nutritional Status')
             ->assertSee('Attendance Status')
             ->assertSee('Beneficiary Status')
-            ->assertSee('Endline Status')
-            ->assertSee('Not yet measured');
+            ->assertSee('Endline Status');
+    }
+
+    /**
+     * The two status filters offer the four labels the cards print and nothing
+     * else. "Underweight" is the classifier's own reading, folded into Wasted
+     * everywhere the coordinator counts, so it is not a fifth option; and a
+     * missing endline is not offered as a status either — it is printed on the
+     * row, never chosen from the list.
+     */
+    #[Test]
+    public function the_status_filters_offer_neither_underweight_nor_not_yet_measured(): void
+    {
+        $this->makeStudent('Grade 7 / Sampaguita', 'Underweight');
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records')
+            ->assertOk();
+
+        $response->assertDontSee('<option value="Underweight"', false);
+        $response->assertDontSee('<option value="not_measured"', false);
+        $response->assertDontSee('>Not yet measured</option>', false);
+        $response->assertSee('<option value="Wasted"', false);
+
+        // Off the wire, the retired values are dropped rather than honoured.
+        $this->assertSame('', $response->viewData('filters')['endline_status']);
+        $this->assertSame('', $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records?endline_status=not_measured&baseline_status=Underweight')
+            ->assertOk()
+            ->viewData('filters')['baseline_status']);
+    }
+
+    /**
+     * Choosing Wasted matches an Underweight reading too — the same folding
+     * the Wasted card above the table counts by, so the filtered list and the
+     * card agree about who is wasted.
+     */
+    #[Test]
+    public function the_wasted_filter_folds_underweight_in(): void
+    {
+        $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', name: 'Ada');
+        $this->makeStudent('Grade 7 / Rosal', 'Underweight', name: 'Bea');
+        $this->makeStudent('Grade 8 / Ilang', 'Severely Wasted', name: 'Cid');
+        $this->makeStudent('Grade 8 / Narra', 'Wasted', endline: 'Underweight', name: 'Dee');
+
+        $this->assertSame(['Ada', 'Bea', 'Dee'], $this->namesShown('?baseline_status=Wasted'));
+        $this->assertSame(['Dee'], $this->namesShown('?endline_status=Wasted'));
     }
 
     /**
@@ -665,7 +716,6 @@ class FeedingBeneficiaryCardsTest extends TestCase
         $this->assertSame(['Bea'], $this->namesShown('?sex=Female'));
         $this->assertSame(['Ada'], $this->namesShown('?baseline_status=Severely+Wasted'));
         $this->assertSame(['Ada'], $this->namesShown('?endline_status=Normal'));
-        $this->assertSame(['Bea'], $this->namesShown('?endline_status=not_measured'));
         $this->assertSame(['Ada', 'Bea'], $this->namesShown('?beneficiary_status=enrolled'));
         // Beneficiary Status composes with the view rather than fighting it.
         $this->assertSame(['Cid'], $this->namesShown('?view=pending&beneficiary_status=pending'));

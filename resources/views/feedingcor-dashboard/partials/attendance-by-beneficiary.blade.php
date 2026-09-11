@@ -56,9 +56,9 @@
 	$showAbsent = $mark === '' || $mark === 'absent';
 	$showExcused = $mark === '' || $mark === 'excused';
 
-	// Student, Grade, Section, Session, Not marked, Rate, Status, plus whichever
-	// of Present / Absent / Excused the filter left standing.
-	$columnCount = 7 + (int) $showPresent + (int) $showAbsent + (int) $showExcused;
+	// Student, Grade, Section, Gender, Session, Not marked, Rate, Status, plus
+	// whichever of Present / Absent / Excused the filter left standing.
+	$columnCount = 8 + (int) $showPresent + (int) $showAbsent + (int) $showExcused;
 @endphp
 <div class="table-card" data-session-dates="{{ json_encode($sessionIndex) }}">
 	<div class="table-scroll">
@@ -68,6 +68,11 @@
 					<th>Student</th>
 					<th>Grade</th>
 					<th>Section</th>
+					{{-- What the toolbar's Gender filter reads, printed so a
+					     filtered roll says why each row is in it. Normalised by
+					     FeedingBeneficiarySummary::sexOf(), the same reading the
+					     filter matches on. --}}
+					<th>Gender</th>
 					{{-- The day this column reads. It is named here rather than
 					     in the toolbar, which carries the roll's search instead:
 					     a session is chosen on the sheet, where the sheet is. --}}
@@ -109,6 +114,7 @@
 						</td>
 						<td>{{ $row['grade_number'] !== '' ? $row['grade_number'] : '—' }}</td>
 						<td>{{ $row['section'] }}</td>
+						<td>{{ $row['sex'] !== '' ? $row['sex'] : '—' }}</td>
 						<td class="fa-session-col">
 							@if (isset($sessionMarks[$row['session_status']]))
 								<span class="badge {{ $sessionMarks[$row['session_status']][0] }}">{{ $sessionMarks[$row['session_status']][1] }}</span>

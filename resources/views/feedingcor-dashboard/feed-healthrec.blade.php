@@ -73,20 +73,13 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
                     Enroll Beneficiaries
                 </button>
-                {{-- Two master lists, because the school keeps two. The
-                     beneficiary list is DepEd Form 1 — the learners actually
-                     enrolled, in the order on screen. The waiting list is the
-                     coordinator's "buffer": the learners the measurement
-                     qualified whom nobody has given a place, and the list a
-                     vacated slot is filled from. One heading over both is how
-                     they end up filed as each other. --}}
+                {{-- The export is DepEd Form 1 — the learners actually
+                     enrolled, in the order on screen. The waiting list is
+                     still a separate document on the server (`?list=waitlist`)
+                     but no longer has a button here. --}}
                 <button type="button" class="btn btn-secondary" id="exportMasterlistBtn" data-export-list="beneficiaries">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     Export Masterlist
-                </button>
-                <button type="button" class="btn btn-secondary" id="exportWaitlistBtn" data-export-list="waitlist">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Export Waiting List
                 </button>
                 <button type="button" class="btn btn-secondary" id="printMasterlistBtn">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
@@ -223,9 +216,6 @@
                         @foreach (($fo['statuses'] ?? []) as $statusOption)
                             <option value="{{ $statusOption }}" @selected(($ff['endline_status'] ?? '') === $statusOption)>{{ $statusOption }}</option>
                         @endforeach
-                        {{-- Not a missing answer but a real one: the learners
-                             the endline weigh-in has still to reach. --}}
-                        <option value="not_measured" @selected(($ff['endline_status'] ?? '') === 'not_measured')>Not yet measured</option>
                     </select>
                 </div>
 
@@ -776,10 +766,10 @@
     // the coordinator filtered, searched and sorted — so what leaves the page is
     // what they were reading. A short-lived form post is used rather than fetch
     // so the browser handles the download itself.
-    // Both export buttons post to the one endpoint and differ only in which
-    // list they ask for. Only the beneficiary list carries the rows on screen:
-    // the waiting list was never on screen, so the server computes it from the
-    // roll rather than from whatever the page happened to be showing.
+    // The button names the list it asks for (`data-export-list`). Only the
+    // beneficiary list carries the rows on screen, and it is the only one
+    // offered here — the waiting list is still served by the same endpoint
+    // but no longer has a button.
     document.querySelectorAll('[data-export-list]').forEach((button) => {
         button.addEventListener('click', () => {
             const list = button.dataset.exportList;
