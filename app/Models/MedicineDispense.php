@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * One issue of medicine from the clinic stock to a learner.
  *
  * Recording a dispense is the only thing in the system that draws stock
- * down, so MedicineDispenseController writes this row and the decrement
+ * down, so ConsultationController writes this row and the decrement
  * together in a transaction.
  */
 class MedicineDispense extends Model

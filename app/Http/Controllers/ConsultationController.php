@@ -162,7 +162,7 @@ class ConsultationController extends Controller
 
         $institutionId = $request->session()->get('active_institution_id');
 
-        // Dispensing is the school nurse's, matching MedicineDispenseController:
+        // Dispensing is the school nurse's, and this is now the only path to it:
         // clinic staff log consultations but are deliberately not admitted to
         // the dispensing path, and this must not become a way around that.
         $mayDispense = $request->session()->get('active_role') === 'school_nurse';

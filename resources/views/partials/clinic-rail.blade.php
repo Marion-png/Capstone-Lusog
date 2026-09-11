@@ -5,8 +5,8 @@
     the School Nurse and Clinic Staff. They used to include the nurse rail
     unconditionally, so a Clinic Staff session that clicked Consultation Log
     landed on a page wearing the nurse's navigation — Review Queue, health
-    programmes, Dispensing Log — none of which it may use. It read as being
-    thrown onto "the nurse's side".
+    programmes — none of which it may use. It read as being thrown onto
+    "the nurse's side".
 
     Include this instead of a rail partial and pass $active; each rail
     understands the keys it needs ('dashboard', 'records', 'consultations',

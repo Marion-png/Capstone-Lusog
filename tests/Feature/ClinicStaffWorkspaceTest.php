@@ -74,7 +74,7 @@ class ClinicStaffWorkspaceTest extends TestCase
         );
 
         // …and none of the nurse-only destinations are.
-        foreach (['nurse.index', 'dashboard.school-nurse.feeding-program', 'dashboard.dispensing-log'] as $nurseRoute) {
+        foreach (['nurse.index', 'dashboard.school-nurse.feeding-program'] as $nurseRoute) {
             $this->assertStringNotContainsString(
                 'href="'.route($nurseRoute).'"',
                 $html,
@@ -97,11 +97,6 @@ class ClinicStaffWorkspaceTest extends TestCase
             $html,
             "{$uri} must still show the nurse their Review Queue."
         );
-        $this->assertStringContainsString(
-            'href="'.route('dashboard.dispensing-log').'"',
-            $html,
-            "{$uri} must still show the nurse the Dispensing Log."
-        );
     }
 
     /**
@@ -118,15 +113,28 @@ class ClinicStaffWorkspaceTest extends TestCase
         $this->assertStringContainsString('<span>School Nurse</span>', $nurse);
     }
 
+    /**
+     * The Dispensing Log page was retired: a dispense is recorded on the
+     * consultation it was given at, and a second form for the same write was
+     * a second way for the two to disagree about what the school had left.
+     * Neither rail offers the tab, and the URL it sat on resolves to nothing.
+     */
     #[Test]
-    public function the_clinic_rail_never_offers_the_dispensing_log(): void
+    public function neither_rail_offers_a_dispensing_log(): void
     {
-        $html = $this->withSession($this->sessionFor('clinic_staff'))
-            ->get(route('dashboard.clinic-staff'))
-            ->assertOk()
-            ->getContent();
+        foreach (['clinic_staff' => 'dashboard.clinic-staff', 'school_nurse' => 'dashboard.school-nurse'] as $role => $home) {
+            $html = $this->withSession($this->sessionFor($role))
+                ->get(route($home))
+                ->assertOk()
+                ->getContent();
 
-        $this->assertStringNotContainsString(route('dashboard.dispensing-log'), $html);
+            $this->assertStringNotContainsString('Dispensing Log', $html, "The {$role} rail still offers a Dispensing Log.");
+            $this->assertStringNotContainsString('/dashboard/dispensing-log', $html);
+        }
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->get('/dashboard/dispensing-log')
+            ->assertNotFound();
     }
 
     #[Test]

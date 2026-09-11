@@ -42,7 +42,6 @@ class NurseSearchOnEveryTabTest extends TestCase
             'Consultation Log' => ['dashboard.consultation-log'],
             'Review Queue' => ['nurse.index'],
             'Medicine Inventory' => ['dashboard.medicine-inventory'],
-            'Dispensing Log' => ['dashboard.dispensing-log'],
             'Feeding Program' => ['dashboard.school-nurse.feeding-program'],
             'Data Visualization' => ['dashboard.data-visualization'],
             'Consent Forms' => ['consent-forms.nurse-index'],

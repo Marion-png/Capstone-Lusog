@@ -6,8 +6,8 @@
 
     Same .sb-* markup and css/nurse-sidebar.css as the School Nurse rail —
     the two roles share the clinic section, so they share a rail design.
-    What differs is the nav: Clinic Staff has no Review Queue, no health
-    programmes, and no Dispensing Log, which is the nurse's alone.
+    What differs is the nav: Clinic Staff has no Review Queue and no health
+    programmes, which are the nurse's alone.
 --}}
 @php
     $active = $active ?? 'dashboard';
@@ -45,8 +45,11 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="2" width="18" height="20" rx="2"/><path d="M9 2v4h6V2"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
             Medicine Inventory
         </a>
-        {{-- Dispensing Log is deliberately absent: recording a dispense is
-             the School Nurse's alone, enforced in MedicineDispenseController. --}}
+        {{-- There is no Dispensing Log tab on either rail. A dispense is
+             recorded in the consultation dialog, where the medicine field is
+             the nurse's alone (ConsultationController refuses it for clinic
+             staff), so the restriction lives on the write rather than on a
+             page one role cannot open. --}}
     </nav>
 
     <div class="sb-user">

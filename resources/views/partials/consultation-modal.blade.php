@@ -29,7 +29,7 @@
     // stock down in the same transaction as the consultation, so the
     // inventory cannot drift from what the clinic actually handed over.
     //
-    // Nurse only, matching MedicineDispenseController: clinic staff log
+    // Nurse only, enforced again in ConsultationController: clinic staff log
     // consultations but are deliberately not admitted to the dispensing
     // path, and this must not become a way around that.
     $consultMayDispense = session('active_role') === 'school_nurse';

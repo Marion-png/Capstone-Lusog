@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\MedicineDispenseController;
+use App\Models\AuditLog;
+use App\Models\Condition;
 use App\Models\Institution;
 use App\Models\Medicine;
 use App\Models\MedicineDispense;
@@ -11,12 +14,25 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Dispensing Log — the one clinic module the School Nurse does not share.
+ * The dispensing record, after the Dispensing Log page was retired.
  *
- * Every other nurse page admits clinic_staff as well. This one does not:
- * issuing medicine draws stock down, and that is the nurse's call. These
- * tests pin that exclusivity, the stock arithmetic behind it, and the
- * encryption and per-school scoping the rest of the system requires.
+ * A dispense is recorded **where it happens** — in the consultation dialog,
+ * on the visit the medicine was given at — and nowhere else. The standalone
+ * page was a second form for the same write, and two ways to draw the same
+ * stock down is two ways for them to disagree about what the school has left.
+ *
+ * What the page's removal must *not* change is the record itself. The table,
+ * the model and every row stay; `App\Support\MedicineUsage` still reads them
+ * for the Medicine Inventory forecast. These tests pin the invariants that
+ * used to live on the page and now belong to the row:
+ *
+ *   - the learner's name and the reason are encrypted at rest,
+ *   - every dispense lands in the audit trail,
+ *   - the record is scoped to one school,
+ *   - and the page is genuinely gone.
+ *
+ * The stock arithmetic and the nurse-only guard moved with the write and are
+ * covered by MedicineInventoryUsageTest, which owns the consultation path.
  */
 class MedicineDispenseTest extends TestCase
 {
@@ -52,191 +68,135 @@ class MedicineDispenseTest extends TestCase
         ];
     }
 
-    #[Test]
-    public function the_school_nurse_can_open_the_dispensing_log(): void
+    /** Dispense two tablets the way the app now does: on a consultation. */
+    private function dispenseOnAConsultation(int $quantity = 2): void
     {
-        $this->withSession($this->sessionFor('school_nurse'))
-            ->get(route('dashboard.dispensing-log'))
-            ->assertOk()
-            ->assertSee('Dispensing')
-            ->assertSee('Paracetamol');
-    }
-
-    /** The point of the module: clinic staff are turned away. */
-    #[Test]
-    public function clinic_staff_cannot_open_or_post_to_the_dispensing_log(): void
-    {
-        $this->withSession($this->sessionFor('clinic_staff'))
-            ->get(route('dashboard.dispensing-log'))
-            ->assertRedirect(route('dashboard.clinic-staff'));
-
-        $this->withSession($this->sessionFor('clinic_staff'))
-            ->post(route('dispensing-log.store'), [
-                'medicine_id' => $this->medicine->id,
-                'student_name' => 'Dela Cruz, Juan',
-                'quantity' => 1,
-            ])
-            ->assertRedirect(route('dashboard.clinic-staff'));
-
-        $this->assertSame(0, MedicineDispense::count());
-        $this->assertSame(50, $this->medicine->fresh()->stock_quantity);
-    }
-
-    #[Test]
-    public function other_roles_are_redirected_to_their_own_dashboards(): void
-    {
-        $expected = [
-            'class_adviser' => 'dashboard.class-adviser',
-            'school_head' => 'dashboard.school-head',
-            'feeding_coor' => 'dashboard.feedingcor-dashboard',
-            'nutricor' => 'dashboard.nutricor-dashboard',
-        ];
-
-        foreach ($expected as $role => $route) {
-            $this->withSession($this->sessionFor($role))
-                ->get(route('dashboard.dispensing-log'))
-                ->assertRedirect(route($route));
-        }
-    }
-
-    #[Test]
-    public function recording_a_dispense_draws_the_stock_down(): void
-    {
-        $this->withSession($this->sessionFor('school_nurse'))
-            ->post(route('dispensing-log.store'), [
-                'medicine_id' => $this->medicine->id,
-                'student_name' => 'Dela Cruz, Juan',
-                'student_lrn' => '123456789012',
-                'quantity' => 4,
-                'reason' => 'Headache after PE',
-            ])
-            ->assertRedirect(route('dashboard.dispensing-log'));
-
-        $this->assertSame(46, $this->medicine->fresh()->stock_quantity);
-
-        $dispense = MedicineDispense::first();
-        $this->assertNotNull($dispense);
-        $this->assertSame(4, $dispense->quantity);
-        $this->assertSame('Dela Cruz, Juan', $dispense->student_name);
-        $this->assertSame('123456789012', $dispense->student_lrn);
-        $this->assertSame('Nurse Cruz', $dispense->dispensed_by_name);
-        $this->assertSame($this->school->id, $dispense->institution_id);
-    }
-
-    /** Stock may never go negative, and a rejected dispense writes nothing. */
-    #[Test]
-    public function dispensing_more_than_the_stock_is_rejected_and_changes_nothing(): void
-    {
-        $this->withSession($this->sessionFor('school_nurse'))
-            ->post(route('dispensing-log.store'), [
-                'medicine_id' => $this->medicine->id,
-                'student_name' => 'Dela Cruz, Juan',
-                'quantity' => 51,
-            ])
-            ->assertSessionHasErrors('quantity');
-
-        $this->assertSame(50, $this->medicine->fresh()->stock_quantity);
-        $this->assertSame(0, MedicineDispense::count());
-    }
-
-    #[Test]
-    public function the_learner_name_and_reason_are_encrypted_at_rest(): void
-    {
-        $this->withSession($this->sessionFor('school_nurse'))
-            ->post(route('dispensing-log.store'), [
-                'medicine_id' => $this->medicine->id,
-                'student_name' => 'Dela Cruz, Juan',
-                'quantity' => 1,
-                'reason' => 'Headache after PE',
-            ]);
-
-        $raw = DB::table('medicine_dispenses')->first();
-
-        $this->assertNotSame('Dela Cruz, Juan', $raw->student_name);
-        $this->assertNotSame('Headache after PE', $raw->reason);
-        $this->assertStringNotContainsString('Dela Cruz', (string) $raw->student_name);
-        $this->assertStringNotContainsString('Headache', (string) $raw->reason);
-
-        // …and still reads back correctly through the model.
-        $this->assertSame('Dela Cruz, Juan', MedicineDispense::first()->student_name);
-    }
-
-    #[Test]
-    public function another_schools_dispensing_never_appears(): void
-    {
-        $otherSchool = Institution::create(['name' => 'Wireless ES', 'status' => 'active']);
-        $otherMedicine = Medicine::create([
-            'institution_id' => $otherSchool->id,
-            'name' => 'Amoxicillin',
-            'stock_quantity' => 30,
-            'minimum_threshold' => 10,
-            'unit' => 'caps',
+        $condition = Condition::query()->first() ?? Condition::create([
+            'name' => 'Headache',
+            'category' => 'General',
         ]);
 
-        MedicineDispense::create([
-            'institution_id' => $otherSchool->id,
-            'medicine_id' => $otherMedicine->id,
-            'student_name' => 'Other School Learner',
-            'quantity' => 2,
-            'dispensed_at' => now(),
-        ]);
-
-        $html = $this->withSession($this->sessionFor('school_nurse'))
-            ->get(route('dashboard.dispensing-log'))
-            ->assertOk()
-            ->getContent();
-
-        $this->assertStringNotContainsString('Other School Learner', $html);
-        $this->assertStringNotContainsString('Amoxicillin', $html);
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->post(route('consultations.store'), [
+                'consulted_at' => now()->toDateString(),
+                'student_name' => 'Cruz, Juan',
+                'grade_section' => 'Grade 10 - Dalton',
+                'condition_id' => $condition->id,
+                'status' => 'treated',
+                'treatment_given' => 'Rest and paracetamol.',
+                'medicine_id' => $this->medicine->id,
+                'medicine_quantity' => $quantity,
+            ])
+            ->assertRedirect();
     }
 
-    /** A nurse at another school cannot dispense this school's stock. */
-    #[Test]
-    public function a_dispense_cannot_reach_across_schools(): void
-    {
-        $otherSchool = Institution::create(['name' => 'Wireless ES', 'status' => 'active']);
-
-        $this->withSession(array_merge($this->sessionFor('school_nurse'), [
-            'active_institution_id' => $otherSchool->id,
-        ]))->post(route('dispensing-log.store'), [
-            'medicine_id' => $this->medicine->id,
-            'student_name' => 'Dela Cruz, Juan',
-            'quantity' => 1,
-        ])->assertNotFound();
-
-        $this->assertSame(50, $this->medicine->fresh()->stock_quantity);
-        $this->assertSame(0, MedicineDispense::count());
-    }
+    // ── The page is gone ────────────────────────────────────────────────────
 
     #[Test]
-    public function the_dispense_is_written_to_the_audit_trail(): void
+    public function the_dispensing_log_page_no_longer_exists(): void
     {
         $this->withSession($this->sessionFor('school_nurse'))
-            ->post(route('dispensing-log.store'), [
-                'medicine_id' => $this->medicine->id,
-                'student_name' => 'Dela Cruz, Juan',
-                'quantity' => 1,
-            ]);
+            ->get('/dashboard/dispensing-log')
+            ->assertNotFound();
 
-        // AuditTrail records the class basename, not the FQCN.
-        $this->assertDatabaseHas('audit_logs', [
-            'subject_type' => 'MedicineDispense',
-            'action' => 'created',
-        ]);
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->post('/dashboard/dispensing-log', ['medicine_id' => $this->medicine->id, 'quantity' => 1])
+            ->assertNotFound();
+    }
+
+    /** Neither the route nor the controller behind it survives. */
+    #[Test]
+    public function nothing_names_the_retired_route_or_controller(): void
+    {
+        $names = collect(app('router')->getRoutes())
+            ->map(fn ($route) => (string) $route->getName())
+            ->filter()
+            ->all();
+
+        $this->assertNotContains('dashboard.dispensing-log', $names);
+        $this->assertNotContains('dispensing-log.store', $names);
+
+        $this->assertFalse(
+            class_exists(MedicineDispenseController::class),
+            'MedicineDispenseController was removed with its page.'
+        );
     }
 
     #[Test]
-    public function the_rail_links_to_the_module_for_the_nurse(): void
+    public function the_nurse_rail_offers_no_dispensing_log(): void
     {
         $html = $this->withSession($this->sessionFor('school_nurse'))
             ->get(route('dashboard.school-nurse'))
             ->assertOk()
             ->getContent();
 
-        $this->assertStringContainsString(
-            'href="'.route('dashboard.dispensing-log').'"',
-            $html,
-            'Dispensing Log must be reachable from the nurse rail.'
+        $this->assertStringNotContainsString('Dispensing Log', $html);
+        $this->assertStringNotContainsString('/dashboard/dispensing-log', $html);
+    }
+
+    // ── The record it wrote is unchanged ────────────────────────────────────
+
+    #[Test]
+    public function a_consultation_still_writes_the_dispensing_record(): void
+    {
+        $this->dispenseOnAConsultation(2);
+
+        $dispense = MedicineDispense::firstOrFail();
+
+        $this->assertSame($this->medicine->id, $dispense->medicine_id);
+        $this->assertSame(2, (int) $dispense->quantity);
+        $this->assertSame($this->school->id, $dispense->institution_id);
+        $this->assertSame(48, (int) $this->medicine->fresh()->stock_quantity);
+    }
+
+    /**
+     * Who a medicine went to and why is clinical information about a child.
+     * It was encrypted when the page wrote it and must stay encrypted now the
+     * consultation does.
+     */
+    #[Test]
+    public function the_learner_name_and_reason_are_encrypted_at_rest(): void
+    {
+        $this->dispenseOnAConsultation();
+
+        $row = DB::table('medicine_dispenses')->first();
+
+        foreach (['student_name', 'reason', 'dispensed_by_name'] as $column) {
+            $this->assertNotEmpty($row->{$column}, "{$column} must be stored.");
+            $this->assertStringStartsWith(
+                'eyJpdiI6',
+                (string) $row->{$column},
+                "{$column} must be encrypted at rest."
+            );
+        }
+
+        // Lookup keys stay plain — the usage forecast groups on them in SQL.
+        $this->assertSame($this->medicine->id, (int) $row->medicine_id);
+        $this->assertSame($this->school->id, (int) $row->institution_id);
+    }
+
+    #[Test]
+    public function the_dispense_is_written_to_the_audit_trail(): void
+    {
+        $this->dispenseOnAConsultation();
+
+        $this->assertTrue(
+            AuditLog::query()
+                ->where('subject_type', class_basename(MedicineDispense::class))
+                ->exists(),
+            'Every dispense must leave an audit entry.'
         );
+    }
+
+    /** A dispense belongs to one school and is never read by another. */
+    #[Test]
+    public function the_record_is_scoped_to_one_school(): void
+    {
+        $this->dispenseOnAConsultation();
+
+        $other = Institution::create(['name' => 'Other NHS', 'status' => 'active']);
+
+        $this->assertSame(1, MedicineDispense::query()->forInstitution($this->school->id)->count());
+        $this->assertSame(0, MedicineDispense::query()->forInstitution($other->id)->count());
     }
 }

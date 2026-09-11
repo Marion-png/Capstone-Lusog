@@ -287,7 +287,10 @@ class SchoolHeadOversightTest extends TestCase
         // logout form is the one POST this page is allowed to carry.)
         $response->assertDontSee(route('medicine-inventory.store'), false);
         $response->assertDontSee(route('medicine-inventory.create'), false);
-        $response->assertDontSee(route('dispensing-log.store'), false);
+        // The dispensing endpoint this used to name was retired with its page;
+        // a dispense is now written by the consultation, which is the clinic's
+        // and has never been reachable from here.
+        $response->assertDontSee(route('consultations.store'), false);
     }
 
     #[Test]

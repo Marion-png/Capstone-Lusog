@@ -43,7 +43,6 @@ class NurseRailIsOneComponentTest extends TestCase
             'Consultation Log' => ['dashboard.consultation-log'],
             'Feeding Program' => ['dashboard.school-nurse.feeding-program'],
             'Medicine Inventory' => ['dashboard.medicine-inventory'],
-            'Dispensing Log' => ['dashboard.dispensing-log'],
             'Data Visualization' => ['dashboard.data-visualization'],
         ];
     }

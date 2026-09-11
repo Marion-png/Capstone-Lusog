@@ -103,7 +103,7 @@
                              that directly follows a word is not parsed as one, and the
                              orphaned @endif then closes the block around it. --}}
                         @php
-                            $forecastNote = 'Read from the dispensing log over the last '.$usage_months.' months';
+                            $forecastNote = 'Read from recorded dispensing over the last '.$usage_months.' months';
                             $forecastNote .= $prediction['peak_month'] ? ', highest in '.$prediction['peak_month'].'.' : '.';
                             $forecastNote .= " The target applies a 20% safety buffer to the recent rate and never falls below this medicine's own reorder line.";
 
@@ -119,7 +119,7 @@
                         <h2 class="forecast-title">Not enough dispensing history yet.</h2>
                         <p class="forecast-sub">
                             No medicine has been dispensed in the last {{ $usage_months }} months, so there is no consumption rate to forecast from.
-                            Record dispensing from the clinic and this panel will fill in.
+                            Record a medicine on a consultation and this panel will fill in.
                         </p>
                     @endif
                     <div class="fc-stats">
@@ -195,7 +195,7 @@
                     </div>
                     <div class="graph-note">
                         @if ($prediction['has_history'])
-                            Each point is that month's dispensed total from the clinic log; the highest is marked. A month with no dispensing shows as zero, not as a gap.
+                            Each point is that month's dispensed total, recorded on the consultations it was given at; the highest is marked. A month with no dispensing shows as zero, not as a gap.
                         @else
                             Nothing has been dispensed in this window, so every month reads zero.
                         @endif

@@ -17,7 +17,6 @@ use App\Http\Controllers\FeedingProgramController;
 use App\Http\Controllers\HealthAssessmentController;
 use App\Http\Controllers\HealthConsentFormController;
 use App\Http\Controllers\MedicalCertificateController;
-use App\Http\Controllers\MedicineDispenseController;
 use App\Http\Controllers\MedicineInventoryController;
 use App\Http\Controllers\NurseController;
 use App\Http\Controllers\NutricorController;
@@ -536,14 +535,14 @@ Route::get('/dashboard/medicine-inventory/new', [MedicineInventoryController::cl
 Route::post('/dashboard/medicine-inventory', [MedicineInventoryController::class, 'store'])
     ->name('medicine-inventory.store');
 
-// Dispensing Log — School Nurse only. Unlike the rest of the clinic
-// section, clinic_staff is not admitted: the guard lives in
-// MedicineDispenseController::requireNurse().
-Route::get('/dashboard/dispensing-log', [MedicineDispenseController::class, 'index'])
-    ->name('dashboard.dispensing-log');
-
-Route::post('/dashboard/dispensing-log', [MedicineDispenseController::class, 'store'])
-    ->name('dispensing-log.store');
+// The Dispensing Log page was retired. A dispense is recorded where it
+// actually happens — in the consultation dialog, which locks the medicine
+// row, refuses to go below stock, writes the `medicine_dispenses` row and
+// decrements the stock in one transaction (ConsultationController::store).
+// A second form for the same write was a second way for the two to disagree
+// about what the school had left. The record itself is untouched: the table,
+// the model and every row stay, and the Medicine Inventory forecast still
+// reads them through App\Support\MedicineUsage.
 
 Route::get('/dashboard/clinic-staff', function (Request $request) {
     $role = (string) $request->session()->get('active_role', '');
