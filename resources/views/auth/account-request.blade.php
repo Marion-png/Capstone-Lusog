@@ -1,129 +1,332 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="theme-color" content="#126B3A">
     <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
     <title>Create Account Request - SIGLA</title>
+    {{-- The same two faces the sign-in page and every dashboard use: DM Serif
+         Display for the title, Inter for everything else. This page was on
+         DM Sans, which is a third voice for the same product. --}}
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
     <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        /* Every colour reads through a LUSOG token, with the token's own value
+           as the fallback. The shared palette is inlined after this block and
+           declares them for real. */
         :root {
-            --bg: #f3f8f4;
-            --card: #ffffff;
-            --text: #0f2f1b;
-            --muted: #5b7b68;
-            --line: #dbe9df;
-            --green: #1F8A4C;
-            --green-dark: #126B3A;
-            --danger-bg: #FCECEC;
-            --danger-text: #A32B2B;
-            --ok-bg: #E7F5EC;
-            --ok-text: #14653C;
+            --ink:        var(--lg-ink, #1F2D25);
+            --ink-soft:   var(--lg-ink-soft, #6B7C72);
+            --line:       var(--lg-border, #DCE8E0);
+            --line-firm:  var(--lg-border-strong, #C7DCCE);
+            --card:       var(--lg-card, #FFFFFF);
+            --page:       var(--lg-page, #F6F9F7);
+            --brand:      var(--lg-emerald, #1F8A4C);
+            --brand-deep: var(--lg-emerald-deep, #126B3A);
+            --brand-dark: var(--lg-emerald-dark, #0E5730);
+            --mint:       var(--lg-mint, #E7F5EC);
+            --focus:      var(--lg-focus, 0 0 0 3px rgba(31, 138, 76, .28));
+
+            --r-card:  var(--lg-r-card, 12px);
+            --r-btn:   var(--lg-r-btn, 9px);
+            --r-input: var(--lg-r-input, 8px);
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body { width: 100%; }
+
         body {
             min-height: 100vh;
-            font-family: 'DM Sans', sans-serif;
-            background:
-                radial-gradient(circle at 10% -10%, #BFE3CC 0, transparent 45%),
-                radial-gradient(circle at 90% 110%, #C4E4D0 0, transparent 40%),
-                var(--bg);
-            color: var(--text);
+            font-family: 'Inter', 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+            font-size: 15px;
+            -webkit-font-smoothing: antialiased;
+            background: var(--page);
+            color: var(--ink);
             display: grid;
             place-items: center;
-            padding: 24px;
+            padding: 32px 24px;
         }
+
+        /* min-width: 0 keeps the card shrinkable on a narrow phone: a grid
+           item's default min-width is auto, which floors it at its own
+           min-content width. */
         .card {
-            width: min(760px, 100%);
+            width: min(780px, 100%);
+            max-width: 100%;
+            min-width: 0;
             background: var(--card);
             border: 1px solid var(--line);
-            border-radius: 18px;
-            box-shadow: 0 18px 40px rgba(20, 83, 45, 0.12);
+            border-radius: var(--r-card);
+            box-shadow: 0 18px 48px rgba(14, 45, 30, .13), 0 2px 6px rgba(14, 45, 30, .05);
             overflow: hidden;
         }
+
+        /* The same emerald, dot texture and ring motif the sign-in panel uses,
+           so the two screens read as one product rather than two designs. */
         .head {
-            background: linear-gradient(135deg, #126B3A, #1F8A4C);
+            position: relative;
+            isolation: isolate;
+            overflow: hidden;
+            padding: 30px 34px;
             color: #fff;
-            padding: 22px;
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            background:
+                radial-gradient(120% 180% at 8% 0%, rgba(107, 201, 146, .30), transparent 60%),
+                linear-gradient(120deg, #17814A 0%, var(--brand-deep) 52%, var(--brand-dark) 100%);
         }
+
+        .head::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background-image: radial-gradient(rgba(255, 255, 255, .16) 1px, transparent 1px);
+            background-size: 22px 22px;
+            opacity: .45;
+            -webkit-mask-image: radial-gradient(70% 120% at 30% 40%, #000 20%, transparent 80%);
+            mask-image: radial-gradient(70% 120% at 30% 40%, #000 20%, transparent 80%);
+            pointer-events: none;
+        }
+
+        .head-ring {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, .14);
+            top: -130px;
+            right: -60px;
+            pointer-events: none;
+        }
+
+        .head-ring.is-inner {
+            width: 190px;
+            height: 190px;
+            top: -75px;
+            right: -5px;
+            border-color: rgba(255, 255, 255, .2);
+        }
+
+        /* The mark is a stacked lockup (shield over wordmark), so it is sized by
+           height and left to find its own width. Boxed into a square it shrank
+           until the wordmark under the shield was unreadable. */
+        .head-logo {
+            position: relative;
+            z-index: 1;
+            height: 66px;
+            width: auto;
+            max-width: 130px;
+            object-fit: contain;
+            flex: none;
+            filter: drop-shadow(0 6px 14px rgba(5, 26, 16, .3));
+        }
+
+        .head-text { position: relative; z-index: 1; min-width: 0; }
+
         .head h1 {
-            font-family: 'DM Serif Display', serif;
-            font-size: 1.65rem;
-            line-height: 1.2;
+            font-family: 'DM Serif Display', Georgia, serif;
+            font-size: 1.85rem;
+            font-weight: 400;
+            line-height: 1.15;
+            letter-spacing: -.006em;
         }
+
         .head p {
-            margin-top: 6px;
-            color: #E7F5EC;
-            font-size: 0.9rem;
+            margin-top: 5px;
+            color: rgba(236, 251, 243, .88);
+            font-size: .875rem;
+            line-height: 1.5;
         }
-        .body { padding: 22px; }
+
+        .body { padding: 30px 34px 34px; }
+
         .flash {
-            border-radius: 10px;
-            padding: 10px 12px;
-            font-size: 0.86rem;
-            margin-bottom: 12px;
+            border-radius: var(--r-input);
+            padding: 11px 13px;
+            font-size: .85rem;
+            font-weight: 500;
+            line-height: 1.45;
+            margin-bottom: 18px;
         }
-        .flash-ok { background: var(--ok-bg); color: var(--ok-text); border: 1px solid #BFE3CC; }
-        .flash-err { background: var(--danger-bg); color: var(--danger-text); border: 1px solid #fecaca; }
+
+        .flash-ok {
+            background: var(--mint);
+            color: var(--lg-success-ink, #14653C);
+            border: 1px solid rgba(31, 138, 76, .3);
+            border-left: 3px solid var(--brand);
+        }
+
+        .flash-err {
+            background: var(--lg-danger-tint, #FCECEC);
+            color: var(--lg-danger-ink, #A32B2B);
+            border: 1px solid rgba(217, 92, 92, .38);
+            border-left: 3px solid var(--lg-danger, #D95C5C);
+        }
+
         .grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
+            gap: 16px 18px;
         }
-        .field { display: flex; flex-direction: column; gap: 6px; }
+
+        /* The script toggles these with style.display = '' / 'none', so the
+           rule here has to be the natural display it reverts to. Never give
+           .field or .hint display:none in CSS — a hidden field would never
+           come back. */
+        .field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+
         .field.full { grid-column: 1 / -1; }
+
         label {
-            font-size: 0.7rem;
-            color: var(--muted);
-            letter-spacing: 0.08em;
+            font-size: .7rem;
+            color: var(--ink-soft);
+            letter-spacing: .09em;
             text-transform: uppercase;
-            font-weight: 700;
+            font-weight: 600;
         }
+
+        .req { color: var(--lg-danger, #D95C5C); }
+
         input, select {
-            height: 42px;
-            border-radius: 10px;
+            width: 100%;
+            min-height: 46px;
+            border-radius: var(--r-input);
             border: 1px solid var(--line);
-            padding: 0 12px;
+            padding: 11px 13px;
             font: inherit;
-            color: var(--text);
-            background: #fff;
+            font-size: .94rem;
+            color: var(--ink);
+            background: var(--card);
+            outline: none;
+            transition: border-color .16s ease, box-shadow .16s ease;
         }
+
+        input::placeholder { color: #A8B5AE; }
+
+        input:hover, select:hover { border-color: var(--line-firm); }
+
         input:focus, select:focus {
-            outline: 2px solid #C4E4D0;
-            border-color: #43A866;
+            border-color: var(--brand);
+            box-shadow: var(--focus);
         }
+
+        select {
+            appearance: none;
+            cursor: pointer;
+            padding-right: 40px;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5 6 6.5l5-5' stroke='%236B7C72' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+        }
+
+        .field-error {
+            color: var(--lg-danger-ink, #A32B2B);
+            font-size: .78rem;
+            font-weight: 500;
+        }
+
         .hint {
             grid-column: 1 / -1;
-            font-size: 0.78rem;
-            color: var(--muted);
+            font-size: .78rem;
+            color: var(--ink-soft);
+            line-height: 1.5;
+            padding: 10px 12px;
+            background: var(--lg-rail, #EEF4F0);
+            border-radius: var(--r-input);
         }
+
         .actions {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: 16px;
-            gap: 8px;
+            margin-top: 26px;
+            padding-top: 20px;
+            border-top: 1px solid var(--line);
+            gap: 12px;
             flex-wrap: wrap;
         }
+
+        /* Nothing in this product underlines a word. Colour, weight and a
+           tinted hover carry the link instead. */
         .link {
-            color: #14653C;
-            text-decoration: underline;
-            font-size: 0.86rem;
-        }
-        .submit {
-            background: var(--green);
-            color: #fff;
-            border: 1px solid var(--green);
-            border-radius: 10px;
-            padding: 10px 14px;
-            cursor: pointer;
+            color: var(--brand-deep);
+            text-decoration: none;
+            font-size: .86rem;
             font-weight: 600;
+            border-radius: 6px;
+            padding: 8px 10px;
+            margin-left: -10px;
+            transition: background .16s ease, color .16s ease;
         }
-        .submit:hover { background: var(--green-dark); }
+
+        .link:hover { background: var(--mint); color: var(--brand-dark); }
+
+        .submit {
+            background: var(--brand-deep);
+            color: #fff;
+            border: none;
+            border-radius: var(--r-btn);
+            min-height: 46px;
+            padding: 12px 22px;
+            cursor: pointer;
+            font: inherit;
+            font-size: .93rem;
+            font-weight: 600;
+            box-shadow: 0 1px 2px rgba(14, 45, 30, .16);
+            transition: background .16s ease, box-shadow .16s ease, transform .08s ease;
+        }
+
+        .submit:hover {
+            background: var(--brand-dark);
+            box-shadow: 0 4px 14px rgba(14, 45, 30, .2);
+        }
+
+        .submit:active { transform: translateY(1px); }
+
+        .link:focus-visible,
+        .submit:focus-visible {
+            outline: 2px solid var(--brand);
+            outline-offset: 2px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: .001ms !important;
+                transition-duration: .001ms !important;
+            }
+        }
+
         @media (max-width: 720px) {
+            body { padding: 0; place-items: stretch; }
+
+            .card {
+                width: 100%;
+                min-height: 100vh;
+                border: none;
+                border-radius: 0;
+                box-shadow: none;
+            }
+
+            .head { padding: 24px 22px; gap: 14px; }
+
+            .head-logo { width: 42px; height: 42px; }
+
+            .head h1 { font-size: 1.5rem; }
+
+            .body { padding: 24px 22px 28px; }
+
             .grid { grid-template-columns: 1fr; }
+
+            .actions { flex-direction: column-reverse; align-items: stretch; }
+
+            .actions .submit { width: 100%; }
+
+            .actions .link { text-align: center; margin-left: 0; }
         }
     </style>
     {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
@@ -133,15 +336,20 @@
 <body>
     <section class="card">
         <header class="head">
-            <h1>Create Account Request</h1>
-            <p>Fill out this form. Your request will be reviewed by the System Admin.</p>
+            <span class="head-ring" aria-hidden="true"></span>
+            <span class="head-ring is-inner" aria-hidden="true"></span>
+            <img src="{{ asset('images/lusog-logo.png') }}" alt="" class="head-logo" aria-hidden="true">
+            <div class="head-text">
+                <h1>Create Account Request</h1>
+                <p>Fill out this form. Your request will be reviewed by the System Admin.</p>
+            </div>
         </header>
         <div class="body">
             @if (session('success'))
-                <div class="flash flash-ok">{{ session('success') }}</div>
+                <div class="flash flash-ok" role="status">{{ session('success') }}</div>
             @endif
             @if ($errors->any())
-                <div class="flash flash-err">{{ $errors->first() }}</div>
+                <div class="flash flash-err" role="alert">{{ $errors->first() }}</div>
             @endif
 
             <form method="POST" action="{{ route('account.request.submit') }}" autocomplete="off" id="accountRequestForm">
@@ -176,9 +384,9 @@
                         </select>
                     </div>
                     <div class="field full" id="schoolField" style="display:none;">
-                        <label for="institution_id">School / Institution <span style="color:#dc2626;">*</span></label>
+                        <label for="institution_id">School / Institution <span class="req">*</span></label>
                         @php($schools = ($institutions ?? collect()))
-                        <select id="institution_id" name="institution_id" style="height:42px;border-radius:10px;border:1px solid var(--line);padding:0 12px;font:inherit;color:var(--text);background:#fff;">
+                        <select id="institution_id" name="institution_id">
                             @if ($schools->count() !== 1)
                                 <option value="" disabled {{ old('institution_id') ? '' : 'selected' }}>Select your school…</option>
                             @endif
@@ -191,7 +399,7 @@
                             @endforeach
                         </select>
                         @error('institution_id')
-                            <span style="color:#dc2626;font-size:0.8rem;">{{ $message }}</span>
+                            <span class="field-error">{{ $message }}</span>
                         @enderror
                     </div>
                     <div class="field" id="gradeField">
@@ -224,7 +432,7 @@
                         </select>
                         <input id="assigned_section" name="assigned_section" type="text" value="{{ old('assigned_section') }}" placeholder="e.g. SPED-A">
                         @error('assigned_section')
-                            <span style="color:#dc2626;font-size:0.8rem;">{{ $message }}</span>
+                            <span class="field-error">{{ $message }}</span>
                         @enderror
                     </div>
                     <p class="hint" id="classAdviserHint">Grade level and section are required for Class Adviser requests only.</p>
