@@ -57,6 +57,16 @@ class FeedingCoordinatorController extends Controller
         // filled with one grade only — Grade 8 is never mixed with Grade 9.
         // Names and statuses are encrypted at rest, so the grouping and sorting
         // happen in PHP after fetch (the plain "section" column holds the grade).
+        //
+        // Two flags, because the school keeps two master lists: `qualified` is
+        // the adviser's measurement (Wasted / Severely Wasted / Underweight)
+        // and fills the Masterlist of Qualified Recipients whether or not the
+        // learner was ever given a place; `enrolled` is the coordinator's
+        // decision and fills the Master List of Beneficiaries. Read through
+        // isBeneficiary() — qualified AND enrolled AND not removed — the same
+        // test the exported Master List of Beneficiaries uses, so the form on
+        // this page and the workbook off the Beneficiaries tab name the same
+        // children.
         $studentsByGrade = [];
         $sectionsByGrade = [];
         foreach ($records as $record) {
@@ -70,6 +80,7 @@ class FeedingCoordinatorController extends Controller
                 'status' => $status,
                 'bmi' => $record->bmi_value !== null ? (string) $record->bmi_value : '',
                 'qualified' => $this->isQualifiedForFeeding($status),
+                'enrolled' => FeedingBeneficiarySummary::isBeneficiary($record),
             ];
 
             if ($section !== '') {

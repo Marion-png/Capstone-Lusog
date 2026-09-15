@@ -48,7 +48,12 @@
 						</optgroup>
 						<optgroup label="Feeding Program (hand-encoded)">
 							<option value="feeding-narrative">Feeding Program - Narrative Report</option>
+							{{-- Two master lists, two documents: the qualified list is
+							     whoever the adviser's measurement qualified, enrolled or
+							     not; the beneficiary list is whoever the coordinator
+							     actually enrolled. --}}
 							<option value="feeding-masterlist">Feeding Program - Masterlist of Qualified Recipients</option>
+							<option value="feeding-beneficiaries">Feeding Program - Master List of Beneficiaries</option>
 						</optgroup>
 					</select>
 				</div>
@@ -263,7 +268,10 @@
 				<div class="form-sheet-inner">
 					<div class="report-head">
 						@include('feedingcor-dashboard.partials.form-letterhead', ['addressField' => 'ml_school_address'])
-						<div class="report-title-lines">Masterlists of Identified Severely Wasted and Wasted Students Who Are Qualified for Feeding Program</div>
+						{{-- The title the export files this list under, read from the
+						     one declaration so the form and the workbook cannot
+						     head the same list two ways. --}}
+						<div class="report-title-lines">{{ \App\Http\Controllers\FeedingMasterlistExportController::LISTS['qualified'][0] }}</div>
 						<div class="report-sy">S.Y. <input type="text" class="inline-line-input" data-field="ml_school_year" value="{{ $schoolYear }}" aria-label="School year"></div>
 						<div class="report-scope" data-scope-line></div>
 					</div>
@@ -299,6 +307,69 @@
 							<div class="foot-label">Noted by:</div>
 							<input type="text" class="sign-input" data-field="ml_noted_name" placeholder="Full name" aria-label="Noted by name">
 							<input type="text" class="foot-role-input" data-field="ml_noted_role" placeholder="Principal III" aria-label="Noted by designation">
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		{{-- The Master List of Beneficiaries: the same sheet as the qualified
+		     list above, filled from the enrolled roll instead. Qualifying is the
+		     adviser's measurement; enrolling is the coordinator's decision, and
+		     a learner the measurement qualified but nobody enrolled belongs on
+		     the list above and not on this one. Its own draft, its own field
+		     prefix (mlb_), so saving one never overwrites the other. --}}
+		<section class="sheet-wrap form-panel" id="beneficiariesPanel" data-template="feeding-beneficiaries">
+			<div class="sheet-tools">
+				<div class="sheet-status" id="mlbDraftStatus">Draft not saved yet.</div>
+				<div class="sheet-btns">
+					<button type="button" class="btn btn-secondary" id="addMlbRowsBtn">Add 10 Rows</button>
+					<button type="button" class="btn btn-primary" id="saveMlbDraftBtn">Save Draft</button>
+					<button type="button" class="btn btn-ghost" id="printMlbBtn">Print Form</button>
+					<button type="button" class="btn btn-warn" id="clearMlbDraftBtn">Clear</button>
+				</div>
+			</div>
+
+			<div class="form-sheet">
+				<div class="form-sheet-inner">
+					<div class="report-head">
+						@include('feedingcor-dashboard.partials.form-letterhead', ['addressField' => 'mlb_school_address'])
+						<div class="report-title-lines">{{ \App\Http\Controllers\FeedingMasterlistExportController::LISTS['beneficiaries'][0] }}</div>
+						<div class="report-sy">S.Y. <input type="text" class="inline-line-input" data-field="mlb_school_year" value="{{ $schoolYear }}" aria-label="School year"></div>
+						<div class="report-scope" data-scope-line></div>
+					</div>
+
+					<table class="template-table" aria-label="Master list of feeding program beneficiaries">
+						<thead>
+							<tr>
+								<th class="num-col">No.</th>
+								<th class="name-col">Name</th>
+								<th class="grade-col">Grade</th>
+								<th>Section</th>
+							</tr>
+						</thead>
+						<tbody id="mlbTbody">
+							@for ($row = 1; $row <= 20; $row++)
+								<tr class="ml-row">
+									<td class="num-col ml-num">{{ $row }}</td>
+									<td><input type="text" class="cell-input" data-field="mlb_row{{ $row }}_name" placeholder="Student full name"></td>
+									<td><input type="text" class="cell-input" data-field="mlb_row{{ $row }}_grade" placeholder="Grade"></td>
+									<td><input type="text" class="cell-input" data-field="mlb_row{{ $row }}_section" placeholder="Section"></td>
+								</tr>
+							@endfor
+						</tbody>
+					</table>
+
+					<div class="foot-grid">
+						<div class="foot-block">
+							<div class="foot-label">Prepared by:</div>
+							<input type="text" class="sign-input" data-field="mlb_prepared_name" placeholder="Full name" aria-label="Prepared by name">
+							<div class="foot-role">Feeding Coordinator</div>
+						</div>
+						<div class="foot-block">
+							<div class="foot-label">Noted by:</div>
+							<input type="text" class="sign-input" data-field="mlb_noted_name" placeholder="Full name" aria-label="Noted by name">
+							<input type="text" class="foot-role-input" data-field="mlb_noted_role" placeholder="Principal III" aria-label="Noted by designation">
 						</div>
 					</div>
 				</div>
@@ -521,10 +592,11 @@
 			autoGrowAllNarratives();
 		}
 
-		if (selected === 'feeding-masterlist' && !mlDraftLoaded && !mlAutofilled) {
-			mlAutofilled = true;
-			fillMasterlist(currentScope());
-		}
+		masterlists.forEach((list) => {
+			if (selected === list.template) {
+				list.open(scope);
+			}
+		});
 	};
 
 	// ── The grids and their charts, repainted from the precomputed sets ────
@@ -638,163 +710,18 @@
 		}
 	});
 
-	// --- Masterlist template: dynamic rows + draft ---
-	const mlTbody = document.getElementById('mlTbody');
-	const mlStatusNode = document.getElementById('mlDraftStatus');
-	const addMlRowsBtn = document.getElementById('addMlRowsBtn');
-	const saveMlDraftBtn = document.getElementById('saveMlDraftBtn');
-	const clearMlDraftBtn = document.getElementById('clearMlDraftBtn');
-	const printMlBtn = document.getElementById('printMlBtn');
-	const mlStorageKey = 'feeding_masterlist_draft_v1';
+	// --- Masterlist templates: dynamic rows + draft + auto-fill ---
+	//
+	// The school keeps two master lists, and they are two documents: the
+	// Masterlist of Qualified Recipients is whoever the adviser's measurement
+	// qualified (Wasted / Severely Wasted / Underweight), enrolled or not; the
+	// Master List of Beneficiaries is whoever the coordinator actually enrolled.
+	// Same sheet, same rows, same draft mechanics — only the predicate that
+	// decides who fills it differs — so both are built from this one module
+	// rather than from two copies that would drift.
 	const mlBaseRowCount = 20;
 
-	const renumberMlRows = () => {
-		if (!mlTbody) {
-			return;
-		}
-
-		Array.from(mlTbody.querySelectorAll('.ml-row')).forEach((row, index) => {
-			const rowNumber = index + 1;
-			const numCell = row.querySelector('.ml-num');
-			if (numCell) {
-				numCell.textContent = String(rowNumber);
-			}
-
-			row.querySelectorAll('[data-field]').forEach((input) => {
-				const key = input.getAttribute('data-field');
-				if (!key) {
-					return;
-				}
-				input.setAttribute('data-field', key.replace(/^ml_row\d+_/, `ml_row${rowNumber}_`));
-			});
-		});
-	};
-
-	const addMlRows = (count) => {
-		if (!mlTbody) {
-			return;
-		}
-
-		const firstRow = mlTbody.querySelector('.ml-row');
-		if (!firstRow) {
-			return;
-		}
-
-		for (let i = 0; i < count; i++) {
-			const clone = firstRow.cloneNode(true);
-			clone.querySelectorAll('input').forEach((input) => {
-				input.value = '';
-			});
-			mlTbody.appendChild(clone);
-		}
-
-		renumberMlRows();
-	};
-
-	const saveMlDraft = () => {
-		if (!mlTbody) {
-			return;
-		}
-
-		const payload = {
-			rowCount: mlTbody.querySelectorAll('.ml-row').length,
-			values: {},
-		};
-
-		document.querySelectorAll('[data-field^="ml_"]').forEach((field) => {
-			const key = field.getAttribute('data-field');
-			if (!key) {
-				return;
-			}
-			payload.values[key] = String(field.value || '').trim();
-		});
-
-		window.localStorage.setItem(mlStorageKey, JSON.stringify(payload));
-		if (mlStatusNode) {
-			mlStatusNode.textContent = `Draft saved on ${stamp()}.`;
-		}
-	};
-
-	// Whether a saved draft is on screen. The masterlist auto-fills itself the
-	// first time it is opened — otherwise "All Grade Level", the default, is
-	// the one choice that never fires a change event and so would leave the
-	// form blank until the coordinator picked a grade and picked it back. A
-	// draft is never clobbered: hand-typed work outranks a re-fill.
-	let mlDraftLoaded = false;
-	let mlAutofilled = false;
-
-	const loadMlDraft = () => {
-		if (!mlTbody) {
-			return;
-		}
-
-		try {
-			const raw = window.localStorage.getItem(mlStorageKey);
-			if (!raw) {
-				return;
-			}
-			mlDraftLoaded = true;
-
-			const parsed = JSON.parse(raw);
-			const rowCount = Math.max(mlBaseRowCount, Number(parsed.rowCount || mlBaseRowCount));
-			const missingRows = rowCount - mlTbody.querySelectorAll('.ml-row').length;
-			if (missingRows > 0) {
-				addMlRows(missingRows);
-			}
-
-			if (parsed.values && typeof parsed.values === 'object') {
-				document.querySelectorAll('[data-field^="ml_"]').forEach((field) => {
-					const key = field.getAttribute('data-field');
-					if (!key) {
-						return;
-					}
-					field.value = typeof parsed.values[key] === 'string' ? parsed.values[key] : '';
-				});
-			}
-
-			if (mlStatusNode) {
-				mlStatusNode.textContent = 'Draft loaded from local storage.';
-			}
-		} catch (_error) {
-			if (mlStatusNode) {
-				mlStatusNode.textContent = 'Unable to load existing draft.';
-			}
-		}
-	};
-
-	const clearMlDraft = () => {
-		if (!mlTbody) {
-			return;
-		}
-
-		Array.from(mlTbody.querySelectorAll('.ml-row')).forEach((row, index) => {
-			if (index < mlBaseRowCount) {
-				row.querySelectorAll('input').forEach((input) => {
-					input.value = '';
-				});
-				return;
-			}
-			row.remove();
-		});
-
-		document.querySelectorAll('[data-field^="ml_"]').forEach((field) => {
-			field.value = '';
-		});
-
-		renumberMlRows();
-		window.localStorage.removeItem(mlStorageKey);
-		if (mlStatusNode) {
-			mlStatusNode.textContent = 'Draft cleared.';
-		}
-	};
-
-	// --- Auto-fill the masterlist from adviser records ---
-	//
-	// "All Grade Level" means every grade, not "no grade": the Masterlist of
-	// Qualified Recipients is the school's list of who the programme feeds, and
-	// a coordinator who has not narrowed to one grade wants all of them, in
-	// grade order. It used to fill nothing at all in that case, so the one
-	// choice that asks for the whole school produced an empty form.
+	// Adviser-entered learners for one grade, as the server grouped them.
 	const gradeStudents = (grade) => (Array.isArray(studentsByGrade[grade]) ? studentsByGrade[grade] : []);
 
 	// Every covered grade in order, so an unfiltered masterlist reads Grade 7
@@ -805,51 +732,276 @@
 		return na - nb || a.localeCompare(b);
 	});
 
-	const qualifiedFor = (scope) => {
+	// "All Grade Level" means every grade, not "no grade": a coordinator who
+	// has not narrowed to one grade wants all of them, in grade order. It used
+	// to fill nothing at all in that case, so the one choice that asks for the
+	// whole school produced an empty form.
+	const learnersFor = (scope, keep) => {
 		const grades = scope.grade ? [scope.grade] : orderedGrades();
 
 		return grades
 			.flatMap((grade) => gradeStudents(grade))
-			.filter((student) => student && student.qualified)
+			.filter((student) => student && keep(student))
 			.filter((student) => scope.section === '' || student.section === scope.section);
 	};
 
-	const fillMasterlist = (scope) => {
-		if (!mlTbody) {
-			return;
-		}
+	const initMasterlist = ({ template, tbodyId, statusId, addId, saveId, clearId, printId, storageKey, fieldPrefix, keep, loadedLabel, emptyLabel }) => {
+		const tbody = document.getElementById(tbodyId);
+		const statusNode = document.getElementById(statusId);
+		const rowKey = new RegExp(`^${fieldPrefix}row\\d+_`);
+		const fields = () => document.querySelectorAll(`[data-field^="${fieldPrefix}"]`);
 
-		const qualified = qualifiedFor(scope);
-
-		// Trim back to the base rows, then grow to fit the qualified list.
-		Array.from(mlTbody.querySelectorAll('.ml-row')).forEach((row, index) => {
-			if (index >= mlBaseRowCount) {
-				row.remove();
+		const renumberRows = () => {
+			if (!tbody) {
+				return;
 			}
-		});
-		const needed = Math.max(mlBaseRowCount, qualified.length);
-		const current = mlTbody.querySelectorAll('.ml-row').length;
-		if (needed > current) {
-			addMlRows(needed - current);
+
+			Array.from(tbody.querySelectorAll('.ml-row')).forEach((row, index) => {
+				const rowNumber = index + 1;
+				const numCell = row.querySelector('.ml-num');
+				if (numCell) {
+					numCell.textContent = String(rowNumber);
+				}
+
+				row.querySelectorAll('[data-field]').forEach((input) => {
+					const key = input.getAttribute('data-field');
+					if (!key) {
+						return;
+					}
+					input.setAttribute('data-field', key.replace(rowKey, `${fieldPrefix}row${rowNumber}_`));
+				});
+			});
+		};
+
+		const addRows = (count) => {
+			if (!tbody) {
+				return;
+			}
+
+			const firstRow = tbody.querySelector('.ml-row');
+			if (!firstRow) {
+				return;
+			}
+
+			for (let i = 0; i < count; i++) {
+				const clone = firstRow.cloneNode(true);
+				clone.querySelectorAll('input').forEach((input) => {
+					input.value = '';
+				});
+				tbody.appendChild(clone);
+			}
+
+			renumberRows();
+		};
+
+		const saveDraft = () => {
+			if (!tbody) {
+				return;
+			}
+
+			const payload = {
+				rowCount: tbody.querySelectorAll('.ml-row').length,
+				values: {},
+			};
+
+			fields().forEach((field) => {
+				const key = field.getAttribute('data-field');
+				if (!key) {
+					return;
+				}
+				payload.values[key] = String(field.value || '').trim();
+			});
+
+			window.localStorage.setItem(storageKey, JSON.stringify(payload));
+			if (statusNode) {
+				statusNode.textContent = `Draft saved on ${stamp()}.`;
+			}
+		};
+
+		// Whether a saved draft is on screen. A masterlist auto-fills itself the
+		// first time it is opened — otherwise "All Grade Level", the default, is
+		// the one choice that never fires a change event and so would leave the
+		// form blank until the coordinator picked a grade and picked it back. A
+		// draft is never clobbered: hand-typed work outranks a re-fill.
+		let draftLoaded = false;
+		let autofilled = false;
+
+		const loadDraft = () => {
+			if (!tbody) {
+				return;
+			}
+
+			try {
+				const raw = window.localStorage.getItem(storageKey);
+				if (!raw) {
+					return;
+				}
+				draftLoaded = true;
+
+				const parsed = JSON.parse(raw);
+				const rowCount = Math.max(mlBaseRowCount, Number(parsed.rowCount || mlBaseRowCount));
+				const missingRows = rowCount - tbody.querySelectorAll('.ml-row').length;
+				if (missingRows > 0) {
+					addRows(missingRows);
+				}
+
+				if (parsed.values && typeof parsed.values === 'object') {
+					fields().forEach((field) => {
+						const key = field.getAttribute('data-field');
+						if (!key) {
+							return;
+						}
+						field.value = typeof parsed.values[key] === 'string' ? parsed.values[key] : '';
+					});
+				}
+
+				if (statusNode) {
+					statusNode.textContent = 'Draft loaded from local storage.';
+				}
+			} catch (_error) {
+				if (statusNode) {
+					statusNode.textContent = 'Unable to load existing draft.';
+				}
+			}
+		};
+
+		const clearDraft = () => {
+			if (!tbody) {
+				return;
+			}
+
+			Array.from(tbody.querySelectorAll('.ml-row')).forEach((row, index) => {
+				if (index < mlBaseRowCount) {
+					row.querySelectorAll('input').forEach((input) => {
+						input.value = '';
+					});
+					return;
+				}
+				row.remove();
+			});
+
+			fields().forEach((field) => {
+				field.value = '';
+			});
+
+			renumberRows();
+			window.localStorage.removeItem(storageKey);
+			if (statusNode) {
+				statusNode.textContent = 'Draft cleared.';
+			}
+		};
+
+		// Auto-fill from adviser records: the learners the predicate keeps, in
+		// the scope the filters name.
+		const fill = (scope) => {
+			if (!tbody) {
+				return;
+			}
+
+			const learners = learnersFor(scope, keep);
+
+			// Trim back to the base rows, then grow to fit the list.
+			Array.from(tbody.querySelectorAll('.ml-row')).forEach((row, index) => {
+				if (index >= mlBaseRowCount) {
+					row.remove();
+				}
+			});
+			const needed = Math.max(mlBaseRowCount, learners.length);
+			const current = tbody.querySelectorAll('.ml-row').length;
+			if (needed > current) {
+				addRows(needed - current);
+			}
+
+			Array.from(tbody.querySelectorAll('.ml-row')).forEach((row, index) => {
+				const student = learners[index] || null;
+				const nameInput = row.querySelector('[data-field$="_name"]');
+				const gradeInput = row.querySelector('[data-field$="_grade"]');
+				const sectionInput = row.querySelector('[data-field$="_section"]');
+				if (nameInput) nameInput.value = student ? student.name : '';
+				if (gradeInput) gradeInput.value = student ? student.grade : '';
+				if (sectionInput) sectionInput.value = student ? student.section : '';
+			});
+
+			if (statusNode) {
+				const where = scopeLabel(scope);
+				statusNode.textContent = learners.length > 0
+					? `Loaded ${learners.length} ${loadedLabel} — ${where}. Save draft to keep changes.`
+					: `${emptyLabel} ${where}.`;
+			}
+		};
+
+		// Fill on the first open only, and never over a loaded draft.
+		const open = (scope) => {
+			if (draftLoaded || autofilled) {
+				return;
+			}
+			autofilled = true;
+			fill(scope);
+		};
+
+		const addBtn = document.getElementById(addId);
+		if (addBtn) {
+			addBtn.addEventListener('click', () => {
+				addRows(10);
+				if (statusNode) {
+					statusNode.textContent = 'Rows added. Save draft to keep changes.';
+				}
+			});
 		}
 
-		Array.from(mlTbody.querySelectorAll('.ml-row')).forEach((row, index) => {
-			const student = qualified[index] || null;
-			const nameInput = row.querySelector('[data-field$="_name"]');
-			const gradeInput = row.querySelector('[data-field$="_grade"]');
-			const sectionInput = row.querySelector('[data-field$="_section"]');
-			if (nameInput) nameInput.value = student ? student.name : '';
-			if (gradeInput) gradeInput.value = student ? student.grade : '';
-			if (sectionInput) sectionInput.value = student ? student.section : '';
-		});
-
-		if (mlStatusNode) {
-			const where = scopeLabel(scope);
-			mlStatusNode.textContent = qualified.length > 0
-				? `Loaded ${qualified.length} qualified student(s) — ${where}. Save draft to keep changes.`
-				: `No qualified (Wasted / Severely Wasted / Underweight) students on file for ${where}.`;
+		const saveBtn = document.getElementById(saveId);
+		if (saveBtn) {
+			saveBtn.addEventListener('click', saveDraft);
 		}
+
+		const clearBtn = document.getElementById(clearId);
+		if (clearBtn) {
+			clearBtn.addEventListener('click', clearDraft);
+		}
+
+		const printBtn = document.getElementById(printId);
+		if (printBtn) {
+			printBtn.addEventListener('click', () => window.print());
+		}
+
+		loadDraft();
+
+		return { template, fill, open };
 	};
+
+	const masterlists = [
+		// The candidate list: whoever the measurement qualified, enrolled or not.
+		initMasterlist({
+			template: 'feeding-masterlist',
+			tbodyId: 'mlTbody',
+			statusId: 'mlDraftStatus',
+			addId: 'addMlRowsBtn',
+			saveId: 'saveMlDraftBtn',
+			clearId: 'clearMlDraftBtn',
+			printId: 'printMlBtn',
+			storageKey: 'feeding_masterlist_draft_v1',
+			fieldPrefix: 'ml_',
+			keep: (student) => Boolean(student.qualified),
+			loadedLabel: 'qualified student(s)',
+			emptyLabel: 'No qualified (Wasted / Severely Wasted / Underweight) students on file for',
+		}),
+		// The enrolled roll: whoever the coordinator gave a place — qualified
+		// AND enrolled AND not removed, the server's own isBeneficiary() reading.
+		initMasterlist({
+			template: 'feeding-beneficiaries',
+			tbodyId: 'mlbTbody',
+			statusId: 'mlbDraftStatus',
+			addId: 'addMlbRowsBtn',
+			saveId: 'saveMlbDraftBtn',
+			clearId: 'clearMlbDraftBtn',
+			printId: 'printMlbBtn',
+			storageKey: 'feeding_masterlist_beneficiaries_draft_v1',
+			fieldPrefix: 'mlb_',
+			keep: (student) => Boolean(student.enrolled),
+			loadedLabel: 'enrolled beneficiary(ies)',
+			emptyLabel: 'No enrolled beneficiaries on file for',
+		}),
+	];
 
 	// Baseline / Final BMI reports: a specific grade shows only that grade's
 	// table (Overall hidden too); "All Grade Level" (empty) shows every grade.
@@ -863,12 +1015,12 @@
 	};
 
 	// One entry point for every filter, so the grid, the chart, the printed
-	// scope line and the masterlist can never be looking at different children.
+	// scope line and both masterlists can never be looking at different children.
 	const applyFilters = () => {
 		const scope = currentScope();
 		filterBmiGrades(scope.grade);
 		paintReports();
-		fillMasterlist(scope);
+		masterlists.forEach((list) => list.fill(scope));
 	};
 
 	const narrativeDraft = initDraftModule({
@@ -910,27 +1062,6 @@
 		});
 	}
 
-	if (addMlRowsBtn) {
-		addMlRowsBtn.addEventListener('click', () => {
-			addMlRows(10);
-			if (mlStatusNode) {
-				mlStatusNode.textContent = 'Rows added. Save draft to keep changes.';
-			}
-		});
-	}
-
-	if (saveMlDraftBtn) {
-		saveMlDraftBtn.addEventListener('click', saveMlDraft);
-	}
-
-	if (clearMlDraftBtn) {
-		clearMlDraftBtn.addEventListener('click', clearMlDraft);
-	}
-
-	if (printMlBtn) {
-		printMlBtn.addEventListener('click', () => window.print());
-	}
-
 	if (templateSelect) {
 		templateSelect.addEventListener('change', syncSelectedTemplate);
 	}
@@ -956,7 +1087,6 @@
 
 	window.addEventListener('beforeprint', autoGrowAllNarratives);
 
-	loadMlDraft();
 	syncSectionOptions('');
 	// The first paint is the whole school, which is what the server rendered —
 	// so the grid on screen and the grid in the markup start out the same.

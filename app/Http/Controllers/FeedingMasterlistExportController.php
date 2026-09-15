@@ -68,8 +68,12 @@ class FeedingMasterlistExportController extends Controller
     /**
      * The three lists this endpoint can write, with the DepEd title each one is
      * filed under and the slug its filename carries.
+     *
+     * Public because the SBFP Forms page heads its two masterlist forms with
+     * these same titles: a form typed under one heading and exported under
+     * another is two documents claiming to be one.
      */
-    private const LISTS = [
+    public const LISTS = [
         'beneficiaries' => [
             'Master List of Beneficiaries',
             'Beneficiaries',

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\FeedingMasterlistExportController;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Support\BmiAssessmentReport;
@@ -538,5 +539,94 @@ class FeedingBmiReportTest extends TestCase
         // different reading than the one beside it.
         $response->assertSee('id="bmiBaselinePanel"', false);
         $response->assertSee('id="bmiFinalPanel"', false);
+    }
+
+    // ── The two master lists ────────────────────────────────────────────
+
+    /**
+     * The school keeps two master lists, and they are two documents.
+     *
+     * The Masterlist of Qualified Recipients is whoever the adviser's
+     * measurement qualified, enrolled or not; the Master List of Beneficiaries
+     * is whoever the coordinator actually enrolled. Each is its own template,
+     * its own sheet and its own draft, headed with the same title the export
+     * files it under — one heading over both is how they get filed as each
+     * other.
+     */
+    #[Test]
+    public function the_forms_page_offers_both_master_lists_as_separate_templates(): void
+    {
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms');
+        $response->assertOk();
+
+        $response->assertSee('value="feeding-masterlist"', false);
+        $response->assertSee('value="feeding-beneficiaries"', false);
+
+        // Two panels, each under the title the export files that list under.
+        $response->assertSee('id="masterlistPanel"', false);
+        $response->assertSee('id="beneficiariesPanel"', false);
+        $response->assertSee(FeedingMasterlistExportController::LISTS['qualified'][0], false);
+        $response->assertSee(FeedingMasterlistExportController::LISTS['beneficiaries'][0], false);
+
+        // Their drafts and rows are keyed apart, so saving one never
+        // overwrites the other.
+        $response->assertSee('data-field="ml_row1_name"', false);
+        $response->assertSee('data-field="mlb_row1_name"', false);
+        $response->assertSee("storageKey: 'feeding_masterlist_draft_v1'", false);
+        $response->assertSee("storageKey: 'feeding_masterlist_beneficiaries_draft_v1'", false);
+    }
+
+    /**
+     * Qualifying is the adviser's measurement; enrolling is the coordinator's
+     * decision. The auto-fill data carries both as separate flags: a qualified
+     * learner nobody enrolled fills the qualified list and not the beneficiary
+     * list, and a learner taken off the programme fills neither list's
+     * enrolled roll — removal is a stamp beside the enrolment, and the roll is
+     * read through isBeneficiary(), the same test the export uses.
+     */
+    #[Test]
+    public function the_autofill_data_separates_qualified_from_enrolled(): void
+    {
+        $waiting = $this->makeStudent('Grade 7 / Matiyaga', 'Male', 'Wasted', 'Stunted', [
+            'student_name' => 'Waiting Learner',
+        ]);
+        $enrolled = $this->makeStudent('Grade 7 / Matiyaga', 'Female', 'Severely Wasted', 'Stunted', [
+            'student_name' => 'Enrolled Learner',
+            'feeding_enrolled_at' => now(),
+            'feeding_enrolled_by' => 'Test Coordinator',
+        ]);
+        $removed = $this->makeStudent('Grade 8 / Ilang', 'Male', 'Wasted', 'Stunted', [
+            'student_name' => 'Removed Learner',
+            'feeding_enrolled_at' => now()->subWeeks(3),
+            'feeding_enrolled_by' => 'Test Coordinator',
+            'feeding_removed_at' => now(),
+            'feeding_removed_by' => 'Test Coordinator',
+            'feeding_removal_reason' => 'Transferred out',
+        ]);
+        $normal = $this->makeStudent('Grade 8 / Ilang', 'Female', 'Normal', 'Normal Height-for-Age', [
+            'student_name' => 'Normal Learner',
+        ]);
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms');
+        $response->assertOk();
+
+        $flags = collect($response->viewData('studentsByGrade'))
+            ->flatten(1)
+            ->mapWithKeys(fn (array $row): array => [$row['name'] => [$row['qualified'], $row['enrolled']]])
+            ->all();
+
+        $this->assertSame([true, false], $flags['Waiting Learner'], 'Qualified but not enrolled: candidate list only.');
+        $this->assertSame([true, true], $flags['Enrolled Learner'], 'Qualified and enrolled: on both lists.');
+        $this->assertSame([true, false], $flags['Removed Learner'], 'Removed: still qualified, no longer a beneficiary.');
+        $this->assertSame([false, false], $flags['Normal Learner'], 'Not qualified: on neither list.');
+
+        // The flag is the export's own reading, so the form and the workbook
+        // cannot name different children.
+        $this->assertTrue(FeedingBeneficiarySummary::isBeneficiary($enrolled->fresh()));
+        $this->assertFalse(FeedingBeneficiarySummary::isBeneficiary($waiting->fresh()));
+        $this->assertFalse(FeedingBeneficiarySummary::isBeneficiary($removed->fresh()));
+        $this->assertFalse(FeedingBeneficiarySummary::isBeneficiary($normal->fresh()));
     }
 }
