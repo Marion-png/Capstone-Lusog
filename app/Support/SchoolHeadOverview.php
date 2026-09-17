@@ -564,6 +564,9 @@ final class SchoolHeadOverview
             'declined' => $declined,
             'rate' => ($total > 0 && $measured > 0) ? round(($rehabilitated / $total) * 100, 1) : null,
             'improved_rate' => ($total > 0 && $measured > 0) ? round(($improved / $total) * 100, 1) : null,
+            // Improved / remained wasted / regressed as shares of the roll,
+            // from the one computation the coordinator's panel reads.
+            'split' => FeedingNutritionProgress::split($total, $measured, $improved, $unchanged, $declined),
         ];
     }
 

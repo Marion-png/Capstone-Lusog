@@ -8,6 +8,7 @@ use App\Support\SchemaCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Incident reports on a learner's student profile: list, file, withdraw.
@@ -62,8 +63,19 @@ class StudentIncidentReportController extends Controller
             // An incident is something that already happened. A future date is
             // a typo, and it would sort to the top of the learner's history.
             'occurred_at' => ['required', 'date', 'before_or_equal:today'],
+            // F-DAR's first column is the date AND the time. Optional, because
+            // a nurse charting from a note that carried no clock reading must
+            // still be able to file; a time later than now on today's date is
+            // refused below for the reason a future date is.
+            'occurred_time' => ['nullable', 'date_format:H:i'],
             'category' => ['required', Rule::in(array_keys(StudentIncidentReport::CATEGORIES))],
             'severity' => ['required', Rule::in(array_keys(StudentIncidentReport::SEVERITIES))],
+            // FDAR: Focus — the nurse's own statement of what the note is
+            // about (a sign or symptom, a behaviour, a treatment event). The
+            // category above is the kind the list filters on; this is the
+            // words on the sheet, and it falls back to the category when
+            // nothing was written.
+            'focus' => ['nullable', 'string', 'max:255'],
             'location' => ['nullable', 'string', 'max:255'],
             // FDAR: Data is what was observed, and it is the one part of the
             // chart that cannot be left out — a report with no data is not a
@@ -85,9 +97,29 @@ class StudentIncidentReportController extends Controller
             ? ['response' => $validated['response'] ?? null]
             : [];
 
+        $time = trim((string) ($validated['occurred_time'] ?? ''));
+
+        // An incident is something that already happened, to the minute: a
+        // time still ahead of the clock on today's date is the same typo as a
+        // date in the future, and it would sort above what actually occurred.
+        if ($time !== '' && $validated['occurred_at'] === now()->toDateString() && $time > now()->format('H:i')) {
+            throw ValidationException::withMessages([
+                'occurred_time' => 'The time of the incident cannot be later than now.',
+            ]);
+        }
+
+        // The sheet's own columns travel only where they have been migrated,
+        // like the Response, so an older database still files the chart.
+        $chart = StudentIncidentReport::supportsChartColumns()
+            ? [
+                'occurred_time' => $time !== '' ? $time : null,
+                'focus' => trim((string) ($validated['focus'] ?? '')) ?: null,
+            ]
+            : [];
+
         // Written through the model, never a raw insert: the casts are what
         // keep the description, the action taken and the staff name encrypted.
-        $report = StudentIncidentReport::create($response + [
+        $report = StudentIncidentReport::create($response + $chart + [
             'institution_id' => $request->session()->get('active_institution_id'),
             'student_lrn' => $lrn,
             'school_year' => StudentHealthRecord::currentSchoolYear(),
@@ -228,23 +260,40 @@ class StudentIncidentReportController extends Controller
     /** @return array<string, mixed> */
     private function present(StudentIncidentReport $report): array
     {
+        $chart = StudentIncidentReport::supportsChartColumns();
+
         return [
             'id' => $report->id,
             'occurred_at' => $report->occurred_at?->toDateString(),
             'occurred_label' => $report->occurred_at?->format('d M Y'),
+            // The sheet's first column: date and time. Blank where no time
+            // was charted, never a made-up midnight.
+            'occurred_time' => $chart && $report->occurred_time ? substr((string) $report->occurred_time, 0, 5) : '',
+            'occurred_time_label' => $report->occurredTimeLabel(),
             'category' => $report->category,
             'category_label' => $report->categoryLabel(),
             'severity' => $report->severity,
             'severity_label' => $report->severityLabel(),
             'location' => (string) $report->location,
-            // FDAR, in the order it is charted: the category is the Focus, the
+            // FDAR, in the order it is charted: the Focus is the nurse's own
+            // statement (or the kind of incident where none was written), the
             // description the Data, then the Action and the Response.
+            'focus' => $chart ? (string) $report->focus : '',
+            'focus_label' => $report->focusLabel(),
             'description' => (string) $report->description,
             'action_taken' => (string) $report->action_taken,
             'response' => StudentIncidentReport::supportsResponse() ? (string) $report->response : '',
             'witnesses' => (string) $report->witnesses,
             'guardian_notified' => (bool) $report->guardian_notified,
+            // The signature under the note: who charted it and as what. The
+            // sheet is signed by the nurse, so the role is printed as a title.
             'reported_by' => (string) $report->reported_by_name,
+            'reported_by_title' => match ((string) $report->reported_by_role) {
+                'school_nurse' => 'School Nurse',
+                'clinic_staff' => 'Clinic Staff',
+                'class_adviser' => 'Class Adviser',
+                default => '',
+            },
             'filed_label' => $report->created_at?->format('d M Y, g:i A'),
         ];
     }

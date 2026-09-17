@@ -58,7 +58,7 @@
             </div>
         </div>
 
-        <div class="kpi-grid cols-3">
+        <div class="kpi-grid {{ $supports_expiry ? '' : 'cols-3' }}">
             <div class="card kpi accent-brand">
                 <div class="kpi-top">
                     <div class="kpi-label">Total Medicines</div>
@@ -91,6 +91,28 @@
                 <div class="kpi-value">{{ number_format($stats['low']) }}</div>
                 <div class="kpi-hint">At or below reorder point</div>
             </div>
+
+            @if ($supports_expiry)
+                {{-- Expiry, judged per item off the earliest date on hand. Expired
+                     stock is counted on the hint rather than folded into the
+                     figure: a box already past its date is a different job
+                     (pull it) from one about to (use or replace it). --}}
+                <div class="card kpi {{ $stats['expired'] > 0 ? 'accent-danger' : 'accent-orange' }}">
+                    <div class="kpi-top">
+                        <div class="kpi-label">Expiring Soon</div>
+                        <div class="kpi-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 16l2 2 4-4"/></svg>
+                        </div>
+                    </div>
+                    <div class="kpi-value">{{ number_format($stats['expiring']) }}</div>
+                    <div class="kpi-hint">
+                        Within {{ $expiry_warning_days }} days
+                        @if ($stats['expired'] > 0)
+                            &middot; <strong>{{ $stats['expired'] }} already expired</strong>
+                        @endif
+                    </div>
+                </div>
+            @endif
         </div>
 
         <section class="card forecast-card">
@@ -218,8 +240,14 @@
                             <th class="num">Used This Month</th>
                             <th class="num">Monthly Avg</th>
                             <th class="num">Cover</th>
+                            @if ($supports_expiry)
+                                <th>Expiry</th>
+                            @endif
                             <th>Status</th>
                             <th>Updated</th>
+                            @if ($supports_receipts)
+                                <th></th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody>
@@ -227,6 +255,10 @@
                         @php
                             $isCritical = $medicine->stock_quantity === 0;
                             $isLow = $medicine->stock_quantity > 0 && $medicine->stock_quantity < $medicine->minimum_threshold;
+                            // Expiry only matters for stock that exists; an empty
+                            // shelf has nothing to go off.
+                            $expiryStatus = $medicine->stock_quantity > 0 ? $medicine->expiryStatus() : null;
+                            $daysToExpiry = $medicine->daysToExpiry();
                         @endphp
                         <tr>
                             <td><strong>{{ $medicine->name }}</strong></td>
@@ -243,6 +275,22 @@
                             <td class="num">{{ $u['this_month'] }}</td>
                             <td class="num">{{ $u['months_of_history'] > 0 ? $u['average'] : '—' }}</td>
                             <td class="num">{{ $cover !== null ? $cover.' mo' : '—' }}</td>
+                            @if ($supports_expiry)
+                                {{-- The date, and how it stands. An item with no date on
+                                     file reads as unknown — an em dash — never as fine. --}}
+                                <td class="tnum inv-expiry">
+                                    @if ($medicine->expiry_date)
+                                        <span class="inv-expiry-date">{{ $medicine->expiry_date->format('d M Y') }}</span>
+                                        @if ($expiryStatus === \App\Models\Medicine::EXPIRY_EXPIRED)
+                                            <span class="badge badge-critical">Expired</span>
+                                        @elseif ($expiryStatus === \App\Models\Medicine::EXPIRY_SOON)
+                                            <span class="badge badge-risk">{{ $daysToExpiry }} {{ \Illuminate\Support\Str::plural('day', $daysToExpiry) }} left</span>
+                                        @endif
+                                    @else
+                                        —
+                                    @endif
+                                </td>
+                            @endif
                             <td>
                                 @if ($isCritical)
                                     <span class="badge badge-critical">Out of Stock</span>
@@ -253,10 +301,23 @@
                                 @endif
                             </td>
                             <td class="tnum">{{ $medicine->updated_at?->format('Y-m-d') ?? '—' }}</td>
+                            @if ($supports_receipts)
+                                <td class="inv-actions">
+                                    <button type="button" class="btn btn-secondary btn-sm" data-receive-open
+                                            data-medicine-id="{{ $medicine->id }}"
+                                            data-medicine-name="{{ $medicine->name }}"
+                                            data-medicine-unit="{{ $medicine->unit }}"
+                                            data-medicine-stock="{{ $medicine->stock_quantity }}"
+                                            data-receive-url="{{ route('medicine-inventory.receive', $medicine) }}">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                        Receive
+                                    </button>
+                                </td>
+                            @endif
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="table-empty">No medicine records yet. Use Add Medicine to create your first item.</td>
+                            <td colspan="{{ 8 + (int) $supports_expiry + (int) $supports_receipts }}" class="table-empty">No medicine records yet. Use Add Medicine to create your first item.</td>
                         </tr>
                     @endforelse
                     </tbody>
@@ -265,6 +326,94 @@
         </div>
     </div>
 </div>
+
+@if ($supports_receipts)
+    {{-- ── Receive stock ──
+         One dialog for every row: the button carries the item, the dialog
+         posts to that item's own receive route. A delivery is the logbook's
+         "in" column — quantity, expiry on the box, where it came from — and
+         the server writes the receipt and the increment in one transaction. --}}
+    <div class="inv-modal-backdrop" id="receiveBackdrop" hidden>
+        <div class="inv-modal" role="dialog" aria-modal="true" aria-labelledby="receiveTitle">
+            <form method="POST" id="receiveForm" action="">
+                @csrf
+                <div class="inv-modal-head">
+                    <div>
+                        <div class="page-eyebrow">Receive Stock</div>
+                        <h2 id="receiveTitle" class="inv-modal-title">Medicine</h2>
+                        <p class="inv-modal-sub" id="receiveSub"></p>
+                    </div>
+                    <button type="button" class="inv-modal-close" data-receive-close aria-label="Close">&times;</button>
+                </div>
+                <div class="inv-modal-body">
+                    <div class="inv-form-grid">
+                        <div class="field">
+                            <label for="receiveQuantity">Quantity received</label>
+                            <input class="input" id="receiveQuantity" name="quantity" type="number" min="1" max="100000" required>
+                        </div>
+                        <div class="field">
+                            <label for="receiveExpiry">Expiry date on the box</label>
+                            {{-- Already-expired stock is refused: the count is a count
+                                 of usable medicine. --}}
+                            <input class="input" id="receiveExpiry" name="expiry_date" type="date" min="{{ now()->addDay()->toDateString() }}">
+                        </div>
+                        <div class="field">
+                            <label for="receiveDate">Date received</label>
+                            <input class="input" id="receiveDate" name="received_at" type="date" value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}">
+                        </div>
+                        <div class="field">
+                            <label for="receiveSource">Source</label>
+                            <input class="input" id="receiveSource" name="source" type="text" maxlength="120" placeholder="e.g. Division delivery, donation, purchase" autocomplete="off">
+                        </div>
+                        <div class="field full">
+                            <label for="receiveNotes">Notes</label>
+                            <input class="input" id="receiveNotes" name="notes" type="text" maxlength="255" placeholder="Optional — lot number, delivery reference" autocomplete="off">
+                        </div>
+                    </div>
+                    @if ($errors->has('quantity') || $errors->has('expiry_date') || $errors->has('received_at'))
+                        <div class="inv-form-error">{{ $errors->first('quantity') ?: ($errors->first('expiry_date') ?: $errors->first('received_at')) }}</div>
+                    @endif
+                </div>
+                <div class="inv-modal-foot">
+                    <button type="button" class="btn btn-secondary" data-receive-close>Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add to Stock</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    (() => {
+        const backdrop = document.getElementById('receiveBackdrop');
+        const form = document.getElementById('receiveForm');
+        const title = document.getElementById('receiveTitle');
+        const sub = document.getElementById('receiveSub');
+        const quantity = document.getElementById('receiveQuantity');
+        if (!backdrop || !form) return;
+
+        const close = () => {
+            backdrop.hidden = true;
+            document.body.classList.remove('inv-modal-open');
+        };
+
+        document.querySelectorAll('[data-receive-open]').forEach((button) => {
+            button.addEventListener('click', () => {
+                form.action = button.dataset.receiveUrl || '';
+                title.textContent = button.dataset.medicineName || 'Medicine';
+                sub.textContent = 'On hand: ' + (button.dataset.medicineStock || '0') + ' ' + (button.dataset.medicineUnit || '');
+                form.reset();
+                backdrop.hidden = false;
+                document.body.classList.add('inv-modal-open');
+                quantity?.focus();
+            });
+        });
+
+        backdrop.querySelectorAll('[data-receive-close]').forEach((button) => button.addEventListener('click', close));
+        backdrop.addEventListener('click', (event) => { if (event.target === backdrop) close(); });
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !backdrop.hidden) close(); });
+    })();
+    </script>
+@endif
 
 @include('partials.nurse-page-transition')
 </body>

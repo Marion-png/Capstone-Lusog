@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
 use App\Support\SchemaCache;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -73,9 +74,23 @@ class StudentIncidentReport extends Model
     }
 
     /**
+     * Whether the F-DAR sheet's own columns are on this database yet: the
+     * time of the incident and the nurse's focus statement. Guarded the same
+     * way as the Response — an un-migrated machine charts without them rather
+     * than 500ing on save.
+     */
+    public static function supportsChartColumns(): bool
+    {
+        return SchemaCache::hasColumn('student_incident_reports', 'occurred_time')
+            && SchemaCache::hasColumn('student_incident_reports', 'focus');
+    }
+
+    /**
      * What kind of incident. A fixed catalogue rather than free text: the
      * list is filtered by it, and a report filed under a category nobody
-     * recognises is a report nobody finds.
+     * recognises is a report nobody finds. It is the kind; the F-DAR Focus
+     * printed on the sheet is the nurse's own `focus` statement, with this as
+     * the fallback where none was written.
      *
      * @var array<string, string>
      */
@@ -106,8 +121,10 @@ class StudentIncidentReport extends Model
         'student_lrn',
         'school_year',
         'occurred_at',
+        'occurred_time',
         'category',
         'severity',
+        'focus',
         'location',
         'description',
         'action_taken',
@@ -121,6 +138,7 @@ class StudentIncidentReport extends Model
     protected $casts = [
         'occurred_at' => 'date',
         'guardian_notified' => 'boolean',
+        'focus' => EncryptedString::class,
         'location' => EncryptedString::class,
         'description' => EncryptedString::class,
         'action_taken' => EncryptedString::class,
@@ -140,6 +158,31 @@ class StudentIncidentReport extends Model
     public function categoryLabel(): string
     {
         return self::CATEGORIES[$this->category] ?? 'Other';
+    }
+
+    /**
+     * The Focus as the F-DAR sheet prints it: the nurse's own statement, or
+     * the kind of incident where none was written.
+     */
+    public function focusLabel(): string
+    {
+        $focus = self::supportsChartColumns() ? trim((string) $this->focus) : '';
+
+        return $focus !== '' ? $focus : $this->categoryLabel();
+    }
+
+    /** "10:20 AM", or '' where no time was charted. */
+    public function occurredTimeLabel(): string
+    {
+        if (! self::supportsChartColumns() || ! $this->occurred_time) {
+            return '';
+        }
+
+        try {
+            return Carbon::parse((string) $this->occurred_time)->format('g:i A');
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     public function severityLabel(): string

@@ -38,12 +38,14 @@
 
     <div class="sp-note">
         @if ($incidentCanFile)
-            Chart an incident involving this learner in <b>FDAR</b> — Focus, Data,
-            Action, Response. The learner's class adviser can read what you file.
+            Chart an incident involving this learner in <b>F-DAR</b> — Date/Time,
+            Focus, then the Progress Notes as Data, Action, Response. The
+            learner's class adviser can read what you file.
         @else
             Incidents involving this learner, charted by the school nurse in
-            <b>FDAR</b> — Focus, Data, Action, Response. Read-only here: filing
-            and withdrawing a report is the nurse's.
+            <b>F-DAR</b> — Date/Time, Focus, and the Progress Notes as Data,
+            Action, Response. Read-only here: filing and withdrawing a report
+            is the nurse's.
         @endif
     </div>
 
@@ -63,52 +65,61 @@
               @endif>
             @csrf
 
-            {{-- The record's own fields: when, how serious, where. They are not
-                 part of FDAR and are kept out of its four sections so the chart
-                 reads as a chart, but they are what makes the report findable
-                 and followable afterwards. --}}
-            <div class="incident-form-grid">
-                <div class="field">
-                    <label for="incidentDate">Date of incident</label>
-                    {{-- An incident is something that already happened; the server
-                         refuses a future date and the picker will not offer one. --}}
-                    <input type="date" id="incidentDate" name="occurred_at" max="{{ now()->toDateString() }}" required>
-                </div>
+            @php $incidentChartColumns = StudentIncidentReport::supportsChartColumns(); @endphp
 
-                <div class="field">
-                    <label for="incidentSeverity">Severity</label>
-                    <select id="incidentSeverity" name="severity" required>
-                        @foreach (StudentIncidentReport::SEVERITIES as $value => $label)
-                            <option value="{{ $value }}">{{ $label }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div class="field full">
-                    <label for="incidentLocation">Where it happened</label>
-                    <input type="text" id="incidentLocation" name="location" maxlength="255" placeholder="e.g. Covered court" autocomplete="off">
-                </div>
-            </div>
-
-            {{-- ── FDAR ──────────────────────────────────────────────────────
-                 Four sections in the order they are charted, each named by its
-                 letter so the form reads as the format a nurse already knows.
-                 Focus stays the fixed catalogue: the list is filtered by it,
-                 and a report filed under a focus nobody recognises is a report
-                 nobody finds. --}}
+            {{-- ── F-DAR ─────────────────────────────────────────────────────
+                 The form is laid out as the sheet it files: Date/Time, then
+                 the Focus, then the Progress Notes in D / A / R order, each
+                 named by its letter so it reads as the format a nurse already
+                 knows. The record's own fields — severity, where, witnesses —
+                 come after, because they are not part of the chart. --}}
             <div class="fdar">
+                {{-- Column one of the sheet: the date AND the time. An incident
+                     is something that already happened; the server refuses a
+                     future date or a later time today, and the picker will not
+                     offer a future date. --}}
+                <div class="fdar-row">
+                    <span class="fdar-letter fdar-letter-plain" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                    </span>
+                    <div class="fdar-body">
+                        <label for="incidentDate">Date and time</label>
+                        <p class="fdar-hint">When it happened.</p>
+                        <div class="fdar-when">
+                            <input type="date" id="incidentDate" name="occurred_at" max="{{ now()->toDateString() }}" required aria-label="Date of incident">
+                            @if ($incidentChartColumns)
+                                <input type="time" id="incidentTime" name="occurred_time" aria-label="Time of incident">
+                            @endif
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Focus: what the note is about — a sign or symptom, a
+                     behaviour, a treatment event; not a medical diagnosis. The
+                     kind of incident stays the fixed catalogue, because the
+                     list is filtered by it and a report filed under a kind
+                     nobody recognises is a report nobody finds; the statement
+                     is the nurse's own words and is what the sheet prints. --}}
                 <div class="fdar-row">
                     <span class="fdar-letter" aria-hidden="true">F</span>
                     <div class="fdar-body">
                         <label for="incidentCategory">Focus</label>
-                        <p class="fdar-hint">The concern being charted.</p>
-                        <select id="incidentCategory" name="category" required>
-                            @foreach (StudentIncidentReport::CATEGORIES as $value => $label)
-                                <option value="{{ $value }}">{{ $label }}</option>
-                            @endforeach
-                        </select>
+                        <p class="fdar-hint">The concern being charted — a sign or symptom, a behaviour or a treatment event, not a medical diagnosis.</p>
+                        <div class="fdar-focus">
+                            <select id="incidentCategory" name="category" required aria-label="Kind of incident">
+                                @foreach (StudentIncidentReport::CATEGORIES as $value => $label)
+                                    <option value="{{ $value }}">{{ $label }}</option>
+                                @endforeach
+                            </select>
+                            @if ($incidentChartColumns)
+                                <input type="text" id="incidentFocus" name="focus" maxlength="255" autocomplete="off"
+                                       placeholder="e.g. Abrasion, left knee" aria-label="Focus statement">
+                            @endif
+                        </div>
                     </div>
                 </div>
+
+                <div class="fdar-subhead">Progress Notes</div>
 
                 <div class="fdar-row">
                     <span class="fdar-letter" aria-hidden="true">D</span>
@@ -146,7 +157,24 @@
                 @endif
             </div>
 
+            {{-- The record's own fields: how serious, where, who else was
+                 there. Not part of F-DAR, so kept out of the chart above, but
+                 they are what makes the report findable and followable. --}}
             <div class="incident-form-grid">
+                <div class="field">
+                    <label for="incidentSeverity">Severity</label>
+                    <select id="incidentSeverity" name="severity" required>
+                        @foreach (StudentIncidentReport::SEVERITIES as $value => $label)
+                            <option value="{{ $value }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div class="field">
+                    <label for="incidentLocation">Where it happened</label>
+                    <input type="text" id="incidentLocation" name="location" maxlength="255" placeholder="e.g. Covered court" autocomplete="off">
+                </div>
+
                 <div class="field full">
                     <label for="incidentWitnesses">Witnesses</label>
                     <input type="text" id="incidentWitnesses" name="witnesses" maxlength="500" placeholder="Names of anyone else present" autocomplete="off">

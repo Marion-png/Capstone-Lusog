@@ -27,6 +27,13 @@
 	<span class="np-measured">{{ $progress['measured'] }} of {{ $progress['total'] }} measured at endline</span>
 </div>
 
+{{-- The headline says who improved; this says what happened to everyone
+     else — remained wasted, regressed, not yet measured — as shares of the
+     same roll. --}}
+@if (isset($progress['split']))
+	@include('partials.outcome-split', ['split' => $progress['split'], 'splitTitle' => 'Who improved, remained wasted or regressed'])
+@endif
+
 <div class="np-legend">
 	<span class="np-legend-item"><i class="np-dot np-dot-baseline"></i>Baseline</span>
 	<span class="np-legend-item"><i class="np-dot np-dot-endline"></i>Endline</span>

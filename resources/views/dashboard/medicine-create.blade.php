@@ -90,6 +90,16 @@
                         <input id="unit" name="unit" type="text" value="{{ old('unit', 'pcs') }}" required>
                         @error('unit') <div class="err">{{ $message }}</div> @enderror
                     </div>
+                    @if (\App\Models\Medicine::supportsExpiry())
+                        <div class="field">
+                            <label for="expiry_date">Expiry Date</label>
+                            {{-- The earliest expiry of the stock being entered. Optional —
+                                 an item created empty has nothing to expire yet; a delivery
+                                 later carries its own date. --}}
+                            <input id="expiry_date" name="expiry_date" type="date" value="{{ old('expiry_date') }}">
+                            @error('expiry_date') <div class="err">{{ $message }}</div> @enderror
+                        </div>
+                    @endif
                     <div class="field">
                         <label for="notes">Notes</label>
                         <input id="notes" name="notes" type="text" value="{{ old('notes') }}" placeholder="Optional">

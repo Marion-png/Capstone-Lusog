@@ -845,3 +845,7 @@
 	.badge { background: transparent !important; color: #000 !important; border: 1px solid #666 !important; }
 	.badge::before { display: none; }
 }
+
+/* Programme outlook: the projected row reads as a projection — tinted, and
+   labelled so — never as another year of record. */
+.sh-outlook-projection td { background: var(--lg-info-tint); border-top: 2px solid var(--lg-info); }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\StudentHealthRecord;
 use App\Support\BmiAssessmentReport;
 use App\Support\FeedingBeneficiarySummary;
+use App\Support\FeedingProgramForecast;
 use App\Support\SchoolHeadOverview;
 use App\Support\SchoolHeadPulse;
 use App\Support\SchoolLetterhead;
@@ -80,6 +81,9 @@ class SchoolHeadReportsController extends Controller
             'comparison' => $this->comparison($overview),
             'shift' => $this->buildShiftChart($overview),
             'outcome' => $overview->outcome(),
+            // Predictive analytics — drawn only once at least two cycles have
+            // finished with an endline on record; see FeedingProgramForecast.
+            'outlook' => FeedingProgramForecast::for($institutionId),
             'target' => $this->target(),
             'reports' => $this->reportCards($overview),
             'headName' => trim((string) $request->session()->get('active_name', '')) ?: 'School Head',

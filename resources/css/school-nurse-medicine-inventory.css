@@ -80,3 +80,60 @@
 @media (max-width: 620px) {
 	.fc-stats { grid-template-columns: 1fr; }
 }
+
+/* ── Expiry and receiving ──
+   The date on the box beside the count on the shelf, and the one control
+   that raises a level: a delivery. The dialog is this page's own — the
+   inventory is shared with Clinic Staff and does not load the board-modal
+   assets — and it keeps the theme's card and input anatomy. */
+.inv-expiry { white-space: nowrap; }
+.inv-expiry-date { display: block; margin-bottom: 3px; }
+.inv-actions { text-align: right; white-space: nowrap; }
+.btn.btn-sm { padding: 6px 11px; font-size: .78rem; }
+.btn.btn-sm svg { width: 14px; height: 14px; }
+
+.inv-modal-backdrop {
+	position: fixed; inset: 0; z-index: 1300;
+	display: flex; align-items: center; justify-content: center;
+	padding: 20px;
+	background: rgba(31, 45, 37, .42);
+	backdrop-filter: blur(2px);
+}
+.inv-modal-backdrop[hidden] { display: none; }
+body.inv-modal-open { overflow: hidden; }
+.inv-modal {
+	width: min(560px, 100%);
+	background: var(--lg-card);
+	border-radius: var(--lg-r-card);
+	box-shadow: var(--lg-shadow-pop);
+	max-height: calc(100vh - 40px);
+	overflow: auto;
+}
+.inv-modal-head {
+	display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+	padding: 18px 20px 12px;
+	border-bottom: 1px solid var(--lg-border);
+}
+.inv-modal-title { margin: 2px 0 0; font-size: 1.05rem; font-weight: 600; color: var(--lg-ink); }
+.inv-modal-sub { margin: 4px 0 0; font-size: .78rem; color: var(--lg-ink-soft); font-variant-numeric: var(--lg-figures); }
+.inv-modal-close {
+	border: none; background: none; cursor: pointer;
+	font-size: 1.4rem; line-height: 1; color: var(--lg-ink-soft);
+	padding: 2px 6px; border-radius: 6px;
+}
+.inv-modal-close:hover { background: var(--lg-rail); color: var(--lg-ink); }
+.inv-modal-body { padding: 16px 20px; }
+.inv-modal-foot {
+	display: flex; justify-content: flex-end; gap: 9px;
+	padding: 12px 20px 18px;
+	border-top: 1px solid var(--lg-border);
+}
+.inv-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.inv-form-grid .field.full { grid-column: 1 / -1; }
+.inv-form-grid label { display: block; font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); margin-bottom: 4px; }
+.inv-form-grid .input { width: 100%; }
+.inv-form-error { margin-top: 12px; padding: 9px 12px; border-radius: 8px; background: var(--lg-danger-tint); color: var(--lg-danger-ink); font-size: .78rem; }
+
+@media (max-width: 620px) {
+	.inv-form-grid { grid-template-columns: 1fr; }
+}

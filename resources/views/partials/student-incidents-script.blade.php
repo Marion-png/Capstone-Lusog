@@ -64,30 +64,84 @@ window.StudentIncidents = (() => {
         return node;
     };
 
-    // One charted section: the letter, its name, and what was written under it.
-    const fdarRow = (letter, label, value) => {
-        const row = el('div', 'fdar-read-row');
-        row.append(
-            el('span', 'fdar-letter', letter),
-            (() => {
-                const body = el('div', 'fdar-read-body');
-                body.append(
-                    el('span', 'fdar-read-label', label),
-                    el('p', 'fdar-read-value', value),
-                );
-                return body;
-            })(),
-        );
-        return row;
+    // One line of the Progress Notes: "D:" and what was written under it.
+    const noteLine = (letter, label, value) => {
+        const line = el('div', 'fdar-note');
+        const tag = el('span', 'fdar-note-tag');
+        tag.append(el('b', null, letter), el('span', null, label));
+        line.append(tag, el('p', 'fdar-note-value', value));
+        return line;
+    };
+
+    // The filed report, read back as the F-DAR sheet it was charted on: one
+    // table, three columns — Date/Time | Focus | Progress Notes — with the
+    // notes in D / A / R order and the nurse's signature under them. A section
+    // nobody has recorded yet (an Action, or a Response before there is an
+    // outcome) is left out rather than printed as an empty heading.
+    const fdarSheet = (report) => {
+        const table = el('table', 'fdar-sheet');
+        const caption = el('caption', 'sr-only', 'Focus charting (F-DAR)');
+        table.appendChild(caption);
+
+        const thead = el('thead');
+        const headRow = el('tr');
+        ['Date / Time', 'Focus', 'Progress Notes'].forEach((heading) => {
+            const th = el('th', null, heading);
+            th.scope = 'col';
+            headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        const tbody = el('tbody');
+        const row = el('tr');
+
+        const when = el('td', 'fdar-when-cell');
+        when.appendChild(el('span', 'fdar-date', report.occurred_label || report.occurred_at || '-'));
+        if (report.occurred_time_label) when.appendChild(el('span', 'fdar-time', report.occurred_time_label));
+        row.appendChild(when);
+
+        // The nurse's own focus statement leads; the kind of incident sits
+        // under it, unless the statement is the kind (nothing else written).
+        const focus = el('td', 'fdar-focus-cell');
+        focus.appendChild(el('span', 'fdar-focus-main', report.focus_label || report.category_label));
+        if (report.focus && report.focus_label !== report.category_label) {
+            focus.appendChild(el('span', 'fdar-focus-kind', report.category_label));
+        }
+        row.appendChild(focus);
+
+        const notes = el('td', 'fdar-notes-cell');
+        notes.appendChild(noteLine('D', 'Data', report.description));
+        if (report.action_taken) notes.appendChild(noteLine('A', 'Action', report.action_taken));
+        if (report.response) notes.appendChild(noteLine('R', 'Response', report.response));
+
+        // Signed, as a note is: the name and the title of who charted it, and
+        // when it was filed. Attribution is the server's, not the form's.
+        const signer = [report.reported_by, report.reported_by_title].filter(Boolean).join(', ');
+        if (signer || report.filed_label) {
+            const sig = el('div', 'fdar-signature');
+            if (signer) sig.appendChild(el('span', 'fdar-signature-name', '— ' + signer));
+            if (report.filed_label) sig.appendChild(el('span', 'fdar-signature-time', 'Filed ' + report.filed_label));
+            notes.appendChild(sig);
+        }
+        row.appendChild(notes);
+
+        tbody.appendChild(row);
+        table.appendChild(tbody);
+
+        const wrap = el('div', 'fdar-sheet-scroll');
+        wrap.appendChild(table);
+        return wrap;
     };
 
     const renderRow = (report) => {
         const card = el('article', 'incident-card');
         card.dataset.id = report.id;
 
+        // The date and time are on the sheet itself; the head carries what is
+        // not part of F-DAR — how serious it was and whether home was told.
         const head = el('div', 'incident-card-head');
         head.append(
-            el('span', 'incident-date', report.occurred_label || report.occurred_at || '-'),
             el('span', 'incident-sev incident-sev-' + report.severity, report.severity_label),
         );
 
@@ -107,15 +161,8 @@ window.StudentIncidents = (() => {
 
         card.appendChild(head);
 
-        // The chart itself, in FDAR order. Focus and Data are always there;
-        // an Action or Response nobody has recorded yet is left out rather
-        // than printed as an empty heading.
-        const chart = el('div', 'fdar-read');
-        chart.appendChild(fdarRow('F', 'Focus', report.category_label));
-        chart.appendChild(fdarRow('D', 'Data', report.description));
-        if (report.action_taken) chart.appendChild(fdarRow('A', 'Action', report.action_taken));
-        if (report.response) chart.appendChild(fdarRow('R', 'Response', report.response));
-        card.appendChild(chart);
+        // The chart itself: the F-DAR sheet.
+        card.appendChild(fdarSheet(report));
 
         // Everything that is not part of the chart.
         const facts = el('div', 'incident-facts');
@@ -127,7 +174,6 @@ window.StudentIncidents = (() => {
         };
         addFact('Where:', report.location);
         addFact('Witnesses:', report.witnesses);
-        addFact('Charted by:', [report.reported_by, report.filed_label].filter(Boolean).join(' · '));
 
         if (facts.childElementCount > 0) card.appendChild(facts);
 

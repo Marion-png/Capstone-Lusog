@@ -104,6 +104,7 @@ class FeedingNutritionProgress
             'unchanged' => $unchanged,
             'declined' => $declined,
             'rate' => $rate,
+            'split' => self::split($total, $measured, $improved, $unchanged, $declined),
             'rows' => array_map(
                 fn (array $row): array => $row + [
                     // Bar lengths share one scale across both series, so a
@@ -114,6 +115,49 @@ class FeedingNutritionProgress
                 ],
                 $rows
             ),
+        ];
+    }
+
+    /**
+     * The outcome as a split: who improved, who remained wasted, who
+     * regressed — and who has not been re-measured.
+     *
+     * One computation for the coordinator's progress panel and the head's
+     * reports, so the two cannot disagree. Every share is over **all**
+     * beneficiaries, the same denominator the improvement rate uses, and the
+     * learners nobody has weighed at endline are their own segment rather than
+     * being dropped: a split over the measured alone reads "60% improved" off
+     * five learners in a programme of ninety. The segments sum to the total.
+     *
+     *   improved   — climbed the wasting scale
+     *   unchanged  — same rung; a beneficiary starts on the scale, so this is
+     *                "remained wasted"
+     *   declined   — dropped a rung (Wasted → Severely Wasted): regressed
+     *   off_scale  — measured, but the endline is above Normal, so there is no
+     *                rung to compare (never counted as improvement)
+     *   unmeasured — no endline yet
+     *
+     * @return array{total: int, measured: int, segments: list<array{key: string, label: string, count: int, pct: float}>}
+     */
+    public static function split(int $total, int $measured, int $improved, int $unchanged, int $declined): array
+    {
+        $offScale = max(0, $measured - $improved - $unchanged - $declined);
+        $unmeasured = max(0, $total - $measured);
+
+        $pct = fn (int $count): float => $total > 0 ? round(($count / $total) * 100, 1) : 0.0;
+
+        $segments = [
+            ['key' => 'improved', 'label' => 'Improved', 'count' => $improved],
+            ['key' => 'unchanged', 'label' => 'Remained wasted', 'count' => $unchanged],
+            ['key' => 'declined', 'label' => 'Regressed', 'count' => $declined],
+            ['key' => 'off_scale', 'label' => 'Above normal', 'count' => $offScale],
+            ['key' => 'unmeasured', 'label' => 'Not yet measured', 'count' => $unmeasured],
+        ];
+
+        return [
+            'total' => $total,
+            'measured' => $measured,
+            'segments' => array_map(fn (array $s): array => $s + ['pct' => $pct($s['count'])], $segments),
         ];
     }
 

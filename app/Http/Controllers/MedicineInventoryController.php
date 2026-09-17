@@ -3,10 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Medicine;
+use App\Models\MedicineReceipt;
 use App\Support\MedicineCatalogue;
 use App\Support\MedicineUsage;
+use App\Support\SchemaCache;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class MedicineInventoryController extends Controller
@@ -35,6 +39,13 @@ class MedicineInventoryController extends Controller
         $lowStockCount = $medicines
             ->filter(fn (Medicine $medicine) => $medicine->stock_quantity < $medicine->minimum_threshold)
             ->count();
+
+        // Expiry, judged per item off the earliest date on hand. An item with
+        // no stock is not counted — an empty shelf cannot expire — and an item
+        // with no date on file is unknown, not fine, so it is neither.
+        $stocked = $medicines->filter(fn (Medicine $medicine) => $medicine->stock_quantity > 0);
+        $expiredCount = $stocked->filter(fn (Medicine $m) => $m->expiryStatus() === Medicine::EXPIRY_EXPIRED)->count();
+        $expiringCount = $stocked->filter(fn (Medicine $m) => $m->expiryStatus() === Medicine::EXPIRY_SOON)->count();
 
         $forecastMedicine = $this->resolveForecastMedicine($medicines);
         $forecastUnit = $forecastMedicine?->unit ?? 'doses';
@@ -78,7 +89,12 @@ class MedicineInventoryController extends Controller
                 'total' => $medicines->count(),
                 'low' => $lowStockCount,
                 'good' => $medicines->count() - $lowStockCount,
+                'expired' => $expiredCount,
+                'expiring' => $expiringCount,
             ],
+            'expiry_warning_days' => Medicine::EXPIRY_WARNING_DAYS,
+            'supports_expiry' => Medicine::supportsExpiry(),
+            'supports_receipts' => SchemaCache::hasTable('medicine_receipts'),
             // Usage per medicine for the Current Inventory table — one query
             // for the page, keyed by medicine id.
             'usage' => $medicines->mapWithKeys(fn (Medicine $m): array => [
@@ -147,8 +163,15 @@ class MedicineInventoryController extends Controller
             'stock_quantity' => ['required', 'integer', 'min:0'],
             'minimum_threshold' => ['required', 'integer', 'min:0'],
             'unit' => ['required', 'string', 'max:20'],
+            // The earliest expiry of the stock being entered. Optional: an
+            // item created with no stock has nothing to expire.
+            'expiry_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:255'],
         ]);
+
+        if (! Medicine::supportsExpiry()) {
+            unset($validated['expiry_date']);
+        }
 
         Medicine::create([
             ...$validated,
@@ -159,6 +182,96 @@ class MedicineInventoryController extends Controller
         return redirect()
             ->route('dashboard.medicine-inventory')
             ->with('success', 'Medicine added to inventory.');
+    }
+
+    /**
+     * A delivery: stock comes in.
+     *
+     * The logbook's other column. Until this existed a level could only be
+     * typed at creation and drawn down by consultations, so the first box to
+     * arrive put the record out of step with the shelf. The receipt row and
+     * the increment are written in one transaction, holding the medicine row
+     * locked exactly as a dispense does, so a delivery and an issue landing
+     * together cannot both read the same level.
+     *
+     * The item's expiry becomes the earliest date on hand: a fresh delivery
+     * onto an empty shelf sets it, a delivery onto existing stock keeps the
+     * sooner of the two — the older box is used first and is still the one
+     * the item is judged by.
+     */
+    public function receive(Request $request, Medicine $medicine): RedirectResponse
+    {
+        if ($redirect = $this->requireClinicRole($request)) {
+            return $redirect;
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+
+        // Re-scoped to the school: an id off the wire decides nothing.
+        if ($institutionId && (int) $medicine->institution_id !== (int) $institutionId) {
+            abort(404);
+        }
+
+        if (! SchemaCache::hasTable('medicine_receipts') || ! Medicine::supportsExpiry()) {
+            return redirect()
+                ->route('dashboard.medicine-inventory')
+                ->with('error', 'Receiving stock is not available until the database has been updated.');
+        }
+
+        $validated = $request->validate([
+            'quantity' => ['required', 'integer', 'min:1', 'max:100000'],
+            // Already-expired stock has no business on the shelf; refusing it
+            // here is what keeps the count a count of usable medicine.
+            'expiry_date' => ['nullable', 'date', 'after:today'],
+            'received_at' => ['nullable', 'date', 'before_or_equal:today'],
+            'source' => ['nullable', 'string', 'max:120'],
+            'notes' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        DB::transaction(function () use ($request, $medicine, $validated, $institutionId): void {
+            $locked = Medicine::query()->lockForUpdate()->findOrFail($medicine->id);
+
+            $newExpiry = ! empty($validated['expiry_date'])
+                ? Carbon::parse($validated['expiry_date'])->startOfDay()
+                : null;
+
+            $current = $locked->expiry_date?->copy()->startOfDay();
+
+            // Nothing on the shelf, or a date already past: the delivery's
+            // date is the shelf's date. Otherwise the earlier of the two.
+            $shelfEmpty = (int) $locked->stock_quantity === 0
+                || ($current !== null && $current->lte(now()->startOfDay()));
+
+            $expiry = match (true) {
+                $newExpiry === null => $shelfEmpty ? null : $current,
+                $shelfEmpty, $current === null => $newExpiry,
+                default => $newExpiry->lt($current) ? $newExpiry : $current,
+            };
+
+            MedicineReceipt::create([
+                'institution_id' => $institutionId,
+                'medicine_id' => $locked->id,
+                'quantity' => (int) $validated['quantity'],
+                'expiry_date' => $newExpiry?->toDateString(),
+                'received_at' => ! empty($validated['received_at'])
+                    ? Carbon::parse($validated['received_at'])->toDateString()
+                    : now()->toDateString(),
+                'source' => $validated['source'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                // Attribution is the app's, not the form's.
+                'received_by_name' => (string) $request->session()->get('active_name', ''),
+                'received_by_role' => (string) $request->session()->get('active_role', ''),
+            ]);
+
+            $locked->forceFill([
+                'stock_quantity' => (int) $locked->stock_quantity + (int) $validated['quantity'],
+                'expiry_date' => $expiry?->toDateString(),
+            ])->save();
+        });
+
+        return redirect()
+            ->route('dashboard.medicine-inventory')
+            ->with('success', 'Received '.(int) $validated['quantity'].' '.$medicine->unit.' of '.$medicine->name.'.');
     }
 
     /**

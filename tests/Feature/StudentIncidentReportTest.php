@@ -136,6 +136,66 @@ class StudentIncidentReportTest extends TestCase
         $this->assertStringContainsString('id="incidentDescription"', $html);
         $this->assertStringContainsString('id="incidentAction"', $html);
         $this->assertStringContainsString('id="incidentResponse"', $html);
+
+        // The sheet's own first column and the nurse's focus statement, and
+        // the D / A / R rows headed as the Progress Notes column they are.
+        $this->assertStringContainsString('id="incidentDate"', $html);
+        $this->assertStringContainsString('id="incidentTime"', $html);
+        $this->assertStringContainsString('name="occurred_time"', $html);
+        $this->assertStringContainsString('id="incidentFocus"', $html);
+        $this->assertStringContainsString('name="focus"', $html);
+        $this->assertStringContainsString('>Date and time<', $html);
+        $this->assertStringContainsString('Progress Notes', $html);
+    }
+
+    /**
+     * F-DAR's first column is the date AND the time, and the Focus is the
+     * nurse's own statement — a sign, a behaviour, a treatment event — with
+     * the kind of incident as the fallback where none was written.
+     */
+    #[Test]
+    public function the_time_and_the_focus_statement_are_charted_and_read_back(): void
+    {
+        $this->learner();
+
+        $this->file(['occurred_time' => '10:20', 'focus' => 'Abrasion, left knee'])
+            ->assertCreated()
+            ->assertJsonPath('report.occurred_time', '10:20')
+            ->assertJsonPath('report.occurred_time_label', '10:20 AM')
+            ->assertJsonPath('report.focus', 'Abrasion, left knee')
+            ->assertJsonPath('report.focus_label', 'Abrasion, left knee')
+            ->assertJsonPath('report.category_label', 'Injury / Accident')
+            ->assertJsonPath('report.reported_by_title', 'School Nurse');
+
+        // Neither is required: a note with no clock reading and no statement
+        // still files, prints no invented time, and is focused on its kind.
+        $this->file(['occurred_time' => '', 'focus' => ''])
+            ->assertCreated()
+            ->assertJsonPath('report.occurred_time', '')
+            ->assertJsonPath('report.occurred_time_label', '')
+            ->assertJsonPath('report.focus', '')
+            ->assertJsonPath('report.focus_label', 'Injury / Accident');
+    }
+
+    /** A time still ahead of the clock on today's date is the same typo as a future date. */
+    #[Test]
+    public function a_time_later_than_now_today_is_refused(): void
+    {
+        $this->learner();
+
+        $this->travelTo(now()->setTime(9, 0));
+
+        $this->file(['occurred_at' => now()->toDateString(), 'occurred_time' => '11:30'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('occurred_time');
+
+        // The same time yesterday, or an earlier time today, is fine.
+        $this->file(['occurred_at' => now()->subDay()->toDateString(), 'occurred_time' => '11:30'])->assertCreated();
+        $this->file(['occurred_at' => now()->toDateString(), 'occurred_time' => '08:15'])->assertCreated();
+
+        $this->file(['occurred_time' => 'ten past'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('occurred_time');
     }
 
     /** The Response is stored, encrypted, and read back. */
@@ -352,11 +412,11 @@ class StudentIncidentReportTest extends TestCase
     public function what_a_person_wrote_is_encrypted_at_rest(): void
     {
         $this->learner();
-        $this->file()->assertCreated();
+        $this->file(['focus' => 'Abrasion, left knee', 'occurred_time' => '10:20'])->assertCreated();
 
         $row = DB::table('student_incident_reports')->first();
 
-        foreach (['location', 'description', 'action_taken', 'response', 'witnesses', 'reported_by_name'] as $column) {
+        foreach (['focus', 'location', 'description', 'action_taken', 'response', 'witnesses', 'reported_by_name'] as $column) {
             $this->assertNotEmpty($row->{$column}, "{$column} must be stored.");
             $this->assertStringStartsWith(
                 'eyJpdiI6',
@@ -365,9 +425,12 @@ class StudentIncidentReportTest extends TestCase
             );
         }
 
-        // Lookup keys stay plain — the list is filtered and ordered on them.
+        // Lookup keys stay plain — the list is filtered and ordered on them —
+        // and so does the time: a clock reading is no more personal than the
+        // plain date beside it.
         $this->assertSame('900000000001', $row->student_lrn);
         $this->assertSame('injury', $row->category);
+        $this->assertStringStartsWith('10:20', (string) $row->occurred_time);
     }
 
     #[Test]

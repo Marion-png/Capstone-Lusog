@@ -241,6 +241,27 @@
 			</article>
 		</section>
 
+		{{-- ── Outcome split ───────────────────────────────────────────
+		     The three cards above are three counts; this is the whole roll
+		     as shares — improved, remained wasted, regressed, and the ones
+		     nobody has re-measured yet — from the same computation the
+		     coordinator's Nutritional Progress panel reads. ── --}}
+		<section class="card section">
+			<div class="section-head">
+				<h2 class="section-title">Programme Outcome</h2>
+				<div class="section-meta">Improved &middot; remained wasted &middot; regressed, as shares of every beneficiary</div>
+			</div>
+			@include('partials.outcome-split', ['split' => $outcome['split'], 'splitTitle' => 'S.Y. '.$schoolYear])
+		</section>
+
+		{{-- ── Programme outlook ───────────────────────────────────────
+		     Predictive analytics, drawn only once there is history to draw
+		     from: completed cycles with an endline on record. Until then the
+		     panel says how many more it needs rather than projecting from a
+		     single year, because a trend through one point is a guess with a
+		     chart behind it. ── --}}
+		@include('schoolhead-dashboard.partials.program-outlook', ['outlook' => $outlook])
+
 		{{-- ── Reports ─────────────────────────────────────────────────
 		     The head opens a report and exports it. There is no decision to
 		     record here any more: Approve / Return for correction / Lock are

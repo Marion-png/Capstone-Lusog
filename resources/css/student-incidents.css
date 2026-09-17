@@ -53,17 +53,58 @@
 .fdar-body label{display:block;font-size:.78rem;font-weight:700;color:var(--lg-ink,#1F2D25);margin-bottom:2px}
 .fdar-hint{margin:0 0 6px;font-size:.72rem;color:var(--lg-ink-soft,#6B7C72)}
 .fdar-body select,
+.fdar-body input,
 .fdar-body textarea{width:100%;font:inherit;font-size:.84rem;color:var(--lg-ink,#1F2D25);background:#fff;border:1px solid var(--lg-border,#DCE8E0);border-radius:8px;padding:8px 10px}
 .fdar-body textarea{resize:vertical}
 .fdar-body select:focus,
+.fdar-body input:focus,
 .fdar-body textarea:focus{outline:none;border-color:var(--lg-emerald,#1F8A4C);box-shadow:0 0 0 3px rgba(31,138,76,.16)}
 
-/* The same four sections read back on a filed report. */
-.fdar-read{display:grid;gap:9px}
-.fdar-read-row{display:grid;grid-template-columns:26px 1fr;gap:11px;align-items:start}
-.fdar-read-body{min-width:0}
-.fdar-read-label{display:block;font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--lg-ink-soft,#6B7C72)}
-.fdar-read-value{margin:2px 0 0;font-size:.84rem;line-height:1.5;color:var(--lg-ink,#1F2D25);white-space:pre-line}
+/* The sheet's first column is the date AND the time, so the two sit on one
+   line; the Focus is the kind of incident beside the nurse's own statement. */
+.fdar-when,
+.fdar-focus{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.fdar-when input[type=time]{max-width:150px}
+/* The date/time row is not one of the four letters; its gutter mark is a
+   clock in the same slot, so the rows still align on the left. */
+.fdar-letter-plain{background:var(--lg-rail,#EEF4F0);color:var(--lg-ink-soft,#6B7C72)}
+.fdar-letter-plain svg{width:14px;height:14px}
+/* The D / A / R rows are the Progress Notes column of the sheet, so they are
+   headed as such — a nurse reads "Progress Notes" and expects D, A, R under it. */
+.fdar-subhead{grid-column:1/-1;margin:2px 0 -4px 37px;font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--lg-ink-soft,#6B7C72)}
+
+/* ── The filed report, read back as the F-DAR sheet ──
+   Date/Time | Focus | Progress Notes, the note in D / A / R order and the
+   nurse's signature under it — the same three columns the format is taught
+   in, so a chart here reads like the one on paper. Hairlines, not the app's
+   card chrome: it is a sheet inside the card. */
+.fdar-sheet-scroll{overflow-x:auto;margin-top:4px}
+.fdar-sheet{width:100%;min-width:520px;border-collapse:collapse;font-size:.82rem;color:var(--lg-ink,#1F2D25)}
+.fdar-sheet th,
+.fdar-sheet td{border:1px solid var(--lg-border,#DCE8E0);padding:8px 10px;vertical-align:top;text-align:left}
+.fdar-sheet th{font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--lg-emerald-deep,#126B3A);background:var(--lg-mint,#E7F5EC)}
+.fdar-sheet th:nth-child(1),
+.fdar-sheet td:nth-child(1){width:112px}
+.fdar-sheet th:nth-child(2),
+.fdar-sheet td:nth-child(2){width:26%}
+.fdar-when-cell{white-space:nowrap}
+.fdar-date,
+.fdar-time{display:block;font-variant-numeric:tabular-nums}
+.fdar-date{font-weight:700}
+.fdar-time{margin-top:2px;color:var(--lg-ink-soft,#6B7C72)}
+.fdar-focus-main{display:block;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
+.fdar-focus-kind{display:block;margin-top:3px;font-size:.72rem;color:var(--lg-ink-soft,#6B7C72)}
+.fdar-notes-cell{min-width:0}
+.fdar-note{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:start}
+.fdar-note+.fdar-note{margin-top:7px}
+.fdar-note-tag{display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap}
+.fdar-note-tag b{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;background:var(--lg-mint,#E7F5EC);color:var(--lg-emerald-deep,#126B3A);font-size:.72rem;font-weight:700;line-height:1;vertical-align:middle}
+.fdar-note-tag span{font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--lg-ink-soft,#6B7C72)}
+.fdar-note-value{margin:0;line-height:1.5;white-space:pre-line;overflow-wrap:anywhere}
+.fdar-signature{margin-top:9px;padding-top:7px;border-top:1px dashed var(--lg-border,#DCE8E0);display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.74rem}
+.fdar-signature-name{font-style:italic;color:var(--lg-ink,#1F2D25)}
+.fdar-signature-time{color:var(--lg-ink-soft,#6B7C72)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
 .incident-readonly{margin:4px 0}
 

@@ -541,6 +541,13 @@ Route::get('/dashboard/medicine-inventory/new', [MedicineInventoryController::cl
 Route::post('/dashboard/medicine-inventory', [MedicineInventoryController::class, 'store'])
     ->name('medicine-inventory.store');
 
+// A delivery. The logbook's "in" column: the receipt row and the stock
+// increment are written in one transaction, the mirror of a dispense
+// (MedicineInventoryController::receive).
+Route::post('/dashboard/medicine-inventory/{medicine}/receive', [MedicineInventoryController::class, 'receive'])
+    ->whereNumber('medicine')
+    ->name('medicine-inventory.receive');
+
 // The Dispensing Log page was retired. A dispense is recorded where it
 // actually happens — in the consultation dialog, which locks the medicine
 // row, refuses to go below stock, writes the `medicine_dispenses` row and
