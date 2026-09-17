@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\NurseController;
 use App\Models\Institution;
+use App\Models\StudentHealthRecord;
+use App\Support\StudentRosterSync;
+use App\Support\StudentVitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -336,5 +339,102 @@ class NurseHealthRecordsPageTest extends TestCase
             ->get('/dashboard/student-health-records')
             ->assertOk()
             ->assertSee('No Adviser Submissions Yet');
+    }
+
+    /** @param  array<string, mixed>  $overrides */
+    private function dbRecord(array $overrides = []): StudentHealthRecord
+    {
+        return StudentHealthRecord::create(array_merge([
+            'institution_id' => $this->institution->id,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'student_name' => 'Gomez, Jose C.',
+            'student_id' => '100000000001',
+            'school_name' => 'Sta. Ana NHS',
+            'section' => 'Grade 10 / Dalton',
+            'weight' => 40,
+            'bmi_value' => 17.8,
+            'nutritional_status' => 'Normal',
+            'student_details' => [],
+        ], $overrides));
+    }
+
+    /**
+     * An older record only has the nutrition columns, so its name is parsed
+     * off `student_name`. The nurse's vital signs are written into the same
+     * `student_details` blob, which used to make the blob "non-empty" and
+     * switch that parsing off — the learner then rendered as "-".
+     */
+    #[Test]
+    public function a_name_survives_the_nurse_recording_vital_signs_on_an_older_record(): void
+    {
+        $record = $this->dbRecord();
+        StudentVitalSigns::write($record, ['temperature_c' => '36.8', 'pulse_bpm' => '80', 'blood_pressure' => '110/70'], 'Ana Reyes');
+
+        $this->assertNotSame([], $record->fresh()->student_details, 'The blob now holds the vitals.');
+
+        $response = $this->withSession($this->nurseSession([]))
+            ->get('/dashboard/student-health-records')
+            ->assertOk();
+
+        $response->assertSee('<td class="shr-name">Gomez, Jose C.</td>', false);
+
+        $row = collect(session('school_health_card_records'))->firstWhere('lrn', '100000000001');
+        $this->assertSame('Gomez', $row['last_name']);
+        $this->assertSame('Jose', $row['first_name']);
+        $this->assertSame('36.8', $row['temperature_c'], 'The vitals are still carried across.');
+    }
+
+    /**
+     * The database is the source of truth. A name the adviser corrected used
+     * to reach the nurse only once their session expired, because the sync
+     * added LRNs missing from the session and never touched the rows already
+     * there.
+     */
+    #[Test]
+    public function a_corrected_name_reaches_a_session_that_already_holds_the_learner(): void
+    {
+        $record = $this->dbRecord([
+            'student_details' => ['last_name' => 'Gomez', 'first_name' => 'Jose', 'middle_name' => 'Cruz', 'gender' => 'Male'],
+        ]);
+
+        $stale = $this->learner(['last_name' => 'Gomes', 'examination' => ['deworming' => 'V']]);
+        $other = $this->learner(['lrn' => 'SESSION-ONLY', 'last_name' => 'Session Only']);
+
+        $response = $this->withSession($this->nurseSession([$stale, $other]))
+            ->get('/dashboard/student-health-records')
+            ->assertOk();
+
+        $response->assertSee('Gomez, Jose C.');
+        $response->assertDontSee('Gomes');
+
+        $roster = session('school_health_card_records');
+        // Refreshed in place: the same raw index, so the "Fill Medical Record"
+        // link keeps opening the learner it was rendered for, and a row the
+        // database does not know about is left alone.
+        $this->assertSame('Gomez', $roster[0]['last_name']);
+        $this->assertSame('Session Only', $roster[1]['last_name']);
+        // The examination is refreshed from its own column, not kept stale.
+        $this->assertSame([], $roster[0]['examination']);
+        $this->assertSame($record->student_id, $roster[0]['lrn']);
+    }
+
+    /** The stored name carries a middle INITIAL, so only a trailing one is read as the middle name. */
+    #[Test]
+    public function a_two_word_first_name_is_not_split_into_a_middle_name(): void
+    {
+        $this->assertSame(['Dela Cruz', 'Maria Clara', 'S.'], StudentRosterSync::splitStudentName('Dela Cruz, Maria Clara S.'));
+        $this->assertSame(['Dela Cruz', 'Maria Clara', ''], StudentRosterSync::splitStudentName('Dela Cruz, Maria Clara'));
+        $this->assertSame(['Gomez', 'Jose', 'C'], StudentRosterSync::splitStudentName('Gomez, Jose C'));
+        $this->assertSame(['Gomez', 'Jose', ''], StudentRosterSync::splitStudentName('Gomez,Jose'));
+        $this->assertSame(['Juan Dela Cruz', '', ''], StudentRosterSync::splitStudentName('Juan Dela Cruz'));
+        $this->assertSame(['', '', ''], StudentRosterSync::splitStudentName('   '));
+
+        $this->dbRecord(['student_name' => 'Dela Cruz, Maria Clara S.']);
+
+        $this->withSession($this->nurseSession([]))
+            ->get('/dashboard/student-health-records')
+            ->assertOk()
+            ->assertSee('<td class="shr-name">Dela Cruz, Maria Clara S.</td>', false)
+            ->assertDontSee('Maria C.');
     }
 }

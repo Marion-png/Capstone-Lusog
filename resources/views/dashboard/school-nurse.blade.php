@@ -50,7 +50,6 @@
                         Today's consultations, learners needing attention, and stock running short.
                     </p>
                 </div>
-                <span class="badge badge-normal">Clinic Open</span>
             </div>
         </div>
 

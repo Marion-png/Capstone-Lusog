@@ -44,6 +44,7 @@ use App\Models\StudentHealthRecord;
 use App\Support\AuditTrail;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingProgramCycle;
+use App\Support\StudentRosterSync;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -320,6 +321,11 @@ Route::get('/dashboard/student-health-records', function () {
 
         return redirect()->route($redirectByRole[$role] ?? 'login');
     }
+
+    // The view reads the session roster at the top of its body, before the
+    // learner-search partial (which also syncs) is reached — so without this
+    // a fresh session painted an empty table on its first load.
+    StudentRosterSync::syncToSession(request());
 
     return view('dashboard.student-health-records');
 })->name('dashboard.student-health-records');

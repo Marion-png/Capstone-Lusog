@@ -22,32 +22,45 @@ class StudentRosterSync
             return;
         }
 
-        $existing = collect($request->session()->get('school_health_card_records', []));
-        $sessionLrns = $existing
-            ->pluck('lrn')
-            ->filter()
-            ->map(fn ($v) => (string) $v)
-            ->flip();
+        $existing = $request->session()->get('school_health_card_records', []);
+        $existing = is_array($existing) ? $existing : [];
 
-        $dbRecords = StudentHealthRecord::currentYearForInstitution($institutionId);
-
-        $toAdd = [];
-        foreach ($dbRecords as $record) {
-            $lrn = (string) $record->student_id;
-
-            if ($sessionLrns->has($lrn)) {
-                continue;
+        // Raw session index per LRN. Rows are updated IN PLACE rather than
+        // rebuilt, because the nurse's "Fill Medical Record" link is keyed by
+        // that index (NurseController::examine) and must keep opening the
+        // learner it was rendered for.
+        $indexByLrn = [];
+        foreach ($existing as $index => $row) {
+            $lrn = is_array($row) ? (string) ($row['lrn'] ?? '') : '';
+            if ($lrn !== '' && ! isset($indexByLrn[$lrn])) {
+                $indexByLrn[$lrn] = $index;
             }
-
-            $toAdd[] = self::buildSessionRow($record, $lrn);
-            $sessionLrns->put($lrn, true);
         }
 
-        if (! empty($toAdd)) {
-            $request->session()->put(
-                'school_health_card_records',
-                array_merge($existing->all(), $toAdd)
-            );
+        $records = $existing;
+        $seen = [];
+        foreach (StudentHealthRecord::currentYearForInstitution($institutionId) as $record) {
+            $lrn = (string) $record->student_id;
+            if ($lrn === '' || isset($seen[$lrn])) {
+                continue;
+            }
+            $seen[$lrn] = true;
+
+            $row = self::buildSessionRow($record, $lrn);
+
+            // The database is the source of truth, so a row already in the
+            // session is refreshed from it: an adviser correcting a learner's
+            // name used to reach the nurse only once their session expired,
+            // because the sync added missing LRNs and never touched the rest.
+            if (isset($indexByLrn[$lrn])) {
+                $records[$indexByLrn[$lrn]] = $row;
+            } else {
+                $records[] = $row;
+            }
+        }
+
+        if ($records !== $existing) {
+            $request->session()->put('school_health_card_records', $records);
         }
     }
 
@@ -57,8 +70,17 @@ class StudentRosterSync
         // (birth date, guardian, address, contact, gender, ...).
         $row = is_array($record->student_details) ? $record->student_details : [];
 
-        if ($row === []) {
-            $row = self::rowFromLegacyColumns($record);
+        // A blob with no name in it is not a full adviser entry, whatever else
+        // it holds: the nurse's vital signs are written into student_details
+        // too (StudentVitalSigns::write), so an older record that only had the
+        // nutrition columns ends up with a non-empty blob and no name, and
+        // used to render as "-" on every roster. Any field the blob lacks is
+        // taken from the legacy columns instead.
+        if (self::isBlank($row['last_name'] ?? null) && self::isBlank($row['first_name'] ?? null)) {
+            $row = array_merge(
+                self::rowFromLegacyColumns($record),
+                array_filter($row, fn ($value): bool => ! self::isBlank($value))
+            );
         }
 
         $row['lrn'] = $lrn;
@@ -97,27 +119,11 @@ class StudentRosterSync
 
     /**
      * Older rows only stored the nutrition summary, so the roster entry is
-     * reconstructed from "LastName, FirstName Middle" and "Grade X / Section".
+     * reconstructed from "LastName, FirstName M." and "Grade X / Section".
      */
     private static function rowFromLegacyColumns(StudentHealthRecord $record): array
     {
-        $name = (string) $record->student_name;
-        $lastName = $name;
-        $firstName = '';
-        $middleName = '';
-
-        $commaPos = strpos($name, ', ');
-        if ($commaPos !== false) {
-            $lastName = substr($name, 0, $commaPos);
-            $rest = substr($name, $commaPos + 2);
-            $spacePos = strpos($rest, ' ');
-            if ($spacePos !== false) {
-                $firstName = substr($rest, 0, $spacePos);
-                $middleName = substr($rest, $spacePos + 1);
-            } else {
-                $firstName = $rest;
-            }
-        }
+        [$lastName, $firstName, $middleName] = self::splitStudentName((string) $record->student_name);
 
         $sectionParts = explode(' / ', (string) $record->section, 2);
 
@@ -134,5 +140,44 @@ class StudentRosterSync
             'nutritional_status_bmi_for_age' => $record->nutritional_status,
             'nutritional_status_height_for_age' => null,
         ];
+    }
+
+    /**
+     * "Dela Cruz, Maria Clara S." → ['Dela Cruz', 'Maria Clara', 'S.'].
+     *
+     * The stored name carries the middle name as an INITIAL
+     * (AdviserController::buildStudentName), so only a trailing initial is
+     * read as the middle name; everything else after the comma is the first
+     * name. Splitting on the first space, as this used to, turned a two-word
+     * first name into a middle name and printed "Maria Clara" as "Maria C.".
+     * A name with no comma is kept whole as the last name rather than guessed
+     * at.
+     *
+     * @return array{0: string, 1: string, 2: string}
+     */
+    public static function splitStudentName(string $name): array
+    {
+        $name = trim(preg_replace('/\s+/', ' ', $name) ?? $name);
+
+        $commaPos = strpos($name, ',');
+        if ($commaPos === false) {
+            return [$name, '', ''];
+        }
+
+        $lastName = trim(substr($name, 0, $commaPos));
+        $rest = trim(substr($name, $commaPos + 1));
+        $middleName = '';
+
+        if (preg_match('/^(.*\S)\s+(\p{L}\.?)$/u', $rest, $m) === 1) {
+            $rest = $m[1];
+            $middleName = $m[2];
+        }
+
+        return [$lastName, $rest, $middleName];
+    }
+
+    private static function isBlank(mixed $value): bool
+    {
+        return $value === null || (is_string($value) && trim($value) === '');
     }
 }

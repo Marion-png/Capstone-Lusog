@@ -129,7 +129,9 @@ class SchoolNurseDashboardTest extends TestCase
             ->assertSee('School Nurse')
             ->assertSee('Sta. Ana NHS')
             ->assertSee(StudentHealthRecord::currentSchoolYear())
-            ->assertSee('Clinic Open');
+            // The "Clinic Open" pill was removed: it was a static label, never
+            // read from anything, so it could only ever say "Open".
+            ->assertDontSee('Clinic Open');
     }
 
     #[Test]
