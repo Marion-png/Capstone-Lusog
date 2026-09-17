@@ -333,13 +333,6 @@
                     <div id="pdHealthHistory"></div>
                 </div>
 
-                <div class="student-profile-section">
-                    <h4>SHD Form 2 Snapshot</h4>
-                    <div class="kv"><div class="k">Grade Level:</div><div class="v" id="psGrade">-</div></div>
-                    <div class="kv"><div class="k">Examination:</div><div class="v" id="psStatus">-</div></div>
-                    <div class="kv"><div class="k">Medical Alerts:</div><div class="v" id="paStatus">Pending School Nurse review.</div></div>
-                </div>
-
                 {{-- Vital signs are this role's to record. Height and weight are
                      the class adviser's — they are what the feeding programme's
                      BMI is built from and a teacher takes them with a tape and a
@@ -799,7 +792,6 @@
             .replace(/\s+/g, ' ')
             .trim();
         const dob = [record.birth_year, record.birth_month, record.birth_day].filter(Boolean).join('-');
-        const examined = record.examination && Object.keys(record.examination).length > 0;
 
         const initials = ((record.first_name || '').charAt(0) + (record.last_name || '').charAt(0)).toUpperCase();
         setText('pName', fullName || '-');
@@ -818,15 +810,11 @@
         setText('pdContact', record.telephone_no || '-');
         setText('pdRegionDivision', [record.region, record.division].filter(Boolean).join(' / ') || '-');
 
-        setText('psGrade', record.grade_level || '-');
-        setText('psStatus', examined ? 'Examined by School Nurse' : 'Pending School Nurse Examination');
-
         window.renderVitals?.(record);
         window.renderLearnerPhoto?.(record);
         setText('pgHeight', (record.height_cm || '-') + ' cm');
         setText('pgWeight', (record.weight_kg || '-') + ' kg');
         drawGrowthTrend(record);
-        setText('paStatus', examined ? 'School Nurse examination details are available.' : 'Pending School Nurse review.');
 
         renderHealthHistory(record.health_history);
         renderSystemsReview(record.systems_review);

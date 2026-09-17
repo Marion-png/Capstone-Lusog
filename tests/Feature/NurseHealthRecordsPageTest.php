@@ -157,16 +157,20 @@ class NurseHealthRecordsPageTest extends TestCase
             $response->assertSee('id="'.$panel.'"', false);
         }
 
-        // Nothing from the old tab set was dropped — each section moved into
-        // one of the six tabs.
+        // Each section moved into one of the six tabs. The "SHD Form 2
+        // Snapshot" block was removed on request: it only restated the grade
+        // and whether an examination existed, both already on the profile.
         foreach ([
             'Personal Information', 'Parent/Guardian Information', 'Medical &amp; Family History',
-            'SHD Form 2 Snapshot', 'Growth &amp; Nutrition', 'Health History',
+            'Growth &amp; Nutrition', 'Health History',
             'Systems Review', 'Health Assessment', 'Consultation Log',
             'Add Clinic Note', 'Note History', 'Parental Consent', 'Medical Documents',
         ] as $section) {
             $response->assertSee($section, false);
         }
+
+        $response->assertDontSee('SHD Form 2 Snapshot');
+        $response->assertDontSee('id="psStatus"', false);
     }
 
     #[Test]
