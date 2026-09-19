@@ -28,7 +28,6 @@
                 'normal' => 'Normal',
                 'wasted' => 'Wasted',
                 'severely-wasted' => 'Severely Wasted',
-                'underweight' => 'Underweight',
                 'overweight' => 'Overweight',
                 'obese' => 'Obese',
                 'not-assessed' => 'Not Assessed',
@@ -37,7 +36,6 @@
             $statusTones = [
                 'normal' => 'fs-tone-ok',
                 'wasted' => 'fs-tone-warn',
-                'underweight' => 'fs-tone-warn',
                 'severely-wasted' => 'fs-tone-bad',
                 'overweight' => 'fs-tone-info',
                 'obese' => 'fs-tone-info',

@@ -93,6 +93,46 @@ class NurseHealthRecordsPageTest extends TestCase
             ->assertSee('LRN-A');
     }
 
+    /**
+     * "Fill Medical Record" opens the Systems Review, Screenings, and
+     * Recommendations form. Vital signs are recorded on the profile's own
+     * panel and height/weight are the adviser's, so the form no longer
+     * repeats either — but the examination is still stamped with the record's
+     * figures on save.
+     */
+    #[Test]
+    public function the_examination_form_is_the_systems_review_and_carries_no_measurements(): void
+    {
+        $learner = $this->learner(['height_cm' => 152, 'weight_kg' => 44, 'nutritional_status_bmi_for_age' => 'Normal']);
+
+        $response = $this->withSession($this->nurseSession([$learner]))
+            ->get(route('nurse.examine', 0))
+            ->assertOk();
+
+        $response->assertSee('Systems Review, <span>Screenings, and Recommendations</span>', false);
+        $response->assertDontSee('Medical Examination Form');
+        $response->assertDontSee('Vital Signs &amp; Physical Measurements', false);
+        $response->assertDontSee('Anthropometric Data');
+        foreach (['temperature_bp', 'heart_rate', 'pulse_rate', 'respiratory_rate', 'height_cm', 'weight_kg', 'nutritional_status_bmi'] as $field) {
+            $response->assertDontSee('name="'.$field.'"', false);
+        }
+        // The record's own date stays, and the screenings are still there.
+        $response->assertSee('name="date_of_examination"', false);
+        $response->assertSee('Screening &amp; Physical Examination', false);
+        $response->assertSee('name="vision_screening"', false);
+
+        $this->withSession($this->nurseSession([$learner]))
+            ->post(route('nurse.examine.save', 0), ['vision_screening' => '20/20'])
+            ->assertRedirect(route('dashboard.student-health-records'));
+
+        $exam = session('school_health_card_records')[0]['examination'];
+        $this->assertSame('20/20', $exam['vision_screening']);
+        $this->assertEquals(152, $exam['height_cm'], 'Stamped from the record, not the form.');
+        $this->assertEquals(44, $exam['weight_kg']);
+        $this->assertSame('Normal', $exam['nutritional_status_bmi']);
+        $this->assertEquals(152, session('school_health_card_records')[0]['height_cm'], 'The measurement is untouched.');
+    }
+
     #[Test]
     public function filter_chips_are_built_from_the_roster_actually_on_file(): void
     {

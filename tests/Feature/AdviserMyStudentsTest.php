@@ -662,7 +662,7 @@ class AdviserMyStudentsTest extends TestCase
                 'current_medications' => 'Salbutamol',
                 'genetic_disorders' => 'None known',
                 'consciousness' => 'Drowsy',
-                'posture' => 'Abnormal',
+                'posture' => 'Poor',
                 'posture_detail' => 'Slight limp',
                 'hygiene' => 'Adequate',
             ],
@@ -677,7 +677,7 @@ class AdviserMyStudentsTest extends TestCase
         $this->assertSame('Peanuts', $history['allergies_detail']);
         $this->assertSame('Salbutamol', $history['current_medications']);
         $this->assertSame('Drowsy', $history['consciousness']);
-        $this->assertSame('Abnormal', $history['posture']);
+        $this->assertSame('Poor', $history['posture']);
         $this->assertSame('Slight limp', $history['posture_detail']);
 
         // Unticked boxes store as false, unfilled text as null.
@@ -692,6 +692,43 @@ class AdviserMyStudentsTest extends TestCase
             ->first(fn ($r) => ($r['lrn'] ?? '') === '123456789012');
 
         $this->assertSame('Peanuts', $row['health_history']['allergies_detail']);
+    }
+
+    /**
+     * Posture / Gait reads Good or Poor. The field used to read Normal /
+     * Abnormal, so the form offers only the new pair, an old form still
+     * posting the old words is saved under the new ones, and a record already
+     * stored under them is handed to every profile as Good / Poor.
+     *
+     * @test
+     */
+    public function posture_gait_reads_good_or_poor_and_translates_the_old_words(): void
+    {
+        $form = $this->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser', ['tab' => 'form']))
+            ->assertOk();
+
+        $form->assertSee('name="health_history[posture]" value="Good"', false);
+        $form->assertSee('name="health_history[posture]" value="Poor"', false);
+        $form->assertDontSee('name="health_history[posture]" value="Normal"', false);
+        $form->assertDontSee('name="health_history[posture]" value="Abnormal"', false);
+        $form->assertSee('If poor, specify');
+
+        // An old form posting the old words is saved under the new ones.
+        $this->enrol(['health_history' => ['posture' => 'Abnormal', 'posture_detail' => 'Slight limp']]);
+        $record = StudentHealthRecord::where('student_id', '123456789012')->firstOrFail();
+        $this->assertSame('Poor', $record->student_details['health_history']['posture']);
+
+        // A record already stored under the old words reaches the roster translated.
+        $details = $record->student_details;
+        $details['health_history']['posture'] = 'Normal';
+        $record->forceFill(['student_details' => $details])->save();
+
+        $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser'))->assertOk();
+
+        $row = collect(session('school_health_card_records'))->firstWhere('lrn', '123456789012');
+        $this->assertSame('Good', $row['health_history']['posture']);
     }
 
     /** @test */

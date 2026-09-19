@@ -8,6 +8,7 @@ use App\Models\StudentHealthRecord;
 use App\Support\AttendanceSheetParser;
 use App\Support\AttendanceSheetScanner;
 use App\Support\AuditTrail;
+use App\Support\BmiClassifier;
 use App\Support\EncryptedFileStorage;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceMark;
@@ -1968,27 +1969,18 @@ class FeedingProgramController extends Controller
         if (str_contains($normalized, 'wast')) {
             return 'Wasted';
         }
+        // A record saved under the retired "Underweight" label is Wasted: the
+        // DepEd scale has no Underweight column, and the classifier no longer
+        // emits it (App\Support\BmiClassifier).
         if (str_contains($normalized, 'underweight')) {
-            return 'Underweight';
+            return 'Wasted';
         }
         if (str_contains($normalized, 'over')) {
             return 'Overweight';
         }
 
         if ($bmi !== null) {
-            $bmiValue = (float) $bmi;
-            if ($bmiValue < 16.0) {
-                return 'Severely Wasted';
-            }
-            if ($bmiValue < 17.0) {
-                return 'Wasted';
-            }
-            if ($bmiValue < 18.5) {
-                return 'Underweight';
-            }
-            if ($bmiValue >= 25.0) {
-                return 'Overweight';
-            }
+            return BmiClassifier::fromBmi((float) $bmi);
         }
 
         return $status !== '' ? $status : 'Normal';

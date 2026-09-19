@@ -42,14 +42,27 @@ class Announcement extends Model
         self::PRIORITY_URGENT => 'Urgent',
     ];
 
-    /** Roles an announcement can be addressed to. */
+    /**
+     * Roles an announcement can be addressed to.
+     *
+     * The Nutrition Coordinator was taken off the list: that role still reads
+     * the board (an announcement to everyone reaches it), but it is no longer
+     * offered as an audience of its own.
+     */
     public const AUDIENCES = [
         'class_adviser' => 'Class Advisers',
         'clinic_staff' => 'Clinic Staff',
         'school_head' => 'School Head',
         'feeding_coor' => 'Feeding Coordinator',
-        'nutricor' => 'Nutrition Coordinator',
         'school_nurse' => 'School Nurse',
+    ];
+
+    /**
+     * Labels for audiences no longer offered, so an announcement posted to
+     * one before it was retired still reads as the role rather than its key.
+     */
+    private const RETIRED_AUDIENCES = [
+        'nutricor' => 'Nutrition Coordinator',
     ];
 
     protected $fillable = [
@@ -170,7 +183,7 @@ class Announcement extends Model
         }
 
         return implode(', ', array_map(
-            fn (string $role) => self::AUDIENCES[$role] ?? $role,
+            fn (string $role) => self::AUDIENCES[$role] ?? self::RETIRED_AUDIENCES[$role] ?? $role,
             $audience
         ));
     }

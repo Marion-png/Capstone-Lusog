@@ -208,13 +208,19 @@ class NurseController extends Controller
         ksort($attendanceByMonth);
         $records[$index]['attendance_by_month'] = $attendanceByMonth;
 
-        $records[$index]['height_cm'] = $request->input('height_cm', $records[$index]['height_cm'] ?? null);
-        $records[$index]['weight_kg'] = $request->input('weight_kg', $records[$index]['weight_kg'] ?? null);
+        // Height and weight are the class adviser's measurements and vital
+        // signs live on the learner's profile, so the form no longer carries
+        // either: the examination is stamped with the record's own figures.
+        // A form that still posts them (an older tab) is honoured.
+        $heightCm = $request->input('height_cm', $records[$index]['height_cm'] ?? null);
+        $weightKg = $request->input('weight_kg', $records[$index]['weight_kg'] ?? null);
+        $records[$index]['height_cm'] = $heightCm;
+        $records[$index]['weight_kg'] = $weightKg;
         $lockedBmiStatus = (string) ($records[$index]['nutritional_status_bmi_for_age'] ?? '');
         $lockedHeightAgeStatus = (string) ($records[$index]['nutritional_status_height_for_age'] ?? '');
         $records[$index]['endline_snapshot'] = [
-            'height_cm' => $request->input('height_cm'),
-            'weight_kg' => $request->input('weight_kg'),
+            'height_cm' => $heightCm,
+            'weight_kg' => $weightKg,
             'nutritional_status_bmi' => $lockedBmiStatus,
         ];
         $records[$index]['examination'] = [
@@ -223,8 +229,8 @@ class NurseController extends Controller
             'heart_rate' => $request->input('heart_rate'),
             'pulse_rate' => $request->input('pulse_rate'),
             'respiratory_rate' => $request->input('respiratory_rate'),
-            'height_cm' => $request->input('height_cm'),
-            'weight_kg' => $request->input('weight_kg'),
+            'height_cm' => $heightCm,
+            'weight_kg' => $weightKg,
             'nutritional_status_bmi' => $lockedBmiStatus,
             'nutritional_status_height_age' => $lockedHeightAgeStatus,
             'vision_screening' => $request->input('vision_screening'),

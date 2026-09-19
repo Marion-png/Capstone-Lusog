@@ -210,6 +210,14 @@ Route::get('/adviser/create', [AdviserController::class, 'create'])
 Route::post('/adviser/store', [AdviserController::class, 'store'])
     ->name('adviser.store');
 
+// Enrol a class from a spreadsheet. Every row goes through the same
+// validation and the same write as the form above (AdviserController::import).
+Route::post('/adviser/import', [AdviserController::class, 'import'])
+    ->name('adviser.import');
+
+Route::get('/adviser/import/template', [AdviserController::class, 'importTemplate'])
+    ->name('adviser.import.template');
+
 Route::get('/adviser/success', [AdviserController::class, 'success'])
     ->name('adviser.success');
 

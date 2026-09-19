@@ -47,6 +47,45 @@ class AnnouncementTest extends TestCase
         $this->assertSame('school_nurse', $announcement->posted_by_role);
     }
 
+    /**
+     * The Nutrition Coordinator is no longer an audience of its own: the
+     * dialog does not offer it and the endpoint refuses it, while the role
+     * still reads announcements addressed to everyone, and an announcement
+     * posted to it before the change still names the role.
+     */
+    #[Test]
+    public function the_nutrition_coordinator_is_not_an_audience(): void
+    {
+        $this->assertArrayNotHasKey('nutricor', Announcement::AUDIENCES);
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->get('/dashboard/school-nurse')
+            ->assertOk()
+            ->assertDontSee('Nutrition Coordinator only')
+            ->assertSee('Feeding Coordinator only');
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->post(route('announcements.store'), [
+                'title' => 'For the nutricor',
+                'body' => 'Should be refused.',
+                'audience' => ['nutricor'],
+            ])
+            ->assertSessionHasErrors();
+
+        $this->assertSame(0, Announcement::count());
+
+        $legacy = Announcement::create([
+            'institution_id' => $this->institution->id,
+            'title' => 'Old post',
+            'body' => 'Posted before the audience was retired.',
+            'audience' => ['nutricor'],
+            'posted_by_name' => 'Nurse Reyes',
+            'posted_by_role' => 'school_nurse',
+        ]);
+
+        $this->assertSame('Nutrition Coordinator', $legacy->audienceLabel());
+    }
+
     #[Test]
     public function other_roles_cannot_post_an_announcement(): void
     {

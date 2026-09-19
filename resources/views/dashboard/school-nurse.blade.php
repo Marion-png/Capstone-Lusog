@@ -114,12 +114,10 @@
             </div>
             <div>
                 <label class="field-label" for="consultDateFilter">Date</label>
-                <select class="select" id="consultDateFilter">
-                    <option value="all">All Dates</option>
-                    <option value="today">Today</option>
-                    <option value="week">This Week</option>
-                    <option value="month">This Month</option>
-                </select>
+                {{-- A calendar, not a Today / Week / Month bucket: the nurse
+                     picks the day and reads that day's visits. Cleared, it
+                     shows every date. --}}
+                <input type="date" class="input" id="consultDateFilter" max="{{ now()->toDateString() }}" aria-label="Filter consultations by date">
             </div>
             <div>
                 <label class="field-label" for="consultLevelFilter">Level</label>
@@ -170,17 +168,15 @@
                                 default => 'personnel',
                             };
 
-                            $consultedAt = $c->consulted_at;
-                            $isToday = $consultedAt?->isToday() ?? false;
-                            $isThisWeek = $consultedAt?->isSameWeek(now()) ?? false;
-                            $isThisMonth = $consultedAt?->isSameMonth(now()) ?? false;
+                            // The row carries its own calendar date, stamped
+                            // server-side so the filter never depends on the
+                            // browser's clock or timezone.
+                            $consultedOn = $c->consulted_at?->toDateString() ?? '';
                         @endphp
                         <tr class="js-consult-row"
                             data-search="{{ strtolower($studentName.' '.$gradeSection.' '.$condition.' '.$treatment) }}"
                             data-level="{{ $level }}"
-                            data-today="{{ $isToday ? '1' : '0' }}"
-                            data-week="{{ $isThisWeek ? '1' : '0' }}"
-                            data-month="{{ $isThisMonth ? '1' : '0' }}">
+                            data-date="{{ $consultedOn }}">
                             <td>
                                 <div class="td-person">
                                     <div class="td-avatar">{{ $initials }}</div>
@@ -324,18 +320,18 @@
     const noMatch = document.getElementById('consultNoMatch');
     const count = document.getElementById('consultCount');
 
-    // Each row is stamped server-side with today/week/month flags, so the
-    // date buckets never depend on the browser's clock or timezone.
+    // Each row is stamped server-side with its calendar date, so matching
+    // the picked day never depends on the browser's clock or timezone.
     const apply = () => {
         const keyword = search.value.trim().toLowerCase();
-        const period = dateFilter.value;
+        const date = dateFilter.value;
         const level = levelFilter.value;
         let visible = 0;
 
         rows.forEach((row) => {
             const haystack = row.dataset.search || '';
             const matchesKeyword = !keyword || haystack.includes(keyword);
-            const matchesPeriod = period === 'all' || row.dataset[period] === '1';
+            const matchesPeriod = !date || (row.dataset.date || '') === date;
             const matchesLevel = level === 'all' || (row.dataset.level || '') === level;
             const show = matchesKeyword && matchesPeriod && matchesLevel;
 
@@ -355,6 +351,7 @@
 
     search.addEventListener('input', apply);
     dateFilter.addEventListener('change', apply);
+    dateFilter.addEventListener('input', apply);
     levelFilter.addEventListener('change', apply);
     apply();
 })();

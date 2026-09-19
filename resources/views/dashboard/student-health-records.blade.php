@@ -627,6 +627,12 @@
         if (values.examiner_signature_present) {
             values.examiner_signature_present = 'Signed';
         }
+        // Sheet 1's Posture / Gait reads Good / Poor; a row saved under the
+        // older Normal / Abnormal words is printed under the current ones.
+        if (kind === 'history' && typeof values.posture === 'string') {
+            const legacy = { normal: 'Good', abnormal: 'Poor' };
+            values.posture = legacy[values.posture.trim().toLowerCase()] ?? values.posture;
+        }
 
         const notes = REVIEW_TEXT[kind]
             .concat(values.examiner_signature_present ? [['examiner_signature_present', 'Examiner Signature']] : [])

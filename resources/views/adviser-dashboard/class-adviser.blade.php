@@ -83,11 +83,12 @@
 
             $recentStudents = $prototypeRecords->take(5);
 
-            $nutritionLabelOrder = ['Normal', 'Wasted', 'Underweight', 'Overweight', 'Obese', 'Severely Wasted'];
+            // The DepEd scale: no "Underweight" bucket. A record saved under
+            // that retired label is counted as Wasted, as every report does.
+            $nutritionLabelOrder = ['Normal', 'Wasted', 'Overweight', 'Obese', 'Severely Wasted'];
             $nutritionCounts = [
                 'Normal' => 0,
                 'Wasted' => 0,
-                'Underweight' => 0,
                 'Overweight' => 0,
                 'Obese' => 0,
                 'Severely Wasted' => 0,
@@ -101,10 +102,8 @@
 
                 if (str_contains($rawStatus, 'severely wasted')) {
                     $nutritionCounts['Severely Wasted']++;
-                } elseif (str_contains($rawStatus, 'wasted')) {
+                } elseif (str_contains($rawStatus, 'wasted') || str_contains($rawStatus, 'underweight')) {
                     $nutritionCounts['Wasted']++;
-                } elseif (str_contains($rawStatus, 'underweight')) {
-                    $nutritionCounts['Underweight']++;
                 } elseif (str_contains($rawStatus, 'overweight')) {
                     $nutritionCounts['Overweight']++;
                 } elseif (str_contains($rawStatus, 'obese')) {
@@ -502,6 +501,65 @@
                 <div class="class-box-note">Students will be automatically added to this grade and section.</div>
             </div>
 
+            {{-- ── Import from a spreadsheet ──
+                 The whole class in one file rather than one form per learner.
+                 Every row goes through the same validation and the same write
+                 the form below uses (AdviserController::import), so a
+                 spreadsheet is not a way around the form's rules. Hidden while
+                 an existing learner is being edited — an edit is one learner. --}}
+            @php $importReport = session('import_report'); @endphp
+            <div class="import-box" id="studentImportBox">
+                <div class="import-head">
+                    <div>
+                        <h4 class="import-title">Enroll from a spreadsheet</h4>
+                        <p class="import-sub">
+                            Upload a CSV or Excel file with one learner per row — the columns the form asks for
+                            (LRN, names, birth date, birthplace, gender, parent/guardian, address, contact, height, weight).
+                            Learners are added to your class; a row that fails a check is skipped and reported by its line.
+                        </p>
+                    </div>
+                    <a href="{{ route('adviser.import.template') }}" class="btn btn-secondary import-template">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Download template
+                    </a>
+                </div>
+
+                <form method="POST" action="{{ route('adviser.import') }}" enctype="multipart/form-data" class="import-form" id="studentImportForm">
+                    @csrf
+                    <label class="import-file" for="studentsFile">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <span id="studentsFileLabel">Choose a .csv or .xlsx file</span>
+                        <input type="file" id="studentsFile" name="students_file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+                    </label>
+                    <button type="submit" class="btn" id="studentImportSubmit">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+                        Enroll Students from File
+                    </button>
+                    @error('students_file') <div class="import-error">{{ $message }}</div> @enderror
+                </form>
+
+                @if (is_array($importReport))
+                    <div class="import-report {{ ($importReport['errors'] ?? []) === [] ? 'is-ok' : 'is-partial' }}">
+                        <div class="import-report-head">
+                            <strong>{{ $importReport['created'] }}</strong> enrolled &middot;
+                            <strong>{{ $importReport['updated'] }}</strong> updated &middot;
+                            <strong>{{ count($importReport['errors'] ?? []) }}</strong> skipped
+                            <span class="import-report-total">of {{ $importReport['total'] }} {{ \Illuminate\Support\Str::plural('row', $importReport['total']) }}</span>
+                        </div>
+                        @if (($importReport['errors'] ?? []) !== [])
+                            <ul class="import-report-errors">
+                                @foreach ($importReport['errors'] as $rowError)
+                                    <li><b>Line {{ $rowError['line'] }}:</b> {{ $rowError['message'] }}</li>
+                                @endforeach
+                            </ul>
+                            <p class="import-report-note">Fix those rows in the file and upload it again — the learners already enrolled are simply updated.</p>
+                        @endif
+                    </div>
+                @endif
+            </div>
+
+            <div class="import-divider" id="studentImportDivider"><span>Or enroll one student manually</span></div>
+
                 {{-- Both sheets are reachable from the moment the form opens: Sheet 2
                      is never gated behind completing Sheet 1. --}}
                 <div class="sheet-tabs" role="tablist" aria-label="Health assessment sheets">
@@ -598,7 +656,12 @@
 
                 <div class="student-section">
                     <h4>General Appearance</h4>
-                    @php $consciousness = $hhText('consciousness', 'Alert'); $posture = $hhText('posture', 'Normal'); $hygiene = $hhText('hygiene', 'Adequate'); @endphp
+                    @php
+                        $consciousness = $hhText('consciousness', 'Alert');
+                        // Good / Poor; an old Normal / Abnormal answer re-posted is read as the current pair.
+                        $posture = \App\Support\PostureGait::normalize($hhText('posture', \App\Support\PostureGait::GOOD)) ?? \App\Support\PostureGait::GOOD;
+                        $hygiene = $hhText('hygiene', 'Adequate');
+                    @endphp
                     <div class="student-grid">
                         <div class="field">
                             <label>Level of Consciousness</label>
@@ -612,10 +675,10 @@
                         <div class="field">
                             <label>Posture / Gait</label>
                             <div class="sr-radios">
-                                <label><input type="radio" name="health_history[posture]" value="Normal" {{ $posture === 'Normal' ? 'checked' : '' }}> Normal</label>
-                                <label><input type="radio" name="health_history[posture]" value="Abnormal" {{ $posture === 'Abnormal' ? 'checked' : '' }}> Abnormal</label>
+                                <label><input type="radio" name="health_history[posture]" value="Good" {{ $posture === 'Good' ? 'checked' : '' }}> Good</label>
+                                <label><input type="radio" name="health_history[posture]" value="Poor" {{ $posture === 'Poor' ? 'checked' : '' }}> Poor</label>
                             </div>
-                            <input id="hh_posture_detail" name="health_history[posture_detail]" type="text" placeholder="If abnormal, specify" value="{{ $hhText('posture_detail') }}">
+                            <input id="hh_posture_detail" name="health_history[posture_detail]" type="text" placeholder="If poor, specify" value="{{ $hhText('posture_detail') }}">
                         </div>
                         <div class="field">
                             <label>Hygiene / Grooming</label>
@@ -1202,9 +1265,10 @@ window.switchAdviserTab = (targetId) => {
             return 'Not enough data';
         }
 
+        // Mirrors App\Support\BmiClassifier: the 17.0–18.5 band is Wasted,
+        // not "Underweight" — the DepEd scale has no such column.
         if (bmi < 16.0) return 'Severely Wasted';
-        if (bmi < 17.0) return 'Wasted';
-        if (bmi < 18.5) return 'Underweight';
+        if (bmi < 18.5) return 'Wasted';
         if (bmi < 25.0) return 'Normal';
         if (bmi < 30.0) return 'Overweight';
         return 'Obese';
@@ -1797,6 +1861,12 @@ window.showAdviserSheet = (panelId) => {
         if (lrnInput) lrnInput.readOnly = editing;
         form.dataset.mode = editing ? 'edit' : 'enrol';
 
+        // The spreadsheet import enrols a class; an edit is one learner.
+        const importBox = document.getElementById('studentImportBox');
+        const importDivider = document.getElementById('studentImportDivider');
+        if (importBox) importBox.hidden = editing;
+        if (importDivider) importDivider.hidden = editing;
+
         // Sheet 2 is the learner's record once they exist, not a field to
         // re-type. The server enforces it; this is what the adviser sees.
         const sheet2 = document.getElementById('sheet2Fieldset');
@@ -1870,6 +1940,10 @@ window.showAdviserSheet = (panelId) => {
 
         // Both grouped sections repopulate the same way: checkboxes by truthiness,
         // radios by matching value, everything else by assignment.
+        // Posture / Gait reads Good / Poor; a row saved under the older
+        // Normal / Abnormal words still lands on the right radio.
+        const POSTURE_LEGACY = { normal: 'Good', abnormal: 'Poor' };
+
         const fillGroup = (prefix, values) => {
             const data = values && typeof values === 'object' ? values : {};
 
@@ -1879,7 +1953,11 @@ window.showAdviserSheet = (panelId) => {
                 if (node.type === 'checkbox') {
                     node.checked = Boolean(data[key]);
                 } else if (node.type === 'radio') {
-                    node.checked = data[key] === node.value;
+                    let value = data[key];
+                    if (prefix === 'health_history' && key === 'posture' && typeof value === 'string') {
+                        value = POSTURE_LEGACY[value.trim().toLowerCase()] ?? value;
+                    }
+                    node.checked = value === node.value;
                 } else {
                     node.value = data[key] ?? '';
                 }
@@ -1913,6 +1991,24 @@ window.showAdviserSheet = (panelId) => {
         window.switchAdviserTab?.('prototype-form-panel');
         window.showAdviserSheet?.('sheetPanel1');
     };
+
+    // The file picker names what was chosen, and the button locks while the
+    // upload is on its way so a double click cannot enrol a class twice.
+    const studentsFile = document.getElementById('studentsFile');
+    const studentsFileLabel = document.getElementById('studentsFileLabel');
+    const studentImportForm = document.getElementById('studentImportForm');
+    studentsFile?.addEventListener('change', () => {
+        if (studentsFileLabel) {
+            studentsFileLabel.textContent = studentsFile.files?.[0]?.name || 'Choose a .csv or .xlsx file';
+        }
+    });
+    studentImportForm?.addEventListener('submit', () => {
+        const submit = document.getElementById('studentImportSubmit');
+        if (submit) {
+            submit.disabled = true;
+            submit.textContent = 'Enrolling…';
+        }
+    });
 
     document.getElementById('openAddStudentBtn')?.addEventListener('click', window.openEnrolmentForm);
     document.getElementById('openAddStudentEmptyBtn')?.addEventListener('click', window.openEnrolmentForm);

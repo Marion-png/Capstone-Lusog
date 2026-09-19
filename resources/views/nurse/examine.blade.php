@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
-    <title>School Nurse Examination - SIGLA</title>
+    <title>Systems Review, Screenings, and Recommendations - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
     <style>
@@ -120,7 +120,7 @@
 <div class="page-header">
     <div>
         <div class="page-eyebrow">School Nurse &rsaquo; Health Records</div>
-        <h1>Medical <span>Examination Form</span></h1>
+        <h1>Systems Review, <span>Screenings, and Recommendations</span></h1>
     </div>
     <a href="{{ route('dashboard.student-health-records') }}" class="btn btn-ghost">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M15 18l-6-6 6-6"/></svg>
@@ -161,7 +161,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
         </div>
         <div>
-            <div class="card-title">Medical Findings</div>
+            <div class="card-title">Systems Review, Screenings, and Recommendations</div>
             <div class="card-sub">Complete the examination fields below and save to finalize the record.</div>
         </div>
     </div>
@@ -169,52 +169,19 @@
         <form method="POST" action="{{ route('nurse.examine.save', $index) }}">
             @csrf
 
-            <div class="section-divider">Vital Signs &amp; Physical Measurements</div>
+            {{-- Vital signs are recorded on the learner's profile (the Vital
+                 Signs panel), and height, weight and nutritional status are the
+                 class adviser's measurements — this form no longer repeats
+                 either. The date is kept: it is the record's own, and the
+                 monthly examination count is keyed on it. Saved with the
+                 profile's current measurements, which NurseController reads
+                 off the record rather than off this form. --}}
+            <div class="section-divider">Screening &amp; Physical Examination</div>
             <div class="form-grid">
                 <div class="field">
                     <label>Date of Examination</label>
-                    <input type="date" name="date_of_examination" value="{{ $exam['date_of_examination'] ?? '' }}">
+                    <input type="date" name="date_of_examination" value="{{ $exam['date_of_examination'] ?? '' }}" max="{{ now()->toDateString() }}">
                 </div>
-                <div class="field">
-                    <label>Temperature / Blood Pressure</label>
-                    <input type="text" name="temperature_bp" value="{{ $exam['temperature_bp'] ?? '' }}" placeholder="e.g. 36.5°C / 120/80">
-                </div>
-                <div class="field">
-                    <label>Heart Rate</label>
-                    <input type="text" name="heart_rate" value="{{ $exam['heart_rate'] ?? '' }}" placeholder="e.g. 80 bpm">
-                </div>
-                <div class="field">
-                    <label>Pulse Rate</label>
-                    <input type="text" name="pulse_rate" value="{{ $exam['pulse_rate'] ?? '' }}" placeholder="e.g. 78 bpm">
-                </div>
-                <div class="field">
-                    <label>Respiratory Rate</label>
-                    <input type="text" name="respiratory_rate" value="{{ $exam['respiratory_rate'] ?? '' }}" placeholder="e.g. 18/min">
-                </div>
-            </div>
-
-            <div class="section-divider" style="margin-top:24px;">Anthropometric Data <span class="readonly-badge">Auto-filled from Adviser</span></div>
-            <div class="form-grid-4">
-                <div class="field">
-                    <label>Height (cm)</label>
-                    <input type="text" id="examHeightCm" name="height_cm" value="{{ $exam['height_cm'] ?? ($record['height_cm'] ?? '') }}" readonly>
-                </div>
-                <div class="field">
-                    <label>Weight (kg)</label>
-                    <input type="text" id="examWeightKg" name="weight_kg" value="{{ $exam['weight_kg'] ?? ($record['weight_kg'] ?? '') }}" readonly>
-                </div>
-                <div class="field">
-                    <label>Nutritional Status (BMI/Wt-for-Age)</label>
-                    <input type="text" id="examNutritionalStatusBmi" name="nutritional_status_bmi" value="{{ $exam['nutritional_status_bmi'] ?? ($record['nutritional_status_bmi_for_age'] ?? '') }}" readonly>
-                </div>
-                <div class="field">
-                    <label>Nutritional Status (Height-for-Age)</label>
-                    <input type="text" id="examNutritionalStatusHeightAge" name="nutritional_status_height_age" value="{{ $exam['nutritional_status_height_age'] ?? ($record['nutritional_status_height_for_age'] ?? '') }}" readonly>
-                </div>
-            </div>
-
-            <div class="section-divider" style="margin-top:24px;">Screening &amp; Physical Examination</div>
-            <div class="form-grid">
                 <div class="field">
                     <label>Vision Screening</label>
                     <input type="text" name="vision_screening" value="{{ $exam['vision_screening'] ?? '' }}" placeholder="e.g. 20/20 both eyes">
@@ -364,75 +331,5 @@
         </form>
     </div>
 </div>
-
-<script>
-(() => {
-    const heightInput = document.getElementById('examHeightCm');
-    const weightInput = document.getElementById('examWeightKg');
-    const bmiStatusInput = document.getElementById('examNutritionalStatusBmi');
-    const hfaStatusInput = document.getElementById('examNutritionalStatusHeightAge');
-
-    if (!heightInput || !weightInput || !bmiStatusInput || !hfaStatusInput) {
-        return;
-    }
-
-    const existingBmiStatus = bmiStatusInput.value.trim();
-    const existingHfaStatus = hfaStatusInput.value.trim();
-
-    const birthYear = Number(@json($record['birth_year'] ?? null));
-    const birthMonth = Number(@json($record['birth_month'] ?? null));
-    const birthDay = Number(@json($record['birth_day'] ?? null));
-
-    const resolveAge = () => {
-        if (!Number.isFinite(birthYear) || !Number.isFinite(birthMonth) || !Number.isFinite(birthDay)) {
-            return null;
-        }
-        const dob = new Date(birthYear, birthMonth - 1, birthDay);
-        if (Number.isNaN(dob.getTime())) return null;
-        const today = new Date();
-        let age = today.getFullYear() - dob.getFullYear();
-        const monthDiff = today.getMonth() - dob.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) age -= 1;
-        return age >= 0 ? age : null;
-    };
-
-    const classifyBmiForAge = (bmi, age) => {
-        if (!Number.isFinite(bmi) || age === null) return 'Not enough data';
-        if (bmi < 16.0) return 'Severely Wasted';
-        if (bmi < 17.0) return 'Wasted';
-        if (bmi < 18.5) return 'Underweight';
-        if (bmi >= 25.0) return 'Overweight';
-        return 'Normal';
-    };
-
-    const classifyHeightForAge = (heightCm, age) => {
-        if (!Number.isFinite(heightCm) || age === null || heightCm <= 0) return 'Not enough data';
-        const heightM = heightCm / 100;
-        if (heightM < 1.20) return 'Severely Stunted';
-        if (heightM < 1.30) return 'Stunted';
-        if (heightM > 1.70) return 'Tall';
-        return 'Normal Height-for-Age';
-    };
-
-    const updateStatuses = (force = false) => {
-        const heightCm = Number(heightInput.value);
-        const weightKg = Number(weightInput.value);
-        const age = resolveAge();
-        if (!Number.isFinite(heightCm) || !Number.isFinite(weightKg) || heightCm <= 0 || weightKg <= 0) return;
-        const heightM = heightCm / 100;
-        const bmi = weightKg / (heightM * heightM);
-        if (force || bmiStatusInput.value.trim() === '' || bmiStatusInput.value.trim() === existingBmiStatus) {
-            bmiStatusInput.value = classifyBmiForAge(bmi, age);
-        }
-        if (force || hfaStatusInput.value.trim() === '' || hfaStatusInput.value.trim() === existingHfaStatus) {
-            hfaStatusInput.value = classifyHeightForAge(heightCm, age);
-        }
-    };
-
-    heightInput.addEventListener('input', () => updateStatuses(true));
-    weightInput.addEventListener('input', () => updateStatuses(true));
-    updateStatuses(false);
-})();
-</script>
 </body>
 </html>

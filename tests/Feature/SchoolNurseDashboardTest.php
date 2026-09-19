@@ -151,7 +151,12 @@ class SchoolNurseDashboardTest extends TestCase
         $this->assertStringContainsString('data-level="senior"', $html);
         $this->assertStringContainsString('data-level="personnel"', $html);
         $this->assertStringContainsString('id="consultSearch"', $html);
-        $this->assertStringContainsString('data-today="1"', $html);
+
+        // The date filter is a calendar, and each row carries the calendar
+        // date it is matched against — stamped server-side.
+        $this->assertStringContainsString('type="date" class="input" id="consultDateFilter"', $html);
+        $this->assertStringNotContainsString('<option value="today">', $html);
+        $this->assertStringContainsString('data-date="'.now()->toDateString().'"', $html);
     }
 
     #[Test]

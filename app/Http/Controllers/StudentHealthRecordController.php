@@ -10,6 +10,7 @@ use App\Models\HealthConsentForm;
 use App\Models\MedicalCertificate;
 use App\Models\StudentHealthRecord;
 use App\Support\AdviserClassScope;
+use App\Support\BmiClassifier;
 use App\Support\ChangeStamp;
 use App\Support\ConsultationVisibility;
 use App\Support\FeedingAtRiskRule;
@@ -1027,7 +1028,7 @@ class StudentHealthRecordController extends Controller
                 $statusKey = $this->nutritionStatusKey($status);
                 // The feeding program targets undernourished learners only;
                 // eligibility is derived from BMI-for-age, never tagged by hand.
-                $eligible = in_array($statusKey, ['wasted', 'severely-wasted', 'underweight'], true);
+                $eligible = in_array($statusKey, ['wasted', 'severely-wasted'], true);
 
                 $attended = max(0, (int) $record->attendance_sessions_count);
                 $sessions = max(0, (int) ($sessionTotals[$record->id] ?? 0));
@@ -1116,8 +1117,8 @@ class StudentHealthRecordController extends Controller
         return match (true) {
             $status === '' => 'not-assessed',
             str_contains($status, 'severely wasted') => 'severely-wasted',
-            str_contains($status, 'wasted') => 'wasted',
-            str_contains($status, 'underweight') => 'underweight',
+            // A record saved under the retired "Underweight" label is Wasted.
+            str_contains($status, 'wasted'), str_contains($status, 'underweight') => 'wasted',
             str_contains($status, 'obese') => 'obese',
             str_contains($status, 'overweight') => 'overweight',
             str_contains($status, 'normal') => 'normal',
@@ -1748,20 +1749,7 @@ class StudentHealthRecordController extends Controller
 
     private function classifyStatus(float $bmi, int $age): string
     {
-        if ($bmi < 16.0) {
-            return 'Severely Wasted';
-        }
-        if ($bmi < 17.0) {
-            return 'Wasted';
-        }
-        if ($bmi < 18.5) {
-            return 'Underweight';
-        }
-        if ($bmi >= 25.0) {
-            return 'Overweight';
-        }
-
-        return 'Normal';
+        return BmiClassifier::bmiForAge($bmi, $age);
     }
 
     /**

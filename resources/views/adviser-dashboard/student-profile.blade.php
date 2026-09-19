@@ -743,9 +743,15 @@ const STUDENT_PROFILE_LRN = @json($lrn);
         const consciousness = history.consciousness === 'Other' && history.consciousness_other
             ? `Other — ${history.consciousness_other}`
             : history.consciousness;
-        const posture = history.posture === 'Abnormal' && history.posture_detail
-            ? `Abnormal — ${history.posture_detail}`
+        // Good / Poor. A row saved under the older Normal / Abnormal words is
+        // printed under the current ones; the detail rides with Poor.
+        const POSTURE_LEGACY = { normal: 'Good', abnormal: 'Poor' };
+        const postureValue = typeof history.posture === 'string'
+            ? (POSTURE_LEGACY[history.posture.trim().toLowerCase()] ?? history.posture)
             : history.posture;
+        const posture = postureValue === 'Poor' && history.posture_detail
+            ? `Poor — ${history.posture_detail}`
+            : postureValue;
 
         setText('vpConsciousness', consciousness || '-');
         setText('vpPosture', posture || '-');
