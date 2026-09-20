@@ -4,13 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Models\Condition;
 use App\Models\Consultation;
+use App\Models\ConsultationPhoto;
 use App\Models\Medicine;
 use App\Models\MedicineDispense;
 use App\Models\StudentHealthRecord;
+use App\Support\EncryptedFileStorage;
 use App\Support\SchemaCache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -127,7 +130,21 @@ class ConsultationController extends Controller
             // clinic gave out and what the inventory says cannot drift apart.
             'medicine_id' => ['nullable', 'integer', 'exists:medicines,id'],
             'medicine_quantity' => ['nullable', 'integer', 'min:1'],
+            // Optional: photographs of the injury, taken while the visit is
+            // being recorded — the same kind of file, the same limits and the
+            // same storage the Photos dialog on the log uses (ConsultationPhoto).
+            'photos' => ['nullable', 'array', 'max:'.ConsultationPhoto::MAX_PER_UPLOAD],
+            'photos.*' => [
+                'file',
+                'image',
+                'mimes:'.ConsultationPhoto::ALLOWED_EXTENSIONS,
+                'max:'.ConsultationPhoto::MAX_KILOBYTES,
+            ],
+            'photo_caption' => ['nullable', 'string', 'max:500'],
+            'photo_shared_with_adviser' => ['nullable', 'boolean'],
         ]);
+
+        $photos = array_values(array_filter((array) $request->file('photos', [])));
 
         // Ensure at least one condition source is provided
         $conditionId = $validated['condition_id'] ?? null;
@@ -175,8 +192,10 @@ class ConsultationController extends Controller
         // leave the stock overstating what the clinic holds, and a dispense
         // without its consultation would be a draw nobody can account for.
         // Either both land or neither does.
-        DB::transaction(function () use ($validated, $conditionName, $conditionId, $institutionId, $medicineId, $quantity, $request, &$dispensed) {
-            Consultation::create([
+        $photoCount = 0;
+
+        DB::transaction(function () use ($validated, $conditionName, $conditionId, $institutionId, $medicineId, $quantity, $photos, $request, &$dispensed, &$photoCount) {
+            $consultation = Consultation::create([
                 'institution_id' => $institutionId,
                 'consulted_at' => $validated['consulted_at'],
                 'student_name' => $validated['student_name'],
@@ -188,6 +207,29 @@ class ConsultationController extends Controller
                 'treatment_given' => $validated['treatment_given'] ?? null,
                 'status' => $validated['status'],
             ]);
+
+            // Photographs attached at the point of recording. Written through
+            // the model and EncryptedFileStorage exactly as the Photos dialog
+            // writes them, so a photo taken now and one added later are the
+            // same record. Not shared with the adviser unless the nurse says
+            // so — the adviser sees no other consultation detail, and a photo
+            // of a child's injury must not become the back door.
+            if ($photos !== [] && SchemaCache::hasTable('consultation_photos')) {
+                foreach ($photos as $file) {
+                    ConsultationPhoto::create([
+                        'consultation_id' => $consultation->id,
+                        'institution_id' => $institutionId,
+                        'file_path' => EncryptedFileStorage::store($file, 'consultation-photos'),
+                        'file_original_name' => $file->getClientOriginalName(),
+                        'file_size' => $file->getSize(),
+                        'caption' => $validated['photo_caption'] ?? null,
+                        'shared_with_adviser' => (bool) ($validated['photo_shared_with_adviser'] ?? false),
+                        'uploaded_by_name' => (string) $request->session()->get('active_name', ''),
+                        'uploaded_by_role' => (string) $request->session()->get('active_role', ''),
+                    ]);
+                    $photoCount++;
+                }
+            }
 
             if (! $medicineId) {
                 return;
@@ -229,11 +271,16 @@ class ConsultationController extends Controller
             $dispensed = $quantity.' '.$medicine->unit.' of '.$medicine->name;
         });
 
+        $message = $dispensed === null
+            ? 'Consultation saved successfully.'
+            : "Consultation saved. {$dispensed} deducted from inventory.";
+        if ($photoCount > 0) {
+            $message .= ' '.$photoCount.' '.Str::plural('photo', $photoCount).' attached.';
+        }
+
         return redirect()
             ->route('dashboard.consultation-log')
-            ->with('success', $dispensed === null
-                ? 'Consultation saved successfully.'
-                : "Consultation saved. {$dispensed} deducted from inventory.");
+            ->with('success', $message);
     }
 
     /**

@@ -54,7 +54,14 @@
 
                 return (string) ($row['grade_level'] ?? '') === (string) $assignedGradeLevel
                     && (string) ($row['section'] ?? '') === (string) $assignedSection;
-            });
+            })
+            // Alphabetical by surname, then given name — a class list is read
+            // by name, not by the order learners happened to be enrolled in.
+            // Rows are keyed by LRN, never by position, so the order is free.
+            ->sortBy(fn ($row) => mb_strtolower(trim(
+                (string) ($row['last_name'] ?? '').', '.(string) ($row['first_name'] ?? '')
+            )), SORT_NATURAL)
+            ->values();
 
             $studentsTotal = $prototypeRecords->count();
             $pendingReviewTotal = $prototypeRecords->filter(fn ($row) => empty($row['examination']))->count();

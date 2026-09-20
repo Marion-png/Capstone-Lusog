@@ -144,6 +144,33 @@ class AdviserMyStudentsTest extends TestCase
             ->assertOk()->assertSee('>Enroll Student</div>', false);
     }
 
+    /**
+     * My Students reads alphabetically by surname, not in enrolment order —
+     * that is the list a search from the topbar lands on.
+     *
+     * @test
+     */
+    public function my_students_is_alphabetical(): void
+    {
+        $row = fn (string $lrn, string $last, string $first) => [
+            'lrn' => $lrn, 'last_name' => $last, 'first_name' => $first,
+            'grade_level' => 'Grade 1', 'section' => 'Sampaguita',
+        ];
+
+        $html = $this->withSession(array_merge($this->adviserSession(), [
+            'school_health_card_records' => [
+                $row('300000000003', 'Reyes', 'Ana'),
+                $row('300000000001', 'cruz', 'Juan'),
+                $row('300000000002', 'Dela Cruz', 'Maria'),
+                $row('300000000004', 'Bautista', 'Leo'),
+            ],
+        ]))->get(route('dashboard.class-adviser', ['tab' => 'saved']))->assertOk()->getContent();
+
+        preg_match_all('/class="js-student-row"\s+data-name="([^"]+)"/', $html, $m);
+
+        $this->assertSame(['bautista, leo', 'cruz, juan', 'dela cruz, maria', 'reyes, ana'], $m[1]);
+    }
+
     /** @test */
     public function the_sidebar_has_no_health_assessment_entry(): void
     {

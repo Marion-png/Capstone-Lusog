@@ -154,11 +154,18 @@
             return;
         }
 
+        // Alphabetical by name ("Last, First"), whatever order the roster
+        // arrived in — the adviser's is the order learners were enrolled, and
+        // a list a nurse scans by eye reads by surname, not by enrolment.
+        const byName = (a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' });
+
         render(
-            roster.filter((row) =>
-                String(row.name).toLowerCase().includes(term) ||
-                String(row.lrn).toLowerCase().includes(term)
-            ),
+            roster
+                .filter((row) =>
+                    String(row.name).toLowerCase().includes(term) ||
+                    String(row.lrn).toLowerCase().includes(term)
+                )
+                .sort(byName),
             raw
         );
 

@@ -7,6 +7,16 @@
  * the include and nothing else. It lived in class-adviser.css, where the nurse's
  * page could not reach it. */
 
+/* The panel's own chrome — head, count, "Incident History" subhead. These
+   used to be declared only in class-adviser.css, so on the nurse's profile
+   the subhead's icon had no size and drew as a page-high glyph. The panel is
+   rendered on two pages that load different sheets; what it needs, it carries. */
+.sp-panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:10px}
+.sp-panel-head h4{margin-bottom:0}
+.sp-panel-count{font-size:.72rem;font-weight:600;color:var(--lg-ink-soft,#6B7C72)}
+.sp-subhead{display:flex;align-items:center;gap:7px;margin:16px 0 10px;font-size:.78rem;font-weight:700;color:var(--lg-ink,#1F2D25);letter-spacing:.02em}
+.sp-subhead svg{width:14px;height:14px;flex:0 0 auto;color:var(--lg-emerald,#1F8A4C)}
+
 .incident-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .incident-form-grid .field.full{grid-column:1/-1}
 .incident-form-grid label{display:block;font-size:.74rem;font-weight:600;color:var(--lg-ink-soft,#6B7C72);margin-bottom:4px}

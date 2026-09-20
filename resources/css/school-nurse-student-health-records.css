@@ -276,6 +276,10 @@ body.sn-profile-stacked .profile-backdrop.open { background: transparent; }
 .cn-entry-body { font-size: .8rem; color: var(--text-2); line-height: 1.5; white-space: pre-line; }
 .cn-pill { display: inline-flex; align-items: center; font-size: .66rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: var(--g100); color: var(--g700); }
 .cn-pill.is-warn { background: #FDF4E2; color: #8A5A06; }
+/* Photos of the injury open from the visit; a thumbnail on the card itself
+   would put a child's injury on a screen anyone passing the desk can read. */
+.cn-photo-btn { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); background: #fff; border-radius: 8px; padding: 4px 9px; font: inherit; font-size: .72rem; font-weight: 600; color: var(--text-3); cursor: pointer; }
+.cn-photo-btn:hover { background: var(--g100); color: var(--g900); }
 .cn-pill.is-followup { margin-top: 7px; background: #E8F2F5; color: #1F5F70; }
 
 .cn-form textarea, .cn-form input[type="text"], .cn-form input[type="date"] { width: 100%; border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; font-family: 'DM Sans', sans-serif; font-size: .82rem; color: var(--text-1); background: #fff; outline: none; }
@@ -322,3 +326,19 @@ body.sn-profile-stacked .profile-backdrop.open { background: transparent; }
 .sp-avatar-photo{object-fit:cover;display:block;padding:0}
 .sp-avatar-blank{background:var(--lg-mint,#E7F5EC);color:var(--lg-emerald-deep,#126B3A)}
 .sp-avatar-blank svg{width:52%;height:52%}
+
+/* ── Vital signs panel (student profile) ──
+   Lives here, on the Health Records page's own sheet: it used to sit in
+   school-nurse.css, the dashboard's sheet, which this page never loads — so
+   the form rendered as bare browser inputs beside the styled ones.
+   The nurse records temperature, pulse and blood pressure; the class adviser
+   reads them on their own form. The form stays closed until asked for — a
+   profile is opened to read far more often than to record. */
+.vitals-form{margin-top:14px;padding:14px;border:1px solid var(--lg-border-strong,#C7DCCE);border-radius:12px;background:var(--lg-page,#F6F9F7)}
+.vitals-form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+.vitals-form-grid label{display:block;font-size:.72rem;font-weight:600;color:var(--lg-ink-soft,#6B7C72);margin-bottom:4px}
+.vitals-form-grid input{width:100%;font:inherit;font-size:.84rem;color:var(--lg-ink,#1F2D25);background:#fff;border:1px solid var(--lg-border,#DCE8E0);border-radius:8px;padding:8px 10px;font-variant-numeric:tabular-nums lining-nums slashed-zero}
+.vitals-form-grid input:focus{outline:none;border-color:var(--lg-emerald,#1F8A4C);box-shadow:0 0 0 3px rgba(31,138,76,.16)}
+.vitals-form-error{margin-top:11px;padding:9px 12px;border-radius:8px;background:#FCECEC;color:#b91c1c;font-size:.78rem}
+.vitals-form-foot{display:flex;justify-content:flex-end;gap:9px;margin-top:12px}
+@media (max-width:640px){.vitals-form-grid{grid-template-columns:1fr}}

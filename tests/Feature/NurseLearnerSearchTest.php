@@ -96,6 +96,35 @@ class NurseLearnerSearchTest extends TestCase
         $this->assertStringContainsString('500000000001', $html);
     }
 
+    /**
+     * Results read alphabetically by surname, whatever order the roster was
+     * enrolled in, and case does not reorder them.
+     */
+    #[Test]
+    public function search_results_are_alphabetical(): void
+    {
+        $row = fn (string $lrn, string $last, string $first) => [
+            'lrn' => $lrn, 'last_name' => $last, 'first_name' => $first,
+            'grade_level' => 'Grade 10', 'section' => 'Dalton',
+        ];
+
+        $html = $this->withSession($this->nurseSession([
+            $row('500000000003', 'Reyes', 'Ana'),
+            $row('500000000001', 'cruz', 'Juan'),
+            $row('500000000002', 'Dela Cruz', 'Maria'),
+            $row('500000000004', 'Bautista', 'Leo'),
+        ]))->get(route('dashboard.school-nurse'))->assertOk()->getContent();
+
+        preg_match('/const roster = (\[.*?\]);/s', $html, $m);
+        $names = array_column(json_decode($m[1], true), 'name');
+
+        $this->assertSame(['Bautista, Leo', 'cruz, Juan', 'Dela Cruz, Maria', 'Reyes, Ana'], $names);
+
+        // The dropdown sorts what it shows, so a roster that arrives in any
+        // order still lists matches alphabetically.
+        $this->assertStringContainsString('.sort(byName)', $html);
+    }
+
     #[Test]
     public function the_profile_offers_a_new_consultation_button(): void
     {

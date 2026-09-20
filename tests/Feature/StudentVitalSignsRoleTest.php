@@ -348,6 +348,12 @@ class StudentVitalSignsRoleTest extends TestCase
         $this->assertStringContainsString('id="vitalsSection"', $html);
         $this->assertStringContainsString('Record Vital Signs', $html);
         $this->assertStringContainsString('id="vfTemperature"', $html);
+
+        // The form's styles ship with the page that draws it. They used to
+        // live in the dashboard's sheet, which this page never loads, so the
+        // three inputs rendered as bare browser boxes beside the styled ones.
+        $this->assertStringContainsString('.vitals-form-grid input{', $html);
+        $this->assertStringContainsString('.vitals-form-grid input:focus{', $html);
     }
 
     /** Clinic staff read the panel; the button is not theirs. */

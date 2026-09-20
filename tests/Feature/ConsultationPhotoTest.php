@@ -396,4 +396,102 @@ class ConsultationPhotoTest extends TestCase
         $this->assertStringContainsString('data-photos-open=', $html);
         $this->assertStringContainsString("Share with the learner's class adviser", $html);
     }
+
+    // ── Photos at the point of recording ────────────────────────────
+
+    /**
+     * The New Consultation dialog takes the photos with the visit, and they
+     * land through the same model and storage as the Photos dialog — one
+     * record, whichever way the picture arrived.
+     */
+    #[Test]
+    public function the_nurse_can_attach_photos_while_recording_the_visit(): void
+    {
+        $this->learner();
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->post(route('consultations.store'), [
+                'consulted_at' => now()->toDateString(),
+                'student_name' => 'Cruz, Juan',
+                'grade_section' => 'Grade 10 - Dalton',
+                'condition' => 'Abrasion',
+                'treatment_given' => 'Cleaned and dressed',
+                'status' => 'treated',
+                'photos' => [
+                    UploadedFile::fake()->create('knee-1.jpg', 120, 'image/jpeg'),
+                    UploadedFile::fake()->create('knee-2.png', 90, 'image/png'),
+                ],
+                'photo_caption' => 'Graze to the left knee',
+            ])
+            ->assertRedirect(route('dashboard.consultation-log'))
+            ->assertSessionHas('success', fn (string $m) => str_contains($m, '2 photos attached'));
+
+        $visit = Consultation::firstOrFail();
+        $photos = ConsultationPhoto::where('consultation_id', $visit->id)->get();
+
+        $this->assertCount(2, $photos);
+        $this->assertSame($this->school->id, $photos[0]->institution_id);
+        $this->assertSame('Graze to the left knee', $photos[0]->caption);
+        $this->assertSame('Nurse Cruz', $photos[0]->uploaded_by_name);
+        $this->assertFalse($photos[0]->shared_with_adviser, 'Not shared unless the nurse says so.');
+
+        // Encrypted on disk, exactly as an upload through the dialog is.
+        $this->assertStringStartsWith('eyJ', Storage::disk('local')->get($photos[0]->file_path));
+
+        // The Photos dialog lists what was attached at recording.
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->getJson(route('consultation-photos.index', $visit))
+            ->assertOk()
+            ->assertJsonCount(2, 'photos');
+    }
+
+    /** A bad file refuses the whole save — no visit lands without its evidence. */
+    #[Test]
+    public function a_non_image_attached_at_recording_refuses_the_visit(): void
+    {
+        $this->learner();
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->post(route('consultations.store'), [
+                'consulted_at' => now()->toDateString(),
+                'student_name' => 'Cruz, Juan',
+                'grade_section' => 'Grade 10 - Dalton',
+                'condition' => 'Abrasion',
+                'status' => 'treated',
+                'photos' => [UploadedFile::fake()->create('notes.pdf', 40, 'application/pdf')],
+            ])
+            ->assertSessionHasErrorsIn('consultation', ['photos.0']);
+
+        $this->assertSame(0, Consultation::count());
+        $this->assertSame(0, ConsultationPhoto::count());
+    }
+
+    /** The dialog offers the photo field, and the profile's log opens the photos too. */
+    #[Test]
+    public function the_dialog_and_the_profile_carry_the_photo_controls(): void
+    {
+        $this->learner();
+
+        $log = $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('dashboard.consultation-log'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('enctype="multipart/form-data"', $log);
+        $this->assertStringContainsString('name="photos[]"', $log);
+        $this->assertStringContainsString('name="photo_caption"', $log);
+        $this->assertStringContainsString('name="photo_shared_with_adviser"', $log);
+
+        $profile = $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('dashboard.student-health-records'))
+            ->assertOk()
+            ->getContent();
+
+        // The profile's Consultation Log tab opens the same dialog, and the
+        // dialog brings its own styles wherever it is included.
+        $this->assertStringContainsString('id="cphotoBackdrop"', $profile);
+        $this->assertStringContainsString('photos.dataset.photosOpen = String(row.id)', $profile);
+        $this->assertStringContainsString('.cphoto-backdrop{', $profile);
+        $this->assertStringContainsString('.cphoto-backdrop{', $log);
+    }
 }

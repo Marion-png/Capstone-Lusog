@@ -37,7 +37,7 @@
             })
             ->filter(fn (array $row) => $row['lrn'] !== '' && $row['name'] !== '')
             ->unique('lrn')
-            ->sortBy('name')
+            ->sortBy(fn (array $row) => mb_strtolower($row['name']), SORT_NATURAL)
             ->values();
     @endphp
 

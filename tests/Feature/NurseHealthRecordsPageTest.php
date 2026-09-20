@@ -133,6 +133,30 @@ class NurseHealthRecordsPageTest extends TestCase
         $this->assertEquals(152, session('school_health_card_records')[0]['height_cm'], 'The measurement is untouched.');
     }
 
+    /** The records table reads by last name, whatever order the roster arrived in. */
+    #[Test]
+    public function the_records_table_is_alphabetical_by_last_name(): void
+    {
+        $roster = [
+            $this->learner(['lrn' => 'LRN-3', 'last_name' => 'Reyes', 'first_name' => 'Ana']),
+            $this->learner(['lrn' => 'LRN-1', 'last_name' => 'cruz', 'first_name' => 'Juan']),
+            $this->learner(['lrn' => 'LRN-2', 'last_name' => 'Dela Cruz', 'first_name' => 'Maria']),
+            $this->learner(['lrn' => 'LRN-4', 'last_name' => 'Bautista', 'first_name' => 'Leo']),
+        ];
+
+        $html = $this->withSession($this->nurseSession($roster))
+            ->get('/dashboard/student-health-records')
+            ->assertOk()
+            ->getContent();
+
+        preg_match_all('/<td class="shr-name">([^<]+)<\/td>/', $html, $m);
+        $this->assertSame(['Bautista, Leo C.', 'cruz, Juan C.', 'Dela Cruz, Maria C.', 'Reyes, Ana C.'], $m[1]);
+
+        // Sorting must not detach a row from the raw index its link is keyed by.
+        $this->assertStringContainsString('data-lrn="LRN-4"', $html);
+        $this->assertMatchesRegularExpression('/data-route="[^"]*\/nurse\/3\/examine"[^>]*data-lrn="LRN-4"/', $html);
+    }
+
     #[Test]
     public function filter_chips_are_built_from_the_roster_actually_on_file(): void
     {

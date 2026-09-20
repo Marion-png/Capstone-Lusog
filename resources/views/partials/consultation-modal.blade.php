@@ -49,7 +49,7 @@
 <div class="bmodal" id="consultModal" role="dialog" aria-modal="true" aria-labelledby="consultModalTitle"
      @if ($errors->consultation->any()) data-bmodal-autoopen @endif>
     <div class="bmodal-panel bmodal-panel-wide">
-        <form method="POST" action="{{ route('consultations.store') }}">
+        <form method="POST" action="{{ route('consultations.store') }}" enctype="multipart/form-data">
             @csrf
             <div class="bmodal-head">
                 <div>
@@ -242,6 +242,44 @@
                     </div>
                     <div class="bmodal-hint">Deducted from inventory when this consultation is saved.</div>
                 @endif
+
+                {{-- Photographs of the injury, attached while the visit is
+                     recorded — a cut, a rash, a swelling, seen rather than
+                     described. Same limits and same storage as the Photos
+                     dialog on the log, so one taken now and one added later
+                     are the same record. Not shared with the class adviser
+                     unless the nurse ticks it: the adviser sees no other
+                     consultation detail, and a photo of a child's injury must
+                     not become the back door. --}}
+                @if (\App\Support\SchemaCache::hasTable('consultation_photos'))
+                    <div class="bmodal-field" id="cm_photos_field">
+                        <label for="cm_photos">Photos of the injury <span class="bmodal-optional">(optional)</span></label>
+                        <label class="cm-photo-drop" for="cm_photos">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                            <span id="cm_photos_label">Take or choose up to {{ \App\Models\ConsultationPhoto::MAX_PER_UPLOAD }} photos</span>
+                            <input id="cm_photos" type="file" name="photos[]" multiple
+                                   accept="image/jpeg,image/png,image/webp,image/heic" capture="environment">
+                        </label>
+                        <div class="cm-photo-previews" id="cm_photos_previews" hidden></div>
+                        @if ($errors->consultation->has('photos') || $errors->consultation->has('photos.*'))
+                            <div class="bmodal-error">{{ $errors->consultation->first('photos') ?: $errors->consultation->first('photos.*') }}</div>
+                        @endif
+                    </div>
+                    <div class="bmodal-grid" id="cm_photo_meta" hidden>
+                        <div class="bmodal-field">
+                            <label for="cm_photo_caption">What the photos show <span class="bmodal-optional">(optional)</span></label>
+                            <input id="cm_photo_caption" type="text" name="photo_caption" maxlength="500"
+                                   value="{{ old('photo_caption') }}" placeholder="e.g. Graze to the left knee, cleaned and dressed" autocomplete="off">
+                        </div>
+                        <div class="bmodal-field cm-photo-share">
+                            <label class="cm-photo-check">
+                                <input type="checkbox" name="photo_shared_with_adviser" value="1" @checked(old('photo_shared_with_adviser'))>
+                                <span>Share with the learner's class adviser</span>
+                            </label>
+                            <div class="bmodal-hint">Photos stay in the clinic unless shared.</div>
+                        </div>
+                    </div>
+                @endif
             </div>
 
             <div class="bmodal-foot">
@@ -272,9 +310,84 @@
         text-transform: none;
         color: #1d3c31;
     }
+
+    /* Photos of the injury: a drop target that is also the camera button on
+       a phone (capture="environment"), then thumbnails of what was chosen so
+       the nurse sees the picture before it is filed against a child. */
+    #consultModal .cm-photo-drop {
+        display: flex; align-items: center; gap: 9px;
+        padding: 10px 12px; margin-top: 4px;
+        border: 1.5px dashed #DCE8E0; border-radius: 10px;
+        background: #F6F9F7; color: #3E5348; font-size: .8rem; cursor: pointer;
+    }
+    #consultModal .cm-photo-drop:hover { border-color: #BFE3CC; color: #1F8A4C; }
+    #consultModal .cm-photo-drop svg { width: 16px; height: 16px; flex: 0 0 auto; }
+    #consultModal .cm-photo-drop input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+    #consultModal .cm-photo-previews {
+        display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
+    }
+    #consultModal .cm-photo-previews[hidden] { display: none; }
+    #consultModal .cm-photo-thumb {
+        width: 64px; height: 64px; border-radius: 8px; object-fit: cover;
+        border: 1px solid #DCE8E0; background: #fff;
+    }
+    #consultModal .cm-photo-check {
+        display: flex; align-items: center; gap: 8px;
+        font-size: .82rem; color: #1d3c31; margin-top: 22px;
+    }
+    #consultModal .cm-photo-check input { width: auto; margin: 0; }
+    #consultModal #cm_photo_meta[hidden] { display: none; }
 </style>
 
 <script>
+// Photos of the injury: name what was chosen, show it, and reveal the caption
+// and sharing controls only once there is a photo for them to describe.
+(() => {
+    const input = document.getElementById('cm_photos');
+    const label = document.getElementById('cm_photos_label');
+    const previews = document.getElementById('cm_photos_previews');
+    const meta = document.getElementById('cm_photo_meta');
+    if (!input) return;
+
+    const max = {{ (int) \App\Models\ConsultationPhoto::MAX_PER_UPLOAD }};
+    const idle = label ? label.textContent : '';
+
+    input.addEventListener('change', () => {
+        const files = Array.from(input.files || []);
+        if (previews) {
+            previews.querySelectorAll('img').forEach((img) => URL.revokeObjectURL(img.src));
+            previews.textContent = '';
+        }
+
+        if (files.length > max) {
+            input.value = '';
+            if (label) label.textContent = 'Choose at most ' + max + ' photos.';
+            if (previews) previews.hidden = true;
+            if (meta) meta.hidden = true;
+            return;
+        }
+
+        if (label) {
+            label.textContent = files.length === 0
+                ? idle
+                : files.length + (files.length === 1 ? ' photo chosen' : ' photos chosen');
+        }
+
+        if (previews) {
+            files.forEach((file) => {
+                if (!file.type.startsWith('image/')) return;
+                const img = document.createElement('img');
+                img.className = 'cm-photo-thumb';
+                img.alt = '';
+                img.src = URL.createObjectURL(file);
+                previews.appendChild(img);
+            });
+            previews.hidden = files.length === 0;
+        }
+        if (meta) meta.hidden = files.length === 0;
+    });
+})();
+
 // Open the dialog with a learner already filled in.
 (() => {
     const nameField = document.getElementById('cm_student_name');

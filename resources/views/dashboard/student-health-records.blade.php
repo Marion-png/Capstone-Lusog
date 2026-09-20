@@ -24,6 +24,17 @@
     // learner whose row it was rendered on (see NurseController::dedupedRoster).
     $records = \App\Http\Controllers\NurseController::dedupedRoster(session('school_health_card_records', []));
 
+    // Alphabetical by last name, then first — a roster is read by surname,
+    // not by the order learners were enrolled. uasort keeps the raw session
+    // index on every row, which is what "Fill Medical Record" is keyed by.
+    uasort($records, function (array $a, array $b): int {
+        $key = fn (array $row): string => mb_strtolower(trim(
+            (string) ($row['last_name'] ?? '').' '.(string) ($row['first_name'] ?? '')
+        ));
+
+        return strnatcmp($key($a), $key($b));
+    });
+
     $pendingCount = collect($records)->filter(fn ($row) => empty($row['examination']))->count();
     $doneCount = collect($records)->filter(fn ($row) => ! empty($row['examination']))->count();
 
@@ -1175,6 +1186,18 @@
                 status.textContent = row.status === 'referred' ? 'Referred' : 'Treated';
                 head.append(when, status);
 
+                // Photographs of the injury open in the same dialog the
+                // Consultation Log uses; the clinic may add to them here too.
+                if (row.id && document.getElementById('cphotoBackdrop')) {
+                    const photos = document.createElement('button');
+                    photos.type = 'button';
+                    photos.className = 'cn-photo-btn';
+                    photos.dataset.photosOpen = String(row.id);
+                    photos.dataset.photosStudent = document.getElementById('pName')?.textContent?.trim() || 'this learner';
+                    photos.textContent = 'Photos';
+                    head.appendChild(photos);
+                }
+
                 const grid = document.createElement('div');
                 grid.className = 'student-profile-grid';
                 [['Condition', row.condition], ['Treatment', row.treatment], ['Grade / Section', row.grade_section]]
@@ -1599,6 +1622,10 @@
 </script>
 
 @include('partials.consultation-modal')
+{{-- Photographs on a visit — the same dialog the Consultation Log opens,
+     reached from each entry on the profile's Consultation Log tab. --}}
+@include('partials.consultation-photos-modal')
+@include('partials.consultation-photos-script')
 @include('partials.nurse-page-transition')
 {{-- Vital signs: this role records them, and the class adviser reads them.
      Written through student-vitals.store, the one endpoint that touches

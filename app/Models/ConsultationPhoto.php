@@ -26,6 +26,9 @@ class ConsultationPhoto extends Model
     /** 8 MB in kilobytes — a phone photo, not a video. */
     public const MAX_KILOBYTES = 8192;
 
+    /** How many may be attached in one save of the consultation dialog. */
+    public const MAX_PER_UPLOAD = 6;
+
     protected $fillable = [
         'consultation_id',
         'institution_id',

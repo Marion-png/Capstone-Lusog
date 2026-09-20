@@ -9,7 +9,13 @@
     beside it, not less.
 
     Opened by any control carrying data-photos-open="<consultation id>".
+    Carries its own sheet: it is opened from the Consultation Log and from a
+    learner's profile, and those pages load different stylesheets.
 --}}
+@php $cphotoCss = resource_path('css/consultation-photos.css'); @endphp
+@if (file_exists($cphotoCss))
+    <style>{!! file_get_contents($cphotoCss) !!}</style>
+@endif
 <div class="cphoto-backdrop" id="cphotoBackdrop" hidden>
     <div class="cphoto-panel" role="dialog" aria-modal="true" aria-labelledby="cphotoTitle">
         <div class="cphoto-head">
