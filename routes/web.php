@@ -18,6 +18,7 @@ use App\Http\Controllers\HealthAssessmentController;
 use App\Http\Controllers\HealthConsentFormController;
 use App\Http\Controllers\MedicalCertificateController;
 use App\Http\Controllers\MedicineInventoryController;
+use App\Http\Controllers\MlatExportController;
 use App\Http\Controllers\NurseController;
 use App\Http\Controllers\NutricorController;
 use App\Http\Controllers\NutritionCoordinatorController;
@@ -855,6 +856,13 @@ Route::delete('/health-records/students/{lrn}/incidents/{id}', [StudentIncidentR
 // Vital signs (temperature, pulse, blood pressure). The school nurse is the
 // only role that may write one — the class adviser measures height and weight
 // and reads these. Enforced in the controller, not here.
+// The Mandatory Learner's Health Assessment Tool as the clinic's own two-sheet
+// workbook (App\Support\MlatWorkbook). Under /health-records for the same
+// reason the documents routes are: EnsureActiveSession would switch a
+// prototype nurse session to class_adviser on an /adviser/* URL.
+Route::get('/health-records/students/{lrn}/mlat', [MlatExportController::class, 'download'])
+    ->name('student-mlat.download');
+
 Route::get('/health-records/students/{lrn}/vitals', [StudentVitalSignsController::class, 'show'])
     ->name('student-vitals.show');
 Route::post('/health-records/students/{lrn}/vitals', [StudentVitalSignsController::class, 'store'])

@@ -264,6 +264,17 @@ body.sn-profile-stacked .profile-backdrop.open { background: transparent; }
 
 .sp-review-block { margin-bottom: 10px; }
 .sp-review-title { display: block; font-size: .71rem; font-weight: 700; color: #334a3f; margin-bottom: 5px; }
+/* Sheet 2 as the nurse filled it: the clinic's lettered sections, and the
+   body systems as a ruled table with an abnormal finding carried in weight
+   and colour so it reads at a glance. */
+.s2-section { margin-top: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--g900); }
+.s2-section:first-child { margin-top: 0; }
+.s2-table { width: 100%; border-collapse: collapse; font-size: .78rem; margin-bottom: 4px; }
+.s2-table th, .s2-table td { border: 1px solid var(--border); padding: 5px 8px; text-align: left; vertical-align: top; }
+.s2-table thead th { background: var(--g50); font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-3); }
+.s2-table tbody th { font-weight: 600; color: var(--text-1); width: 30%; }
+.s2-table td.is-abnormal { color: #9A4E10; font-weight: 700; }
+.s2-table + .student-profile-grid { margin-top: 8px; }
 .sp-review-items { display: flex; flex-wrap: wrap; gap: 5px; }
 .sp-review-item { font-size: .72rem; color: var(--text-3); background: #f2f5f3; border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; }
 .sp-review-item.on { background: #E7F5EC; border-color: #BFE3CC; color: var(--g700); font-weight: 600; }

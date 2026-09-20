@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Controllers\NurseController;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
+use App\Support\Sheet2Review;
 use App\Support\StudentRosterSync;
 use App\Support\StudentVitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -116,21 +117,130 @@ class NurseHealthRecordsPageTest extends TestCase
         foreach (['temperature_bp', 'heart_rate', 'pulse_rate', 'respiratory_rate', 'height_cm', 'weight_kg', 'nutritional_status_bmi'] as $field) {
             $response->assertDontSee('name="'.$field.'"', false);
         }
-        // The record's own date stays, and the screenings are still there.
+        // The record's own date stays, and the form is Sheet 2's five sections.
         $response->assertSee('name="date_of_examination"', false);
-        $response->assertSee('Screening &amp; Physical Examination', false);
-        $response->assertSee('name="vision_screening"', false);
+        foreach ([
+            'F. Evaluation of Body Systems', 'G. Vision and Hearing Screening', 'H. Oral Health Examination',
+            'I. Immunization Status', 'J. Assessment Summary and Recommendations',
+        ] as $section) {
+            $response->assertSee($section);
+        }
+        foreach (array_keys(Sheet2Review::SYSTEMS) as $system) {
+            $response->assertSee('name="systems['.$system.'][finding]"', false);
+            $response->assertSee('name="systems['.$system.'][notes]"', false);
+        }
+        foreach (['vision_right', 'vision_left', 'vision_result', 'hearing_result', 'teeth_condition', 'last_dental_visit', 'dental_referral', 'immunization_status', 'missing_vaccines', 'immunization_reviewed_at', 'summary_findings', 'recommendations'] as $field) {
+            $response->assertSee('name="'.$field.'"', false);
+        }
+        $response->assertSee('Examiner Signature / Name:');
+        $response->assertSee('Ana Reyes');
+
+        // Supplementation & Programs went too — no deworming, iron, SBFP/4Ps,
+        // menarche, immunization, others or Examined By controls, and no
+        // consent banner for a control that is not there.
+        $response->assertDontSee('Supplementation &amp; Programs', false);
+        foreach (['iron_supplementation', 'deworming', 'sbfp_beneficiary', 'four_ps_beneficiary', 'menarche', 'immunization', 'others', 'examined_by'] as $field) {
+            $response->assertDontSee('name="'.$field.'"', false);
+        }
+        $response->assertDontSee('No signed parental consent on file');
 
         $this->withSession($this->nurseSession([$learner]))
-            ->post(route('nurse.examine.save', 0), ['vision_screening' => '20/20'])
+            ->post(route('nurse.examine.save', 0), [
+                'date_of_examination' => '2026-08-02',
+                'systems' => [
+                    'integumentary' => ['finding' => 'Normal', 'notes' => ''],
+                    'respiratory' => ['finding' => 'Abnormal', 'notes' => 'Wheeze on exertion'],
+                    'neurological' => ['finding' => 'not-an-option', 'notes' => ''],
+                ],
+                'vision_right' => '20/20', 'vision_left' => '20/25', 'vision_result' => 'Pass',
+                'hearing_result' => 'Passed Both',
+                'teeth_condition' => 'Good', 'dental_referral' => 'No referral required',
+                'immunization_status' => 'Complete', 'immunization_reviewed_at' => '2026-08-02',
+                'summary_findings' => 'Controlled bronchial asthma.',
+                'recommendations' => 'Keep inhaler accessible during PE classes.',
+            ])
             ->assertRedirect(route('dashboard.student-health-records'));
 
         $exam = session('school_health_card_records')[0]['examination'];
-        $this->assertSame('20/20', $exam['vision_screening']);
+
+        // Sheet 2 lands under one key, every system present, options validated,
+        // signed by whoever is signed in on the date of examination.
+        $sheet = $exam[Sheet2Review::KEY];
+        $this->assertSame(['finding' => 'Normal', 'notes' => ''], $sheet['systems']['integumentary']);
+        $this->assertSame(['finding' => 'Abnormal', 'notes' => 'Wheeze on exertion'], $sheet['systems']['respiratory']);
+        $this->assertSame('', $sheet['systems']['neurological']['finding'], 'A value off the list is dropped.');
+        $this->assertArrayHasKey('genitourinary', $sheet['systems']);
+        $this->assertSame(['right' => '20/20', 'left' => '20/25', 'result' => 'Pass'], $sheet['vision']);
+        $this->assertSame('Good', $sheet['oral']['teeth']);
+        $this->assertSame('Complete', $sheet['immunization']['status']);
+        $this->assertSame('Controlled bronchial asthma.', $sheet['summary']['findings']);
+        $this->assertSame('Ana Reyes', $sheet['summary']['examiner']);
+        $this->assertSame('2026-08-02', $sheet['summary']['date']);
+
+        // With no Examined By box, the examination is attributed to whoever is signed in.
+        $this->assertSame('Ana Reyes', $exam['examined_by']);
         $this->assertEquals(152, $exam['height_cm'], 'Stamped from the record, not the form.');
         $this->assertEquals(44, $exam['weight_kg']);
         $this->assertSame('Normal', $exam['nutritional_status_bmi']);
         $this->assertEquals(152, session('school_health_card_records')[0]['height_cm'], 'The measurement is untouched.');
+    }
+
+    /**
+     * Sheet 2 opens on the record's answers: the adviser's checklist and the
+     * older examination fields fill the form as a first draft, and once the
+     * nurse has saved, her sheet is what the form, the tab and the export read.
+     */
+    #[Test]
+    public function sheet_two_prefills_from_the_record_and_then_reads_the_nurses_own(): void
+    {
+        $learner = $this->learner([
+            'systems_review' => [
+                'skin_lesions' => true, 'heent_normal' => true, 'resp_clear' => true,
+                'dental_fair' => true, 'dental_caries' => true, 'dental_referral' => true,
+                'immun_incomplete' => true, 'right_eye' => '20/20', 'left_eye' => '20/40',
+                'immun_date' => '2026-08-02', 'recommendations' => 'Refer to dentist.',
+            ],
+            'examination' => ['vision_screening' => 'Pass', 'abdomen' => 'Soft', 'immunization' => 'MMR'],
+        ]);
+
+        $html = $this->withSession($this->nurseSession([$learner]))
+            ->get(route('nurse.examine', 0))
+            ->assertOk()
+            ->getContent();
+
+        // Derived from the adviser's checklist, and said so.
+        $this->assertStringContainsString("Filled in from the class adviser's Sheet 2", $html);
+        $this->assertMatchesRegularExpression('/name="systems\[integumentary\]\[finding\]"[^>]*>.*?<option value="Abnormal" selected/s', $html);
+        $this->assertMatchesRegularExpression('/name="systems\[heent_eyes\]\[finding\]"[^>]*>.*?<option value="Normal" selected/s', $html);
+        $this->assertStringContainsString('name="systems[gastrointestinal][notes]" value="Soft"', $html);
+        $this->assertStringContainsString('name="vision_left" value="20/40"', $html);
+        $this->assertStringContainsString('name="vision_result" value="Pass"', $html);
+        $this->assertMatchesRegularExpression('/name="teeth_condition"[^>]*>.*?<option value="Fair" selected/s', $html);
+        $this->assertStringContainsString('name="dental_referral" value="Referred for dental care — Caries"', $html);
+        $this->assertMatchesRegularExpression('/name="immunization_status"[^>]*>.*?<option value="Incomplete" selected/s', $html);
+        $this->assertStringContainsString('name="missing_vaccines" value="MMR"', $html);
+        $this->assertStringContainsString('Refer to dentist.', $html);
+
+        // The nurse's own sheet, once saved, is what everything reads.
+        $sheet = Sheet2Review::read([
+            Sheet2Review::KEY => Sheet2Review::fromInput([
+                'systems' => ['integumentary' => ['finding' => 'Normal', 'notes' => 'Healed']],
+                'teeth_condition' => 'Good',
+            ]),
+        ], $learner['systems_review']);
+
+        $this->assertSame('nurse', $sheet['source']);
+        $this->assertSame('Normal', $sheet['systems']['integumentary']['finding']);
+        $this->assertSame('Good', $sheet['oral']['teeth']);
+        $this->assertSame('', $sheet['vision']['left'], 'The nurse\'s sheet is not back-filled from the adviser\'s once it exists.');
+
+        // The profile's Sheet 2 tab renders the nurse's sheet when present.
+        $profile = $this->withSession($this->nurseSession([$learner]))
+            ->get(route('dashboard.student-health-records'))
+            ->assertOk()
+            ->getContent();
+        $this->assertStringContainsString('const renderSheet2 = ', $profile);
+        $this->assertStringContainsString('renderSystemsReview(record.systems_review, record.examination)', $profile);
     }
 
     /** The records table reads by last name, whatever order the roster arrived in. */

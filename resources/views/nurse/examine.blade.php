@@ -90,6 +90,29 @@
 
         .form-actions { display: flex; align-items: center; gap: 10px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
 
+        /* Sheet 2, section F: the body systems as the clinic's sheet rules
+           them — one row per system, a finding and a note on each. */
+        .sheet2-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+        .sheet2-table th, .sheet2-table td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: middle; }
+        .sheet2-table thead th { background: var(--g50); font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); }
+        .sheet2-table tbody th { font-weight: 600; color: var(--text-1); width: 22%; white-space: nowrap; }
+        .sheet2-table td:nth-child(2) { width: 22%; }
+        .sheet2-table select, .sheet2-table input {
+            width: 100%; height: 36px; border: 1.5px solid var(--border); border-radius: 8px;
+            padding: 0 10px; font: inherit; font-size: .82rem; color: var(--text-1); background: #fff; outline: none;
+        }
+        .sheet2-table select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237a9e87' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 30px; }
+        .sheet2-table select:focus, .sheet2-table input:focus { border-color: var(--g300); box-shadow: 0 0 0 3px rgba(134,239,172,.25); }
+        .field textarea {
+            border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 9px 12px;
+            font: inherit; font-size: .84rem; color: var(--text-1); background: #fff; outline: none; resize: vertical;
+        }
+        .field textarea:focus { border-color: var(--g300); box-shadow: 0 0 0 3px rgba(134,239,172,.25); }
+        .sheet2-note { margin-top: 12px; padding: 9px 12px; border-radius: 8px; background: var(--g50); border: 1px solid var(--g200); font-size: .78rem; color: var(--text-2); }
+        .sheet2-signature { display: flex; align-items: baseline; gap: 10px; margin-top: 14px; font-size: .84rem; color: var(--text-2); }
+        .sheet2-signature b { color: var(--text-1); border-bottom: 1px solid var(--text-3); padding: 0 12px 2px; }
+        @media (max-width: 700px) { .sheet2-table tbody th { white-space: normal; } }
+
         .student-hero {
             background: linear-gradient(135deg, var(--g900) 0%, #1f5c3e 100%);
             padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;
@@ -173,152 +196,139 @@
                  Signs panel), and height, weight and nutritional status are the
                  class adviser's measurements — this form no longer repeats
                  either. The date is kept: it is the record's own, and the
-                 monthly examination count is keyed on it. Saved with the
-                 profile's current measurements, which NurseController reads
-                 off the record rather than off this form. --}}
-            <div class="section-divider">Screening &amp; Physical Examination</div>
+                 monthly examination count is keyed on it. --}}
+            @php
+                // Sheet 2, as filled — or, until the nurse has filled it, as
+                // derived from the adviser's checklist and the older fields, so
+                // the form opens on the record's answers (App\Support\Sheet2Review).
+                $sheet2 = \App\Support\Sheet2Review::read($exam, is_array($record['systems_review'] ?? null) ? $record['systems_review'] : []);
+                $s2 = fn (string $section, string $key): string => (string) ($sheet2[$section][$key] ?? '');
+            @endphp
+
             <div class="form-grid">
                 <div class="field">
                     <label>Date of Examination</label>
                     <input type="date" name="date_of_examination" value="{{ $exam['date_of_examination'] ?? '' }}" max="{{ now()->toDateString() }}">
                 </div>
+            </div>
+
+            @if (($sheet2['source'] ?? 'none') === 'adviser')
+                <div class="sheet2-note">Filled in from the class adviser's Sheet 2 and the record on file. Review each item and change what the examination found.</div>
+            @endif
+
+            {{-- ── F. Evaluation of body systems ── --}}
+            <div class="section-divider" style="margin-top:24px;">F. Evaluation of Body Systems</div>
+            <table class="sheet2-table">
+                <thead>
+                    <tr>
+                        <th>Body System</th>
+                        <th>Findings (Check / Status)</th>
+                        <th>Notes / Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (\App\Support\Sheet2Review::SYSTEMS as $key => $label)
+                        @php $row = $sheet2['systems'][$key] ?? ['finding' => '', 'notes' => '']; @endphp
+                        <tr>
+                            <th scope="row">{{ $label }}</th>
+                            <td>
+                                <select name="systems[{{ $key }}][finding]" aria-label="{{ $label }} finding">
+                                    <option value="">— Select —</option>
+                                    @foreach (\App\Support\Sheet2Review::FINDINGS as $finding)
+                                        <option value="{{ $finding }}" @selected($row['finding'] === $finding)>{{ $finding }}</option>
+                                    @endforeach
+                                </select>
+                            </td>
+                            <td>
+                                <input type="text" name="systems[{{ $key }}][notes]" value="{{ $row['notes'] }}" maxlength="500" placeholder="Details, if any" aria-label="{{ $label }} notes">
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+
+            {{-- ── G. Vision and hearing screening ── --}}
+            <div class="section-divider" style="margin-top:24px;">G. Vision and Hearing Screening</div>
+            <div class="form-grid-4">
                 <div class="field">
-                    <label>Vision Screening</label>
-                    <input type="text" name="vision_screening" value="{{ $exam['vision_screening'] ?? '' }}" placeholder="e.g. 20/20 both eyes">
+                    <label>Vision — Right Eye</label>
+                    <input type="text" name="vision_right" value="{{ $s2('vision', 'right') }}" placeholder="e.g. 20/20">
                 </div>
                 <div class="field">
-                    <label>Auditory Screening</label>
-                    <input type="text" name="auditory_screening" value="{{ $exam['auditory_screening'] ?? '' }}" placeholder="e.g. Normal">
+                    <label>Vision — Left Eye</label>
+                    <input type="text" name="vision_left" value="{{ $s2('vision', 'left') }}" placeholder="e.g. 20/20">
                 </div>
                 <div class="field">
-                    <label>Skin / Scalp</label>
-                    <input type="text" name="skin_scalp" value="{{ $exam['skin_scalp'] ?? '' }}" placeholder="e.g. No lesions">
+                    <label>Vision — Result</label>
+                    <input type="text" name="vision_result" value="{{ $s2('vision', 'result') }}" placeholder="e.g. Pass">
                 </div>
                 <div class="field">
-                    <label>Eyes / Ears / Nose</label>
-                    <input type="text" name="eyes_ears_nose" value="{{ $exam['eyes_ears_nose'] ?? '' }}" placeholder="e.g. Normal">
-                </div>
-                <div class="field">
-                    <label>Mouth / Throat / Neck</label>
-                    <input type="text" name="mouth_throat_neck" value="{{ $exam['mouth_throat_neck'] ?? '' }}" placeholder="e.g. No abnormalities">
-                </div>
-                <div class="field">
-                    <label>Lungs / Heart</label>
-                    <input type="text" name="lungs_heart" value="{{ $exam['lungs_heart'] ?? '' }}" placeholder="e.g. Clear">
-                </div>
-                <div class="field">
-                    <label>Abdomen</label>
-                    <input type="text" name="abdomen" value="{{ $exam['abdomen'] ?? '' }}" placeholder="e.g. Soft, non-tender">
-                </div>
-                <div class="field">
-                    <label>Deformities</label>
-                    <input type="text" name="deformities" value="{{ $exam['deformities'] ?? '' }}" placeholder="e.g. None">
+                    <label>Hearing — Result</label>
+                    <input type="text" name="hearing_result" value="{{ $s2('hearing', 'result') }}" placeholder="e.g. Passed Both">
                 </div>
             </div>
 
-            <div class="section-divider" style="margin-top:24px;">Supplementation &amp; Programs</div>
+            {{-- ── H. Oral health examination ── --}}
+            <div class="section-divider" style="margin-top:24px;">H. Oral Health Examination</div>
+            <div class="form-grid">
+                <div class="field">
+                    <label>Teeth Condition</label>
+                    <select name="teeth_condition">
+                        <option value="">— Select —</option>
+                        @foreach (\App\Support\Sheet2Review::TEETH as $teeth)
+                            <option value="{{ $teeth }}" @selected($s2('oral', 'teeth') === $teeth)>{{ $teeth }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Last Dental Visit</label>
+                    <input type="text" name="last_dental_visit" value="{{ $s2('oral', 'last_visit') }}" placeholder="e.g. 2026-03 or N/A">
+                </div>
+                <div class="field">
+                    <label>Referral</label>
+                    <input type="text" name="dental_referral" value="{{ $s2('oral', 'referral') }}" placeholder="e.g. No referral required">
+                </div>
+            </div>
 
-            @error('deworming')
-                <div style="background:#FCECEC;border:1px solid #fca5a5;color:#b91c1c;border-radius:8px;padding:10px 14px;font-size:.8rem;font-weight:600;margin-bottom:12px;">
-                    {{ $message }}
+            {{-- ── I. Immunization status ── --}}
+            <div class="section-divider" style="margin-top:24px;">I. Immunization Status</div>
+            <div class="form-grid">
+                <div class="field">
+                    <label>Status</label>
+                    <select name="immunization_status">
+                        <option value="">— Select —</option>
+                        @foreach (\App\Support\Sheet2Review::IMMUNIZATION as $status)
+                            <option value="{{ $status }}" @selected($s2('immunization', 'status') === $status)>{{ $status }}</option>
+                        @endforeach
+                    </select>
                 </div>
-            @enderror
+                <div class="field">
+                    <label>Missing / Needed Vaccines</label>
+                    <input type="text" name="missing_vaccines" value="{{ $s2('immunization', 'missing') }}" placeholder="e.g. None">
+                </div>
+                <div class="field">
+                    <label>Date Record Reviewed</label>
+                    <input type="date" name="immunization_reviewed_at" value="{{ $s2('immunization', 'reviewed_at') }}" max="{{ now()->toDateString() }}">
+                </div>
+            </div>
 
-            @if($consentForm === null)
-                <div style="background:#FDF4E2;border:1px solid #fcd34d;color:#8A5A06;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;">
-                    No signed parental consent on file for this student for SY {{ $consentSchoolYear }}.
-                    Deworming cannot be marked as given until the Class Adviser records a consent form.
-                </div>
-            @elseif($consentForm->consent_type === 'refused')
-                <div style="background:#f3f4f6;border:1px solid #d1d5db;color:#374151;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;">
-                    <span>Consent refused for SY {{ $consentSchoolYear }}@if($consentForm->refused_reason) &mdash; Reason: {{ $consentForm->refused_reason }}@endif.</span>
-                    Deworming cannot be recorded.
-                    @if($consentForm->file_path !== null)
-                        <a href="{{ route('parental-consent.download', $consentForm->id) }}" target="_blank" rel="noopener noreferrer"
-                           style="display:inline-flex;align-items:center;gap:4px;color:#374151;font-size:.74rem;font-weight:700;text-decoration:underline;margin-left:8px;">
-                            View signed form
-                        </a>
-                    @endif
-                </div>
-            @elseif($consentForm->consent_type === 'partial')
-                <div style="background:#FDF4E2;border:1px solid #fcd34d;color:#8A5A06;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-                    <span>Partial consent on file for SY {{ $consentSchoolYear }}@if($consentForm->partial_exception) &mdash; Except: {{ $consentForm->partial_exception }}@endif. Verify that deworming is included before recording.</span>
-                    @if($consentForm->file_path !== null)
-                        <a href="{{ route('parental-consent.download', $consentForm->id) }}" target="_blank" rel="noopener noreferrer"
-                           style="display:inline-flex;align-items:center;gap:5px;background:#8A5A06;color:#fff;border-radius:6px;padding:5px 11px;font-size:.74rem;font-weight:700;text-decoration:none;flex-shrink:0;">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                            View Consent Form
-                        </a>
-                    @endif
-                </div>
-            @else
-                <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;background:#E7F5EC;border:1px solid #BFE3CC;color:#1F8A4C;border-radius:8px;padding:10px 14px;font-size:.78rem;font-weight:600;margin-bottom:12px;">
-                    <span>Full parental consent on file for SY {{ $consentSchoolYear }}. Deworming may be recorded.</span>
-                    @if($consentForm->file_path !== null)
-                        <a href="{{ route('parental-consent.download', $consentForm->id) }}"
-                           target="_blank"
-                           rel="noopener noreferrer"
-                           style="display:inline-flex;align-items:center;gap:5px;background:#1F8A4C;color:#fff;border-radius:6px;padding:5px 11px;font-size:.74rem;font-weight:700;text-decoration:none;flex-shrink:0;">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                            View Consent Form
-                        </a>
-                    @endif
-                </div>
-            @endif
-
-            <div class="form-grid-4">
+            {{-- ── J. Assessment summary and recommendations ── --}}
+            <div class="section-divider" style="margin-top:24px;">J. Assessment Summary and Recommendations</div>
+            <div class="form-grid-2">
                 <div class="field">
-                    <label>Iron Supplementation</label>
-                    <select name="iron_supplementation">
-                        <option value="">— Select —</option>
-                        <option value="V" @selected(($exam['iron_supplementation'] ?? '') === 'V')>V — Given</option>
-                        <option value="X" @selected(($exam['iron_supplementation'] ?? '') === 'X')>X — Not Given</option>
-                    </select>
+                    <label>Summary of Findings</label>
+                    <textarea name="summary_findings" rows="3" maxlength="2000" placeholder="What the examination found">{{ $s2('summary', 'findings') }}</textarea>
                 </div>
                 <div class="field">
-                    <label>Deworming</label>
-                    <select name="deworming">
-                        <option value="">— Select —</option>
-                        <option value="V" @selected(($exam['deworming'] ?? '') === 'V')>V — Given</option>
-                        <option value="X" @selected(($exam['deworming'] ?? '') === 'X')>X — Not Given</option>
-                    </select>
+                    <label>Recommendations / Referrals</label>
+                    <textarea name="recommendations" rows="3" maxlength="2000" placeholder="What should follow">{{ $s2('summary', 'recommendations') }}</textarea>
                 </div>
-                <div class="field">
-                    <label>SBFP Beneficiary</label>
-                    <select name="sbfp_beneficiary">
-                        <option value="">— Select —</option>
-                        <option value="V" @selected(($exam['sbfp_beneficiary'] ?? '') === 'V')>V — Yes</option>
-                        <option value="X" @selected(($exam['sbfp_beneficiary'] ?? '') === 'X')>X — No</option>
-                    </select>
-                </div>
-                <div class="field">
-                    <label>4Ps Beneficiary</label>
-                    <select name="four_ps_beneficiary">
-                        <option value="">— Select —</option>
-                        <option value="V" @selected(($exam['four_ps_beneficiary'] ?? '') === 'V')>V — Yes</option>
-                        <option value="X" @selected(($exam['four_ps_beneficiary'] ?? '') === 'X')>X — No</option>
-                    </select>
-                </div>
-                <div class="field">
-                    <label>Menarche (V — Started)</label>
-                    <select name="menarche">
-                        <option value="">— Select —</option>
-                        <option value="V" @selected(($exam['menarche'] ?? '') === 'V')>V — Yes</option>
-                        <option value="X" @selected(($exam['menarche'] ?? '') === 'X')>X — No</option>
-                    </select>
-                </div>
-                <div class="field">
-                    <label>Immunization (specify)</label>
-                    <input type="text" name="immunization" value="{{ $exam['immunization'] ?? '' }}" placeholder="e.g. BCG, MMR">
-                </div>
-                <div class="field">
-                    <label>Others (specify)</label>
-                    <input type="text" name="others" value="{{ $exam['others'] ?? '' }}" placeholder="Any additional notes">
-                </div>
-                <div class="field">
-                    <label>Examined By</label>
-                    <input type="text" name="examined_by" value="{{ $exam['examined_by'] ?? '' }}" placeholder="Full name of examiner">
-                </div>
+            </div>
+            {{-- The examiner and the date are the app's: whoever is signed in,
+                 on the date of examination above. --}}
+            <div class="sheet2-signature">
+                <span>Examiner Signature / Name:</span>
+                <b>{{ session('active_name', 'School Nurse') }}</b>
             </div>
 
             <div class="form-actions">

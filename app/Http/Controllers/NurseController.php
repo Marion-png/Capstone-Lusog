@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use App\Support\SchemaCache;
+use App\Support\Sheet2Review;
 use App\Support\StudentRosterSync;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -118,26 +119,14 @@ class NurseController extends Controller
             abort(404);
         }
 
-        $lrn = (string) ($records[$index]['lrn'] ?? '');
-        $schoolYear = ParentalConsentForm::currentSchoolYear();
-        $consentForm = null;
-
-        if ($lrn !== '') {
-            $studentRecord = StudentHealthRecord::currentForStudent($lrn, $request->session()->get('active_institution_id'));
-            if ($studentRecord !== null) {
-                $consentForm = ParentalConsentForm::where('student_health_record_id', $studentRecord->id)
-                    ->where('program_type', 'Deworming')
-                    ->where('school_year', $schoolYear)
-                    ->latest()
-                    ->first();
-            }
-        }
-
+        // The form no longer carries the Supplementation & Programs section,
+        // so the deworming-consent banner it fed is gone and with it the two
+        // round trips that looked the consent up on every open. The gate on
+        // saveExamination() stays: a replayed old form still cannot mark
+        // deworming as given without a signed consent on file.
         return view('nurse.examine', [
             'index' => $index,
             'record' => $records[$index],
-            'consentForm' => $consentForm,
-            'consentSchoolYear' => $schoolYear,
         ]);
     }
 
@@ -248,8 +237,24 @@ class NurseController extends Controller
             'four_ps_beneficiary' => $request->input('four_ps_beneficiary'),
             'menarche' => $request->input('menarche'),
             'others' => $request->input('others'),
-            'examined_by' => $request->input('examined_by'),
+            // The Supplementation & Programs section (and its Examined By box)
+            // was removed from the form, so attribution is the app's: whoever
+            // is signed in examined the learner. An older form still posting a
+            // name is honoured, since it was the nurse who typed it.
+            'examined_by' => trim((string) $request->input('examined_by', ''))
+                ?: (string) $request->session()->get('active_name', ''),
         ];
+
+        // Sheet 2 — F. body systems through J. summary — as the form posted
+        // it, signed by whoever is signed in on the date of examination. The
+        // one shape the profile's Sheet 2 tab and the MLAT download read
+        // (App\Support\Sheet2Review).
+        $records[$index]['examination'][Sheet2Review::KEY] = Sheet2Review::fromInput(
+            $request->all() + [
+                'examiner' => (string) $request->session()->get('active_name', ''),
+                'examiner_date' => $examDate,
+            ]
+        );
 
         $request->session()->put('school_health_card_records', $records);
 

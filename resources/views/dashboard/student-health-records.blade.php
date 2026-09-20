@@ -297,6 +297,13 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
                     Print
                 </button>
+                {{-- The MLAT as the clinic's own two-sheet workbook, so it can
+                     be filed rather than retyped (App\Support\MlatWorkbook).
+                     The href is set per learner when the profile opens. --}}
+                <a href="#" class="btn btn-secondary" id="profileDownloadMlat" data-mlat-url="{{ route('student-mlat.download', ['lrn' => '__LRN__']) }}" hidden>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Download MLAT
+                </a>
                 {{-- Opens the consultation dialog over this profile, with the
                      learner already filled in — the profile stays behind it
                      rather than being navigated away from. --}}
@@ -677,10 +684,99 @@
         'No medical or family history was recorded for this learner.'
     );
 
-    const renderSystemsReview = (review) => renderReview(
-        'pdSystemsReview', review, 'systems',
-        'No systems review was recorded for this learner.'
-    );
+    // Sheet 2 as the nurse filled it on Fill Medical Record — F. body systems
+    // through J. summary, in the clinic's own layout. Until the nurse has
+    // filled it, the tab shows the adviser's checklist as before. Built from
+    // DOM nodes: every value is something a person typed about a child.
+    const SHEET2_SYSTEMS = @json(\App\Support\Sheet2Review::SYSTEMS);
+
+    const renderSheet2 = (host, sheet) => {
+        host.textContent = '';
+        const text = (v) => (v === null || v === undefined) ? '' : String(v);
+        const dash = (v) => text(v).trim() !== '' ? text(v) : '—';
+
+        const section = (title) => {
+            const h = document.createElement('div');
+            h.className = 'sp-review-title s2-section';
+            h.textContent = title;
+            host.appendChild(h);
+        };
+        const kvGrid = (pairs) => {
+            const grid = document.createElement('div');
+            grid.className = 'student-profile-grid';
+            pairs.forEach(([label, value]) => {
+                const cell = document.createElement('div');
+                const k = document.createElement('span');
+                k.textContent = label + ':';
+                const v = document.createElement('b');
+                v.textContent = dash(value);
+                cell.append(k, v);
+                grid.appendChild(cell);
+            });
+            host.appendChild(grid);
+        };
+
+        section('F. Evaluation of Body Systems');
+        const table = document.createElement('table');
+        table.className = 's2-table';
+        const thead = document.createElement('thead');
+        const hr = document.createElement('tr');
+        ['Body System', 'Findings', 'Notes / Details'].forEach((t) => {
+            const th = document.createElement('th');
+            th.textContent = t;
+            hr.appendChild(th);
+        });
+        thead.appendChild(hr);
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        const systems = (sheet && sheet.systems) || {};
+        Object.entries(SHEET2_SYSTEMS).forEach(([key, label]) => {
+            const row = systems[key] || {};
+            const tr = document.createElement('tr');
+            const th = document.createElement('th');
+            th.scope = 'row';
+            th.textContent = label;
+            const finding = document.createElement('td');
+            finding.textContent = dash(row.finding);
+            if (text(row.finding) === 'Abnormal') finding.className = 'is-abnormal';
+            const notes = document.createElement('td');
+            notes.textContent = text(row.notes);
+            tr.append(th, finding, notes);
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        host.appendChild(table);
+
+        const vision = (sheet && sheet.vision) || {};
+        const hearing = (sheet && sheet.hearing) || {};
+        section('G. Vision and Hearing Screening');
+        kvGrid([['Right Eye', vision.right], ['Left Eye', vision.left], ['Vision Result', vision.result], ['Hearing Result', hearing.result]]);
+
+        const oral = (sheet && sheet.oral) || {};
+        section('H. Oral Health Examination');
+        kvGrid([['Teeth Condition', oral.teeth], ['Last Dental Visit', oral.last_visit || 'N/A'], ['Referral', oral.referral]]);
+
+        const imm = (sheet && sheet.immunization) || {};
+        section('I. Immunization Status');
+        kvGrid([['Status', imm.status], ['Missing / Needed Vaccines', imm.missing || 'None'], ['Date Record Reviewed', imm.reviewed_at]]);
+
+        const summary = (sheet && sheet.summary) || {};
+        section('J. Assessment Summary and Recommendations');
+        kvGrid([['Summary of Findings', summary.findings], ['Recommendations / Referrals', summary.recommendations], ['Examiner', summary.examiner], ['Date', summary.date]]);
+    };
+
+    const renderSystemsReview = (review, examination) => {
+        const host = document.getElementById('pdSystemsReview');
+        const sheet = examination && typeof examination === 'object' ? examination.sheet2 : null;
+        if (host && sheet && typeof sheet === 'object' && Object.keys(sheet).length > 0) {
+            renderSheet2(host, sheet);
+            return;
+        }
+        renderReview(
+            'pdSystemsReview', review, 'systems',
+            'No systems review was recorded for this learner.'
+        );
+    };
 
     const drawGrowthTrend = (record) => {
         const toNum = (value) => {
@@ -803,6 +899,17 @@
             consultLink.hidden = lrn === '';
             consultLink.dataset.consultLrn = lrn;
         }
+
+        // The MLAT download is keyed by LRN; a row with none has no record
+        // on file to write out, so the link is hidden rather than dangling.
+        const mlatLink = document.getElementById('profileDownloadMlat');
+        if (mlatLink) {
+            const lrn = String(record.lrn || '').trim();
+            mlatLink.hidden = lrn === '';
+            mlatLink.href = lrn === ''
+                ? '#'
+                : (mlatLink.dataset.mlatUrl || '').replace('__LRN__', encodeURIComponent(lrn));
+        }
         const fullName = [record.last_name, ',', record.first_name, record.middle_name ? (' ' + String(record.middle_name).charAt(0).toUpperCase() + '.') : '']
             .join(' ')
             .replace(' ,', ',')
@@ -834,7 +941,7 @@
         drawGrowthTrend(record);
 
         renderHealthHistory(record.health_history);
-        renderSystemsReview(record.systems_review);
+        renderSystemsReview(record.systems_review, record.examination);
 
         const lrn = record.lrn || '';
         const lrnField = document.getElementById('cnLrn');
