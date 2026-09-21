@@ -1,103 +1,132 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audit Trail | SIGLA</title>
-    <style>
-        :root{--bg:#F6F9F7;--card:#fff;--border:#DCE8E0;--text:#1F2D25;--muted:#6B7C72;--g900:#126B3A;--g700:#1F8A4C;--g300:#BFE3CC;--g100:#E7F5EC;--g50:#F2FAF5;--red:#D95C5C}
-        *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',system-ui,sans-serif}
-        body{background:var(--bg);color:var(--text);min-height:100vh}
-        .topbar{background:var(--g900);color:#fff;padding:14px 28px;display:flex;align-items:center;gap:14px}
-        .topbar a{color:var(--g300);text-decoration:none;font-size:.85rem}
-        .topbar h1{font-size:1.05rem;font-weight:700}
-        .content{max-width:1280px;margin:0 auto;padding:26px 20px 60px}
-        .sub{color:var(--muted);font-size:.85rem;margin-bottom:18px}
-        .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
-        .filters select,.filters input{padding:8px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:.83rem;background:#fff;color:var(--text)}
-        .filters button{padding:8px 16px;border:none;border-radius:9px;background:var(--g700);color:#fff;font-size:.83rem;font-weight:600;cursor:pointer}
-        .filters a{align-self:center;font-size:.8rem;color:var(--muted)}
-        .card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
-        table{width:100%;border-collapse:collapse;font-size:.8rem}
-        th{background:var(--g50);color:var(--g900);text-align:left;padding:10px 12px;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)}
-        td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top;color:#1d3c31}
-        tr:last-child td{border-bottom:none}
-        .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.7rem;font-weight:700;background:var(--g100);color:var(--g900);white-space:nowrap}
-        .pill.warn{background:#FCECEC;color:#A32B2B}
-        .muted{color:var(--muted)}
-        details summary{cursor:pointer;color:var(--g700);font-size:.74rem}
-        details pre{margin-top:6px;background:var(--g50);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:.7rem;white-space:pre-wrap;word-break:break-all;max-width:420px;max-height:220px;overflow:auto}
-        .empty{padding:34px;text-align:center;color:var(--muted);font-size:.85rem}
-    </style>
-    {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
-         last so it overrides this page's own :root colours. --}}
-    <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="csrf-token" content="{{ csrf_token() }}">
+	<title>Audit Trail - System Admin - SIGLA</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
+	<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+	<script>document.documentElement.classList.add('js');</script>
+	<style>{!! file_get_contents(resource_path('css/lusog-theme.css')) !!}</style>
+	<style>{!! file_get_contents(resource_path('css/system-admin.css')) !!}</style>
+	<style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
 </head>
 <body>
-    <header class="topbar">
-        <a href="{{ route('dashboard.system-admin') }}">&larr; Control Center</a>
-        <h1>Audit Trail</h1>
-        @include('partials.live-clock')
-    </header>
-    <div class="content">
-        <p class="sub">Every access and action performed on personal and sensitive personal information — who, what, when, and from where. Entries are append-only; change payloads are stored encrypted. Showing the latest 200 matching entries.</p>
+@include('partials.system-admin-sidebar', ['active' => 'audit'])
 
-        <form class="filters" method="GET" action="{{ route('dashboard.system-admin.audit-logs') }}">
-            <select name="action">
-                <option value="">All actions</option>
-                @foreach ($actions as $actionOption)
-                    <option value="{{ $actionOption }}" {{ $filterAction === $actionOption ? 'selected' : '' }}>{{ $actionOption }}</option>
-                @endforeach
-            </select>
-            <input type="text" name="username" value="{{ $filterUsername }}" placeholder="Filter by username...">
-            <button type="submit">Filter</button>
-            <a href="{{ route('dashboard.system-admin.audit-logs') }}">Clear</a>
-        </form>
+@php
+	$isFiltered = $filterAction !== '' || $filterUsername !== '';
 
-        <div class="card">
-            <table>
-                <thead>
-                    <tr>
-                        <th>When</th>
-                        <th>Actor</th>
-                        <th>Action</th>
-                        <th>Description</th>
-                        <th>Subject</th>
-                        <th>Request</th>
-                        <th>IP</th>
-                        <th>Details</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($logs as $log)
-                        <tr>
-                            <td style="white-space:nowrap;">{{ $log->created_at?->format('M d, Y H:i:s') }}</td>
-                            <td>
-                                {{ $log->actor_name ?: '—' }}
-                                <div class="muted">{{ $log->actor_username }} {{ $log->actor_role ? '(' . $log->actor_role . ')' : '' }}</div>
-                            </td>
-                            <td><span class="pill {{ str_contains($log->action, 'failed') || $log->action === 'deleted' ? 'warn' : '' }}">{{ $log->action }}</span></td>
-                            <td>{{ $log->description }}</td>
-                            <td class="muted">{{ $log->subject_type ? $log->subject_type . ($log->subject_id ? ' #' . $log->subject_id : '') : '—' }}</td>
-                            <td class="muted">{{ $log->http_method }} {{ $log->route_name ?: parse_url((string) $log->url, PHP_URL_PATH) }}</td>
-                            <td class="muted">{{ $log->ip_address }}</td>
-                            <td>
-                                @if ($log->details)
-                                    <details>
-                                        <summary>view</summary>
-                                        <pre>{{ json_encode($log->details, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
-                                    </details>
-                                @else
-                                    <span class="muted">—</span>
-                                @endif
-                            </td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="8" class="empty">No audit entries match the current filter.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </div>
+	// One reading of an action's severity for the badge scale: a refusal
+	// or a deletion is critical, a read is information, everything else
+	// is neutral. The label is always the action itself.
+	$actionBadge = function (string $action): string {
+		if (str_contains($action, 'failed') || in_array($action, ['deleted', 'declined'], true)) {
+			return 'badge-critical';
+		}
+		if (in_array($action, ['viewed', 'read', 'downloaded', 'accessed'], true)) {
+			return 'badge-info';
+		}
+		return 'badge-neutral';
+	};
+@endphp
+
+<div class="main">
+	<header class="topbar">
+		<div class="topbar-bc"><a href="{{ route('dashboard.system-admin') }}">System Admin</a><span class="bc-sep">&rsaquo;</span><span>Audit Trail</span></div>
+		@include('partials.live-clock')
+	</header>
+
+	<div class="content">
+		<div class="content-inner">
+
+		<div class="page-header sa-header">
+			<div class="sa-headline">
+				<h1 class="page-title">Audit <span>Trail</span></h1>
+				<p class="sa-meta">
+					<span class="tnum">{{ number_format($logs->count()) }} {{ \Illuminate\Support\Str::plural('entry', $logs->count()) }} shown</span>
+					<span class="sa-sep">&middot;</span>
+					<span>latest 200{{ $isFiltered ? ' matching' : '' }}</span>
+				</p>
+			</div>
+		</div>
+
+		<form class="toolbar" method="GET" action="{{ route('dashboard.system-admin.audit-logs') }}">
+			<div>
+				<label class="field-label" for="auditAction">Action</label>
+				<select class="select" id="auditAction" name="action">
+					<option value="">All actions</option>
+					@foreach ($actions as $actionOption)
+						<option value="{{ $actionOption }}" @selected($filterAction === $actionOption)>{{ $actionOption }}</option>
+					@endforeach
+				</select>
+			</div>
+			<div>
+				<label class="field-label" for="auditUsername">Username</label>
+				<div class="lg-search">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+					<input type="text" id="auditUsername" name="username" value="{{ $filterUsername }}" placeholder="Filter by username">
+				</div>
+			</div>
+			<button type="submit" class="btn btn-primary">Filter</button>
+			@if ($isFiltered)
+				<a href="{{ route('dashboard.system-admin.audit-logs') }}" class="btn btn-secondary">Clear</a>
+			@endif
+		</form>
+
+		<div class="table-card">
+			<div class="table-scroll">
+				<table class="sa-audit-table">
+					<thead>
+						<tr>
+							<th>When</th>
+							<th>Actor</th>
+							<th>Action</th>
+							<th>Description</th>
+							<th>Subject</th>
+							<th>Request</th>
+							<th>IP</th>
+							<th>Details</th>
+						</tr>
+					</thead>
+					<tbody>
+						@forelse ($logs as $log)
+							<tr>
+								<td class="sa-nowrap tnum">{{ $log->created_at?->format('M d, Y H:i:s') }}</td>
+								<td>
+									<span class="sa-audit-actor">{{ $log->actor_name ?: '—' }}</span>
+									<span class="sa-cell-sub">{{ $log->actor_username }}{{ $log->actor_role ? ' · '.$log->actor_role : '' }}</span>
+								</td>
+								<td><span class="badge {{ $actionBadge((string) $log->action) }}">{{ $log->action }}</span></td>
+								<td class="sa-audit-desc">{{ $log->description }}</td>
+								<td class="muted">{{ $log->subject_type ? $log->subject_type.($log->subject_id ? ' #'.$log->subject_id : '') : '—' }}</td>
+								<td class="muted sa-cell-mono">{{ $log->http_method }} {{ $log->route_name ?: parse_url((string) $log->url, PHP_URL_PATH) }}</td>
+								<td class="muted sa-cell-mono">{{ $log->ip_address }}</td>
+								<td>
+									@if ($log->details)
+										<details class="sa-audit-details">
+											<summary>View</summary>
+											<pre>{{ json_encode($log->details, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+										</details>
+									@else
+										<span class="muted">—</span>
+									@endif
+								</td>
+							</tr>
+						@empty
+							<tr><td colspan="8" class="table-empty">No audit entries match the current filter.</td></tr>
+						@endforelse
+					</tbody>
+				</table>
+			</div>
+		</div>
+
+		</div>
+	</div>
+</div>
+@include('partials.role-page-transition')
 </body>
 </html>

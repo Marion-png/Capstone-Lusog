@@ -15,7 +15,9 @@
 	document.querySelectorAll('.asb-link[href]').forEach((link) => {
 		link.addEventListener('click', (event) => {
 			const href = link.getAttribute('href');
-			if (!href || href === '#' || link.classList.contains('active')) return;
+			// An in-page anchor scrolls and stays: fading the content out
+			// for it would leave the page blank, since no navigation follows.
+			if (!href || href.startsWith('#') || link.classList.contains('active')) return;
 			if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
 
 			event.preventDefault();

@@ -202,6 +202,8 @@ class SharedPaletteTest extends TestCase
             'resources/views/dashboard/school-nurse.blade.php',
             'resources/views/feedingcor-dashboard/feed-dashboard.blade.php',
             'resources/views/schoolhead-dashboard/school-head.blade.php',
+            'resources/views/dashboard/system-admin.blade.php',
+            'resources/views/dashboard/system-admin-audit-logs.blade.php',
         ];
 
         foreach ($themed as $path) {

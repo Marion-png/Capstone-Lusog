@@ -1,0 +1,197 @@
+/* ══════════════════════════════════════════════════════════════════════
+   System Admin — Control Center, Audit Trail
+   ──────────────────────────────────────────────────────────────────────
+   Page-specific styles only. Tokens, shell, KPI cards, buttons, inputs,
+   tables, the .badge status scale and the flash components come from
+   lusog-theme.css, which is loaded first — so this role reads as the
+   same product as the School Head and the Feeding Coordinator rather
+   than a second design on a private green ramp.
+
+   One sheet for both tabs on purpose: they share a masthead, a section
+   rhythm and a table treatment, and two copies of those is two chances
+   for the tabs to drift apart.
+
+   Nothing here underlines a word. A link that can be followed is
+   carried by colour, weight or a tinted hover, exactly as everywhere
+   else in the product.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Administrative tables want the room, but a 2000px-wide list of five
+   columns is harder to scan, not easier. */
+.content-inner { max-width: 1280px; margin: 0 auto; }
+
+/* One stack rule for the gap between a page's top-level blocks, rather
+   than a margin on each section in turn. 24px separates sections; the
+   16px grid gaps below group cards that belong together. */
+.content-inner > * + * { margin-top: 24px; }
+
+/* ══ Masthead ═══════════════════════════════════════════════════════ */
+
+.sa-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap; }
+.sa-headline { flex: 1 1 360px; min-width: 0; }
+.sa-meta { margin-top: 8px; font-size: .82rem; color: var(--lg-ink-soft); }
+.sa-meta .sa-sep { color: var(--lg-border-strong); margin: 0 8px; }
+.sa-actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; flex: 0 0 auto; margin-left: auto; }
+.sa-actions .btn { white-space: nowrap; }
+
+/* ══ Sections ═══════════════════════════════════════════════════════
+   A heading above a table card, never a heading inside one: the theme's
+   table head fill runs edge to edge that way, and the rail's jump links
+   land on the heading with a little air above it. ══ */
+
+.sa-block { scroll-margin-top: 16px; }
+.section-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 16px;
+	flex-wrap: wrap;
+	margin-bottom: 12px;
+}
+.section-head .section-title { margin-bottom: 0; }
+.section-meta { font-size: .76rem; color: var(--lg-ink-soft); }
+
+/* Two-line cells: the school on the first line, the class on the second. */
+.sa-cell-sub { display: block; margin-top: 2px; font-size: .72rem; color: var(--lg-ink-soft); }
+.sa-cell-mono { font-family: var(--lg-mono); font-size: .74rem; }
+.sa-nowrap { white-space: nowrap; }
+
+/* Row actions: two small buttons side by side. Decline is a quiet
+   secondary that turns coral only on hover — a solid red button on
+   every pending row would make the routine act look like the
+   dangerous one. */
+.sa-row-actions { display: flex; align-items: center; gap: 6px; }
+.sa-row-actions form { display: inline; margin: 0; }
+.btn-sm { padding: 6px 11px; font-size: .74rem; border-radius: 8px; }
+.btn-secondary.is-danger { color: var(--lg-danger-ink); }
+.btn-secondary.is-danger:hover { background: var(--lg-danger-tint); border-color: #F2C9C9; }
+
+/* ══ Feeding policy ═════════════════════════════════════════════════
+   One card per school, one form per card. The six settings sit in a
+   labelled grid, each with its unit beside the figure, so the form can
+   be read as a sentence about the school's rule rather than as a row of
+   unlabelled boxes. ══ */
+
+.sa-policy-list { display: grid; gap: 16px; }
+.sa-policy { padding: var(--lg-pad-card); }
+.sa-policy form { margin: 0; }
+.sa-policy-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+	margin-bottom: 16px;
+}
+.sa-policy-school { font-size: .95rem; font-weight: 600; color: var(--lg-ink); letter-spacing: -.005em; }
+.sa-policy-grid {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 14px 16px;
+	align-items: end;
+}
+.sa-policy-grid .sa-field-wide { grid-column: 1 / -1; }
+.sa-field { min-width: 0; }
+.sa-field .field-label { margin-bottom: 6px; }
+/* Figure + unit share one control. The unit sits inside the border so
+   the pair reads as a single value rather than a box and a stray word. */
+.sa-unit {
+	display: flex;
+	align-items: center;
+	background: var(--lg-card);
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-input);
+	transition: border-color .16s ease, box-shadow .16s ease;
+}
+.sa-unit:focus-within { border-color: var(--lg-emerald); box-shadow: var(--lg-focus); }
+.sa-unit input {
+	flex: 1 1 auto;
+	min-width: 0;
+	width: 100%;
+	font: inherit;
+	font-size: .8rem;
+	color: var(--lg-ink);
+	background: transparent;
+	border: 0;
+	padding: 9px 0 9px 12px;
+}
+.sa-unit input:focus { outline: none; }
+.sa-unit input::placeholder { color: #9AAEA4; }
+.sa-unit span {
+	flex: 0 0 auto;
+	padding: 0 11px 0 8px;
+	font-size: .72rem;
+	font-weight: 600;
+	color: var(--lg-ink-soft);
+	white-space: nowrap;
+}
+/* The browser's spinner draws over the unit; the range is enforced by
+   min/max on the field, so the arrows cost nothing to lose. */
+.sa-unit input::-webkit-outer-spin-button,
+.sa-unit input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sa-unit input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+.sa-policy-foot {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 16px;
+	padding-top: 14px;
+	border-top: 1px solid var(--lg-border);
+}
+
+/* ══ Audit trail ════════════════════════════════════════════════════ */
+
+.sa-audit-table th, .sa-audit-table td { vertical-align: top; }
+.sa-audit-table td { line-height: 1.45; }
+.sa-audit-actor { font-weight: 600; color: var(--lg-ink); }
+.sa-audit-desc { max-width: 42ch; }
+/* The change payload is the exception to "no monospace in prose": it is
+   data, folded away until asked for. The summary is a link-coloured
+   word, never underlined. */
+.sa-audit-details summary {
+	cursor: pointer;
+	list-style: none;
+	font-size: .74rem;
+	font-weight: 600;
+	color: var(--lg-emerald);
+	border-radius: 6px;
+	padding: 2px 6px;
+	margin: -2px -6px;
+	display: inline-block;
+}
+.sa-audit-details summary::-webkit-details-marker { display: none; }
+.sa-audit-details summary:hover { background: var(--lg-mint); color: var(--lg-emerald-dark); }
+.sa-audit-details summary:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+.sa-audit-details[open] summary { color: var(--lg-emerald-dark); }
+.sa-audit-details pre {
+	margin-top: 8px;
+	background: var(--lg-rail);
+	border: 1px solid var(--lg-border);
+	border-radius: 8px;
+	padding: 10px;
+	font-family: var(--lg-mono);
+	font-size: .7rem;
+	line-height: 1.5;
+	color: #3E5348;
+	white-space: pre-wrap;
+	word-break: break-all;
+	max-width: 420px;
+	max-height: 220px;
+	overflow: auto;
+}
+
+/* ══ Responsive ═════════════════════════════════════════════════════ */
+
+@media (max-width: 1100px) {
+	.sa-policy-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+	.sa-actions { width: 100%; margin-left: 0; }
+	.sa-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
+@media (max-width: 620px) {
+	.sa-policy-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.sa-policy-foot .btn { width: 100%; }
+}
+@media (max-width: 420px) {
+	.sa-policy-grid { grid-template-columns: 1fr; }
+}
