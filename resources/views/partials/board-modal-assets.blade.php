@@ -92,7 +92,15 @@
     .bmodal-close svg { width: 15px; height: 15px; }
 
     /* The body scrolls, not the page behind it. */
-    .bmodal-body { padding: 16px 18px; overflow-y: auto; }
+    /* The panel caps its height and the body scrolls inside it — but every
+       dialog wraps head, body and foot in a <form>, and a form is a plain
+       block: it took the body's full height, the panel clipped the rest,
+       and a form taller than the screen (the consultation, with its notes
+       and photos) could not be scrolled to its Save. The form is a column
+       like the panel, and the body is the part that gives. */
+    .bmodal-panel > form { display: flex; flex-direction: column; min-height: 0; max-height: inherit; }
+    .bmodal-body { padding: 16px 18px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+    .bmodal-head, .bmodal-foot { flex: 0 0 auto; }
     .bmodal-body label { display: block; font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #6B7C72; margin-bottom: 5px; }
     .bmodal-body input, .bmodal-body textarea, .bmodal-body select {
         width: 100%;

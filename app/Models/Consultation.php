@@ -21,6 +21,7 @@ class Consultation extends Model
         'condition',
         'condition_id',
         'treatment_given',
+        'notes',
         'status',
     ];
 
@@ -37,6 +38,7 @@ class Consultation extends Model
             'grade_section' => EncryptedString::class,
             'condition' => EncryptedString::class,
             'treatment_given' => EncryptedString::class,
+            'notes' => EncryptedString::class,
         ];
     }
 

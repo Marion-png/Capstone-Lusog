@@ -9,6 +9,7 @@ use App\Models\Medicine;
 use App\Models\MedicineDispense;
 use App\Models\StudentHealthRecord;
 use App\Support\EncryptedFileStorage;
+use App\Support\LearnerSearchIndex;
 use App\Support\SchemaCache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,6 +42,18 @@ class ConsultationController extends Controller
             ->latest('id')
             ->paginate(10);
 
+        // How many photographs each visit on this page carries — one grouped
+        // query on plain columns, so the row can say "No photos attached" or
+        // offer to view them without opening the dialog to find out.
+        $photoCounts = collect();
+        if (SchemaCache::hasTable('consultation_photos') && $consultations->isNotEmpty()) {
+            $photoCounts = ConsultationPhoto::query()
+                ->whereIn('consultation_id', $consultations->pluck('id')->all())
+                ->selectRaw('consultation_id, COUNT(*) AS total')
+                ->groupBy('consultation_id')
+                ->pluck('total', 'consultation_id');
+        }
+
         // condition is encrypted at rest, so grouping happens in PHP after decryption.
         $topConditionStats = $baseQuery()
             ->whereMonth('consulted_at', now()->month)
@@ -68,6 +81,7 @@ class ConsultationController extends Controller
 
         return view('dashboard.consultation-log', [
             'consultations' => $consultations,
+            'photoCounts' => $photoCounts,
             'stats' => [
                 'total' => $baseQuery()->count(),
                 'month' => $baseQuery()->whereMonth('consulted_at', now()->month)->whereYear('consulted_at', now()->year)->count(),
@@ -101,10 +115,24 @@ class ConsultationController extends Controller
                 ->first();
         }
 
+        // Back, Cancel and the save all return to the page this was opened
+        // from, when that page is inside the app; the log is the fallback.
+        $previous = (string) url()->previous();
+        $base = rtrim(url('/'), '/');
+        $backTo = str_starts_with($previous, $base.'/')
+            && $previous !== url()->current()
+            && ! str_starts_with($previous, route('consultations.create'))
+            ? $previous
+            : route('dashboard.consultation-log');
+
         return view('dashboard.consultation-create', [
             'prefillName' => $learner?->student_name,
             'prefillSection' => $learner?->section,
             'prefillLrn' => $learner ? $lrn : null,
+            'backTo' => $backTo,
+            // The roll, for the learner picker: choosing a name fills the
+            // grade and section from the record instead of typing them.
+            'learnerIndex' => LearnerSearchIndex::fromSession($request),
         ]);
     }
 
@@ -124,6 +152,9 @@ class ConsultationController extends Controller
             'condition_id' => ['nullable', 'integer', 'exists:conditions,id'],
             'condition' => ['nullable', 'string', 'max:255'],
             'treatment_given' => ['nullable', 'string', 'max:1000'],
+            // A note on the visit — what the profile's Clinic Notes tab used
+            // to take separately. It rides the consultation it is about.
+            'notes' => ['nullable', 'string', 'max:2000'],
             'status' => ['required', 'in:treated,referred'],
             // Optional: a medicine handed over during the visit. Recording it
             // here draws the stock down in the same transaction, so what the
@@ -195,7 +226,13 @@ class ConsultationController extends Controller
         $photoCount = 0;
 
         DB::transaction(function () use ($validated, $conditionName, $conditionId, $institutionId, $medicineId, $quantity, $photos, $request, &$dispensed, &$photoCount) {
-            $consultation = Consultation::create([
+            // The note travels only where its column has been migrated, so an
+            // older database still records the visit.
+            $note = SchemaCache::hasColumn('consultations', 'notes')
+                ? ['notes' => trim((string) ($validated['notes'] ?? '')) ?: null]
+                : [];
+
+            $consultation = Consultation::create($note + [
                 'institution_id' => $institutionId,
                 'consulted_at' => $validated['consulted_at'],
                 'student_name' => $validated['student_name'],
@@ -279,8 +316,27 @@ class ConsultationController extends Controller
         }
 
         return redirect()
-            ->route('dashboard.consultation-log')
+            ->to($this->returnTo($request))
             ->with('success', $message);
+    }
+
+    /**
+     * Where a saved consultation comes back to: the page the dialog was opened
+     * on — a learner's profile, the log, the standalone form's referrer — not
+     * always the Consultation Log. Only a URL inside this app is honoured; a
+     * value off the wire pointing anywhere else falls back to the log, so the
+     * field cannot be used to send a nurse off-site after a save.
+     */
+    private function returnTo(Request $request): string
+    {
+        $candidate = trim((string) $request->input('return_to', ''));
+        $base = rtrim(url('/'), '/');
+
+        if ($candidate !== '' && str_starts_with($candidate, $base.'/') && ! str_contains($candidate, "\n")) {
+            return $candidate;
+        }
+
+        return route('dashboard.consultation-log');
     }
 
     /**

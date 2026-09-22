@@ -6,10 +6,11 @@
     builds its own roster rather than expecting a controller to pass one,
     and each nurse page includes it with a single line.
 
-    The roster is synced from the database first (the invariant: any page
-    reading `school_health_card_records` calls StudentRosterSync), then
-    embedded and filtered in the browser, because student names are
-    encrypted at rest and no SQL LIKE can see them.
+    The roster is App\Support\LearnerSearchIndex — synced from the database
+    first (the invariant: any page reading `school_health_card_records`
+    calls StudentRosterSync), then embedded and filtered in the browser,
+    because student names are encrypted at rest and no SQL LIKE can see
+    them. The New Consultation learner picker reads the same index.
 
     Nurse-only. The Health Records, Consultation Log and Medicine
     Inventory pages are shared with Clinic Staff, whose rail carries no
@@ -18,27 +19,7 @@
 --}}
 @if (session('active_role') === 'school_nurse')
     @php
-        \App\Support\StudentRosterSync::syncToSession(request());
-
-        $nurseSearchRoster = collect(session('school_health_card_records', []))
-            ->map(function ($row) {
-                $middle = trim((string) ($row['middle_name'] ?? ''));
-                $name = trim(
-                    trim((string) ($row['last_name'] ?? '')).', '.
-                    trim((string) ($row['first_name'] ?? '')).
-                    ($middle !== '' ? ' '.strtoupper(substr($middle, 0, 1)).'.' : '')
-                );
-
-                return [
-                    'lrn' => (string) ($row['lrn'] ?? ''),
-                    'name' => trim($name, ' ,'),
-                    'section' => trim(trim((string) ($row['grade_level'] ?? '')).' - '.trim((string) ($row['section'] ?? '')), ' -'),
-                ];
-            })
-            ->filter(fn (array $row) => $row['lrn'] !== '' && $row['name'] !== '')
-            ->unique('lrn')
-            ->sortBy(fn (array $row) => mb_strtolower($row['name']), SORT_NATURAL)
-            ->values();
+        $nurseSearchRoster = collect(\App\Support\LearnerSearchIndex::fromSession(request()));
     @endphp
 
     @include('partials.learner-search', [

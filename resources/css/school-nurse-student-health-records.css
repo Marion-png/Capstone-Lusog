@@ -287,6 +287,10 @@ body.sn-profile-stacked .profile-backdrop.open { background: transparent; }
 .cn-entry-body { font-size: .8rem; color: var(--text-2); line-height: 1.5; white-space: pre-line; }
 .cn-pill { display: inline-flex; align-items: center; font-size: .66rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: var(--g100); color: var(--g700); }
 .cn-pill.is-warn { background: #FDF4E2; color: #8A5A06; }
+/* The note written with a visit, under the consultation it is about. */
+.cn-entry-note { margin-top: 8px; padding: 8px 10px; border-left: 3px solid var(--g300); background: var(--g50); border-radius: 0 8px 8px 0; }
+.cn-entry-note-label { display: block; font-size: .66rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-3); margin-bottom: 3px; }
+.cn-entry-note .cn-entry-body { margin: 0; }
 /* Photos of the injury open from the visit; a thumbnail on the card itself
    would put a child's injury on a screen anyone passing the desk can read. */
 .cn-photo-btn { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); background: #fff; border-radius: 8px; padding: 4px 9px; font: inherit; font-size: .72rem; font-weight: 600; color: var(--text-3); cursor: pointer; }
@@ -353,3 +357,78 @@ body.sn-profile-stacked .profile-backdrop.open { background: transparent; }
 .vitals-form-error{margin-top:11px;padding:9px 12px;border-radius:8px;background:#FCECEC;color:#b91c1c;font-size:.78rem}
 .vitals-form-foot{display:flex;justify-content:flex-end;gap:9px;margin-top:12px}
 @media (max-width:640px){.vitals-form-grid{grid-template-columns:1fr}}
+
+/* ══ Legibility pass on the student profile ══
+   The nurses read this dialog all day, on clinic screens, and it had grown
+   dense: 12px tab labels, 11–12px field labels, a hairline under the active
+   tab. This block sits last and lifts the whole profile a step — bigger type,
+   a filled active tab, taller tap targets, more air between sections — while
+   keeping the layout the nurses already know. Tune here, not in the rules
+   above. */
+.profile-modal { width: min(1120px, 96vw); }
+
+/* Header: the learner's name and facts are what the dialog is opened for. */
+.student-profile-titleline { font-size: 1.2rem; }
+.student-profile-subline { font-size: .82rem; margin-top: 3px; }
+.student-profile-back { font-size: 1.25rem; padding: 4px 6px; border-radius: 8px; }
+.student-profile-back:hover { background: var(--g50); color: var(--g900); }
+.sp-cover { height: 72px; }
+.sp-avatar { width: 72px; height: 72px; margin-top: -28px; font-size: 1.25rem; }
+.sp-name { font-size: 1.5rem; }
+.sp-class { font-size: .92rem; margin-top: 3px; color: var(--text-2); }
+.sp-meta { gap: 8px 22px; margin-top: 12px; }
+.sp-meta span { font-size: .9rem; gap: 7px; }
+.sp-meta svg { width: 15px; height: 15px; }
+.sp-identity { padding-bottom: 18px; gap: 18px; }
+.sp-identity-actions { gap: 10px; padding-top: 16px; }
+.sp-identity-actions .btn { font-size: .9rem; padding: 10px 16px; }
+.sp-identity-actions .btn svg { width: 16px; height: 16px; }
+
+/* Tabs: readable labels, a tab-sized target, and an active state that is a
+   filled emerald block rather than a 3px underline. */
+.sp-tabs { gap: 6px; padding: 8px; margin-top: 16px; }
+.sp-tab { font-size: .92rem; padding: 11px 16px; gap: 9px; border-bottom: none; border-radius: 10px; }
+.sp-tab:hover { background: var(--g50); }
+.sp-tab.active { background: var(--g900); color: #fff; }
+.sp-tab.active:hover { background: var(--g900); }
+.sp-tab-badge { font-size: .76rem; padding: 3px 10px; }
+.sp-tab.active .sp-tab-badge { background: rgba(255,255,255,.22); color: #fff; }
+.sp-tab:focus-visible { outline: 3px solid rgba(31,138,76,.35); outline-offset: 2px; }
+
+/* Sections and fields: labels that can be read at arm's length, values
+   that stand off them, and room between one section and the next. */
+.student-profile-section { padding: 18px 20px; }
+.student-profile-section h4 { font-size: .92rem; letter-spacing: .05em; margin-bottom: 14px; color: var(--g900); }
+.student-profile-grid { gap: 14px 24px; }
+.student-profile-grid span { font-size: .84rem; }
+.student-profile-grid b { font-size: .98rem; margin-top: 3px; }
+.kv { grid-template-columns: 180px 1fr; font-size: .95rem; margin-bottom: 8px; gap: 6px 14px; }
+.profile-body .kv { margin-bottom: 8px; }
+.kv .k { font-size: .86rem; }
+.sp-note { font-size: .84rem; margin-top: 12px; }
+.sp-panel-head h4 { margin-bottom: 0; }
+.sp-panel-count { font-size: .84rem; }
+.sp-subhead { font-size: .9rem; margin-top: 20px; }
+
+/* Review chips, Sheet 2 table, consultation entries, vitals. */
+.sp-review-title { font-size: .84rem; margin-bottom: 7px; }
+.sp-review-item { font-size: .84rem; padding: 5px 12px; }
+.s2-table { font-size: .9rem; }
+.s2-table th, .s2-table td { padding: 8px 10px; }
+.s2-table thead th { font-size: .74rem; }
+.cn-entry { padding: 14px 16px; margin-bottom: 12px; }
+.cn-entry-date { font-size: .92rem; }
+.cn-entry-body { font-size: .92rem; line-height: 1.55; }
+.cn-pill { font-size: .76rem; padding: 3px 11px; }
+.cn-entry-note { padding: 10px 12px; margin-top: 10px; }
+.cn-entry-note-label { font-size: .74rem; }
+.cn-photo-btn { font-size: .84rem; padding: 6px 12px; gap: 6px; }
+.vitals-form-grid label { font-size: .84rem; }
+.vitals-form-grid input { font-size: .95rem; padding: 10px 12px; }
+#vitalsSection .btn { font-size: .88rem; }
+.growth-chart-title { font-size: .8rem; }
+.growth-legend { font-size: .8rem; }
+
+/* Documents and incidents panels are shared components with their own
+   sheets; lift their body text to match without touching their files. */
+#p-documents .student-profile-section, #p-incidents .student-profile-section { font-size: .95rem; }

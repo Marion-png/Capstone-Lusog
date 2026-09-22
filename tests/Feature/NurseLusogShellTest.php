@@ -69,4 +69,24 @@ class NurseLusogShellTest extends TestCase
 
         $this->assertStringNotContainsString('nsb-item', $html, "{$uri} still renders the retired .nsb-* rail");
     }
+
+    /**
+     * The nurse's window onto the feeding programme is titled "Nutritional
+     * Status Report" — on the rail, in the breadcrumb, in the heading and in
+     * the tab title — never "Feeding Program", which is the coordinator's word
+     * for their own screens.
+     */
+    public function test_the_feeding_page_is_titled_nutritional_status_report_for_the_nurse(): void
+    {
+        $html = $this->withSession($this->nurseSession())
+            ->get('/dashboard/school-nurse/feeding-program')
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('<title>Nutritional Status Report - SIGLA</title>', $html);
+        $this->assertStringContainsString('<h1 class="page-title">Nutritional Status <span>Report</span></h1>', $html);
+        $this->assertStringContainsString('<span>Nutritional Status Report</span></div>', $html);
+        $this->assertMatchesRegularExpression('/class="sb-link active">.*?Nutritional Status Report\s*<\/a>/s', $html);
+        $this->assertStringNotContainsString('<h1 class="page-title">Feeding <span>Program</span></h1>', $html);
+    }
 }

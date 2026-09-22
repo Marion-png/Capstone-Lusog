@@ -63,3 +63,11 @@
 .clog-photo-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--lg-border,#DCE8E0);background:#fff;border-radius:8px;padding:5px 10px;font:inherit;font-size:.75rem;font-weight:600;color:var(--lg-ink-soft,#6B7C72);cursor:pointer}
 .clog-photo-btn:hover{background:var(--lg-mint,#E7F5EC);color:var(--lg-emerald-deep,#126B3A);border-color:var(--lg-border-strong,#C7DCCE)}
 .clog-photo-btn svg{width:14px;height:14px}
+/* A visit with photos reads as something to view — the eye, emerald, and the
+   count. One without is a statement, not a control: muted, no border, no
+   pointer, because there is nothing to open. */
+.clog-photo-btn.has-photos{color:var(--lg-emerald-deep,#126B3A);border-color:var(--lg-border-strong,#C7DCCE);background:var(--lg-mint,#E7F5EC)}
+.clog-photo-btn.has-photos:hover{background:#d9efe2}
+.clog-photo-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--lg-emerald-deep,#126B3A);color:#fff;font-size:.68rem;font-weight:700;font-variant-numeric:tabular-nums}
+.clog-photo-none{display:inline-flex;align-items:center;gap:6px;padding:5px 0;font-size:.75rem;font-weight:500;color:var(--lg-ink-soft,#6B7C72);cursor:default;user-select:none}
+.clog-photo-none svg{width:14px;height:14px;opacity:.7}

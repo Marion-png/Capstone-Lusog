@@ -42,6 +42,11 @@ class Sheet2Review
 
     public const FINDINGS = ['Normal', 'Abnormal'];
 
+    /** G. The screening outcomes — a vision result is one of two, a hearing result one of four. */
+    public const VISION_RESULTS = ['Pass', 'Refer'];
+
+    public const HEARING_RESULTS = ['Passed Both', 'Failed Right', 'Failed Left', 'Refer'];
+
     public const TEETH = ['Good', 'Fair', 'Poor'];
 
     public const IMMUNIZATION = ['Complete', 'Incomplete', 'Not available'];
@@ -97,9 +102,9 @@ class Sheet2Review
             'vision' => [
                 'right' => self::text($input['vision_right'] ?? ''),
                 'left' => self::text($input['vision_left'] ?? ''),
-                'result' => self::text($input['vision_result'] ?? ''),
+                'result' => self::option($input['vision_result'] ?? '', self::VISION_RESULTS),
             ],
-            'hearing' => ['result' => self::text($input['hearing_result'] ?? '')],
+            'hearing' => ['result' => self::option($input['hearing_result'] ?? '', self::HEARING_RESULTS)],
             'oral' => [
                 'teeth' => self::option($input['teeth_condition'] ?? '', self::TEETH),
                 'last_visit' => self::text($input['last_dental_visit'] ?? ''),
@@ -218,9 +223,9 @@ class Sheet2Review
             'vision' => [
                 'right' => $text($review['right_eye'] ?? ''),
                 'left' => $text($review['left_eye'] ?? ''),
-                'result' => $text($exam['vision_screening'] ?? ''),
+                'result' => self::screeningResult($exam['vision_screening'] ?? '', self::VISION_RESULTS),
             ],
-            'hearing' => ['result' => $text($exam['auditory_screening'] ?? '')],
+            'hearing' => ['result' => self::screeningResult($exam['auditory_screening'] ?? '', self::HEARING_RESULTS)],
             'oral' => [
                 'teeth' => $teeth,
                 'last_visit' => '',
@@ -262,6 +267,35 @@ class Sheet2Review
     private static function text(mixed $value, int $max = 500): string
     {
         return is_scalar($value) ? mb_substr(trim((string) $value), 0, $max) : '';
+    }
+
+    /**
+     * A screening result typed on the older free-text form, read onto the
+     * sheet's own options: "passed" is a pass, "failed"/"referred" a
+     * referral, and anything the options do not name stays blank for the
+     * nurse to decide — a draft never invents an outcome.
+     *
+     * @param  list<string>  $options
+     */
+    private static function screeningResult(mixed $value, array $options): string
+    {
+        $exact = self::option($value, $options);
+        if ($exact !== '') {
+            return $exact;
+        }
+
+        $value = mb_strtolower(self::text($value));
+        if ($value === '') {
+            return '';
+        }
+
+        $pass = $options === self::HEARING_RESULTS ? 'Passed Both' : 'Pass';
+
+        return match (true) {
+            str_starts_with($value, 'pass') => $pass,
+            str_starts_with($value, 'fail'), str_starts_with($value, 'refer') => 'Refer',
+            default => '',
+        };
     }
 
     /** @param  list<string>  $options */

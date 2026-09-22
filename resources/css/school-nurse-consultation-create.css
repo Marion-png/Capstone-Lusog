@@ -10,9 +10,23 @@
         .field { display: flex; flex-direction: column; gap: 8px; }
         .field.full { grid-column: 1 / -1; }
         label { font-size: .78rem; font-weight: 700; color: #3E5348; }
+        label .optional { font-weight: 400; color: var(--text-3, #6B7C72); }
         input, select, textarea { border: 1px solid #DCE8E0; border-radius: 10px; padding: 10px 12px; font: inherit; font-size: .86rem; }
         textarea { min-height: 110px; resize: vertical; }
         .err { margin-top: 4px; font-size: .74rem; color: #b91c1c; }
+        .hint { font-size: .72rem; color: #6B7C72; }
+        input[readonly] { background: #F6F9F7; color: #3E5348; cursor: default; }
+        /* The learner search: a box that finds, a list that answers. */
+        .lsearch { position: relative; display: flex; align-items: center; }
+        .lsearch > svg { position: absolute; left: 11px; width: 15px; height: 15px; color: #7a9e87; pointer-events: none; }
+        .lsearch input[type="text"] { width: 100%; padding-left: 34px; }
+        .lsearch-list { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 5px); z-index: 20; max-height: 260px; overflow-y: auto; background: #fff; border: 1px solid #C7DCCE; border-radius: 10px; box-shadow: 0 14px 34px rgba(16,32,24,.16); padding: 4px; }
+        .lsearch-list.show { display: block; }
+        .lsearch-row { display: flex; align-items: baseline; gap: 9px; width: 100%; text-align: left; border: none; background: none; font: inherit; cursor: pointer; padding: 8px 10px; border-radius: 7px; }
+        .lsearch-row:hover, .lsearch-row:focus-visible { background: #E7F5EC; outline: none; }
+        .lsearch-name { font-size: .84rem; font-weight: 600; color: #1F2D25; }
+        .lsearch-sec { margin-left: auto; font-size: .7rem; color: #6B7C72; }
+        .lsearch-empty { padding: 13px 11px; text-align: center; font-size: .8rem; color: #6B7C72; }
         .actions { margin-top: 18px; display: flex; gap: 10px; }
         .btn { display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; padding: 10px 16px; text-decoration: none; border: 1px solid transparent; font-weight: 600; font-size: .84rem; cursor: pointer; }
         .btn-primary { background: #14653C; color: #fff; }

@@ -133,6 +133,9 @@ class ClinicNoteController extends Controller
                 'grade_section' => (string) $c->grade_section,
                 'condition' => (string) $c->condition,
                 'treatment' => (string) $c->treatment_given,
+                // The note written with the visit — clinic-only, like the
+                // rest of this endpoint.
+                'notes' => (string) $c->notes,
                 'status' => (string) $c->status,
             ])->values(),
         ]);

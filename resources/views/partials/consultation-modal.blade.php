@@ -34,6 +34,12 @@
     // path, and this must not become a way around that.
     $consultMayDispense = session('active_role') === 'school_nurse';
 
+    // The school's learners, for the name picker: opened cold, the nurse
+    // types a name and chooses the learner, and the grade and section come
+    // off the record rather than being typed against it. Names are encrypted
+    // at rest, so the index is embedded and searched in the browser.
+    $consultLearnerIndex = \App\Support\LearnerSearchIndex::fromSession(request());
+
     $consultMedicines = ($consultMayDispense && \App\Support\SchemaCache::hasTable('medicines'))
         ? \App\Models\Medicine::query()
             ->when(session('active_institution_id'), fn ($q, $id) => $q->where('institution_id', $id))
@@ -51,6 +57,12 @@
     <div class="bmodal-panel bmodal-panel-wide">
         <form method="POST" action="{{ route('consultations.store') }}" enctype="multipart/form-data">
             @csrf
+            {{-- Where the save comes back to: the page the dialog was opened
+                 on, not always the Consultation Log. A profile sets it to
+                 itself with the learner open, so the nurse lands back on the
+                 child they were reading. The server accepts only a URL inside
+                 this app and otherwise falls back to the log. --}}
+            <input type="hidden" name="return_to" id="cm_return_to" value="{{ old('return_to', url()->full()) }}">
             <div class="bmodal-head">
                 <div>
                     <div class="bmodal-eyebrow">Consultation</div>
@@ -92,8 +104,18 @@
                      mismatched pair — the wrong child on the right class. --}}
                 <div class="bmodal-field" id="cm_student_name_field">
                     <label for="cm_student_name">Student name</label>
-                    <input id="cm_student_name" type="text" name="student_name"
-                           value="{{ old('student_name') }}" placeholder="e.g. Dela Cruz, Juan" required autocomplete="off">
+                    {{-- Opened cold, this is a search over the school's roll:
+                         typing lists matching learners, and choosing one fills
+                         the grade and section from their record and locks it.
+                         A name typed and never chosen is still accepted — a
+                         visitor not on the roll is still a visit. --}}
+                    <div class="cmcombo" id="cm_student_combo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input id="cm_student_name" type="text" name="student_name"
+                               value="{{ old('student_name') }}" placeholder="Type a learner's name or LRN…" required autocomplete="off"
+                               role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="cm_student_results">
+                        <div class="cmcombo-list" id="cm_student_results" role="listbox"></div>
+                    </div>
                     <div class="bmodal-note">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                         <span>From the learner's record. Correct it on their profile.</span>
@@ -211,6 +233,21 @@
                         <div class="bmodal-error">{{ $errors->consultation->first('treatment_given') }}</div>
                     @endif
                 </div>
+
+                {{-- A note on the visit, written with it. It replaced the
+                     profile's separate Clinic Notes tab: a comment about a
+                     visit belongs on that visit, and it shows under the
+                     consultation on the profile's Consultation Log tab. --}}
+                @if (\App\Support\SchemaCache::hasColumn('consultations', 'notes'))
+                    <div class="bmodal-field">
+                        <label for="cm_notes">Notes / comments <span class="bmodal-optional">(optional)</span></label>
+                        <textarea id="cm_notes" name="notes" maxlength="2000"
+                                  placeholder="Clinical observation, follow-up, or anything worth noting about this visit">{{ old('notes') }}</textarea>
+                        @if ($errors->consultation->has('notes'))
+                            <div class="bmodal-error">{{ $errors->consultation->first('notes') }}</div>
+                        @endif
+                    </div>
+                @endif
 
                 @if ($consultMayDispense && $consultMedicines->isNotEmpty())
                     {{-- Optional. Choosing one deducts it from stock when the
@@ -632,6 +669,101 @@
         });
 
         syncOther();
+    }
+
+    // ── Learner search ───────────────────────────────────────────────
+    //
+    // Same shape as the condition search below the fold: type to find, the
+    // list stays closed until something is typed, rows are built from DOM
+    // nodes because the names come out of the database. Choosing a learner
+    // fills the grade and section from their record and locks that field;
+    // typing over the name afterwards unlocks and clears it, because a
+    // section that no longer belongs to the name beside it is the one state
+    // this must never submit in.
+    const studentCombo = document.getElementById('cm_student_combo');
+    const studentList = document.getElementById('cm_student_results');
+    const learners = @json($consultLearnerIndex ?? []);
+
+    if (studentCombo && studentList && nameField) {
+        let pickedName = '';
+
+        const closeStudents = () => {
+            studentList.classList.remove('show');
+            nameField.setAttribute('aria-expanded', 'false');
+        };
+
+        const chooseLearner = (learner) => {
+            pickedName = learner.name;
+            nameField.value = learner.name;
+            if (sectionField) sectionField.value = learner.section || '';
+            setLock(sectionField, sectionWrap, String(learner.section || '').trim() !== '');
+            closeStudents();
+            if (sectionField && !sectionField.readOnly) sectionField.focus();
+        };
+
+        const learnerRow = (learner) => {
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'cmcombo-row';
+            row.setAttribute('role', 'option');
+            row.appendChild(Object.assign(document.createElement('span'), { className: 'cmcombo-name', textContent: learner.name }));
+            row.appendChild(Object.assign(document.createElement('span'), { className: 'cmcombo-cat', textContent: learner.section || 'No section on file' }));
+            row.addEventListener('click', () => chooseLearner(learner));
+            return row;
+        };
+
+        const applyStudents = () => {
+            // Filled in from a profile: the name is the record's, not a search.
+            if (nameField.readOnly) { closeStudents(); return; }
+
+            const raw = nameField.value.trim();
+            const term = raw.toLowerCase();
+
+            // Typed over a pick: the section was that learner's, not this name's.
+            if (pickedName !== '' && raw !== pickedName) {
+                pickedName = '';
+                if (sectionField) sectionField.value = '';
+                setLock(sectionField, sectionWrap, false);
+            }
+
+            if (term === '' || learners.length === 0) { studentList.textContent = ''; closeStudents(); return; }
+
+            const startsWith = (value) => String(value || '').toLowerCase().startsWith(term);
+            const wordStartsWith = (value) =>
+                String(value || '').toLowerCase().split(/[^a-z0-9]+/).some((word) => word.startsWith(term));
+
+            const tiers = [[], [], []];
+            learners.forEach((learner) => {
+                if (startsWith(learner.name) || startsWith(learner.lrn)) tiers[0].push(learner);
+                else if (wordStartsWith(learner.name)) tiers[1].push(learner);
+                else if (String(learner.name).toLowerCase().includes(term)) tiers[2].push(learner);
+            });
+            const matches = tiers[0].concat(tiers[1], tiers[2]);
+
+            studentList.textContent = '';
+            if (matches.length === 0) {
+                studentList.appendChild(Object.assign(document.createElement('div'), {
+                    className: 'cmcombo-empty',
+                    textContent: 'No learner on the roll matches "' + raw + '". The name will be recorded as typed.',
+                }));
+            }
+            matches.slice(0, 8).forEach((learner) => studentList.appendChild(learnerRow(learner)));
+
+            studentList.classList.add('show');
+            nameField.setAttribute('aria-expanded', 'true');
+        };
+
+        nameField.addEventListener('input', applyStudents);
+        nameField.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') { closeStudents(); return; }
+            if (event.key === 'Enter' && studentList.classList.contains('show')) {
+                const rows = studentList.querySelectorAll('.cmcombo-row');
+                if (rows.length === 1) { event.preventDefault(); rows[0].click(); }
+            }
+        });
+        document.addEventListener('click', (event) => {
+            if (!studentCombo.contains(event.target)) closeStudents();
+        });
     }
 
     // A trigger may carry the learner on itself.
