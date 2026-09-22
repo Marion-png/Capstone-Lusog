@@ -145,9 +145,17 @@
 						</div>
 						<div class="sh-cols-bars">
 							@foreach ($clinic['trend']['columns'] as $column)
-								<div class="sh-col" title="{{ $column['full_label'] }}: {{ $column['count'] }}">
-									<span class="sh-col-cap" style="bottom: calc({{ $column['pct'] }}% + 5px)">{{ number_format($column['count']) }}</span>
-									<span class="sh-col-bar" style="height: {{ $column['pct'] }}%"></span>
+								<div class="sh-col"
+									data-tip-title="{{ $column['full_label'] }}"
+									data-tip="{{ number_format($column['count']) }} {{ \Illuminate\Support\Str::plural('consultation', $column['count']) }}">
+									{{-- A month with no visit prints its nought and draws no
+									     column: a 2px stub reads as "a couple", which is the
+									     one thing a month of none must not look like. --}}
+									<span class="sh-col-cap {{ $column['count'] === 0 ? 'is-zero' : '' }}"
+										style="bottom: calc({{ $column['pct'] }}% + 5px)">{{ number_format($column['count']) }}</span>
+									@if ($column['count'] > 0)
+										<span class="sh-col-bar" style="height: {{ $column['pct'] }}%"></span>
+									@endif
 								</div>
 							@endforeach
 						</div>
@@ -295,6 +303,12 @@
 		}
 	})();
 </script>
+{{-- One readout for every chart on this page. Included here rather than
+     inside a chart partial: these panels are re-rendered by the live pulse,
+     and a partial that carried its own tooltip would inject a second copy of
+     it — same id, same script — on every refresh. The listeners are delegated
+     from the document, so marks the refresh brings in are covered anyway. --}}
+@include('partials.chart-tooltip')
 @include('partials.schoolhead-live')
 @include('partials.role-page-transition')
 </body>

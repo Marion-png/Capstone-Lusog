@@ -44,6 +44,30 @@
 		return 'is-normal';
 	};
 
+	// The fallback when the school holds no photograph: the learner's own
+	// initials, not a generic silhouette. A name is what this record already
+	// has, and a plate that differs per child is far easier to scan down a
+	// stack of printed records than the same grey head repeated.
+	$initials = function (string $name): string {
+		$parts = preg_split('/[\s,]+/', trim($name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+		$letters = '';
+
+		foreach ($parts as $part) {
+			// Skip over a generational suffix; "Jr." is not somebody's initial.
+			if (preg_match('/^(jr|sr|ii|iii|iv|v)\.?$/i', $part)) {
+				continue;
+			}
+
+			$letters .= mb_strtoupper(mb_substr($part, 0, 1));
+
+			if (mb_strlen($letters) === 2) {
+				break;
+			}
+		}
+
+		return $letters !== '' ? $letters : '—';
+	};
+
 	// Metres, as the DepEd sheet records a learner's height.
 	$metres = fn (?float $cm) => $cm === null ? null : number_format($cm / 100, 2).' m';
 
@@ -95,17 +119,42 @@
 
 		<div class="bd-header">
 			<div class="bd-ident">
-				<p class="bd-eyebrow">Beneficiary Record</p>
-				<h1 class="bd-name">{{ $learner['name'] }}</h1>
-				<p class="bd-meta">
-					<strong>{{ $learner['grade'] }}{{ $learner['section'] !== '' ? ' — '.$learner['section'] : '' }}</strong>
-					@if ($learner['sex'] !== '')
-						<span class="bd-sep">&middot;</span>{{ $learner['sex'] }}
+				{{-- The learner's face, taken and set by their class adviser. The
+				     coordinator hands the meal over at the feeding line and ticks
+				     the sheet, so knowing that the child in front of them is the
+				     beneficiary whose name they are about to mark is the whole
+				     point of it here. This record only looks: the photograph
+				     stays the adviser's to set, replace and remove.
+
+				     Where the school holds none, the plate carries the learner's
+				     initials rather than an empty frame — the same fallback the
+				     adviser's and the nurse's profiles use, so one learner reads
+				     the same way at every desk. --}}
+				<figure class="bd-portrait{{ $learner['photo_url'] === null ? ' is-blank' : '' }}">
+					<span class="bd-portrait-initials" aria-hidden="true">{{ $initials($learner['name']) }}</span>
+					@if ($learner['photo_url'] !== null)
+						{{-- Named as a photograph rather than repeated as the name: the
+						     heading beside it already says who this is, so an alt of
+						     the name alone would have a screen reader read the learner
+						     twice and never say a picture was on file. --}}
+						<img class="bd-portrait-img" src="{{ $learner['photo_url'] }}"
+							alt="Photograph of {{ $learner['name'] }}">
 					@endif
-				</p>
-				<p class="bd-meta">
-					S.Y. {!! $yearLabel !!}<span class="bd-sep">&middot;</span>School-Based Feeding Program
-				</p>
+				</figure>
+
+				<div class="bd-ident-body">
+					<p class="bd-eyebrow">Beneficiary Record</p>
+					<h1 class="bd-name">{{ $learner['name'] }}</h1>
+					<p class="bd-meta">
+						<strong>{{ $learner['grade'] }}{{ $learner['section'] !== '' ? ' — '.$learner['section'] : '' }}</strong>
+						@if ($learner['sex'] !== '')
+							<span class="bd-sep">&middot;</span>{{ $learner['sex'] }}
+						@endif
+					</p>
+					<p class="bd-meta">
+						S.Y. {!! $yearLabel !!}<span class="bd-sep">&middot;</span>School-Based Feeding Program
+					</p>
+				</div>
 			</div>
 
 			{{-- The acts a coordinator can take on one learner. Measurements are
@@ -514,6 +563,32 @@
 			button.disabled = false;
 		}
 	});
+})();
+</script>
+{{-- The photograph is served from an encrypted file behind its own access
+     check, so it can fail in ways the page cannot see when it renders — the
+     adviser deletes it between the query and the request, the file is gone
+     from disk, the session lapses. A broken-image glyph on a child's record
+     is the worst of the available answers, so the plate falls back to the
+     initials that are already underneath it. --}}
+<script>
+(() => {
+	const img = document.querySelector('.bd-portrait-img');
+	if (!img) return;
+
+	const fallBack = () => {
+		img.closest('.bd-portrait')?.classList.add('is-blank');
+		img.remove();
+	};
+
+	img.addEventListener('error', fallBack, { once: true });
+
+	// This script sits at the foot of the document, so the request may already
+	// have failed by the time it runs and the error event is long gone. A
+	// finished image with no intrinsic width is one that did not load.
+	if (img.complete && img.naturalWidth === 0) {
+		fallBack();
+	}
 })();
 </script>
 @include('partials.role-page-transition')

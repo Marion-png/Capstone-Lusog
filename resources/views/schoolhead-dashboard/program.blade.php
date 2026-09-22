@@ -119,7 +119,8 @@
 
 			<div class="sh-grid" role="list" aria-label="Feeding days 1 to {{ $stats['duration'] }}">
 				@foreach ($grid as $cell)
-					<span class="sh-cell is-{{ $cell['state'] }}" role="listitem" title="{{ $cell['title'] }}">{{ $cell['day'] }}</span>
+					<span class="sh-cell is-{{ $cell['state'] }}" role="listitem" aria-label="{{ $cell['title'] }}"
+						data-tip-title="Day {{ $cell['day'] }}" data-tip="{{ $cell['title'] }}">{{ $cell['day'] }}</span>
 				@endforeach
 			</div>
 		</section>
@@ -176,7 +177,8 @@
 									@foreach ($bar['left'] as $seg)
 										<span class="sh-div-seg tone-{{ $seg['tone'] }}"
 										      style="width:{{ $seg['width'] }}%"
-										      title="{{ $seg['label'] }}: {{ $seg['count'] }} ({{ rtrim(rtrim(number_format($seg['share'], 1), '0'), '.') }}% of {{ $bar['label'] }} measured)"></span>
+										      data-tip-title="{{ $bar['label'] }} &middot; {{ $seg['label'] }}"
+										      data-tip="{{ $seg['count'] }} learners ({{ rtrim(rtrim(number_format($seg['share'], 1), '0'), '.') }}% of those measured)"></span>
 									@endforeach
 								</div>
 								<span class="sh-div-axis" aria-hidden="true"></span>
@@ -184,7 +186,8 @@
 									@foreach ($bar['right'] as $seg)
 										<span class="sh-div-seg tone-{{ $seg['tone'] }}"
 										      style="width:{{ $seg['width'] }}%"
-										      title="{{ $seg['label'] }}: {{ $seg['count'] }} ({{ rtrim(rtrim(number_format($seg['share'], 1), '0'), '.') }}% of {{ $bar['label'] }} measured)"></span>
+										      data-tip-title="{{ $bar['label'] }} &middot; {{ $seg['label'] }}"
+										      data-tip="{{ $seg['count'] }} learners ({{ rtrim(rtrim(number_format($seg['share'], 1), '0'), '.') }}% of those measured)"></span>
 									@endforeach
 								</div>
 							</div>
@@ -251,6 +254,7 @@
 		document.querySelectorAll('details.sh-table-view').forEach((view) => { view.open = true; });
 	});
 </script>
+@include('partials.chart-tooltip')
 @include('partials.schoolhead-live')
 @include('partials.role-page-transition')
 </body>

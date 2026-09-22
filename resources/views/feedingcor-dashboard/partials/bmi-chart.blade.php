@@ -88,7 +88,8 @@
 										@endphp
 										<span class="chart-col is-{{ $sex }}" data-chart-col="{{ $sex }}"
 											style="height: {{ $height }}%"
-											title="{{ $sexLabel }} &middot; {{ $label }}: {{ $value }}">
+											data-tip-title="{{ $sexLabel }} &middot; {{ $label }}"
+											data-tip="{{ $value }} {{ \Illuminate\Support\Str::plural('learner', $value) }}">
 											{{-- A zero prints no label: a row of noughts above an
 											     empty axis is noise, and the grid above says zero
 											     by leaving the cell blank. --}}

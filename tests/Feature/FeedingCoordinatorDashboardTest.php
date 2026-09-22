@@ -794,6 +794,40 @@ class FeedingCoordinatorDashboardTest extends TestCase
             ->assertDontSee('checkins-table', false);
     }
 
+    /**
+     * The chart readout is the page's, not a panel's.
+     *
+     * Every panel here is re-rendered wholesale by the 20s pulse, so a chart
+     * partial that carried its own tooltip would inject a second copy of it —
+     * the same element id and the same script — into the document on every
+     * refresh, and go on doing it for as long as the tab stayed open. The
+     * listeners are delegated from the document instead, which is what lets
+     * the marks a refresh brings in keep working without one.
+     */
+    #[Test]
+    public function the_chart_readout_is_included_once_and_never_by_a_refreshed_panel(): void
+    {
+        $this->makeStudent('Grade 7 / Maabilidad', 'Severely Wasted', 13.1, 'Normal');
+
+        $html = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-dashboard')
+            ->assertOk()
+            ->getContent();
+
+        $this->assertSame(1, substr_count($html, 'id="chartTip"'));
+
+        $panel = (string) ($this->withSession($this->coordinatorSession())
+            ->getJson(route('dashboard.feedingcor.metrics'))
+            ->assertOk()
+            ->json('html.progress') ?? '');
+
+        $this->assertNotSame('', $panel);
+        $this->assertSame(0, substr_count($panel, 'id="chartTip"'));
+
+        // The refreshed marks still carry their readouts.
+        $this->assertStringContainsString('data-tip', $panel);
+    }
+
     private function markAttendance(StudentHealthRecord $record, string $date, ?bool $isPresent, bool $needsReview = false): void
     {
         FeedingAttendance::create([

@@ -16,11 +16,20 @@ use Illuminate\Http\Response;
  * The class adviser takes and replaces it — they enrol the learner and know
  * which face belongs to which name. The school nurse and clinic staff see it,
  * because putting a face to a name is the point of it when a child arrives at
- * the clinic and cannot explain who they are.
+ * the clinic and cannot explain who they are. The Feeding Coordinator sees it
+ * for the same reason and no other: they hand the meal over at the feeding
+ * line and mark the sheet, so they need to know that the child in front of
+ * them is the beneficiary whose name they are about to tick.
  *
  * Deliberately narrower than that: no other role reads one here. A photograph
  * of a child's face is the most identifying field in the record, and the roles
- * that do not handle the learner in person have no use for it.
+ * that do not handle the learner in person have no use for it — the School
+ * Head reads aggregates, the Nutrition Coordinator reads analytics, and
+ * neither is ever in the room with the learner.
+ *
+ * Reading is still not writing. The coordinator was added to the read list and
+ * to nothing else: the photograph remains the adviser's to set, replace and
+ * remove, so there is one desk answerable for which face is on which record.
  *
  * One photo per learner. Uploading again replaces the old file rather than
  * accumulating them, so there is never a stale picture to serve by mistake.
@@ -31,7 +40,7 @@ class StudentPhotoController extends Controller
     private const WRITE_ROLES = ['class_adviser'];
 
     /** The desks that meet the learner in person. */
-    private const READ_ROLES = ['class_adviser', 'school_nurse', 'clinic_staff'];
+    private const READ_ROLES = ['class_adviser', 'school_nurse', 'clinic_staff', 'feeding_coor'];
 
     public function show(Request $request, string $lrn): Response
     {
@@ -162,7 +171,17 @@ class StudentPhotoController extends Controller
             ->first();
     }
 
-    /** The learner must be on this school's roll. */
+    /**
+     * The learner must be on this school's roll — in any school year, not only
+     * the current one.
+     *
+     * The photograph is keyed by LRN + institution precisely so it survives
+     * grade promotion, so gating the read on a current-year health record
+     * contradicted the thing it is keyed that way for: a coordinator or nurse
+     * opening last year's record got a broken image for a child whose picture
+     * the school still holds. The school is the boundary here, as it is on
+     * every other year-spanning read; the year is not.
+     */
     private function mayRead(Request $request, string $lrn): bool
     {
         if (! in_array((string) $request->session()->get('active_role'), self::READ_ROLES, true)) {
@@ -171,7 +190,14 @@ class StudentPhotoController extends Controller
 
         $institutionId = $request->session()->get('active_institution_id');
 
-        return $institutionId && StudentHealthRecord::currentForStudent($lrn, $institutionId) !== null;
+        if (! $institutionId) {
+            return false;
+        }
+
+        return StudentHealthRecord::query()
+            ->where('student_id', $lrn)
+            ->where('institution_id', $institutionId)
+            ->exists();
     }
 
     /**

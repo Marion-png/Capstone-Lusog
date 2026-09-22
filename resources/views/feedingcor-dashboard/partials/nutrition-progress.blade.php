@@ -17,6 +17,10 @@
 @php
 	$progress = $nutritionProgress ?? ['total' => 0, 'measured' => 0, 'improved' => 0, 'rate' => 0.0, 'rows' => []];
 	$hasEndline = ($progress['measured'] ?? 0) > 0;
+
+	// axisScale() returns the ticks largest first, for a column chart's y-axis.
+	// This chart is horizontal, so it reads 0 on the left.
+	$axisTicks = array_reverse($progress['ticks'] ?? [0, 1]);
 @endphp
 
 <div class="np-headline">
@@ -39,22 +43,64 @@
 	<span class="np-legend-item"><i class="np-dot np-dot-endline"></i>Endline</span>
 </div>
 
-<div class="np-chart">
-	@foreach ($progress['rows'] as $row)
-		<div class="np-row">
-			<div class="np-label">{{ $row['label'] }}</div>
-			<div class="np-bars">
-				<div class="np-bar-line">
-					<span class="np-bar np-bar-baseline" style="width: {{ $row['baseline_pct'] }}%"></span>
-					<span class="np-value">{{ $row['baseline'] }}</span>
-				</div>
-				<div class="np-bar-line">
-					<span class="np-bar np-bar-endline" style="width: {{ $row['endline_pct'] }}%"></span>
-					<span class="np-value">{{ $row['endline'] }}</span>
+{{-- The bars sit in a ruled plot, not loose on the card: the rules are the
+     only thing that turns a length into a count a coordinator can read off,
+     and without them the longest bar is simply "the longest bar" whether it
+     counts four learners or four hundred. The ticks are the axis the server
+     stepped, so the chart and the figures beside it cannot disagree. --}}
+{{-- One scope over the plot and its axis: the column widths are declared
+     here, so the rules, the rows and the ticks all read the same figures
+     instead of three copies that drift apart. --}}
+<div class="np-graph">
+<div class="np-plot">
+	<div class="np-rules" aria-hidden="true">
+		@foreach ($axisTicks as $tick)<i></i>@endforeach
+	</div>
+
+	<div class="np-chart">
+		@foreach ($progress['rows'] as $row)
+			<div class="np-row">
+				<div class="np-label">{{ $row['label'] }}</div>
+				<div class="np-bars">
+					@foreach ([['baseline', 'Baseline'], ['endline', 'Endline']] as [$seriesKey, $seriesLabel])
+						@php
+							$count = (int) $row[$seriesKey];
+							$share = $progress['total'] > 0 ? round(($count / $progress['total']) * 100) : 0;
+						@endphp
+						<div class="np-bar-line">
+							<span class="np-track">
+								{{-- A true zero draws no bar at all. A 2px stub reads as
+								     "a few", which is the one thing a count of none must
+								     never look like; the figure beside it says 0. --}}
+								@if ($count > 0)
+									<span class="np-bar np-bar-{{ $seriesKey }}" style="width: {{ $row[$seriesKey.'_pct'] }}%"
+										data-tip-title="{{ $row['label'] }} &middot; {{ $seriesLabel }}"
+										data-tip="{{ $count }} of {{ $progress['total'] }} beneficiaries ({{ $share }}%)"></span>
+								@endif
+							</span>
+							<span class="np-value {{ $count === 0 ? 'is-zero' : '' }}">{{ $count }}</span>
+						</div>
+					@endforeach
 				</div>
 			</div>
+		@endforeach
+	</div>
+</div>
+
+{{-- Labelled last so the rules above are read as counts rather than as
+     decoration. Aria-hidden: the table view carries every number as text. --}}
+<div class="np-axis" aria-hidden="true">
+	<span class="np-axis-pad"></span>
+	{{-- Mirrors .np-bar-line exactly — track, then the figure gutter — so the
+	     ticks line up with the rules by construction rather than by two
+	     separate sums that have to be kept equal by hand. --}}
+	<div class="np-axis-line">
+		<div class="np-axis-ticks">
+			@foreach ($axisTicks as $tick)<span class="tnum">{{ $tick }}</span>@endforeach
 		</div>
-	@endforeach
+		<span class="np-axis-gutter"></span>
+	</div>
+</div>
 </div>
 
 {{-- The WCAG-clean twin: every value the bars encode is readable as text. --}}

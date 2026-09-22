@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AttendanceImport;
 use App\Models\FeedingAttendance;
 use App\Models\StudentHealthRecord;
+use App\Models\StudentPhoto;
 use App\Support\AttendanceSheetParser;
 use App\Support\AttendanceSheetScanner;
 use App\Support\AuditTrail;
@@ -1046,6 +1047,11 @@ class FeedingProgramController extends Controller
                 // rather than being a column anything could filter on.
                 'sex' => $this->resolveGenderLabel((string) ($details['gender'] ?? '')),
                 'school_year' => (string) $learner->school_year,
+                // The face the class adviser put on the record. Resolved here
+                // rather than fetched by the page: this record is one server
+                // render, and a photograph that arrives after the name has
+                // already been read is a second round trip for nothing.
+                'photo_url' => $this->learnerPhotoUrl($learner, $institutionId),
             ],
             'standing' => [
                 'qualified' => $qualified,
@@ -1104,6 +1110,46 @@ class FeedingProgramController extends Controller
             // learner's mark on each — see sessionCalendar().
             'sessionMonths' => $this->sessionCalendar($learner, $institutionId, $sessions),
         ]);
+    }
+
+    /**
+     * The learner's profile photograph, or null where the school holds none.
+     *
+     * The picture is the class adviser's — they enrol the learner and know
+     * which face belongs to which name — and this role only looks at it. It is
+     * read here so the record renders in one response, and it is looked up by
+     * **LRN + institution**, the key the photo is actually stored under, so a
+     * learner promoted out of Grade 7 keeps the face on file rather than
+     * needing it re-taken each August.
+     *
+     * A missing photo, a learner with no LRN and a deployment whose database
+     * predates the table all come back the same way: null, which the record
+     * draws as the neutral placeholder. A beneficiary record must open whether
+     * or not anybody has got round to photographing the child.
+     */
+    private function learnerPhotoUrl(StudentHealthRecord $learner, ?int $institutionId): ?string
+    {
+        $lrn = trim((string) $learner->student_id);
+
+        if ($lrn === '' || ! $institutionId || ! SchemaCache::hasTable('student_photos')) {
+            return null;
+        }
+
+        // Only the timestamp is read, never the row's encrypted columns: the
+        // question here is whether a picture exists and how old it is, and the
+        // filename it was uploaded under is the adviser's business.
+        $photo = StudentPhoto::query()
+            ->forLearner($lrn, $institutionId)
+            ->first(['id', 'updated_at']);
+
+        if ($photo === null) {
+            return null;
+        }
+
+        // Cache-busted on the photograph's own timestamp, not the health
+        // record's: the URL is the same string after the adviser replaces the
+        // file, and a browser holding the old face would go on showing it.
+        return route('student-photo.show', $lrn).'?v='.($photo->updated_at?->timestamp ?? 0);
     }
 
     /**

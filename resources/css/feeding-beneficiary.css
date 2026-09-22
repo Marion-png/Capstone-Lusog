@@ -39,6 +39,82 @@
 	flex-wrap: wrap;
 	margin-bottom: 18px;
 }
+
+/* The learner's face, set by their class adviser and only read here.
+
+   A rounded plate, not a circle: this page is a record, and a photograph on a
+   record is a portrait on a document rather than an avatar in a chat. It is
+   also what survives the printer, where a circle crops a face oddly at 18mm.
+
+   Framed in neutrals on purpose. Colour on this page belongs to the standing
+   plate below it, which says what the learner is to the programme; a green
+   ring around the portrait would carry the brand and mean nothing, and this
+   sheet does not paint components green to look on-brand. */
+.bd-ident {
+	display: flex;
+	align-items: flex-start;
+	gap: 18px;
+	min-width: 0;
+}
+.bd-ident-body { min-width: 0; }
+
+.bd-portrait {
+	flex-shrink: 0;
+	width: 96px;
+	height: 96px;
+	margin: 0;
+	border-radius: 14px;
+	overflow: hidden;
+	background: var(--lg-card);
+	border: 1px solid var(--lg-border);
+	box-shadow: var(--lg-shadow);
+	display: grid;
+	place-items: center;
+	line-height: 0;
+}
+/* The photograph and the initials occupy the same cell, the picture over the
+   letters. The initials are therefore already rendered underneath every
+   photograph, which is what lets a failed image fall back to them without
+   fetching anything — see the handler on the record page. */
+.bd-portrait > * { grid-area: 1 / 1; }
+.bd-portrait-img {
+	/* Stretched rather than centred: the plate's own place-items would size
+	   the picture to its content, and a portrait has to fill the frame or it
+	   sits in it like a stamp. object-fit then crops rather than distorts,
+	   which matters when advisers upload whatever their phone took. */
+	justify-self: stretch;
+	align-self: stretch;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	object-position: center top;
+	display: block;
+	z-index: 1;
+	background: var(--lg-card);
+}
+
+/* No photograph on file. The learner's initials on the same mint the adviser's
+   and the nurse's empty avatars use, so one learner reads the same way at
+   every desk — and a plate that differs per child is far easier to scan down a
+   stack of printed records than the same grey silhouette repeated. */
+.bd-portrait.is-blank {
+	background: var(--lg-mint);
+	border-color: var(--lg-border-strong);
+	box-shadow: none;
+}
+.bd-portrait-initials {
+	font-size: 1.6rem;
+	font-weight: 700;
+	letter-spacing: .04em;
+	line-height: 1;
+	color: var(--lg-emerald-deep);
+	/* Mint only reads as the empty plate; under a photograph the letters are
+	   covered, and on the white card they would be a stray mark if it loaded
+	   with any transparency. */
+	visibility: hidden;
+}
+.bd-portrait.is-blank .bd-portrait-initials { visibility: visible; }
+
 .bd-eyebrow {
 	font-size: .68rem;
 	font-weight: 700;
@@ -259,6 +335,12 @@
 	.bd-header { flex-direction: column; }
 	.bd-actions { width: 100%; }
 	.bd-fact { grid-template-columns: 1fr; gap: 2px; }
+
+	/* The name is the masthead on a narrow screen; the portrait gives way to
+	   it rather than pushing it into two words a line. */
+	.bd-ident { gap: 14px; }
+	.bd-portrait { width: 68px; height: 68px; border-radius: 12px; }
+	.bd-portrait-initials { font-size: 1.15rem; }
 }
 
 /* ── Remove from Active List ───────────────────────────────────────
@@ -328,6 +410,26 @@
 	   rail that is not there. */
 	.bd-standing { break-inside: avoid; }
 	.bd-name { font-size: 1.4rem; }
+
+	/* The portrait prints: it is what lets somebody holding the filed record
+	   match it to a child. Kept small, and framed in a hairline a school
+	   printer can actually render. An <img> prints where a CSS background
+	   would not, which is why the face is one and never the other. */
+	.bd-ident { gap: 12px; }
+	.bd-portrait {
+		width: 72px;
+		height: 72px;
+		border-radius: 8px;
+		box-shadow: none;
+		border-color: #666;
+		break-inside: avoid;
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+	}
+	/* Colour must not carry meaning on paper, and the empty plate carries
+	   none: it prints as an outlined box with the initials in black. */
+	.bd-portrait.is-blank { background: transparent !important; border-color: #666; }
+	.bd-portrait-initials { color: #000 !important; font-size: 1.25rem; }
 	.bd-sessions { break-inside: auto; }
 	.bd-sessions .table-scroll { overflow: visible !important; }
 	.bd-session-table { font-size: .72rem; }

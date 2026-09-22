@@ -113,31 +113,49 @@
 								<div class="grade-title grade-title-overall">OVERALL BMI</div>
 								@include('feedingcor-dashboard.partials.bmi-table', ['prefix' => $prefix.'_overall', 'editable' => false, 'values' => $bmiValues])
 							</div>
+
+							{{-- The grids read as a picture, at the foot of the form and on
+							     the printed copy — the same partial the coordinator's SBFP
+							     Forms page draws, off the same BmiAssessmentReport values
+							     this page already has. One computation, so the head's chart,
+							     the coordinator's chart, the grid above them and the exported
+							     workbook cannot report different numbers for one school. --}}
+							@include('feedingcor-dashboard.partials.bmi-chart', [
+								'phase' => $report === 'endline' ? 'endline' : 'baseline',
+								'prefix' => $prefix,
+							])
 						</div>
 					@elseif ($report === 'masterlist')
-						<table class="template-table" aria-label="Masterlist of feeding program recipients">
-							<thead>
-								<tr>
-									<th class="num-col">No.</th>
-									<th class="name-col">Name</th>
-									<th class="grade-col">Grade</th>
-									<th>Section</th>
-								</tr>
-							</thead>
-							<tbody>
-								{{-- Padded to twenty rows, as the printed form is
-								     ruled: a short list still looks like the form. --}}
-								@for ($row = 1; $row <= max(20, count($masterlistRows)); $row++)
-									@php $entry = $masterlistRows[$row - 1] ?? null; @endphp
+						{{-- Inside .report-body, as the assessment branch above already
+						     puts its grids. Left out, the table was ruled straight onto
+						     the sheet's own border on all four sides: its head sat on the
+						     line under the title block and its last row on the line above
+						     the signatures, so the form read as one continuous grid. --}}
+						<div class="report-body">
+							<table class="template-table" aria-label="Masterlist of feeding program recipients">
+								<thead>
 									<tr>
-										<td class="num-col">{{ $row }}</td>
-										<td class="name-col">{{ $entry['name'] ?? '' }}</td>
-										<td class="grade-col">{{ $entry['grade'] ?? '' }}</td>
-										<td>{{ $entry['section'] ?? '' }}</td>
+										<th class="num-col">No.</th>
+										<th class="name-col">Name</th>
+										<th class="grade-col">Grade</th>
+										<th>Section</th>
 									</tr>
-								@endfor
-							</tbody>
-						</table>
+								</thead>
+								<tbody>
+									{{-- Padded to twenty rows, as the printed form is
+									     ruled: a short list still looks like the form. --}}
+									@for ($row = 1; $row <= max(20, count($masterlistRows)); $row++)
+										@php $entry = $masterlistRows[$row - 1] ?? null; @endphp
+										<tr>
+											<td class="num-col">{{ $row }}</td>
+											<td class="name-col">{{ $entry['name'] ?? '' }}</td>
+											<td class="grade-col">{{ $entry['grade'] ?? '' }}</td>
+											<td>{{ $entry['section'] ?? '' }}</td>
+										</tr>
+									@endfor
+								</tbody>
+							</table>
+						</div>
 					@endif
 
 					{{-- The signature lines carry the school's own staff. A name
@@ -172,6 +190,13 @@
 <script>
 	document.getElementById('printReport')?.addEventListener('click', () => window.print());
 </script>
+{{-- The readout for the BMI charts above, and only where there are charts —
+     the masterlist is a ruled table with no marks to read. Page level, never
+     inside a chart partial: this page reloads itself off the head's pulse, and
+     a partial carrying its own would duplicate the element on every reload. --}}
+@if ($isAssessment)
+	@include('partials.chart-tooltip')
+@endif
 {{-- The report is derived at read time, so an adviser's weighing recorded while
      this page is open changes what it says. The pulse reloads it when it does. --}}
 @include('partials.schoolhead-live')

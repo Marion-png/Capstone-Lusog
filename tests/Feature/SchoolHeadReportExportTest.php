@@ -358,4 +358,59 @@ class SchoolHeadReportExportTest extends TestCase
             ->get('/dashboard/school-head/reports/export?report=baseline')
             ->assertRedirect(route('login'));
     }
+
+    // ── The report on screen ───────────────────────────────
+
+    /**
+     * The head reads the same picture of the grid the coordinator does.
+     *
+     * One chart per covered grade plus the overall one, drawn by the very
+     * partial the SBFP Forms page draws, off the BmiAssessmentReport values
+     * this page already holds — so the head's chart, the coordinator's chart,
+     * the grid above them and the exported workbook cannot report different
+     * numbers for one school and year.
+     */
+    #[Test]
+    public function the_assessment_reports_carry_the_same_charts_the_coordinator_draws(): void
+    {
+        $this->makeLearner();
+
+        foreach (['baseline' => 'Baseline', 'endline' => 'Endline'] as $report => $heading) {
+            $html = $this->withSession($this->headSession())
+                ->get('/dashboard/school-head/reports/view?report='.$report)
+                ->assertOk()
+                ->getContent();
+
+            $this->assertSame(
+                count(FeedingBeneficiarySummary::GRADE_LEVELS) + 1,
+                substr_count($html, 'data-chart-grade='),
+                'one chart per covered grade, plus the overall grid'
+            );
+
+            $this->assertStringContainsString('Data Visualization &mdash; '.$heading, $html);
+            // The readout the marks need, exactly once.
+            $this->assertSame(1, substr_count($html, 'id="chartTip"'));
+        }
+    }
+
+    /**
+     * The masterlist is ruled inside the sheet, not onto it.
+     *
+     * Without the wrapper its head sat on the line under the title block and
+     * its last row on the line above the signatures, so the form read as one
+     * unbroken grid — while the assessment reports on the same page had the
+     * padding all along.
+     */
+    #[Test]
+    public function every_report_body_sits_inside_the_sheets_padding(): void
+    {
+        $this->makeLearner();
+
+        foreach (['baseline', 'endline', 'masterlist'] as $report) {
+            $this->withSession($this->headSession())
+                ->get('/dashboard/school-head/reports/view?report='.$report)
+                ->assertOk()
+                ->assertSee('<div class="report-body">', false);
+        }
+    }
 }

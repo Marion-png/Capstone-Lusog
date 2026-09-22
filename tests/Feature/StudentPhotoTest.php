@@ -19,8 +19,9 @@ use Tests\TestCase;
  * The class adviser sets it — they enrol the learner and know which face
  * belongs to which name. The nurse and clinic staff see it, because putting a
  * face to a name is the point of it when a child arrives at the clinic and
- * cannot explain who they are. Nobody else reads one: a photograph of a
- * child's face is the most identifying field in the record.
+ * cannot explain who they are, and the Feeding Coordinator does for the same
+ * reason — they hand the meal over and tick the sheet. Nobody else reads one:
+ * a photograph of a child's face is the most identifying field in the record.
  *
  * Keyed by LRN + institution rather than by health record, so it survives
  * grade promotion — the same child in Grade 8 as in Grade 7.
@@ -215,7 +216,9 @@ class StudentPhotoTest extends TestCase
 
     /**
      * A photograph of a child's face is the most identifying field in the
-     * record. The roles that never meet the learner have no use for it.
+     * record. The roles that never meet the learner have no use for it: the
+     * School Head reads aggregates and the Nutrition Coordinator reads
+     * analytics, and neither is ever in the room with the child.
      */
     #[Test]
     public function no_other_role_can_see_or_set_a_photo(): void
@@ -223,7 +226,7 @@ class StudentPhotoTest extends TestCase
         $this->learner();
         $this->upload()->assertCreated();
 
-        foreach (['school_head', 'feeding_coor', 'nutricor'] as $role) {
+        foreach (['school_head', 'nutricor'] as $role) {
             $this->withSession($this->sessionFor($role))
                 ->getJson(route('student-photo.status', self::LRN))
                 ->assertForbidden();
@@ -232,6 +235,72 @@ class StudentPhotoTest extends TestCase
                 ->get(route('student-photo.show', self::LRN))
                 ->assertForbidden();
         }
+    }
+
+    /**
+     * The Feeding Coordinator hands the meal over at the feeding line and
+     * ticks the sheet, so they are one of the desks that meets the learner in
+     * person — the same reason the clinic sees the photograph.
+     */
+    #[Test]
+    public function the_feeding_coordinator_can_see_a_photo(): void
+    {
+        $this->learner();
+        $this->upload()->assertCreated();
+
+        $this->withSession($this->sessionFor('feeding_coor'))
+            ->getJson(route('student-photo.status', self::LRN))
+            ->assertOk()
+            ->assertJson(['has_photo' => true, 'may_manage' => false]);
+
+        $this->withSession($this->sessionFor('feeding_coor'))
+            ->get(route('student-photo.show', self::LRN))
+            ->assertOk();
+    }
+
+    /** Reading is not writing: the photograph stays the adviser's to set. */
+    #[Test]
+    public function the_feeding_coordinator_cannot_change_a_photo(): void
+    {
+        $this->learner();
+        $this->upload()->assertCreated();
+
+        $before = StudentPhoto::first()->file_path;
+
+        $this->upload('feeding_coor')->assertForbidden();
+
+        $this->withSession($this->sessionFor('feeding_coor'))
+            ->deleteJson(route('student-photo.destroy', self::LRN))
+            ->assertForbidden();
+
+        $this->assertSame(1, StudentPhoto::count());
+        $this->assertSame($before, StudentPhoto::first()->file_path);
+    }
+
+    /**
+     * The photograph is keyed by LRN + institution so it survives promotion.
+     * Gating the read on a current-year health record contradicted that: a
+     * coordinator or nurse opening an earlier year — which those tabs let them
+     * do — got a broken image for a child whose picture the school still holds.
+     */
+    #[Test]
+    public function a_photo_is_readable_from_an_earlier_school_year(): void
+    {
+        $this->learner();
+        $this->upload()->assertCreated();
+
+        // The learner rolls on to a year the roster has not reached yet, so
+        // nothing on file is "current" any more.
+        StudentHealthRecord::query()->update(['school_year' => '2019-2020']);
+
+        $this->withSession($this->sessionFor('feeding_coor'))
+            ->get(route('student-photo.show', self::LRN))
+            ->assertOk();
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->getJson(route('student-photo.status', self::LRN))
+            ->assertOk()
+            ->assertJson(['has_photo' => true]);
     }
 
     /** Writing needs the adviser's own class, not merely their school. */

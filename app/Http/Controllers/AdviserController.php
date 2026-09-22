@@ -188,7 +188,7 @@ class AdviserController extends Controller
             $line = $row['line'];
             $input = $this->normaliseEnrolmentInput($row['data']);
 
-            $validator = Validator::make($input, $this->enrolmentRules());
+            $validator = Validator::make($input, $this->importRules());
             if ($validator->fails()) {
                 $errors[] = ['line' => $line, 'message' => $validator->errors()->first()];
 
@@ -295,6 +295,60 @@ class AdviserController extends Controller
             // and StudentVitalSignsController. Whatever a form posts for them
             // is ignored and the stored reading is carried across instead.
         ];
+    }
+
+    /**
+     * The rules a spreadsheet row is judged by.
+     *
+     * The form's rules with the School Health Card half relaxed, and nothing
+     * else. A class masterlist is a roster — NO, the learner's name, their
+     * LRN, a remarks column — and it is the document a school actually holds
+     * at the start of a year. Requiring a birthplace, a guardian, an address,
+     * a contact number, a height and a weight of it meant the one sheet every
+     * adviser has could never be uploaded, so the feature only worked for a
+     * sheet somebody had already retyped by hand.
+     *
+     * What is relaxed is **completeness, and only completeness**. Everything
+     * that makes the import safe is untouched and shared with the form: the
+     * row is still written by enrolLearner(), still scoped by
+     * applyAssignedClass() to this adviser's own class whatever the sheet's
+     * title row says, still refused when its LRN belongs to another class at
+     * the school, and every value still has to pass the same type and length
+     * rules. A spreadsheet is still not a way around the rules — it is a way
+     * to start a learner's record before the measuring has happened.
+     *
+     * A half-filled learner is not a silent state. StudentDataCompleteness
+     * already names each of these fields, and the adviser's own dashboard
+     * already counts the learners still missing them, so an imported roster
+     * shows up as the data entry it is.
+     *
+     * @return array<string, list<string>>
+     */
+    private function importRules(): array
+    {
+        $rules = $this->enrolmentRules();
+
+        // Name, LRN and the class stay required: they are what identifies the
+        // learner and what scopes the write, and the masterlist carries them.
+        foreach ([
+            'birth_month', 'birth_day', 'birth_year',
+            'birthplace', 'parent_guardian', 'address', 'telephone_no',
+            'height_cm', 'weight_kg',
+        ] as $field) {
+            $rules[$field] = array_values(array_map(
+                fn (string $rule): string => $rule === 'required' ? 'nullable' : $rule,
+                $rules[$field] ?? []
+            ));
+        }
+
+        // A date the adviser *did* give is judged even though giving one is
+        // now optional. Without this, "15/06/2012" in the Birth Date column
+        // parses to nothing, passes as "not provided" and the learner is
+        // enrolled with no birth date at all — the sheet said something and
+        // the import quietly disagreed. Absent is fine; unreadable is not.
+        $rules['birth_date'] = ['nullable', 'date_format:Y-m-d'];
+
+        return $rules;
     }
 
     /**
@@ -405,16 +459,40 @@ class AdviserController extends Controller
         ?StudentHealthRecord $existingRecord,
         array &$records,
     ): void {
-        $birthYear = (int) $validated['birth_year'];
-        $birthMonth = (int) $validated['birth_month'];
-        $birthDay = (int) $validated['birth_day'];
+        // A masterlist carries no birth date, and the import's rules no longer
+        // demand one — so these keys can be absent from validated() entirely
+        // rather than merely empty. resolveAge() already reads a zero as "no
+        // date", so an unmeasured learner simply has no age.
+        $birthYear = (int) ($validated['birth_year'] ?? 0);
+        $birthMonth = (int) ($validated['birth_month'] ?? 0);
+        $birthDay = (int) ($validated['birth_day'] ?? 0);
 
         $age = $this->resolveAge($birthYear, $birthMonth, $birthDay);
-        $heightCm = (float) $validated['height_cm'];
-        $weightKg = (float) $validated['weight_kg'];
-        $bmi = $this->computeBmi($heightCm, $weightKg);
-        $nutritionalStatusBmiForAge = $this->classifyBmiForAge($bmi, $age);
-        $nutritionalStatusHeightForAge = $this->classifyHeightForAge($heightCm, $age);
+
+        // NULL where nobody has measured the learner yet, never 0.
+        //
+        // An imported class masterlist carries no height or weight, and a zero
+        // does not stay in these columns: it becomes a BMI, then a nutritional
+        // status, then a learner the feeding programme qualifies, then a cell
+        // in the DepEd grid the School Head exports. "0 kg, Severely Wasted"
+        // is a child fed on the strength of a measurement nobody took. An
+        // absent reading is reported as absent all the way through — the same
+        // rule the Feeding Program roster keeps when it prints "No baseline"
+        // rather than inventing one.
+        $heightCm = $this->measurementOrNull($validated['height_cm'] ?? null);
+        $weightKg = $this->measurementOrNull($validated['weight_kg'] ?? null);
+
+        $bmi = ($heightCm === null || $weightKg === null)
+            ? null
+            : $this->computeBmi($heightCm, $weightKg);
+        // A status is a reading of a measurement, so an unmeasured learner has
+        // none at all rather than the classifier's "Not enough data" — which
+        // is a sentence about the record, not a nutritional status, and would
+        // be counted as one by anything grouping on the column.
+        $nutritionalStatusBmiForAge = $bmi === null ? null : $this->classifyBmiForAge($bmi, $age);
+        $nutritionalStatusHeightForAge = $heightCm === null
+            ? null
+            : $this->classifyHeightForAge($heightCm, $age);
 
         // Sheet 2 is written once, when the learner is enrolled.
         //
@@ -457,18 +535,22 @@ class AdviserController extends Controller
             'first_name' => $validated['first_name'],
             'middle_name' => $validated['middle_name'] ?? null,
             'lrn' => $validated['lrn'],
-            'birth_month' => $validated['birth_month'],
-            'birth_day' => $validated['birth_day'],
-            'birth_year' => $validated['birth_year'],
-            'birthplace' => $validated['birthplace'],
-            'parent_guardian' => $validated['parent_guardian'],
-            'address' => $validated['address'],
+            // Null, not '', for every field the sheet did not carry:
+            // StudentDataCompleteness reads these and names the ones still to
+            // be entered, which is how an imported roster reaches the
+            // adviser's own "needs data entry" count.
+            'birth_month' => $validated['birth_month'] ?? null,
+            'birth_day' => $validated['birth_day'] ?? null,
+            'birth_year' => $validated['birth_year'] ?? null,
+            'birthplace' => $validated['birthplace'] ?? null,
+            'parent_guardian' => $validated['parent_guardian'] ?? null,
+            'address' => $validated['address'] ?? null,
             'region' => $validated['region'] ?? null,
             'division' => $validated['division'] ?? null,
-            'telephone_no' => $validated['telephone_no'],
+            'telephone_no' => $validated['telephone_no'] ?? null,
             'gender' => $validated['gender'] ?? null,
-            'height_cm' => $validated['height_cm'],
-            'weight_kg' => $validated['weight_kg'],
+            'height_cm' => $heightCm,
+            'weight_kg' => $weightKg,
             // Vital signs are filled in from the record by StudentVitalSigns
             // ::preserve() below, never from this request.
             'health_history' => $healthHistory,
@@ -543,7 +625,7 @@ class AdviserController extends Controller
             'student_name' => $studentName,
             'section' => $sectionLabel !== '' ? $sectionLabel : (string) $validated['section'],
             'student_details' => $details,
-            'weight' => (float) $validated['weight_kg'],
+            'weight' => $weightKg,
             'bmi_value' => $bmi,
             'nutritional_status' => $nutritionalStatusBmiForAge,
             'baseline_age' => $age,
@@ -655,6 +737,22 @@ class AdviserController extends Controller
         }
 
         return $birthDate->isFuture() ? null : $birthDate->age;
+    }
+
+    /**
+     * A measurement, or null where there is none.
+     *
+     * A blank cell, a missing column and a zero all mean the same thing here:
+     * nobody has taken this reading. Casting them to 0.0 is what turns "not
+     * measured" into a number the rest of the app will happily classify.
+     */
+    private function measurementOrNull(mixed $value): ?float
+    {
+        if ($value === null || $value === '' || ! is_numeric($value)) {
+            return null;
+        }
+
+        return ((float) $value) > 0 ? (float) $value : null;
     }
 
     private function computeBmi(float $heightCm, float $weightKg): ?float

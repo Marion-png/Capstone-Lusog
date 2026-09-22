@@ -121,6 +121,22 @@
 .inline-line-input.inline-short { width: 56px; }
 .inline-line-input.inline-wide { width: 260px; }
 .report-body { padding: 12px 10px; }
+
+/* One grade's title and its grid are a block, so the air between grades goes
+   on the block rather than on the title. The title's own top margin is zeroed
+   by :first-child inside every block — correct, since it always is the first
+   child — which left each grid ruled directly onto the one above it, and the
+   whole report reading as a single unbroken table.
+
+   Bottom margin rather than a `+` rule on purpose: the coordinator's grade
+   filter hides blocks with display:none, and a hidden element contributes no
+   margin, so the one grade left on screen never inherits a gap from the
+   grades above it. The chart figures carry this class too, so they space the
+   same way, at the 22px the chart figures already set below, so the whole
+   report body keeps one vertical rhythm rather than two near-equal ones. */
+.bmi-grade-block { margin-bottom: 22px; }
+.bmi-grade-block:last-child { margin-bottom: 0; }
+
 .grade-title { text-align: center; font-size: .9rem; font-weight: 700; color: #0f172a; text-transform: uppercase; text-decoration: underline; margin: 16px 0 8px; }
 .grade-title:first-child { margin-top: 0; }
 .grade-title-overall { margin-bottom: 4px; }
@@ -346,6 +362,10 @@
 	.report-head { padding: 10px 8px 8px; }
 	.report-body { padding: 8px 6px; }
 	.grade-title { margin: 12px 0 6px; }
+	/* Enough to keep one grade's grid off the next on paper, without spending
+	   a quarter of an inch per grade the way the on-screen gap would. */
+	.bmi-grade-block { margin-bottom: 14px; }
+	.bmi-grade-block:last-child { margin-bottom: 0; }
 	.narrative-textarea { border: none; border-radius: 0; padding: 0; min-height: 0; resize: none; overflow: hidden; font-size: 10pt; line-height: 1.6; box-shadow: none; }
 	.narrative-section { margin-bottom: 12px; }
 	.foot-block { min-height: 70px; }

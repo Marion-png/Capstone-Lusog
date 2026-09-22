@@ -509,5 +509,11 @@
 	});
 })();
 </script>
+{{-- One readout for every chart on this page. Included here rather than
+     inside a chart partial: these panels are re-rendered by the live pulse,
+     and a partial that carried its own tooltip would inject a second copy of
+     it — same id, same script — on every refresh. The listeners are delegated
+     from the document, so marks the refresh brings in are covered anyway. --}}
+@include('partials.chart-tooltip')
 </body>
 </html>

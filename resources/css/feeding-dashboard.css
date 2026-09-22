@@ -223,17 +223,75 @@
 .np-dot-baseline { background: var(--series-risk); }
 .np-dot-endline { background: var(--series-healthy); }
 
-.np-chart { margin-top: 10px; display: flex; flex-direction: column; gap: 12px; }
-.np-row { display: grid; grid-template-columns: 128px minmax(0, 1fr); align-items: center; gap: 12px; }
+/* The plot's three columns, declared once and read by the rules, the rows
+   and the axis alike — three places that must line up to the pixel, so
+   none of them may carry its own copy of the figure. */
+.np-graph {
+	--np-label-w: 128px;
+	--np-label-gap: 12px;
+	--np-value-w: 34px;
+	--np-value-gap: 8px;
+	margin-top: 10px;
+}
+.np-plot { position: relative; }
+
+/* Recessive rules the eye reads a length against. They span exactly the
+   track — starting after the status label, stopping before the figure —
+   and sit behind the data, never over it. */
+.np-rules {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: calc(var(--np-label-w) + var(--np-label-gap));
+	right: calc(var(--np-value-w) + var(--np-value-gap));
+	display: flex;
+	justify-content: space-between;
+	pointer-events: none;
+}
+.np-rules i { width: 1px; background: var(--lg-border); }
+/* The baseline of the chart is the one rule that carries weight: every bar
+   grows from it, so it reads as an axis rather than as another gridline. */
+.np-rules i:first-child { background: var(--lg-border-strong); }
+
+.np-chart { position: relative; display: flex; flex-direction: column; gap: 12px; }
+.np-row { display: grid; grid-template-columns: var(--np-label-w) minmax(0, 1fr); align-items: center; gap: var(--np-label-gap); }
 .np-label { font-size: .78rem; font-weight: 600; color: var(--lg-ink); }
 /* 2px of surface between the pair, never a border — the two fills must
    not appear to touch for a reader who cannot separate the hues. */
 .np-bars { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.np-bar-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.np-bar { height: 12px; border-radius: 0 4px 4px 0; min-width: 2px; transition: width .5s cubic-bezier(.22,.61,.36,1); }
+.np-bar-line { display: flex; align-items: center; gap: var(--np-value-gap); min-width: 0; }
+/* The track is the full width of the scale, so a bar's percentage is a
+   percentage of the axis and lands on the rules. Before this the bar was
+   sized against a box the figure also sat in, which quietly shortened
+   every bar by the width of its own label. */
+.np-track { flex: 1 1 auto; min-width: 0; display: block; }
+.np-bar {
+	display: block;
+	height: 12px;
+	border-radius: 0 4px 4px 0;
+	transition: width .5s cubic-bezier(.22,.61,.36,1), filter .12s ease;
+}
+.np-bar:hover, .np-bar:focus-visible { filter: saturate(1.15) brightness(.94); }
 .np-bar-baseline { background: var(--series-risk); }
 .np-bar-endline { background: var(--series-healthy); }
-.np-value { font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); flex: 0 0 auto; }
+.np-value { width: var(--np-value-w); text-align: right; font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); flex: 0 0 auto; }
+/* A count of none is stated, not drawn. It is quietened by weight rather
+   than by colour: the muted border step this first used is 1.44:1 on the
+   card, so the one figure that has no bar to back it up would have been the
+   one figure nobody could read. */
+.np-value.is-zero { font-weight: 500; opacity: .75; }
+
+/* The scale, labelled under the rules it belongs to and inset by the same
+   two gutters, so a tick sits on its own line. */
+.np-axis { display: grid; grid-template-columns: var(--np-label-w) minmax(0, 1fr); gap: var(--np-label-gap); margin-top: 7px; }
+.np-axis-line { display: flex; align-items: center; gap: var(--np-value-gap); min-width: 0; }
+.np-axis-gutter { width: var(--np-value-w); flex: 0 0 auto; }
+.np-axis-ticks { flex: 1 1 auto; min-width: 0; display: flex; justify-content: space-between; }
+.np-axis-ticks span { font-size: .66rem; color: var(--lg-ink-soft); transform: translateX(-50%); }
+/* The first and last ticks are pulled inside the plot rather than hanging
+   off its ends. */
+.np-axis-ticks span:first-child { transform: none; }
+.np-axis-ticks span:last-child { transform: translateX(-100%); }
 
 .np-table { margin-top: 16px; }
 .np-table summary { font-size: .76rem; color: var(--lg-ink-soft); cursor: pointer; font-weight: 500; padding: 4px 0; width: fit-content; }
@@ -243,7 +301,13 @@
 .tnum { font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 
 @media (max-width: 620px) {
+	.np-graph { --np-label-w: 0px; --np-label-gap: 0px; }
 	.np-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+	/* The label now sits above its own bars, so a rule drawn the full height
+	   of the plot would cross it. */
+	.np-rules { display: none; }
+	.np-axis { grid-template-columns: minmax(0, 1fr); }
+	.np-axis-pad { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
 	.np-bar { transition: none; }

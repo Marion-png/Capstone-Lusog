@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\FeedingAttendance;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
+use App\Models\StudentPhoto;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
@@ -568,6 +569,86 @@ class FeedingBeneficiaryProfileTest extends TestCase
         ])
             ->get('/dashboard/feedingcor-program/beneficiary/'.$record->id)
             ->assertRedirect(route('login'));
+    }
+
+    // ── The learner's photograph ─────────────────────
+
+    /**
+     * The face the class adviser put on the record, read here.
+     *
+     * The coordinator hands the meal over at the feeding line and ticks the
+     * sheet, so the picture answers "is this the child whose name I am about
+     * to mark". It is resolved server-side in the one render this page already
+     * costs — never fetched afterwards, which would be a second round trip
+     * against a hosted database for a face the page could have carried.
+     */
+    #[Test]
+    public function it_shows_the_photograph_the_adviser_set(): void
+    {
+        $record = $this->makeStudent();
+
+        StudentPhoto::create([
+            'institution_id' => $this->institution->id,
+            'student_lrn' => $record->student_id,
+            'file_path' => 'student-photos/fake.jpg',
+            'file_original_name' => 'juan.jpg',
+            'file_size' => 900,
+            'uploaded_by_name' => 'Maria Santos',
+            'uploaded_by_role' => 'class_adviser',
+        ]);
+
+        $response = $this->openRecord($record)->assertOk();
+
+        $response->assertSee('<img class="bd-portrait-img"', false);
+        $response->assertSee(route('student-photo.show', $record->student_id), false);
+
+        // The plate is not the empty one. The initials are rendered underneath
+        // every photograph on purpose — that is what a failed image falls back
+        // to — so the blank state is read off the class, not off their absence.
+        $response->assertDontSee('bd-portrait is-blank', false);
+    }
+
+    /**
+     * A beneficiary record must open whether or not anybody has got round to
+     * photographing the child. The empty plate carries the learner's initials
+     * rather than a broken image or a generic head.
+     */
+    #[Test]
+    public function a_learner_with_no_photograph_falls_back_to_their_initials(): void
+    {
+        $record = $this->makeStudent(['student_name' => 'Juan Cruz']);
+
+        $response = $this->openRecord($record)->assertOk();
+
+        $response->assertSee('bd-portrait is-blank', false);
+        $response->assertSee('>JC<', false);
+        // The URL only the <img> can carry: the class names are also in the
+        // stylesheet this page inlines, so absence is asserted on the route.
+        $response->assertDontSee(route('student-photo.show', $record->student_id), false);
+    }
+
+    /** A photograph belongs to one school, as every other record here does. */
+    #[Test]
+    public function another_schools_photograph_is_never_shown(): void
+    {
+        $other = Institution::create(['name' => 'Wireless ES', 'status' => 'active']);
+        $record = $this->makeStudent();
+
+        // Same LRN, different school. Nothing may cross.
+        StudentPhoto::create([
+            'institution_id' => $other->id,
+            'student_lrn' => $record->student_id,
+            'file_path' => 'student-photos/other.jpg',
+            'file_original_name' => 'other.jpg',
+            'file_size' => 900,
+            'uploaded_by_name' => 'Other Adviser',
+            'uploaded_by_role' => 'class_adviser',
+        ]);
+
+        $this->openRecord($record)
+            ->assertOk()
+            ->assertSee('bd-portrait is-blank', false)
+            ->assertDontSee(route('student-photo.show', $record->student_id), false);
     }
 
     #[Test]

@@ -358,12 +358,19 @@
 .sh-cols-labels { grid-column: 2; grid-row: 2; height: auto; }
 .sh-cols-labels span { flex: 1 1 0; min-width: 0; text-align: center; font-size: .7rem; color: var(--lg-ink-soft); }
 .sh-col { flex: 1 1 0; min-width: 0; max-width: 72px; height: 100%; position: relative; display: flex; align-items: flex-end; justify-content: center; }
-.sh-col-bar { width: min(30px, 78%); border-radius: 4px 4px 0 0; background: var(--lg-info); min-height: 2px; }
+.sh-col-bar { width: min(30px, 78%); border-radius: 4px 4px 0 0; background: var(--lg-info); transition: filter .12s ease; }
+.sh-col:hover .sh-col-bar { filter: saturate(1.15) brightness(.94); }
+/* The whole column is the hover target, not the 30px of fill inside it —
+   a 3-consultation month is a sliver nobody can aim at. */
+.sh-col[data-tip] { cursor: help; }
 .sh-col-cap {
 	position: absolute; left: 50%; transform: translateX(-50%);
 	font-size: .7rem; font-weight: 600; color: var(--lg-ink); line-height: 1; white-space: nowrap;
 	font-variant-numeric: var(--lg-figures);
 }
+/* A month of none states its nought without competing with the months that
+   have a column under them — by weight, not by a colour too pale to read. */
+.sh-col-cap.is-zero { font-weight: 500; opacity: .75; }
 
 /* ══ Program overview rows ══════════════════════════════════════════ */
 
@@ -513,27 +520,73 @@
 .sh-swatch.is-baseline { background: var(--series-risk); }
 .sh-swatch.is-endline { background: var(--series-healthy); }
 
-.sh-shift { display: flex; flex-direction: column; gap: 12px; }
-.sh-shift-row { display: grid; grid-template-columns: 128px minmax(0, 1fr); align-items: center; gap: 12px; }
-.sh-shift-label { font-size: .78rem; font-weight: 600; color: var(--lg-ink); }
-.sh-shift-bars { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.sh-shift-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.sh-shift-bar { height: 12px; border-radius: 0 4px 4px 0; min-width: 2px; flex: 0 0 auto; }
-.sh-shift-bar.is-baseline { background: var(--series-risk); }
-.sh-shift-bar.is-endline { background: var(--series-healthy); }
-.sh-shift-value { font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); flex: 0 0 auto; }
-/* Direction is a sign and a word-sized figure, never the colour alone. */
-.sh-shift-delta { font-size: .7rem; font-weight: 600; flex: 0 0 auto; }
-.sh-shift-delta.is-down { color: var(--lg-success-ink); }
-.sh-shift-delta.is-up { color: var(--lg-danger-ink); }
-.sh-shift-axis {
+/* The plot's columns, declared once and read by the rules, the rows and the
+   axis alike — three things that must line up to the pixel, so none of them
+   carries its own copy of the figure. */
+.sh-shift-graph {
+	--shs-label-w: 128px;
+	--shs-label-gap: 12px;
+	--shs-value-w: 34px;
+	--shs-delta-w: 38px;
+	--shs-gap: 8px;
+}
+.sh-shift-plot { position: relative; }
+
+/* Recessive rules the eye reads a length against, spanning exactly the
+   track and sitting behind the data rather than over it. */
+.sh-shift-rules {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: calc(var(--shs-label-w) + var(--shs-label-gap));
+	right: calc(var(--shs-value-w) + var(--shs-delta-w) + var(--shs-gap) * 2);
 	display: flex;
 	justify-content: space-between;
-	gap: 8px;
-	margin: 10px 0 0 140px;
+	pointer-events: none;
+}
+.sh-shift-rules i { width: 1px; background: var(--lg-border); }
+/* Every bar grows from the first rule, so it carries the weight of an axis
+   rather than reading as another gridline. */
+.sh-shift-rules i:first-child { background: var(--lg-border-strong); }
+
+.sh-shift { position: relative; display: flex; flex-direction: column; gap: 12px; }
+.sh-shift-row { display: grid; grid-template-columns: var(--shs-label-w) minmax(0, 1fr); align-items: center; gap: var(--shs-label-gap); }
+.sh-shift-label { font-size: .78rem; font-weight: 600; color: var(--lg-ink); }
+.sh-shift-bars { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sh-shift-line { display: flex; align-items: center; gap: var(--shs-gap); min-width: 0; }
+/* The track is the whole scale, so a bar's percentage is a percentage of the
+   axis and lands on the rules. Sized against a box the figures also sat in,
+   every bar was quietly shortened by the width of its own labels. */
+.sh-shift-track { flex: 1 1 auto; min-width: 0; display: block; }
+.sh-shift-bar { display: block; height: 12px; border-radius: 0 4px 4px 0; transition: filter .12s ease; }
+.sh-shift-bar:hover, .sh-shift-bar:focus-visible { filter: saturate(1.15) brightness(.94); }
+.sh-shift-bar.is-baseline { background: var(--series-risk); }
+.sh-shift-bar.is-endline { background: var(--series-healthy); }
+.sh-shift-value { width: var(--shs-value-w); text-align: right; font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); flex: 0 0 auto; }
+/* A count of none is stated, not drawn. It is quietened by weight rather
+   than by colour: the muted border step this first used is 1.44:1 on the
+   card, so the one figure that has no bar to back it up would have been the
+   one figure nobody could read. */
+.sh-shift-value.is-zero { font-weight: 500; opacity: .75; }
+/* Direction is a sign and a word-sized figure, never the colour alone. */
+.sh-shift-delta { width: var(--shs-delta-w); text-align: right; font-size: .7rem; font-weight: 600; flex: 0 0 auto; }
+.sh-shift-delta.is-down { color: var(--lg-success-ink); }
+.sh-shift-delta.is-up { color: var(--lg-danger-ink); }
+/* The scale, laid out on the same grid as a row so a tick sits on its rule. */
+.sh-shift-axis {
+	display: grid;
+	grid-template-columns: var(--shs-label-w) minmax(0, 1fr);
+	gap: var(--shs-label-gap);
+	margin-top: 8px;
 	font-size: .68rem;
 	color: var(--lg-ink-soft);
 }
+.sh-shift-axis-line { display: flex; align-items: center; gap: var(--shs-gap); min-width: 0; }
+.sh-shift-axis-ticks { flex: 1 1 auto; min-width: 0; display: flex; justify-content: space-between; }
+/* Pulled inside the plot rather than hanging off its ends. */
+.sh-shift-axis-ticks span { transform: translateX(-50%); }
+.sh-shift-axis-ticks span:first-child { transform: none; }
+.sh-shift-axis-ticks span:last-child { transform: translateX(-100%); }
 
 .sh-compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
 .sh-panel { min-width: 0; }

@@ -97,6 +97,19 @@ class FeedingNutritionProgress
             array_column($rows, 'endline')
         )));
 
+        // The bars are scaled against a **clean** axis, not against the tallest
+        // of them. Scaling to the peak makes the longest bar full width
+        // whatever it counts, so a panel where the worst category holds four
+        // learners looks exactly like one where it holds four hundred, and
+        // there is no tick a reader could check a length against.
+        //
+        // The step is BmiAssessmentReport::axisScale()'s — the same 1/2/5 × 10ⁿ
+        // rule the BMI charts and the School Head's shift chart already step,
+        // read rather than re-typed, so one comparison cannot be drawn on two
+        // different scales in two roles.
+        $axis = BmiAssessmentReport::axisScale($peak);
+        $axisMax = max(1, (int) $axis['max']);
+
         return [
             'total' => $total,
             'measured' => $measured,
@@ -105,13 +118,16 @@ class FeedingNutritionProgress
             'declined' => $declined,
             'rate' => $rate,
             'split' => self::split($total, $measured, $improved, $unchanged, $declined),
+            // The gridlines the panel rules and labels, largest first.
+            'axis_max' => $axisMax,
+            'ticks' => $axis['ticks'],
             'rows' => array_map(
                 fn (array $row): array => $row + [
                     // Bar lengths share one scale across both series, so a
                     // baseline bar and an endline bar of equal length are
-                    // equal counts.
-                    'baseline_pct' => round(($row['baseline'] / $peak) * 100, 1),
-                    'endline_pct' => round(($row['endline'] / $peak) * 100, 1),
+                    // equal counts — and both are read against the ticks above.
+                    'baseline_pct' => round(($row['baseline'] / $axisMax) * 100, 2),
+                    'endline_pct' => round(($row['endline'] / $axisMax) * 100, 2),
                 ],
                 $rows
             ),

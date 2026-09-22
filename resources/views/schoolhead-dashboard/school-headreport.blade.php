@@ -106,39 +106,83 @@
 					</ul>
 				@endif
 
-				<div class="sh-shift">
-					@foreach ($shift['rows'] as $row)
-						<div class="sh-shift-row">
-							<span class="sh-shift-label">{{ $row['label'] }}</span>
-							<div class="sh-shift-bars">
-								<div class="sh-shift-line">
-									<span class="sh-shift-bar is-baseline" style="width:{{ $row['baseline_pct'] }}%"
-									      title="Baseline &middot; {{ $row['label'] }}: {{ $row['baseline'] }}"></span>
-									<span class="sh-shift-value tnum">{{ $row['baseline'] }}</span>
-								</div>
-								@if ($shift['has_endline'])
+				{{-- Ruled, so a bar's length is a count a head can read off rather
+				     than a length to compare with the bar under it. The rules span
+				     exactly the track and sit behind the data. --}}
+				{{-- One scope over the plot and its axis, so the rules, the rows
+				     and the ticks read one declaration of the column widths. --}}
+				<div class="sh-shift-graph">
+				<div class="sh-shift-plot">
+					<div class="sh-shift-rules" aria-hidden="true">
+						@foreach ($shift['ticks'] as $tick)<i></i>@endforeach
+					</div>
+
+					<div class="sh-shift">
+						@foreach ($shift['rows'] as $row)
+							@php
+								$measuredFor = fn (string $k) => $k === 'baseline'
+									? (int) $shift['baseline_measured']
+									: (int) $shift['endline_measured'];
+							@endphp
+							<div class="sh-shift-row">
+								<span class="sh-shift-label">{{ $row['label'] }}</span>
+								<div class="sh-shift-bars">
 									<div class="sh-shift-line">
-										<span class="sh-shift-bar is-endline" style="width:{{ $row['endline_pct'] }}%"
-										      title="Endline &middot; {{ $row['label'] }}: {{ $row['endline'] }}"></span>
-										<span class="sh-shift-value tnum">{{ $row['endline'] }}</span>
-										@if ($row['change'] !== 0)
-											{{-- A real minus sign, not an entity: inside {{ }} an
-											     entity would be escaped and print as text. --}}
-											<span class="sh-shift-delta {{ $row['change'] < 0 ? 'is-down' : 'is-up' }} tnum">
-												{{ $row['change'] > 0 ? '+' : '−' }}{{ abs($row['change']) }}
-											</span>
-										@endif
+										<span class="sh-shift-track">
+											{{-- A category nobody falls into draws nothing. A 2px
+											     stub would read as "one or two learners". --}}
+											@if ($row['baseline'] > 0)
+												<span class="sh-shift-bar is-baseline" style="width:{{ $row['baseline_pct'] }}%"
+													data-tip-title="{{ $row['label'] }} &middot; Baseline"
+													data-tip="{{ $row['baseline'] }} of {{ $measuredFor('baseline') }} measured"></span>
+											@endif
+										</span>
+										<span class="sh-shift-value tnum {{ $row['baseline'] === 0 ? 'is-zero' : '' }}">{{ $row['baseline'] }}</span>
+										{{-- The baseline line carries no change, but it keeps the
+										     slot: both lines must end on the same column or the
+										     pair reads as two different scales. --}}
+										<span class="sh-shift-delta" aria-hidden="true"></span>
 									</div>
-								@endif
+									@if ($shift['has_endline'])
+										<div class="sh-shift-line">
+											<span class="sh-shift-track">
+												@if ($row['endline'] > 0)
+													<span class="sh-shift-bar is-endline" style="width:{{ $row['endline_pct'] }}%"
+														data-tip-title="{{ $row['label'] }} &middot; Endline"
+														data-tip="{{ $row['endline'] }} of {{ $measuredFor('endline') }} measured"></span>
+												@endif
+											</span>
+											<span class="sh-shift-value tnum {{ $row['endline'] === 0 ? 'is-zero' : '' }}">{{ $row['endline'] }}</span>
+											@if ($row['change'] !== 0)
+												{{-- A real minus sign, not an entity: inside {{ }} an
+												     entity would be escaped and print as text. --}}
+												<span class="sh-shift-delta {{ $row['change'] < 0 ? 'is-down' : 'is-up' }} tnum">
+													{{ $row['change'] > 0 ? '+' : '−' }}{{ abs($row['change']) }}
+												</span>
+											@else
+												<span class="sh-shift-delta" aria-hidden="true"></span>
+											@endif
+										</div>
+									@endif
+								</div>
 							</div>
-						</div>
-					@endforeach
+						@endforeach
+					</div>
 				</div>
 
+				{{-- Mirrors .sh-shift-line exactly — track, figure, change — so the
+				     ticks land on the rules by construction rather than by a
+				     hand-kept margin that drifts the moment a column changes. --}}
 				<div class="sh-shift-axis" aria-hidden="true">
-					@foreach ($shift['ticks'] as $tick)
-						<span class="tnum">{{ $tick }}</span>
-					@endforeach
+					<span class="sh-shift-axis-pad"></span>
+					<div class="sh-shift-axis-line">
+						<div class="sh-shift-axis-ticks">
+							@foreach ($shift['ticks'] as $tick)<span class="tnum">{{ $tick }}</span>@endforeach
+						</div>
+						<span class="sh-shift-value"></span>
+						<span class="sh-shift-delta"></span>
+					</div>
+				</div>
 				</div>
 			@endif
 		</section>
@@ -347,6 +391,12 @@
 
 })();
 </script>
+{{-- One readout for every chart on this page. Included here rather than
+     inside a chart partial: these panels are re-rendered by the live pulse,
+     and a partial that carried its own tooltip would inject a second copy of
+     it — same id, same script — on every refresh. The listeners are delegated
+     from the document, so marks the refresh brings in are covered anyway. --}}
+@include('partials.chart-tooltip')
 @include('partials.role-page-transition')
 </body>
 </html>
