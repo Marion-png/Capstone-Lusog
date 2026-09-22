@@ -135,6 +135,20 @@ class NurseHealthRecordsPageTest extends TestCase
         $response->assertSee('Examiner Signature / Name:');
         $response->assertSee('Ana Reyes');
 
+        // G. is a right-eye and a left-eye field, a Pass / Refer tick for the
+        // vision screening and a four-way dropdown for the auditory one —
+        // never a free-text result.
+        $html = $response->getContent();
+        foreach (Sheet2Review::VISION_RESULTS as $result) {
+            $this->assertStringContainsString('type="checkbox" name="vision_result" value="'.$result.'"', $html);
+        }
+        $this->assertMatchesRegularExpression('/<select name="hearing_result">/', $html);
+        foreach (Sheet2Review::HEARING_RESULTS as $result) {
+            $this->assertStringContainsString('<option value="'.$result.'"', $html);
+        }
+        $this->assertSame(['Pass', 'Refer'], Sheet2Review::VISION_RESULTS);
+        $this->assertSame(['Passed Both', 'Failed Right', 'Failed Left', 'Refer'], Sheet2Review::HEARING_RESULTS);
+
         // Supplementation & Programs went too — no deworming, iron, SBFP/4Ps,
         // menarche, immunization, others or Examined By controls, and no
         // consent banner for a control that is not there.
@@ -153,7 +167,7 @@ class NurseHealthRecordsPageTest extends TestCase
                     'neurological' => ['finding' => 'not-an-option', 'notes' => ''],
                 ],
                 'vision_right' => '20/20', 'vision_left' => '20/25', 'vision_result' => 'Pass',
-                'hearing_result' => 'Passed Both',
+                'hearing_result' => 'Failed Left',
                 'teeth_condition' => 'Good', 'dental_referral' => 'No referral required',
                 'immunization_status' => 'Complete', 'immunization_reviewed_at' => '2026-08-02',
                 'summary_findings' => 'Controlled bronchial asthma.',
@@ -171,6 +185,7 @@ class NurseHealthRecordsPageTest extends TestCase
         $this->assertSame('', $sheet['systems']['neurological']['finding'], 'A value off the list is dropped.');
         $this->assertArrayHasKey('genitourinary', $sheet['systems']);
         $this->assertSame(['right' => '20/20', 'left' => '20/25', 'result' => 'Pass'], $sheet['vision']);
+        $this->assertSame('Failed Left', $sheet['hearing']['result']);
         $this->assertSame('Good', $sheet['oral']['teeth']);
         $this->assertSame('Complete', $sheet['immunization']['status']);
         $this->assertSame('Controlled bronchial asthma.', $sheet['summary']['findings']);
@@ -214,7 +229,8 @@ class NurseHealthRecordsPageTest extends TestCase
         $this->assertMatchesRegularExpression('/name="systems\[heent_eyes\]\[finding\]"[^>]*>.*?<option value="Normal" selected/s', $html);
         $this->assertStringContainsString('name="systems[gastrointestinal][notes]" value="Soft"', $html);
         $this->assertStringContainsString('name="vision_left" value="20/40"', $html);
-        $this->assertStringContainsString('name="vision_result" value="Pass"', $html);
+        $this->assertStringContainsString('name="vision_result" value="Pass" checked', $html);
+        $this->assertStringNotContainsString('name="vision_result" value="Refer" checked', $html);
         $this->assertMatchesRegularExpression('/name="teeth_condition"[^>]*>.*?<option value="Fair" selected/s', $html);
         $this->assertStringContainsString('name="dental_referral" value="Referred for dental care — Caries"', $html);
         $this->assertMatchesRegularExpression('/name="immunization_status"[^>]*>.*?<option value="Incomplete" selected/s', $html);
@@ -325,7 +341,7 @@ class NurseHealthRecordsPageTest extends TestCase
         $response->assertSee('Fill Medical Record')->assertSee('Print');
 
         foreach ([
-            'p-sheet1', 'p-sheet2', 'p-consultation', 'p-clinic-notes', 'p-consent', 'p-documents',
+            'p-sheet1', 'p-sheet2', 'p-consultation', 'p-consent', 'p-documents',
         ] as $panel) {
             $response->assertSee('data-panel="'.$panel.'"', false);
             $response->assertSee('id="'.$panel.'"', false);
@@ -338,13 +354,21 @@ class NurseHealthRecordsPageTest extends TestCase
             'Personal Information', 'Parent/Guardian Information', 'Medical &amp; Family History',
             'Growth &amp; Nutrition', 'Health History',
             'Systems Review', 'Health Assessment', 'Consultation Log',
-            'Add Clinic Note', 'Note History', 'Parental Consent', 'Medical Documents',
+            'Parental Consent', 'Medical Documents',
         ] as $section) {
             $response->assertSee($section, false);
         }
 
         $response->assertDontSee('SHD Form 2 Snapshot');
         $response->assertDontSee('id="psStatus"', false);
+
+        // Clinic Notes went too: a note is written with the visit now (New
+        // Consultation) and read under it on the Consultation Log tab.
+        $response->assertDontSee('data-panel="p-clinic-notes"', false);
+        $response->assertDontSee('Add Clinic Note');
+        $response->assertDontSee('id="clinicNoteForm"', false);
+        $response->assertSee('id="cm_notes"', false);
+        $response->assertSee("label.textContent = 'Notes / comments'", false);
     }
 
     #[Test]
@@ -361,13 +385,12 @@ class NurseHealthRecordsPageTest extends TestCase
             $response->assertSee($tab)->assertSee($badge);
         }
 
-        $response->assertSee('Clinic Notes')
-            ->assertSee('Consultation Log')
+        $response->assertSee('Consultation Log')
             ->assertSee('Consent')
             ->assertSee('Documents');
 
         // Live badge targets the scripts fill in.
-        foreach (['pConsultBadge', 'pNotesBadge', 'pConsentBadge', 'pDocsBadge'] as $badgeId) {
+        foreach (['pConsultBadge', 'pConsentBadge', 'pDocsBadge'] as $badgeId) {
             $response->assertSee('id="'.$badgeId.'"', false);
         }
 
@@ -377,7 +400,7 @@ class NurseHealthRecordsPageTest extends TestCase
         // Incident Reports closes the strip: it is the nurse's FDAR chart of
         // something that happened to this learner, and the adviser reads the
         // same panel on their own profile.
-        $expected = ['p-sheet1', 'p-sheet2', 'p-consent', 'p-clinic-notes', 'p-consultation', 'p-documents', 'p-incidents'];
+        $expected = ['p-sheet1', 'p-sheet2', 'p-consent', 'p-consultation', 'p-documents', 'p-incidents'];
 
         preg_match_all('/data-panel="([^"]+)"/', $html, $tabs);
         $this->assertSame($expected, $tabs[1]);
@@ -614,5 +637,78 @@ class NurseHealthRecordsPageTest extends TestCase
             ->assertOk()
             ->assertSee('<td class="shr-name">Dela Cruz, Maria Clara S.</td>', false)
             ->assertDontSee('Maria C.');
+    }
+
+    /**
+     * A screening outcome is one of the sheet's own options. A value the
+     * form cannot produce is dropped, and an outcome typed on the older
+     * free-text form is read onto the option it meant — never invented.
+     */
+    #[Test]
+    public function screening_results_are_read_onto_the_sheets_own_options(): void
+    {
+        $sheet = Sheet2Review::fromInput([
+            'vision_result' => 'refer', 'hearing_result' => 'failed right',
+        ]);
+        $this->assertSame('Refer', $sheet['vision']['result']);
+        $this->assertSame('Failed Right', $sheet['hearing']['result']);
+
+        $sheet = Sheet2Review::fromInput([
+            'vision_result' => 'Excellent', 'hearing_result' => 'Both ears fine',
+        ]);
+        $this->assertSame('', $sheet['vision']['result']);
+        $this->assertSame('', $sheet['hearing']['result']);
+
+        // The draft derived from the older examination fields.
+        $derived = Sheet2Review::read(['vision_screening' => 'Passed', 'auditory_screening' => 'Referred to ENT'], []);
+        $this->assertSame('Pass', $derived['vision']['result']);
+        $this->assertSame('Refer', $derived['hearing']['result']);
+
+        $derived = Sheet2Review::read(['vision_screening' => 'passed', 'auditory_screening' => 'ok'], []);
+        $this->assertSame('Pass', $derived['vision']['result']);
+        $this->assertSame('', $derived['hearing']['result'], 'A word the options do not name stays blank.');
+    }
+
+    /**
+     * Back, Cancel and the save return to the page the form was opened from
+     * — the profile the nurse was reading, or whichever tab sent them here —
+     * never to the dashboard. A return address outside the app is ignored.
+     */
+    #[Test]
+    public function the_examination_form_returns_to_the_page_it_was_opened_from(): void
+    {
+        $learner = $this->learner();
+        $session = $this->nurseSession([$learner]);
+        $profile = route('dashboard.student-health-records', ['open' => '123456789012']);
+
+        // The profile passes itself as the return address.
+        $html = $this->withSession($session)
+            ->get(route('nurse.examine', ['index' => 0, 'return_to' => $profile]))
+            ->assertOk()
+            ->getContent();
+        $this->assertSame(2, substr_count($html, 'href="'.e($profile).'"'), 'Back and Cancel both lead to the profile.');
+        $this->assertStringContainsString('name="return_to" value="'.e($profile).'"', $html);
+
+        // Opened from another tab with no address of its own: the referrer.
+        $html = $this->withSession($session)
+            ->from(route('dashboard.school-nurse'))
+            ->get(route('nurse.examine', 0))
+            ->assertOk()
+            ->getContent();
+        $this->assertStringContainsString('href="'.route('dashboard.school-nurse').'"', $html);
+        $this->flushHeaders();
+
+        // An address outside the app falls back to Health Records.
+        $html = $this->withSession($session)
+            ->get(route('nurse.examine', ['index' => 0, 'return_to' => 'https://evil.example/phish']))
+            ->assertOk()
+            ->getContent();
+        $this->assertStringNotContainsString('evil.example', $html);
+        $this->assertStringContainsString('href="'.route('dashboard.student-health-records').'"', $html);
+
+        // The save lands where the form said it would.
+        $this->withSession($session)
+            ->post(route('nurse.examine.save', 0), ['date_of_examination' => '2026-08-02', 'return_to' => $profile])
+            ->assertRedirect($profile);
     }
 }

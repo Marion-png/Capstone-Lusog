@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Condition;
 use App\Models\Consultation;
 use App\Models\Institution;
+use App\Models\StudentHealthRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -184,5 +185,149 @@ class ConsultationTest extends TestCase
 
             $response->assertRedirect();
         }
+    }
+
+    /**
+     * A saved consultation comes back to the page the dialog was opened on —
+     * a learner's profile with that learner open, say — not always to the
+     * Consultation Log. Only a URL inside this app is honoured.
+     *
+     * @test
+     */
+    public function saving_returns_to_where_the_dialog_was_opened(): void
+    {
+        $payload = [
+            'consulted_at' => now()->format('Y-m-d'),
+            'student_name' => 'John Doe',
+            'grade_section' => 'Grade 10 - A',
+            'condition' => 'Headache',
+            'status' => 'treated',
+        ];
+
+        // From a learner's profile: back to that profile, learner open.
+        $profile = route('dashboard.student-health-records').'?open=123456789012';
+        $this->withSession($this->clinicSession())
+            ->post('/dashboard/consultation-log', $payload + ['return_to' => $profile])
+            ->assertRedirect($profile);
+
+        // From the log, or with nothing said: the log.
+        $this->withSession($this->clinicSession())
+            ->post('/dashboard/consultation-log', $payload)
+            ->assertRedirect(route('dashboard.consultation-log'));
+
+        // A value off the wire pointing anywhere else is refused.
+        $this->withSession($this->clinicSession())
+            ->post('/dashboard/consultation-log', $payload + ['return_to' => 'https://evil.example/phish'])
+            ->assertRedirect(route('dashboard.consultation-log'));
+
+        $this->assertSame(3, Consultation::count());
+    }
+
+    /**
+     * The dialog carries its page as the return target, and the profile
+     * rewrites it to reopen the learner; the standalone page's Back and
+     * Cancel go to the page it was opened from.
+     *
+     * @test
+     */
+    public function the_dialog_and_the_standalone_page_carry_the_return_target(): void
+    {
+        $log = $this->withSession($this->clinicSession())
+            ->get(route('dashboard.consultation-log'))
+            ->assertOk()
+            ->getContent();
+        $this->assertStringContainsString('name="return_to" id="cm_return_to" value="'.route('dashboard.consultation-log').'"', $log);
+
+        $profile = $this->withSession($this->clinicSession() + ['active_role' => 'school_nurse'])
+            ->get(route('dashboard.student-health-records'))
+            ->assertOk()
+            ->getContent();
+        $this->assertStringContainsString("url.searchParams.set('open', lrn)", $profile);
+
+        $standalone = $this->withSession($this->clinicSession())
+            ->from(route('dashboard.student-health-records'))
+            ->get(route('consultations.create'))
+            ->assertOk()
+            ->getContent();
+        $this->assertStringContainsString('href="'.route('dashboard.student-health-records').'" class="btn btn-ghost">Back</a>', $standalone);
+        $this->assertStringContainsString('name="return_to" value="'.route('dashboard.student-health-records').'"', $standalone);
+
+        // Opened cold — no referrer inside the app — it falls back to the log.
+        $cold = $this->flushHeaders()->flushSession()
+            ->withSession($this->clinicSession())
+            ->get(route('consultations.create'))
+            ->assertOk()
+            ->getContent();
+        $this->assertStringContainsString('href="'.route('dashboard.consultation-log').'" class="btn btn-ghost">Back</a>', $cold);
+    }
+
+    /**
+     * The New Consultation page carries the same clinic-notes field the
+     * profile's dialog does, so a note written from the dashboard's learner
+     * search lands on the visit like any other.
+     */
+    /** @test */
+    public function the_new_consultation_page_takes_a_clinic_note(): void
+    {
+        $html = $this->withSession($this->clinicSession())
+            ->get(route('consultations.create'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('Clinic Notes', $html);
+        $this->assertStringContainsString('<textarea id="notes" name="notes" maxlength="2000"', $html);
+    }
+
+    /**
+     * The learner is searched for, not typed. Both entrances to New
+     * Consultation — the dialog and the standalone page — embed the school's
+     * roll (LRN, name, grade – section) for a picker that fills the grade
+     * and section from the record once a learner is chosen. The index is
+     * scoped to the session's school and never lists another school's child.
+     */
+    /** @test */
+    public function new_consultation_offers_a_learner_search_that_fills_the_section(): void
+    {
+        $other = Institution::create(['name' => 'Other School', 'status' => 'active']);
+        StudentHealthRecord::create([
+            'institution_id' => $this->institution->id,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'student_id' => '130000000001',
+            'student_name' => 'Cruz, Juan',
+            'section' => 'Grade 10 / Dalton',
+            'weight' => 40, 'bmi_value' => 18, 'nutritional_status' => 'Normal',
+            'student_details' => ['lrn' => '130000000001', 'last_name' => 'Cruz', 'first_name' => 'Juan', 'grade_level' => 'Grade 10', 'section' => 'Dalton'],
+        ]);
+        StudentHealthRecord::create([
+            'institution_id' => $other->id,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'student_id' => '130000000002',
+            'student_name' => 'Outsider, Nina',
+            'section' => 'Grade 8 / Bonifacio',
+            'weight' => 40, 'bmi_value' => 18, 'nutritional_status' => 'Normal',
+            'student_details' => ['lrn' => '130000000002', 'last_name' => 'Outsider', 'first_name' => 'Nina', 'grade_level' => 'Grade 8', 'section' => 'Bonifacio'],
+        ]);
+
+        $entry = json_encode(['lrn' => '130000000001', 'name' => 'Cruz, Juan', 'section' => 'Grade 10 - Dalton']);
+
+        // The standalone page.
+        $page = $this->withSession($this->clinicSession())
+            ->get(route('consultations.create'))
+            ->assertOk()
+            ->getContent();
+        $this->assertStringContainsString('id="student_search"', $page);
+        $this->assertStringContainsString('role="combobox"', $page);
+        $this->assertStringContainsString($entry, $page);
+        $this->assertStringNotContainsString('Outsider', $page);
+
+        // The dialog on the Consultation Log.
+        $dialog = $this->withSession($this->clinicSession())
+            ->get(route('dashboard.consultation-log'))
+            ->assertOk()
+            ->getContent();
+        $this->assertStringContainsString('id="cm_student_combo"', $dialog);
+        $this->assertStringContainsString('id="cm_student_results"', $dialog);
+        $this->assertStringContainsString($entry, $dialog);
+        $this->assertStringNotContainsString('Outsider', $dialog);
     }
 }

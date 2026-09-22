@@ -81,6 +81,10 @@
             border-color: var(--g300); box-shadow: 0 0 0 3px rgba(134,239,172,.25);
         }
         .field input[readonly] { background: var(--bg); color: var(--text-2); cursor: default; }
+        /* A pair of screening outcomes, ticked like the paper form. */
+        .check-row { display: flex; align-items: center; gap: 18px; min-height: 40px; }
+        .field .check { display: inline-flex; align-items: center; gap: 8px; font-size: .84rem; font-weight: 500; color: var(--text-1); text-transform: none; letter-spacing: 0; cursor: pointer; }
+        .field .check input[type="checkbox"] { width: 18px; height: 18px; margin: 0; padding: 0; accent-color: var(--g600); cursor: pointer; }
         .field select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237a9e87' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px; }
 
         .readonly-badge { display: inline-flex; align-items: center; gap: 4px; font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; margin-left: auto; }
@@ -145,9 +149,9 @@
         <div class="page-eyebrow">School Nurse &rsaquo; Health Records</div>
         <h1>Systems Review, <span>Screenings, and Recommendations</span></h1>
     </div>
-    <a href="{{ route('dashboard.student-health-records') }}" class="btn btn-ghost">
+    <a href="{{ $backTo }}" class="btn btn-ghost">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M15 18l-6-6 6-6"/></svg>
-        Back to Records
+        Back
     </a>
 </div>
 
@@ -191,6 +195,8 @@
     <div class="card-body">
         <form method="POST" action="{{ route('nurse.examine.save', $index) }}">
             @csrf
+            {{-- Where the save lands: the page this form was opened from. --}}
+            <input type="hidden" name="return_to" value="{{ $backTo }}">
 
             {{-- Vital signs are recorded on the learner's profile (the Vital
                  Signs panel), and height, weight and nutritional status are the
@@ -259,12 +265,26 @@
                     <input type="text" name="vision_left" value="{{ $s2('vision', 'left') }}" placeholder="e.g. 20/20">
                 </div>
                 <div class="field">
-                    <label>Vision — Result</label>
-                    <input type="text" name="vision_result" value="{{ $s2('vision', 'result') }}" placeholder="e.g. Pass">
+                    <label>Vision Screening</label>
+                    {{-- One outcome or the other: ticking one clears the other (see the
+                         script at the foot), and the server keeps only a listed value. --}}
+                    <div class="check-row" data-exclusive>
+                        @foreach (\App\Support\Sheet2Review::VISION_RESULTS as $result)
+                            <label class="check">
+                                <input type="checkbox" name="vision_result" value="{{ $result }}" @checked($s2('vision', 'result') === $result)>
+                                <span>{{ $result }}</span>
+                            </label>
+                        @endforeach
+                    </div>
                 </div>
                 <div class="field">
-                    <label>Hearing — Result</label>
-                    <input type="text" name="hearing_result" value="{{ $s2('hearing', 'result') }}" placeholder="e.g. Passed Both">
+                    <label>Auditory Screening</label>
+                    <select name="hearing_result">
+                        <option value="">— Select —</option>
+                        @foreach (\App\Support\Sheet2Review::HEARING_RESULTS as $result)
+                            <option value="{{ $result }}" @selected($s2('hearing', 'result') === $result)>{{ $result }}</option>
+                        @endforeach
+                    </select>
                 </div>
             </div>
 
@@ -336,10 +356,23 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                     Save Examination
                 </button>
-                <a href="{{ route('dashboard.student-health-records') }}" class="btn btn-ghost">Cancel</a>
+                <a href="{{ $backTo }}" class="btn btn-ghost">Cancel</a>
             </div>
         </form>
     </div>
 </div>
+<script>
+    // A screening has one outcome: ticking Pass unticks Refer and the other
+    // way round, so the form can never post both.
+    document.querySelectorAll('[data-exclusive]').forEach(function (group) {
+        var boxes = group.querySelectorAll('input[type="checkbox"]');
+        boxes.forEach(function (box) {
+            box.addEventListener('change', function () {
+                if (!box.checked) return;
+                boxes.forEach(function (other) { if (other !== box) other.checked = false; });
+            });
+        });
+    });
+</script>
 </body>
 </html>

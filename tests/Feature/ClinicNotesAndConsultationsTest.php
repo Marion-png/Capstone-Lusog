@@ -197,6 +197,54 @@ class ClinicNotesAndConsultationsTest extends TestCase
         $response->assertDontSee('Headache');
     }
 
+    /**
+     * A note is written with the visit on New Consultation — it replaced the
+     * profile's separate Clinic Notes tab — encrypted like the rest of the
+     * visit, and read back under that consultation on the profile's
+     * Consultation Log tab.
+     */
+    #[Test]
+    public function a_note_written_with_the_visit_is_read_back_under_it(): void
+    {
+        $this->learner('LRN001', 'Dela Cruz, Juan');
+
+        $this->withSession($this->nurseSession())
+            ->post(route('consultations.store'), [
+                'consulted_at' => now()->toDateString(),
+                'student_name' => 'Dela Cruz, Juan',
+                'grade_section' => 'Grade 10 - Dalton',
+                'condition' => 'Asthma',
+                'treatment_given' => 'Salbutamol inhaler',
+                'notes' => 'Wheeze settled after 10 minutes. Follow up Friday.',
+                'status' => 'treated',
+            ])
+            ->assertRedirect();
+
+        $visit = Consultation::firstOrFail();
+        $this->assertSame('Wheeze settled after 10 minutes. Follow up Friday.', $visit->notes);
+        $this->assertStringStartsWith('eyJpdiI6', (string) $visit->getRawOriginal('notes'), 'The note is encrypted at rest.');
+
+        $response = $this->withSession($this->nurseSession())
+            ->getJson('/api/student-consultations?lrn=LRN001')
+            ->assertOk()
+            ->assertJsonCount(1, 'consultations');
+
+        $this->assertSame('Wheeze settled after 10 minutes. Follow up Friday.', $response->json('consultations.0.notes'));
+
+        // A visit recorded without one carries an empty note, never a placeholder.
+        $this->withSession($this->nurseSession())
+            ->post(route('consultations.store'), [
+                'consulted_at' => now()->toDateString(),
+                'student_name' => 'Dela Cruz, Juan',
+                'grade_section' => 'Grade 10 - Dalton',
+                'condition' => 'Headache',
+                'status' => 'treated',
+            ])
+            ->assertRedirect();
+
+        $this->assertNull(Consultation::latest('id')->first()->notes);
+    }
+
     #[Test]
     public function a_missing_or_unknown_lrn_returns_empty_rather_than_erroring(): void
     {

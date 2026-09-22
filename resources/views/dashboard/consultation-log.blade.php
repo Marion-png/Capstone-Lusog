@@ -203,13 +203,26 @@
                                 </td>
                                 <td>
                                     {{-- A photograph of an injury is clinical information, so it
-                                         opens from here and is never printed into the row. --}}
-                                    <button type="button" class="clog-photo-btn"
-                                            data-photos-open="{{ $consultation->id }}"
-                                            data-photos-student="{{ $rowName !== '' ? $rowName : 'this learner' }}">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                                        Photos
-                                    </button>
+                                         opens from here and is never printed into the row. The row
+                                         says whether there is anything to see: an eye and the count
+                                         open the dialog when photos are on file; "No photos attached"
+                                         is a plain statement, not a control — photos are taken at the
+                                         point of recording, on New Consultation. --}}
+                                    @php $photoTotal = (int) ($photoCounts[$consultation->id] ?? 0); @endphp
+                                    @if ($photoTotal > 0)
+                                        <button type="button" class="clog-photo-btn has-photos"
+                                                data-photos-open="{{ $consultation->id }}"
+                                                data-photos-student="{{ $rowName !== '' ? $rowName : 'this learner' }}"
+                                                title="View the photos attached to this visit">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                            View photos <span class="clog-photo-count">{{ $photoTotal }}</span>
+                                        </button>
+                                    @else
+                                        <span class="clog-photo-none">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/><line x1="4" y1="4" x2="20" y2="20"/></svg>
+                                            No photos attached
+                                        </span>
+                                    @endif
                                 </td>
                             </tr>
                         @empty

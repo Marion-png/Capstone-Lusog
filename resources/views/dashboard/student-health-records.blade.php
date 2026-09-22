@@ -322,7 +322,6 @@
             <button type="button" class="sp-tab active" role="tab" aria-selected="true" data-panel="p-sheet1">Sheet 1 <span class="sp-tab-badge">Learner Info</span></button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-sheet2">Sheet 2 <span class="sp-tab-badge">Systems Review</span></button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-consent">Consent <span class="sp-tab-badge" id="pConsentBadge">&ndash;</span></button>
-            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-clinic-notes">Clinic Notes <span class="sp-tab-badge" id="pNotesBadge">0</span></button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-consultation">Consultation Log <span class="sp-tab-badge" id="pConsultBadge">0</span></button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-documents">Documents <span class="sp-tab-badge" id="pDocsBadge">0</span></button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-incidents">Incident Reports <span class="sp-tab-badge" id="vpIncidentsTabBadge">0</span></button>
@@ -448,11 +447,15 @@
             </section>
 
             <section id="p-sheet2" class="sp-panel">
+                {{-- A missing MLHAT is said first, at the top of the tab, so a nurse
+                     opening Sheet 2 reads it before the systems review rather than
+                     after scrolling past it. Filled by loadHealthAssessment(). --}}
+                <div id="phaWarning" hidden></div>
                 <div class="student-profile-section">
                     <h4>Systems Review</h4>
                     <div id="pdSystemsReview"></div>
                 </div>
-                <div class="student-profile-section">
+                <div class="student-profile-section" id="phaSection">
                     <h4>Health Assessment <span style="font-size:.72rem;font-weight:400;color:var(--text-3);">(MLHAT)</span></h4>
                     <div id="phaStatus">
                         <div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Select a student to view assessment.</div></div>
@@ -465,38 +468,6 @@
                     <h4>Parental Consent &mdash; Health Services (Sulat-Pahibalo)</h4>
                     <div id="pcConsentStatus">
                         <div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Select a student to view consent status.</div></div>
-                    </div>
-                </div>
-            </section>
-
-            <section id="p-clinic-notes" class="sp-panel">
-                <div class="student-profile-section">
-                    <h4>Add Clinic Note</h4>
-                    <form id="clinicNoteForm" class="cn-form" autocomplete="off">
-                        @csrf
-                        <input type="hidden" name="lrn" id="cnLrn" value="">
-                        <label class="cn-label" for="cnNote">Note <span style="color:var(--red);">*</span></label>
-                        <textarea id="cnNote" name="note" rows="3" maxlength="5000" required placeholder="Clinical observation, follow-up, or recommendation"></textarea>
-                        <div class="cn-row">
-                            <div>
-                                <label class="cn-label" for="cnFollowUp">Follow-up Date</label>
-                                <input type="date" id="cnFollowUp" name="follow_up_date">
-                            </div>
-                            <div>
-                                <label class="cn-label" for="cnAuthor">Recorded By</label>
-                                <input type="text" id="cnAuthor" name="author_name" maxlength="255" value="{{ session('active_name', 'School Nurse') }}">
-                            </div>
-                        </div>
-                        <div class="cn-actions">
-                            <span class="cn-feedback" id="cnFeedback" role="status" aria-live="polite"></span>
-                            <button type="submit" class="btn btn-primary" id="cnSubmit">Add Note</button>
-                        </div>
-                    </form>
-                </div>
-                <div class="student-profile-section">
-                    <h4>Note History</h4>
-                    <div id="pNotesList">
-                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Select a student to view notes.</div></div>
                     </div>
                 </div>
             </section>
@@ -887,8 +858,18 @@
     };
 
     const openProfile = (record, route) => {
+        // Fill Medical Record carries this page — and this learner — as its
+        // return address, so Back, Cancel and Save land on the profile the
+        // nurse was reading rather than on a list or the dashboard.
         if (fillLink) {
-            fillLink.setAttribute('href', route || '#');
+            const lrn = String(record.lrn || '').trim();
+            let href = route || '#';
+            if (route && lrn !== '') {
+                const back = new URL(window.location.href);
+                back.searchParams.set('open', lrn);
+                href = route + (route.includes('?') ? '&' : '?') + 'return_to=' + encodeURIComponent(back.toString());
+            }
+            fillLink.setAttribute('href', href);
         }
 
         // "New Consultation" opens the dialog over this profile with the
@@ -944,10 +925,6 @@
         renderSystemsReview(record.systems_review, record.examination);
 
         const lrn = record.lrn || '';
-        const lrnField = document.getElementById('cnLrn');
-        if (lrnField) {
-            lrnField.value = lrn;
-        }
 
         StudentDocuments.load(lrn);
         // The dialog serves whichever row was clicked, so the incident panel is
@@ -958,7 +935,6 @@
         loadHealthAssessment(lrn);
         loadHealthHistory(lrn);
         loadConsultations(lrn);
-        loadClinicNotes(lrn);
 
         // Each learner opens on the first tab, scrolled to the top.
         resetTabs();
@@ -1101,6 +1077,10 @@
     const loadHealthAssessment = async (lrn) => {
         const el = document.getElementById('phaStatus');
         if (!el) return;
+        const warning = document.getElementById('phaWarning');
+        const section = document.getElementById('phaSection');
+        if (warning) { warning.hidden = true; warning.innerHTML = ''; }
+        if (section) section.hidden = false;
         if (!lrn) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">No LRN available.</div></div>'; return; }
         el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Loading&hellip;</div></div>';
         try {
@@ -1108,14 +1088,19 @@
             if (!resp.ok) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load assessment.</div></div>'; return; }
             const d = await resp.json();
             if (!d.has_assessment) {
-                el.innerHTML = `
-                    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#FCECEC;border:1px solid #fca5a5;border-radius:8px;font-size:.82rem;font-weight:700;color:#A32B2B;margin-bottom:12px;">
+                // Said at the top of the tab; the section below would only
+                // repeat it, so it is hidden until an assessment is on file.
+                const notice = `
+                    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#FCECEC;border:1px solid #fca5a5;border-radius:8px;font-size:.82rem;font-weight:700;color:#A32B2B;margin-bottom:8px;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-                        No health assessment on file for SY ${d.school_year || '—'}
+                        No health assessment (MLHAT) on file for SY ${d.school_year || '—'}
                     </div>
-                    <div style="padding:10px 12px;background:#FDF4E2;border:1px solid #fcd34d;border-radius:8px;font-size:.78rem;color:#8A5A06;">
+                    <div style="padding:10px 12px;background:#FDF4E2;border:1px solid #fcd34d;border-radius:8px;font-size:.78rem;color:#8A5A06;margin-bottom:16px;">
                         The Class Adviser has not yet submitted an MLHAT health assessment for this student.
                     </div>`;
+                if (warning) { warning.innerHTML = notice; warning.hidden = false; }
+                if (section) section.hidden = true;
+                el.innerHTML = notice;
                 return;
             }
 
@@ -1320,6 +1305,21 @@
                     });
 
                 card.append(head, grid);
+
+                // The note written with the visit — what the Clinic Notes tab
+                // used to hold, now under the consultation it is about.
+                if (row.notes && String(row.notes).trim() !== '') {
+                    const note = document.createElement('div');
+                    note.className = 'cn-entry-note';
+                    const label = document.createElement('span');
+                    label.className = 'cn-entry-note-label';
+                    label.textContent = 'Notes / comments';
+                    const body = document.createElement('p');
+                    body.className = 'cn-entry-body';
+                    body.textContent = String(row.notes);
+                    note.append(label, body);
+                    card.appendChild(note);
+                }
                 el.appendChild(card);
             });
         } catch (_err) {
@@ -1327,145 +1327,6 @@
         }
     };
 
-    // ── Clinic notes ───────────────────────────────────────────────
-    const renderClinicNotes = (notes) => {
-        const el = document.getElementById('pNotesList');
-        if (!el) return;
-
-        setBadge('pNotesBadge', notes.length);
-
-        if (!notes.length) {
-            el.innerHTML = '<p class="sp-note">No clinic notes recorded for this learner yet.</p>';
-            return;
-        }
-
-        el.textContent = '';
-        notes.forEach((note) => {
-            const card = document.createElement('div');
-            card.className = 'cn-entry';
-
-            const head = document.createElement('div');
-            head.className = 'cn-entry-head';
-            const when = document.createElement('span');
-            when.className = 'cn-entry-date';
-            when.textContent = note.recorded_at || '—';
-            const author = document.createElement('span');
-            author.className = 'cn-entry-author';
-            author.textContent = note.author || '—';
-            head.append(when, author);
-
-            const body = document.createElement('p');
-            body.className = 'cn-entry-body';
-            body.textContent = note.note || '';
-
-            card.append(head, body);
-
-            if (note.follow_up_date) {
-                const followUp = document.createElement('span');
-                followUp.className = 'cn-pill is-followup';
-                followUp.textContent = 'Follow-up: ' + note.follow_up_date;
-                card.appendChild(followUp);
-            }
-
-            el.appendChild(card);
-        });
-    };
-
-    const loadClinicNotes = async (lrn) => {
-        const el = document.getElementById('pNotesList');
-        if (!el) return;
-
-        setBadge('pNotesBadge', 0);
-
-        if (!lrn) {
-            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">No LRN available.</div></div>';
-            return;
-        }
-
-        el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Loading&hellip;</div></div>';
-
-        try {
-            const resp = await fetch('/api/student-clinic-notes?lrn=' + encodeURIComponent(lrn), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-            if (!resp.ok) {
-                el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load clinic notes.</div></div>';
-                return;
-            }
-
-            renderClinicNotes((await resp.json()).notes || []);
-        } catch (_err) {
-            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load clinic notes.</div></div>';
-        }
-    };
-
-    const noteForm = document.getElementById('clinicNoteForm');
-    if (noteForm) {
-        noteForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
-
-            const feedback = document.getElementById('cnFeedback');
-            const submit = document.getElementById('cnSubmit');
-            const lrn = (document.getElementById('cnLrn') || {}).value || '';
-            const noteText = (document.getElementById('cnNote') || {}).value || '';
-
-            if (!lrn || noteText.trim() === '') {
-                if (feedback) {
-                    feedback.textContent = 'Enter a note first.';
-                    feedback.className = 'cn-feedback is-error';
-                }
-                return;
-            }
-
-            if (submit) submit.disabled = true;
-            if (feedback) {
-                feedback.textContent = 'Saving…';
-                feedback.className = 'cn-feedback';
-            }
-
-            try {
-                const resp = await fetch('/api/student-clinic-notes', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                    },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({
-                        lrn,
-                        note: noteText,
-                        follow_up_date: (document.getElementById('cnFollowUp') || {}).value || null,
-                        author_name: (document.getElementById('cnAuthor') || {}).value || null,
-                    }),
-                });
-
-                if (!resp.ok) {
-                    if (feedback) {
-                        feedback.textContent = resp.status === 404
-                            ? 'No health record on file for this learner.'
-                            : 'Could not save the note.';
-                        feedback.className = 'cn-feedback is-error';
-                    }
-                    return;
-                }
-
-                document.getElementById('cnNote').value = '';
-                document.getElementById('cnFollowUp').value = '';
-                if (feedback) {
-                    feedback.textContent = 'Note saved.';
-                    feedback.className = 'cn-feedback is-ok';
-                }
-                await loadClinicNotes(lrn);
-            } catch (_err) {
-                if (feedback) {
-                    feedback.textContent = 'Could not save the note.';
-                    feedback.className = 'cn-feedback is-error';
-                }
-            } finally {
-                if (submit) submit.disabled = false;
-            }
-        });
-    }
 
     /**
      * Health Conditions list. The certificates attached to a condition are no
@@ -1617,6 +1478,17 @@
             // a placeholder, leaving the nurse no way to enter the real one.
             const shown = document.getElementById('pGrade')?.textContent?.trim() || '';
             const section = shown === '-' ? '' : shown;
+
+            // Saving comes back here with this learner's profile open, rather
+            // than to the Consultation Log the nurse never left for.
+            const returnTo = document.getElementById('cm_return_to');
+            const lrn = String(consultLink.dataset.consultLrn || '').trim();
+            if (returnTo) {
+                const url = new URL(window.location.href);
+                url.search = '';
+                if (lrn !== '') url.searchParams.set('open', lrn);
+                returnTo.value = url.toString();
+            }
 
             setStacked(true);
 

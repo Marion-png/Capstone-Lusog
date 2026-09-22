@@ -385,7 +385,7 @@ class ConsultationPhotoTest extends TestCase
     #[Test]
     public function the_consultation_log_offers_the_photo_dialog(): void
     {
-        $this->visit();
+        $this->upload($this->visit())->assertCreated();
 
         $html = $this->withSession($this->sessionFor('school_nurse'))
             ->get(route('dashboard.consultation-log'))
@@ -395,6 +395,35 @@ class ConsultationPhotoTest extends TestCase
         $this->assertStringContainsString('id="cphotoBackdrop"', $html);
         $this->assertStringContainsString('data-photos-open=', $html);
         $this->assertStringContainsString("Share with the learner's class adviser", $html);
+    }
+
+    /**
+     * The row says whether there is anything to see. A visit with photos
+     * carries the eye, "View photos" and how many, and opens the dialog; a
+     * visit the nurse took no picture of reads "No photos attached" as plain
+     * text — not a button, since there is nothing to open.
+     */
+    #[Test]
+    public function the_consultation_log_says_whether_a_visit_has_photos(): void
+    {
+        $withPhoto = $this->visit();
+        $this->visit();
+        $this->upload($withPhoto)->assertCreated();
+
+        $html = $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('dashboard.consultation-log'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('class="clog-photo-btn has-photos"', $html);
+        $this->assertStringContainsString('View photos', $html);
+        $this->assertStringContainsString('<span class="clog-photo-count">1</span>', $html);
+
+        $this->assertStringContainsString('<span class="clog-photo-none">', $html);
+        $this->assertStringContainsString('No photos attached', $html);
+        $this->assertStringNotContainsString('is-empty', $html);
+        $this->assertSame(1, substr_count($html, 'data-photos-open='), 'Only the visit with photos opens the dialog.');
+        $this->assertSame(1, substr_count($html, 'class="clog-photo-btn'), 'The empty state is not a button.');
     }
 
     // ── Photos at the point of recording ────────────────────────────

@@ -4,7 +4,7 @@
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<meta name="csrf-token" content="{{ csrf_token() }}">
-		<title>Feeding Program - SIGLA</title>
+		<title>{{ (bool) ($isReadOnly ?? (session('active_role') === 'school_nurse')) ? 'Nutritional Status Report' : 'Feeding Program' }} - SIGLA</title>
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
@@ -43,7 +43,7 @@
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>{{ $isReadOnly ? 'School Nurse' : 'Dashboard' }}</span><span class="bc-sep">&rsaquo;</span><span>Feeding Program</span></div>
+		<div class="topbar-bc"><span>{{ $isReadOnly ? 'School Nurse' : 'Dashboard' }}</span><span class="bc-sep">&rsaquo;</span><span>{{ $isReadOnly ? 'Nutritional Status Report' : 'Feeding Program' }}</span></div>
 
 		@include('partials.nurse-learner-search')
 	    @include('partials.live-clock')
@@ -62,7 +62,11 @@
 
 		<div class="head-row page-header">
 			<div>
-				<h1 class="page-title">Feeding <span>Program</span></h1>
+				@if ($isReadOnly)
+					<h1 class="page-title">Nutritional Status <span>Report</span></h1>
+				@else
+					<h1 class="page-title">Feeding <span>Program</span></h1>
+				@endif
 				<p class="page-sub">Participation, attendance and nutritional movement across the Supplementary Feeding Program.</p>
 				@if ($hasGradeFilter ?? false)
 					<form method="GET" action="{{ route($programRouteName) }}" class="school-filter-form">

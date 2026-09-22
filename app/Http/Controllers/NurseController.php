@@ -127,7 +127,36 @@ class NurseController extends Controller
         return view('nurse.examine', [
             'index' => $index,
             'record' => $records[$index],
+            'backTo' => $this->returnTo($request),
         ]);
+    }
+
+    /**
+     * Where Back, Cancel and the save go: the page the form was opened from.
+     * A `return_to` the opener passed wins (the profile passes its own
+     * learner, so the nurse lands back on the record they were reading),
+     * else the referring page, and Health Records only when neither is a
+     * page inside this app — never the dashboard.
+     */
+    private function returnTo(Request $request): string
+    {
+        $base = rtrim(url('/'), '/');
+        $inApp = fn (string $url): bool => $url !== ''
+            && str_starts_with($url, $base.'/')
+            && ! str_contains($url, "\n")
+            && ! preg_match('#/nurse/\d+/examine(\?|$)#', $url);
+
+        $candidate = trim((string) $request->input('return_to', ''));
+        if ($inApp($candidate)) {
+            return $candidate;
+        }
+
+        $previous = (string) url()->previous();
+        if ($request->isMethod('GET') && $inApp($previous)) {
+            return $previous;
+        }
+
+        return route('dashboard.student-health-records');
     }
 
     public function saveExamination(Request $request, int $index): RedirectResponse
@@ -287,7 +316,7 @@ class NurseController extends Controller
             }
         }
 
-        return redirect()->route('dashboard.student-health-records')->with('success', 'Medical record saved.');
+        return redirect()->to($this->returnTo($request))->with('success', 'Medical record saved.');
     }
 
     /**
