@@ -9,21 +9,22 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Sheet 2 — the systems review — is written once, at enrolment.
+ * Sheet 2 — the systems review — belongs to the School Nurse.
  *
- * Opening a learner from their profile is reading their record, not
- * re-examining them. The sheet renders read-only for a learner already on
- * file, and the server keeps the stored review whatever the form posts: a
- * disabled control is only a suggestion, and a stale tab, a replayed form
- * or devtools all reach the endpoint the same way.
+ * It is a clinical finding, examined and recorded on the nurse's Fill
+ * Medical Record. The class adviser reads it and never writes it: not when
+ * editing a learner, and not when enrolling one. The sheet renders locked
+ * for every learner, and the server keeps whatever is on file whatever the
+ * form posts — a disabled control is only a suggestion, and a stale tab, a
+ * replayed form or devtools all reach the endpoint the same way.
  *
  * That also closes a quieter hole. The roster row the browser fills the
  * edit form from is a copy, and it carries no signature image — so every
  * edit used to round-trip a clinical finding through the browser and write
  * back whatever came home.
  *
- * A NEW learner still gets a writable Sheet 2, or the field would have no
- * writer at all.
+ * Reviews the adviser recorded before the nurse's form existed are kept and
+ * still read everywhere; nothing is migrated away.
  */
 class AdviserSheetTwoReadOnlyTest extends TestCase
 {
@@ -118,23 +119,27 @@ class AdviserSheetTwoReadOnlyTest extends TestCase
     }
 
     #[Test]
-    public function the_sheet_can_be_locked_and_says_so(): void
+    public function the_sheet_is_locked_from_the_first_paint_and_says_who_owns_it(): void
     {
         $html = $this->dashboard();
 
-        $this->assertStringContainsString('id="sheet2Fieldset"', $html);
-        $this->assertStringContainsString('id="sheet2ReadonlyNote"', $html);
-        $this->assertStringContainsString("This learner's systems review was recorded when they were enrolled.", $html);
+        // Disabled in the markup, not by a script: a page whose JavaScript
+        // has not run yet is still not a page the adviser may type Sheet 2 on.
+        $this->assertStringContainsString('id="sheet2Fieldset" disabled aria-readonly="true"', $html);
+        $this->assertStringContainsString('id="sheet2ReadonlyNote">', $html);
+        $this->assertStringContainsString('The systems review is recorded by the School Nurse on Fill Medical Record.', $html);
+        $this->assertStringNotContainsString('id="sheet2ReadonlyNote" hidden', $html, 'The notice is not conditional.');
     }
 
-    /** Edit mode locks it; enrolling a new learner does not. */
+    /** Locked for a new learner exactly as for a saved one. */
     #[Test]
-    public function edit_mode_locks_the_sheet_and_enrolment_does_not(): void
+    public function enrolling_a_learner_does_not_unlock_the_sheet(): void
     {
         $html = $this->dashboard();
 
-        $this->assertStringContainsString('sheet2.disabled = editing;', $html);
-        $this->assertStringContainsString('sheet2Note.hidden = !editing;', $html);
+        $this->assertStringNotContainsString('sheet2.disabled = editing;', $html);
+        $this->assertStringNotContainsString('sheet2Note.hidden = !editing;', $html);
+        $this->assertStringContainsString('window.setSignaturePadEnabled?.(false);', $html);
     }
 
     /**
@@ -149,6 +154,7 @@ class AdviserSheetTwoReadOnlyTest extends TestCase
         $this->assertStringContainsString('window.setSignaturePadEnabled = (enabled) =>', $html);
         $this->assertStringContainsString('if (!padEnabled || !ensureCanvas())', $html);
         $this->assertStringContainsString('if (padEnabled) fileInput?.click();', $html);
+        $this->assertStringContainsString('let padEnabled = false;', $html, 'The pad is locked before any script decides.');
     }
 
     /** Editing a learner leaves the review exactly as it stands. */
@@ -225,8 +231,14 @@ class AdviserSheetTwoReadOnlyTest extends TestCase
      * A NEW learner still gets a writable Sheet 2. Freezing it everywhere
      * would leave the field with no writer at all.
      */
+    /**
+     * Enrolling a learner records no systems review either: the adviser
+     * enrols, the nurse examines. The learner is still enrolled — the rest of
+     * Sheet 1 saves exactly as before — and their review stays empty until the
+     * nurse fills it on Fill Medical Record.
+     */
     #[Test]
-    public function a_new_learner_still_records_a_systems_review(): void
+    public function enrolling_a_learner_records_no_systems_review(): void
     {
         $this->withSession($this->adviserSession())
             ->post(route('adviser.store'), $this->payload([
@@ -234,18 +246,20 @@ class AdviserSheetTwoReadOnlyTest extends TestCase
                 'systems_review' => [
                     'skin_lesions' => '1',
                     'notes' => 'Rash on the left forearm.',
-                    'examiner_name' => 'Nurse Reyes, RN',
+                    'examiner_name' => 'Not the nurse',
                 ],
             ]))
             ->assertRedirect();
 
         $record = StudentHealthRecord::where('student_id', '800000000009')->first();
 
-        $this->assertNotNull($record);
+        $this->assertNotNull($record, 'The learner is enrolled all the same.');
         $review = $record->student_details['systems_review'];
 
-        $this->assertTrue((bool) $review['skin_lesions']);
-        $this->assertSame('Rash on the left forearm.', $review['notes']);
+        $this->assertFalse((bool) ($review['skin_lesions'] ?? false));
+        $this->assertSame('', (string) ($review['notes'] ?? ''));
+        $this->assertSame('', (string) ($review['examiner_name'] ?? ''));
+        $this->assertNull($review['examiner_signature'] ?? null, 'The signature is part of Sheet 2 and is the nurse\'s too.');
     }
 
     /** The signature on file survives an edit, as it always did. */

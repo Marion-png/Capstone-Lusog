@@ -9,10 +9,15 @@ use Illuminate\View\View;
 
 class NutritionCoordinatorController extends Controller
 {
+    /**
+     * The DepEd scale has no Underweight column, and the classifier no longer
+     * emits one: a record saved under that retired label is counted as Wasted
+     * here exactly as it is on every other screen, so the school is not told
+     * about two groups of children where there is one.
+     */
     private const STATUS_LABELS = [
         'severely_wasted' => 'Severely Wasted',
         'wasted' => 'Wasted',
-        'underweight' => 'Underweight',
         'normal' => 'Normal',
         'overweight' => 'Overweight',
     ];
@@ -26,7 +31,7 @@ class NutritionCoordinatorController extends Controller
             'records' => $records,
             'summary' => $summary,
             'priorityOne' => $this->priorityRows($records, ['severely_wasted']),
-            'priorityTwo' => $this->priorityRows($records, ['wasted', 'underweight']),
+            'priorityTwo' => $this->priorityRows($records, ['wasted']),
         ]);
     }
 
@@ -144,8 +149,8 @@ class NutritionCoordinatorController extends Controller
             'baseline_counts' => $baselineCounts,
             'endline_counts' => $endlineCounts,
             'priority_1' => $baselineCounts['severely_wasted'],
-            'priority_2' => $baselineCounts['wasted'] + $baselineCounts['underweight'],
-            'at_risk' => $baselineCounts['severely_wasted'] + $baselineCounts['wasted'] + $baselineCounts['underweight'],
+            'priority_2' => $baselineCounts['wasted'],
+            'at_risk' => $baselineCounts['severely_wasted'] + $baselineCounts['wasted'],
             'tracked_total' => $trackedRows->count(),
             'improvement_rate' => round(($movement['improved'] / $trackedTotal) * 100, 1),
             ...$movement,
@@ -201,7 +206,7 @@ class NutritionCoordinatorController extends Controller
         $status = $this->statusKey((string) ($record->endline_nutritional_status ?: $record->baseline_nutritional_status ?: $record->nutritional_status));
         $risk = match ($status) {
             'severely_wasted' => 'High',
-            'wasted', 'underweight' => 'Medium',
+            'wasted' => 'Medium',
             default => $record->is_at_risk ? 'Medium' : 'Low',
         };
 
@@ -255,8 +260,9 @@ class NutritionCoordinatorController extends Controller
         if (str_contains($normalized, 'severe')) {
             return 'severely_wasted';
         }
+        // The retired label reads as what it always meant here.
         if (str_contains($normalized, 'underweight')) {
-            return 'underweight';
+            return 'wasted';
         }
         if (str_contains($normalized, 'wast')) {
             return 'wasted';
@@ -273,7 +279,6 @@ class NutritionCoordinatorController extends Controller
         return [
             'severely_wasted' => 0,
             'wasted' => 1,
-            'underweight' => 2,
             'overweight' => 3,
             'normal' => 4,
         ][$key] ?? 4;

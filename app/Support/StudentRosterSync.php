@@ -95,6 +95,12 @@ class StudentRosterSync
         $row['examination'] = $record->examination ?? [];
         $row['attendance_by_month'] = $record->attendance_by_month ?? [];
 
+        // Baseline against endline — height, weight, BMI and height-for-age
+        // with their classifications — read once here so the profile's
+        // Nutritional Health Status tab renders the record's own figures
+        // rather than a second reading of the same columns.
+        $row['nutrition'] = NutritionalHealthStatus::forRecord($record);
+
         return self::withoutSignature($row);
     }
 

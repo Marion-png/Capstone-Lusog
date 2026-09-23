@@ -261,6 +261,9 @@ body.sn-profile-stacked .profile-backdrop.open { background: transparent; }
 .sp-panel { display: none; }
 .sp-panel.active { display: block; }
 .sp-note { margin-top: 9px; font-size: .72rem; color: var(--text-3); line-height: 1.5; }
+/* A panel with nothing to report says so, rather than showing empty rows. */
+.sp-empty { padding: 16px 18px; background: var(--bg); border: 1px dashed var(--border); border-radius: 10px; font-size: .84rem; color: var(--text-3); line-height: 1.5; }
+.sp-empty[hidden] { display: none; }
 
 .sp-review-block { margin-bottom: 10px; }
 .sp-review-title { display: block; font-size: .71rem; font-weight: 700; color: #334a3f; margin-bottom: 5px; }

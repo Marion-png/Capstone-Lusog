@@ -20,7 +20,7 @@ Nutritional <span>Analytics</span>
                             <th>Section</th>
                             <th>Total</th>
                             <th>Severely Wasted</th>
-                            <th>Wasted/Underweight</th>
+                            <th>Wasted</th>
                             <th>Normal</th>
                         </tr>
                     </thead>
@@ -30,7 +30,7 @@ Nutritional <span>Analytics</span>
                                 <td>{{ $section['section'] }}</td>
                                 <td>{{ number_format($section['total']) }}</td>
                                 <td>{{ number_format($section['baseline']['severely_wasted']) }}</td>
-                                <td>{{ number_format($section['baseline']['wasted'] + $section['baseline']['underweight']) }}</td>
+                                <td>{{ number_format($section['baseline']['wasted']) }}</td>
                                 <td>{{ number_format($section['baseline']['normal']) }}</td>
                             </tr>
                         @empty
@@ -56,8 +56,8 @@ Nutritional <span>Analytics</span>
         <div class="hint">Immediate intervention needed</div>
     </article>
     <article class="card stat" style="border-left-color:#F2B84B;">
-        <div class="label">Wasted/Underweight</div>
-        <div class="num">{{ number_format($summary['baseline_counts']['wasted'] + $summary['baseline_counts']['underweight']) }}</div>
+        <div class="label">Wasted</div>
+        <div class="num">{{ number_format($summary['baseline_counts']['wasted']) }}</div>
         <div class="hint">Close monitoring required</div>
     </article>
     <article class="card stat" style="border-left-color:#1F8A4C;">

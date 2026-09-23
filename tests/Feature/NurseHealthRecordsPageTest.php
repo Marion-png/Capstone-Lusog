@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Http\Controllers\NurseController;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
+use App\Support\BmiAssessmentReport;
+use App\Support\NutritionalHealthStatus;
 use App\Support\Sheet2Review;
 use App\Support\StudentRosterSync;
 use App\Support\StudentVitalSigns;
@@ -400,7 +402,10 @@ class NurseHealthRecordsPageTest extends TestCase
         // Incident Reports closes the strip: it is the nurse's FDAR chart of
         // something that happened to this learner, and the adviser reads the
         // same panel on their own profile.
-        $expected = ['p-sheet1', 'p-sheet2', 'p-consent', 'p-consultation', 'p-documents', 'p-incidents'];
+        // Nutritional Health Status sits beside the two MLAT sheets: it is
+        // the measurement half of the same record, read before the clinic
+        // history that follows it.
+        $expected = ['p-sheet1', 'p-sheet2', 'p-nutrition', 'p-consent', 'p-consultation', 'p-documents', 'p-incidents'];
 
         preg_match_all('/data-panel="([^"]+)"/', $html, $tabs);
         $this->assertSame($expected, $tabs[1]);
@@ -710,5 +715,81 @@ class NurseHealthRecordsPageTest extends TestCase
         $this->withSession($session)
             ->post(route('nurse.examine.save', 0), ['date_of_examination' => '2026-08-02', 'return_to' => $profile])
             ->assertRedirect($profile);
+    }
+
+    /**
+     * The Nutritional Health Status tab: height, weight, BMI with its
+     * BMI-for-age classification and height-for-age with its own, for the
+     * baseline weigh-in and the endline one. Every figure is the record's,
+     * read once on the server, and a phase nobody measured says so rather
+     * than borrowing the other phase's numbers.
+     */
+    #[Test]
+    public function the_nutritional_health_status_tab_reads_both_weigh_ins(): void
+    {
+        $record = StudentHealthRecord::create([
+            'institution_id' => 1,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'student_id' => '130000000009',
+            'student_name' => 'Cruz, Juan',
+            'section' => 'Grade 10 / Dalton',
+            'weight' => 38, 'bmi_value' => 16.2, 'nutritional_status' => 'Wasted',
+            'baseline_height_cm' => 153, 'baseline_weight_kg' => 38, 'baseline_age' => 15,
+            'baseline_bmi_value' => 16.2, 'baseline_nutritional_status' => 'Wasted',
+            'baseline_recorded_at' => '2026-07-01',
+            'student_details' => [
+                'lrn' => '130000000009', 'last_name' => 'Cruz', 'first_name' => 'Juan',
+                'grade_level' => 'Grade 10', 'section' => 'Dalton',
+                'nutritional_status_height_for_age' => 'Normal',
+            ],
+        ]);
+
+        // Before the closing weigh-in: baseline reads, endline is blank.
+        $status = NutritionalHealthStatus::forRecord($record);
+        $this->assertTrue($status['has_any']);
+        $this->assertTrue($status['baseline']['measured']);
+        $this->assertSame('153', $status['baseline']['height_cm']);
+        $this->assertSame('38', $status['baseline']['weight_kg']);
+        $this->assertSame('16.2', $status['baseline']['bmi']);
+        $this->assertSame('Wasted', $status['baseline']['bmi_status']);
+        $this->assertSame('Normal', $status['baseline']['hfa_status']);
+        $this->assertSame('2026-07-01', $status['baseline']['recorded_at']);
+
+        $this->assertFalse($status['endline']['measured'], 'Nobody has re-measured this learner.');
+        $this->assertSame('', $status['endline']['bmi']);
+        $this->assertSame('', $status['endline']['bmi_status'], 'An unmeasured phase never borrows the baseline reading.');
+        $this->assertSame('', $status['endline']['hfa_status']);
+
+        // After it, the endline is its own reading — height-for-age recomputed
+        // from the endline height and age, since it is stored nowhere.
+        $record->update([
+            'endline_height_cm' => 157, 'endline_weight_kg' => 46, 'endline_age' => 16,
+            'endline_bmi_value' => 18.7, 'endline_nutritional_status' => 'Normal',
+            'endline_recorded_at' => '2027-03-01',
+        ]);
+
+        $status = NutritionalHealthStatus::forRecord($record->fresh());
+        $this->assertTrue($status['endline']['measured']);
+        $this->assertSame('157', $status['endline']['height_cm']);
+        $this->assertSame('18.7', $status['endline']['bmi']);
+        $this->assertSame('Normal', $status['endline']['bmi_status']);
+        $this->assertSame(
+            BmiAssessmentReport::classifyHeightForAge(157.0, 16),
+            $status['endline']['hfa_status'],
+            'Endline height-for-age is the DepEd grid\'s own classifier, never a second one.'
+        );
+
+        // And the tab is on the profile, with both panels.
+        $html = $this->withSession($this->nurseSession([$this->learner()]))
+            ->get('/dashboard/student-health-records')
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('data-panel="p-nutrition">Nutritional Health Status</button>', $html);
+        $this->assertStringContainsString('<section id="p-nutrition" class="sp-panel">', $html);
+        foreach (['pnBaseline', 'pnEndline', 'pnEmpty'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        $this->assertStringContainsString('Height-for-Age', $html);
     }
 }

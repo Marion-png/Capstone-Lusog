@@ -781,23 +781,23 @@
                     $srText = fn (string $key, string $default = '') => $srPosted ? (string) ($sr[$key] ?? '') : $default;
                 @endphp
 
-                {{-- Sheet 2 is read-only once a learner exists. The systems review
-                     is taken at enrolment; opening a saved learner from their
-                     profile is reading their record, not re-examining them, and
-                     re-posting the whole sheet through the browser on every edit is
-                     how a finding gets quietly overwritten. The guarantee is
-                     server-side in AdviserController::store, which keeps the stored
-                     review whenever the learner is already on file — so a disabled
-                     control re-enabled in devtools still changes nothing. --}}
+                {{-- Sheet 2 is the School Nurse's, and the adviser reads it.
+                     The systems review is a clinical finding: it is examined and
+                     recorded on the nurse's Fill Medical Record, and this sheet
+                     shows it as it stands for every learner, new or saved. The
+                     guarantee is server-side in AdviserController::enrolLearner,
+                     which keeps whatever is on file and ignores whatever this form
+                     posts — so a disabled control re-enabled in devtools still
+                     changes nothing. --}}
                 <div class="sheet-panel" id="sheetPanel2" role="tabpanel" aria-labelledby="sheetTab2">
-                    <div class="sheet2-readonly-note" id="sheet2ReadonlyNote" hidden>
+                    <div class="sheet2-readonly-note" id="sheet2ReadonlyNote">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                         <div>
                             <strong>View only</strong>
-                            <span>This learner's systems review was recorded when they were enrolled. It is shown here as it stands and cannot be changed from this form.</span>
+                            <span>The systems review is recorded by the School Nurse on Fill Medical Record. It is shown here as it stands and cannot be changed from this form.</span>
                         </div>
                     </div>
-                    <fieldset class="sheet2-fieldset" id="sheet2Fieldset">
+                    <fieldset class="sheet2-fieldset" id="sheet2Fieldset" disabled aria-readonly="true">
                     <div class="student-section">
                         <h4>Systems Review</h4>
 
@@ -1703,10 +1703,10 @@ window.showAdviserSheet = (panelId) => {
         return { x: event.clientX - rect.left, y: event.clientY - rect.top };
     };
 
-    // Sheet 2 goes read-only when an existing learner is opened, and a
-    // canvas is not a form control — the disabled fieldset around it stops
-    // the inputs but never the pad, so it is gated here instead.
-    let padEnabled = true;
+    // Sheet 2 is the nurse's, so the pad is locked from the first paint:
+    // a canvas is not a form control, and the disabled fieldset around it
+    // stops the inputs but never the pad, so it is gated here instead.
+    let padEnabled = false;
 
     window.setSignaturePadEnabled = (enabled) => {
         padEnabled = Boolean(enabled);
@@ -1874,18 +1874,12 @@ window.showAdviserSheet = (panelId) => {
         if (importBox) importBox.hidden = editing;
         if (importDivider) importDivider.hidden = editing;
 
-        // Sheet 2 is the learner's record once they exist, not a field to
-        // re-type. The server enforces it; this is what the adviser sees.
-        const sheet2 = document.getElementById('sheet2Fieldset');
-        const sheet2Note = document.getElementById('sheet2ReadonlyNote');
-        if (sheet2) {
-            sheet2.disabled = editing;
-            sheet2.setAttribute('aria-readonly', editing ? 'true' : 'false');
-        }
-        if (sheet2Note) sheet2Note.hidden = !editing;
-        // The pad is a canvas, not a form control, so `disabled` does not
-        // reach it — it has to be told separately.
-        window.setSignaturePadEnabled?.(!editing);
+        // Sheet 2 is the nurse's record, never a field for the adviser to
+        // type — so it stays locked whichever learner is open, new or saved.
+        // The server enforces it; this is what the adviser sees. The pad is a
+        // canvas, not a form control, so `disabled` does not reach it and it
+        // has to be told separately.
+        window.setSignaturePadEnabled?.(false);
     };
 
     // Vital signs are read-only for this role: show what the nurse recorded,

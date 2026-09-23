@@ -86,7 +86,6 @@
 
                             $pillClass = match(true) {
                                 in_array($cat, ['Severely Wasted', 'Wasted']) => 'bad',
-                                $cat === 'Underweight' => 'warn',
                                 $cat === 'Normal'      => 'ok',
                                 default                => 'warn',
                             };

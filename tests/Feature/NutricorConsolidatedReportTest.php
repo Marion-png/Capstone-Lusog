@@ -167,7 +167,6 @@ class NutricorConsolidatedReportTest extends TestCase
         $bl = $response->viewData('baselineCounts');
         $this->assertSame(1, $bl['Severely Wasted']['count']);
         $this->assertSame(1, $bl['Wasted']['count']);
-        $this->assertSame(0, $bl['Underweight']['count']);
         $this->assertSame(2, $bl['Normal']['count']);
         $this->assertSame(1, $bl['Overweight']['count']);
     }
@@ -360,5 +359,36 @@ class NutricorConsolidatedReportTest extends TestCase
         $bl = $response->viewData('baselineCounts');
         $this->assertSame(25.0, $bl['Severely Wasted']['percent']);
         $this->assertSame(75.0, $bl['Normal']['percent']);
+    }
+    /**
+     * "Underweight" is a retired label, not a fifth category. The classifier
+     * stopped emitting it, so the report carries the DepEd scale's four
+     * columns — and a record still saved under the old word is counted as
+     * Wasted rather than dropped, because it is a child who was weighed.
+     */
+    public function test_a_record_saved_as_underweight_is_counted_as_wasted(): void
+    {
+        foreach ([['LRN101', 'Underweight'], ['LRN102', 'Wasted']] as [$lrn, $status]) {
+            StudentHealthRecord::create([
+                'school_year' => StudentHealthRecord::currentSchoolYear(),
+                'student_name' => "Student $lrn",
+                'student_id' => $lrn,
+                'school_name' => 'Test School',
+                'section' => 'Grade 1 / A',
+                'weight' => 30,
+                'bmi_value' => 17.0,
+                'nutritional_status' => $status,
+                'baseline_nutritional_status' => $status,
+            ]);
+        }
+
+        $response = $this->withSession($this->nutricorSession())->get(self::ROUTE);
+        $response->assertOk();
+
+        $counts = $response->viewData('baselineCounts');
+
+        $this->assertArrayNotHasKey('Underweight', $counts, 'The report has no Underweight column.');
+        $this->assertSame(2, $counts['Wasted']['count'], 'Both learners are reported as Wasted.');
+        $response->assertDontSee('Underweight');
     }
 }

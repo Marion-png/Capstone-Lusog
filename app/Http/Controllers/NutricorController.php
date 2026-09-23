@@ -7,14 +7,39 @@ use Illuminate\View\View;
 
 class NutricorController extends Controller
 {
-    /** Ordered nutritional status categories (matches AdviserController classification). */
+    /**
+     * Ordered nutritional status categories, the DepEd scale's own.
+     *
+     * There is no Underweight column: the classifier stopped emitting that
+     * label, and a record saved under it is counted as Wasted through
+     * categoryOf() rather than dropped — a retired label is still a child who
+     * was weighed.
+     */
     private const CATEGORIES = [
         'Severely Wasted',
         'Wasted',
-        'Underweight',
         'Normal',
         'Overweight',
     ];
+
+    /** A stored status read onto one of the four columns, or '' for none. */
+    private static function categoryOf(mixed $status): string
+    {
+        $status = trim((string) $status);
+        if ($status === '' || $status === 'Not enough data') {
+            return '';
+        }
+
+        $normalized = strtolower($status);
+
+        return match (true) {
+            str_contains($normalized, 'severe') => 'Severely Wasted',
+            str_contains($normalized, 'wast'), str_contains($normalized, 'underweight') => 'Wasted',
+            str_contains($normalized, 'obes'), str_contains($normalized, 'over') => 'Overweight',
+            str_contains($normalized, 'normal') => 'Normal',
+            default => '',
+        };
+    }
 
     /**
      * Consolidated school-wide nutritional assessment report for the
@@ -40,7 +65,7 @@ class NutricorController extends Controller
 
         $baselineCounts = [];
         foreach (self::CATEGORIES as $cat) {
-            $n = $baselineRows->where('baseline_nutritional_status', $cat)->count();
+            $n = $baselineRows->filter(fn ($r): bool => self::categoryOf($r->baseline_nutritional_status) === $cat)->count();
             $baselineCounts[$cat] = [
                 'count' => $n,
                 'percent' => $baselineTotal > 0 ? round($n / $baselineTotal * 100, 1) : 0.0,
@@ -54,7 +79,7 @@ class NutricorController extends Controller
 
         $endlineCounts = [];
         foreach (self::CATEGORIES as $cat) {
-            $n = $endlineRows->where('endline_nutritional_status', $cat)->count();
+            $n = $endlineRows->filter(fn ($r): bool => self::categoryOf($r->endline_nutritional_status) === $cat)->count();
             $endlineCounts[$cat] = [
                 'count' => $n,
                 'percent' => $endlineTotal > 0 ? round($n / $endlineTotal * 100, 1) : 0.0,
@@ -82,8 +107,8 @@ class NutricorController extends Controller
                 $baselineByCat = [];
                 $endlineByCat = [];
                 foreach (self::CATEGORIES as $cat) {
-                    $baselineByCat[$cat] = $bl->where('baseline_nutritional_status', $cat)->count();
-                    $endlineByCat[$cat] = $el->where('endline_nutritional_status', $cat)->count();
+                    $baselineByCat[$cat] = $bl->filter(fn ($r): bool => self::categoryOf($r->baseline_nutritional_status) === $cat)->count();
+                    $endlineByCat[$cat] = $el->filter(fn ($r): bool => self::categoryOf($r->endline_nutritional_status) === $cat)->count();
                 }
 
                 return [

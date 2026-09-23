@@ -40,6 +40,24 @@ class AdviserMyStudentsTest extends TestCase
     }
 
     /** @param  array<string, mixed>  $overrides */
+    /**
+     * A systems review put on the record directly, as the nurse's Fill
+     * Medical Record does. Sheet 2 is the nurse's, so the adviser's form can
+     * no longer write one — but how a stored review is carried, normalised
+     * and kept out of the session is still this suite's business.
+     *
+     * @param  array<string, mixed>  $review
+     */
+    private function storeReview(array $review): StudentHealthRecord
+    {
+        $record = StudentHealthRecord::where('student_id', '123456789012')->firstOrFail();
+        $details = $record->student_details;
+        $details['systems_review'] = array_merge($details['systems_review'] ?? [], $review);
+        $record->forceFill(['student_details' => $details])->save();
+
+        return $record->fresh();
+    }
+
     private function enrol(array $overrides = []): void
     {
         $this->withSession($this->adviserSession())
@@ -204,36 +222,40 @@ class AdviserMyStudentsTest extends TestCase
     }
 
     /** @test */
-    public function sheet_two_answers_are_saved_with_the_student_and_survive_session_loss(): void
+    public function sheet_two_is_the_nurses_to_write_and_survives_session_loss(): void
     {
+        // Posted by the adviser and ignored: Sheet 2 is a clinical finding.
         $this->enrol([
             'systems_review' => [
-                'skin_normal' => '1',
                 'skin_lesions' => '1',
-                'resp_cough' => '1',
-                'dental_caries' => '1',
-                'right_eye' => '20/20',
-                'left_eye' => '20/25',
-                'summary' => 'Mild cough noted during assessment.',
-                'recommendations' => 'Refer to school clinic.',
-                'examiner_name' => 'Maria Santos, RN',
+                'summary' => 'Typed by the adviser.',
+                'examiner_name' => 'Not the nurse',
             ],
         ]);
 
         $record = StudentHealthRecord::where('student_id', '123456789012')->first();
         $this->assertNotNull($record);
+        $this->assertFalse($record->student_details['systems_review']['skin_lesions']);
+        $this->assertNull($record->student_details['systems_review']['summary']);
+
+        // Recorded by the nurse, it reads back whole.
+        $record = $this->storeReview([
+            'skin_normal' => true,
+            'resp_cough' => true,
+            'right_eye' => '20/20',
+            'left_eye' => '20/25',
+            'summary' => 'Mild cough noted during assessment.',
+            'examiner_name' => 'Maria Santos, RN',
+        ]);
 
         $review = $record->student_details['systems_review'];
         $this->assertTrue($review['skin_normal']);
-        $this->assertTrue($review['skin_lesions']);
         $this->assertTrue($review['resp_cough']);
-        $this->assertTrue($review['dental_caries']);
         $this->assertSame('20/20', $review['right_eye']);
         $this->assertSame('Mild cough noted during assessment.', $review['summary']);
         $this->assertSame('Maria Santos, RN', $review['examiner_name']);
 
-        // Unchecked boxes are absent from the request and must store as false,
-        // and unfilled text answers as null — never as a stale default.
+        // An answer nobody gave stores as false or null — never a stale default.
         $this->assertFalse($review['skin_pallor']);
         $this->assertFalse($review['immun_incomplete']);
         $this->assertNull($review['notes']);
@@ -473,7 +495,8 @@ class AdviserMyStudentsTest extends TestCase
     /** @test */
     public function editing_a_learner_updates_their_row_instead_of_adding_a_second_one(): void
     {
-        $this->enrol(['systems_review' => ['resp_cough' => '1']]);
+        $this->enrol();
+        $this->storeReview(['resp_cough' => true]);
 
         // Re-post the same LRN, as the Edit Profile form does.
         $this->enrol([
@@ -498,9 +521,8 @@ class AdviserMyStudentsTest extends TestCase
         $this->assertSame('456 Rizal St., Davao City', $row['address']);
         $this->assertSame('09998887777', $row['telephone_no']);
 
-        // Sheet 2 is written once, at enrolment. An edit is reading the
-        // learner's record, not re-examining them, so the review the
-        // second post carried is ignored and the first one stands.
+        // Sheet 2 is the nurse's. Neither post writes one, so what the nurse
+        // recorded stands and what the form carried is ignored.
         // AdviserSheetTwoReadOnlyTest owns that rule.
         $this->assertTrue($row['systems_review']['resp_cough']);
         $this->assertFalse($row['systems_review']['dental_caries']);
@@ -570,9 +592,9 @@ class AdviserMyStudentsTest extends TestCase
     /** @test */
     public function the_signature_is_stored_on_the_record_but_kept_out_of_the_session(): void
     {
-        $this->enrol(['systems_review' => ['examiner_signature' => $this->signature()]]);
+        $this->enrol();
+        $record = $this->storeReview(['examiner_signature' => $this->signature()]);
 
-        $record = StudentHealthRecord::where('student_id', '123456789012')->first();
         $this->assertSame(
             $this->signature(),
             $record->student_details['systems_review']['examiner_signature']
@@ -580,13 +602,6 @@ class AdviserMyStudentsTest extends TestCase
 
         // The roster is read and rewritten on every request, so it carries only
         // a flag — never the image.
-        $row = collect(session('school_health_card_records'))
-            ->first(fn ($r) => ($r['lrn'] ?? '') === '123456789012');
-
-        $this->assertNull($row['systems_review']['examiner_signature']);
-        $this->assertTrue($row['systems_review']['examiner_signature_present']);
-
-        // Same after the roster is rebuilt from the database.
         $this->flushSession()->withSession($this->adviserSession())
             ->get(route('dashboard.class-adviser'))->assertOk();
 
@@ -600,9 +615,10 @@ class AdviserMyStudentsTest extends TestCase
     /** @test */
     public function editing_without_re_signing_keeps_the_signature_on_file(): void
     {
-        $this->enrol(['systems_review' => ['examiner_signature' => $this->signature()]]);
+        $this->enrol();
+        $this->storeReview(['examiner_signature' => $this->signature()]);
 
-        // The pad opens blank on edit, so a blank submit must not wipe it.
+        // The pad is locked and opens blank, so a submit must not wipe it.
         $this->enrol([
             'address' => 'Edited address',
             'systems_review' => ['examiner_signature' => ''],
@@ -630,7 +646,8 @@ class AdviserMyStudentsTest extends TestCase
      */
     public function a_signature_cannot_be_replaced_from_an_edit(): void
     {
-        $this->enrol(['systems_review' => ['examiner_signature' => $this->signature()]]);
+        $this->enrol();
+        $this->storeReview(['examiner_signature' => $this->signature()]);
 
         $replacement = 'data:image/jpeg;base64,'.base64_encode('replacement');
         $this->enrol(['systems_review' => ['examiner_signature' => $replacement]]);
@@ -639,7 +656,7 @@ class AdviserMyStudentsTest extends TestCase
         $this->assertSame(
             $this->signature(),
             $record->student_details['systems_review']['examiner_signature'],
-            'The signature taken at enrolment is the one on file.'
+            'The signature on file is the one the examiner gave.'
         );
     }
 
@@ -811,15 +828,20 @@ class AdviserMyStudentsTest extends TestCase
         $this->assertNull($record->student_details['pulse_bpm'] ?? null);
     }
 
-    /** @test */
+    /**
+     * The whitelist runs over the stored review as well as over input, so a
+     * key that reached the column some other way is dropped on the next save
+     * rather than carried forward.
+     *
+     * @test
+     */
     public function unknown_sheet_two_keys_are_dropped(): void
     {
-        $this->enrol([
-            'systems_review' => [
-                'skin_normal' => '1',
-                'evil_key' => 'should not be stored',
-            ],
-        ]);
+        $this->enrol();
+        $this->storeReview(['skin_normal' => true, 'evil_key' => 'should not be stored']);
+
+        // Any save rewrites the card, and the review is normalised on the way.
+        $this->enrol(['address' => 'Edited address']);
 
         $review = StudentHealthRecord::where('student_id', '123456789012')
             ->first()

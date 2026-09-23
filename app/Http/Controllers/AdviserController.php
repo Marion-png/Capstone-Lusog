@@ -99,14 +99,11 @@ class AdviserController extends Controller
 
         $records = $request->session()->get('school_health_card_records', []);
 
-        // Read the raw input, not $validated: adding a rule for the nested
-        // systems_review.examiner_signature key makes validated() return only
-        // that key for systems_review. normaliseSystemsReview() whitelists
-        // every key it keeps, so unvalidated input cannot leak through.
+        // systems_review is deliberately not read off this request: Sheet 2 is
+        // the nurse's, and enrolLearner() keeps whatever is on file.
         $this->enrolLearner(
             $request,
             $validated,
-            (array) $request->input('systems_review', []),
             (array) $request->input('health_history', []),
             $existingRecord,
             $records
@@ -214,7 +211,7 @@ class AdviserController extends Controller
                 continue;
             }
 
-            $this->enrolLearner($request, $validated, [], [], $existingRecord, $records);
+            $this->enrolLearner($request, $validated, [], $existingRecord, $records);
 
             if ($existingRecord !== null) {
                 $updated++;
@@ -447,14 +444,12 @@ class AdviserController extends Controller
      * caller saves the session once) and the database row immediately.
      *
      * @param  array<string, mixed>  $validated
-     * @param  array<mixed>  $systemsReviewInput
      * @param  array<mixed>  $healthHistoryInput
      * @param  array<int, array<string, mixed>>  $records
      */
     private function enrolLearner(
         Request $request,
         array $validated,
-        array $systemsReviewInput,
         array $healthHistoryInput,
         ?StudentHealthRecord $existingRecord,
         array &$records,
@@ -494,26 +489,22 @@ class AdviserController extends Controller
             ? null
             : $this->classifyHeightForAge($heightCm, $age);
 
-        // Sheet 2 is written once, when the learner is enrolled.
+        // Sheet 2 belongs to the School Nurse (invariant).
         //
-        // CONTESTED: Ma'am Nanette's confirmation is "editable only by nurse",
-        // which this does not satisfy — the adviser still writes it here at
-        // enrolment, and no nurse-side form for it exists. Switching this off
-        // without building one would leave Sheet 2 blank for every learner
-        // enrolled afterwards. See docs/open-decisions.md, entry 3.
+        // The systems review is a clinical finding, so it is examined and
+        // recorded by the nurse on Fill Medical Record — the adviser reads it
+        // and never writes it, at enrolment or afterwards. This endpoint
+        // therefore keeps whatever is on file and ignores whatever the form
+        // posted: a disabled control is only a suggestion, and a stale tab, a
+        // replayed form or devtools all reach it the same way. A finding a
+        // browser round-trip can silently overwrite is not a record.
         //
-        // Opening a learner from their profile is reading their record, not
-        // re-examining them, so an edit keeps the systems review exactly as it
-        // stands and ignores whatever the form posted. The sheet renders
-        // read-only for an existing learner, but a disabled control is only a
-        // suggestion — a stale tab, a replayed form or devtools all reach this
-        // endpoint the same way, and a finding that a browser round-trip can
-        // silently overwrite is not a record.
+        // (Until the nurse's form existed the adviser wrote it at enrolment —
+        // docs/open-decisions.md entry 3, now settled. Reviews recorded that
+        // way are kept and still read everywhere; nothing is migrated away.)
         $storedReview = $existingRecord?->student_details['systems_review'] ?? null;
 
-        $systemsReview = is_array($storedReview)
-            ? $this->normaliseSystemsReview($storedReview)
-            : $this->normaliseSystemsReview($systemsReviewInput);
+        $systemsReview = $this->normaliseSystemsReview(is_array($storedReview) ? $storedReview : []);
 
         // The roster carries no copy of the signature image, so the pad is blank
         // whenever an existing learner is edited. Blank means "keep what is on

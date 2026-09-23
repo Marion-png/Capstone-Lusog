@@ -321,6 +321,7 @@
         <div class="sp-tabs" role="tablist" aria-label="Student profile sections">
             <button type="button" class="sp-tab active" role="tab" aria-selected="true" data-panel="p-sheet1">Sheet 1 <span class="sp-tab-badge">Learner Info</span></button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-sheet2">Sheet 2 <span class="sp-tab-badge">Systems Review</span></button>
+            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-nutrition">Nutritional Health Status</button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-consent">Consent <span class="sp-tab-badge" id="pConsentBadge">&ndash;</span></button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-consultation">Consultation Log <span class="sp-tab-badge" id="pConsultBadge">0</span></button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-documents">Documents <span class="sp-tab-badge" id="pDocsBadge">0</span></button>
@@ -459,6 +460,24 @@
                     <h4>Health Assessment <span style="font-size:.72rem;font-weight:400;color:var(--text-3);">(MLHAT)</span></h4>
                     <div id="phaStatus">
                         <div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Select a student to view assessment.</div></div>
+                    </div>
+                </div>
+            </section>
+
+            {{-- The learner weighed twice: the opening measurement and the
+                 closing one, each with the classifications those figures
+                 decide. It reads; the measurements are the class adviser's to
+                 enter, so no control here writes one. --}}
+            <section id="p-nutrition" class="sp-panel">
+                <div id="pnEmpty" class="sp-empty" hidden>No measurement on file for this learner yet. Height and weight are recorded by the class adviser.</div>
+                <div class="profile-grid" id="pnGrid">
+                    <div class="student-profile-section">
+                        <h4>Baseline <span style="font-size:.72rem;font-weight:400;color:var(--text-3);" id="pnBaselineDate"></span></h4>
+                        <div id="pnBaseline"></div>
+                    </div>
+                    <div class="student-profile-section">
+                        <h4>Endline <span style="font-size:.72rem;font-weight:400;color:var(--text-3);" id="pnEndlineDate"></span></h4>
+                        <div id="pnEndline"></div>
                     </div>
                 </div>
             </section>
@@ -857,10 +876,90 @@
         setLabel('pgWeightEndLabel', cx, cyW - 8, currentWeight !== null ? `${currentWeight.toFixed(1)}` : '-');
     };
 
+    // ── Nutritional Health Status ────────────────────────────────────
+    //
+    // Baseline beside endline: height, weight, BMI with its BMI-for-age
+    // classification, and height-for-age with its own. Every figure is the
+    // server's (App\Support\NutritionalHealthStatus), so this panel and the
+    // feeding reports cannot classify the same child two ways.
+    //
+    // A phase nobody measured says so. It is never filled in from the other
+    // phase and never estimated — an em dash is the honest answer.
+    const renderNutrition = (record) => {
+        const data = (record && record.nutrition) || {};
+        const grid = document.getElementById('pnGrid');
+        const empty = document.getElementById('pnEmpty');
+        if (!grid || !empty) return;
+
+        const anyMeasured = Boolean(data.has_any);
+        grid.hidden = !anyMeasured;
+        empty.hidden = anyMeasured;
+        if (!anyMeasured) return;
+
+        const dash = (value) => {
+            const text = String(value == null ? '' : value).trim();
+            return text === '' ? '—' : text;
+        };
+
+        const fill = (hostId, dateId, phase) => {
+            const host = document.getElementById(hostId);
+            const dateEl = document.getElementById(dateId);
+            if (!host) return;
+            const p = phase || {};
+
+            if (dateEl) dateEl.textContent = p.recorded_at ? '(' + p.recorded_at + ')' : '';
+
+            host.textContent = '';
+
+            if (!p.measured) {
+                const note = document.createElement('div');
+                note.className = 'kv';
+                const k = document.createElement('div');
+                k.className = 'k';
+                k.textContent = 'Status:';
+                const v = document.createElement('div');
+                v.className = 'v';
+                v.style.color = '#6B7C72';
+                v.textContent = 'Not yet measured.';
+                note.appendChild(k);
+                note.appendChild(v);
+                host.appendChild(note);
+                return;
+            }
+
+            const rows = [
+                ['Height', p.height_cm ? p.height_cm + ' cm' : ''],
+                ['Weight', p.weight_kg ? p.weight_kg + ' kg' : ''],
+                ['BMI', p.bmi],
+                ['BMI-for-Age', p.bmi_status],
+                ['Height-for-Age', p.hfa_status],
+            ];
+
+            rows.forEach(([label, value]) => {
+                const row = document.createElement('div');
+                row.className = 'kv';
+                const k = document.createElement('div');
+                k.className = 'k';
+                k.textContent = label + ':';
+                const v = document.createElement('div');
+                v.className = 'v';
+                v.textContent = dash(value);
+                row.appendChild(k);
+                row.appendChild(v);
+                host.appendChild(row);
+            });
+        };
+
+        fill('pnBaseline', 'pnBaselineDate', data.baseline);
+        fill('pnEndline', 'pnEndlineDate', data.endline);
+    };
+
     const openProfile = (record, route) => {
         // Fill Medical Record carries this page — and this learner — as its
         // return address, so Back, Cancel and Save land on the profile the
         // nurse was reading rather than on a list or the dashboard.
+        renderNutrition(record);
+
         if (fillLink) {
             const lrn = String(record.lrn || '').trim();
             let href = route || '#';

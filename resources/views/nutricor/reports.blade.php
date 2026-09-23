@@ -65,10 +65,10 @@ Report <span>Center</span>
                         <td>{{ $section['section'] }}</td>
                         <td>{{ number_format($section['total']) }}</td>
                         <td>{{ number_format($section['baseline']['severely_wasted']) }}</td>
-                        <td>{{ number_format($section['baseline']['wasted'] + $section['baseline']['underweight']) }}</td>
+                        <td>{{ number_format($section['baseline']['wasted']) }}</td>
                         <td>{{ number_format($section['baseline']['normal']) }}</td>
                         <td>{{ number_format($section['endline']['severely_wasted']) }}</td>
-                        <td>{{ number_format($section['endline']['wasted'] + $section['endline']['underweight']) }}</td>
+                        <td>{{ number_format($section['endline']['wasted']) }}</td>
                         <td>{{ number_format($section['endline']['normal']) }}</td>
                     </tr>
                 @empty
