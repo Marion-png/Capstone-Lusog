@@ -68,22 +68,6 @@ class StudentImportSheet
         'weight' => 'weight_kg',
     ];
 
-    /** The template's columns, in the order the form asks for them. */
-    public const TEMPLATE_COLUMNS = [
-        'LRN',
-        'Last Name',
-        'First Name',
-        'Middle Name',
-        'Birth Date (YYYY-MM-DD)',
-        'Birthplace',
-        'Gender',
-        'Parent/Guardian',
-        'Address',
-        'Contact No.',
-        'Height (cm)',
-        'Weight (kg)',
-    ];
-
     /** The fields a row must carry for the reader to hand it on at all. */
     public const REQUIRED_HEADERS = ['lrn', 'last_name', 'first_name'];
 
@@ -126,8 +110,9 @@ class StudentImportSheet
             return ['rows' => [], 'missing' => self::REQUIRED_HEADERS, 'total' => 0];
         }
 
-        // A masterlist names the three columns once, in a merged caption.
-        $columns = self::expandMergedNameCaption($matrix[$headerIndex] ?? [], $columns);
+        // A masterlist names the three columns once, in a merged caption —
+        // which on the school's own sheet sits on a line of its own.
+        [$columns, $headerIndex] = self::readNameColumns($matrix, $headerIndex, $columns);
 
         $missing = array_values(array_diff(self::REQUIRED_HEADERS, $columns));
         if ($missing !== []) {
@@ -176,6 +161,51 @@ class StudentImportSheet
         }
 
         return ['rows' => $rows, 'missing' => [], 'total' => count($rows)];
+    }
+
+    /**
+     * The name columns, and the row the learners start after.
+     *
+     * A masterlist's header is stacked over two rows: NO, LRN and REMARKS are
+     * merged down the pair, and the name columns carry a band heading on the
+     * first line with the merged caption on the second. So the row this reader
+     * finds LRN on is not always the row that names the learner's name, and a
+     * reader that looked only at the first reported the school's own sheet as
+     * having no Last Name or First Name column — a refusal of the one document
+     * every class already holds.
+     *
+     * The caption row is consumed along with the heading when it is found,
+     * because it is a heading: left in the list it would be read as a learner
+     * whose surname is "Student's Name (Last Name, First Name Middle Initial)".
+     *
+     * Only a row that IS a caption is ever consumed. expandMergedNameCaption
+     * fires on a cell naming both a last and a first name, so a learner row
+     * leaves the columns exactly as they were and the sheet is reported
+     * unreadable instead — which is the honest answer.
+     *
+     * @param  list<list<string>>  $matrix
+     * @param  list<string|null>  $columns
+     * @return array{0: list<string|null>, 1: int}
+     */
+    private static function readNameColumns(array $matrix, int $headerIndex, array $columns): array
+    {
+        $expanded = self::expandMergedNameCaption($matrix[$headerIndex] ?? [], $columns);
+
+        if (in_array('last_name', $expanded, true)) {
+            return [$expanded, $headerIndex];
+        }
+
+        $below = $matrix[$headerIndex + 1] ?? null;
+
+        if ($below === null) {
+            return [$expanded, $headerIndex];
+        }
+
+        $stacked = self::expandMergedNameCaption($below, $columns);
+
+        return in_array('last_name', $stacked, true)
+            ? [$stacked, $headerIndex + 1]
+            : [$expanded, $headerIndex];
     }
 
     /**

@@ -520,23 +520,32 @@
                     <div>
                         <h4 class="import-title">Enroll from a spreadsheet</h4>
                         <p class="import-sub">
-                            Upload a CSV or Excel file with one learner per row — the columns the form asks for
-                            (LRN, names, birth date, birthplace, gender, parent/guardian, address, contact, height, weight).
-                            Learners are added to your class; a row that fails a check is skipped and reported by its line.
+                            Upload your CLASS MASTERLIST. Learners are added to your class; a row that fails a check
+                            is skipped and reported by its line.
                         </p>
                     </div>
                     <a href="{{ route('adviser.import.template') }}" class="btn btn-secondary import-template">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        Download template
+                        Download masterlist
                     </a>
                 </div>
 
+                {{-- One picker, whatever form the masterlist is in: the
+                     workbook, or a photograph of the paper one. The controller
+                     reads the file and decides which; a second control would
+                     have been two doors into one room. The photo formats are
+                     advertised only where the reader is configured. --}}
+                @php $canScan = \App\Support\MasterlistSheetScanner::isConfigured(); @endphp
                 <form method="POST" action="{{ route('adviser.import') }}" enctype="multipart/form-data" class="import-form" id="studentImportForm">
                     @csrf
                     <label class="import-file" for="studentsFile">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        <span id="studentsFileLabel">Choose a .csv or .xlsx file</span>
-                        <input type="file" id="studentsFile" name="students_file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+                        <span id="studentsFileLabel">{{ $canScan ? 'Choose a spreadsheet, photo or PDF of your masterlist' : 'Choose a .csv or .xlsx file' }}</span>
+                        <input type="file" id="studentsFile" name="students_file"
+                               data-default-label="{{ $canScan ? 'Choose a spreadsheet, photo or PDF of your masterlist' : 'Choose a .csv or .xlsx file' }}"
+                               accept="{{ $canScan
+                                   ? '.csv,.xlsx,.jpg,.jpeg,.png,.webp,.pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/jpeg,image/png,image/webp,application/pdf'
+                                   : '.csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }}" required>
                     </label>
                     <button type="submit" class="btn" id="studentImportSubmit">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
@@ -2000,14 +2009,20 @@ window.showAdviserSheet = (panelId) => {
     const studentImportForm = document.getElementById('studentImportForm');
     studentsFile?.addEventListener('change', () => {
         if (studentsFileLabel) {
-            studentsFileLabel.textContent = studentsFile.files?.[0]?.name || 'Choose a .csv or .xlsx file';
+            studentsFileLabel.textContent = studentsFile.files?.[0]?.name
+                || studentsFile.dataset.defaultLabel
+                || 'Choose a .csv or .xlsx file';
         }
     });
     studentImportForm?.addEventListener('submit', () => {
         const submit = document.getElementById('studentImportSubmit');
         if (submit) {
             submit.disabled = true;
-            submit.textContent = 'Enrolling…';
+            // A picture has to be read before a single learner is written, and
+            // that takes long enough that the button should say which is
+            // happening rather than leaving the teacher watching a spinner.
+            const name = (studentsFile?.files?.[0]?.name || '').toLowerCase();
+            submit.textContent = /\.(jpe?g|png|webp|pdf)$/.test(name) ? 'Reading masterlist…' : 'Enrolling…';
         }
     });
 

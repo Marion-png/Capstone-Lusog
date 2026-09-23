@@ -6,18 +6,33 @@ use App\Models\StudentHealthRecord;
 use App\Support\AdviserClassScope;
 use App\Support\AuditTrail;
 use App\Support\BmiClassifier;
+use App\Support\ClassMasterlistTemplate;
+use App\Support\MasterlistSheetScanner;
 use App\Support\PostureGait;
 use App\Support\SchemaCache;
+use App\Support\SchoolLetterhead;
 use App\Support\StudentImportSheet;
 use App\Support\StudentRosterSync;
 use App\Support\StudentVitalSigns;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use OpenSpout\Common\Entity\Cell;
+use OpenSpout\Common\Entity\Row;
+use OpenSpout\Common\Entity\Style\Border;
+use OpenSpout\Common\Entity\Style\BorderName;
+use OpenSpout\Common\Entity\Style\BorderPart;
+use OpenSpout\Common\Entity\Style\BorderWidth;
+use OpenSpout\Common\Entity\Style\CellAlignment;
+use OpenSpout\Common\Entity\Style\Style;
+use OpenSpout\Writer\XLSX\Options as XlsxOptions;
+use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Throwable;
 
 class AdviserController extends Controller
 {
@@ -131,13 +146,37 @@ class AdviserController extends Controller
      * rather than one per row: against a hosted database a class-sized import
      * would otherwise spend most of its time waiting on round trips.
      */
-    public function import(Request $request): RedirectResponse
+    public function import(Request $request, MasterlistSheetScanner $scanner): RedirectResponse
     {
+        // One picker takes the masterlist in whichever form the adviser has it:
+        // the workbook, or a photograph of the paper one. The photo formats are
+        // accepted only where the reader is configured, so an upload can never
+        // be taken and then refused for want of a key.
+        $canScan = MasterlistSheetScanner::isConfigured();
+        $formats = array_merge(
+            ['csv', 'txt', 'xlsx'],
+            $canScan ? MasterlistSheetScanner::ACCEPTED_EXTENSIONS : []
+        );
+
         $request->validate([
-            'students_file' => ['required', 'file', 'mimes:csv,txt,xlsx', 'max:5120'],
+            'students_file' => [
+                'required',
+                'file',
+                'mimes:'.implode(',', $formats),
+                'max:'.max(5120, MasterlistSheetScanner::maxUploadKb()),
+            ],
         ]);
 
-        $sheet = StudentImportSheet::read($request->file('students_file'));
+        $file = $request->file('students_file');
+
+        // A picture is read by the scanner; everything else is a spreadsheet.
+        // Both end at the same enrolRows() write, so this decides how the class
+        // list is *read* and nothing about how a learner is written.
+        if ($canScan && MasterlistSheetScanner::handles($file)) {
+            return $this->importFromPicture($request, $scanner, $file);
+        }
+
+        $sheet = StudentImportSheet::read($file);
 
         if ($sheet['missing'] !== []) {
             $labels = ['lrn' => 'LRN', 'last_name' => 'Last Name', 'first_name' => 'First Name'];
@@ -159,9 +198,117 @@ class AdviserController extends Controller
                 ->with('error', 'A single import is limited to '.StudentImportSheet::MAX_ROWS.' learners.');
         }
 
+        $result = $this->enrolRows($request, $sheet['rows'], 'Imported a class list');
+
+        return redirect()
+            ->route('dashboard.class-adviser', ['tab' => $result['errors'] === [] ? 'saved' : 'form'])
+            ->with('import_report', [
+                'created' => $result['created'],
+                'updated' => $result['updated'],
+                'errors' => $result['errors'],
+                'total' => $sheet['total'],
+            ])
+            ->with('success', $result['created'] + $result['updated'] > 0
+                ? $result['created'].' '.Str::plural('learner', $result['created']).' enrolled'.($result['updated'] > 0 ? ', '.$result['updated'].' updated' : '').' from the spreadsheet.'
+                : null);
+    }
+
+    /**
+     * Read a photographed or scanned CLASS MASTERLIST and enrol what is on it.
+     *
+     * The same document the spreadsheet import takes, taken as a picture: the
+     * form already on the adviser's desk, photographed or scanned, rather than
+     * a workbook somebody has to build first. App\Support\MasterlistSheetScanner
+     * sends it to Gemini and hands back rows shaped exactly like
+     * StudentImportSheet's, so they go through enrolRows() — the same rules, the
+     * same class scoping, the same enrolLearner() write. A camera is a second
+     * way to read a class list, never a second way to write a learner.
+     *
+     * Reached from import() and nowhere else: the adviser has one file picker
+     * and one submit, and which reader runs is decided from the file rather
+     * than from which of two buttons was pressed.
+     *
+     * **A document that is not this form enrols nobody.** The check is taken
+     * before a single row is written (ClassMasterlistTemplate::mismatches(),
+     * against the headings the model reports rather than its opinion of them),
+     * and a refusal names what was missing and returns the adviser to the panel
+     * with the roster exactly as it was. There is no partial state to undo,
+     * because nothing was begun.
+     *
+     * Name, LRN and sex are what a masterlist carries, so they are what Sheet 1
+     * is filled with. Everything else on the card — birth date, guardian,
+     * address, contact, height, weight — stays empty and is counted by
+     * StudentDataCompleteness as still to be entered, exactly as it is for the
+     * spreadsheet import.
+     */
+    private function importFromPicture(Request $request, MasterlistSheetScanner $scanner, UploadedFile $file): RedirectResponse
+    {
+        try {
+            $scan = $scanner->scan($file);
+        } catch (Throwable $e) {
+            // Deliberately no partial write: a failed read leaves the roster
+            // exactly as it was.
+            return back()->with('error', 'Could not read the masterlist. '.$e->getMessage());
+        }
+
+        if (! $scan['matches_template']) {
+            $seen = trim((string) $scan['document_seen']);
+
+            return back()->with('error', trim(
+                'The file you uploaded is not a '.ClassMasterlistTemplate::TITLE.', so nothing was enrolled.'
+                .($seen !== '' ? ' It reads as: '.$seen.'.' : '')
+                .' It is missing '.$this->readableList($scan['mismatches']).'.'
+                .' Download the masterlist above and upload that form.'
+            ));
+        }
+
+        if ($scan['rows'] === [] && $scan['errors'] === []) {
+            return back()->with('error', 'No learners could be read from that masterlist, so nothing was enrolled.'
+                .($scan['note'] !== '' ? ' '.$scan['note'] : ''));
+        }
+
+        $result = $this->enrolRows($request, $scan['rows'], 'Enrolled a class from a scanned masterlist');
+
+        // A learner the scan could not read is reported beside the rows that
+        // failed validation: both are lines the adviser has to look at, and one
+        // list of them is easier to work through than two.
+        $errors = array_merge($scan['errors'], $result['errors']);
+        usort($errors, fn (array $a, array $b): int => $a['line'] <=> $b['line']);
+
+        return redirect()
+            ->route('dashboard.class-adviser', ['tab' => $errors === [] ? 'saved' : 'form'])
+            ->with('import_report', [
+                'created' => $result['created'],
+                'updated' => $result['updated'],
+                'errors' => $errors,
+                'total' => $scan['total'],
+            ])
+            ->with('success', $result['created'] + $result['updated'] > 0
+                ? $result['created'].' '.Str::plural('learner', $result['created']).' enrolled'.($result['updated'] > 0 ? ', '.$result['updated'].' updated' : '').' from the scanned masterlist.'
+                : null);
+    }
+
+    /**
+     * The one place a read class list becomes enrolled learners.
+     *
+     * Shared by the spreadsheet import and the scanned masterlist, so the two
+     * cannot drift: same rules, same class scoping, same refusal of an LRN
+     * belonging to another class, same enrolLearner() write, same audit entry.
+     * Adding a third way to read a class list means calling this, never copying
+     * it.
+     *
+     * The existing rows for every LRN on the sheet are fetched in one query
+     * rather than one per row: against a hosted database a class-sized import
+     * would otherwise spend most of its time waiting on round trips.
+     *
+     * @param  list<array{line: int, data: array<string, mixed>}>  $rows
+     * @return array{created: int, updated: int, errors: list<array{line: int, message: string}>}
+     */
+    private function enrolRows(Request $request, array $rows, string $auditSummary): array
+    {
         $existingByLrn = collect();
         if (SchemaCache::hasTable('student_health_records')) {
-            $lrns = collect($sheet['rows'])
+            $lrns = collect($rows)
                 ->map(fn (array $row): string => trim((string) ($row['data']['lrn'] ?? '')))
                 ->filter()
                 ->unique()
@@ -181,7 +328,7 @@ class AdviserController extends Controller
         $errors = [];
         $seen = [];
 
-        foreach ($sheet['rows'] as $row) {
+        foreach ($rows as $row) {
             $line = $row['line'];
             $input = $this->normaliseEnrolmentInput($row['data']);
 
@@ -226,33 +373,156 @@ class AdviserController extends Controller
             'imported',
             'StudentHealthRecord',
             null,
-            'Imported a class list: '.$created.' enrolled, '.$updated.' updated, '.count($errors).' skipped',
+            $auditSummary.': '.$created.' enrolled, '.$updated.' updated, '.count($errors).' skipped',
             ['created' => $created, 'updated' => $updated, 'skipped' => count($errors)]
         );
 
-        return redirect()
-            ->route('dashboard.class-adviser', ['tab' => $errors === [] ? 'saved' : 'form'])
-            ->with('import_report', [
-                'created' => $created,
-                'updated' => $updated,
-                'errors' => $errors,
-                'total' => $sheet['total'],
-            ])
-            ->with('success', $created + $updated > 0
-                ? $created.' '.Str::plural('learner', $created).' enrolled'.($updated > 0 ? ', '.$updated.' updated' : '').' from the spreadsheet.'
-                : null);
+        return ['created' => $created, 'updated' => $updated, 'errors' => $errors];
     }
 
-    /** The blank spreadsheet, with the headings the reader expects. */
-    public function importTemplate(): Response
+    /** "a, b and c" — a refusal reads as a sentence, not as a list. */
+    private function readableList(array $items): string
     {
-        $csv = implode(',', StudentImportSheet::TEMPLATE_COLUMNS)."\r\n"
-            .implode(',', ['123456789012', 'Dela Cruz', 'Juan', 'Santos', '2012-06-15', 'Davao City', 'Male', 'Maria Dela Cruz', '123 Mabini St., Davao City', '09171234567', '142', '35.5'])."\r\n";
+        $items = array_values(array_filter(array_map('strval', $items)));
 
-        return response($csv, 200, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="student-enrolment-template.csv"',
-        ]);
+        if (count($items) <= 1) {
+            return (string) ($items[0] ?? 'nothing this form is recognised by');
+        }
+
+        $last = array_pop($items);
+
+        return implode(', ', $items).' and '.$last;
+    }
+
+    /**
+     * The blank sheet an adviser fills in: their own class masterlist.
+     *
+     * It used to be a flat twelve-column CSV of this application's invention —
+     * LRN, names, birth date, birthplace, guardian, address, contact, height,
+     * weight — a sheet no school keeps, so the one document every adviser
+     * already has was not what the button handed them, and the feature only
+     * worked for a list somebody had already retyped by hand. The template is
+     * now the DepEd CLASS MASTERLIST itself (App\Support\ClassMasterlistTemplate),
+     * headed for this adviser's own school, class and school year, so the file
+     * that downloads and the file the class already holds are one document.
+     *
+     * The wider set of columns has not gone anywhere: StudentImportSheet still
+     * recognises every one of them, so a sheet exported from another system
+     * uploads exactly as before. What changed is which sheet is offered.
+     *
+     * It is .xlsx rather than .csv for the reason every other export here is —
+     * a .csv is a text file and which program opens one is a setting on the
+     * reader's own machine, while an .xlsx is a spreadsheet by format. A ruled
+     * form with a merged heading does not survive comma-separated text at all.
+     */
+    public function importTemplate(Request $request): BinaryFileResponse|RedirectResponse
+    {
+        if (! class_exists(XlsxWriter::class)) {
+            return back()->with('error', 'The spreadsheet library is not installed on this server, so the template cannot be downloaded.');
+        }
+
+        $session = $request->session();
+
+        $template = ClassMasterlistTemplate::build(
+            SchoolLetterhead::for(
+                $session->get('active_institution_id'),
+                (string) $session->get('active_school_name', '')
+            ),
+            ClassMasterlistTemplate::classLabel(
+                (string) $session->get('assigned_grade_level', ''),
+                (string) $session->get('assigned_section', '')
+            ),
+            StudentHealthRecord::currentSchoolYear(),
+            (string) $session->get('active_name', '')
+        );
+
+        return response()
+            ->download($this->writeMasterlist($template), $template['file_name'], [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ])
+            ->deleteFileAfterSend(true);
+    }
+
+    /**
+     * The template model, written out as a workbook.
+     *
+     * Column widths and merges are declared up front because OpenSpout takes
+     * them as options rather than as calls on the sheet — the heading block and
+     * the stacked header are merged cells, and a merge the writer never hears
+     * about leaves the caption sitting in one narrow column.
+     *
+     * @param  array{rows: list<array{cells: list<string>, register: string}>, merges: list<array{0: int, 1: int, 2: int, 3: int}>, widths: list<int>, file_name: string}  $template
+     */
+    private function writeMasterlist(array $template): string
+    {
+        // tempnam() creates the file it names, so the reservation is released
+        // before the writer claims the .xlsx path — otherwise every download
+        // leaves an empty temp file behind.
+        $reserved = tempnam(sys_get_temp_dir(), 'class-masterlist-');
+        $path = $reserved.'.xlsx';
+        @unlink($reserved);
+
+        $options = new XlsxOptions;
+
+        foreach ($template['widths'] as $column => $width) {
+            $options->setColumnWidth((float) $width, $column + 1);
+        }
+
+        foreach ($template['merges'] as [$left, $top, $right, $bottom]) {
+            $options->mergeCells($left, $top, $right, $bottom);
+        }
+
+        $writer = new XlsxWriter($options);
+        $writer->openToFile($path);
+        $writer->getCurrentSheet()->setName(ClassMasterlistTemplate::SHEET_NAME);
+
+        $styles = $this->masterlistStyles();
+
+        try {
+            foreach ($template['rows'] as $row) {
+                $style = $styles[$row['register']] ?? $styles[ClassMasterlistTemplate::R_PLAIN];
+
+                $writer->addRow(new Row(array_map(
+                    static fn (string $value): Cell => Cell::fromValue($value, $style),
+                    $row['cells']
+                )));
+            }
+        } finally {
+            $writer->close();
+        }
+
+        return $path;
+    }
+
+    /**
+     * The registers the form is printed in.
+     *
+     * A hairline box, as on the printed sheet: the DepEd masterlist is a ruled
+     * grid, and an unruled block of blank rows is not the same document — an
+     * adviser cannot see where one learner's line ends and the next begins.
+     *
+     * @return array<string, Style>
+     */
+    private function masterlistStyles(): array
+    {
+        $box = static fn (): Border => new Border(
+            new BorderPart(BorderName::TOP, width: BorderWidth::THIN),
+            new BorderPart(BorderName::BOTTOM, width: BorderWidth::THIN),
+            new BorderPart(BorderName::LEFT, width: BorderWidth::THIN),
+            new BorderPart(BorderName::RIGHT, width: BorderWidth::THIN),
+        );
+
+        $centred = (new Style)->withCellAlignment(CellAlignment::CENTER);
+
+        return [
+            ClassMasterlistTemplate::R_SCHOOL => $centred->withFontBold(true)->withFontSize(12),
+            ClassMasterlistTemplate::R_HEADING => $centred->withFontBold(true)->withFontSize(10),
+            ClassMasterlistTemplate::R_CLASS => $centred->withFontBold(true)->withFontSize(10),
+            ClassMasterlistTemplate::R_HEAD => $centred->withFontBold(true)->withFontSize(10)->withBorder($box()),
+            ClassMasterlistTemplate::R_BAND => (new Style)->withFontBold(true)->withFontSize(10)->withBorder($box()),
+            ClassMasterlistTemplate::R_LINE => (new Style)->withFontSize(10)->withBorder($box()),
+            ClassMasterlistTemplate::R_PLAIN => new Style,
+        ];
     }
 
     /**
@@ -372,7 +642,7 @@ class AdviserController extends Controller
                 $input['birth_year'] = (int) $parsed->format('Y');
                 $input['birth_month'] = (int) $parsed->format('n');
                 $input['birth_day'] = (int) $parsed->format('j');
-            } catch (\Throwable $_) {
+            } catch (Throwable $_) {
                 // Keep whatever month/day/year the input already carried.
             }
         }
@@ -723,7 +993,7 @@ class AdviserController extends Controller
 
         try {
             $birthDate = Carbon::createFromDate($birthYear, $birthMonth, $birthDay);
-        } catch (\Throwable $_) {
+        } catch (Throwable $_) {
             return null;
         }
 

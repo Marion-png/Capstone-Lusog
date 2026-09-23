@@ -31,6 +31,14 @@
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>
+        <!-- Blanked for the same reason DB_URL is: the suite must not depend on
+             a developer's own credentials, and must never reach a provider.
+             A test that needs a vision reader sets the key itself and fakes the
+             HTTP client; without this, a developer with a real key in .env runs
+             a different suite from CI and an upload test could bill an account
+             and leave the network in the test path. -->
+        <env name="ANTHROPIC_API_KEY" value=""/>
+        <env name="GEMINI_API_KEY" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

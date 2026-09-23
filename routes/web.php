@@ -211,8 +211,10 @@ Route::get('/adviser/create', [AdviserController::class, 'create'])
 Route::post('/adviser/store', [AdviserController::class, 'store'])
     ->name('adviser.store');
 
-// Enrol a class from a spreadsheet. Every row goes through the same
-// validation and the same write as the form above (AdviserController::import).
+// Enrol a class from its masterlist — the workbook, or a photograph of the
+// paper one, read by Gemini vision. One endpoint for both: import() decides
+// which reader runs from the file itself, and every row goes through the same
+// validation and the same write as the form above.
 Route::post('/adviser/import', [AdviserController::class, 'import'])
     ->name('adviser.import');
 

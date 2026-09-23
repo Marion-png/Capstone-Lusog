@@ -6,8 +6,10 @@ use App\Models\AuditLog;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Support\BmiClassifier;
+use App\Support\ClassMasterlistTemplate;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\StudentDataCompleteness;
+use App\Support\StudentImportSheet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use PHPUnit\Framework\Attributes\Test;
@@ -230,8 +232,112 @@ class AdviserStudentImportTest extends TestCase
         $this->withSession($this->adviserSession())
             ->get(route('adviser.import.template'))
             ->assertOk()
-            ->assertHeader('Content-Type', 'text/csv; charset=UTF-8')
-            ->assertSee('LRN,Last Name,First Name');
+            ->assertDownload('CLASS-MASTERLIST-GRADE-7-SAMPAGUITA-'.StudentHealthRecord::currentSchoolYear().'.xlsx');
+    }
+
+    /**
+     * The template is the school's own form, headed for this adviser's class.
+     *
+     * It used to be a flat twelve-column CSV this application invented, which
+     * no school keeps — so the one document every class already holds was not
+     * what the button handed them.
+     */
+    #[Test]
+    public function the_template_is_the_class_masterlist(): void
+    {
+        $template = ClassMasterlistTemplate::build(
+            ['school' => 'Test School', 'address' => 'D. Suazo St., Davao City'],
+            ClassMasterlistTemplate::classLabel('Grade 7', 'Sampaguita'),
+            '2026-2027',
+            'Beberly Real Panerio'
+        );
+
+        $cells = array_map(fn (array $row): array => $row['cells'], $template['rows']);
+
+        $this->assertSame(
+            [
+                ['Test School', '', '', '', '', ''],
+                ['D. Suazo St., Davao City', '', '', '', '', ''],
+                ['CLASS MASTERLIST', '', '', '', '', ''],
+                ['GRADE 7 - SAMPAGUITA', '', '', '', '', ''],
+                ['MASTERLIST', '', '', '', '', ''],
+                ['School Year: 2026 - 2027', '', '', '', '', ''],
+                // The header is stacked: NO, LRN and REMARKS span both rows,
+                // the name columns carry one merged caption on the second.
+                ['NO', 'MALE', '', '', 'LRN', 'REMARKS'],
+                ['', ClassMasterlistTemplate::NAME_CAPTION, '', '', '', ''],
+                // The sheet has no Sex column: the bands are where it is said.
+                ['MALE', '', '', '', '', ''],
+                ['1', '', '', '', '', ''],
+            ],
+            array_slice($cells, 0, 10)
+        );
+
+        // Blank numbered lines under each band, then the adviser's signature.
+        $this->assertSame(['FEMALE', '', '', '', '', ''], $cells[9 + ClassMasterlistTemplate::BAND_ROWS]);
+        $this->assertSame(['BEBERLY REAL PANERIO', '', '', '', '', ''], $cells[count($cells) - 2]);
+        $this->assertSame(['ADVISER', '', '', '', '', ''], $cells[count($cells) - 1]);
+
+        // The merges the form's heading needs: every banner line across the
+        // sheet, then the stacked header's five.
+        $this->assertContains([0, 1, 5, 1], $template['merges'], 'The school name is centred across the form.');
+        $this->assertContains([1, 8, 3, 8], $template['merges'], 'The name caption is one merged cell over three columns.');
+        $this->assertContains([4, 7, 4, 8], $template['merges'], 'LRN spans both header rows.');
+    }
+
+    /**
+     * A school with no address on file gets a line to write on.
+     *
+     * The same answer SchoolLetterhead gives everywhere else: a gap on a
+     * government form is honest, a neighbouring school's street is not. A
+     * session with no class assignment is treated the same way.
+     */
+    #[Test]
+    public function the_template_invents_nothing_it_does_not_hold(): void
+    {
+        $template = ClassMasterlistTemplate::build(
+            ['school' => 'Test School', 'address' => ''],
+            ClassMasterlistTemplate::classLabel('', ''),
+            '2026-2027',
+            ''
+        );
+
+        $cells = array_map(fn (array $row): array => $row['cells'], $template['rows']);
+
+        $this->assertSame('', $cells[1][0], 'No address on file prints an empty line.');
+        $this->assertSame('', $cells[3][0], 'No class assignment prints an empty line.');
+        $this->assertSame('', $cells[count($cells) - 2][0], 'No adviser name prints an empty line.');
+    }
+
+    /**
+     * The sheet this app writes is a sheet this app can read back.
+     *
+     * The template and the reader are one contract — the merged caption, the
+     * stacked header and the two bands are all shapes StudentImportSheet has
+     * to understand — so the file that downloads is fed straight back into it.
+     * A blank form carries no learners, which is what "no learner rows" means:
+     * the header was read, there is simply nobody on it yet.
+     */
+    #[Test]
+    public function the_downloaded_template_uploads_back_into_the_import(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'masterlist-').'.xlsx';
+
+        file_put_contents($path, $this->withSession($this->adviserSession())
+            ->get(route('adviser.import.template'))
+            ->assertOk()
+            ->streamedContent());
+
+        try {
+            $sheet = StudentImportSheet::read(
+                new UploadedFile($path, 'CLASS-MASTERLIST.xlsx', null, null, true)
+            );
+
+            $this->assertSame([], $sheet['missing'], 'The reader finds the LRN and the merged name caption.');
+            $this->assertSame([], $sheet['rows'], 'A blank form carries no learners — not the band rows, not the caption, not the signature.');
+        } finally {
+            @unlink($path);
+        }
     }
 
     // ── The school's own class masterlist ────────────────────────────
@@ -271,6 +377,36 @@ class AdviserStudentImportTest extends TestCase
         ];
 
         return $this->sheet($rows);
+    }
+
+    /**
+     * The same masterlist with its header stacked over two rows.
+     *
+     * This is the shape the deployment school's own file has: NO, LRN and
+     * REMARKS are merged down the pair, the name columns carry a band heading
+     * on the first line and the merged caption on the second, and a merged cell
+     * hands its value to its top-left position only. It is also the shape the
+     * template this app hands out is written in.
+     */
+    private function stackedMasterlist(): UploadedFile
+    {
+        return $this->sheet([
+            ['Sta. Ana National High School', '', '', '', '', ''],
+            ['D. Suazo St., Davao City', '', '', '', '', ''],
+            ['CLASS MASTERLIST', '', '', '', '', ''],
+            ['GRADE 7 - MATATAG', '', '', '', '', ''],
+            ['MASTERLIST', '', '', '', '', ''],
+            ['School Year: 2026 - 2027', '', '', '', '', ''],
+            ['NO', 'MALE', '', '', 'LRN', 'REMARKS'],
+            ['', ClassMasterlistTemplate::NAME_CAPTION, '', '', '', ''],
+            ['MALE', '', '', '', '', ''],
+            ['1', 'ACALA', 'ZAIREL', 'G.', '129708190295', ''],
+            ['FEMALE', '', '', '', '', ''],
+            ['1', 'ALFORNON', 'MARIA RAINGIELYN', 'A.', '129697190076', ''],
+            ['', '', '', '', '', ''],
+            ['BEBERLY REAL PANERIO', '', '', '', '', ''],
+            ['ADVISER', '', '', '', '', ''],
+        ]);
     }
 
     /** @param  list<list<string>>  $rows */
@@ -314,6 +450,34 @@ class AdviserStudentImportTest extends TestCase
                 fn (StudentHealthRecord $r): bool => str_contains((string) $r->student_name, 'PANERIO')
             )
         );
+    }
+
+    /**
+     * A header stacked over two rows is still a header.
+     *
+     * The school's own sheet — and the template this app hands out — merges NO,
+     * LRN and REMARKS down a pair of rows and puts the name caption on the
+     * second. A reader that looked only at the row it found LRN on reported the
+     * sheet as having no Last Name or First Name column, which is a refusal of
+     * the one document every class already holds. The caption row is consumed
+     * with the header, so it is never read as a learner surnamed
+     * "Student's Name (Last Name, First Name Middle Initial)".
+     */
+    #[Test]
+    public function a_masterlist_with_a_stacked_header_enrols_its_learners(): void
+    {
+        $this->import($this->stackedMasterlist(), ['assigned_section' => 'MATATAG'])
+            ->assertRedirect(route('dashboard.class-adviser', ['tab' => 'saved']))
+            ->assertSessionHas('import_report', fn (array $r) => $r['created'] === 2 && $r['errors'] === []);
+
+        $this->assertSame(2, StudentHealthRecord::count());
+
+        $zairel = StudentHealthRecord::where('student_id', '129708190295')->firstOrFail();
+        $this->assertSame('ACALA, ZAIREL G.', $zairel->student_name);
+        $this->assertSame('Male', $zairel->student_details['gender']);
+
+        $maria = StudentHealthRecord::where('student_id', '129697190076')->firstOrFail();
+        $this->assertSame('Female', $maria->student_details['gender']);
     }
 
     /**
