@@ -12,7 +12,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Guards three changes to the Feeding Coordinator's tabs:
+ * Guards four changes to the Feeding Coordinator's tabs:
  *
  * - **A weekend is not a feeding day.** Nobody is fed on a Saturday or a Sunday,
  *   so a weekend is not a session the school missed — it is not a session, and
@@ -23,6 +23,10 @@ use Tests\TestCase;
  * - **There is no Feeding Program tab.** The cycle, the at-risk list and the
  *   roll live on tabs that own them; a fourth rendering of all three is how two
  *   screens start reporting different numbers for one programme.
+ * - **The forms tab is "Nutritional Health Status Report".** It was "SBFP
+ *   Forms"; the name is wider than the rail's room beside the icon, so the
+ *   label wraps and the breadcrumb gives way rather than either being clipped
+ *   or running under the clock.
  */
 class FeedingCoordinatorTabsTest extends TestCase
 {
@@ -284,9 +288,56 @@ class FeedingCoordinatorTabsTest extends TestCase
         $this->assertStringNotContainsString('<span class="asb-link-text">Feeding Program</span>', $html);
 
         // The four tabs that replaced it are all still on the rail.
-        foreach (['Dashboard', 'Beneficiaries', 'Attendance', 'At-Risk Students', 'SBFP Forms'] as $tab) {
+        foreach (['Dashboard', 'Beneficiaries', 'Attendance', 'At-Risk Students', 'Nutritional Health Status Report'] as $tab) {
             $this->assertStringContainsString('<span class="asb-link-text">'.$tab.'</span>', $html);
         }
+    }
+
+    // ── Nutritional Health Status Report ────────────────────────────────
+
+    /**
+     * The forms tab is titled "Nutritional Health Status Report" on the rail,
+     * in the breadcrumb, in the heading and in the browser tab. The route kept
+     * its sbfp-forms name, so an old bookmark still lands.
+     */
+    #[Test]
+    public function the_forms_tab_is_titled_nutritional_health_status_report(): void
+    {
+        $html = $this->withSession($this->coordinatorSession())
+            ->get(route('dashboard.feedingcor-sbfp-forms'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('<title>Nutritional Health Status Report - Feeding Coordinator - SIGLA</title>', $html);
+        $this->assertStringContainsString('<span>Nutritional Health Status Report</span></div>', $html);
+        $this->assertStringContainsString('<h1 class="page-title">Nutritional Health Status <span>Report</span></h1>', $html);
+        $this->assertMatchesRegularExpression(
+            '/class="asb-link active" title="Nutritional Health Status Report">.*?<span class="asb-link-text">Nutritional Health Status Report<\/span>/s',
+            $html,
+        );
+
+        $this->assertStringNotContainsString('<span class="asb-link-text">SBFP Forms</span>', $html);
+        $this->assertStringNotContainsString('<h1 class="page-title">SBFP <span>Forms</span></h1>', $html);
+    }
+
+    /**
+     * The name is ~188px against ~181px of room beside the rail icon, inside a
+     * link that hides its overflow: a label that may not wrap loses its last
+     * letters. And on a phone the breadcrumb ran under the clock pill. The
+     * label wraps, and the current crumb ends in an ellipsis instead.
+     */
+    #[Test]
+    public function a_long_tab_name_is_neither_clipped_on_the_rail_nor_overlapping_the_clock(): void
+    {
+        $rail = file_get_contents(resource_path('css/role-sidebar.css'));
+        $this->assertSame(1, preg_match('/\.asb-link-text\{([^}]*)\}/', $rail, $label), 'rail label rule not found');
+        $this->assertStringNotContainsString('nowrap', $label[1], 'a rail label must be free to wrap');
+        $this->assertStringNotContainsString('flex:0 0', $label[1], 'a rail label must be free to shrink to the room it has');
+
+        $theme = file_get_contents(resource_path('css/lusog-theme.css'));
+        $this->assertSame(1, preg_match('/\.topbar-bc span:last-child \{([^}]*)\}/', $theme, $crumb), 'breadcrumb rule not found');
+        $this->assertStringContainsString('text-overflow: ellipsis', $crumb[1]);
+        $this->assertStringContainsString('min-width: 0', $crumb[1]);
     }
 
     /** An old link to the retired page lands on Attendance, not a 404. */

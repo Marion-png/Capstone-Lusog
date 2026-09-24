@@ -47,9 +47,12 @@
              Attendance, the threshold list on At-Risk Students and the roll on
              Beneficiaries. A page repeating all three is how two screens start
              reporting different numbers for one programme. --}}
-        <a href="{{ route('dashboard.feedingcor-sbfp-forms') }}" class="asb-link {{ $active === 'forms' ? 'active' : '' }}" title="SBFP Forms">
+        {{-- Formerly "SBFP Forms": only the name moved, so the route and the
+             'forms' key are unchanged. The label is wider than the room beside
+             the icon, which is why role-sidebar.css lets a label wrap. --}}
+        <a href="{{ route('dashboard.feedingcor-sbfp-forms') }}" class="asb-link {{ $active === 'forms' ? 'active' : '' }}" title="Nutritional Health Status Report">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
-            <span class="asb-link-text">SBFP Forms</span>
+            <span class="asb-link-text">Nutritional Health Status Report</span>
         </a>
     </nav>
 

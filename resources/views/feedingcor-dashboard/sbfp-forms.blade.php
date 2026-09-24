@@ -4,7 +4,7 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="csrf-token" content="{{ csrf_token() }}">
-	<title>SBFP Forms - Feeding Coordinator - SIGLA</title>
+	<title>Nutritional Health Status Report - Feeding Coordinator - SIGLA</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
@@ -23,13 +23,13 @@
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>Dashboard</span><span class="bc-sep">&rsaquo;</span><span>SBFP Forms</span></div>
+		<div class="topbar-bc"><span>Dashboard</span><span class="bc-sep">&rsaquo;</span><span>Nutritional Health Status Report</span></div>
 		@include('partials.live-clock')
 	</header>
 
 	<div class="content">
 		<div class="page-header">
-			<h1 class="page-title">SBFP <span>Forms</span></h1>
+			<h1 class="page-title">Nutritional Health Status <span>Report</span></h1>
 			<p class="page-sub">Select a form template, then encode the required fields in a clean sheet view.</p>
 		</div>
 

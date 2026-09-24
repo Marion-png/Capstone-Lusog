@@ -66,7 +66,7 @@ Runs the Supplementary Feeding Program. Attendance must be uploaded first — by
 | 1 | Dashboard | `/dashboard/feedingcor-dashboard` | Participation and nutritional movement |
 | 2 | Feeding Program | `/dashboard/feedingcor-program` | Attendance upload and at-risk beneficiaries |
 | 3 | Attendance Review | `/dashboard/feedingcor-program/attendance/review` | Confirming unclear scanned marks |
-| 4 | SBFP Forms | `/dashboard/feedingcor-sbfp-forms` | Auto-tabulated DepEd BMI report |
+| 4 | Nutritional Health Status Report | `/dashboard/feedingcor-sbfp-forms` | Auto-tabulated DepEd BMI report |
 
 **Note for your write-up:** photo scanning sends the class roster with the image, so the system matches a mark to a learner already on the roster. It cannot invent a learner, and is never used to identify anyone from a face. Marks nobody has confirmed count as neither present nor absent.
 

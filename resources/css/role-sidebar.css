@@ -49,10 +49,18 @@
 .asb-nav-label:first-child{margin-top:0}
 .asb-link{position:relative;overflow:hidden;display:flex;align-items:center;gap:11px;color:var(--asb-ink,rgba(255,255,255,.72));text-decoration:none;font-size:.82rem;font-weight:600;padding:9px 10px;border-radius:9px;margin-bottom:2px;transition:background .22s var(--asb-ease),color .22s var(--asb-ease),padding .22s var(--asb-ease)}
 .asb-link svg{width:16px;height:16px;flex:0 0 auto;transition:transform .28s var(--asb-ease)}
-.asb-link-text{flex:0 0 auto;white-space:nowrap}
+/* A label wider than the room beside the icon wraps onto a second line —
+   balanced, so the break falls mid-label instead of stranding one word —
+   rather than running under the link's hidden overflow and losing its last
+   letters ("Nutritional Health Status Report" is ~188px against ~181px).
+   1.3 leading keeps a one-line link at the icon's 16px, so no other tab moves. */
+.asb-link-text{flex:0 1 auto;line-height:1.3;text-wrap:balance}
 /* left accent bar grows in on hover, stays put on the active tab */
 .asb-link::before{content:"";position:absolute;left:0;top:50%;width:3px;height:0;border-radius:0 3px 3px 0;background:var(--asb-accent,#BFE3CC);transform:translateY(-50%);transition:height .26s var(--asb-ease)}
-.asb-link:hover{background:var(--asb-hover-bg,rgba(255,255,255,.08));color:var(--asb-ink-strong,#fff);padding-left:14px}
+/* The hover nudge moves a label, never narrows it: the right padding gives
+   back what the left takes, so a wrapped label keeps its line breaks (and
+   the rail its height) under the cursor. */
+.asb-link:hover{background:var(--asb-hover-bg,rgba(255,255,255,.08));color:var(--asb-ink-strong,#fff);padding-left:14px;padding-right:6px}
 .asb-link:hover::before{height:56%}
 .asb-link:hover svg{transform:scale(1.12)}
 .asb-link:active{background:rgba(255,255,255,.14)}
@@ -60,7 +68,7 @@
 .asb-link.active::before{height:62%}
 .asb-link.active svg{transform:none}
 /* click feedback: the tapped tab lights up while the page swaps out */
-.asb-link.is-navigating{background:var(--asb-press-bg,rgba(34,197,94,.28));color:var(--asb-active-ink,#BFE3CC);padding-left:14px}
+.asb-link.is-navigating{background:var(--asb-press-bg,rgba(34,197,94,.28));color:var(--asb-active-ink,#BFE3CC);padding-left:14px;padding-right:6px}
 .asb-link.is-navigating::before{height:70%}
 .asb-ripple{position:absolute;border-radius:50%;background:rgba(255,255,255,.28);transform:scale(0);pointer-events:none;animation:asbRipple .55s var(--asb-ease) forwards}
 /* nav items ease in on load, one after another */
@@ -113,5 +121,5 @@ html.js .asb-sidebar ~ .main.page-exit{opacity:0;transform:translateY(12px)}
 
 @media (prefers-reduced-motion:reduce){
 	.asb-sidebar,.asb-sidebar *,.asb-sidebar *::before,.asb-sidebar ~ .main{animation:none!important;transition-duration:.01ms!important;transition-delay:0s!important}
-	.asb-link:hover,.asb-link.is-navigating{padding-left:10px}
+	.asb-link:hover,.asb-link.is-navigating{padding-left:10px;padding-right:10px}
 }

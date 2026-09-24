@@ -184,7 +184,10 @@ html, body {
 	min-width: 0;
 }
 .topbar-bc span { white-space: nowrap; }
-.topbar-bc span:last-child { color: var(--lg-ink); font-weight: 600; }
+/* When the bar runs short (a phone, or a long name such as "Nutritional
+   Health Status Report") the page you are on gives way with an ellipsis
+   rather than running under the clock; the page title still names it in full. */
+.topbar-bc span:last-child { color: var(--lg-ink); font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .topbar-bc .bc-sep { color: var(--lg-border-strong); }
 /* A crumb that can be followed is still a crumb: no underline, no link blue —
    it deepens to the brand colour on hover like every other action here. */
