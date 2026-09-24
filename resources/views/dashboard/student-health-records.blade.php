@@ -399,6 +399,13 @@
                     <h4>Growth &amp; Nutrition</h4>
                     <div class="kv"><div class="k">Height:</div><div class="v" id="pgHeight">-</div></div>
                     <div class="kv"><div class="k">Weight:</div><div class="v" id="pgWeight">-</div></div>
+                    {{-- A height is a measurement; height-for-age is what it means
+                         for a child of this age. The chart below plots the two
+                         figures, so the classification belongs beside them —
+                         read from the same App\Support\NutritionalHealthStatus
+                         the Nutritional Health Status tab renders, never
+                         classified a second time here. --}}
+                    <div class="kv"><div class="k">Height-for-Age:</div><div class="v" id="pgHfa">-</div></div>
                     <div class="growth-chart-wrap">
                         <div class="growth-chart-head">
                             <div class="growth-chart-title">Growth Over Time</div>
@@ -1018,6 +1025,17 @@
         window.renderLearnerPhoto?.(record);
         setText('pgHeight', (record.height_cm || '-') + ' cm');
         setText('pgWeight', (record.weight_kg || '-') + ' kg');
+
+        // Baseline first — it is the reading the height and weight above are
+        // from — and the endline where the learner has been re-measured, so
+        // the row says which weigh-in it is talking about. A phase nobody
+        // measured is an em dash, never the other phase's classification.
+        const growth = (record.nutrition || {});
+        const hfaBaseline = ((growth.baseline || {}).hfa_status || '').trim();
+        const hfaEndline = ((growth.endline || {}).hfa_status || '').trim();
+        setText('pgHfa', hfaEndline !== '' && hfaEndline !== hfaBaseline
+            ? (hfaBaseline !== '' ? hfaBaseline + ' \u2192 ' + hfaEndline : hfaEndline)
+            : (hfaBaseline !== '' ? hfaBaseline : '\u2014'));
         drawGrowthTrend(record);
 
         renderHealthHistory(record.health_history);

@@ -665,12 +665,11 @@ final class SchoolHeadOverview
      */
     public static function toScale(string $status): string
     {
+        // normalize() already folds the retired "Underweight" into Wasted, so this
+        // only has to decide whether the label is one the scale carries.
         $normalized = FeedingBeneficiarySummary::normalize($status);
 
-        return match ($normalized) {
-            'Underweight' => 'Wasted',
-            default => in_array($normalized, self::NUTRITION_SCALE, true) ? $normalized : '',
-        };
+        return in_array($normalized, self::NUTRITION_SCALE, true) ? $normalized : '';
     }
 
     /** Whether a status sits in the range the feeding programme treats. */

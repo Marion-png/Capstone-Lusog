@@ -53,6 +53,15 @@
                         <button type="submit" class="cf-btn cf-btn-primary">Mark as Reviewed &mdash; Release to School Nurse</button>
                     </form>
                 @endif
+                @if (! in_array($form->status, [HealthConsentForm::STATUS_SIGNED, HealthConsentForm::STATUS_REVIEWED], true))
+                    {{-- Some consents come back on paper, signed in ink. The consent
+                         half of the document is editable only through the parent's
+                         own link, so this is the one way a paper form gets in. --}}
+                    <a href="{{ route('consent-forms.paper', $form) }}" class="cf-btn cf-btn-outline">Record Signed Paper Form</a>
+                @endif
+                @if ($form->paper_form_path)
+                    <a href="{{ route('consent-forms.paper.image', $form) }}" target="_blank" class="cf-btn cf-btn-ghost">View Signed Paper Form</a>
+                @endif
                 <a href="{{ route('consent-forms.print', $form) }}" target="_blank" class="cf-btn cf-btn-ghost">Print / Export PDF</a>
             </div>
 

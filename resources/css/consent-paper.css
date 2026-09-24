@@ -1,0 +1,90 @@
+/* ══════════════════════════════════════════════════════════════════════
+   Record the Signed Paper Form
+   ──────────────────────────────────────────────────────────────────────
+   Loaded after consent-form.css, which owns the topbar, cards, buttons and
+   flashes. Only the upload, the preview and the per-field flags are unique
+   to this screen.
+
+   The flags are the point of the page: a reading the model was unsure of
+   has to be visible ON the field it belongs to, not summarised at the top
+   where the eye slides past it on the way to the Save button.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.pf-lede { font-size: .86rem; line-height: 1.55; color: var(--muted, #6B7C72); margin-bottom: 12px; }
+
+/* The file picker reads as a place to drop something, not as a button. */
+.pf-drop {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	align-items: center;
+	justify-content: center;
+	padding: 20px 16px;
+	border: 1.5px dashed var(--border, #DCE8E0);
+	border-radius: 12px;
+	background: var(--bg, #F6F9F7);
+	cursor: pointer;
+	text-align: center;
+}
+.pf-drop:hover { border-color: var(--g500, #1F8A4C); background: #fff; }
+.pf-drop-label { font-size: .88rem; font-weight: 600; color: var(--g900, #14532d); }
+.pf-drop-hint { font-size: .74rem; color: var(--muted, #6B7C72); }
+
+.pf-scan-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+.pf-scan-state { font-size: .78rem; color: var(--muted, #6B7C72); }
+.pf-note {
+	margin-top: 12px; padding: 10px 12px; border-radius: 8px;
+	background: #FDF4E2; border: 1px solid #fcd34d;
+	font-size: .78rem; color: #8A5A06;
+}
+
+/* The photograph stays on screen while the answers are checked against it. */
+.pf-preview { margin-top: 14px; }
+.pf-preview img {
+	max-width: 100%; max-height: 520px; display: block; margin: 0 auto;
+	border: 1px solid var(--border, #DCE8E0); border-radius: 10px;
+}
+
+.pf-field { margin-bottom: 14px; border: none; padding: 0; }
+.pf-field > label,
+.pf-field > legend {
+	display: block; font-size: .78rem; font-weight: 700;
+	color: var(--g900, #14532d); margin-bottom: 6px; padding: 0;
+}
+.pf-field input[type="text"] {
+	width: 100%; border: 1.5px solid var(--border, #DCE8E0); border-radius: 9px;
+	padding: 9px 11px; font: inherit; font-size: .86rem; background: #fff;
+}
+.pf-field input[type="text"]:focus { outline: none; border-color: var(--g500, #1F8A4C); }
+/* "Unreadable" is a placeholder for a real answer, not an answer: it reads as
+   something outstanding rather than as text the adviser typed. */
+.pf-field input.is-unreadable { border-color: #f59e0b; background: #FFFBEB; font-style: italic; color: #8A5A06; }
+.pf-field[hidden] { display: none; }
+
+.pf-radio { display: flex; align-items: center; gap: 9px; padding: 5px 0; font-size: .86rem; cursor: pointer; }
+.pf-radio input { width: 17px; height: 17px; accent-color: var(--g600, #16a34a); }
+
+/* Amber, not red: "check this" is not "this is wrong". */
+.pf-flag {
+	margin-top: 5px; padding: 6px 9px; border-radius: 7px;
+	background: #FDF4E2; border-left: 3px solid #f59e0b;
+	font-size: .75rem; color: #8A5A06;
+}
+.pf-flag[hidden] { display: none; }
+
+.pf-flags { margin-bottom: 14px; display: grid; gap: 7px; }
+.pf-flags[hidden] { display: none; }
+.pf-flags-item {
+	padding: 9px 12px; border-radius: 8px;
+	background: #FDF4E2; border: 1px solid #fcd34d;
+	font-size: .8rem; color: #8A5A06;
+}
+
+/* The attestation is a sentence the adviser signs, so it reads as one. */
+.pf-confirm {
+	display: flex; align-items: flex-start; gap: 10px;
+	margin-top: 16px; padding: 11px 13px;
+	background: var(--bg, #F6F9F7); border: 1px solid var(--border, #DCE8E0);
+	border-radius: 9px; font-size: .84rem; cursor: pointer;
+}
+.pf-confirm input { width: 17px; height: 17px; margin-top: 1px; accent-color: var(--g600, #16a34a); }

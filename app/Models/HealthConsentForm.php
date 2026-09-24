@@ -98,7 +98,7 @@ class HealthConsentForm extends Model
         'services', 'status',
         'consent_choice', 'consent_exceptions', 'refusal_reason',
         'allergy_food', 'allergy_medicine', 'prev_immunization', 'other_illness',
-        'signature', 'sent_at', 'signed_at', 'reviewed_at',
+        'signature', 'paper_form_path', 'sent_at', 'signed_at', 'reviewed_at',
         'created_by_name', 'adviser_unread', 'audit',
     ];
 

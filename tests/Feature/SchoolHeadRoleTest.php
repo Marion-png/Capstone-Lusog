@@ -654,6 +654,69 @@ class SchoolHeadRoleTest extends TestCase
 
     // ── Masterlist tab ──────────────────────────────────────────────────
 
+    /**
+     * The Nutritional Health Status tab reports both weighings, each as itself.
+     *
+     * It used to print one weight, one height and one BMI — the endline if
+     * there was one, else the current record, else the baseline. That column
+     * means a different reading on every row, so it cannot be compared down and
+     * a head reading it has no way to tell which weighing they are looking at.
+     * Now the two are separate column groups, and a phase nobody recorded is an
+     * em dash rather than the other phase's figures.
+     */
+    #[Test]
+    public function the_masterlist_reports_both_weighings_separately(): void
+    {
+        $this->makeLearner([
+            'student_name' => 'Measured Twice',
+            'baseline_height_cm' => 150, 'baseline_weight_kg' => 38,
+            'baseline_bmi_value' => 16.9, 'baseline_nutritional_status' => 'Wasted',
+            'endline_height_cm' => 155, 'endline_weight_kg' => 47,
+            'endline_bmi_value' => 19.6, 'endline_nutritional_status' => 'Normal',
+        ]);
+
+        $response = $this->withSession($this->headSession())
+            ->get('/dashboard/school-head/masterlist')->assertOk();
+
+        $row = collect($response->viewData('rows'))->firstWhere('name', 'Measured Twice');
+
+        $this->assertSame('38', $row['baseline_weight']);
+        $this->assertSame('150', $row['baseline_height']);
+        $this->assertSame('16.9', $row['baseline_bmi']);
+        $this->assertSame('47', $row['endline_weight']);
+        $this->assertSame('155', $row['endline_height']);
+        $this->assertSame('19.6', $row['endline_bmi']);
+
+        // Both weighings are named on the table, and both carry a status.
+        $html = $response->getContent();
+        $this->assertStringContainsString('Baseline weighing', $html);
+        $this->assertStringContainsString('Endline weighing', $html);
+        $this->assertStringContainsString('data-baseline-weight="38"', $html);
+        $this->assertStringContainsString('data-endline-weight="47"', $html);
+    }
+
+    /** A weighing nobody took is blank — never the other one's numbers. */
+    #[Test]
+    public function a_learner_with_no_endline_reports_no_endline_figures(): void
+    {
+        $this->makeLearner([
+            'student_name' => 'Measured Once',
+            'baseline_height_cm' => 150, 'baseline_weight_kg' => 38,
+            'baseline_bmi_value' => 16.9, 'baseline_nutritional_status' => 'Wasted',
+        ]);
+
+        $row = collect(
+            $this->withSession($this->headSession())
+                ->get('/dashboard/school-head/masterlist')->assertOk()
+                ->viewData('rows')
+        )->firstWhere('name', 'Measured Once');
+
+        $this->assertSame('38', $row['baseline_weight']);
+        $this->assertSame('', $row['endline_weight'], 'An endline nobody recorded is empty.');
+        $this->assertSame('', $row['endline_height']);
+        $this->assertSame('', $row['endline_bmi']);
+    }
+
     #[Test]
     public function the_masterlist_shows_only_this_schools_learners(): void
     {

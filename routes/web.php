@@ -712,6 +712,17 @@ Route::get('/dashboard/school-head/masterlist', [SchoolHeadMasterlistController:
 Route::get('/dashboard/school-head/masterlist/export', [SchoolHeadMasterlistController::class, 'export'])
     ->name('dashboard.school-head.masterlist.export');
 
+// The same list, under the nurse's own path. It is one controller and one
+// reading — but the URL has to live under dashboard/school-nurse, because
+// EnsureActiveSession seeds a prototype session for whichever role a URL
+// belongs to, and a demo nurse on a /dashboard/school-head URL would be
+// re-seeded as the head before the page ever rendered.
+Route::get('/dashboard/school-nurse/nutritional-status', [SchoolHeadMasterlistController::class, 'index'])
+    ->name('dashboard.school-nurse.nutritional-status');
+
+Route::get('/dashboard/school-nurse/nutritional-status/export', [SchoolHeadMasterlistController::class, 'export'])
+    ->name('dashboard.school-nurse.nutritional-status.export');
+
 // Keeps the school head's dashboard current without a reload: the page polls
 // the pulse (a stamp, no data) and only re-reads the metrics when it moves.
 Route::get('/dashboard/school-head/metrics', [SchoolHeadController::class, 'metrics'])
@@ -934,6 +945,14 @@ Route::post('/dashboard/class-adviser/consent-forms/{form}/send', [HealthConsent
     ->whereNumber('form')->name('consent-forms.send');
 Route::post('/dashboard/class-adviser/consent-forms/{form}/review', [HealthConsentFormController::class, 'review'])
     ->whereNumber('form')->name('consent-forms.review');
+// A consent that came back on paper: scan it, check it, confirm it. The scan
+// endpoint above fills the fields in; this is where a human saves them.
+Route::get('/dashboard/class-adviser/consent-forms/{form}/paper', [HealthConsentFormController::class, 'paperForm'])
+    ->whereNumber('form')->name('consent-forms.paper');
+Route::post('/dashboard/class-adviser/consent-forms/{form}/paper', [HealthConsentFormController::class, 'recordPaperForm'])
+    ->whereNumber('form')->name('consent-forms.paper.store');
+Route::get('/dashboard/class-adviser/consent-forms/{form}/paper-image', [HealthConsentFormController::class, 'paperFormImage'])
+    ->whereNumber('form')->name('consent-forms.paper.image');
 Route::get('/dashboard/school-nurse/consent-forms', [HealthConsentFormController::class, 'nurseIndex'])
     ->name('consent-forms.nurse-index');
 Route::get('/dashboard/school-nurse/consent-forms/{form}', [HealthConsentFormController::class, 'nurseShow'])

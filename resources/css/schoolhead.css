@@ -643,6 +643,21 @@
 .sh-table th:first-child, .sh-table td:first-child { padding-left: 18px; }
 .sh-table th:last-child, .sh-table td:last-child { padding-right: 18px; }
 .sh-index { color: var(--lg-ink-soft); width: 46px; }
+/* The two weighings are two column groups. The band names which reading the
+   four columns under it belong to — without it a figure is just a number in
+   a row, and the head cannot tell a baseline from an endline by looking. */
+.sh-group-row th { padding-top: 10px; padding-bottom: 4px; border-bottom: none; }
+.sh-group {
+	text-align: center;
+	font-size: .66rem;
+	font-weight: 700;
+	letter-spacing: .08em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft);
+}
+.sh-group-baseline { border-bottom: 2px solid var(--lg-border-strong, #C7DCCE); }
+.sh-group-endline { border-bottom: 2px solid var(--lg-emerald, #1F8A4C); color: var(--lg-emerald-deep, #126B3A); }
+@media print { .sh-group-baseline, .sh-group-endline { border-bottom: 1px solid #000; color: #000; } }
 /* No form to open. An em dash, not an empty cell that reads as a bug. */
 .sh-none { color: var(--lg-ink-soft); }
 /* A link is carried by colour and weight, never an underline. */

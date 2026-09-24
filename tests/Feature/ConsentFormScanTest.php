@@ -291,4 +291,157 @@ class ConsentFormScanTest extends TestCase
                 ->assertForbidden();
         }
     }
+    // ── The handwritten blanks ───────────────────────────────────────
+
+    /**
+     * A tick says *whether*; the blanks say *what*. A consent read without
+     * them is one the adviser still has to re-type off the paper, so the
+     * reader transcribes them — and says which ones it was unsure of.
+     */
+    #[Test]
+    public function the_handwritten_blanks_are_transcribed_with_their_confidence(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'written' => [
+                'consent_exceptions' => ['text' => 'Dili ang bakuna', 'confident' => true],
+                'allergy_food' => ['text' => 'Lamang dagat', 'confident' => false],
+                'other_illness' => ['text' => '', 'confident' => true],
+            ],
+        ]));
+
+        $this->assertSame('Dili ang bakuna', $draft['written']['consent_exceptions']['text']);
+        $this->assertTrue($draft['written']['consent_exceptions']['confident']);
+
+        // Read, but not confidently: the text is kept AND named, because the
+        // adviser holding the paper can correct it faster than they can type it.
+        $this->assertSame('Lamang dagat', $draft['written']['allergy_food']['text']);
+        $this->assertFalse($draft['written']['allergy_food']['confident']);
+        $this->assertContains(ConsentFormScanner::WRITTEN_FIELDS['allergy_food'], $draft['unclear']);
+
+        // An empty blank is an answer, and is never flagged.
+        $this->assertSame('', $draft['written']['other_illness']['text']);
+        $this->assertFalse($draft['written']['other_illness']['confident']);
+        $this->assertNotContains(ConsentFormScanner::WRITTEN_FIELDS['other_illness'], $draft['unclear']);
+
+        // Every blank on the form comes back, whether the model answered or not.
+        foreach (array_keys(ConsentFormScanner::WRITTEN_FIELDS) as $key) {
+            $this->assertArrayHasKey($key, $draft['written']);
+        }
+    }
+
+    /** An unreadable photograph transcribes nothing, as it answers nothing. */
+    #[Test]
+    public function an_unreadable_photo_transcribes_no_handwriting(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'unreadable' => true,
+            'written' => ['allergy_medicine' => ['text' => 'Amoxicillin', 'confident' => true]],
+        ]));
+
+        $this->assertSame('', $draft['written']['allergy_medicine']['text']);
+        $this->assertFalse($draft['written']['allergy_medicine']['confident']);
+        $this->assertTrue($draft['needs_review']);
+    }
+
+    /**
+     * `needs_review` is decided once, by the reader, so two screens cannot
+     * reach different answers about the same draft. A clean read still goes to
+     * the adviser — this only says whether anything on it needs a second look.
+     */
+    #[Test]
+    public function needs_review_is_set_by_anything_the_reader_was_unsure_of(): void
+    {
+        $clean = ConsentFormScanner::interpret($this->draft(
+            array_fill_keys(array_keys(ConsentFormScanner::serviceKeys()), ConsentFormScanner::TICKED),
+            ['consent_choice' => HealthConsentForm::CONSENT_ALL, 'written' => []],
+        ));
+        $this->assertFalse($clean['needs_review']);
+
+        foreach ([
+            'an unreadable sheet' => ['unreadable' => true],
+            'a missing signature' => ['signature_present' => false],
+            'an unclear choice' => ['consent_choice' => 'unclear'],
+            'shaky handwriting' => ['written' => ['other_illness' => ['text' => 'ubo', 'confident' => false]]],
+        ] as $because => $overrides) {
+            $draft = ConsentFormScanner::interpret($this->draft(
+                array_fill_keys(array_keys(ConsentFormScanner::serviceKeys()), ConsentFormScanner::TICKED),
+                array_merge(['consent_choice' => HealthConsentForm::CONSENT_ALL, 'written' => []], $overrides),
+            ));
+
+            $this->assertTrue($draft['needs_review'], 'needs_review must be set by '.$because);
+        }
+    }
+
+    /**
+     * A blank nobody could read reads "Unreadable" — not blank, and not a
+     * guess.
+     *
+     * Three states, three different claims about a child: the parent wrote
+     * nothing, the parent wrote this, or the parent wrote something and nobody
+     * could make it out. An empty field would say the first when the truth is
+     * the third, and once the form is saved the two cannot be told apart.
+     */
+    #[Test]
+    public function handwriting_nobody_could_read_is_marked_unreadable(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'written' => [
+                // Blurred beyond reading.
+                'allergy_medicine' => ['text' => '', 'confident' => false, 'readable' => false],
+                // Nothing written at all.
+                'allergy_food' => ['text' => '', 'confident' => true, 'readable' => true],
+                // Read, and certain.
+                'other_illness' => ['text' => 'Ubo', 'confident' => true, 'readable' => true],
+            ],
+        ]));
+
+        $this->assertSame(ConsentFormScanner::UNREADABLE_TEXT, $draft['written']['allergy_medicine']['text']);
+        $this->assertFalse($draft['written']['allergy_medicine']['readable']);
+        $this->assertFalse($draft['written']['allergy_medicine']['confident']);
+        $this->assertContains(ConsentFormScanner::WRITTEN_FIELDS['allergy_medicine'], $draft['unclear']);
+        $this->assertTrue($draft['needs_review']);
+
+        // An empty blank stays empty: "no food allergy" is an answer, and it
+        // must not be reported as unread handwriting.
+        $this->assertSame('', $draft['written']['allergy_food']['text']);
+        $this->assertTrue($draft['written']['allergy_food']['readable']);
+        $this->assertNotContains(ConsentFormScanner::WRITTEN_FIELDS['allergy_food'], $draft['unclear']);
+
+        // And a confident reading is untouched.
+        $this->assertSame('Ubo', $draft['written']['other_illness']['text']);
+        $this->assertTrue($draft['written']['other_illness']['confident']);
+    }
+
+    /**
+     * A reading the model returned but did not mark is taken as read.
+     *
+     * `readable` defaults to true on the way in: a model that omits the key
+     * must not silently turn every blank on the form into "Unreadable", which
+     * would bury the ones that genuinely are.
+     */
+    #[Test]
+    public function a_blank_with_no_readable_flag_is_taken_as_read(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'written' => ['other_illness' => ['text' => 'Ubo', 'confident' => true]],
+        ]));
+
+        $this->assertSame('Ubo', $draft['written']['other_illness']['text']);
+        $this->assertTrue($draft['written']['other_illness']['readable']);
+    }
+
+    /** An unreadable photograph is unreadable whole: no field claims otherwise. */
+    #[Test]
+    public function an_unreadable_photo_marks_nothing_unreadable_field_by_field(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'unreadable' => true,
+            'written' => ['allergy_food' => ['text' => 'x', 'confident' => true, 'readable' => false]],
+        ]));
+
+        // The whole sheet failed, so no single blank is singled out — the
+        // adviser fills the form in from the paper, and the screen says so.
+        $this->assertSame('', $draft['written']['allergy_food']['text']);
+        $this->assertTrue($draft['unreadable']);
+    }
 }

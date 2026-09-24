@@ -83,7 +83,7 @@ final class FeedingReportNarrative
 
         return match ($normalized) {
             'Severely Wasted' => 'Severely Wasted',
-            'Wasted', 'Underweight' => 'Wasted',
+            'Wasted' => 'Wasted',
             'Normal' => 'Normal',
             'Overweight', 'Obese' => FeedingNutritionProgress::ABOVE_NORMAL,
             default => '',

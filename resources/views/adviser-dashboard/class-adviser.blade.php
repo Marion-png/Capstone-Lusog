@@ -66,19 +66,22 @@
             $studentsTotal = $prototypeRecords->count();
             $pendingReviewTotal = $prototypeRecords->filter(fn ($row) => empty($row['examination']))->count();
             $completeRecordsTotal = $prototypeRecords->filter(fn ($row) => !empty($row['examination']) && isset($lrnsWithCertificates[$row['lrn'] ?? '']))->count();
+            // Wasted is one bucket. The classifier no longer emits
+            // "Underweight" and the DepEd scale has no such column, so a
+            // record saved under that retired label counts here rather than in
+            // a second total of its own — which was counted, excluded from
+            // Normal, and then shown nowhere, so those learners fell out of
+            // every figure on this screen.
             $wastedStudentsTotal = $prototypeRecords->filter(function ($row) {
                 $status = strtolower((string) ($row['nutritional_status_bmi_for_age'] ?? ''));
-                return str_contains($status, 'wasted');
-            })->count();
-            $underweightStudentsTotal = $prototypeRecords->filter(function ($row) {
-                $status = strtolower((string) ($row['nutritional_status_bmi_for_age'] ?? ''));
-                return str_contains($status, 'underweight');
+
+                return str_contains($status, 'wasted') || str_contains($status, 'underweight');
             })->count();
             $overweightStudentsTotal = $prototypeRecords->filter(function ($row) {
                 $status = strtolower((string) ($row['nutritional_status_bmi_for_age'] ?? ''));
                 return str_contains($status, 'overweight') || str_contains($status, 'obese');
             })->count();
-            $normalStudentsTotal = max(0, $studentsTotal - ($wastedStudentsTotal + $underweightStudentsTotal + $overweightStudentsTotal));
+            $normalStudentsTotal = max(0, $studentsTotal - ($wastedStudentsTotal + $overweightStudentsTotal));
 
             $safePercent = static function ($count, $total) {
                 if ($total <= 0) {

@@ -1770,8 +1770,8 @@ class StudentHealthRecordController extends Controller
      */
     private static function filterStatus(string $status): string
     {
-        $normalized = FeedingBeneficiarySummary::normalize(trim($status));
-
-        return $normalized === 'Underweight' ? 'Wasted' : $normalized;
+        // normalize() folds the retired "Underweight" into Wasted, so choosing
+        // Wasted lists the same learners the Wasted card counts.
+        return FeedingBeneficiarySummary::normalize(trim($status));
     }
 }

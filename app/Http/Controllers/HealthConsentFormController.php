@@ -6,6 +6,8 @@ use App\Models\HealthConsentForm;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use App\Support\AdviserClassScope;
+use App\Support\ConsentFormScanner;
+use App\Support\EncryptedFileStorage;
 use App\Support\SchemaCache;
 use App\Support\StudentRosterSync;
 use Illuminate\Http\RedirectResponse;
@@ -362,6 +364,152 @@ class HealthConsentFormController extends Controller
 
         return redirect()->route('consent-forms.show', $form)
             ->with('success', 'Form marked as reviewed and released to the School Nurse.');
+    }
+
+    /**
+     * Adviser: record a consent that came back on paper.
+     *
+     * Most consents arrive through the parent's own link. Some arrive the way
+     * they always have — signed in ink, in a child's bag — and the consent half
+     * of the document is editable only through that link, so until this screen
+     * existed a paper form had no way into the system at all.
+     *
+     * **Nothing here is decided by the reader.** The photograph is scanned to
+     * fill the fields in (consent-forms.scan), the adviser checks every one of
+     * them against the paper in their hand, and the form is written only when
+     * they submit it. A parent's consent authorises medical procedures on a
+     * child; a model reading a photograph is a typing aid, never the
+     * authorisation. That is why the scan endpoint records nothing and this
+     * action reads its values from the submitted form, never from a scan.
+     */
+    public function paperForm(Request $request, HealthConsentForm $form)
+    {
+        if ($redirect = $this->requireRole($request, ['class_adviser'])) {
+            return $redirect;
+        }
+
+        $this->assertSameInstitution($request, $form);
+
+        if ($this->paperFormIsClosed($form)) {
+            return redirect()->route('consent-forms.show', $form)
+                ->with('error', 'This form already carries the parent\'s answers.');
+        }
+
+        return view('consent-forms.paper', [
+            'form' => $form,
+            'scannerReady' => ConsentFormScanner::isConfigured(),
+            'writtenFields' => ConsentFormScanner::WRITTEN_FIELDS,
+        ]);
+    }
+
+    /**
+     * Adviser: save the paper form, as the adviser confirmed it.
+     *
+     * The same validation the parent's own submission runs, minus the drawn
+     * signature: the signature is on the paper, and the photograph is what the
+     * record keeps as evidence. A consent with no photograph cannot be saved
+     * here — the drawn PNG column is empty for these, so the sheet itself is
+     * the only thing standing behind the claim that a parent agreed.
+     */
+    public function recordPaperForm(Request $request, HealthConsentForm $form): RedirectResponse
+    {
+        if ($redirect = $this->requireRole($request, ['class_adviser'])) {
+            return $redirect;
+        }
+
+        $this->assertSameInstitution($request, $form);
+
+        if ($this->paperFormIsClosed($form)) {
+            return redirect()->route('consent-forms.show', $form)
+                ->with('error', 'This form already carries the parent\'s answers.');
+        }
+
+        $validated = $request->validate([
+            'consent_choice' => ['required', 'in:all,specific,deny'],
+            'consent_exceptions' => ['required_if:consent_choice,specific', 'nullable', 'string', 'max:1000'],
+            'refusal_reason' => ['required_if:consent_choice,deny', 'nullable', 'string', 'max:1000'],
+            'allergy_food' => ['nullable', 'string', 'max:1000'],
+            'allergy_medicine' => ['nullable', 'string', 'max:1000'],
+            'prev_immunization' => ['nullable', 'string', 'max:1000'],
+            'other_illness' => ['nullable', 'string', 'max:1000'],
+            'parent_guardian_name' => ['required', 'string', 'max:255'],
+            'paper_form' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp,heic', 'max:8192'],
+            // Not a checkbox that styles a warning: the adviser is attesting
+            // that they read the paper and that these are its answers.
+            'confirmed' => ['accepted'],
+        ], [
+            'consent_exceptions.required_if' => 'Write which health services the parent excepted.',
+            'refusal_reason.required_if' => 'Write the reason the parent gave.',
+            'paper_form.required' => 'Attach the photograph of the signed form.',
+            'confirmed.accepted' => 'Confirm that these answers match the paper form.',
+        ]);
+
+        $path = EncryptedFileStorage::store($request->file('paper_form'), 'consent-forms');
+
+        $form->fill([
+            'consent_choice' => $validated['consent_choice'],
+            'consent_exceptions' => $validated['consent_choice'] === 'specific' ? $validated['consent_exceptions'] : null,
+            'refusal_reason' => $validated['consent_choice'] === 'deny' ? $validated['refusal_reason'] : null,
+            'allergy_food' => $validated['allergy_food'] ?? null,
+            'allergy_medicine' => $validated['allergy_medicine'] ?? null,
+            'prev_immunization' => $validated['prev_immunization'] ?? null,
+            'other_illness' => $validated['other_illness'] ?? null,
+            'parent_guardian_name' => $validated['parent_guardian_name'],
+            'paper_form_path' => $path,
+        ]);
+
+        $form->status = HealthConsentForm::STATUS_SIGNED;
+        $form->signed_at = now();
+        $form->adviser_unread = false;
+        // Said on the record, not inferred from an empty signature column: a
+        // nurse reading this later must be able to tell a consent signed on a
+        // screen from one transcribed off paper by a member of staff.
+        $form->addAudit(
+            'Recorded from the signed paper form',
+            'class_adviser',
+            (string) $request->session()->get('active_name', 'Class Adviser'),
+        );
+        $form->save();
+
+        return redirect()->route('consent-forms.show', $form)
+            ->with('success', 'Consent recorded from the paper form. Review it to release it to the School Nurse.');
+    }
+
+    /**
+     * The photographed form itself, for the desks that may already read it.
+     *
+     * A signed consent names a child and their parent's health decisions, so
+     * the image is served through the same scope the form is — never from a
+     * public disk, and never to a role that cannot open the form it belongs to.
+     */
+    public function paperFormImage(Request $request, HealthConsentForm $form)
+    {
+        if ($redirect = $this->requireRole($request, ['class_adviser', 'school_nurse', 'clinic_staff', 'school_head'])) {
+            return $redirect;
+        }
+
+        $this->assertSameInstitution($request, $form);
+
+        abort_unless((string) $form->paper_form_path !== '', 404);
+
+        return EncryptedFileStorage::response(
+            (string) $form->paper_form_path,
+            'consent-form-'.$form->id.'.jpg',
+            'inline',
+        );
+    }
+
+    /**
+     * A form that already carries the parent's answers is not re-recorded
+     * here: a second reading of the same paper would overwrite the first
+     * without anybody being told which one the parent actually signed.
+     */
+    private function paperFormIsClosed(HealthConsentForm $form): bool
+    {
+        return in_array($form->status, [
+            HealthConsentForm::STATUS_SIGNED,
+            HealthConsentForm::STATUS_REVIEWED,
+        ], true);
     }
 
     /** School Nurse: read-only list of completed consent forms for the school. */

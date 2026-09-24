@@ -806,4 +806,29 @@ class NurseHealthRecordsPageTest extends TestCase
         }
         $this->assertStringContainsString('Height-for-Age', $html);
     }
+
+    /**
+     * Growth & Nutrition reports what the height means, not only what it was.
+     *
+     * The panel plots height against weight over time; height-for-age is the
+     * reading those two figures produce for a child of this age, so it sits
+     * beside them — taken from the same App\Support\NutritionalHealthStatus
+     * the Nutritional Health Status tab renders, never classified a second
+     * time in the view.
+     */
+    #[Test]
+    public function the_growth_and_nutrition_panel_carries_height_for_age(): void
+    {
+        $html = $this->withSession($this->nurseSession([$this->learner()]))
+            ->get('/dashboard/student-health-records')
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('Growth &amp; Nutrition', $html);
+        $this->assertStringContainsString('<div class="k">Height-for-Age:</div>', $html);
+        $this->assertStringContainsString('id="pgHfa"', $html);
+
+        // It reads the shared reading, and nothing in the view classifies.
+        $this->assertStringContainsString('record.nutrition', $html);
+    }
 }

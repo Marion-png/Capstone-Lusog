@@ -46,10 +46,27 @@ class SchoolHeadMasterlistController extends Controller
     /** Statuses a filter may offer: what the app's classifier actually emits, plus the honest fourth answer. */
     private const STATUS_OPTIONS = ['Severely Wasted', 'Wasted', 'Normal', 'Overweight', 'Obese', 'not_measured'];
 
+    /**
+     * The roles that may read the school's nutritional health status.
+     *
+     * The School Head reads it to monitor the school. **The School Nurse reads
+     * it because it is their own subject matter**: they already open every
+     * learner's health record one at a time, and a nurse asked "how many
+     * children are wasted this year" had no screen that answered it — only a
+     * roster to page through. Widening the reader is the whole change; the
+     * page still writes nothing for anybody, so nothing about who may *change*
+     * a measurement moves (that is still the class adviser's, and the head is
+     * refused every write by RestrictSchoolHeadWrites regardless).
+     *
+     * @var list<string>
+     */
+    private const READ_ROLES = ['school_head', 'school_nurse'];
+
     public function index(Request $request): View|RedirectResponse
     {
-        if (! $this->isSchoolHead($request)) {
-            return redirect()->route('login')->with('error', 'Only the School Head can open the masterlist.');
+        if (! $this->mayRead($request)) {
+            return redirect()->route('login')
+                ->with('error', 'Only the School Head and the School Nurse can open the nutritional health status list.');
         }
 
         return view('schoolhead-dashboard.masterlist', $this->build($request));
@@ -67,7 +84,7 @@ class SchoolHeadMasterlistController extends Controller
      */
     public function export(Request $request): BinaryFileResponse|RedirectResponse
     {
-        if (! $this->isSchoolHead($request)) {
+        if (! $this->mayRead($request)) {
             return redirect()->route('login')->with('error', 'Only the School Head can export the masterlist.');
         }
 
@@ -91,7 +108,8 @@ class SchoolHeadMasterlistController extends Controller
 
         $writer->addRow(Row::fromValues([
             'NO.', 'LRN', 'NAME', 'GRADE & SECTION', 'SEX', 'AGE',
-            'WEIGHT (KG)', 'HEIGHT (CM)', 'BMI',
+            'BASELINE WEIGHT (KG)', 'BASELINE HEIGHT (CM)', 'BASELINE BMI',
+            'ENDLINE WEIGHT (KG)', 'ENDLINE HEIGHT (CM)', 'ENDLINE BMI',
             'BASELINE STATUS', 'LATEST STATUS', 'CHANGE',
             'BENEFICIARY', 'ATTENDANCE', 'ATTENDANCE STANDING',
         ]));
@@ -106,9 +124,12 @@ class SchoolHeadMasterlistController extends Controller
                 $row['section'],
                 $row['sex'] !== '' ? $row['sex'] : '—',
                 $row['age'] !== '' ? $row['age'] : '—',
-                $row['weight'] !== '' ? $row['weight'] : '—',
-                $row['height'] !== '' ? $row['height'] : '—',
-                $row['bmi'] !== '' ? $row['bmi'] : '—',
+                $row['baseline_weight'] !== '' ? $row['baseline_weight'] : '—',
+                $row['baseline_height'] !== '' ? $row['baseline_height'] : '—',
+                $row['baseline_bmi'] !== '' ? $row['baseline_bmi'] : '—',
+                $row['endline_weight'] !== '' ? $row['endline_weight'] : '—',
+                $row['endline_height'] !== '' ? $row['endline_height'] : '—',
+                $row['endline_bmi'] !== '' ? $row['endline_bmi'] : '—',
                 $row['baseline'] !== '' ? $row['baseline'] : SchoolHeadOverview::NOT_MEASURED,
                 $row['latest'] !== '' ? $row['latest'] : SchoolHeadOverview::NOT_MEASURED,
                 SchoolHeadOverview::movementLabel($row['movement']),
@@ -209,9 +230,24 @@ class SchoolHeadMasterlistController extends Controller
             'grade' => FeedingBeneficiarySummary::gradeNumber((string) $record->section),
             'sex' => FeedingBeneficiarySummary::sexOf($record),
             'age' => $this->firstFilled([$record->endline_age, $details['age'] ?? null, $record->baseline_age]),
+            // The single figure the table used to print: endline if there is
+            // one, else the current record, else the baseline. Kept because the
+            // export and the sort read it, but it is NOT what the table shows
+            // any more — a column that silently changes which weighing it means
+            // from row to row cannot be compared down.
             'weight' => $this->firstFilled([$record->endline_weight_kg, $details['weight_kg'] ?? null, $record->weight, $record->baseline_weight_kg]),
             'height' => $this->firstFilled([$record->endline_height_cm, $details['height_cm'] ?? null, $record->baseline_height_cm]),
             'bmi' => $this->firstFilled([$record->endline_bmi_value, $record->bmi_value, $record->baseline_bmi_value]),
+            // Each weighing as itself. A phase nobody took is empty — never the
+            // other phase's figures, and never the current record standing in
+            // for an endline nobody recorded.
+            'baseline_weight' => $this->firstFilled([$record->baseline_weight_kg]),
+            'baseline_height' => $this->firstFilled([$record->baseline_height_cm]),
+            'baseline_bmi' => $this->firstFilled([$record->baseline_bmi_value]),
+            'endline_weight' => $this->firstFilled([$record->endline_weight_kg]),
+            'endline_height' => $this->firstFilled([$record->endline_height_cm]),
+            'endline_bmi' => $this->firstFilled([$record->endline_bmi_value]),
+            'endline' => SchoolHeadOverview::phaseStatus($record, 'endline'),
             'baseline' => $baseline,
             'latest' => $latest,
             'movement' => SchoolHeadOverview::movement($baseline, $latest),
@@ -465,8 +501,18 @@ class SchoolHeadMasterlistController extends Controller
         return rtrim(rtrim(number_format($value, 1), '0'), '.');
     }
 
-    private function isSchoolHead(Request $request): bool
+    private function mayRead(Request $request): bool
     {
-        return strtolower(trim((string) $request->session()->get('active_role', ''))) === 'school_head';
+        return in_array(
+            strtolower(trim((string) $request->session()->get('active_role', ''))),
+            self::READ_ROLES,
+            true,
+        );
+    }
+
+    /** Which shell the page is drawn in — the reader's own, never the other's. */
+    public static function isNurse(Request $request): bool
+    {
+        return strtolower(trim((string) $request->session()->get('active_role', ''))) === 'school_nurse';
     }
 }

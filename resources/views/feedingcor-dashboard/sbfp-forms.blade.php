@@ -983,7 +983,7 @@
 			fieldPrefix: 'ml_',
 			keep: (student) => Boolean(student.qualified),
 			loadedLabel: 'qualified student(s)',
-			emptyLabel: 'No qualified (Wasted / Severely Wasted / Underweight) students on file for',
+			emptyLabel: 'No qualified (Wasted / Severely Wasted) students on file for',
 		}),
 		// The enrolled roll: whoever the coordinator gave a place — qualified
 		// AND enrolled AND not removed, the server's own isBeneficiary() reading.

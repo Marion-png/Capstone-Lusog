@@ -47,6 +47,36 @@ class ConsentFormScanner
 
     public const UNCLEAR = 'unclear';
 
+    /**
+     * What a blank reads as when the handwriting cannot be made out at all.
+     *
+     * Blurred, smeared, over-written, cut off by the edge of the photograph —
+     * whatever the cause, the honest answer is that nobody read it. It is a
+     * word on the screen rather than an empty field for a reason: an empty
+     * field says "the parent wrote nothing here", which is a different claim
+     * about a child's allergies, and the adviser cannot tell the two apart
+     * once the form is saved.
+     */
+    public const UNREADABLE_TEXT = 'Unreadable';
+
+    /**
+     * The blanks the parent writes in by hand, keyed by the column each one
+     * fills. A tick says *whether*; these say *what* — which services were
+     * excepted, why consent was refused, what the child reacts to — and a
+     * consent form read without them is a form the adviser still has to
+     * re-type from the paper.
+     *
+     * @var array<string, string>
+     */
+    public const WRITTEN_FIELDS = [
+        'consent_exceptions' => 'Services the parent excepted',
+        'refusal_reason' => 'Reason for refusing',
+        'allergy_food' => 'Food allergy',
+        'allergy_medicine' => 'Medicine allergy',
+        'prev_immunization' => 'Reaction to a previous immunization',
+        'other_illness' => 'Current or other illness',
+    ];
+
     public function __construct(private readonly ?Client $client = null) {}
 
     public static function isConfigured(): bool
@@ -79,9 +109,11 @@ class ConsentFormScanner
      * @return array{
      *     consent_choice: string,
      *     services: array<string, string>,
+     *     written: array<string, array{text: string, confident: bool, readable: bool}>,
      *     parent_guardian_name: string,
      *     signature_present: bool,
      *     unclear: list<string>,
+     *     needs_review: bool,
      *     unreadable: bool,
      *     note: string
      * }
@@ -151,6 +183,35 @@ class ConsentFormScanner
         consent forms often indent sub-items beneath a parent item — check that
         a mark belongs to the row you think it does before recording it.
 
+        The parent also WRITES in some blanks by hand. For each one, transcribe
+        exactly what is written and say whether you are confident you read it
+        correctly.
+
+        There are exactly three outcomes for a blank, and they are different
+        claims about the child. Do not blur them together:
+
+          - EMPTY: the parent wrote nothing. Set text to an empty string,
+            readable true. An empty blank is an answer — "no food allergy" —
+            so never fill it with something plausible.
+          - READ: transcribe exactly what is on the paper, readable true. Do
+            not correct spelling, expand an abbreviation, translate, or
+            complete a half-written word. Set confident to false if you read it
+            but are not certain of every word: these forms are written in
+            Cebuano/Bisaya, English or a mixture, often in hurried handwriting,
+            and Cebuano medical vocabulary frequently will not be certain. An
+            unsure reading is useful — the adviser is holding the paper and
+            will correct it. A confident wrong transcription is the failure to
+            avoid.
+          - UNREADABLE: something is written there but you cannot make out the
+            words at all — blurred, smeared, over-written, too faint, or cut
+            off by the edge of the photograph. Set readable to FALSE and leave
+            text empty. Do not guess at it and do not describe it. "Something
+            is written and nobody read it" is the answer, and it is not the
+            same answer as "nothing is written".
+
+        Never set confident to true for a blank you had to infer from context
+        rather than read.
+
         Also report:
           - consent_choice: "all" if the parent agreed to every service,
             "specific" if they agreed to some but not all, "deny" if they
@@ -182,6 +243,12 @@ class ConsentFormScanner
 
         $services = implode("\n", $lines);
 
+        $writtenLines = [];
+        foreach (self::WRITTEN_FIELDS as $key => $label) {
+            $writtenLines[] = '- '.$key.': '.$label;
+        }
+        $written = implode("\n", $writtenLines);
+
         return <<<PROMPT
         Read the attached consent form.
 
@@ -190,9 +257,13 @@ class ConsentFormScanner
 
         {$services}
 
-        Return "yes", "no" or "unclear" for each key, plus consent_choice, the
-        parent or guardian's printed name if legible, and whether a signature is
-        present.
+        Then transcribe each handwritten blank, with a confidence flag:
+
+        {$written}
+
+        Return "yes", "no" or "unclear" for each service key, the written
+        blanks, consent_choice, the parent or guardian's printed name if
+        legible, and whether a signature is present.
         PROMPT;
     }
 
@@ -207,6 +278,24 @@ class ConsentFormScanner
         $properties = [];
         foreach (array_keys(self::serviceKeys()) as $key) {
             $properties[$key] = $answer;
+        }
+
+        $written = [];
+        foreach (self::WRITTEN_FIELDS as $key => $label) {
+            $written[$key] = [
+                'type' => 'object',
+                'description' => $label.' — empty text if the blank is empty.',
+                'properties' => [
+                    'text' => ['type' => 'string'],
+                    'confident' => ['type' => 'boolean'],
+                    'readable' => [
+                        'type' => 'boolean',
+                        'description' => 'False only when something is written there and cannot be made out.',
+                    ],
+                ],
+                'required' => ['text', 'confident', 'readable'],
+                'additionalProperties' => false,
+            ];
         }
 
         return [
@@ -230,6 +319,12 @@ class ConsentFormScanner
                         'properties' => $properties,
                         'additionalProperties' => false,
                     ],
+                    'written' => [
+                        'type' => 'object',
+                        'description' => 'One entry per handwritten blank on the form.',
+                        'properties' => $written,
+                        'additionalProperties' => false,
+                    ],
                     'parent_guardian_name' => [
                         'type' => 'string',
                         'description' => 'Printed name of the parent or guardian, or an empty string.',
@@ -241,14 +336,14 @@ class ConsentFormScanner
                         'description' => 'Anything the adviser should check by eye. Empty if nothing.',
                     ],
                 ],
-                'required' => ['consent_choice', 'services', 'signature_present', 'unreadable'],
+                'required' => ['consent_choice', 'services', 'written', 'signature_present', 'unreadable'],
                 'additionalProperties' => false,
             ],
         ];
     }
 
     /**
-     * @return array{consent_choice: string, services: array<string, string>, parent_guardian_name: string, signature_present: bool, unclear: list<string>, unreadable: bool, note: string}
+     * @return array<string, mixed>
      */
     private function parse(mixed $message): array
     {
@@ -266,9 +361,17 @@ class ConsentFormScanner
      *    UNCLEAR — never "no". A missing answer is not a refusal.
      *  - an unreadable photo answers nothing at all, rather than returning
      *    guesses beside the warning.
+     *  - a handwritten blank the model was not sure of is carried WITH its
+     *    reading and named as needing a look. Dropping the text would make the
+     *    adviser type it from the paper anyway; presenting it as certain is the
+     *    error. So it arrives flagged, and the review screen shows it flagged.
+     *  - a blank nobody could read at all reads "Unreadable", not blank. An
+     *    empty field is the claim that the parent wrote nothing, which is a
+     *    different thing to say about a child's allergies and cannot be told
+     *    apart from the real thing once the form is saved.
      *
      * @param  array<string, mixed>  $payload
-     * @return array{consent_choice: string, services: array<string, string>, parent_guardian_name: string, signature_present: bool, unclear: list<string>, unreadable: bool, note: string}
+     * @return array<string, mixed>
      */
     public static function interpret(array $payload): array
     {
@@ -292,19 +395,67 @@ class ConsentFormScanner
             $services[$key] = $answer;
         }
 
+        // The handwritten blanks. An unreadable sheet transcribes nothing, and
+        // a blank the model was unsure of keeps its text and is named.
+        $writtenIn = is_array($payload['written'] ?? null) ? $payload['written'] : [];
+        $written = [];
+
+        foreach (self::WRITTEN_FIELDS as $key => $label) {
+            $entry = is_array($writtenIn[$key] ?? null) ? $writtenIn[$key] : [];
+            $text = $unreadable ? '' : trim((string) ($entry['text'] ?? ''));
+
+            // Something is written there and nobody read it. The field says so
+            // in words rather than arriving blank, because a blank field is the
+            // claim that the parent wrote nothing — a different thing to say
+            // about a child's allergies, and indistinguishable once saved.
+            // `readable` defaults to true, so a model that omits it is taken to
+            // have read what it returned rather than silently marking every
+            // blank unreadable.
+            $illegible = ! $unreadable
+                && array_key_exists('readable', $entry)
+                && ! (bool) $entry['readable'];
+
+            if ($illegible) {
+                $written[$key] = ['text' => self::UNREADABLE_TEXT, 'confident' => false, 'readable' => false];
+                $unclear[] = $label;
+
+                continue;
+            }
+
+            // Confidence is only meaningful about something that was read.
+            $confident = $text !== '' && (bool) ($entry['confident'] ?? false);
+
+            $written[$key] = ['text' => $text, 'confident' => $confident, 'readable' => true];
+
+            if ($text !== '' && ! $confident) {
+                $unclear[] = $label;
+            }
+        }
+
         $choice = strtolower(trim((string) ($payload['consent_choice'] ?? '')));
         $validChoices = [
             HealthConsentForm::CONSENT_ALL,
             HealthConsentForm::CONSENT_SPECIFIC,
             HealthConsentForm::CONSENT_DENY,
         ];
+        $choice = (! $unreadable && in_array($choice, $validChoices, true)) ? $choice : self::UNCLEAR;
+        $signature = ! $unreadable && (bool) ($payload['signature_present'] ?? false);
 
         return [
-            'consent_choice' => (! $unreadable && in_array($choice, $validChoices, true)) ? $choice : self::UNCLEAR,
+            'consent_choice' => $choice,
             'services' => $services,
+            'written' => $written,
             'parent_guardian_name' => $unreadable ? '' : trim((string) ($payload['parent_guardian_name'] ?? '')),
-            'signature_present' => ! $unreadable && (bool) ($payload['signature_present'] ?? false),
+            'signature_present' => $signature,
             'unclear' => $unclear,
+            // Said once, by the reader, so no screen has to work it out for
+            // itself and reach a different answer. A form with nothing flagged
+            // still goes to the adviser to confirm — this only says whether
+            // anything on it needs a second look first.
+            'needs_review' => $unreadable
+                || $unclear !== []
+                || $choice === self::UNCLEAR
+                || ! $signature,
             'unreadable' => $unreadable,
             'note' => trim((string) ($payload['note'] ?? '')),
         ];

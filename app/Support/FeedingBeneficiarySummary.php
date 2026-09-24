@@ -207,13 +207,23 @@ final class FeedingBeneficiarySummary
     {
         return match (self::normalize((string) ($record->baseline_nutritional_status ?: $record->nutritional_status))) {
             'Severely Wasted' => 'Severely Wasted',
-            'Wasted', 'Underweight' => 'Wasted',
+            'Wasted' => 'Wasted',
             'Overweight', 'Obese' => FeedingNutritionProgress::ABOVE_NORMAL,
             default => 'Normal',
         };
     }
 
-    /** The many spellings an adviser may have typed, reduced to one label. */
+    /**
+     * The many spellings an adviser may have typed, reduced to one label.
+     *
+     * **"Underweight" is not one of the labels this can return.** The DepEd
+     * scale has no such column, `BmiClassifier` stopped emitting it, and a
+     * record saved under it is Wasted everywhere the app counts — so it is
+     * folded here, at the one place every caller already goes through, rather
+     * than by each of them afterwards. Four callers used to do exactly that
+     * (`statusOf`, `toScale`, `filterStatus`, `scaleStatus`) and a fifth that
+     * forgot would have printed the retired word on a screen.
+     */
     public static function normalize(string $status): string
     {
         $normalized = strtolower(trim($status));
@@ -221,8 +231,7 @@ final class FeedingBeneficiarySummary
         return match (true) {
             $normalized === '' => '',
             str_contains($normalized, 'severe') => 'Severely Wasted',
-            str_contains($normalized, 'wast') => 'Wasted',
-            str_contains($normalized, 'underweight') => 'Underweight',
+            str_contains($normalized, 'wast'), str_contains($normalized, 'underweight') => 'Wasted',
             str_contains($normalized, 'over') => 'Overweight',
             str_contains($normalized, 'normal') => 'Normal',
             default => $status,

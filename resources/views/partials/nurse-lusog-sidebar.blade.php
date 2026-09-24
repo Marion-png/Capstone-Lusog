@@ -57,6 +57,17 @@
             Consultation Log
         </a>
 
+        {{-- The whole school's weigh-ins in one list. The nurse already opens
+             every learner's record one at a time; this answers "how many
+             children are wasted this year" without paging through a roster.
+             It is the School Head's Nutritional Health Status list, read by
+             one controller and rendered in whichever rail the reader belongs
+             to — never a second copy that could report different figures. --}}
+        <a href="{{ route('dashboard.school-nurse.nutritional-status') }}" class="sb-link {{ $active === 'nutritional-status' ? 'active' : '' }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 16l4-5 3 3 5-7"/></svg>
+            Nutritional Health Status
+        </a>
+
         <div class="sb-section-label">Health Programs</div>
         <a href="{{ route('dashboard.school-nurse.feeding-program') }}" class="sb-link {{ $active === 'feeding' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>

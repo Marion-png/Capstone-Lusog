@@ -89,4 +89,70 @@ class NurseLusogShellTest extends TestCase
         $this->assertMatchesRegularExpression('/class="sb-link active">.*?Nutritional Status Report\s*<\/a>/s', $html);
         $this->assertStringNotContainsString('<h1 class="page-title">Feeding <span>Program</span></h1>', $html);
     }
+
+    /**
+     * The nurse reads the whole school's nutritional health status.
+     *
+     * They already open every learner's record one at a time; "how many
+     * children are wasted this year" had no screen that answered it. It is the
+     * School Head's list — one controller, one reading, rendered in whichever
+     * rail the reader belongs to — so the two desks can never report different
+     * figures for the same school.
+     */
+    public function test_the_nurse_can_read_the_nutritional_health_status_list(): void
+    {
+        $html = $this->withSession($this->nurseSession())
+            ->get('/dashboard/school-nurse/nutritional-status')
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('Nutritional Health Status', $html);
+
+        // Drawn in the nurse's own shell, not the head's: a nurse's click must
+        // never land on the School Head's menu.
+        $this->assertStringContainsString('sb-section-label', $html);
+        $this->assertStringNotContainsString('asb-link-text', $html);
+        $this->assertStringContainsString('page-ready', $html, 'A nurse page that never adds .page-ready renders blank.');
+        $this->assertStringContainsString('<span>School Nurse</span>', $html);
+
+        // And the rail offers it.
+        $rail = $this->withSession($this->nurseSession())
+            ->get('/dashboard/school-nurse')
+            ->assertOk()
+            ->getContent();
+        $this->assertStringContainsString('/dashboard/school-nurse/nutritional-status', $rail);
+    }
+
+    /** It reads; it offers nothing to change. */
+    public function test_the_nutritional_status_list_is_read_only_for_the_nurse(): void
+    {
+        $html = $this->withSession($this->nurseSession())
+            ->get('/dashboard/school-nurse/nutritional-status')
+            ->assertOk()
+            ->getContent();
+
+        // Measurements belong to the class adviser and enrolment to the
+        // coordinator, so the page carries no write of its own. The one form
+        // on it is the GET filter toolbar; the only POST in the document is
+        // the rail's logout, which is the browser's own session and not
+        // school data.
+        $this->assertStringContainsString('<form method="GET" class="card sh-toolbar"', $html);
+        $this->assertStringNotContainsString('enrollment.store', $html);
+        $this->assertStringNotContainsString('storeBaseline', $html);
+        $this->assertSame(
+            1,
+            substr_count(strtolower($html), 'method="post"'),
+            'The only POST on the page is the rail\x27s logout.'
+        );
+    }
+
+    /** A role with no business in it is turned away. */
+    public function test_another_role_cannot_open_the_nutritional_status_list(): void
+    {
+        foreach (['feeding_coor', 'nutricor', 'clinic_staff'] as $role) {
+            $this->withSession(array_merge($this->nurseSession(), ['active_role' => $role]))
+                ->get('/dashboard/school-nurse/nutritional-status')
+                ->assertRedirect(route('login'));
+        }
+    }
 }

@@ -4,7 +4,8 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="csrf-token" content="{{ csrf_token() }}">
-	<title>Nutritional Health Status - School Head - SIGLA</title>
+	@php $mlIsNurse = session('active_role') === 'school_nurse'; @endphp
+	<title>Nutritional Health Status - {{ $mlIsNurse ? 'School Nurse' : 'School Head' }} - SIGLA</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
@@ -12,10 +13,21 @@
 	<script>document.documentElement.classList.add('js');</script>
 	<style>{!! file_get_contents(resource_path('css/lusog-theme.css')) !!}</style>
 	<style>{!! file_get_contents(resource_path('css/schoolhead.css')) !!}</style>
-	<style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
+	{{-- One page, two readers, each in their own shell. The table is the same
+	     reading either way — this only decides which rail is beside it, so a
+	     nurse's click never lands on the head's menu. --}}
+	@if ($mlIsNurse)
+		<style>{!! file_get_contents(resource_path('css/nurse-sidebar.css')) !!}</style>
+	@else
+		<style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
+	@endif
 </head>
 <body>
-@include('partials.schoolhead-sidebar', ['active' => 'masterlist'])
+@if ($mlIsNurse)
+	@include('partials.nurse-lusog-sidebar', ['active' => 'nutritional-status'])
+@else
+	@include('partials.schoolhead-sidebar', ['active' => 'masterlist'])
+@endif
 
 @php
 	use App\Support\SchoolHeadOverview;
@@ -47,7 +59,7 @@
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>School Head</span><span class="bc-sep">&rsaquo;</span><span>Nutritional Health Status</span></div>
+		<div class="topbar-bc"><span>{{ $mlIsNurse ? 'School Nurse' : 'School Head' }}</span><span class="bc-sep">&rsaquo;</span><span>Nutritional Health Status</span></div>
 		@include('partials.live-clock')
 	</header>
 
@@ -66,7 +78,7 @@
 				</p>
 			</div>
 			<div class="sh-actions">
-				<a class="btn btn-secondary" href="{{ route('dashboard.school-head.masterlist.export', request()->query()) }}">
+				<a class="btn btn-secondary" href="{{ route($mlIsNurse ? 'dashboard.school-nurse.nutritional-status.export' : 'dashboard.school-head.masterlist.export', request()->query()) }}">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
 					Export list
 				</a>
@@ -189,7 +201,18 @@
 			@else
 				<div class="table-scroll">
 					<table class="sh-table" id="mlTable">
+						{{-- The two weighings are two column groups, not one set of
+						     figures that quietly means whichever reading exists. A
+						     column that is the endline on one row and the baseline
+						     on the next cannot be compared down, and the head
+						     reading it has no way to tell which is which. --}}
 						<thead>
+							<tr class="sh-group-row">
+								<th colspan="6"></th>
+								<th colspan="4" class="sh-group sh-group-baseline">Baseline weighing</th>
+								<th colspan="4" class="sh-group sh-group-endline">Endline weighing</th>
+								<th></th>
+							</tr>
 							<tr>
 								<th class="num">#</th>
 								<th data-sort="lrn">LRN</th>
@@ -197,11 +220,14 @@
 								<th data-sort="section">Grade &amp; Section</th>
 								<th data-sort="sex">Gender</th>
 								<th class="num" data-sort="age">Age</th>
-								<th class="num" data-sort="weight">Weight (kg)</th>
-								<th class="num" data-sort="height">Height (cm)</th>
-								<th class="num" data-sort="bmi">BMI</th>
-								<th data-sort="baseline">Baseline</th>
-								<th data-sort="latest">Latest</th>
+								<th class="num" data-sort="baselineWeight">Weight (kg)</th>
+								<th class="num" data-sort="baselineHeight">Height (cm)</th>
+								<th class="num" data-sort="baselineBmi">BMI</th>
+								<th data-sort="baseline">Status</th>
+								<th class="num" data-sort="endlineWeight">Weight (kg)</th>
+								<th class="num" data-sort="endlineHeight">Height (cm)</th>
+								<th class="num" data-sort="endlineBmi">BMI</th>
+								<th data-sort="latest">Status</th>
 								<th data-sort="movement">Change</th>
 							</tr>
 						</thead>
@@ -215,6 +241,12 @@
 								    data-section="{{ $row['section'] }}"
 								    data-sex="{{ $row['sex'] }}"
 								    data-age="{{ $row['age'] }}"
+								    data-baseline-weight="{{ $row['baseline_weight'] }}"
+								    data-baseline-height="{{ $row['baseline_height'] }}"
+								    data-baseline-bmi="{{ $row['baseline_bmi'] }}"
+								    data-endline-weight="{{ $row['endline_weight'] }}"
+								    data-endline-height="{{ $row['endline_height'] }}"
+								    data-endline-bmi="{{ $row['endline_bmi'] }}"
 								    data-weight="{{ $row['weight'] }}"
 								    data-height="{{ $row['height'] }}"
 								    data-bmi="{{ $row['bmi'] }}"
@@ -235,10 +267,18 @@
 									<td>{{ $row['section'] }}</td>
 									<td>{{ $row['sex'] !== '' ? $row['sex'] : '—' }}</td>
 									<td class="num">{{ $row['age'] !== '' ? $row['age'] : '—' }}</td>
-									<td class="num">{{ $row['weight'] !== '' ? $row['weight'] : '—' }}</td>
-									<td class="num">{{ $row['height'] !== '' ? $row['height'] : '—' }}</td>
-									<td class="num">{{ $row['bmi'] !== '' ? $row['bmi'] : '—' }}</td>
+									{{-- Baseline. A figure nobody recorded is an em dash,
+									     never the other weighing's number. --}}
+									<td class="num">{{ $row['baseline_weight'] !== '' ? $row['baseline_weight'] : '—' }}</td>
+									<td class="num">{{ $row['baseline_height'] !== '' ? $row['baseline_height'] : '—' }}</td>
+									<td class="num">{{ $row['baseline_bmi'] !== '' ? $row['baseline_bmi'] : '—' }}</td>
 									<td><span class="badge {{ $shStatusBadge($row['baseline']) }}">{{ $shStatusLabel($row['baseline']) }}</span></td>
+									{{-- Endline. The status column stays the record's own
+									     `latest` reading, which is what the Latest filter
+									     above the table narrows on. --}}
+									<td class="num">{{ $row['endline_weight'] !== '' ? $row['endline_weight'] : '—' }}</td>
+									<td class="num">{{ $row['endline_height'] !== '' ? $row['endline_height'] : '—' }}</td>
+									<td class="num">{{ $row['endline_bmi'] !== '' ? $row['endline_bmi'] : '—' }}</td>
 									<td><span class="badge {{ $shStatusBadge($row['latest']) }}">{{ $shStatusLabel($row['latest']) }}</span></td>
 									<td>
 										@if ($row['movement'] === 'unknown')
@@ -485,6 +525,12 @@
 	renumber();
 })();
 </script>
-@include('partials.role-page-transition')
+@if ($mlIsNurse)
+	{{-- nurse-sidebar.css starts .sidebar ~ .main at opacity 0 under html.js,
+	     so a nurse page that never adds .page-ready renders blank. --}}
+	@include('partials.nurse-page-transition')
+@else
+	@include('partials.role-page-transition')
+@endif
 </body>
 </html>
