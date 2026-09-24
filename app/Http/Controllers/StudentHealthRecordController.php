@@ -17,6 +17,7 @@ use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
+use App\Support\NutritionalHealthStatus;
 use App\Support\PriorityHealthRule;
 use App\Support\ProfileCompletionRule;
 use App\Support\RequestMemo;
@@ -369,8 +370,8 @@ class StudentHealthRecordController extends Controller
                 'has_assessment' => $assessment !== null,
                 'consent' => $this->classifyConsentStatus($consent),
                 'at_risk' => (bool) ($shRecord?->is_at_risk),
-                // Read-only summaries for the Consent and Feeding Status tabs
-                // of the student profile.
+                // Read-only summaries for the Consent and Nutritional Health
+                // Status tabs of the student profile.
                 'consent_detail' => [
                     'status' => $consent
                         ? (HealthConsentForm::statusBadges()[$consent->status]['label'] ?? $consent->status)
@@ -384,6 +385,13 @@ class StudentHealthRecordController extends Controller
                     'endline_status' => $shRecord?->endline_nutritional_status,
                     'sessions' => (int) ($shRecord?->attendance_sessions_count ?? 0),
                 ],
+                // Height, weight, BMI and height-for-age with their
+                // classifications, baseline against endline. The same one
+                // reading the nurse's profile renders, so a learner's figures
+                // cannot differ between the two desks that open them.
+                'nutrition' => $shRecord !== null
+                    ? NutritionalHealthStatus::forRecord($shRecord)
+                    : null,
                 'programme_complete' => ProfileCompletionRule::isComplete(
                     $cycle,
                     $shRecord,

@@ -22,6 +22,7 @@ class Consultation extends Model
         'condition_id',
         'treatment_given',
         'notes',
+        'notes_shared_with_adviser',
         'status',
     ];
 
@@ -39,6 +40,8 @@ class Consultation extends Model
             'condition' => EncryptedString::class,
             'treatment_given' => EncryptedString::class,
             'notes' => EncryptedString::class,
+            // A flag, not a fact about the child: plain, and queryable.
+            'notes_shared_with_adviser' => 'boolean',
         ];
     }
 

@@ -155,6 +155,7 @@ class ConsultationController extends Controller
             // A note on the visit — what the profile's Clinic Notes tab used
             // to take separately. It rides the consultation it is about.
             'notes' => ['nullable', 'string', 'max:2000'],
+            'notes_shared_with_adviser' => ['nullable', 'boolean'],
             'status' => ['required', 'in:treated,referred'],
             // Optional: a medicine handed over during the visit. Recording it
             // here draws the stock down in the same transaction, so what the
@@ -227,10 +228,18 @@ class ConsultationController extends Controller
 
         DB::transaction(function () use ($validated, $conditionName, $conditionId, $institutionId, $medicineId, $quantity, $photos, $request, &$dispensed, &$photoCount) {
             // The note travels only where its column has been migrated, so an
-            // older database still records the visit.
+            // older database still records the visit. Whether the clinic
+            // shared it with the class adviser rides with it — a note nobody
+            // wrote is never 'shared', so the flag follows the text.
+            $noteText = trim((string) ($validated['notes'] ?? '')) ?: null;
             $note = SchemaCache::hasColumn('consultations', 'notes')
-                ? ['notes' => trim((string) ($validated['notes'] ?? '')) ?: null]
+                ? ['notes' => $noteText]
                 : [];
+
+            if (SchemaCache::hasColumn('consultations', 'notes_shared_with_adviser')) {
+                $note['notes_shared_with_adviser'] = $noteText !== null
+                    && (bool) ($validated['notes_shared_with_adviser'] ?? false);
+            }
 
             $consultation = Consultation::create($note + [
                 'institution_id' => $institutionId,

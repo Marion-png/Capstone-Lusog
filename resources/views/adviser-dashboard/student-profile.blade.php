@@ -89,7 +89,7 @@
                 <button type="button" class="sp-tab active" role="tab" aria-selected="true" data-panel="vpTabSheet1">Sheet 1 <span class="sp-tab-badge">Learner Info</span></button>
                 <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabSheet2">Sheet 2 <span class="sp-tab-badge">Systems Review</span></button>
                 <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabConsent">Consent <span class="sp-tab-badge" id="vpConsentTabBadge">&ndash;</span></button>
-                <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabFeeding">Feeding Status <span class="sp-tab-badge" id="vpFeedingTabBadge">&ndash;</span></button>
+                <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabFeeding">Nutritional Health Status <span class="sp-tab-badge" id="vpFeedingTabBadge">&ndash;</span></button>
                 <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabNotes">Clinic Notes <span class="sp-tab-badge" id="vpNotesTabBadge">0</span></button>
                 <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabConsultations">Consultation Log <span class="sp-tab-badge" id="vpConsultationsTabBadge">0</span></button>
                 <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabDocuments">Medical Documents <span class="sp-tab-badge" id="vpDocumentsTabBadge">0</span></button>
@@ -173,15 +173,34 @@
                 </section>
             </div>
 
+            {{-- The learner weighed twice, side by side: the opening measurement
+                 and the closing one, each with the classifications those figures
+                 decide. Every value is the server's (App\Support\NutritionalHealthStatus),
+                 the same reading the nurse's profile renders. --}}
             <div class="sp-panel" id="vpTabFeeding" role="tabpanel">
                 <section class="student-profile-section">
-                    <h4>Feeding Status</h4>
-                    <div class="student-profile-grid metrics">
-                        <div><span>Baseline nutritional status:</span><b id="vpFeedBaseline">-</b></div>
-                        <div><span>Endline nutritional status:</span><b id="vpFeedEndline">-</b></div>
-                        <div><span>Attendance sessions:</span><b id="vpFeedSessions">-</b></div>
+                    <h4>Nutritional Health Status</h4>
+                    <div class="nhs-empty" id="vpNhsEmpty" hidden>No measurement on file for this learner yet.</div>
+                    <table class="nhs-table" id="vpNhsTable">
+                        <thead>
+                            <tr>
+                                <th>Measurement</th>
+                                <th>Baseline <span id="vpNhsBaselineDate"></span></th>
+                                <th>Endline <span id="vpNhsEndlineDate"></span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><th>Height</th><td id="vpNhsHeightB">&mdash;</td><td id="vpNhsHeightE">&mdash;</td></tr>
+                            <tr><th>Weight</th><td id="vpNhsWeightB">&mdash;</td><td id="vpNhsWeightE">&mdash;</td></tr>
+                            <tr><th>BMI</th><td id="vpNhsBmiB">&mdash;</td><td id="vpNhsBmiE">&mdash;</td></tr>
+                            <tr><th>BMI-for-Age</th><td id="vpNhsBmiStatusB">&mdash;</td><td id="vpNhsBmiStatusE">&mdash;</td></tr>
+                            <tr><th>Height-for-Age</th><td id="vpNhsHfaB">&mdash;</td><td id="vpNhsHfaE">&mdash;</td></tr>
+                        </tbody>
+                    </table>
+                    <div class="student-profile-grid metrics" style="margin-top:14px;">
+                        <div><span>Feeding attendance sessions:</span><b id="vpFeedSessions">-</b></div>
                     </div>
-                    <div class="sp-note">At-risk is derived from feeding attendance and is maintained by the Feeding Coordinator.</div>
+                    <div class="sp-note">Measurements are entered on the enrolment form; at-risk is derived from feeding attendance and is maintained by the Feeding Coordinator.</div>
                 </section>
             </div>
 
@@ -214,7 +233,7 @@
 
                     <div class="sp-readonly-banner">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                        <span><b>Date and time only:</b> consultation records are added by the school nurse or clinic staff. You can see that this learner attended the clinic and when. The complaint, diagnosis and treatment are clinical information held by the clinic &mdash; ask the school nurse if there is something you need to act on.</span>
+                        <span><b>Date and time, plus what the clinic shares:</b> consultation records are added by the school nurse or clinic staff. You can see that this learner attended the clinic and when, along with any note or photograph the clinic chose to share with you. The complaint, diagnosis and treatment are clinical information held by the clinic &mdash; ask the school nurse if there is something you need to act on.</span>
                     </div>
 
                     <div class="sp-subhead">
@@ -660,6 +679,27 @@ const STUDENT_PROFILE_LRN = @json($lrn);
                 card.appendChild(row);
             });
 
+            // The note the clinic chose to hand over — "watch for dizziness
+            // this afternoon", "no PE for a week". Only a shared note is in
+            // the payload at all (App\Support\ConsultationVisibility), so a
+            // visit with none renders nothing rather than a locked row. It is
+            // set as text through the DOM, never interpolated: staff typed it.
+            if (visit.shared_note) {
+                const note = document.createElement('div');
+                note.className = 'clog-note';
+
+                note.appendChild(Object.assign(document.createElement('div'), {
+                    className: 'clog-note-label',
+                    textContent: 'Note from the clinic',
+                }));
+                note.appendChild(Object.assign(document.createElement('p'), {
+                    className: 'clog-note-body',
+                    textContent: String(visit.shared_note),
+                }));
+
+                card.appendChild(note);
+            }
+
             // Photographs the school nurse deliberately shared for this
             // visit — a cut or a graze the adviser needs to know about.
             // Nothing loads unless the nurse shared something: the count
@@ -775,10 +815,35 @@ const STUDENT_PROFILE_LRN = @json($lrn);
         setText('vpConsentSigned', consent.signed_at || '-');
         setText('vpConsentReviewed', consent.reviewed_at || '-');
 
+        // Baseline against endline. A phase nobody measured is an em dash,
+        // never the other phase's figures — the server sends blanks for it and
+        // this only prints what it was sent.
+        const nutrition = meta.nutrition || {};
+        const nhsTable = document.getElementById('vpNhsTable');
+        const nhsEmpty = document.getElementById('vpNhsEmpty');
+        const nhsDash = (value) => {
+            const text = String(value == null ? '' : value).trim();
+            return text === '' ? '\u2014' : text;
+        };
+
+        if (nhsTable && nhsEmpty) {
+            const measured = Boolean(nutrition.has_any);
+            nhsTable.hidden = !measured;
+            nhsEmpty.hidden = measured;
+        }
+
+        [['B', nutrition.baseline || {}], ['E', nutrition.endline || {}]].forEach(([suffix, phase]) => {
+            setText('vpNhsHeight' + suffix, phase.height_cm ? `${phase.height_cm} cm` : '');
+            setText('vpNhsWeight' + suffix, phase.weight_kg ? `${phase.weight_kg} kg` : '');
+            setText('vpNhsBmi' + suffix, nhsDash(phase.bmi));
+            setText('vpNhsBmiStatus' + suffix, nhsDash(phase.bmi_status));
+            setText('vpNhsHfa' + suffix, nhsDash(phase.hfa_status));
+        });
+        setText('vpNhsBaselineDate', (nutrition.baseline || {}).recorded_at ? `(${nutrition.baseline.recorded_at})` : '');
+        setText('vpNhsEndlineDate', (nutrition.endline || {}).recorded_at ? `(${nutrition.endline.recorded_at})` : '');
+
         const feeding = meta.feeding || {};
         setText('vpFeedingTabBadge', meta.at_risk ? 'At risk' : 'Not flagged');
-        setText('vpFeedBaseline', feeding.baseline_status || record.nutritional_status_bmi_for_age || '-');
-        setText('vpFeedEndline', feeding.endline_status || '-');
         setText('vpFeedSessions', feeding.sessions ? String(feeding.sessions) : '0');
 
         // The shared Medical Documents component renders the list the page was

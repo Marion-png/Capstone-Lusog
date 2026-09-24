@@ -15,6 +15,8 @@
         textarea { min-height: 110px; resize: vertical; }
         .err { margin-top: 4px; font-size: .74rem; color: #b91c1c; }
         .hint { font-size: .72rem; color: #6B7C72; }
+        .check { display: inline-flex; align-items: center; gap: 8px; font-size: .84rem; font-weight: 500; color: #1F2D25; cursor: pointer; }
+        .check input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: #1F8A4C; cursor: pointer; }
         input[readonly] { background: #F6F9F7; color: #3E5348; cursor: default; }
         /* The learner search: a box that finds, a list that answers. */
         .lsearch { position: relative; display: flex; align-items: center; }

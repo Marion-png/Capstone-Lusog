@@ -137,19 +137,31 @@ class NurseHealthRecordsPageTest extends TestCase
         $response->assertSee('Examiner Signature / Name:');
         $response->assertSee('Ana Reyes');
 
-        // G. is a right-eye and a left-eye field, a Pass / Refer tick for the
-        // vision screening and a four-way dropdown for the auditory one —
-        // never a free-text result.
+        // Sheet 2 is answered from lists: every field whose answer is one of a
+        // fixed set is a dropdown, as the template rules it. Only the two eye
+        // measurements, the vaccines and the summary prose are typed.
         $html = $response->getContent();
-        foreach (Sheet2Review::VISION_RESULTS as $result) {
-            $this->assertStringContainsString('type="checkbox" name="vision_result" value="'.$result.'"', $html);
+
+        foreach ([
+            'vision_result' => Sheet2Review::VISION_RESULTS,
+            'hearing_result' => Sheet2Review::HEARING_RESULTS,
+            'teeth_condition' => Sheet2Review::TEETH,
+            'dental_referral' => Sheet2Review::DENTAL_REFERRALS,
+            'immunization_status' => Sheet2Review::IMMUNIZATION,
+        ] as $field => $options) {
+            $this->assertStringContainsString('<select name="'.$field.'">', $html, $field.' must be a dropdown.');
+            foreach ($options as $option) {
+                $this->assertStringContainsString('<option value="'.$option.'"', $html);
+            }
         }
-        $this->assertMatchesRegularExpression('/<select name="hearing_result">/', $html);
-        foreach (Sheet2Review::HEARING_RESULTS as $result) {
-            $this->assertStringContainsString('<option value="'.$result.'"', $html);
-        }
+
+        // Nothing on the sheet is ticked or typed where a list decides it.
+        $this->assertStringNotContainsString('name="vision_result" value="Pass"', $html, 'No checkbox: the outcome is chosen.');
+        $this->assertStringNotContainsString('type="text" name="dental_referral"', $html);
+
         $this->assertSame(['Pass', 'Refer'], Sheet2Review::VISION_RESULTS);
         $this->assertSame(['Passed Both', 'Failed Right', 'Failed Left', 'Refer'], Sheet2Review::HEARING_RESULTS);
+        $this->assertSame(['No referral required', 'Referred for dental care'], Sheet2Review::DENTAL_REFERRALS);
 
         // Supplementation & Programs went too — no deworming, iron, SBFP/4Ps,
         // menarche, immunization, others or Examined By controls, and no
@@ -231,10 +243,12 @@ class NurseHealthRecordsPageTest extends TestCase
         $this->assertMatchesRegularExpression('/name="systems\[heent_eyes\]\[finding\]"[^>]*>.*?<option value="Normal" selected/s', $html);
         $this->assertStringContainsString('name="systems[gastrointestinal][notes]" value="Soft"', $html);
         $this->assertStringContainsString('name="vision_left" value="20/40"', $html);
-        $this->assertStringContainsString('name="vision_result" value="Pass" checked', $html);
-        $this->assertStringNotContainsString('name="vision_result" value="Refer" checked', $html);
+        $this->assertMatchesRegularExpression('/name="vision_result">.*?<option value="Pass" selected/s', $html);
         $this->assertMatchesRegularExpression('/name="teeth_condition"[^>]*>.*?<option value="Fair" selected/s', $html);
-        $this->assertStringContainsString('name="dental_referral" value="Referred for dental care — Caries"', $html);
+        // The derived draft lands on one of the two options, never a sentence:
+        // the field is a dropdown, and what the adviser ticked is already on
+        // the body-systems rows above.
+        $this->assertMatchesRegularExpression('/name="dental_referral">.*?<option value="Referred for dental care" selected/s', $html);
         $this->assertMatchesRegularExpression('/name="immunization_status"[^>]*>.*?<option value="Incomplete" selected/s', $html);
         $this->assertStringContainsString('name="missing_vaccines" value="MMR"', $html);
         $this->assertStringContainsString('Refer to dentist.', $html);

@@ -96,6 +96,18 @@ class ConsultationVisibility
         ];
 
         if (! self::maySeeDetails($role)) {
+            // One thing the clinic may hand over deliberately: the note on
+            // this visit, when the nurse marked it shared. It is the same
+            // decision a shared photograph is — per visit, taken by the
+            // person who wrote it, reversible — and it is the only clinical
+            // text that ever reaches this role. An unshared note is absent
+            // from the payload, not blanked in the view: a value that reaches
+            // the browser has been disclosed whether or not a template prints
+            // it.
+            if (self::sharedNote($consultation) !== '') {
+                $visit['shared_note'] = self::sharedNote($consultation);
+            }
+
             return $visit;
         }
 
@@ -105,6 +117,25 @@ class ConsultationVisibility
             'treatment_given' => (string) $consultation->treatment_given,
             'status' => (string) $consultation->status,
         ];
+    }
+
+    /**
+     * The note on this visit, if the clinic shared it with the adviser.
+     *
+     * Empty for a visit with no note, for one whose note was not shared, and
+     * before the columns exist — never a placeholder, because "the clinic
+     * wrote something you may not read" is a disclosure of its own.
+     */
+    public static function sharedNote(Consultation $consultation): string
+    {
+        if (! SchemaCache::hasColumn('consultations', 'notes')
+            || ! SchemaCache::hasColumn('consultations', 'notes_shared_with_adviser')) {
+            return '';
+        }
+
+        return $consultation->notes_shared_with_adviser
+            ? trim((string) $consultation->notes)
+            : '';
     }
 
     /**

@@ -370,20 +370,31 @@ body.sn-profile-stacked .profile-backdrop.open { background: transparent; }
    above. */
 .profile-modal { width: min(1120px, 96vw); }
 
-/* Header: the learner's name and facts are what the dialog is opened for. */
+/* Header: the learner's name and facts are what the dialog is opened for.
+   The dialog is given air above it — a panel whose first line sits against the
+   top of the screen reads as cut off rather than as a card, and the title had
+   12px over it while the identity block below carried 20. */
+.profile-backdrop { padding: 28px 16px; }
+.profile-modal, .student-profile-modal { max-height: calc(100vh - 56px); }
+.student-profile-topline { padding: 20px 20px 14px; }
 .student-profile-titleline { font-size: 1.2rem; }
 .student-profile-subline { font-size: .82rem; margin-top: 3px; }
 .student-profile-back { font-size: 1.25rem; padding: 4px 6px; border-radius: 8px; }
 .student-profile-back:hover { background: var(--g50); color: var(--g900); }
 .sp-cover { height: 72px; }
-.sp-avatar { width: 72px; height: 72px; margin-top: -28px; font-size: 1.25rem; }
+/* The avatar sits below the cover band rather than straddling it: a circle
+   cut in half by the bar read as an accident, not a portrait. It keeps its
+   white ring, and the name and the actions beside it start on the same line
+   it does. */
+.sp-avatar { width: 74px; height: 74px; margin-top: 14px; font-size: 1.25rem; border-width: 5px; }
+.sp-identity-body { padding-top: 16px; }
 .sp-name { font-size: 1.5rem; }
 .sp-class { font-size: .92rem; margin-top: 3px; color: var(--text-2); }
 .sp-meta { gap: 8px 22px; margin-top: 12px; }
 .sp-meta span { font-size: .9rem; gap: 7px; }
 .sp-meta svg { width: 15px; height: 15px; }
 .sp-identity { padding-bottom: 18px; gap: 18px; }
-.sp-identity-actions { gap: 10px; padding-top: 16px; }
+.sp-identity-actions { gap: 10px; padding-top: 20px; }
 .sp-identity-actions .btn { font-size: .9rem; padding: 10px 16px; }
 .sp-identity-actions .btn svg { width: 16px; height: 16px; }
 

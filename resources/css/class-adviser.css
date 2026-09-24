@@ -907,6 +907,28 @@ tbody tr:hover td{background:#f3fbf6}
 .vitals-attribution{margin-top:9px;font-size:.72rem;color:var(--lg-ink-soft,#6B7C72)}
 @media (max-width:640px){.vitals-readout{grid-template-columns:1fr}}
 
+/* ── Nutritional Health Status (student profile) ──
+   The learner weighed twice, read across: one row per measurement, one column
+   per weigh-in, so baseline and endline are compared by eye rather than by
+   scrolling between two panels. A phase nobody measured prints an em dash. */
+.nhs-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.nhs-table th,.nhs-table td{border:1px solid var(--lg-border,#DCE8E0);padding:9px 12px;text-align:left}
+.nhs-table thead th{background:var(--lg-rail,#F3F8F4);font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--lg-ink-soft,#6B7C72)}
+.nhs-table thead th span{font-weight:400;text-transform:none;letter-spacing:0}
+.nhs-table tbody th{width:34%;font-weight:600;color:var(--lg-ink,#1F2D25);background:#fff}
+.nhs-table tbody td{font-variant-numeric:tabular-nums;color:var(--lg-ink,#1F2D25)}
+.nhs-table[hidden]{display:none}
+.nhs-empty{padding:14px 16px;background:var(--lg-page,#F6F9F7);border:1px dashed var(--lg-border,#DCE8E0);border-radius:10px;font-size:.84rem;color:var(--lg-ink-soft,#6B7C72)}
+.nhs-empty[hidden]{display:none}
+
+/* ── A note the clinic shared (student profile) ──
+   Clinical text stops at the clinic; this is the one line of it the nurse can
+   hand over, per visit, deliberately. It reads as a quotation rather than as
+   another field, because it is somebody speaking to the adviser. */
+.clog-note{margin-top:10px;padding:9px 11px;background:var(--lg-mint,#E7F5EC);border-left:3px solid var(--lg-emerald,#1F8A4C);border-radius:0 8px 8px 0}
+.clog-note-label{font-size:.7rem;font-weight:700;letter-spacing:.03em;color:var(--lg-emerald-deep,#126B3A);margin-bottom:4px}
+.clog-note-body{font-size:.84rem;line-height:1.5;color:var(--lg-ink,#1F2D25);white-space:pre-wrap}
+
 /* ── Shared consultation photos (student profile) ──
    The school nurse decides, per photo, whether the class adviser sees it.
    Nothing appears here unless they did — see App\Support\ConsultationVisibility. */

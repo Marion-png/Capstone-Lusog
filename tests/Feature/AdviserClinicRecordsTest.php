@@ -185,7 +185,7 @@ class AdviserClinicRecordsTest extends TestCase
 
         // The adviser sees that the learner attended the clinic, and when.
         $this->assertStringContainsString('vpConsultationsList', $html);
-        $this->assertStringContainsString('<b>Date and time only:</b>', $html);
+        $this->assertStringContainsString('<b>Date and time, plus what the clinic shares:</b>', $html);
 
         // Not what they came for, what was found, or what was done. This is
         // the whole point: the payload never carries it, so no template can

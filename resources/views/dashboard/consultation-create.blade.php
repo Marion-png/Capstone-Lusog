@@ -86,6 +86,15 @@
                             <label for="notes">Clinic Notes <span class="optional">(optional)</span></label>
                             <textarea id="notes" name="notes" maxlength="2000" placeholder="Clinical observation, follow-up, or anything worth noting about this visit">{{ old('notes') }}</textarea>
                             @error('notes') <div class="err">{{ $message }}</div> @enderror
+                            @if (\App\Support\SchemaCache::hasColumn('consultations', 'notes_shared_with_adviser'))
+                                {{-- The one way a clinic note reaches the class
+                                     adviser, and the nurse's decision to make. --}}
+                                <label class="check">
+                                    <input type="checkbox" name="notes_shared_with_adviser" value="1" @checked(old('notes_shared_with_adviser'))>
+                                    <span>Share this note with the learner's class adviser</span>
+                                </label>
+                                <div class="hint">Notes stay in the clinic unless shared.</div>
+                            @endif
                         </div>
                     @endif
                 </div>

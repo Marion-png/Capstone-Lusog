@@ -49,6 +49,9 @@ class Sheet2Review
 
     public const TEETH = ['Good', 'Fair', 'Poor'];
 
+    /** H. Whether the learner was sent on for dental care. */
+    public const DENTAL_REFERRALS = ['No referral required', 'Referred for dental care'];
+
     public const IMMUNIZATION = ['Complete', 'Incomplete', 'Not available'];
 
     /** The key the nurse's sheet is stored under on `examination`. */
@@ -108,7 +111,7 @@ class Sheet2Review
             'oral' => [
                 'teeth' => self::option($input['teeth_condition'] ?? '', self::TEETH),
                 'last_visit' => self::text($input['last_dental_visit'] ?? ''),
-                'referral' => self::text($input['dental_referral'] ?? ''),
+                'referral' => self::option($input['dental_referral'] ?? '', self::DENTAL_REFERRALS),
             ],
             'immunization' => [
                 'status' => self::option($input['immunization_status'] ?? '', self::IMMUNIZATION),
@@ -229,9 +232,14 @@ class Sheet2Review
             'oral' => [
                 'teeth' => $teeth,
                 'last_visit' => '',
+                // One of the two options, never a sentence: the field is a
+                // dropdown now, and a draft that filled it with prose would
+                // arrive at a control that cannot show it. What the adviser
+                // ticked (caries, gum disease) is already on the body-systems
+                // rows above, so nothing is lost by dropping the suffix.
                 'referral' => $on('dental_referral')
-                    ? trim('Referred for dental care'.($dentalNotes !== '' ? ' — '.$dentalNotes : ''))
-                    : ($teeth !== '' ? trim('No referral required'.($dentalNotes !== '' ? ' — '.$dentalNotes : '')) : ''),
+                    ? 'Referred for dental care'
+                    : ($teeth !== '' ? 'No referral required' : ''),
             ],
             'immunization' => [
                 'status' => $immunization,

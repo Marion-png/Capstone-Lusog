@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
+use App\Support\BmiAssessmentReport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -395,7 +396,7 @@ class AdviserMyStudentsTest extends TestCase
         // Clinic Notes is read-only; Consultation Log is read-only AND redacted,
         // so it carries its own notice saying what is withheld and why.
         $this->assertSame(1, substr_count($html, '<b>Read-Only:</b>'), 'Clinic Notes carries the read-only notice.');
-        $this->assertStringContainsString('<b>Date and time only:</b>', $html);
+        $this->assertStringContainsString('<b>Date and time, plus what the clinic shares:</b>', $html);
     }
 
     /** @test */
@@ -862,5 +863,93 @@ class AdviserMyStudentsTest extends TestCase
 
         $this->assertFalse($review['skin_normal']);
         $this->assertNull($review['summary']);
+    }
+
+    /**
+     * The profile's Nutritional Health Status tab — the old "Feeding Status".
+     *
+     * Height, weight, BMI with its BMI-for-age classification and
+     * height-for-age with its own, baseline beside endline. Every figure is
+     * the server's, read through the same App\Support\NutritionalHealthStatus
+     * the nurse's profile uses, so one learner's numbers cannot differ between
+     * the two desks that open them.
+     *
+     * @test
+     */
+    public function the_profile_carries_a_nutritional_health_status_tab_with_both_weigh_ins(): void
+    {
+        $this->enrol();
+
+        StudentHealthRecord::where('student_id', '123456789012')->firstOrFail()->forceFill([
+            'baseline_height_cm' => 110, 'baseline_weight_kg' => 18.5, 'baseline_age' => 11,
+            'baseline_bmi_value' => 15.3, 'baseline_nutritional_status' => 'Wasted',
+            'baseline_recorded_at' => '2026-07-01',
+            'endline_height_cm' => 115, 'endline_weight_kg' => 24, 'endline_age' => 12,
+            'endline_bmi_value' => 18.1, 'endline_nutritional_status' => 'Normal',
+            'endline_recorded_at' => '2027-03-01',
+        ])->save();
+
+        $response = $this->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'))
+            ->assertOk();
+
+        $html = $response->getContent();
+
+        // The tab is named for what it reports; "Feeding Status" is gone.
+        $this->assertStringContainsString('data-panel="vpTabFeeding">Nutritional Health Status', $html);
+        $this->assertStringNotContainsString('data-panel="vpTabFeeding">Feeding Status', $html);
+
+        // Five measurements, two columns.
+        foreach (['Height', 'Weight', 'BMI', 'BMI-for-Age', 'Height-for-Age'] as $row) {
+            $this->assertStringContainsString('<th>'.$row.'</th>', $html);
+        }
+        foreach (['vpNhsHeightB', 'vpNhsHeightE', 'vpNhsBmiStatusB', 'vpNhsBmiStatusE', 'vpNhsHfaB', 'vpNhsHfaE'] as $cell) {
+            $this->assertStringContainsString('id="'.$cell.'"', $html);
+        }
+
+        // And the figures behind them are the shared reading's.
+        $nutrition = $response->viewData('meta')['nutrition'];
+
+        $this->assertSame('110', $nutrition['baseline']['height_cm']);
+        $this->assertSame('18.5', $nutrition['baseline']['weight_kg']);
+        $this->assertSame('15.3', $nutrition['baseline']['bmi']);
+        $this->assertSame('Wasted', $nutrition['baseline']['bmi_status']);
+        $this->assertNotSame('', $nutrition['baseline']['hfa_status']);
+
+        $this->assertSame('115', $nutrition['endline']['height_cm']);
+        $this->assertSame('18.1', $nutrition['endline']['bmi']);
+        $this->assertSame('Normal', $nutrition['endline']['bmi_status']);
+        $this->assertSame(
+            BmiAssessmentReport::classifyHeightForAge(115.0, 12),
+            $nutrition['endline']['hfa_status'],
+            'Endline height-for-age is the DepEd grid\'s own classifier.'
+        );
+    }
+
+    /** A learner nobody has measured says so, rather than printing zeroes. */
+    /** @test */
+    public function an_unmeasured_learner_reads_as_unmeasured_on_that_tab(): void
+    {
+        $this->enrol();
+
+        // Nothing weighed anywhere: the columns AND the card's own copy.
+        $record = StudentHealthRecord::where('student_id', '123456789012')->firstOrFail();
+        $details = $record->student_details;
+        unset($details['height_cm'], $details['weight_kg']);
+        $record->forceFill([
+            'student_details' => $details,
+            'weight' => null, 'bmi_value' => null, 'nutritional_status' => null,
+            'baseline_height_cm' => null, 'baseline_weight_kg' => null,
+            'baseline_bmi_value' => null, 'baseline_nutritional_status' => null,
+        ])->save();
+
+        $meta = $this->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'))
+            ->assertOk()
+            ->viewData('meta');
+
+        $this->assertFalse($meta['nutrition']['has_any']);
+        $this->assertFalse($meta['nutrition']['baseline']['measured']);
+        $this->assertSame('', $meta['nutrition']['baseline']['bmi_status']);
     }
 }

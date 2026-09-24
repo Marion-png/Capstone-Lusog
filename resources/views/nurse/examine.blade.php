@@ -81,10 +81,6 @@
             border-color: var(--g300); box-shadow: 0 0 0 3px rgba(134,239,172,.25);
         }
         .field input[readonly] { background: var(--bg); color: var(--text-2); cursor: default; }
-        /* A pair of screening outcomes, ticked like the paper form. */
-        .check-row { display: flex; align-items: center; gap: 18px; min-height: 40px; }
-        .field .check { display: inline-flex; align-items: center; gap: 8px; font-size: .84rem; font-weight: 500; color: var(--text-1); text-transform: none; letter-spacing: 0; cursor: pointer; }
-        .field .check input[type="checkbox"] { width: 18px; height: 18px; margin: 0; padding: 0; accent-color: var(--g600); cursor: pointer; }
         .field select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237a9e87' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px; }
 
         .readonly-badge { display: inline-flex; align-items: center; gap: 4px; font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; margin-left: auto; }
@@ -266,19 +262,15 @@
                 </div>
                 <div class="field">
                     <label>Vision Screening</label>
-                    {{-- One outcome or the other: ticking one clears the other (see the
-                         script at the foot), and the server keeps only a listed value. --}}
-                    <div class="check-row" data-exclusive>
+                    <select name="vision_result">
+                        <option value="">— Select —</option>
                         @foreach (\App\Support\Sheet2Review::VISION_RESULTS as $result)
-                            <label class="check">
-                                <input type="checkbox" name="vision_result" value="{{ $result }}" @checked($s2('vision', 'result') === $result)>
-                                <span>{{ $result }}</span>
-                            </label>
+                            <option value="{{ $result }}" @selected($s2('vision', 'result') === $result)>{{ $result }}</option>
                         @endforeach
-                    </div>
+                    </select>
                 </div>
                 <div class="field">
-                    <label>Auditory Screening</label>
+                    <label>Hearing</label>
                     <select name="hearing_result">
                         <option value="">— Select —</option>
                         @foreach (\App\Support\Sheet2Review::HEARING_RESULTS as $result)
@@ -306,7 +298,12 @@
                 </div>
                 <div class="field">
                     <label>Referral</label>
-                    <input type="text" name="dental_referral" value="{{ $s2('oral', 'referral') }}" placeholder="e.g. No referral required">
+                    <select name="dental_referral">
+                        <option value="">— Select —</option>
+                        @foreach (\App\Support\Sheet2Review::DENTAL_REFERRALS as $referral)
+                            <option value="{{ $referral }}" @selected($s2('oral', 'referral') === $referral)>{{ $referral }}</option>
+                        @endforeach
+                    </select>
                 </div>
             </div>
 
@@ -361,18 +358,5 @@
         </form>
     </div>
 </div>
-<script>
-    // A screening has one outcome: ticking Pass unticks Refer and the other
-    // way round, so the form can never post both.
-    document.querySelectorAll('[data-exclusive]').forEach(function (group) {
-        var boxes = group.querySelectorAll('input[type="checkbox"]');
-        boxes.forEach(function (box) {
-            box.addEventListener('change', function () {
-                if (!box.checked) return;
-                boxes.forEach(function (other) { if (other !== box) other.checked = false; });
-            });
-        });
-    });
-</script>
 </body>
 </html>

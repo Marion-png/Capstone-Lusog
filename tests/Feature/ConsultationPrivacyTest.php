@@ -21,7 +21,11 @@ use Tests\TestCase;
  *   - School nurse and clinic staff: the whole record.
  *   - Class adviser: the date, the time, and that the learner attended. A
  *     teacher needs to know a pupil was out of class; they do not need the
- *     diagnosis to do their job.
+ *     diagnosis to do their job. The one exception is what the clinic hands
+ *     over on purpose — a photograph the nurse shared, and now the note on
+ *     the visit when the nurse ticked "share with the class adviser". That
+ *     is a disclosure somebody made, per visit and reversibly, not a widening
+ *     of the role.
  *   - School head: nothing per-visit. Their screens are management summaries.
  *     School-wide tallies stay — "twelve headaches this month" is a statistic
  *     about the school, not a detail about a learner.
@@ -173,13 +177,91 @@ class ConsultationPrivacyTest extends TestCase
             ->getContent();
 
         $this->assertStringContainsString('vpConsultationsList', $html);
-        $this->assertStringContainsString('<b>Date and time only:</b>', $html);
+        $this->assertStringContainsString('<b>Date and time, plus what the clinic shares:</b>', $html);
 
         $this->assertStringNotContainsString(self::COMPLAINT, $html);
         $this->assertStringNotContainsString(self::TREATMENT, $html);
     }
 
     /** The adviser's dashboard embeds the same meta payload. */
+    /**
+     * A note reaches the adviser only because the clinic sent it.
+     *
+     * The note is clinical text and stops at the clinic like the complaint
+     * and the treatment — unless the nurse ticked "share this note with the
+     * learner's class adviser" when they wrote it. An unshared note is
+     * absent from the payload, not blanked in the view.
+     */
+    #[Test]
+    public function only_a_note_the_clinic_shared_reaches_the_adviser(): void
+    {
+        $visit = $this->visit();
+        $visit->forceFill(['notes' => 'Watch for dizziness this afternoon.'])->save();
+
+        // Written, not shared: the adviser is told nothing about it.
+        $row = ConsultationVisibility::present($visit->fresh(), 'class_adviser');
+        $this->assertArrayNotHasKey('shared_note', $row);
+
+        // Shared: it is the one piece of clinical text this role receives.
+        $visit->forceFill(['notes_shared_with_adviser' => true])->save();
+        $row = ConsultationVisibility::present($visit->fresh(), 'class_adviser');
+        $this->assertSame('Watch for dizziness this afternoon.', $row['shared_note']);
+
+        // And still nothing else.
+        foreach (['condition', 'treatment_given', 'status', 'grade_section'] as $clinical) {
+            $this->assertArrayNotHasKey($clinical, $row);
+        }
+        $this->assertFalse($row['details_visible']);
+    }
+
+    /** The whole way round: the nurse writes it, the adviser reads it. */
+    #[Test]
+    public function a_shared_note_is_written_on_the_visit_and_read_on_the_advisers_profile(): void
+    {
+        $this->learner();
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->post(route('consultations.store'), [
+                'consulted_at' => now()->toDateTimeString(),
+                'student_name' => 'Cruz, Juan',
+                'grade_section' => 'Grade 10 / Dalton',
+                'condition' => self::COMPLAINT,
+                'treatment_given' => self::TREATMENT,
+                'notes' => 'No PE for a week.',
+                'notes_shared_with_adviser' => '1',
+                'status' => 'treated',
+            ])
+            ->assertRedirect();
+
+        $this->assertTrue(Consultation::latest('id')->first()->notes_shared_with_adviser);
+
+        $html = $this->withSession($this->sessionFor('class_adviser'))
+            ->get(route('dashboard.class-adviser.student-profile', '120000000001'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('No PE for a week.', $html);
+        $this->assertStringContainsString('Note from the clinic', $html);
+        // The rest of the visit is still the clinic's.
+        $this->assertStringNotContainsString(self::COMPLAINT, $html);
+        $this->assertStringNotContainsString(self::TREATMENT, $html);
+    }
+
+    /** A note left unshared never reaches the adviser's page. */
+    #[Test]
+    public function an_unshared_note_never_reaches_the_advisers_profile(): void
+    {
+        $this->learner();
+        $this->visit()->forceFill(['notes' => 'Clinic-only observation.'])->save();
+
+        $html = $this->withSession($this->sessionFor('class_adviser'))
+            ->get(route('dashboard.class-adviser.student-profile', '120000000001'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringNotContainsString('Clinic-only observation.', $html);
+    }
+
     #[Test]
     public function the_advisers_dashboard_never_embeds_the_narrative(): void
     {

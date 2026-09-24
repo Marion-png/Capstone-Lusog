@@ -247,6 +247,19 @@
                             <div class="bmodal-error">{{ $errors->consultation->first('notes') }}</div>
                         @endif
                     </div>
+                    @if (\App\Support\SchemaCache::hasColumn('consultations', 'notes_shared_with_adviser'))
+                        {{-- A note is clinical text and stops at the clinic, like the
+                             complaint and the treatment. This is the one way it
+                             reaches the class adviser, and it is the nurse's
+                             decision — the same one a shared photograph is. --}}
+                        <div class="bmodal-field cm-photo-share">
+                            <label class="cm-photo-check">
+                                <input type="checkbox" name="notes_shared_with_adviser" value="1" @checked(old('notes_shared_with_adviser'))>
+                                <span>Share this note with the learner's class adviser</span>
+                            </label>
+                            <div class="bmodal-hint">Notes stay in the clinic unless shared.</div>
+                        </div>
+                    @endif
                 @endif
 
                 @if ($consultMayDispense && $consultMedicines->isNotEmpty())
