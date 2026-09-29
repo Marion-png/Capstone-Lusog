@@ -33,7 +33,28 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
 .cf-table th { text-align: left; font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--border); }
 .cf-table td { padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .cf-table tr:last-child td { border-bottom: none; }
+/* ── The nurse list's one filter ──
+   Above the card, not inside its head: a control that decides what a table
+   contains has to be visible before the table, and the head names the answer
+   currently on screen. */
+.cf-filter { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.cf-filter label { font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.cf-filter select {
+	border: 1px solid var(--border); border-radius: 9px; padding: 8px 11px;
+	font: inherit; font-size: .84rem; background: #fff; color: var(--g900); cursor: pointer;
+}
+.cf-filter select:focus { outline: none; border-color: var(--g500); }
+/* No underline at rest, per the app's own rule; colour and weight carry it. */
+.cf-filter-clear { font-size: .78rem; font-weight: 600; color: var(--g700); text-decoration: none; }
+.cf-filter-clear:hover { color: var(--g900); }
+/* How many rows the heading is talking about. */
+.cf-count {
+	display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 7px;
+	margin-left: 8px; border-radius: 999px; background: var(--g100, #E7F5EC); color: var(--g700);
+	font-size: .72rem; font-weight: 700; letter-spacing: 0;
+}
 .cf-empty { padding: 30px; text-align: center; color: var(--muted); font-size: .85rem; }
+.cf-empty a { color: var(--g700); font-weight: 600; text-decoration: none; }
 
 /* ── Buttons ─────────────────────────────────────────────────── */
 .cf-btn { display: inline-flex; align-items: center; gap: 7px; border: none; cursor: pointer; font-family: inherit; font-size: .8rem; font-weight: 600; padding: 9px 16px; border-radius: 9px; text-decoration: none; transition: background .15s, color .15s, transform .1s; }
@@ -66,9 +87,20 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
 .doc-header .doc-seal-placeholder { display: block; border: 1px dashed #b6c3bb; border-radius: 50%; }
 .doc-header .doc-rp { font-weight: 700; }
 .doc-header .doc-form-title { font-weight: 700; text-decoration: underline; letter-spacing: .02em; }
+/* ── The fill-in blanks ──
+   Every blank on the Sulat-Pahibalo is shaded, filled or not: shaded and
+   empty reads as somewhere an answer goes, shaded and full reads as the
+   answer somebody gave. Unshaded, a filled value sits on a rule looking like
+   part of the printed form, and a nurse skimming the sheet cannot tell the
+   school's own text from the parent's. The rule under each one stays — it is
+   what makes this a facsimile of the government form rather than a web form. */
 .doc-field { display: flex; gap: 6px; align-items: baseline; margin: 2px 0; flex-wrap: wrap; }
 .doc-field label { font-weight: 700; white-space: nowrap; }
 .doc-field .doc-line { flex: 1; min-width: 140px; border-bottom: 1px solid #111; padding: 0 6px; font-weight: 700; min-height: 1.2em; }
+/* The standalone blanks (the locked view of a write-in answer) carry the rule
+   and the height themselves, so an answer nobody gave still renders as a
+   visible empty blank rather than collapsing to nothing. */
+.doc-line { background: #F1F7F3; border-bottom: 1px solid #111; padding: 0 6px; min-height: 1.2em; }
 .doc p.doc-body { text-indent: 2.4em; margin: 10px 0; text-align: justify; }
 .doc .doc-salutation { font-style: italic; font-weight: 700; margin-top: 6px; }
 
@@ -90,9 +122,11 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
 .doc-consent-option { display: flex; align-items: flex-start; gap: 9px; margin: 9px 0; }
 .doc-consent-option input[type="radio"] { width: 16px; height: 16px; margin-top: 3px; accent-color: var(--g700); flex-shrink: 0; cursor: pointer; }
 .doc-consent-option label { cursor: pointer; }
-.doc-writein { width: 100%; border: none; border-bottom: 1px solid #111; font-family: inherit; font-size: .9rem; padding: 2px 4px; background: #fbfdf9; margin-top: 4px; }
-.doc-writein:focus { outline: none; background: #F2FAF5; }
-.doc-writein[readonly] { background: transparent; }
+.doc-writein { width: 100%; border: none; border-bottom: 1px solid #111; font-family: inherit; font-size: .9rem; padding: 2px 4px; background: #F1F7F3; margin-top: 4px; }
+.doc-writein:focus { outline: none; background: #E7F5EC; }
+/* A locked blank is still a blank: it keeps the shading so the reader can see
+   where an answer was asked for, even when nobody gave one. */
+.doc-writein[readonly] { background: #F1F7F3; }
 .doc-allergy-note { font-style: italic; font-size: .85rem; margin-top: 10px; }
 
 /* The allergy block sits at the left margin like the paper form, with the
@@ -172,7 +206,11 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
 /* ── Print / Export as PDF ───────────────────────────────────── */
 @media print {
     body { background: #fff; }
-    .cf-topbar, .cf-actions, .cf-page-title, .cf-page-sub, .cf-card, .cf-flash, .cf-share, .no-print { display: none !important; }
+    /* The tint says "a value goes here", which the printed government form
+       says with its ruled line. Dropping it keeps the filed copy looking like
+       the Sulat-Pahibalo and spares a school printer the toner. */
+    .doc-line, .doc-writein, .doc-writein[readonly] { background: transparent !important; }
+    .cf-topbar, .cf-actions, .cf-page-title, .cf-page-sub, .cf-card, .cf-flash, .cf-share, .cf-filter, .no-print { display: none !important; }
     .cf-wrap { max-width: none; padding: 0; }
     .doc { border: none; box-shadow: none; border-radius: 0; padding: 10mm 12mm; font-size: 11pt; }
     /* The space a missing seal holds is kept; its outline is not, or a school

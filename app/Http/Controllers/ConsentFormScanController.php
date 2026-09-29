@@ -36,7 +36,7 @@ class ConsentFormScanController extends Controller
             return response()->json(['message' => 'Only the class adviser may scan a consent form.'], 403);
         }
 
-        if (! ConsentFormScanner::isConfigured()) {
+        if (! $scanner->isAvailable()) {
             return response()->json([
                 'message' => 'Consent scanning is not set up on this server. Fill the form in by hand.',
             ], 503);

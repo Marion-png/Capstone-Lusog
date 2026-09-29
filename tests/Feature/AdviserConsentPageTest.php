@@ -231,18 +231,25 @@ class AdviserConsentPageTest extends TestCase
 
         $student = strpos($html, 'id="pc_lrn"');
         $year = strpos($html, 'id="pc_school_year"');
-        $status = strpos($html, 'name="consent_type"');
         $signedForm = strpos($html, 'id="pc_file"');
         $medCert = strpos($html, 'id="pc_med_cert"');
         $notes = strpos($html, 'id="pc_notes"');
 
-        foreach ([$student, $year, $status, $signedForm, $medCert, $notes] as $position) {
+        foreach ([$student, $year, $signedForm, $medCert, $notes] as $position) {
             $this->assertNotFalse($position);
         }
 
+        // This dialog files the document; it no longer asks what the document
+        // says. What the parent answered is recorded once, on Record Signed
+        // Paper Form, where the adviser reads the sheet and attests to it.
+        // The radio group is gone; the list's own "Consent Status" column
+        // header is not, and is a different thing entirely.
+        $this->assertStringNotContainsString('name="consent_type"', $html);
+        $this->assertStringNotContainsString('id="pcPartialField"', $html);
+        $this->assertStringNotContainsString('id="pcRefusedField"', $html);
+
         $this->assertTrue($student < $year, 'Select Student comes first.');
-        $this->assertTrue($year < $status, 'School Year precedes Consent Status.');
-        $this->assertTrue($status < $signedForm, 'Consent Status precedes the signed form upload.');
+        $this->assertTrue($year < $signedForm, 'School Year precedes the signed form upload.');
         $this->assertTrue($signedForm < $medCert, 'Medical Certificate follows the signed form.');
         $this->assertTrue($medCert < $notes, 'Additional Notes come last.');
 

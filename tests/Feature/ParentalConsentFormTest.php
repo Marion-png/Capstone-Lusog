@@ -444,4 +444,65 @@ class ParentalConsentFormTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('has_consent', false);
     }
+
+    /**
+     * The upload dialog files the document; it no longer says what the
+     * document contains.
+     *
+     * "Consent Status" was removed from it — what the parent answered is
+     * recorded once, on Record Signed Paper Form, where the adviser reads the
+     * sheet field by field and attests to it. So `consent_type` is nullable
+     * here, and an upload that carries no answer is **pending**, never
+     * consent given.
+     */
+    /** @test */
+    public function a_scan_can_be_filed_without_saying_what_the_parent_answered(): void
+    {
+        $record = $this->makeRecord('LRN-FILED');
+
+        $this->withSession($this->adviserSession())
+            ->post(route('parental-consent.store'), [
+                'lrn' => $record->student_id,
+                'consent' => UploadedFile::fake()->create('consent.pdf', 40, 'application/pdf'),
+            ])
+            ->assertRedirect();
+
+        $form = ParentalConsentForm::where('student_health_record_id', $record->id)->firstOrFail();
+
+        $this->assertNull($form->consent_type, 'No answer was recorded with the document.');
+        $this->assertNotNull($form->file_path, 'The document itself is filed.');
+    }
+
+    /**
+     * And an unanswered scan does not authorise a procedure.
+     *
+     * "A document exists" is not the same claim as "the parent agreed". The
+     * gate used to block only an explicit refusal, so once the dialog stopped
+     * asking, a filed-but-unread scan would have let a child be dewormed on
+     * the strength of a photograph nobody had read.
+     */
+    /** @test */
+    public function deworming_is_refused_when_no_answer_was_recorded(): void
+    {
+        $record = $this->makeRecord('LRN-GATE');
+        $this->makeConsent($record, null, 'full');
+
+        // A recorded "full" consent permits it, as before.
+        $this->withSession($this->nurseExamSession((string) $record->student_id))
+            ->post(route('nurse.examine.save', 0), [
+                'date_of_examination' => now()->toDateString(),
+                'deworming' => 'V',
+            ])
+            ->assertRedirect(route('dashboard.student-health-records'));
+
+        // With no answer on file, it is refused — exactly as a refusal is.
+        ParentalConsentForm::query()->update(['consent_type' => null]);
+
+        $this->withSession($this->nurseExamSession((string) $record->student_id))
+            ->post(route('nurse.examine.save', 0), [
+                'date_of_examination' => now()->toDateString(),
+                'deworming' => 'V',
+            ])
+            ->assertSessionHasErrors('deworming');
+    }
 }

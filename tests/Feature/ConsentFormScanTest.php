@@ -71,6 +71,14 @@ class ConsentFormScanTest extends TestCase
             {
                 return $this->draft;
             }
+
+            // The fake IS the reader, so it reports itself available: the
+            // real check also requires the Anthropic SDK in vendor, which a
+            // machine whose PHP is too old for the lock file does not have.
+            public function isAvailable(): bool
+            {
+                return true;
+            }
         });
     }
 
@@ -86,6 +94,14 @@ class ConsentFormScanTest extends TestCase
             public function scan(UploadedFile $photo): array
             {
                 throw new RuntimeException($this->message);
+            }
+
+            // The fake IS the reader, so it reports itself available: the
+            // real check also requires the Anthropic SDK in vendor, which a
+            // machine whose PHP is too old for the lock file does not have.
+            public function isAvailable(): bool
+            {
+                return true;
             }
         });
     }

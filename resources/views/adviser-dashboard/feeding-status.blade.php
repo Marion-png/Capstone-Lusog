@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
-    <title>Feeding Status - SIGLA</title>
+    <title>Nutritional Health Status - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     @php $classAdviserCssPath = resource_path('css/class-adviser.css'); @endphp
@@ -20,7 +20,7 @@
 @include('partials.adviser-sidebar', ['active' => 'feeding'])
 
 <div class="asb-main">
-    @include('partials.adviser-topbar', ['breadcrumb' => 'Feeding Status'])
+    @include('partials.adviser-topbar', ['breadcrumb' => 'Nutritional Health Status'])
 
     <div class="content">
         @php
@@ -70,7 +70,7 @@
 
         <div class="ms-page-header">
             <div>
-                <h2 class="ms-page-title">SBFP Feeding Status</h2>
+                <h2 class="ms-page-title">Nutritional Health Status</h2>
                 <p class="ms-page-sub">{{ $gradeSection }} &middot; School Year {{ $schoolYear }}</p>
             </div>
         </div>

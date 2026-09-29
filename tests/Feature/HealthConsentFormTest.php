@@ -240,4 +240,100 @@ class HealthConsentFormTest extends TestCase
             'Viewed by School Nurse',
         ], $actions);
     }
+
+    /**
+     * The nurse narrows the list by what the parent answered.
+     *
+     * `consent_choice` is encrypted at rest, so the filter runs in PHP after
+     * the fetch — never as a WHERE, which would match nothing against
+     * ciphertext and quietly report that no parent consented.
+     */
+    #[Test]
+    public function the_nurse_can_filter_the_list_by_the_parents_answer(): void
+    {
+        $agreed = $this->signAsParent($this->sendToParent($this->createDraft()));
+
+        // A second learner on the same roll, whose parent refused.
+        $session = $this->adviserSession();
+        $session['school_health_card_records'][] = [
+            'last_name' => 'Refuser',
+            'first_name' => 'Rosa',
+            'lrn' => '123456789013',
+            'parent_guardian' => 'Rita Refuser',
+            'address' => '9 Mabini St., Davao City',
+            'division' => 'DAVAO CITY',
+            'grade_level' => 'Grade 7/SPED',
+            'section' => 'SPED-A',
+        ];
+
+        $this->withSession($session)->post(route('consent-forms.open'), ['lrn' => '123456789013']);
+        $refused = HealthConsentForm::where('student_lrn', '123456789013')->firstOrFail();
+
+        $this->withSession($session)
+            ->post(route('consent-forms.send', $refused), ['services' => ['checkup']]);
+
+        $this->post(route('consent-forms.parent-submit', $refused->fresh()->token), [
+            'consent_choice' => 'deny',
+            'refusal_reason' => 'Naa siyay sakit karon.',
+            'signature' => self::SIGNATURE,
+        ]);
+
+        $agreedRow = route('consent-forms.nurse-show', $agreed);
+        $refusedRow = route('consent-forms.nurse-show', $refused);
+
+        // A row is on the list exactly when its own View link is. A learner's
+        // name is not a safe marker here: the nurse topbar's learner search
+        // embeds the whole roster, so every name is in the page whatever the
+        // table holds.
+        $all = $this->withSession($this->nurseSession())
+            ->get(route('consent-forms.nurse-index'))->assertOk()->getContent();
+        $this->assertStringContainsString($agreedRow, $all);
+        $this->assertStringContainsString($refusedRow, $all);
+
+        $consented = $this->withSession($this->nurseSession())
+            ->get(route('consent-forms.nurse-index', ['consent' => HealthConsentForm::CONSENT_ALL]))
+            ->assertOk()->getContent();
+        $this->assertStringContainsString($agreedRow, $consented);
+        $this->assertStringNotContainsString($refusedRow, $consented);
+
+        $denied = $this->withSession($this->nurseSession())
+            ->get(route('consent-forms.nurse-index', ['consent' => HealthConsentForm::CONSENT_DENY]))
+            ->assertOk()->getContent();
+        $this->assertStringContainsString($refusedRow, $denied);
+        $this->assertStringNotContainsString($agreedRow, $denied);
+    }
+
+    /**
+     * A value off the query string that is not one of the three answers
+     * narrows nothing, rather than emptying the page and reading as "no
+     * learner consented".
+     */
+    #[Test]
+    public function an_unrecognised_consent_filter_is_dropped(): void
+    {
+        $form = $this->signAsParent($this->sendToParent($this->createDraft()));
+
+        $html = $this->withSession($this->nurseSession())
+            ->get(route('consent-forms.nurse-index', ['consent' => 'maybe']))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString(route('consent-forms.nurse-show', $form), $html);
+    }
+
+    /** An empty filtered list says which question it answered. */
+    #[Test]
+    public function an_empty_filtered_list_names_the_answer_it_looked_for(): void
+    {
+        $form = $this->signAsParent($this->sendToParent($this->createDraft()));
+
+        $html = $this->withSession($this->nurseSession())
+            ->get(route('consent-forms.nurse-index', ['consent' => HealthConsentForm::CONSENT_DENY]))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString("No learner's form reads", $html);
+        $this->assertStringContainsString('Did not consent', $html);
+        $this->assertStringNotContainsString(route('consent-forms.nurse-show', $form), $html);
+    }
 }

@@ -190,7 +190,11 @@ class NurseController extends Controller
                     ->withErrors(['deworming' => "Cannot proceed — no signed parental consent on file for this student for SY {$schoolYear}."]);
             }
 
-            if ($consentForm->consent_type === 'refused') {
+            // Refused, or never answered. The upload dialog files the scanned
+            // form without asking what it says, so "a document exists" is not
+            // the same claim as "the parent agreed" — and deworming a child on
+            // the strength of an unread scan is the error this gate exists for.
+            if (! in_array($consentForm->consent_type, ['full', 'partial'], true)) {
                 return back()
                     ->withInput()
                     ->withErrors(['deworming' => "Cannot proceed — the parent/guardian refused consent for health services for SY {$schoolYear}."]);

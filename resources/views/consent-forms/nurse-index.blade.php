@@ -34,10 +34,44 @@
 
     @if (session('error')) <div class="cf-flash cf-flash-err">{{ session('error') }}</div> @endif
 
+    {{-- What the parent answered, as a filter. The three answers stay apart:
+         a parent who agreed *except* for certain services did consent, and the
+         nurse's next question is always which ones — so folding them in with
+         "consented to all" would hide the very learners whose letter has to be
+         read before a service is given. --}}
+    <form method="GET" class="cf-filter" id="nurseConsentFilter">
+        <label for="consentFilter">Parent's answer</label>
+        <select name="consent" id="consentFilter" onchange="this.form.submit()">
+            <option value="">All answers ({{ $totalForms }})</option>
+            @foreach ($consentFilters as $value => $label)
+                <option value="{{ $value }}" @selected($consentFilter === $value)>{{ $label }}</option>
+            @endforeach
+        </select>
+        <noscript><button type="submit" class="cf-btn cf-btn-outline">Apply</button></noscript>
+        @if ($consentFilter !== '')
+            <a href="{{ route('consent-forms.nurse-index') }}" class="cf-filter-clear">Clear</a>
+        @endif
+    </form>
+
     <div class="cf-card">
-        <div class="cf-card-head"><h2>Signed &amp; Reviewed Forms</h2></div>
+        <div class="cf-card-head">
+            <h2>
+                {{ $consentFilter !== '' ? $consentFilters[$consentFilter] : 'Signed &amp; Reviewed Forms' }}
+                <span class="cf-count">{{ $forms->count() }}</span>
+            </h2>
+        </div>
         @if ($forms->isEmpty())
-            <div class="cf-empty">No signed consent forms yet.</div>
+            {{-- An empty filtered list is a real answer about this school, and
+                 says which question it answered — never a blank box reading as
+                 "no consent forms exist". --}}
+            <div class="cf-empty">
+                @if ($consentFilter !== '')
+                    No learner's form reads &ldquo;{{ $consentFilters[$consentFilter] }}&rdquo;.
+                    <a href="{{ route('consent-forms.nurse-index') }}">Show all {{ $totalForms }}</a>.
+                @else
+                    No signed consent forms yet.
+                @endif
+            </div>
         @else
             <table class="cf-table">
                 <thead>

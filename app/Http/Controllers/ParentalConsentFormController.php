@@ -27,7 +27,10 @@ class ParentalConsentFormController extends Controller
 
         $validated = $request->validate([
             'lrn' => ['required', 'string', 'max:50'],
-            'consent_type' => ['required', 'string', 'in:full,partial,refused'],
+            // Nullable since the upload dialog stopped asking: what the parent
+            // answered is recorded on Record Signed Paper Form, and an upload
+            // with no answer on it reads as pending rather than as consent.
+            'consent_type' => ['nullable', 'string', 'in:full,partial,refused'],
             'partial_exception' => ['nullable', 'string', 'max:500'],
             'refused_reason' => ['nullable', 'string', 'max:500'],
             'allergy_food' => ['nullable', 'boolean'],
@@ -86,7 +89,7 @@ class ParentalConsentFormController extends Controller
             'student_health_record_id' => $record->id,
             'program_type' => 'Deworming',
             'school_year' => $schoolYear,
-            'consent_type' => $validated['consent_type'],
+            'consent_type' => $validated['consent_type'] ?? null,
             'partial_exception' => $validated['partial_exception'] ?? null,
             'refused_reason' => $validated['refused_reason'] ?? null,
             'allergy_food' => ! empty($validated['allergy_food']),
@@ -108,14 +111,16 @@ class ParentalConsentFormController extends Controller
             'uploaded_by_name' => (string) $request->session()->get('active_name', 'Class Adviser'),
         ]);
 
-        $typeLabel = match ($validated['consent_type']) {
+        $typeLabel = match ($validated['consent_type'] ?? null) {
             'full' => 'Full consent',
             'partial' => 'Partial consent',
             'refused' => 'Consent refused',
-            default => 'Consent',
+            // No answer was recorded with the document, and the message says
+            // what actually happened rather than implying a consent was given.
+            default => 'Signed form',
         };
 
-        return back()->with('consent_success', "{$typeLabel} recorded successfully for SY {$schoolYear}.");
+        return back()->with('consent_success', "{$typeLabel} filed successfully for SY {$schoolYear}.");
     }
 
     /**

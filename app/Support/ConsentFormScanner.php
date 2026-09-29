@@ -79,9 +79,26 @@ class ConsentFormScanner
 
     public function __construct(private readonly ?Client $client = null) {}
 
+    /**
+     * Whether this server can read a form at all.
+     *
+     * Two things, not one: the key **and** the SDK. `anthropic-ai/sdk` is in
+     * composer.json, but a machine whose PHP is too old for the lock file has
+     * no vendor copy of it — and with a key set but no class, the button
+     * rendered, the request reached `new Client` and the adviser was told to
+     * try a clearer photograph. The photograph was fine; the package was
+     * missing. Same guard the XLSX writers keep (`class_exists(XlsxWriter)`),
+     * for the same reason: a feature that cannot run should say so up front
+     * rather than fail as though the user did something wrong.
+     */
+    public function isAvailable(): bool
+    {
+        return self::isConfigured();
+    }
+
     public static function isConfigured(): bool
     {
-        return filled(config('services.anthropic.key'));
+        return filled(config('services.anthropic.key')) && class_exists(Client::class);
     }
 
     /**
@@ -120,8 +137,8 @@ class ConsentFormScanner
      */
     public function scan(UploadedFile $photo): array
     {
-        if (! self::isConfigured()) {
-            throw new RuntimeException('Consent scanning is not configured. Set ANTHROPIC_API_KEY.');
+        if (! $this->isAvailable()) {
+            throw new RuntimeException('Consent scanning is not configured. Set ANTHROPIC_API_KEY and install anthropic-ai/sdk.');
         }
 
         $client = $this->client ?? new Client(apiKey: (string) config('services.anthropic.key'));

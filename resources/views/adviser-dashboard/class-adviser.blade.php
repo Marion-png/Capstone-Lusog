@@ -317,7 +317,7 @@
                 </a>
                 <a href="{{ route('dashboard.class-adviser.feeding-status') }}" class="quick-action-card">
                     <div class="qa-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg></div>
-                    <div><div class="qa-title">Feeding Status</div><div class="qa-desc">Track students' feeding program participation</div></div>
+                    <div><div class="qa-title">Nutritional Health Status</div><div class="qa-desc">Track your class's nutritional status and feeding participation</div></div>
                     <svg class="qa-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                 </a>
             </div>

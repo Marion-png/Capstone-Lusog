@@ -397,7 +397,7 @@ class HealthConsentFormController extends Controller
 
         return view('consent-forms.paper', [
             'form' => $form,
-            'scannerReady' => ConsentFormScanner::isConfigured(),
+            'scannerReady' => app(ConsentFormScanner::class)->isAvailable(),
             'writtenFields' => ConsentFormScanner::WRITTEN_FIELDS,
         ]);
     }
@@ -513,6 +513,23 @@ class HealthConsentFormController extends Controller
     }
 
     /** School Nurse: read-only list of completed consent forms for the school. */
+    /**
+     * What the parent answered, as a filter the nurse can narrow the list by.
+     *
+     * Three answers, kept apart rather than folded into "accepted / refused":
+     * a parent who agreed *except* for certain services did consent, and the
+     * nurse's next question is always which ones — collapsing them into one
+     * "accepted" bucket would hide exactly the learners whose letter has to be
+     * read before a service is given.
+     *
+     * @var array<string, string>
+     */
+    private const NURSE_CONSENT_FILTERS = [
+        HealthConsentForm::CONSENT_ALL => 'Consented to all services',
+        HealthConsentForm::CONSENT_SPECIFIC => 'Consented with exceptions',
+        HealthConsentForm::CONSENT_DENY => 'Did not consent',
+    ];
+
     public function nurseIndex(Request $request)
     {
         if ($redirect = $this->requireRole($request, ['school_nurse', 'clinic_staff'])) {
@@ -527,7 +544,29 @@ class HealthConsentFormController extends Controller
             ->orderByDesc('signed_at')
             ->get();
 
-        return view('consent-forms.nurse-index', ['forms' => $forms]);
+        // consent_choice is encrypted at rest, so the filter runs in PHP after
+        // the fetch — never as a WHERE. A value off the query string that is
+        // not one of the three answers narrows nothing, rather than emptying
+        // the page and reading as "no learner consented".
+        $choice = trim((string) $request->query('consent', ''));
+        if (! array_key_exists($choice, self::NURSE_CONSENT_FILTERS)) {
+            $choice = '';
+        }
+
+        $total = $forms->count();
+
+        if ($choice !== '') {
+            $forms = $forms->filter(
+                fn (HealthConsentForm $form): bool => (string) $form->consent_choice === $choice
+            )->values();
+        }
+
+        return view('consent-forms.nurse-index', [
+            'forms' => $forms,
+            'consentFilter' => $choice,
+            'consentFilters' => self::NURSE_CONSENT_FILTERS,
+            'totalForms' => $total,
+        ]);
     }
 
     /** School Nurse: read-only view of one completed form. */

@@ -247,41 +247,14 @@
                     </div>
                 </div>
 
-                <div class="pc-field">
-                    <label>Consent Status <span class="pc-req">*</span></label>
-                    <p class="pc-hint">Based on what the parent indicated on the signed form:</p>
-                    <div class="pc-choices">
-                        <label class="pc-choice selected">
-                            <input type="radio" name="consent_type" value="full" checked>
-                            <span><b>Full Consent</b>Parent checked &ldquo;Oo, ako mutugot&rdquo;</span>
-                        </label>
-                        <label class="pc-choice">
-                            <input type="radio" name="consent_type" value="partial">
-                            <span><b>Partial Consent</b>Parent checked &ldquo;gawas lamang niini&rdquo;</span>
-                        </label>
-                        <label class="pc-choice">
-                            <input type="radio" name="consent_type" value="refused">
-                            <span><b>Declined</b>Parent checked &ldquo;Dili ko mutugot&rdquo;</span>
-                        </label>
-                    </div>
-                </div>
-
-                <div class="pc-field" id="pcPartialField" hidden>
-                    <label for="pc_partial_exception">Services not consented to</label>
-                    <div class="pc-input">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-                        <input id="pc_partial_exception" name="partial_exception" type="text" maxlength="500">
-                    </div>
-                </div>
-
-                <div class="pc-field" id="pcRefusedField" hidden>
-                    <label for="pc_refused_reason">Reason for declining</label>
-                    <div class="pc-input">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-                        <input id="pc_refused_reason" name="refused_reason" type="text" maxlength="500">
-                    </div>
-                </div>
-
+                {{-- No Consent Status here. What the parent answered is recorded
+                     in one place — Record Signed Paper Form, where the adviser
+                     reads the sheet field by field and attests to it — and two
+                     screens asking the same question is how they come to
+                     disagree about what a parent agreed to. This dialog files
+                     the document; it does not decide what the document says.
+                     An upload with no answer recorded reads as PENDING, never
+                     as consent given. --}}
                 <div class="pc-field">
                     <label>Upload Signed Sulat-Pahibalo Form <span class="pc-req">*</span></label>
                     <div class="pc-drop" id="pcDrop" role="button" tabindex="0">
@@ -496,20 +469,6 @@
     // ── Upload ──────────────────────────────────────────────────────
     if (uploadModal) {
         const studentSelect = document.getElementById('pc_lrn');
-        const partialField = document.getElementById('pcPartialField');
-        const refusedField = document.getElementById('pcRefusedField');
-        const syncChoice = () => {
-            const choice = uploadModal.querySelector('input[name="consent_type"]:checked')?.value;
-            if (partialField) partialField.hidden = choice !== 'partial';
-            if (refusedField) refusedField.hidden = choice !== 'refused';
-            uploadModal.querySelectorAll('.pc-choice').forEach((label) => {
-                label.classList.toggle('selected', label.querySelector('input')?.checked === true);
-            });
-        };
-
-        uploadModal.querySelectorAll('input[name="consent_type"]').forEach((radio) => {
-            radio.addEventListener('change', syncChoice);
-        });
 
         // Both drop zones behave identically: click, keyboard, or drag a file in.
         const wireDropZone = (dropId, bodyId, inputId) => {
@@ -588,7 +547,6 @@
             resetConsentDrop();
             resetMedCertDrop();
             if (studentSelect && lrn) studentSelect.value = lrn;
-            syncChoice();
             open(uploadModal);
         };
 
@@ -604,8 +562,6 @@
                 close(uploadModal);
             }
         });
-
-        syncChoice();
     }
 
     // ── Details ─────────────────────────────────────────────────────
