@@ -79,6 +79,12 @@
 .designation-tag { font-size: .72rem; font-weight: 700; color: #334155; white-space: nowrap; }
 .designation-input:focus, .cell-input:focus { outline: none; border-color: var(--lg-emerald); box-shadow: 0 0 0 2px rgba(31, 138, 76, .18); }
 .cell-input[readonly] { background: #f3f4f6; color: #334155; font-weight: 700; }
+/* A master list is read off the roster, never typed, so its rows are the
+   form's own writing on a ruled line rather than fields: plain text that
+   wraps a long name instead of clipping it. An empty line keeps the height
+   of a written one, as the printed form's twenty lines do. */
+.template-table .ml-row td { height: 36px; }
+.template-table .ml-cell { overflow-wrap: anywhere; }
 
 /* ── Letterhead ──────────────────────────────────────────────────────
    The seals sit either side of the heading lines, as they do on the printed
@@ -355,6 +361,7 @@
 	.template-table thead th.subhead { font-size: 7.5pt; }
 	.cell-input, .designation-input { border: none; border-radius: 0; padding: 1px 2px; font-size: 8.5pt; background: transparent; box-shadow: none; }
 	.cell-input[readonly] { background: #f3f4f6; }
+	.template-table .ml-row td { height: 16pt; }
 	.bmi-table .bmi-input { padding: 1px 0; font-size: 8.5pt; }
 	.bmi-table .sex-cell { font-size: 8pt; }
 	input[type=number] { -moz-appearance: textfield; appearance: textfield; }

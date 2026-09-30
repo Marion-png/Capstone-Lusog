@@ -802,6 +802,12 @@ Route::post('/dashboard/feedingcor-at-risk/follow-up', [FeedingAtRiskController:
 Route::get('/dashboard/feedingcor-sbfp-forms', [FeedingCoordinatorController::class, 'sbfpForms'])
     ->name('dashboard.feedingcor-sbfp-forms');
 
+// The page's roster, re-read when the coordinator's pulse moves, so a learner
+// an adviser or the coordinator enrols reaches the open master lists without
+// a reload.
+Route::get('/dashboard/feedingcor-sbfp-forms/roster', [FeedingCoordinatorController::class, 'sbfpFormsRoster'])
+    ->name('dashboard.feedingcor-sbfp-forms.roster');
+
 Route::get('/dashboard/feedingcor-health-records', [StudentHealthRecordController::class, 'feedingHealthRecords'])
     ->name('dashboard.feedingcor-health-records');
 

@@ -544,14 +544,10 @@ class FeedingBmiReportTest extends TestCase
     // ── The two master lists ────────────────────────────────────────────
 
     /**
-     * The school keeps two master lists, and they are two documents.
-     *
-     * The Masterlist of Qualified Recipients is whoever the adviser's
-     * measurement qualified, enrolled or not; the Master List of Beneficiaries
-     * is whoever the coordinator actually enrolled. Each is its own template,
-     * its own sheet and its own draft, headed with the same title the export
-     * files it under — one heading over both is how they get filed as each
-     * other.
+     * The school keeps two master lists, and they are two documents: each is
+     * its own template, its own sheet and its own draft, headed with the same
+     * title the export files it under — one heading over both is how they get
+     * filed as each other.
      */
     #[Test]
     public function the_forms_page_offers_both_master_lists_as_separate_templates(): void
@@ -569,34 +565,44 @@ class FeedingBmiReportTest extends TestCase
         $response->assertSee(FeedingMasterlistExportController::LISTS['qualified'][0], false);
         $response->assertSee(FeedingMasterlistExportController::LISTS['beneficiaries'][0], false);
 
-        // Their drafts and rows are keyed apart, so saving one never
-        // overwrites the other.
-        $response->assertSee('data-field="ml_row1_name"', false);
-        $response->assertSee('data-field="mlb_row1_name"', false);
+        // Their drafts are keyed apart, so saving one never overwrites the
+        // other.
+        $response->assertSee('data-field="ml_prepared_name"', false);
+        $response->assertSee('data-field="mlb_prepared_name"', false);
         $response->assertSee("storageKey: 'feeding_masterlist_draft_v1'", false);
         $response->assertSee("storageKey: 'feeding_masterlist_beneficiaries_draft_v1'", false);
     }
 
     /**
-     * Qualifying is the adviser's measurement; enrolling is the coordinator's
-     * decision. The auto-fill data carries both as separate flags: a qualified
-     * learner nobody enrolled fills the qualified list and not the beneficiary
-     * list, and a learner taken off the programme fills neither list's
-     * enrolled roll — removal is a stamp beside the enrolment, and the roll is
-     * read through isBeneficiary(), the same test the export uses.
+     * Who is written on which list is decided by who enrolled the learner.
+     *
+     * The Master List of Beneficiaries is every learner the class advisers
+     * enrolled — including one uploaded on a class masterlist that nobody has
+     * measured yet. The Masterlist of Qualified Recipients names a learner
+     * only once the Feeding Coordinator has enrolled them: qualifying on a
+     * measurement is not enough, and a learner taken off the programme is no
+     * longer a recipient. The page is Junior High only, so a Senior High
+     * learner is on neither.
      */
     #[Test]
-    public function the_autofill_data_separates_qualified_from_enrolled(): void
+    public function each_master_list_names_the_learners_it_should(): void
     {
-        $waiting = $this->makeStudent('Grade 7 / Matiyaga', 'Male', 'Wasted', 'Stunted', [
+        $this->makeStudent('Grade 7 / Matiyaga', 'Male', '', '', [
+            'student_name' => 'Uploaded Learner',
+            'weight' => null,
+            'bmi_value' => null,
+            'nutritional_status' => null,
+            'baseline_nutritional_status' => null,
+        ]);
+        $this->makeStudent('Grade 7 / Matiyaga', 'Male', 'Wasted', 'Stunted', [
             'student_name' => 'Waiting Learner',
         ]);
-        $enrolled = $this->makeStudent('Grade 7 / Matiyaga', 'Female', 'Severely Wasted', 'Stunted', [
+        $this->makeStudent('Grade 7 / Matiyaga', 'Female', 'Severely Wasted', 'Stunted', [
             'student_name' => 'Enrolled Learner',
             'feeding_enrolled_at' => now(),
             'feeding_enrolled_by' => 'Test Coordinator',
         ]);
-        $removed = $this->makeStudent('Grade 8 / Ilang', 'Male', 'Wasted', 'Stunted', [
+        $this->makeStudent('Grade 8 / Ilang', 'Male', 'Wasted', 'Stunted', [
             'student_name' => 'Removed Learner',
             'feeding_enrolled_at' => now()->subWeeks(3),
             'feeding_enrolled_by' => 'Test Coordinator',
@@ -604,29 +610,122 @@ class FeedingBmiReportTest extends TestCase
             'feeding_removed_by' => 'Test Coordinator',
             'feeding_removal_reason' => 'Transferred out',
         ]);
-        $normal = $this->makeStudent('Grade 8 / Ilang', 'Female', 'Normal', 'Normal Height-for-Age', [
+        $this->makeStudent('Grade 8 / Ilang', 'Female', 'Normal', 'Normal Height-for-Age', [
             'student_name' => 'Normal Learner',
+        ]);
+        $this->makeStudent('Grade 11 / Rizal', 'Female', 'Wasted', 'Stunted', [
+            'student_name' => 'Senior High Learner',
         ]);
 
         $response = $this->withSession($this->coordinatorSession())
             ->get('/dashboard/feedingcor-sbfp-forms');
         $response->assertOk();
 
-        $flags = collect($response->viewData('studentsByGrade'))
+        $lists = collect($response->viewData('studentsByGrade'))
             ->flatten(1)
-            ->mapWithKeys(fn (array $row): array => [$row['name'] => [$row['qualified'], $row['enrolled']]])
+            ->mapWithKeys(fn (array $row): array => [$row['name'] => $row['lists']])
             ->all();
 
-        $this->assertSame([true, false], $flags['Waiting Learner'], 'Qualified but not enrolled: candidate list only.');
-        $this->assertSame([true, true], $flags['Enrolled Learner'], 'Qualified and enrolled: on both lists.');
-        $this->assertSame([true, false], $flags['Removed Learner'], 'Removed: still qualified, no longer a beneficiary.');
-        $this->assertSame([false, false], $flags['Normal Learner'], 'Not qualified: on neither list.');
+        $everyone = ['feeding-beneficiaries'];
+        $both = ['feeding-beneficiaries', 'feeding-masterlist'];
 
-        // The flag is the export's own reading, so the form and the workbook
-        // cannot name different children.
-        $this->assertTrue(FeedingBeneficiarySummary::isBeneficiary($enrolled->fresh()));
-        $this->assertFalse(FeedingBeneficiarySummary::isBeneficiary($waiting->fresh()));
-        $this->assertFalse(FeedingBeneficiarySummary::isBeneficiary($removed->fresh()));
-        $this->assertFalse(FeedingBeneficiarySummary::isBeneficiary($normal->fresh()));
+        $this->assertSame($everyone, $lists['Uploaded Learner'], 'Uploaded by the adviser, unmeasured: a beneficiary-list learner.');
+        $this->assertSame($everyone, $lists['Waiting Learner'], 'Qualified but not enrolled by the coordinator: not a recipient yet.');
+        $this->assertSame($both, $lists['Enrolled Learner'], 'Enrolled by the coordinator: on both lists.');
+        $this->assertSame($everyone, $lists['Removed Learner'], 'Taken off the programme: no longer a recipient.');
+        $this->assertSame($everyone, $lists['Normal Learner']);
+        $this->assertArrayNotHasKey('Senior High Learner', $lists, 'The page is Junior High only.');
+    }
+
+    /**
+     * Both lists follow the roster while the page is open. A learner an
+     * adviser enrols moves the pulse the page polls and arrives on the Master
+     * List of Beneficiaries; enrolling them through the coordinator's one
+     * enrolment endpoint moves it again and adds them to the Masterlist of
+     * Qualified Recipients.
+     */
+    #[Test]
+    public function new_enrolments_reach_the_open_master_lists(): void
+    {
+        $page = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms');
+        $page->assertOk();
+        $paintedStamp = $page->viewData('rosterStamp');
+
+        $this->travel(1)->seconds();
+        $learner = $this->makeStudent('Grade 7 / Matiyaga', 'Male', 'Wasted', 'Stunted', [
+            'student_name' => 'Newly Enrolled',
+        ]);
+
+        $afterAdviser = $this->withSession($this->coordinatorSession())
+            ->getJson(route('dashboard.feedingcor-sbfp-forms.roster'))
+            ->assertOk();
+
+        $this->assertNotSame($paintedStamp, $afterAdviser->json('stamp'), "The adviser's enrolment moves the stamp the page polls.");
+        $row = $afterAdviser->json('studentsByGrade')['Grade 7'][0];
+        $this->assertSame('Newly Enrolled', $row['name']);
+        $this->assertSame(['feeding-beneficiaries'], $row['lists']);
+
+        $this->travel(1)->seconds();
+        $this->withSession($this->coordinatorSession())
+            ->postJson(route('feedingcor-program.enrollment.store'), ['record_ids' => [$learner->id]])
+            ->assertOk();
+
+        $afterCoordinator = $this->withSession($this->coordinatorSession())
+            ->getJson(route('dashboard.feedingcor-sbfp-forms.roster'))
+            ->assertOk();
+
+        $this->assertNotSame($afterAdviser->json('stamp'), $afterCoordinator->json('stamp'), "The coordinator's enrolment moves it again.");
+        $this->assertSame($afterCoordinator->json('stamp'), $this->withSession($this->coordinatorSession())
+            ->getJson(route('dashboard.feedingcor.metrics.pulse'))->json('stamp'));
+        $this->assertSame(
+            ['feeding-beneficiaries', 'feeding-masterlist'],
+            $afterCoordinator->json('studentsByGrade')['Grade 7'][0]['lists'],
+        );
+    }
+
+    /**
+     * The roster names children, so it is the coordinator's and scoped to
+     * their school.
+     */
+    #[Test]
+    public function the_forms_roster_is_the_coordinators_own_school_only(): void
+    {
+        $this->makeStudent('Grade 7 / Matiyaga', 'Male', 'Wasted', 'Stunted', ['student_name' => 'Ours']);
+        $other = Institution::create(['name' => 'Other School', 'status' => 'active']);
+        $this->makeStudent('Grade 7 / Matiyaga', 'Male', 'Wasted', 'Stunted', [
+            'student_name' => 'Theirs',
+            'institution_id' => $other->id,
+            'school_name' => 'Other School',
+        ]);
+
+        $names = collect($this->withSession($this->coordinatorSession())
+            ->getJson(route('dashboard.feedingcor-sbfp-forms.roster'))
+            ->assertOk()
+            ->json('studentsByGrade'))->flatten(1)->pluck('name')->all();
+
+        $this->assertSame(['Ours'], $names);
+
+        $this->withSession(array_merge($this->coordinatorSession(), ['active_role' => 'class_adviser']))
+            ->getJson(route('dashboard.feedingcor-sbfp-forms.roster'))
+            ->assertForbidden();
+    }
+
+    /**
+     * Neither list's rows can be typed into: a name added by hand would be a
+     * learner nobody enrolled. The rows are plain text read off the roster.
+     */
+    #[Test]
+    public function neither_master_list_can_be_typed_into(): void
+    {
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms');
+        $response->assertOk();
+
+        $response->assertDontSee('data-field="ml_row1_name"', false);
+        $response->assertDontSee('data-field="mlb_row1_name"', false);
+        $response->assertDontSee('id="addMlRowsBtn"', false);
+        $response->assertDontSee('id="addMlbRowsBtn"', false);
+        $response->assertSee('data-ml="name"', false);
     }
 }

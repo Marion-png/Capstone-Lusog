@@ -27,81 +27,15 @@ class FeedingCoordinatorController extends Controller
     {
         $institutionId = $request->session()->get('active_institution_id');
 
-        $records = collect();
-        if (SchemaCache::hasTable('student_health_records')) {
-            $query = StudentHealthRecord::query();
-            if ($institutionId) {
-                $query->where('institution_id', $institutionId);
-            }
-            $records = $query->forCurrentSchoolYear()->get();
-        }
-
-        // Every form on this page is an SBFP form, and SBFP is Junior High only.
-        // The whole page is therefore narrowed once, here, to the grades the
-        // programme covers — read from FeedingBeneficiarySummary::GRADE_LEVELS,
-        // never re-typed. Without it the Grade Level dropdown offered whatever
-        // grades happened to be on the roll (Grade 11, Grade 12, an elementary
-        // grade, "Unassigned") and would auto-fill a masterlist of qualified
-        // recipients for learners the programme cannot feed. The BMI grids drop
-        // them already; this makes the two agree rather than relying on it.
-        $records = $records->filter(
-            fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::coversGrade($record)
-        )->values();
+        // Stamped before the roster is read, so an enrolment landing between
+        // the two is caught by the next pulse rather than missed by both.
+        $rosterStamp = $this->metricsStamp($institutionId);
+        [$records, $studentsByGrade, $sectionsByGrade] = $this->sbfpRoster($institutionId);
 
         // The narrative below reports the programme, and the programme only
         // feeds covered grades — so it reads the same narrowed set every other
         // form on this page does.
         $unfilteredRecords = $records;
-
-        // Group adviser-entered students by grade level so each SBFP form is
-        // filled with one grade only — Grade 8 is never mixed with Grade 9.
-        // Names and statuses are encrypted at rest, so the grouping and sorting
-        // happen in PHP after fetch (the plain "section" column holds the grade).
-        //
-        // Two flags, because the school keeps two master lists: `qualified` is
-        // the adviser's measurement (Wasted / Severely Wasted / Underweight)
-        // and fills the Masterlist of Qualified Recipients whether or not the
-        // learner was ever given a place; `enrolled` is the coordinator's
-        // decision and fills the Master List of Beneficiaries. Read through
-        // isBeneficiary() — qualified AND enrolled AND not removed — the same
-        // test the exported Master List of Beneficiaries uses, so the form on
-        // this page and the workbook off the Beneficiaries tab name the same
-        // children.
-        $studentsByGrade = [];
-        $sectionsByGrade = [];
-        foreach ($records as $record) {
-            [$grade, $section] = $this->splitSection((string) $record->section);
-            $status = $this->normalizeStatus((string) $record->nutritional_status);
-
-            $studentsByGrade[$grade][] = [
-                'name' => (string) $record->student_name,
-                'grade' => $grade,
-                'section' => $section,
-                'status' => $status,
-                'bmi' => $record->bmi_value !== null ? (string) $record->bmi_value : '',
-                'qualified' => $this->isQualifiedForFeeding($status),
-                'enrolled' => FeedingBeneficiarySummary::isBeneficiary($record),
-            ];
-
-            if ($section !== '') {
-                $sectionsByGrade[$grade][$section] = true;
-            }
-        }
-
-        uksort($studentsByGrade, fn (string $a, string $b): int => strnatcasecmp($a, $b));
-        foreach ($studentsByGrade as $grade => $rows) {
-            usort($rows, fn (array $a, array $b): int => strnatcasecmp($a['name'], $b['name']));
-            $studentsByGrade[$grade] = $rows;
-        }
-
-        // Each grade's own sections, so the Section control offers what the
-        // grade actually runs rather than every section in the school.
-        uksort($sectionsByGrade, fn (string $a, string $b): int => strnatcasecmp($a, $b));
-        foreach ($sectionsByGrade as $grade => $sections) {
-            $names = array_keys($sections);
-            usort($names, 'strnatcasecmp');
-            $sectionsByGrade[$grade] = $names;
-        }
 
         $letterhead = SchoolLetterhead::for($institutionId, (string) $request->session()->get('active_school_name', ''));
 
@@ -109,6 +43,10 @@ class FeedingCoordinatorController extends Controller
             'studentsByGrade' => $studentsByGrade,
             'gradeOptions' => array_keys($studentsByGrade),
             'sectionsByGrade' => $sectionsByGrade,
+            // Where the master lists' live refresh starts counting from: a
+            // learner an adviser enrols, or one the coordinator enrols, after
+            // this paint moves it.
+            'rosterStamp' => $rosterStamp,
             'bmiValues' => BmiAssessmentReport::values($records),
             // The same grid, counted again over each section on its own. It is
             // precomputed rather than fetched per choice because every field it
@@ -140,6 +78,125 @@ class FeedingCoordinatorController extends Controller
                 FeedingProgramCycle::forInstitution($institutionId),
                 FeedingAtRiskRule::forInstitution($institutionId),
             ),
+        ]);
+    }
+
+    /**
+     * The roster behind the SBFP Forms page, read once and grouped by grade:
+     * the page paints from it and the Master List of Beneficiaries' live
+     * refresh re-reads it, so the form a coordinator has open and the one a
+     * reload would draw can never name different children.
+     *
+     * @return array{0: Collection<int, StudentHealthRecord>, 1: array<string, list<array<string, mixed>>>, 2: array<string, list<string>>}
+     */
+    private function sbfpRoster(?int $institutionId): array
+    {
+        $records = collect();
+        if (SchemaCache::hasTable('student_health_records')) {
+            $query = StudentHealthRecord::query();
+            if ($institutionId) {
+                $query->where('institution_id', $institutionId);
+            }
+            $records = $query->forCurrentSchoolYear()->get();
+        }
+
+        // Every form on this page is an SBFP form, and SBFP is Junior High only.
+        // The whole page is therefore narrowed once, here, to the grades the
+        // programme covers — read from FeedingBeneficiarySummary::GRADE_LEVELS,
+        // never re-typed. Without it the Grade Level dropdown offered whatever
+        // grades happened to be on the roll (Grade 11, Grade 12, an elementary
+        // grade, "Unassigned") and would auto-fill a masterlist of qualified
+        // recipients for learners the programme cannot feed. The BMI grids drop
+        // them already; this makes the two agree rather than relying on it.
+        $records = $records->filter(
+            fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::coversGrade($record)
+        )->values();
+
+        // Group adviser-entered students by grade level so each SBFP form is
+        // filled with one grade only — Grade 8 is never mixed with Grade 9.
+        // Names and statuses are encrypted at rest, so the grouping and sorting
+        // happen in PHP after fetch (the plain "section" column holds the grade).
+        $studentsByGrade = [];
+        $sectionsByGrade = [];
+        foreach ($records as $record) {
+            [$grade, $section] = $this->splitSection((string) $record->section);
+            $status = $this->normalizeStatus((string) $record->nutritional_status);
+
+            $studentsByGrade[$grade][] = [
+                'name' => (string) $record->student_name,
+                'grade' => $grade,
+                'section' => $section,
+                'status' => $status,
+                'bmi' => $record->bmi_value !== null ? (string) $record->bmi_value : '',
+                'lists' => $this->masterlistsFor($record),
+            ];
+
+            if ($section !== '') {
+                $sectionsByGrade[$grade][$section] = true;
+            }
+        }
+
+        uksort($studentsByGrade, fn (string $a, string $b): int => strnatcasecmp($a, $b));
+        foreach ($studentsByGrade as $grade => $rows) {
+            usort($rows, fn (array $a, array $b): int => strnatcasecmp($a['name'], $b['name']));
+            $studentsByGrade[$grade] = $rows;
+        }
+
+        // Each grade's own sections, so the Section control offers what the
+        // grade actually runs rather than every section in the school.
+        uksort($sectionsByGrade, fn (string $a, string $b): int => strnatcasecmp($a, $b));
+        foreach ($sectionsByGrade as $grade => $sections) {
+            $names = array_keys($sections);
+            usort($names, 'strnatcasecmp');
+            $sectionsByGrade[$grade] = $names;
+        }
+
+        return [$records, $studentsByGrade, $sectionsByGrade];
+    }
+
+    /**
+     * Which of the SBFP Forms page's two master lists a learner is written
+     * on, keyed by the page's template ids. Decided here, once, so the page
+     * only draws what it is told and the rule can be tested without a browser.
+     *
+     * The Master List of Beneficiaries is every learner the class advisers
+     * have enrolled — one by one or by uploading their class masterlist — so
+     * it is this roster, whole, measured or not. The Masterlist of Qualified
+     * Recipients names a learner only once the Feeding Coordinator has
+     * enrolled them: isBeneficiary(), qualified AND enrolled AND not removed,
+     * the same test every other coordinator screen counts with.
+     *
+     * @return list<string>
+     */
+    private function masterlistsFor(StudentHealthRecord $record): array
+    {
+        return FeedingBeneficiarySummary::isBeneficiary($record)
+            ? ['feeding-beneficiaries', 'feeding-masterlist']
+            : ['feeding-beneficiaries'];
+    }
+
+    /**
+     * The SBFP Forms roster for the live refresh, re-read when the
+     * coordinator's pulse moves. A class masterlist an adviser uploads reaches
+     * the Master List of Beneficiaries this way, and a learner the coordinator
+     * enrols reaches the Masterlist of Qualified Recipients, both without a
+     * reload — the same grouping and the same masterlistsFor() the first paint
+     * used.
+     */
+    public function sbfpFormsRoster(Request $request): JsonResponse
+    {
+        if (! $this->isCoordinator($request)) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+        $stamp = $this->metricsStamp($institutionId);
+        [, $studentsByGrade, $sectionsByGrade] = $this->sbfpRoster($institutionId);
+
+        return response()->json([
+            'stamp' => $stamp,
+            'studentsByGrade' => (object) $studentsByGrade,
+            'sectionsByGrade' => (object) $sectionsByGrade,
         ]);
     }
 
@@ -190,18 +247,13 @@ class FeedingCoordinatorController extends Controller
     }
 
     /**
-     * Both of these live in FeedingBeneficiarySummary, which the Beneficiaries
-     * tab reads too. One definition, or the two tabs would eventually disagree
+     * This lives in FeedingBeneficiarySummary, which the Beneficiaries tab
+     * reads too. One definition, or the two tabs would eventually disagree
      * about who the programme feeds.
      */
     private function normalizeStatus(string $status): string
     {
         return FeedingBeneficiarySummary::normalize($status);
-    }
-
-    private function isQualifiedForFeeding(string $status): bool
-    {
-        return FeedingBeneficiarySummary::qualifies($status);
     }
 
     public function dashboard(Request $request): View
