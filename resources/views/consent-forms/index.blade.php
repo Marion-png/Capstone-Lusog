@@ -87,12 +87,23 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         <input id="consentSearch" class="ms-search-input" type="text" placeholder="Search by name or LRN..." autocomplete="off">
                     </div>
-                    <select id="consentStatusFilter" class="ms-filter-select" aria-label="Filter by consent status">
-                        <option value="all">All Students</option>
-                        <option value="approved">Approved</option>
-                        <option value="partial">Partial</option>
-                        <option value="declined">Declined</option>
-                        <option value="pending">Pending Upload</option>
+                    {{-- The same two questions the nurse's list asks — did this
+                         parent agree, or not — worded the same way, so one
+                         answer does not read as two different things on two
+                         screens. "Agreed" covers the parent who agreed *except*
+                         for certain services: they did consent, and the precise
+                         answers stay below it because the next question about an
+                         exception is always which services it covered.
+                         "Awaiting response" is the adviser's own: their list is
+                         one row per learner, so the ones still to reply are the
+                         chase list, and the nurse never sees those at all. --}}
+                    <select id="consentStatusFilter" class="ms-filter-select" aria-label="Filter by the parent's answer">
+                        <option value="all">All students</option>
+                        <option value="agreed">Agreed to the consent</option>
+                        <option value="declined">Did not agree</option>
+                        <option value="approved">&mdash; Agreed to all services</option>
+                        <option value="partial">&mdash; Agreed, with exceptions</option>
+                        <option value="pending">Awaiting response</option>
                     </select>
                     <button type="button" class="btn" id="openUploadConsent">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -438,7 +449,13 @@
             const name = row.dataset.name || '';
             const lrn = row.dataset.lrn || '';
             const keywordMatch = !keyword || name.includes(keyword) || lrn.includes(keyword);
-            const statusMatch = status === 'all' || (row.dataset.status || '') === status;
+            // Every choice is a list of standings, so the grouped "agreed"
+            // and the precise ones are matched by one line rather than by a
+            // special case that could disagree with the label above it.
+            const wanted = status === 'all'
+                ? null
+                : (status === 'agreed' ? ['approved', 'partial'] : [status]);
+            const statusMatch = wanted === null || wanted.includes(row.dataset.status || '');
 
             return keywordMatch && statusMatch;
         });

@@ -831,4 +831,87 @@ class NurseHealthRecordsPageTest extends TestCase
         // It reads the shared reading, and nothing in the view classifies.
         $this->assertStringContainsString('record.nutrition', $html);
     }
+
+    /**
+     * Two absences, two tabs — decided by whose work is outstanding.
+     *
+     * "The Class Adviser has not yet submitted an MLHAT" is a fact about
+     * Sheet 1, the adviser's half of the card, so it is said there whatever
+     * the nurse has done. "No health assessment on file" was on Sheet 2, above
+     * the nurse's own systems review — and once the nurse has filled that
+     * sheet it contradicts the panel underneath it, so it is drawn only while
+     * Sheet 2 is genuinely empty.
+     */
+    #[Test]
+    public function the_mlhat_notices_sit_on_the_tab_whose_work_is_outstanding(): void
+    {
+        $html = $this->withSession($this->nurseSession([$this->learner()]))
+            ->get('/dashboard/student-health-records')
+            ->assertOk()
+            ->getContent();
+
+        // Sheet 1 holds the adviser's outstanding submission…
+        $sheetOneAt = strpos($html, 'id="p-sheet1"');
+        $adviserNoteAt = strpos($html, 'id="pdAdviserMlhat"');
+        $sheetTwoAt = strpos($html, 'id="p-sheet2"');
+
+        $this->assertNotFalse($sheetOneAt);
+        $this->assertNotFalse($adviserNoteAt);
+        $this->assertNotFalse($sheetTwoAt);
+        $this->assertTrue($sheetOneAt < $adviserNoteAt, 'The adviser note belongs to Sheet 1.');
+        $this->assertTrue($adviserNoteAt < $sheetTwoAt, 'It is on Sheet 1, not Sheet 2.');
+
+        // …and the red banner is gated on the nurse's own sheet being empty.
+        $this->assertStringContainsString('if (!nurseSheetFilled) {', $html);
+        $this->assertStringContainsString('No health assessment (MLHAT) on file for SY', $html);
+
+        // The gate reads the same value renderSystemsReview does, so the
+        // banner and the panel under it cannot disagree.
+        $this->assertStringContainsString('record.examination.sheet2', $html);
+        $this->assertStringContainsString('loadHealthAssessment(lrn, nurseSheetFilled)', $html);
+    }
+
+    /**
+     * Health History is on the two tabs that are about measurement over time.
+     *
+     * It used to sit outside every panel — after Sheet 1's closing tag, with a
+     * stray </section> after it — and `.sp-panel { display: none }` hides
+     * sections, not stray divs, so a learner's weigh-ins were printed under
+     * Consent, Consultation, Documents and Incidents as well. The two copies
+     * are filled by one render, so they cannot disagree about one learner.
+     */
+    #[Test]
+    public function health_history_renders_only_on_sheet_one_and_nutritional_health_status(): void
+    {
+        $html = $this->withSession($this->nurseSession([$this->learner()]))
+            ->get('/dashboard/student-health-records')
+            ->assertOk()
+            ->getContent();
+
+        // Each panel runs from its own opening tag to the next one.
+        $panels = ['p-sheet1', 'p-sheet2', 'p-nutrition', 'p-consent', 'p-consultation', 'p-documents', 'p-incidents'];
+        $starts = [];
+        foreach ($panels as $panel) {
+            $at = strpos($html, 'id="'.$panel.'"');
+            $this->assertNotFalse($at, 'The '.$panel.' panel is missing.');
+            $starts[$panel] = $at;
+        }
+        $end = strlen($html);
+
+        $carries = [];
+        foreach ($panels as $i => $panel) {
+            $stop = $panels[$i + 1] ?? null;
+            $slice = substr($html, $starts[$panel], ($stop ? $starts[$stop] : $end) - $starts[$panel]);
+            if (str_contains($slice, 'Health History')) {
+                $carries[] = $panel;
+            }
+        }
+
+        $this->assertSame(['p-sheet1', 'p-nutrition'], $carries);
+
+        // Two hosts, one render — a second fetch per tab is how two copies of
+        // one learner's history start disagreeing.
+        $this->assertSame(2, substr_count($html, 'class="js-history-list"'));
+        $this->assertStringContainsString("querySelectorAll('.js-history-list')", $html);
+    }
 }

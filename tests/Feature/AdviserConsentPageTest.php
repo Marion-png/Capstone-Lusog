@@ -426,4 +426,45 @@ class AdviserConsentPageTest extends TestCase
         $response->assertSee('ms-page-title', false);
         $response->assertSee('Grade 1 / Sampaguita &middot; School Year '.HealthConsentForm::currentSchoolYear(), false);
     }
+
+    /**
+     * The adviser filters by the parent's answer, in the nurse's words.
+     *
+     * The same two questions both desks ask first — agreed, or did not — so
+     * one answer does not read as two different things on two screens.
+     * "Agreed" covers the parent who agreed *except* for certain services,
+     * and the precise answers stay below it. "Awaiting response" is the
+     * adviser's own: their list is one row per learner, so the ones still to
+     * reply are the chase list, and the nurse never sees those at all.
+     */
+    #[Test]
+    public function the_adviser_filters_the_list_by_the_parents_answer(): void
+    {
+        $this->enrol();
+
+        $html = $this->flushSession()
+            ->withSession($this->adviserSession())
+            ->get(route('consent-forms.index'))
+            ->assertOk()
+            ->getContent();
+
+        foreach ([
+            'all' => 'All students',
+            'agreed' => 'Agreed to the consent',
+            'declined' => 'Did not agree',
+            'approved' => 'Agreed to all services',
+            'partial' => 'Agreed, with exceptions',
+            'pending' => 'Awaiting response',
+        ] as $value => $label) {
+            $this->assertStringContainsString('<option value="'.$value.'"', $html);
+            $this->assertStringContainsString($label, $html);
+        }
+
+        // "Agreed" is a list of standings, not a fourth standing of its own —
+        // one line matches the grouped choice and the precise ones alike.
+        $this->assertStringContainsString("['approved', 'partial']", $html);
+
+        // Each row carries the standing the filter reads.
+        $this->assertStringContainsString('data-status=', $html);
+    }
 }

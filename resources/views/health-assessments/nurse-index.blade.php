@@ -19,7 +19,7 @@
     <img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA">
     <div>
         <div class="cf-topbar-title">Health Assessments (MLHAT)</div>
-        <div class="cf-topbar-sub">School Nurse &middot; read-only access</div>
+        <div class="cf-topbar-sub">School Nurse &middot; assessments are read-only; the health record is yours to record</div>
     </div>
     @include('partials.nurse-learner-search')
     <a href="{{ route('dashboard.school-nurse') }}" class="cf-back">&larr; Back to Dashboard</a>
@@ -27,7 +27,7 @@
 
 <div class="cf-wrap">
     <h1 class="cf-page-title">Submitted Health Assessments</h1>
-    <p class="cf-page-sub">Mandatory Learner's Health Assessment Tool forms submitted by class advisers for SY {{ \App\Models\HealthAssessment::currentSchoolYear() }}.</p>
+    <p class="cf-page-sub">Mandatory Learner's Health Assessment Tool forms submitted by class advisers for SY {{ \App\Models\HealthAssessment::currentSchoolYear() }}. The assessment itself belongs to the adviser who submitted it; the health record beside it is yours to fill in or correct.</p>
 
     @if (session('error')) <div class="cf-flash cf-flash-err">{{ session('error') }}</div> @endif
 
@@ -44,19 +44,47 @@
                         <th>Date of Assessment</th>
                         <th>Assessed by</th>
                         <th>Submitted</th>
+                        <th>Health Record</th>
                         <th></th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach ($assessments as $assessment)
+                        @php
+                            // A learner whose assessment is in but who is not on
+                            // the session roster has no form to open — the link
+                            // is keyed by that row, so there is nothing to point
+                            // at and the standing says so rather than offering a
+                            // control that would 404.
+                            $rowLrn = trim((string) ($assessment->studentHealthRecord?->student_id ?? ''));
+                            $examineIndex = $examineIndexByLrn[$rowLrn] ?? null;
+                            $examined = ! empty($examinedByLrn[$rowLrn]);
+                        @endphp
                         <tr>
                             <td><b>{{ $assessment->studentHealthRecord?->student_name ?? 'Unknown' }}</b><br><span style="color:var(--muted); font-size:.74rem;">LRN {{ $assessment->studentHealthRecord?->student_id }}</span></td>
                             <td>{{ $assessment->studentHealthRecord?->section }}</td>
                             <td>{{ optional($assessment->date_of_assessment)->format('M j, Y') ?? '—' }}</td>
                             <td>{{ $assessment->assessed_by ?: $assessment->submitted_by_name }}</td>
                             <td>{{ $assessment->created_at?->format('M j, Y g:i A') }}</td>
-                            <td style="text-align:right;">
+                            <td>
+                                @if ($examineIndex === null)
+                                    <span style="color:var(--muted);">Not on this year's roster</span>
+                                @elseif ($examined)
+                                    <span style="color:var(--g700);font-weight:600;">Recorded</span>
+                                @else
+                                    <span style="color:var(--muted);">Not yet recorded</span>
+                                @endif
+                            </td>
+                            <td style="text-align:right;white-space:nowrap;">
                                 <a href="{{ route('health-assessments.show', $assessment) }}" class="cf-btn cf-btn-outline">View</a>
+                                @if ($examineIndex !== null)
+                                    {{-- One form, one audited write path: the same
+                                         Fill Medical Record the Health Records table
+                                         opens, carrying this page back so Cancel and
+                                         Save both land here. --}}
+                                    <a href="{{ route('nurse.examine', ['index' => $examineIndex, 'return_to' => route('health-assessments.nurse-index')]) }}"
+                                       class="cf-btn cf-btn-primary">{{ $examined ? 'Edit Health Record' : 'Fill Health Record' }}</a>
+                                @endif
                             </td>
                         </tr>
                     @endforeach

@@ -64,6 +64,9 @@
 	</header>
 
 	<div class="content">
+		@if ($mlIsNurse)
+			@include('partials.nurse-nutrition-tabs', ['active' => 'learners'])
+		@endif
 
 		<div class="page-header sh-header">
 			<div class="sh-headline">

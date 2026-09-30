@@ -29,8 +29,8 @@
 </header>
 
 <div class="cf-wrap">
-    <h1 class="cf-page-title">Completed Consent Forms</h1>
-    <p class="cf-page-sub">Consent forms signed by parents/guardians. These are read-only — consent information cannot be altered.</p>
+    <h1 class="cf-page-title">Consent Forms</h1>
+    <p class="cf-page-sub">Every consent on file for this school, however it arrived — the letters the class advisers sent, replied to or not, and the signed forms they scanned and uploaded. These are read-only — consent information cannot be altered.</p>
 
     @if (session('error')) <div class="cf-flash cf-flash-err">{{ session('error') }}</div> @endif
 
@@ -56,11 +56,11 @@
     <div class="cf-card">
         <div class="cf-card-head">
             <h2>
-                {{ $consentFilter !== '' ? $consentFilters[$consentFilter] : 'Signed &amp; Reviewed Forms' }}
-                <span class="cf-count">{{ $forms->count() }}</span>
+                {{ $consentFilter !== '' ? $consentFilters[$consentFilter] : 'All Consents on File' }}
+                <span class="cf-count">{{ $rows->count() }}</span>
             </h2>
         </div>
-        @if ($forms->isEmpty())
+        @if ($rows->isEmpty())
             {{-- An empty filtered list is a real answer about this school, and
                  says which question it answered — never a blank box reading as
                  "no consent forms exist". --}}
@@ -69,7 +69,7 @@
                     No learner's form reads &ldquo;{{ $consentFilters[$consentFilter] }}&rdquo;.
                     <a href="{{ route('consent-forms.nurse-index') }}">Show all {{ $totalForms }}</a>.
                 @else
-                    No signed consent forms yet.
+                    No consent forms on file yet.
                 @endif
             </div>
         @else
@@ -85,24 +85,47 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach ($forms as $form)
+                    @php
+                        // The five answers a row can carry, worded once. A
+                        // scan with nothing keyed in beside it is "not
+                        // recorded" and never a consent — the school holds the
+                        // parent's reply, but this application has not been
+                        // told what it says.
+                        $answerLabels = [
+                            HealthConsentForm::CONSENT_ALL => ['Consented to all services', '#14653C', '#E7F5EC'],
+                            HealthConsentForm::CONSENT_SPECIFIC => ['Consented with exceptions', '#8A5A06', '#FDF4E2'],
+                            HealthConsentForm::CONSENT_DENY => ['Did not consent', '#A32B2B', '#FCECEC'],
+                            'awaiting' => ['Awaiting response', '#8A5A06', '#FDF4E2'],
+                            'unrecorded' => ['Answer not recorded', '#475569', '#f1f5f9'],
+                        ];
+                    @endphp
+                    @foreach ($rows as $row)
                         @php
-                            $badge = $form->statusBadge();
-                            $consentLabels = [
-                                HealthConsentForm::CONSENT_ALL => ['Consented to all services', '#14653C', '#E7F5EC'],
-                                HealthConsentForm::CONSENT_SPECIFIC => ['Consented with exceptions', '#8A5A06', '#FDF4E2'],
-                                HealthConsentForm::CONSENT_DENY => ['Did not consent', '#A32B2B', '#FCECEC'],
-                            ];
-                            [$cLabel, $cFg, $cBg] = $consentLabels[$form->consent_choice] ?? ['—', '#475569', '#f1f5f9'];
+                            [$cLabel, $cFg, $cBg] = $answerLabels[$row['answer']] ?? ['—', '#475569', '#f1f5f9'];
                         @endphp
                         <tr>
-                            <td><b>{{ $form->student_name }}</b><br><span style="color:var(--muted); font-size:.74rem;">LRN {{ $form->student_lrn }}</span></td>
-                            <td>{{ $form->grade_level }} / {{ $form->section }}</td>
+                            <td><b>{{ $row['name'] }}</b><br><span style="color:var(--muted); font-size:.74rem;">LRN {{ $row['lrn'] }}</span></td>
+                            <td>{{ $row['grade_section'] !== '' ? $row['grade_section'] : '—' }}</td>
                             <td><span class="cf-badge" style="background: {{ $cBg }}; color: {{ $cFg }};">{{ $cLabel }}</span></td>
-                            <td>{{ optional($form->signed_at)->format('M j, Y g:i A') }}</td>
-                            <td><span class="cf-badge" style="background: {{ $badge['bg'] }}; color: {{ $badge['fg'] }};">{{ $badge['label'] }}</span></td>
+                            <td>
+                                @if ($row['answer'] === 'awaiting')
+                                    <span class="cf-muted">{{ $row['dated_label'] }}</span>
+                                @else
+                                    {{ $row['dated_label'] }}
+                                @endif
+                            </td>
+                            <td>
+                                <span class="cf-badge" style="background: {{ $row['status_bg'] }}; color: {{ $row['status_fg'] }};">{{ $row['status_label'] }}</span>
+                            </td>
                             <td style="text-align:right;">
-                                <a href="{{ route('consent-forms.nurse-show', $form) }}" class="cf-btn cf-btn-outline">View</a>
+                                @if ($row['view_url'] !== null)
+                                    <a href="{{ $row['view_url'] }}" class="cf-btn cf-btn-outline">{{ $row['view_label'] }}</a>
+                                @else
+                                    {{-- A consent recorded with no scan behind it has
+                                         nothing to open, and the row says so rather
+                                         than offering a button that would 404. --}}
+                                    <span class="cf-muted">No document</span>
+                                @endif
                             </td>
                         </tr>
                     @endforeach

@@ -329,6 +329,13 @@
         </div>
         <div class="student-profile-body">
             <section id="p-sheet1" class="sp-panel active">
+                {{-- Sheet 1 is the class adviser's half of the card, so an
+                     adviser who has not submitted the MLHAT is a Sheet 1
+                     absence and is said here. It used to sit on Sheet 2, above
+                     the nurse's own systems review — a note about somebody
+                     else's outstanding work, on the tab the nurse fills in. --}}
+                <div id="pdAdviserMlhat" hidden></div>
+
                 <div class="profile-grid">
                     <div class="student-profile-section">
                         <h4>Personal Information</h4>
@@ -445,10 +452,18 @@
                         </div>
                     </div>
                 </div>
-            </section>
+                {{-- Health History belongs to the two tabs that are about
+                     measurement over time: Sheet 1, where the card's own
+                     figures are, and Nutritional Health Status, which asks the
+                     same question across school years. It used to sit OUTSIDE
+                     every panel — after Sheet 1's closing tag, with a stray
+                     </section> after it — and because .sp-panel hides sections
+                     only, it rendered on the Consent, Consultation, Documents
+                     and Incident tabs too, none of which is asking about a
+                     learner's weigh-ins. --}}
                 <div class="student-profile-section">
                     <h4>Health History <span style="font-size:.72rem;font-weight:400;color:var(--text-3);">(across school years)</span></h4>
-                    <div id="pHistoryList">
+                    <div class="js-history-list">
                         <div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Select a student to view history.</div></div>
                     </div>
                 </div>
@@ -485,6 +500,17 @@
                     <div class="student-profile-section">
                         <h4>Endline <span style="font-size:.72rem;font-weight:400;color:var(--text-3);" id="pnEndlineDate"></span></h4>
                         <div id="pnEndline"></div>
+                    </div>
+                </div>
+
+                {{-- The same panel Sheet 1 carries, and one render fills both
+                     (see loadHealthHistory): this tab is the learner's two
+                     weigh-ins for one year, and the history is that same
+                     question asked across all of them. --}}
+                <div class="student-profile-section">
+                    <h4>Health History <span style="font-size:.72rem;font-weight:400;color:var(--text-3);">(across school years)</span></h4>
+                    <div class="js-history-list">
+                        <div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Select a student to view history.</div></div>
                     </div>
                 </div>
             </section>
@@ -1049,7 +1075,16 @@
         window.StudentIncidents?.load(lrn);
         loadConditions(lrn);
         loadConsentStatus(lrn);
-        loadHealthAssessment(lrn);
+        // The same test renderSystemsReview uses to decide the nurse's Sheet 2
+        // is on file, so the banner and the panel cannot disagree.
+        const nurseSheet = record.examination && typeof record.examination === 'object'
+            ? record.examination.sheet2
+            : null;
+        const nurseSheetFilled = Boolean(
+            nurseSheet && typeof nurseSheet === 'object' && Object.keys(nurseSheet).length > 0
+        );
+
+        loadHealthAssessment(lrn, nurseSheetFilled);
         loadHealthHistory(lrn);
         loadConsultations(lrn);
 
@@ -1191,13 +1226,15 @@
         }
     };
 
-    const loadHealthAssessment = async (lrn) => {
+    const loadHealthAssessment = async (lrn, nurseSheetFilled = false) => {
         const el = document.getElementById('phaStatus');
         if (!el) return;
         const warning = document.getElementById('phaWarning');
         const section = document.getElementById('phaSection');
+        const adviserNote = document.getElementById('pdAdviserMlhat');
         if (warning) { warning.hidden = true; warning.innerHTML = ''; }
         if (section) section.hidden = false;
+        if (adviserNote) { adviserNote.hidden = true; adviserNote.innerHTML = ''; }
         if (!lrn) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">No LRN available.</div></div>'; return; }
         el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Loading&hellip;</div></div>';
         try {
@@ -1205,19 +1242,38 @@
             if (!resp.ok) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load assessment.</div></div>'; return; }
             const d = await resp.json();
             if (!d.has_assessment) {
-                // Said at the top of the tab; the section below would only
-                // repeat it, so it is hidden until an assessment is on file.
-                const notice = `
-                    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#FCECEC;border:1px solid #fca5a5;border-radius:8px;font-size:.82rem;font-weight:700;color:#A32B2B;margin-bottom:8px;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-                        No health assessment (MLHAT) on file for SY ${d.school_year || '—'}
-                    </div>
+                // Two different absences, and they belong on two different
+                // tabs. Whose work is outstanding is what decides where.
+                const adviserPending = `
                     <div style="padding:10px 12px;background:#FDF4E2;border:1px solid #fcd34d;border-radius:8px;font-size:.78rem;color:#8A5A06;margin-bottom:16px;">
                         The Class Adviser has not yet submitted an MLHAT health assessment for this student.
                     </div>`;
-                if (warning) { warning.innerHTML = notice; warning.hidden = false; }
-                if (section) section.hidden = true;
-                el.innerHTML = notice;
+
+                // Sheet 1: the adviser's half of the card, so their
+                // outstanding submission is said there whatever the nurse has
+                // done.
+                if (adviserNote) { adviserNote.innerHTML = adviserPending; adviserNote.hidden = false; }
+
+                // Sheet 2: once the nurse has filled their own systems review,
+                // "no assessment on file" is no longer true of this tab — the
+                // nurse is looking at the record they just wrote. The red
+                // banner would contradict the panel underneath it, so it is
+                // only drawn while Sheet 2 is genuinely empty.
+                const missingBanner = `
+                    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#FCECEC;border:1px solid #fca5a5;border-radius:8px;font-size:.82rem;font-weight:700;color:#A32B2B;margin-bottom:8px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                        No health assessment (MLHAT) on file for SY ${d.school_year || '—'}
+                    </div>`;
+
+                if (!nurseSheetFilled) {
+                    if (warning) { warning.innerHTML = missingBanner; warning.hidden = false; }
+                    if (section) section.hidden = true;
+                    el.innerHTML = missingBanner;
+                } else {
+                    // The nurse's sheet stands on its own; nothing is hidden and
+                    // nothing contradicts it.
+                    if (section) section.hidden = true;
+                }
                 return;
             }
 
@@ -1304,8 +1360,14 @@
     };
 
     const loadHealthHistory = async (lrn) => {
-        const el = document.getElementById('pHistoryList');
-        if (!el) return;
+        // Two tabs carry this panel (Sheet 1 and Nutritional Health Status), so
+        // one render fills every host rather than each tab fetching its own —
+        // two copies of one learner's history that could disagree is exactly
+        // what a class selector must not produce.
+        const hosts = Array.from(document.querySelectorAll('.js-history-list'));
+        if (!hosts.length) return;
+
+        const el = { set innerHTML(html) { hosts.forEach((host) => { host.innerHTML = html; }); } };
         if (!lrn) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">No LRN available.</div></div>'; return; }
         el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Loading&hellip;</div></div>';
         try {

@@ -76,18 +76,50 @@ class NurseLusogShellTest extends TestCase
      * the tab title — never "Feeding Program", which is the coordinator's word
      * for their own screens.
      */
-    public function test_the_feeding_page_is_titled_nutritional_status_report_for_the_nurse(): void
+    /**
+     * Nutrition is one module on the nurse's rail, with two views.
+     *
+     * It used to be two entries with nearly the same name — "Nutritional
+     * Health Status" and, under Health Programs, "Nutritional Status Report" —
+     * which is how a nurse learns to guess which one to press. They are not
+     * the same reading (one is every learner's weigh-ins, the other the
+     * feeding programme's cycle and turnout), so neither was deleted: the
+     * second became a view inside the first.
+     */
+    public function test_nutrition_is_one_rail_entry_with_two_views(): void
     {
-        $html = $this->withSession($this->nurseSession())
+        $programme = $this->withSession($this->nurseSession())
             ->get('/dashboard/school-nurse/feeding-program')
             ->assertOk()
             ->getContent();
 
-        $this->assertStringContainsString('<title>Nutritional Status Report - SIGLA</title>', $html);
-        $this->assertStringContainsString('<h1 class="page-title">Nutritional Status <span>Report</span></h1>', $html);
-        $this->assertStringContainsString('<span>Nutritional Status Report</span></div>', $html);
-        $this->assertMatchesRegularExpression('/class="sb-link active">.*?Nutritional Status Report\s*<\/a>/s', $html);
-        $this->assertStringNotContainsString('<h1 class="page-title">Feeding <span>Program</span></h1>', $html);
+        // The old second entry is gone from the rail.
+        $this->assertStringNotContainsString('Nutritional Status Report', $programme);
+
+        // Both views are reachable from the module's own rail, and this is the
+        // programme one.
+        $this->assertStringContainsString('class="nh-tabs"', $programme);
+        $this->assertStringContainsString('Feeding Programme', $programme);
+        $this->assertStringContainsString(route('dashboard.school-nurse.nutritional-status'), $programme);
+        $this->assertMatchesRegularExpression('/nh-tab active[^>]*>\s*<span class="nh-tab-label">Feeding Programme/s', $programme);
+
+        // One entry on the rail, lit on this view too.
+        $this->assertMatchesRegularExpression('/class="sb-link active">.*?Nutritional Health Status\s*<\/a>/s', $programme);
+        $this->assertSame(
+            1,
+            preg_match_all('/class="sb-link[^"]*"[^>]*>.*?Nutritional Health Status\s*<\/a>/s', $programme),
+            'Nutrition is one entry on the rail, not two.'
+        );
+
+        // And the learner roll is the module's other view.
+        $learners = $this->withSession($this->nurseSession())
+            ->get('/dashboard/school-nurse/nutritional-status')
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('class="nh-tabs"', $learners);
+        $this->assertMatchesRegularExpression('/nh-tab active[^>]*>\s*<span class="nh-tab-label">Learners/s', $learners);
+        $this->assertStringContainsString(route('dashboard.school-nurse.feeding-program'), $learners);
     }
 
     /**

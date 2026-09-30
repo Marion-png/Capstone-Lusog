@@ -46,15 +46,35 @@ final class DecryptedValues
     private static array $values = [];
 
     /**
-     * The plaintext for a stored value, or the value itself when it was written
-     * before encryption at rest and cannot be decrypted.
+     * The plaintext for a stored value.
+     *
+     * Two kinds of value cannot be decrypted, and they are not the same thing:
+     *
+     *  - **Legacy plaintext** — written before encryption at rest, or an
+     *    empty-string default the data migration skipped. It is returned as it
+     *    stands, because it is already readable and a page must not break over
+     *    a row that predates the feature.
+     *  - **Ciphertext this key cannot open** — written under a different
+     *    APP_KEY. Returning it printed a wall of base64 into a learner's name
+     *    column. That is not a value: nobody can read it, it is not what the
+     *    parent or the adviser typed, and rendering it makes a screen unusable
+     *    while telling the reader nothing. So it comes back **empty**, and the
+     *    row shows a blank where a name should be — which is the truth, and
+     *    which the plain columns beside it (the LRN) still identify.
+     *
+     * Losing APP_KEY loses the data; this only stops the loss being rendered
+     * as gibberish. Nothing here invents a value to put in its place.
      */
     public static function plaintext(string $stored): string
     {
         $hit = self::$values[$stored] ?? null;
 
         if ($hit !== null) {
-            return $hit === false ? $stored : $hit;
+            // Same rule on the cached path as on the fresh one: a remembered
+            // failure must not hand back base64 just because it was asked twice.
+            return $hit === false
+                ? (self::looksEncrypted($stored) ? '' : $stored)
+                : $hit;
         }
 
         if (count(self::$values) >= self::MAX_ENTRIES) {
@@ -66,12 +86,36 @@ final class DecryptedValues
         } catch (DecryptException) {
             self::$values[$stored] = false;
 
-            return $stored;
+            // Ciphertext written under another key is unreadable, not legacy
+            // plaintext. An empty string says so; the base64 said nothing.
+            return self::looksEncrypted($stored) ? '' : $stored;
         }
 
         self::$values[$stored] = $plain;
 
         return $plain;
+    }
+
+    /**
+     * Whether a stored value is Laravel ciphertext by shape — base64 of a JSON
+     * object carrying iv, value and mac — whatever key it was written with.
+     *
+     * Shape alone, deliberately: this is asked precisely when decryption has
+     * already failed, so the question is no longer "can this be opened" but
+     * "was this ever meant to be readable as it stands".
+     */
+    public static function looksEncrypted(string $stored): bool
+    {
+        $decoded = base64_decode($stored, true);
+
+        if ($decoded === false) {
+            return false;
+        }
+
+        $payload = json_decode($decoded, true);
+
+        return is_array($payload)
+            && isset($payload['iv'], $payload['value'], $payload['mac']);
     }
 
     /** Whether the stored value could be decrypted at all. */

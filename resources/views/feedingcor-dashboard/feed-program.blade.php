@@ -4,7 +4,7 @@
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<meta name="csrf-token" content="{{ csrf_token() }}">
-		<title>{{ (bool) ($isReadOnly ?? (session('active_role') === 'school_nurse')) ? 'Nutritional Status Report' : 'Feeding Program' }} - SIGLA</title>
+		<title>{{ (bool) ($isReadOnly ?? (session('active_role') === 'school_nurse')) ? 'Nutritional Health Status — Feeding Programme' : 'Feeding Program' }} - SIGLA</title>
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
@@ -36,20 +36,26 @@
      links pointed at "#". One include, so a rail change reaches every page
      that shows it. --}}
 @if ($isReadOnly)
-    @include('partials.nurse-lusog-sidebar', ['active' => 'feeding'])
+    {{-- One module, two views: the nurse's nutrition entry stays lit here,
+         because this page is a view inside it rather than a tab of its own. --}}
+    @include('partials.nurse-lusog-sidebar', ['active' => 'nutritional-status'])
 @else
     @include('partials.feedingcor-sidebar', ['active' => 'program'])
 @endif
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>{{ $isReadOnly ? 'School Nurse' : 'Dashboard' }}</span><span class="bc-sep">&rsaquo;</span><span>{{ $isReadOnly ? 'Nutritional Status Report' : 'Feeding Program' }}</span></div>
+		<div class="topbar-bc"><span>{{ $isReadOnly ? 'School Nurse' : 'Dashboard' }}</span><span class="bc-sep">&rsaquo;</span><span>{{ $isReadOnly ? 'Nutritional Health Status' : 'Feeding Program' }}</span></div>
 
 		@include('partials.nurse-learner-search')
 	    @include('partials.live-clock')
 	</header>
 
 	<div class="content">
+		@if ($isReadOnly)
+			@include('partials.nurse-nutrition-tabs', ['active' => 'programme'])
+		@endif
+
 		@if (session('success'))
 			<div class="flash ok">{{ session('success') }}</div>
 		@endif
@@ -63,7 +69,7 @@
 		<div class="head-row page-header">
 			<div>
 				@if ($isReadOnly)
-					<h1 class="page-title">Nutritional Status <span>Report</span></h1>
+					<h1 class="page-title">Nutritional Health Status <span>Feeding Programme</span></h1>
 				@else
 					<h1 class="page-title">Feeding <span>Program</span></h1>
 				@endif

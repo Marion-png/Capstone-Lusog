@@ -183,4 +183,105 @@ class HealthAssessmentPagesTest extends TestCase
         $this->assertSame(1, HealthAssessment::count());
         $this->assertSame('Updated summary.', HealthAssessment::first()->summary_of_findings);
     }
+
+    /**
+     * A submitted assessment gives the nurse a way into their own half of it.
+     *
+     * The MLHAT stays the adviser's — the nurse reads it and cannot change
+     * what somebody else submitted — but the examination beside it is the
+     * nurse's to record, and until now this page made them go and find the
+     * learner again on Health Records to do it. The link is keyed by the
+     * learner's index in the session roster, the same key the Health Records
+     * table uses, so both surfaces open one form for one learner.
+     */
+    #[Test]
+    public function the_nurse_can_open_the_health_record_from_a_submitted_assessment(): void
+    {
+        $record = $this->makeRecord();
+        $this->submitAssessment();
+
+        $html = $this->withSession($this->nurseSession())
+            ->get(route('health-assessments.nurse-index'))
+            ->assertOk()
+            ->assertSee('Fill Health Record')
+            ->getContent();
+
+        // The roster was rebuilt from the database, so the learner has a row
+        // to be keyed by even though the nurse's session carried none.
+        $roster = session('school_health_card_records', []);
+        $index = null;
+        foreach ($roster as $rawIndex => $row) {
+            if (($row['lrn'] ?? null) === $record->student_id) {
+                $index = $rawIndex;
+            }
+        }
+        $this->assertNotNull($index, 'The learner must be on the rebuilt roster.');
+
+        $this->assertStringContainsString(
+            e(route('nurse.examine', ['index' => $index, 'return_to' => route('health-assessments.nurse-index')])),
+            $html,
+            'The action must open that learner\'s own examination form, and come back here.'
+        );
+
+        // It is the existing audited form, opened for this learner.
+        $this->withSession($this->nurseSession())
+            ->get(route('nurse.examine', ['index' => $index]))
+            ->assertOk()
+            ->assertSee('Dela Cruz, Juan');
+    }
+
+    /**
+     * An examination already on file is corrected, not filled in again — and
+     * the page says which of the two it is offering.
+     */
+    #[Test]
+    public function an_examination_already_on_file_is_offered_as_an_edit(): void
+    {
+        $this->makeRecord();
+        $this->submitAssessment();
+
+        // The roster is rebuilt from the database on every open, so what the
+        // nurse has recorded is read off the record itself and not out of a
+        // session a test could hand-set.
+        $record = StudentHealthRecord::firstOrFail();
+        $record->examination = ['sheet2' => ['summary' => 'Seen by the nurse.']];
+        $record->save();
+
+        $this->withSession($this->nurseSession())
+            ->get(route('health-assessments.nurse-index'))
+            ->assertOk()
+            ->assertSee('Edit Health Record')
+            ->assertSee('Recorded')
+            ->assertDontSee('Fill Health Record');
+    }
+
+    /**
+     * The assessment itself is still read-only here: the nurse is offered no
+     * way to change the form the class adviser submitted.
+     */
+    #[Test]
+    public function the_nurse_is_offered_no_way_to_change_the_advisers_assessment(): void
+    {
+        $this->makeRecord();
+        $assessment = $this->submitAssessment();
+
+        $html = $this->withSession($this->nurseSession())
+            ->get(route('health-assessments.nurse-index'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringNotContainsString(route('health-assessment.store'), $html);
+        $this->assertStringNotContainsString(
+            e(route('health-assessments.form', '123456789012')),
+            $html,
+            'The adviser\'s MLHAT form is not offered to the nurse.'
+        );
+
+        // And the gate behind it still refuses, whatever a page renders.
+        $this->withSession($this->nurseSession())
+            ->post(route('health-assessment.store'), ['lrn' => '123456789012'])
+            ->assertForbidden();
+
+        $this->assertSame('Generally healthy.', $assessment->fresh()->summary_of_findings);
+    }
 }

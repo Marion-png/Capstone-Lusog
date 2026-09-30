@@ -7,7 +7,9 @@ use App\Models\HealthConsentForm;
 use App\Models\Institution;
 use App\Models\StudentHealthCondition;
 use App\Models\StudentHealthRecord;
+use App\Support\DecryptedValues;
 use App\Support\EncryptedFileStorage;
+use Illuminate\Encryption\Encrypter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -164,5 +166,55 @@ class EncryptionAtRestTest extends TestCase
         $response = EncryptedFileStorage::response($path, 'certificate.pdf');
         $this->assertSame('%PDF-1.4 fake medical certificate body', $response->getContent());
         $this->assertSame('application/pdf', $response->headers->get('Content-Type'));
+    }
+
+    /**
+     * Ciphertext this key cannot open reads as empty, never as base64.
+     *
+     * A record written under a different APP_KEY cannot be decrypted, and the
+     * fallback that keeps legacy plaintext readable used to hand the raw value
+     * back — printing a wall of base64 into a learner's name column. That is
+     * not a value: nobody can read it, it is not what anyone typed, and it
+     * makes the screen unusable while saying nothing.
+     *
+     * Legacy plaintext is a different case and still comes back as it stands.
+     */
+    /** @test */
+    public function ciphertext_from_another_key_reads_as_empty_not_as_base64(): void
+    {
+        // Encrypt under a key this app does not have.
+        $foreign = new Encrypter(random_bytes(32), 'AES-256-CBC');
+        $unreadable = $foreign->encryptString('Dela Cruz, Juan');
+
+        $this->assertTrue(
+            DecryptedValues::looksEncrypted($unreadable),
+            'The fixture must be Laravel ciphertext by shape.'
+        );
+        $this->assertFalse(DecryptedValues::isEncrypted($unreadable));
+        $this->assertSame('', DecryptedValues::plaintext($unreadable));
+
+        // …and it reaches a model's attribute as empty too, rather than base64.
+        $school = Institution::create(['name' => 'Key Test School', 'status' => 'active']);
+
+        $record = StudentHealthRecord::create([
+            'institution_id' => $school->id,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'student_id' => '130000009999',
+            'student_name' => 'placeholder',
+            'section' => 'Grade 10 / Dalton',
+        ]);
+        DB::table('student_health_records')
+            ->where('id', $record->id)
+            ->update(['student_name' => $unreadable]);
+
+        $this->assertSame('', (string) $record->fresh()->student_name);
+    }
+
+    /** Legacy plaintext is not ciphertext, and is still handed back readable. */
+    /** @test */
+    public function legacy_plaintext_is_still_returned_as_it_stands(): void
+    {
+        $this->assertFalse(DecryptedValues::looksEncrypted('Dela Cruz, Juan'));
+        $this->assertSame('Dela Cruz, Juan', DecryptedValues::plaintext('Dela Cruz, Juan'));
     }
 }

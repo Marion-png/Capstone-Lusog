@@ -55,6 +55,8 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
 }
 .cf-empty { padding: 30px; text-align: center; color: var(--muted); font-size: .85rem; }
 .cf-empty a { color: var(--g700); font-weight: 600; text-decoration: none; }
+/* A date that is not an answer: quieter than one that is. */
+.cf-muted { color: var(--muted); font-size: .8rem; }
 
 /* ── Buttons ─────────────────────────────────────────────────── */
 .cf-btn { display: inline-flex; align-items: center; gap: 7px; border: none; cursor: pointer; font-family: inherit; font-size: .8rem; font-weight: 600; padding: 9px 16px; border-radius: 9px; text-decoration: none; transition: background .15s, color .15s, transform .1s; }

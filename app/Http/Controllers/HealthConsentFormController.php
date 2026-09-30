@@ -7,6 +7,7 @@ use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use App\Support\AdviserClassScope;
 use App\Support\ConsentFormScanner;
+use App\Support\ConsentStanding;
 use App\Support\EncryptedFileStorage;
 use App\Support\SchemaCache;
 use App\Support\StudentRosterSync;
@@ -125,39 +126,13 @@ class HealthConsentFormController extends Controller
     }
 
     /**
-     * A consent status is only reported once there is a document behind it.
-     *
-     * A parent-signed online form carries its own e-signature, so it stands on
-     * its own. An uploaded record does not: the signed scan is its evidence,
-     * and `consent` is nullable on upload, so a record can exist carrying an
-     * answer with no file attached. Reporting that answer as Approved would
-     * claim consent the school cannot produce — those stay Pending Upload.
-     *
-     * consent_choice and consent_type are both encrypted, so this compares
-     * decrypted values in PHP.
+     * Where one learner's consent stands — decided in `ConsentStanding`, which
+     * the adviser's student profile and their dashboard counts read too, so
+     * three screens cannot report three answers about one child.
      */
     private function deriveConsentStatus(?HealthConsentForm $form, ?ParentalConsentForm $upload): string
     {
-        $signed = [HealthConsentForm::STATUS_SIGNED, HealthConsentForm::STATUS_REVIEWED];
-
-        if ($form !== null && in_array($form->status, $signed, true)) {
-            return match ($form->consent_choice) {
-                HealthConsentForm::CONSENT_DENY => 'declined',
-                HealthConsentForm::CONSENT_SPECIFIC => 'partial',
-                default => 'approved',
-            };
-        }
-
-        if ($upload !== null && $upload->file_path !== null) {
-            return match ($upload->consent_type) {
-                'refused' => 'declined',
-                'partial' => 'partial',
-                'full' => 'approved',
-                default => 'pending',
-            };
-        }
-
-        return 'pending';
+        return ConsentStanding::for($form, $upload);
     }
 
     /** How the adviser recorded the parent's answer, whether or not the scan is in. */
@@ -525,10 +500,45 @@ class HealthConsentFormController extends Controller
      * @var array<string, string>
      */
     private const NURSE_CONSENT_FILTERS = [
-        HealthConsentForm::CONSENT_ALL => 'Consented to all services',
-        HealthConsentForm::CONSENT_SPECIFIC => 'Consented with exceptions',
-        HealthConsentForm::CONSENT_DENY => 'Did not consent',
+        // The two the nurse asks for most: did this parent agree, or not.
+        // "Agreed" deliberately includes the parent who agreed *except* for
+        // certain services — they did consent — but the three precise answers
+        // stay below it, because the nurse's next question about an exception
+        // is always which services it covered, and a single "agreed" bucket
+        // cannot answer that.
+        'agreed' => 'Agreed to the consent',
+        HealthConsentForm::CONSENT_DENY => 'Did not agree',
+        'awaiting' => 'Awaiting response',
+        // A consent the adviser uploaded as a scan, with no answer keyed in
+        // beside it. The school holds the parent's reply; nobody has recorded
+        // what it says, so it authorises nothing until the nurse opens it.
+        'unrecorded' => 'Answer not recorded',
+        HealthConsentForm::CONSENT_ALL => '— Agreed to all services',
+        HealthConsentForm::CONSENT_SPECIFIC => '— Agreed, with exceptions',
     ];
+
+    /**
+     * Whether one form is the answer a filter asked for.
+     *
+     * **Awaiting is a status, not an answer**, which is why this is a
+     * predicate rather than a list of `consent_choice` values: a form the
+     * parent has not replied to carries no choice at all, and matching it on
+     * an empty string would also match a signed form whose answer failed to
+     * decrypt. The two are not the same thing to tell a nurse.
+     */
+    private static function nurseRowMatches(array $row, string $choice): bool
+    {
+        $answer = (string) $row['answer'];
+
+        // "Agreed" covers the parent who agreed except for certain services —
+        // they did consent. Every other filter is the answer itself, because
+        // the row already carries one of the five in the same vocabulary.
+        if ($choice === 'agreed') {
+            return in_array($answer, [HealthConsentForm::CONSENT_ALL, HealthConsentForm::CONSENT_SPECIFIC], true);
+        }
+
+        return $answer === $choice;
+    }
 
     public function nurseIndex(Request $request)
     {
@@ -536,37 +546,193 @@ class HealthConsentFormController extends Controller
             return $redirect;
         }
 
-        $forms = HealthConsentForm::whereIn('status', [
-            HealthConsentForm::STATUS_SIGNED,
-            HealthConsentForm::STATUS_REVIEWED,
-        ])
-            ->when($request->session()->get('active_institution_id'), fn ($q, $id) => $q->where('institution_id', $id))
-            ->orderByDesc('signed_at')
-            ->get();
+        $rows = $this->nurseConsentRows($request);
 
-        // consent_choice is encrypted at rest, so the filter runs in PHP after
-        // the fetch — never as a WHERE. A value off the query string that is
-        // not one of the three answers narrows nothing, rather than emptying
+        // Every answer on a row is decrypted at rest, so the filter runs in
+        // PHP after the fetch — never as a WHERE. A value off the query string
+        // that is not one of the answers narrows nothing, rather than emptying
         // the page and reading as "no learner consented".
         $choice = trim((string) $request->query('consent', ''));
         if (! array_key_exists($choice, self::NURSE_CONSENT_FILTERS)) {
             $choice = '';
         }
 
-        $total = $forms->count();
+        $total = $rows->count();
 
         if ($choice !== '') {
-            $forms = $forms->filter(
-                fn (HealthConsentForm $form): bool => (string) $form->consent_choice === $choice
+            $rows = $rows->filter(
+                fn (array $row): bool => self::nurseRowMatches($row, $choice)
             )->values();
         }
 
         return view('consent-forms.nurse-index', [
-            'forms' => $forms,
+            'rows' => $rows,
             'consentFilter' => $choice,
             'consentFilters' => self::NURSE_CONSENT_FILTERS,
             'totalForms' => $total,
         ]);
+    }
+
+    /**
+     * One row per learner whose parent has been asked, however the answer came.
+     *
+     * A consent reaches this school two ways and the nurse's question is the
+     * same either way: may this child be given the service? So both are on one
+     * list. The digital Sulat-Pahibalo the adviser sent is one; the signed form
+     * the adviser scanned and uploaded (`parental_consent_forms`) is the other,
+     * and it used to appear on no nurse screen at all — a consent could be on
+     * file at the school and invisible to the person who acts on it.
+     *
+     * Where a learner has both, the row is **the record that actually answers
+     * the question**: an answered letter keeps its place (it carries the
+     * parent's reply service by service, which a scanned tick does not), and a
+     * letter still out yields to a scan that has come back. `has_scan` says a
+     * document is on file either way.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function nurseConsentRows(Request $request): Collection
+    {
+        // A letter that is out but unanswered belongs here too. The nurse
+        // plans a deworming round off this list, and "nobody has replied for
+        // this learner yet" is exactly the thing that decides whether a child
+        // can be given a service.
+        $letters = HealthConsentForm::whereIn('status', [
+            HealthConsentForm::STATUS_SENT,
+            HealthConsentForm::STATUS_SIGNED,
+            HealthConsentForm::STATUS_REVIEWED,
+        ])
+            ->when($request->session()->get('active_institution_id'), fn ($q, $id) => $q->where('institution_id', $id))
+            ->get();
+
+        $rows = [];
+
+        foreach ($letters as $form) {
+            $rows[(string) $form->student_lrn] = $this->nurseLetterRow($form);
+        }
+
+        $records = SchemaCache::hasTable('parental_consent_forms')
+            ? StudentHealthRecord::rosterFor($request->session()->get('active_institution_id'))
+            : collect();
+        $recordsById = $records->keyBy('id');
+
+        foreach ($this->uploadedConsentsForNurse($records) as $lrn => $upload) {
+            $existing = $rows[(string) $lrn] ?? null;
+
+            if ($existing !== null && $existing['answer'] !== 'awaiting') {
+                $rows[(string) $lrn]['has_scan'] = true;
+
+                continue;
+            }
+
+            $rows[(string) $lrn] = $this->nurseUploadRow((string) $lrn, $upload, $recordsById);
+        }
+
+        // Answered first, newest at the top, then the letters still out.
+        // Sorted here rather than in SQL: an unanswered form has no signed_at,
+        // and the two databases this app runs on disagree about where NULL
+        // sorts.
+        return collect(array_values($rows))
+            ->sortBy([
+                fn (array $a, array $b) => ($b['answer'] !== 'awaiting') <=> ($a['answer'] !== 'awaiting'),
+                fn (array $a, array $b) => ($b['dated_at']) <=> ($a['dated_at']),
+            ])
+            ->values();
+    }
+
+    /**
+     * The scanned consents on file for this school year, keyed by LRN.
+     *
+     * Given the roster already read for this request: `parental_consent_forms`
+     * hangs off `student_health_records`, and the join goes through the plain
+     * `student_id` column because the learner's name is encrypted.
+     *
+     * @param  Collection<int, StudentHealthRecord>  $records
+     * @return Collection<string, ParentalConsentForm>
+     */
+    private function uploadedConsentsForNurse(Collection $records): Collection
+    {
+        if ($records->isEmpty()) {
+            return collect();
+        }
+
+        $lrnByRecordId = $records->pluck('student_id', 'id');
+
+        // Sorted oldest-first so keyBy leaves the most recent upload per learner.
+        return ParentalConsentForm::whereIn('student_health_record_id', $records->pluck('id'))
+            ->where('school_year', ParentalConsentForm::currentSchoolYear())
+            ->get()
+            ->sortBy('created_at')
+            ->keyBy(fn (ParentalConsentForm $upload) => (string) ($lrnByRecordId[$upload->student_health_record_id] ?? ''));
+    }
+
+    /** @return array<string, mixed> */
+    private function nurseLetterRow(HealthConsentForm $form): array
+    {
+        $awaiting = $form->status === HealthConsentForm::STATUS_SENT;
+
+        // A letter still out has no answer on it, and says so in words. An em
+        // dash here would read as "the parent answered something we cannot
+        // show", which is a different thing to tell a nurse deciding whether a
+        // child may be given a service.
+        $answer = $awaiting ? 'awaiting' : (string) $form->consent_choice;
+        $badge = $form->statusBadge();
+
+        return [
+            'lrn' => (string) $form->student_lrn,
+            'name' => (string) $form->student_name,
+            'grade_section' => trim(trim((string) $form->grade_level).' / '.trim((string) $form->section), ' /'),
+            'answer' => $answer,
+            'dated_at' => $form->signed_at ?? $form->sent_at,
+            'dated_label' => $awaiting
+                ? 'Sent '.optional($form->sent_at)->format('M j, Y')
+                : (optional($form->signed_at)->format('M j, Y g:i A') ?: '—'),
+            'status_label' => $badge['label'],
+            'status_bg' => $badge['bg'],
+            'status_fg' => $badge['fg'],
+            'source' => 'letter',
+            'has_scan' => $form->paper_form_path !== null,
+            'view_url' => route('consent-forms.nurse-show', $form),
+            'view_label' => 'View',
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    /** @param  Collection<int, StudentHealthRecord>  $recordsById */
+    private function nurseUploadRow(string $lrn, ParentalConsentForm $upload, Collection $recordsById): array
+    {
+        $record = $recordsById->get($upload->student_health_record_id);
+
+        // The upload dialog stopped asking what the parent answered, so most
+        // scans carry none — which is reported as "not recorded" and never as
+        // a consent. The document is the evidence; the nurse opens it.
+        $answer = match ((string) $upload->consent_type) {
+            'full' => HealthConsentForm::CONSENT_ALL,
+            'partial' => HealthConsentForm::CONSENT_SPECIFIC,
+            'refused' => HealthConsentForm::CONSENT_DENY,
+            default => 'unrecorded',
+        };
+
+        $hasFile = $upload->file_path !== null;
+
+        return [
+            'lrn' => (string) $lrn,
+            'name' => (string) ($record?->student_name ?? 'Unknown'),
+            'grade_section' => trim((string) ($record?->section ?? '')),
+            'answer' => $answer,
+            'dated_at' => $upload->created_at,
+            'dated_label' => 'Uploaded '.optional($upload->created_at)->format('M j, Y'),
+            'status_label' => $hasFile ? 'Signed form on file' : 'Recorded without a scan',
+            'status_bg' => '#f1f5f9',
+            'status_fg' => '#475569',
+            'source' => 'upload',
+            'has_scan' => $hasFile,
+            // The scan itself is the whole record here, so View opens it —
+            // and only when there is one. `parental-consent.download` is
+            // already nurse/clinic-staff only and re-scoped to the school.
+            'view_url' => $hasFile ? route('parental-consent.download', $upload->id) : null,
+            'view_label' => 'Open scan',
+        ];
     }
 
     /** School Nurse: read-only view of one completed form. */

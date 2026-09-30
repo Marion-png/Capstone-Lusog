@@ -185,7 +185,11 @@
         </div>
         <div>
             <div class="card-title">Systems Review, Screenings, and Recommendations</div>
-            <div class="card-sub">Complete the examination fields below and save to finalize the record.</div>
+            {{-- An examination already on file is being corrected, not
+                 filled in for the first time, and the form prefills with
+                 it — so it says which of the two this is rather than
+                 telling a nurse to complete what is already complete. --}}
+            <div class="card-sub">@if (! empty($record["examination"]))This examination is already on file. Correct any field below and save to update the record.@elseComplete the examination fields below and save to finalize the record.@endif</div>
         </div>
     </div>
     <div class="card-body">

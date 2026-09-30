@@ -619,3 +619,22 @@ td strong { color: var(--lg-ink); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) {
 	.card, .btn, tbody tr { transition: none !important; }
 }
+
+/* ══ Nutritional Health Status — one module, two views ══════════════
+   The nurse had two rail entries with nearly the same name; they are one
+   entry now, and the two readings sit on this rail inside it. Shared by
+   both pages (partials/nurse-nutrition-tabs), so neither can drift. */
+.nh-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+.nh-tab {
+	display: block; padding: 10px 16px; border-radius: 12px;
+	border: 1px solid var(--lg-border); background: #fff;
+	text-decoration: none; min-width: 200px;
+}
+.nh-tab:hover { border-color: var(--lg-border-strong); background: var(--lg-rail); }
+.nh-tab-label { display: block; font-size: .88rem; font-weight: 600; color: var(--lg-ink); }
+.nh-tab-hint { display: block; margin-top: 2px; font-size: .74rem; color: var(--lg-ink-soft); }
+/* The active view is filled, not underlined — the app underlines nothing. */
+.nh-tab.active { background: var(--lg-emerald-deep); border-color: var(--lg-emerald-deep); }
+.nh-tab.active .nh-tab-label { color: #fff; }
+.nh-tab.active .nh-tab-hint { color: rgba(255,255,255,.78); }
+@media print { .nh-tabs { display: none !important; } }

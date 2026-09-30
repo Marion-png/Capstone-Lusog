@@ -68,11 +68,13 @@
             Nutritional Health Status
         </a>
 
+        {{-- "Nutritional Status Report" used to sit here, under Health
+             Programs. It is the same module as Nutritional Health Status above
+             — one nurse asking one question about nutrition — so it is now a
+             view inside it (partials/nurse-nutrition-tabs) rather than a
+             second entry with nearly the same name. The page, its route and
+             its figures are unchanged; only the way in moved. --}}
         <div class="sb-section-label">Health Programs</div>
-        <a href="{{ route('dashboard.school-nurse.feeding-program') }}" class="sb-link {{ $active === 'feeding' ? 'active' : '' }}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
-            Nutritional Status Report
-        </a>
         {{-- Deworming Program is deliberately not listed. The page, its
              routes and its data are all still live at
              dashboard.school-nurse.deworming — only the rail entry is

@@ -6,6 +6,7 @@ use App\Models\HealthAssessment;
 use App\Models\StudentHealthRecord;
 use App\Support\AdviserClassScope;
 use App\Support\SchemaCache;
+use App\Support\StudentRosterSync;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -351,7 +352,16 @@ class HealthAssessmentController extends Controller
         ]);
     }
 
-    /** School Nurse/clinic staff: read-only list of all submitted assessments. */
+    /**
+     * School Nurse/clinic staff: every submitted assessment, and the way
+     * into the half of the card that is theirs to write.
+     *
+     * The MLHAT stays read-only here — it is the class adviser's form and
+     * only they may change what they submitted. What the nurse *can* do,
+     * once a learner's assessment is in, is record or correct their own
+     * examination, and until now this page made them go and find the
+     * learner again on Health Records to do it.
+     */
     public function nurseIndex(Request $request)
     {
         if ($redirect = $this->requirePageRole($request, ['school_nurse', 'clinic_staff'])) {
@@ -371,7 +381,36 @@ class HealthAssessmentController extends Controller
                 ->get()
             : collect();
 
-        return view('health-assessments.nurse-index', ['assessments' => $assessments]);
+        // Fill Medical Record is keyed by the learner's index in the session
+        // roster, so rebuild the roster first (the invariant every page reading
+        // school_health_card_records carries) and map each LRN onto that raw
+        // index — the same one NurseController::dedupedRoster hands the Health
+        // Records table, so both surfaces open the same form for one learner.
+        StudentRosterSync::syncToSession($request);
+
+        $roster = NurseController::dedupedRoster(
+            $request->session()->get('school_health_card_records', [])
+        );
+
+        $examineIndexByLrn = [];
+        $examinedByLrn = [];
+
+        foreach ($roster as $rawIndex => $row) {
+            $lrn = trim((string) ($row['lrn'] ?? ''));
+
+            if ($lrn === '') {
+                continue;
+            }
+
+            $examineIndexByLrn[$lrn] = $rawIndex;
+            $examinedByLrn[$lrn] = ! empty($row['examination']);
+        }
+
+        return view('health-assessments.nurse-index', [
+            'assessments' => $assessments,
+            'examineIndexByLrn' => $examineIndexByLrn,
+            'examinedByLrn' => $examinedByLrn,
+        ]);
     }
 
     /** Students of the adviser's assigned class, from the session workflow. */
