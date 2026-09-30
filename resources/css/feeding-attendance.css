@@ -390,6 +390,15 @@ a.fa-cal-day:hover { border-color: var(--lg-emerald); }
 a.fa-cal-day:focus-visible { outline: none; box-shadow: var(--lg-focus); }
 .fa-cal-day.is-outside { border-color: transparent; background: transparent; }
 .fa-cal-day.is-weekend { background: var(--lg-rail); }
+/* Saturdays and Sundays are locked, never links: hatched and muted so they
+   read as closed rather than as empty, with the cursor saying the same. */
+.fa-cal-day.is-locked {
+	cursor: not-allowed;
+	border-color: transparent;
+	background: repeating-linear-gradient(135deg, var(--lg-rail) 0 5px, var(--lg-card) 5px 10px);
+}
+.fa-cal-day.is-locked .fa-cal-num { color: var(--lg-ink-soft); opacity: .6; }
+.fa-cal-head.is-weekend { opacity: .55; }
 .fa-cal-day.is-today { border-color: var(--lg-ink); }
 .fa-cal-day.is-selected { border-color: var(--lg-emerald); box-shadow: inset 0 0 0 1px var(--lg-emerald); }
 .fa-cal-day.fa-day-complete { background: var(--lg-mint); border-color: #C4E4D0; }

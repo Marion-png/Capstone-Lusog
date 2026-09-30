@@ -28,59 +28,107 @@
 }
 .sbfp-year::before { content: ""; position: absolute; left: 0; top: -1px; bottom: 1px; width: 1px; background: var(--lg-border-strong); }
 
-.sbfp-day { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; font-size: .82rem; color: var(--lg-ink-soft); }
+/* ── The cycle card ──────────────────────────────────────────────────
+   One reading of where the programme stands: the day and the days left
+   on the left, the share complete on the right, the bar between them and
+   the dates the cycle runs between underneath. The number is the fact;
+   the bar gives it a shape and the quarter ticks give the shape a scale,
+   so nothing is encoded by the bar alone. The action shares the row and
+   sits centred against the card rather than floating above it. ── */
+.sbfp-progress-row { display: flex; align-items: center; gap: 12px 16px; margin-top: 14px; flex-wrap: wrap; }
+.sbfp-progress-row .sbfp-actions { margin-left: auto; }
+
+.sbfp-cycle {
+	flex: 1 1 420px;
+	max-width: 640px;
+	min-width: 0;
+	padding: 12px 16px 11px;
+	background: var(--lg-card);
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-card);
+	box-shadow: var(--lg-shadow);
+}
+.sbfp-cycle-head { display: flex; align-items: baseline; justify-content: space-between; gap: 4px 16px; flex-wrap: wrap; }
+
+.sbfp-day { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; font-size: .82rem; color: var(--lg-ink-soft); }
 .sbfp-day strong { color: var(--lg-ink); font-weight: 700; font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 .sbfp-sep { color: var(--lg-border-strong); }
-.sbfp-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--lg-emerald); flex: 0 0 auto; }
-/* Idle is amber, not green: nothing is running yet. */
-.sbfp-day.is-idle .sbfp-dot { background: var(--lg-amber); }
+/* A status dot with a soft halo: running is emerald, idle is amber —
+   nothing is running yet, so it must not read as healthy. */
+.sbfp-dot { width: 8px; height: 8px; margin-right: 2px; border-radius: 50%; background: var(--lg-emerald); box-shadow: 0 0 0 3px var(--lg-mint); flex: 0 0 auto; }
+.sbfp-cycle.is-idle .sbfp-dot { background: var(--lg-amber); box-shadow: 0 0 0 3px var(--lg-amber-tint); }
 
-/* The figure leads at full size and the bar follows: a length alone is
-   not readable to the tenth, and a 5px hairline read as a divider rather
-   than a measure. The track is outlined so the empty remainder is
-   visible — a fill with no visible end has no scale to be read against. */
-.sbfp-progress-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
-/* The bar keeps its own measure; the action is pushed to the far end of
-   the row so it lines up with the bar rather than crowding it. */
-.sbfp-progress-row .sbfp-progress { max-width: 340px; }
-.sbfp-progress-row .sbfp-actions { margin-left: auto; }
 .sbfp-progress-pct {
 	flex: 0 0 auto;
-	min-width: 62px;
-	font-size: 1.05rem;
-	font-weight: 700;
-	letter-spacing: -.01em;
-	color: var(--lg-emerald-deep);
+	font-size: .74rem;
+	font-weight: 600;
+	color: var(--lg-ink-soft);
+	white-space: nowrap;
 	font-variant-numeric: var(--lg-figures);
 	font-feature-settings: var(--lg-figure-features);
 }
+.sbfp-progress-pct strong { margin-right: 3px; font-size: 1.2rem; font-weight: 700; letter-spacing: -.01em; color: var(--lg-emerald-deep); }
+.sbfp-cycle.is-idle .sbfp-progress-pct strong { color: var(--lg-ink-soft); }
+
+/* The track carries hairline ticks at each quarter; the fill covers the
+   ones already passed, so the ticks left over mark what is still to come. */
 .sbfp-progress {
 	position: relative;
-	flex: 1 1 auto;
 	height: 10px;
+	margin-top: 10px;
 	border-radius: var(--lg-r-pill);
-	background: var(--lg-rail);
-	border: 1px solid var(--lg-border);
-	overflow: hidden;
+	background:
+		linear-gradient(to right,
+			transparent calc(25% - .5px), var(--lg-border-strong) calc(25% - .5px), var(--lg-border-strong) calc(25% + .5px), transparent calc(25% + .5px),
+			transparent calc(50% - .5px), var(--lg-border-strong) calc(50% - .5px), var(--lg-border-strong) calc(50% + .5px), transparent calc(50% + .5px),
+			transparent calc(75% - .5px), var(--lg-border-strong) calc(75% - .5px), var(--lg-border-strong) calc(75% + .5px), transparent calc(75% + .5px)),
+		var(--lg-rail);
+	box-shadow: inset 0 0 0 1px var(--lg-border);
 }
 .sbfp-progress-fill {
+	position: relative;
 	display: block;
 	height: 100%;
 	border-radius: inherit;
 	background: var(--lg-emerald);
-	/* A hair of surface at the leading edge so the fill reads as a level
-	   reached, not as a bar that ran out of track. */
-	box-shadow: inset -1px 0 0 rgba(255, 255, 255, .6);
 	transition: width .4s ease;
 }
-.sbfp-progress-end { flex: 0 0 auto; font-size: .72rem; font-weight: 600; color: var(--lg-ink-soft); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); white-space: nowrap; }
+/* Today, marked on the fill's leading edge — the level reached, not a bar
+   that ran out of track. Not drawn before the first session. */
+.sbfp-progress-fill::after {
+	content: "";
+	position: absolute;
+	top: 50%;
+	right: -7px;
+	box-sizing: border-box;
+	width: 14px;
+	height: 14px;
+	margin-top: -7px;
+	border-radius: 50%;
+	background: var(--lg-card);
+	border: 3px solid var(--lg-emerald);
+	box-shadow: var(--lg-shadow);
+}
+.sbfp-cycle.is-idle .sbfp-progress-fill::after { display: none; }
+
+.sbfp-cycle-dates {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	margin-top: 9px;
+	font-size: .72rem;
+	color: var(--lg-ink-soft);
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
+}
+.sbfp-cycle-dates time { color: var(--lg-ink); font-weight: 600; }
 
 .sbfp-actions { display: flex; gap: 8px; flex-wrap: wrap; flex: 0 0 auto; }
 
 @media (max-width: 620px) {
+	.sbfp-cycle { max-width: none; flex-basis: 100%; }
 	.sbfp-actions { width: 100%; margin-left: 0; }
 	.sbfp-actions .btn { flex: 1 1 auto; justify-content: center; }
-	.sbfp-progress-row .sbfp-progress { max-width: none; }
 }
 
 /* ── Filter bar ─────────────────────────────────────────────────────
@@ -119,16 +167,57 @@
 .att-card .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
 .att-card .card-head .btn { white-space: nowrap; }
 
-.att-headline { display: flex; align-items: center; justify-content: space-between; gap: 12px 18px; flex-wrap: wrap; margin: 14px 0 4px; }
-.att-figure { display: flex; align-items: baseline; gap: 10px; }
-.att-count { font-size: 1.9rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; color: var(--lg-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
-.att-percent { font-size: .95rem; font-weight: 600; color: var(--lg-emerald-deep); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
+/* The summary is a small panel of its own on the rail tint: the figure and
+   the turnout on one line, the day's split as one bar under them, and a
+   legend that names every part of the bar with its count. */
+.att-summary { margin: 14px 0 4px; padding: 14px 16px 12px; background: var(--lg-rail); border: 1px solid var(--lg-border); border-radius: var(--lg-r-card); }
+.att-headline { display: flex; align-items: center; justify-content: space-between; gap: 10px 18px; flex-wrap: wrap; }
+.att-figure { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.att-count { display: inline-flex; align-items: baseline; gap: 4px; line-height: 1; color: var(--lg-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
+.att-count strong { font-size: 2rem; font-weight: 700; letter-spacing: -.02em; }
+.att-of { font-size: 1.15rem; font-weight: 600; color: var(--lg-ink-soft); }
+.att-caption { font-size: .8rem; color: var(--lg-ink-soft); }
+
+.att-rate {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 5px;
+	padding: 4px 11px;
+	border-radius: var(--lg-r-pill);
+	background: var(--lg-card);
+	box-shadow: inset 0 0 0 1px var(--lg-border);
+	color: var(--lg-success-ink);
+	font-size: .74rem;
+	font-weight: 600;
+	white-space: nowrap;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
+}
+.att-rate strong { font-size: .95rem; font-weight: 700; }
 /* Before the session is recorded the figure is a real 0 of N, but it is
    not a turnout anyone measured — so it reads grey until it is. */
-.att-percent.is-idle { color: var(--lg-ink-soft); }
+.att-rate.is-idle { color: var(--lg-ink-soft); }
+
+/* One bar, five parts, in the order a session resolves: fed, not fed,
+   excused, a scan nobody has read, and nobody's mark at all. */
+.att-meter { display: flex; gap: 2px; height: 10px; margin-top: 12px; overflow: hidden; border-radius: var(--lg-r-pill); background: var(--lg-card); box-shadow: inset 0 0 0 1px var(--lg-border); }
+.att-seg { display: block; height: 100%; min-width: 4px; }
+.att-seg.is-present, .att-key.is-present { background: var(--lg-emerald); }
+.att-seg.is-absent, .att-key.is-absent { background: var(--lg-danger); }
+.att-seg.is-excused, .att-key.is-excused { background: var(--lg-amber); }
+.att-seg.is-unconfirmed, .att-key.is-unconfirmed { background: var(--lg-info); }
+/* Unmarked is paperwork, not a verdict — hatched, never coloured. */
+.att-seg.is-unmarked, .att-key.is-unmarked { background: repeating-linear-gradient(135deg, var(--lg-border-strong) 0 3px, var(--lg-rail) 3px 6px); }
+
+.att-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 0 0; padding: 0; list-style: none; font-size: .78rem; color: var(--lg-ink-soft); }
+.att-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.att-legend strong { color: var(--lg-ink); font-weight: 700; font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
+.att-legend li.is-zero strong { color: var(--lg-ink-soft); font-weight: 600; }
+.att-key { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 auto; }
+.att-key.is-unmarked { box-shadow: inset 0 0 0 1px var(--lg-border-strong); }
+
 .att-none { color: var(--lg-ink-soft); }
 .att-remark { color: var(--lg-ink-soft); font-size: .78rem; max-width: 240px; }
-.att-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 
 /* The roll runs to the card's edges — a bordered table inside a bordered
    card is a frame around a frame — so cells take the padding back. */
@@ -139,40 +228,85 @@
 .att-table thead th { position: sticky; top: 0; z-index: 1; background: var(--lg-rail); }
 
 /* ── Nutritional status ─────────────────────────────────────────────
-   Wasted and Severely Wasted decide who the programme feeds, so their
-   rows carry a tinted rail; the rest of the scale is listed at rest,
-   zeros included, because a missing row reads as a bug. ── */
-.ns-card { padding: var(--lg-pad-card); display: flex; flex-direction: column; }
-.ns-total { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 4px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--lg-border); }
-.ns-total-label { font-size: .78rem; font-weight: 600; color: var(--lg-ink-soft); }
-.ns-total-value { font-size: 1.7rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; color: var(--lg-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
-.ns-table { width: 100%; }
-.ns-table th { font-size: .68rem; }
-.ns-table td { padding-top: 9px; padding-bottom: 9px; }
-.ns-count { font-size: .92rem; font-weight: 700; color: var(--lg-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
-.ns-table tr.is-eligible td { background: var(--lg-rail); }
+   The population first, then its size, then its mix: one bar splitting
+   the roll by baseline status, and a row per status naming every part of
+   it with its count, its share and where the endline weigh-in found them.
+   Wasted and Severely Wasted decide who the programme feeds, so their rows
+   carry a tinted rail; the rest of the scale is listed at rest, zeros
+   included, because a missing row reads as a bug. ── */
+.ns-card {
+	padding: var(--lg-pad-card);
+	display: flex;
+	flex-direction: column;
+	/* The School Head's validated status steps (--sh-* in schoolhead.css),
+	   declared here because that sheet is not loaded on this page — one
+	   status, one colour, in both roles. Re-run the dataviz validator before
+	   changing any of them. A learner nobody weighed has no status, so they
+	   are a hatch rather than a colour. */
+	--ns-sw: #8C2F2F;
+	--ns-w: #D0741C;
+	--ns-n: #126B3A;
+	--ns-ob: #2F6FB3;
+	--ns-none: repeating-linear-gradient(135deg, var(--lg-border-strong) 0 3px, var(--lg-rail) 3px 6px);
+}
 
 /* ── Population switch ──────────────────────────────────────────────
-   Beneficiaries or All Students. A link group rather than a <select>:
-   the panel is replaced wholesale by the live refresh, and a select's
-   selection would not survive that. ── */
-.ns-controls { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
-.ns-controls .ns-total { flex: 1 1 auto; border-bottom: none; margin: 4px 0 0; padding-bottom: 0; }
-.ns-switch { display: inline-flex; border: 1px solid var(--lg-border); border-radius: var(--lg-r-btn); overflow: hidden; background: var(--lg-card); }
+   Beneficiaries or All Students, as a segmented control across the card.
+   A link group rather than a <select>: the panel is replaced wholesale by
+   the live refresh, and a select's selection would not survive that. ── */
+.ns-switch { display: flex; gap: 3px; margin-top: 14px; padding: 3px; background: var(--lg-rail); border: 1px solid var(--lg-border); border-radius: var(--lg-r-btn); }
 .ns-switch-opt {
-	padding: 6px 12px;
-	font-size: .74rem;
+	flex: 1 1 0;
+	padding: 6px 10px;
+	border-radius: 7px;
+	text-align: center;
+	font-size: .76rem;
 	font-weight: 600;
 	color: var(--lg-ink-soft);
 	text-decoration: none;
-	border-right: 1px solid var(--lg-border);
+	transition: background-color .15s ease, color .15s ease;
 }
-.ns-switch-opt:last-child { border-right: none; }
-.ns-switch-opt:hover { background: var(--lg-mint); color: var(--lg-emerald-deep); }
-.ns-switch-opt.is-active { background: var(--lg-emerald); color: #fff; }
-.ns-table { border-top: 1px solid var(--lg-border); }
-.ns-table tfoot td { padding-top: 10px; border-top: 1px solid var(--lg-border); }
-.ns-foot-label { font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); }
+.ns-switch-opt:hover { background: var(--lg-card); color: var(--lg-emerald-deep); text-decoration: none; }
+.ns-switch-opt.is-active { background: var(--lg-card); color: var(--lg-emerald-deep); box-shadow: var(--lg-shadow), inset 0 0 0 1px var(--lg-border); }
+
+.ns-total { display: flex; align-items: baseline; gap: 8px; margin: 16px 0 10px; }
+.ns-total-value { font-size: 2rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; color: var(--lg-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
+.ns-total-label { font-size: .8rem; font-weight: 600; color: var(--lg-ink-soft); }
+
+/* 2px of the surface between parts, never a stroke: two parts that seem to
+   touch are one part to a reader who cannot separate the hues. */
+.ns-mix { display: flex; height: 12px; overflow: hidden; border-radius: var(--lg-r-pill); background: var(--lg-rail); box-shadow: inset 0 0 0 1px var(--lg-border); }
+.ns-seg { display: block; height: 100%; min-width: 3px; }
+.ns-seg + .ns-seg { box-shadow: -2px 0 0 0 var(--lg-card); }
+.ns-seg.is-sw, .ns-key.is-sw { background: var(--ns-sw); }
+.ns-seg.is-w, .ns-key.is-w { background: var(--ns-w); }
+.ns-seg.is-n, .ns-key.is-n { background: var(--ns-n); }
+.ns-seg.is-ob, .ns-key.is-ob { background: var(--ns-ob); }
+.ns-seg.is-none, .ns-key.is-none { background: var(--ns-none); }
+
+.ns-table { width: 100%; margin-top: 14px; border-collapse: separate; border-spacing: 0; }
+.ns-table thead th { padding: 0 10px 7px; font-size: .66rem; background: none; border-bottom: 1px solid var(--lg-border); }
+.ns-table td { padding: 9px 10px; border-bottom: 1px solid var(--lg-border); vertical-align: middle; }
+.ns-table tbody tr:last-child td { border-bottom: none; }
+.ns-table tbody tr:hover td { background: none; }
+.ns-table tr.is-eligible td, .ns-table tbody tr.is-eligible:hover td { background: var(--lg-rail); }
+.ns-name { display: inline-flex; align-items: center; gap: 9px; font-size: .8rem; font-weight: 600; color: var(--lg-ink); white-space: nowrap; }
+.ns-key { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+.ns-key.is-none { box-shadow: inset 0 0 0 1px var(--lg-border-strong); }
+.ns-count { font-size: .92rem; font-weight: 700; color: var(--lg-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
+.ns-share { display: inline-block; min-width: 40px; margin-left: 4px; text-align: right; font-size: .7rem; font-weight: 500; color: var(--lg-ink-soft); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
+/* A row with nobody in it is stated, not stressed. */
+.ns-table tr.is-zero .ns-count { font-weight: 500; color: var(--lg-ink-soft); }
+
+/* How far the closing weigh-in has got, in the endline series' colour —
+   the one the progress chart below draws endline in. */
+.ns-endline { margin-top: 14px; padding: 12px 14px; background: var(--lg-rail); border: 1px solid var(--lg-border); border-radius: var(--lg-r-card); }
+.ns-endline-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: .76rem; font-weight: 600; color: var(--lg-ink-soft); }
+.ns-endline-figure { font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
+.ns-endline-figure strong { font-size: .95rem; font-weight: 700; color: var(--lg-ink); }
+.ns-endline-bar { height: 8px; margin-top: 8px; overflow: hidden; border-radius: var(--lg-r-pill); background: var(--lg-card); box-shadow: inset 0 0 0 1px var(--lg-border); }
+.ns-endline-bar span { display: block; height: 100%; border-radius: inherit; background: var(--series-healthy); }
+.ns-endline-note { margin: 6px 0 0; font-size: .72rem; color: var(--lg-ink-soft); }
 
 /* ── Attendance at risk ─────────────────────────────────────────────
    The threshold is printed above the table because it is school-set: the
@@ -203,90 +337,103 @@
 .risk-view:hover { color: var(--lg-emerald-dark); text-decoration: none; }
 
 /* ── Nutritional progress ───────────────────────────────────────────
-   Two series on one scale: --series-risk for baseline, --series-healthy
-   for endline (the theme's validated pair — re-run the dataviz
-   validator before changing either). Colour carries which reading, the
-   row label carries the status, and every bar is direct-labelled, so
-   identity never rests on hue alone. ── */
+   Two columns: the result (the improvement rate and the outcome split)
+   beside the evidence it was counted from (the status bars). Two series
+   on one scale: --series-risk for baseline, --series-healthy for endline
+   (the theme's validated pair — re-run the dataviz validator before
+   changing either). Colour carries which reading, the row label carries
+   the status, and every bar carries its own count, so identity never
+   rests on hue alone. ── */
 .np-card { padding: var(--lg-pad-card); margin-top: 16px; }
-.np-headline { display: flex; align-items: baseline; justify-content: space-between; gap: 12px 18px; flex-wrap: wrap; margin: 14px 0 2px; }
-.np-figure { display: flex; align-items: baseline; gap: 10px; }
-.np-count { font-size: 1.9rem; font-weight: 700; letter-spacing: -.02em; line-height: 1; color: var(--lg-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
-.np-rate { font-size: .95rem; font-weight: 600; color: var(--lg-emerald-deep); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
-/* No endline reading yet: 0 improved is a real count, but not a result. */
-.np-rate.is-idle { color: var(--lg-ink-soft); }
-.np-measured { font-size: .76rem; color: var(--lg-ink-soft); }
+.np-layout { display: grid; grid-template-columns: minmax(250px, 320px) minmax(0, 1fr); gap: 20px 32px; margin-top: 16px; align-items: start; }
+.np-summary, .np-evidence { min-width: 0; }
 
-.np-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 14px; font-size: .74rem; color: var(--lg-ink-soft); }
+/* The result, set large on the healthy tint. Before any endline exists
+   the figure is a real 0 but not a result, so the block goes neutral. */
+.np-hero { display: flex; flex-direction: column; gap: 3px; padding: 16px 18px; background: var(--lg-mint); border: 1px solid var(--lg-border); border-radius: var(--lg-r-card); }
+.np-eyebrow { font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--lg-success-ink); }
+.np-rate { font-size: 2.5rem; font-weight: 700; letter-spacing: -.03em; line-height: 1.05; color: var(--lg-emerald-deep); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
+.np-count { font-size: .8rem; color: var(--lg-ink-soft); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
+.np-count strong { color: var(--lg-ink); font-weight: 700; }
+.np-hero.is-idle { background: var(--lg-rail); }
+.np-hero.is-idle .np-eyebrow, .np-hero.is-idle .np-rate { color: var(--lg-ink-soft); }
+.np-summary .os-wrap { margin-top: 18px; }
+/* The column is narrow, so the split's legend reads as one list rather
+   than two cramped columns that break "Remained wasted" in half. */
+.np-summary .os-legend { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+.np-empty { margin: 0; padding: 28px 16px; text-align: center; font-size: .8rem; color: var(--lg-ink-soft); background: var(--lg-rail); border: 1px dashed var(--lg-border-strong); border-radius: var(--lg-r-card); }
+
+.np-chart-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; margin-bottom: 14px; }
+/* Set in the outcome split's own title voice, so the two halves of the
+   panel are headed alike. */
+.np-chart-title { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--lg-ink-soft); }
+.np-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .74rem; color: var(--lg-ink-soft); }
 .np-legend-item { display: inline-flex; align-items: center; gap: 6px; }
-.np-dot { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 auto; }
+.np-dot { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
 .np-dot-baseline { background: var(--series-risk); }
 .np-dot-endline { background: var(--series-healthy); }
 
-/* The plot's three columns, declared once and read by the rules, the rows
-   and the axis alike — three places that must line up to the pixel, so
-   none of them may carry its own copy of the figure. */
+/* The plot's columns, declared once and read by the rules, the rows and
+   the axis alike — places that must line up to the pixel, so none of them
+   may carry its own copy of the figure. The value gutter is room for a
+   full-length bar's count to sit past its end — wide enough for a grouped
+   five-digit count ("12,500"), since a school's roll runs to thousands. */
 .np-graph {
-	--np-label-w: 128px;
-	--np-label-gap: 12px;
-	--np-value-w: 34px;
-	--np-value-gap: 8px;
-	margin-top: 10px;
+	--np-label-w: 118px;
+	--np-label-gap: 14px;
+	--np-value-w: 48px;
 }
 .np-plot { position: relative; }
 
 /* Recessive rules the eye reads a length against. They span exactly the
-   track — starting after the status label, stopping before the figure —
-   and sit behind the data, never over it. */
+   track and sit behind the data, never over it. */
 .np-rules {
 	position: absolute;
-	top: 0;
-	bottom: 0;
+	top: -4px;
+	bottom: -4px;
 	left: calc(var(--np-label-w) + var(--np-label-gap));
-	right: calc(var(--np-value-w) + var(--np-value-gap));
+	right: var(--np-value-w);
 	display: flex;
 	justify-content: space-between;
 	pointer-events: none;
 }
 .np-rules i { width: 1px; background: var(--lg-border); }
-/* The baseline of the chart is the one rule that carries weight: every bar
-   grows from it, so it reads as an axis rather than as another gridline. */
+/* Every bar grows from the first rule, so it reads as an axis. */
 .np-rules i:first-child { background: var(--lg-border-strong); }
 
-.np-chart { position: relative; display: flex; flex-direction: column; gap: 12px; }
+.np-chart { position: relative; display: flex; flex-direction: column; gap: 16px; }
 .np-row { display: grid; grid-template-columns: var(--np-label-w) minmax(0, 1fr); align-items: center; gap: var(--np-label-gap); }
-.np-label { font-size: .78rem; font-weight: 600; color: var(--lg-ink); }
-/* 2px of surface between the pair, never a border — the two fills must
+.np-label { font-size: .8rem; font-weight: 600; color: var(--lg-ink); }
+/* 3px of surface between the pair, never a border — the two fills must
    not appear to touch for a reader who cannot separate the hues. */
-.np-bars { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.np-bar-line { display: flex; align-items: center; gap: var(--np-value-gap); min-width: 0; }
+.np-bars { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-right: var(--np-value-w); }
 /* The track is the full width of the scale, so a bar's percentage is a
-   percentage of the axis and lands on the rules. Before this the bar was
-   sized against a box the figure also sat in, which quietly shortened
-   every bar by the width of its own label. */
-.np-track { flex: 1 1 auto; min-width: 0; display: block; }
+   percentage of the axis and lands on the rules; its count follows it. */
+.np-track { display: flex; align-items: center; gap: 6px; height: 14px; min-width: 0; }
 .np-bar {
 	display: block;
-	height: 12px;
-	border-radius: 0 4px 4px 0;
+	flex: 0 0 auto;
+	/* A real count is never drawn thinner than a sliver: beside a bar of
+	   hundreds, one learner is a fraction of a pixel and would vanish,
+	   reading as none. The figure after it still says exactly how many. */
+	min-width: 3px;
+	height: 100%;
+	border-radius: 0 5px 5px 0;
 	transition: width .5s cubic-bezier(.22,.61,.36,1), filter .12s ease;
 }
 .np-bar:hover, .np-bar:focus-visible { filter: saturate(1.15) brightness(.94); }
 .np-bar-baseline { background: var(--series-risk); }
 .np-bar-endline { background: var(--series-healthy); }
-.np-value { width: var(--np-value-w); text-align: right; font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); flex: 0 0 auto; }
-/* A count of none is stated, not drawn. It is quietened by weight rather
-   than by colour: the muted border step this first used is 1.44:1 on the
-   card, so the one figure that has no bar to back it up would have been the
-   one figure nobody could read. */
-.np-value.is-zero { font-weight: 500; opacity: .75; }
+.np-value { flex: 0 0 auto; font-size: .74rem; font-weight: 700; line-height: 1; color: var(--lg-ink); white-space: nowrap; font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
+/* A count of none is stated on the axis, not drawn. It is quietened by
+   weight and ink, never faded towards the border step, which is 1.44:1 on
+   the card — the one figure with no bar behind it must stay readable. */
+.np-value.is-zero { font-weight: 500; color: var(--lg-ink-soft); }
 
 /* The scale, labelled under the rules it belongs to and inset by the same
-   two gutters, so a tick sits on its own line. */
-.np-axis { display: grid; grid-template-columns: var(--np-label-w) minmax(0, 1fr); gap: var(--np-label-gap); margin-top: 7px; }
-.np-axis-line { display: flex; align-items: center; gap: var(--np-value-gap); min-width: 0; }
-.np-axis-gutter { width: var(--np-value-w); flex: 0 0 auto; }
-.np-axis-ticks { flex: 1 1 auto; min-width: 0; display: flex; justify-content: space-between; }
+   gutters, so a tick sits on its own line. */
+.np-axis { display: grid; grid-template-columns: var(--np-label-w) minmax(0, 1fr); gap: var(--np-label-gap); margin-top: 10px; }
+.np-axis-ticks { display: flex; justify-content: space-between; min-width: 0; margin-right: var(--np-value-w); }
 .np-axis-ticks span { font-size: .66rem; color: var(--lg-ink-soft); transform: translateX(-50%); }
 /* The first and last ticks are pulled inside the plot rather than hanging
    off its ends. */
@@ -300,9 +447,12 @@
 .la-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .tnum { font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
 
+@media (max-width: 900px) {
+	.np-layout { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 620px) {
 	.np-graph { --np-label-w: 0px; --np-label-gap: 0px; }
-	.np-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+	.np-row { grid-template-columns: minmax(0, 1fr); gap: 5px; }
 	/* The label now sits above its own bars, so a rule drawn the full height
 	   of the plot would cross it. */
 	.np-rules { display: none; }
@@ -310,7 +460,7 @@
 	.np-axis-pad { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-	.np-bar { transition: none; }
+	.np-bar, .ns-switch-opt { transition: none; }
 }
 
 @media (max-width: 1180px) {

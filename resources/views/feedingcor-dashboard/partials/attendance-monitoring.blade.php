@@ -10,24 +10,56 @@
 	];
 @endphp
 
-<div class="att-headline">
-	<div class="att-figure">
-		<span class="att-count">{{ $today['present'] }} / {{ $today['expected'] }}</span>
-		<span class="att-percent {{ $today['recorded'] ? '' : 'is-idle' }}">{{ number_format((float) $today['percent'], 0) }}%</span>
+@php
+	// Today's roll, split five ways. Present and Absent are always named —
+	// they are the two answers a recorded session gives — and the other three
+	// only when someone is in them. Unmarked is a learner no sheet covered,
+	// never an absence, so it is drawn as a hatched gap rather than a colour.
+	$expected = max(0, (int) $today['expected']);
+	$split = [
+		['key' => 'present', 'label' => 'Present', 'count' => (int) $today['present'], 'always' => true],
+		['key' => 'absent', 'label' => 'Absent', 'count' => (int) $today['absent'], 'always' => true],
+		['key' => 'excused', 'label' => 'Excused', 'count' => (int) $today['excused'], 'always' => false],
+		['key' => 'unconfirmed', 'label' => 'Unconfirmed', 'count' => (int) $today['unconfirmed'], 'always' => false],
+		['key' => 'unmarked', 'label' => 'Unmarked', 'count' => (int) $today['unrecorded'], 'always' => false],
+	];
+	$shown = array_values(array_filter($split, fn (array $part): bool => $part['always'] || $part['count'] > 0));
+	$meterLabel = implode(', ', array_map(fn (array $part): string => $part['label'].' '.$part['count'], $shown)).' of '.$expected;
+@endphp
+
+{{-- The fraction is the fact (82 of 87 present); the percentage restates it
+     for scale and stays grey until the session is recorded, because 0 of N
+     before anybody has marked the roll is not a turnout anyone measured. --}}
+<div class="att-summary">
+	<div class="att-headline">
+		<div class="att-figure">
+			<span class="att-count"><strong>{{ number_format((int) $today['present']) }}</strong> <span class="att-of">/ {{ number_format($expected) }}</span></span>
+			<span class="att-caption">present today</span>
+		</div>
+		<span class="att-rate {{ $today['recorded'] ? '' : 'is-idle' }}">
+			<strong>{{ number_format((float) $today['percent'], 0) }}%</strong>
+			{{ $today['recorded'] ? 'turnout' : 'not recorded' }}
+		</span>
 	</div>
-	<div class="att-chips">
-		<span class="badge badge-normal">Present {{ $today['present'] }}</span>
-		<span class="badge badge-critical">Absent {{ $today['absent'] }}</span>
-		@if ($today['excused'] > 0)
-			<span class="badge badge-monitor">Excused {{ $today['excused'] }}</span>
-		@endif
-		@if ($today['unconfirmed'] > 0)
-			<span class="badge badge-monitor">Unconfirmed {{ $today['unconfirmed'] }}</span>
-		@endif
-		@if ($today['unrecorded'] > 0)
-			<span class="badge badge-neutral">Unmarked {{ $today['unrecorded'] }}</span>
+
+	<div class="att-meter" role="img" aria-label="{{ $meterLabel }}">
+		@if ($expected > 0)
+			@foreach ($split as $part)
+				@if ($part['count'] > 0)
+					<span class="att-seg is-{{ $part['key'] }}" style="width: {{ round($part['count'] / $expected * 100, 2) }}%"></span>
+				@endif
+			@endforeach
 		@endif
 	</div>
+
+	<ul class="att-legend">
+		@foreach ($shown as $part)
+			<li class="{{ $part['count'] === 0 ? 'is-zero' : '' }}">
+				<i class="att-key is-{{ $part['key'] }}" aria-hidden="true"></i>
+				{{ $part['label'] }} <strong>{{ number_format($part['count']) }}</strong>
+			</li>
+		@endforeach
+	</ul>
 </div>
 
 <div class="table-scroll att-scroll">

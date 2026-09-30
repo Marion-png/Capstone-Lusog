@@ -51,33 +51,53 @@
 				<span class="sbfp-year">S.Y. {!! $cycleYear !!}</span>
 			</div>
 
-			<p class="sbfp-day {{ $cycle['started'] ? '' : 'is-idle' }}">
-				<span class="sbfp-dot" aria-hidden="true"></span>
-				@if ($cycle['started'])
-					Feeding day <strong data-cycle-day>{{ $cycleDay }}</strong> of {{ $cycleDuration }}
-					<span class="sbfp-sep">&middot;</span>
-					<span data-cycle-remaining>{{ $cycle['days_remaining'] }} days remaining</span>
-				@else
-					No feeding session recorded yet
-					<span class="sbfp-sep">&middot;</span>
-					{{ $cycleDuration }}-day cycle
-				@endif
-			</p>
-
-			{{-- Server-rendered fill; the script below re-reads the calendar so a
-			     page left open overnight still shows today's day. The figure
-			     leads at full size — the bar behind it only gives the number a
-			     shape, and a 10px track reads as a measure rather than a hairline.
-			     The action shares this line, so it sits level with the bar. --}}
+			{{-- The cycle as one reading: where the programme is (day, days
+			     left, share complete), the bar that gives it a shape, and the
+			     dates it runs between. Server-rendered; the script below
+			     advances the day on a page left open overnight, counting
+			     school days exactly as FeedingProgramCycle does. The action
+			     shares the row, level with the card. --}}
+			@php
+				$cycleDate = fn (?string $iso): string => $iso ? \Illuminate\Support\Carbon::parse($iso)->format('M j, Y') : '';
+			@endphp
 			<div class="sbfp-progress-row">
-				<span class="sbfp-progress-pct" data-cycle-percent>{{ number_format((float) $cycle['percent'], 0) }}%</span>
-				<div class="sbfp-progress" id="sbfpProgress" role="progressbar"
-					aria-valuemin="0" aria-valuemax="{{ $cycleDuration }}" aria-valuenow="{{ $cycleDay }}"
-					aria-valuetext="Feeding day {{ $cycleDay }} of {{ $cycleDuration }}"
-					data-start="{{ $cycle['start_date'] }}" data-duration="{{ $cycleDuration }}">
-					<span class="sbfp-progress-fill" style="width: {{ $cycle['percent'] }}%"></span>
+				<div class="sbfp-cycle {{ $cycle['started'] ? '' : 'is-idle' }}">
+					<div class="sbfp-cycle-head">
+						<p class="sbfp-day">
+							<span class="sbfp-dot" aria-hidden="true"></span>
+							@if ($cycle['started'])
+								<span>Feeding day <strong data-cycle-day>{{ $cycleDay }}</strong> of {{ $cycleDuration }}</span>
+								<span class="sbfp-sep" aria-hidden="true">&middot;</span>
+								<span data-cycle-remaining>{{ $cycle['days_remaining'] }} {{ $cycle['days_remaining'] === 1 ? 'day' : 'days' }} remaining</span>
+							@else
+								<span>No feeding session recorded yet</span>
+								<span class="sbfp-sep" aria-hidden="true">&middot;</span>
+								<span>{{ $cycleDuration }}-day cycle</span>
+							@endif
+						</p>
+						<span class="sbfp-progress-pct"><strong data-cycle-percent>{{ number_format((float) $cycle['percent'], 0) }}%</strong> complete</span>
+					</div>
+
+					<div class="sbfp-progress" id="sbfpProgress" role="progressbar"
+						aria-valuemin="0" aria-valuemax="{{ $cycleDuration }}" aria-valuenow="{{ $cycleDay }}"
+						aria-valuetext="Feeding day {{ $cycleDay }} of {{ $cycleDuration }}"
+						data-start="{{ $cycle['start_date'] }}" data-duration="{{ $cycleDuration }}">
+						<span class="sbfp-progress-fill" style="width: {{ $cycle['percent'] }}%"></span>
+					</div>
+
+					<div class="sbfp-cycle-dates">
+						@if ($cycle['started'])
+							<span>Started <time datetime="{{ $cycle['start_date'] }}">{{ $cycleDate($cycle['start_date']) }}</time></span>
+							@if (! empty($cycle['end_date']))
+								<span>Ends <time datetime="{{ $cycle['end_date'] }}">{{ $cycleDate($cycle['end_date']) }}</time></span>
+							@endif
+						@else
+							<span>Day 0</span>
+							<span>Day {{ $cycleDuration }}</span>
+						@endif
+					</div>
 				</div>
-				<span class="sbfp-progress-end">Day {{ $cycleDuration }}</span>
+
 				<div class="sbfp-actions">
 					<button type="button" class="btn btn-secondary" id="enrollBeneficiaryBtn" data-enroll-open>
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
@@ -291,8 +311,9 @@
 	}
 
 	const duration = Number(bar.dataset.duration) || 120;
-	const startMs = Date.parse(bar.dataset.start + 'T00:00:00');
-	if (Number.isNaN(startMs)) {
+	const [y, m, d] = String(bar.dataset.start).split('-').map(Number);
+	const start = new Date(y, (m || 1) - 1, d || 1);
+	if (Number.isNaN(start.getTime())) {
 		return;
 	}
 
@@ -301,11 +322,32 @@
 	const remainingEl = document.querySelector('[data-cycle-remaining]');
 	const percentEl = document.querySelector('[data-cycle-percent]');
 
+	// School days (Mon-Fri) from the start to today, inclusive — the same count
+	// FeedingProgramCycle::countFeedingDays() makes. A weekend is not a feeding
+	// day, so counting calendar days here would run ahead of the server.
+	const feedingDaysTo = (end) => {
+		if (end < start) {
+			return 0;
+		}
+		const total = Math.round((end - start) / 86400000) + 1;
+		const weeks = Math.floor(total / 7);
+		let days = weeks * 5;
+		const cursor = new Date(start);
+		cursor.setDate(cursor.getDate() + weeks * 7);
+		while (cursor <= end) {
+			const weekday = cursor.getDay();
+			if (weekday !== 0 && weekday !== 6) {
+				days++;
+			}
+			cursor.setDate(cursor.getDate() + 1);
+		}
+		return days;
+	};
+
 	const tick = () => {
 		const today = new Date();
 		today.setHours(0, 0, 0, 0);
-		const elapsed = Math.floor((today.getTime() - startMs) / 86400000) + 1;
-		const day = Math.max(0, Math.min(duration, elapsed));
+		const day = Math.max(0, Math.min(duration, feedingDaysTo(today)));
 		const remaining = Math.max(0, duration - day);
 		const percent = (day / duration) * 100;
 
@@ -314,8 +356,7 @@
 		if (fill) fill.style.width = percent.toFixed(1) + '%';
 		if (percentEl) percentEl.textContent = Math.round(percent) + '%';
 		if (dayEl) dayEl.textContent = String(day);
-		if (remainingEl) remainingEl.textContent = remaining + (remaining === 1 ? ' day remaining' : ' days remaining');
-		bar.setAttribute('aria-valuenow', String(day));
+		if (remainingEl) remainingEl.textContent = remaining + (remaining === 1 ? ' day remaining' : ' days remaining');		bar.setAttribute('aria-valuenow', String(day));
 		bar.setAttribute('aria-valuetext', 'Feeding day ' + day + ' of ' + duration);
 	};
 

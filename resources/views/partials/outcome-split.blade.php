@@ -43,7 +43,7 @@
 		   cannot separate the hues. The gap is a box-shadow rather than a
 		   margin so it costs the bar no width and the shares still sum
 		   to the roll. */
-		.os-seg{height:100%;min-width:0;transition:filter .12s ease}
+		.os-seg{height:100%;min-width:3px;transition:filter .12s ease}
 		.os-seg + .os-seg{box-shadow:-2px 0 0 0 var(--lg-card,#fff)}
 		.os-seg:hover,.os-seg:focus-visible{filter:saturate(1.15) brightness(.94)}
 		/* Same four hues as before — green up, amber level, red down, blue off
@@ -78,7 +78,7 @@
 <div class="os-wrap">
 	<div class="os-head">
 		<span class="os-title">{{ $splitTitle ?? 'Outcome, baseline to endline' }}</span>
-		<span class="os-total">{{ $osMeasured }} of {{ $osTotal }} {{ \Illuminate\Support\Str::plural('beneficiary', $osTotal) }} measured at endline</span>
+		<span class="os-total">{{ number_format($osMeasured) }} of {{ number_format($osTotal) }} {{ \Illuminate\Support\Str::plural('beneficiary', $osTotal) }} measured at endline</span>
 	</div>
 	@if ($osTotal === 0)
 		<p class="os-empty">No beneficiaries enrolled, so there is no outcome to split.</p>
@@ -88,7 +88,7 @@
 				@if ($segment['count'] > 0)
 					<span class="os-seg os-seg-{{ $segment['key'] }}" style="width: {{ $segment['pct'] }}%"
 					data-tip-title="{{ $segment['label'] }}"
-					data-tip="{{ $segment['count'] }} of {{ $osTotal }} beneficiaries ({{ rtrim(rtrim(number_format($segment['pct'], 1), '0'), '.') }}%)"></span>
+					data-tip="{{ number_format($segment['count']) }} of {{ number_format($osTotal) }} beneficiaries ({{ rtrim(rtrim(number_format($segment['pct'], 1), '0'), '.') }}%)"></span>
 				@endif
 			@endforeach
 		</div>
@@ -99,7 +99,7 @@
 				<div class="os-item" data-outcome="{{ $segment['key'] }}">
 					<i class="os-dot os-seg-{{ $segment['key'] }}"></i>
 					<span>{{ $segment['label'] }}</span>
-					<b>{{ $segment['count'] }} <small>&middot; {{ rtrim(rtrim(number_format($segment['pct'], 1), '0'), '.') }}%</small></b>
+					<b>{{ number_format($segment['count']) }} <small>&middot; {{ rtrim(rtrim(number_format($segment['pct'], 1), '0'), '.') }}%</small></b>
 				</div>
 			@endforeach
 		</div>

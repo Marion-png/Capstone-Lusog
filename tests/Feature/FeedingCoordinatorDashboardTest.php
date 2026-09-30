@@ -455,7 +455,7 @@ class FeedingCoordinatorDashboardTest extends TestCase
         $panel = $this->withSession($this->coordinatorSession())
             ->get('/dashboard/feedingcor-dashboard')
             ->assertOk()
-            ->assertSee('0 / 1')
+            ->assertSeeText('0 / 1')
             ->viewData('todayAttendance');
 
         $this->assertFalse($panel['recorded']);

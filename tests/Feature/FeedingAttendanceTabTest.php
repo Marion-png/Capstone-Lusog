@@ -712,6 +712,46 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertSee('fa-day-partial', false);
     }
 
+    /**
+     * Saturdays and Sundays are locked on the calendar: never a link, so a
+     * coordinator cannot land on a day nobody is fed. A mark written on one
+     * before the weekend guard still shows, so nothing recorded goes missing.
+     */
+    #[Test]
+    public function the_calendar_locks_weekends(): void
+    {
+        $learner = $this->makeStudent();
+        $friday = now()->toDateString();
+        $saturday = now()->subDays(6)->toDateString();
+        $this->mark($learner, $friday, true);
+        $this->mark($learner, $saturday, true);
+
+        $html = $this->open('?view=calendar&date='.$friday)->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('date='.$saturday, $html, 'A weekend is never a link.');
+        $this->assertStringContainsString('date='.$friday, $html, 'A recorded weekday still opens its sheet.');
+        $this->assertStringContainsString('is-locked', $html);
+        $this->assertStringContainsString('no feeding on weekends', $html);
+    }
+
+    /** The sheet's date is chosen from a picker that will not offer a weekend. */
+    #[Test]
+    public function the_date_pickers_lock_weekends(): void
+    {
+        $this->makeStudent();
+
+        $this->open()->assertOk()
+            ->assertSee('id="faDate"', false)
+            ->assertSee('data-weekday-picker', false)
+            ->assertSee('.wdp-day.is-weekend:disabled', false);
+
+        $this->withSession($this->coordinatorSession())
+            ->get(route('feedingcor-program.attendance.record'))
+            ->assertOk()
+            ->assertSee('id="sessionDate"', false)
+            ->assertSee('data-weekday-picker', false);
+    }
+
     #[Test]
     public function the_tab_carries_no_health_profile_data(): void
     {

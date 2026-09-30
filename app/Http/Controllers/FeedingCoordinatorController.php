@@ -615,6 +615,9 @@ class FeedingCoordinatorController extends Controller
                 'percent' => $cycle->percent(),
                 'started' => $cycle->hasStarted(),
                 'start_date' => $cycle->startDateIso(),
+                // The date of the last feeding day, counted in school days,
+                // so the header can say when the cycle ends.
+                'end_date' => $cycle->endDateIso(),
             ],
             'nutritionStatus' => $this->buildNutritionStatus(
                 $filters['population'] === self::POPULATION_ALL_STUDENTS

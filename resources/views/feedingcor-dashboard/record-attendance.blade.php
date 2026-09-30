@@ -75,6 +75,7 @@
 					     file for that day come back pre-selected. --}}
 					<input type="date" class="input" id="sessionDate" name="session_date"
 						value="{{ $sessionDate }}" max="{{ $today }}" required
+						aria-label="Session date" data-weekday-picker
 						data-reload-url="{{ route('feedingcor-program.attendance.record') }}">
 				</div>
 				<div class="ra-field ra-field-grow">
@@ -293,6 +294,7 @@
 	retally();
 })();
 </script>
+@include('partials.weekday-date-picker')
 @include('partials.role-page-transition')
 </body>
 </html>

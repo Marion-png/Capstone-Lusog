@@ -145,9 +145,13 @@
 						@if ($previousDate === null) aria-disabled="true" @endif
 						aria-label="Previous feeding day">&lsaquo;</a>
 
+					{{-- data-weekday-picker: Saturdays and Sundays are locked in
+					     the picker (partials/weekday-date-picker), since neither is
+					     ever a feeding day. --}}
 					<input type="date" class="input fa-dateinput" id="faDate" name="date"
 						value="{{ $selectedDate }}"
 						aria-label="Feeding date"
+						data-weekday-picker
 						@if ($window['start'] !== null) min="{{ $window['start'] }}" @endif
 						max="{{ $window['end'] }}">
 
@@ -505,13 +509,15 @@
 		calendar: document.getElementById('fa-calendar'),
 	};
 
-	const query = window.location.search;
+	// Named apart from the roll's search box above: two `const query` in one
+	// scope is a SyntaxError, which stopped every script on this tab running.
+	const pageQuery = window.location.search;
 	let stamp = null;
 	let busy = false;
 
 	const refresh = async () => {
 		try {
-			const response = await fetch(metricsUrl + query, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+			const response = await fetch(metricsUrl + pageQuery, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
 			if (!response.ok) return;
 			const payload = await response.json();
 			Object.entries(panes).forEach(([key, node]) => {
@@ -542,6 +548,7 @@
 	document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 })();
 </script>
+@include('partials.weekday-date-picker')
 @include('partials.role-page-transition')
 </body>
 </html>
