@@ -467,4 +467,176 @@ class AdviserConsentPageTest extends TestCase
         // Each row carries the standing the filter reads.
         $this->assertStringContainsString('data-status=', $html);
     }
+
+    /**
+     * Uploading the guardian's signed form shows on the learner's own profile.
+     *
+     * The profile's Consent tab read the digital Sulat-Pahibalo alone, so an
+     * adviser who had just filed the guardian's filled-in paper form was told
+     * the consent was still Pending on that very learner's page — the one place
+     * they would go to check.
+     */
+    /** @test */
+    public function an_uploaded_consent_shows_on_the_students_profile(): void
+    {
+        $this->enrol();
+
+        $this->flushSession()->withSession($this->adviserSession())
+            ->post(route('parental-consent.store'), [
+                'lrn' => '123456789012',
+                'consent' => UploadedFile::fake()->create('sulat-pahibalo.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'))
+            ->assertOk()
+            ->getContent();
+
+        $meta = $this->profileMeta($html);
+
+        // The row payload the Consent tab renders from carries the return.
+        $this->assertTrue($meta['consent_detail']['returned']);
+        $this->assertStringContainsString('Signed form returned by guardian', $html);
+        $this->assertStringContainsString($this->today(), $html);
+        $this->assertStringContainsString('Test Adviser', $html);
+
+        // The dialog says so in words, and says the answer is not keyed in —
+        // the upload dialog no longer asks for it.
+        $this->assertStringContainsString('has filled up and returned this consent', $html);
+        $this->assertFalse($meta['consent_detail']['answer_recorded']);
+
+        // And the badge reads Returned, not Pending.
+        $this->assertSame('returned', $meta['consent_badge']);
+    }
+
+    /**
+     * Returned is not approved: an answer nobody has read authorises nothing,
+     * so the standing a gate reads stays pending while the badge says Returned.
+     */
+    /** @test */
+    public function a_returned_form_with_no_recorded_answer_authorises_nothing(): void
+    {
+        $this->enrol();
+
+        $this->flushSession()->withSession($this->adviserSession())
+            ->post(route('parental-consent.store'), [
+                'lrn' => '123456789012',
+                'consent' => UploadedFile::fake()->create('sulat-pahibalo.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'))
+            ->assertOk()
+            ->getContent();
+
+        $meta = $this->profileMeta($html);
+
+        $this->assertSame('pending', $meta['consent']);
+        $this->assertSame('returned', $meta['consent_badge']);
+    }
+
+    /**
+     * An answer the adviser did key in is the answer, and the profile reports it
+     * rather than the returned-but-unread wording.
+     */
+    /** @test */
+    public function a_returned_form_carrying_an_answer_reports_it_on_the_profile(): void
+    {
+        $this->enrol();
+
+        $this->flushSession()->withSession($this->adviserSession())
+            ->post(route('parental-consent.store'), [
+                'lrn' => '123456789012',
+                'consent_type' => 'full',
+                'consent' => UploadedFile::fake()->create('sulat-pahibalo.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'))
+            ->assertOk()
+            ->getContent();
+
+        $meta = $this->profileMeta($html);
+
+        $this->assertStringContainsString('Consented to all health services', $html);
+        $this->assertTrue($meta['consent_detail']['answer_recorded']);
+        $this->assertSame('approved', $meta['consent']);
+        $this->assertSame('approved', $meta['consent_badge']);
+    }
+
+    /**
+     * My Students prints the same answer as the profile does.
+     *
+     * A column reading Pending beside a profile reading Returned is two screens
+     * disagreeing about one child, so both read `consent_badge` and both take
+     * their wording from ConsentStanding::LABELS.
+     */
+    /** @test */
+    public function the_my_students_column_agrees_with_the_profile(): void
+    {
+        $this->enrol();
+
+        $this->flushSession()->withSession($this->adviserSession())
+            ->post(route('parental-consent.store'), [
+                'lrn' => '123456789012',
+                'consent' => UploadedFile::fake()->create('sulat-pahibalo.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser', ['tab' => 'saved']))
+            ->assertOk()
+            ->assertSee('<span class="ms-badge ms-consent-returned">Returned</span>', false)
+            ->assertDontSee('<span class="ms-badge ms-consent-pending">', false);
+    }
+
+    /** With nothing uploaded the profile says so, rather than leaving a dash. */
+    /** @test */
+    public function a_learner_with_no_uploaded_form_reports_none(): void
+    {
+        $this->enrol();
+
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'))
+            ->assertOk()
+            ->getContent();
+
+        $meta = $this->profileMeta($html);
+
+        $this->assertFalse($meta['consent_detail']['returned']);
+        $this->assertSame('pending', $meta['consent_badge']);
+        $this->assertStringContainsString('Not received', $html);
+    }
+
+    /** The date the roster meta stamps an upload with. */
+    private function today(): string
+    {
+        return now()->toDateString();
+    }
+
+    /**
+     * The payload the profile's Consent tab renders from.
+     *
+     * The page hands its whole roster-meta entry to the browser as JSON, so the
+     * test reads the values the tab reads rather than matching the markup the
+     * script writes out of them.
+     *
+     * @return array<string, mixed>
+     */
+    private function profileMeta(string $html): array
+    {
+        $this->assertSame(
+            1,
+            preg_match('/const STUDENT_PROFILE_META = (.+);$/m', $html, $m),
+            'The profile must hand its meta to the browser.'
+        );
+
+        $meta = json_decode(trim($m[1]), true);
+        $this->assertIsArray($meta, 'The meta payload must be valid JSON.');
+
+        return $meta;
+    }
 }

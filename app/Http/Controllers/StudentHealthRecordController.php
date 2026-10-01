@@ -8,10 +8,12 @@ use App\Models\FeedingAttendance;
 use App\Models\HealthAssessment;
 use App\Models\HealthConsentForm;
 use App\Models\MedicalCertificate;
+use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use App\Support\AdviserClassScope;
 use App\Support\BmiClassifier;
 use App\Support\ChangeStamp;
+use App\Support\ConsentStanding;
 use App\Support\ConsultationVisibility;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceMark;
@@ -254,7 +256,8 @@ class StudentHealthRecordController extends Controller
             'cycle' => $cycle,
             'meta' => $this->buildRosterMeta($request)[$lrn] ?? [
                 'has_assessment' => false,
-                'consent' => 'pending',
+                'consent' => ConsentStanding::PENDING,
+                'consent_badge' => ConsentStanding::PENDING,
                 'at_risk' => false,
                 'programme_complete' => false,
                 'completion_outstanding' => '',
@@ -340,6 +343,7 @@ class StudentHealthRecordController extends Controller
         $shRecords = $this->recordsByLrn($lrns, $institutionId);
         $assessments = $this->assessmentsForRecords($shRecords);
         $consentForms = $this->consentsByLrn($lrns, $institutionId);
+        $consentUploads = $this->uploadedConsentsByLrn($shRecords);
 
         // Medical Documents tab — documents are keyed by LRN + institution on
         // the document row itself, so this is an exact match, unlike consultations.
@@ -365,20 +369,41 @@ class StudentHealthRecordController extends Controller
             $shRecord = $shRecords->get($lrn);
             $assessment = $shRecord ? $assessments->get($shRecord->id) : null;
             $consent = $consentForms->get($lrn);
+            $upload = $consentUploads->get($lrn);
+            $returned = ConsentStanding::guardianReturnedPaperForm($upload);
 
             $meta[$lrn] = [
                 'has_assessment' => $assessment !== null,
-                'consent' => $this->classifyConsentStatus($consent),
+                // Two questions, answered separately and both in one place:
+                // `consent` is whether a service may be given, `consent_badge`
+                // is what to print. A guardian's signed form on file whose
+                // answer nobody keyed in authorises nothing, but an adviser who
+                // has just filed it must not be told it is still outstanding.
+                'consent' => ConsentStanding::for($consent, $upload),
+                'consent_badge' => ConsentStanding::badge($consent, $upload),
                 'at_risk' => (bool) ($shRecord?->is_at_risk),
                 // Read-only summaries for the Consent and Nutritional Health
                 // Status tabs of the student profile.
                 'consent_detail' => [
                     'status' => $consent
                         ? (HealthConsentForm::statusBadges()[$consent->status]['label'] ?? $consent->status)
-                        : null,
-                    'choice' => $consent ? $this->consentChoiceLabel($consent->consent_choice) : null,
+                        : ($returned ? 'Signed form returned by guardian' : null),
+                    'choice' => $consent
+                        ? $this->consentChoiceLabel($consent->consent_choice)
+                        : ConsentStanding::uploadAnswerLabel($upload),
                     'signed_at' => $consent?->signed_at?->toDateString(),
                     'reviewed_at' => $consent?->reviewed_at?->toDateString(),
+                    // The guardian's own filled-in paper form, as the adviser
+                    // filed it. The profile knew nothing about it before, so an
+                    // adviser who had just uploaded a signed consent was still
+                    // shown "Pending" on that learner's own page.
+                    'returned' => $returned,
+                    'returned_at' => $returned ? $upload->created_at?->toDateString() : null,
+                    'returned_by' => $returned ? ($upload->uploaded_by_name ?: null) : null,
+                    // A scan whose answer nobody keyed in is not an unanswered
+                    // consent: the guardian answered on paper, and the answer is
+                    // read off the document rather than off this screen.
+                    'answer_recorded' => ConsentStanding::uploadAnswerLabel($upload) !== null,
                 ],
                 'feeding' => [
                     'baseline_status' => $shRecord?->baseline_nutritional_status,
@@ -536,25 +561,38 @@ class StudentHealthRecordController extends Controller
     }
 
     /**
-     * A consent form only counts as answered once the parent has signed it —
-     * drafts and sent-but-unsigned forms are still pending.
+     * This year's uploaded consent scans, keyed by LRN.
+     *
+     * `parental_consent_forms` hangs off `student_health_records`, so the join
+     * goes through the plain `student_id` column — the learner's name is
+     * encrypted and can never be named in SQL. Sorted oldest-first so keyBy
+     * leaves the most recent upload per learner, exactly as the adviser's
+     * Consent Forms page reads them.
+     *
+     * @param  Collection<string, StudentHealthRecord>  $shRecords
+     * @return Collection<string, ParentalConsentForm>
      */
-    private function classifyConsentStatus(?HealthConsentForm $form): string
+    private function uploadedConsentsByLrn(Collection $shRecords): Collection
     {
-        if ($form === null) {
-            return 'pending';
+        if ($shRecords->isEmpty() || ! SchemaCache::hasTable('parental_consent_forms')) {
+            return collect();
         }
 
-        $answered = [HealthConsentForm::STATUS_SIGNED, HealthConsentForm::STATUS_REVIEWED];
-        if (! in_array($form->status, $answered, true)) {
-            return 'pending';
+        $ids = $shRecords->pluck('id')->filter()->sort()->values();
+
+        if ($ids->isEmpty()) {
+            return collect();
         }
 
-        return match ($form->consent_choice) {
-            HealthConsentForm::CONSENT_DENY => 'declined',
-            HealthConsentForm::CONSENT_SPECIFIC => 'partial',
-            default => 'approved',
-        };
+        $lrnByRecordId = $shRecords->mapWithKeys(
+            fn (StudentHealthRecord $record) => [$record->id => (string) $record->student_id]
+        );
+
+        return $this->memo('consent_uploads:'.md5($ids->implode(',')), fn () => ParentalConsentForm::whereIn('student_health_record_id', $ids)
+            ->where('school_year', ParentalConsentForm::currentSchoolYear())
+            ->get()
+            ->sortBy('created_at')
+            ->keyBy(fn (ParentalConsentForm $upload) => (string) ($lrnByRecordId[$upload->student_health_record_id] ?? '')));
     }
 
     /**

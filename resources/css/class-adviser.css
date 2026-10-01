@@ -303,6 +303,9 @@ tbody tr:hover td{background:#f7fbf8}
 .ms-profile-pending{background:#FCECEC;color:#b91c1c}
 .ms-consent-declined{background:#FCECEC;color:#b91c1c}
 .ms-consent-pending{background:#e6efe9;color:#3f6350}
+/* The guardian has returned their signed form; nobody has keyed in what it
+   says. Blue, not green: the document is in, the answer is not read yet. */
+.ms-consent-returned{background:#E4EDF8;color:#1E4E8C}
 
 /* Row actions: View Profile, Edit Profile, Parent's Consent. Consent posts the
    learner's LRN, so it is a one-button form rather than a link. */
@@ -490,6 +493,9 @@ tbody tr:hover td{background:#f7fbf8}
 .sp-panel.active{display:block}
 
 .sp-note{margin-top:9px;font-size:.72rem;color:var(--muted);line-height:1.5}
+/* A guardian has returned their signed consent. It is an answer, so it is
+   stated above the figures rather than as a footnote under them. */
+.sp-consent-returned{margin:0 0 12px;padding:10px 12px;border:1px solid #BCD3EE;border-radius:9px;background:#F1F6FC;font-size:.78rem;line-height:1.5;color:#1E4E8C}
 .sp-review-block{margin-bottom:10px}
 .sp-review-title{display:block;font-size:.71rem;font-weight:700;color:#334a3f;margin-bottom:5px}
 .sp-review-items{display:flex;flex-wrap:wrap;gap:5px}

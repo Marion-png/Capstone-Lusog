@@ -336,12 +336,11 @@
                     'partial' => 'Partial',
                     'pending' => 'Pending',
                 ];
-                $consentBadges = [
-                    'approved' => 'Approved',
-                    'partial' => 'Partial',
-                    'declined' => 'Declined',
-                    'pending' => 'Pending',
-                ];
+                // Typed once, in App\Support\ConsentStanding, because the student
+                // profile prints the same answer about the same learner and a
+                // column that says Pending beside a profile that says Returned is
+                // two screens disagreeing about one child.
+                $consentBadges = \App\Support\ConsentStanding::LABELS;
             @endphp
 
             <div class="ms-page-header">
@@ -426,7 +425,11 @@
                                     // its learners fall through to Partial or Pending.
                                     $profileKey = ($meta['programme_complete'] ?? false) ? 'complete' : ($isExamined ? 'partial' : 'pending');
                                     $profileWhy = (string) ($meta['completion_outstanding'] ?? '');
-                                    $consentKey = $meta['consent'];
+                                    // consent_badge is what to print; consent is what
+                                    // decides whether a service may be given. They differ
+                                    // on one learner only: the one whose guardian has
+                                    // returned a form nobody has keyed an answer from.
+                                    $consentKey = $meta['consent_badge'] ?? $meta['consent'];
                                     $healthStatus = trim((string) ($prototypeRecord['nutritional_status_bmi_for_age'] ?? ''));
                                 @endphp
                                 <tr class="js-student-row"

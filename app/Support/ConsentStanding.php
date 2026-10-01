@@ -40,6 +40,29 @@ final class ConsentStanding
 
     public const PENDING = 'pending';
 
+    /**
+     * A guardian's signed form is on file; nobody has keyed in its answer.
+     *
+     * Not a standing `for()` can return — see `badge()`. It is what a screen
+     * prints, never what decides whether a service may be given.
+     */
+    public const RETURNED = 'returned';
+
+    /**
+     * The short label printed beside a learner, for every value `badge()` can
+     * return. Typed once, so the profile's tab badge and the My Students
+     * column cannot word one answer two ways.
+     *
+     * @var array<string, string>
+     */
+    public const LABELS = [
+        self::APPROVED => 'Approved',
+        self::PARTIAL => 'Partial',
+        self::DECLINED => 'Declined',
+        self::RETURNED => 'Returned',
+        self::PENDING => 'Pending',
+    ];
+
     /** The standing one learner's consent is in. */
     public static function for(?HealthConsentForm $form, ?ParentalConsentForm $upload = null): string
     {
@@ -67,6 +90,25 @@ final class ConsentStanding
         }
 
         return self::PENDING;
+    }
+
+    /**
+     * What to print beside a learner: the standing, plus one value of its own.
+     *
+     * A guardian's signed form on file whose answer nobody has keyed in
+     * authorises nothing, so `for()` keeps it PENDING and every gate reads it
+     * that way. But telling the adviser who has just filed that form that the
+     * consent is still outstanding is simply wrong — the guardian has filled it
+     * in and the school holds it. So the two questions are answered separately
+     * and both from here, rather than each screen deciding for itself.
+     */
+    public static function badge(?HealthConsentForm $form, ?ParentalConsentForm $upload = null): string
+    {
+        $standing = self::for($form, $upload);
+
+        return $standing === self::PENDING && self::guardianReturnedPaperForm($upload)
+            ? self::RETURNED
+            : $standing;
     }
 
     /**

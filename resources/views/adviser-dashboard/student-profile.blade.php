@@ -163,9 +163,17 @@
             <div class="sp-panel" id="vpTabConsent" role="tabpanel">
                 <section class="student-profile-section">
                     <h4>Parent's Consent</h4>
+                    {{-- A consent comes back one of two ways, and this panel used
+                         to know about only one of them: it read the digital
+                         Sulat-Pahibalo alone, so an adviser who had just uploaded
+                         the guardian's filled-in paper form was still told the
+                         consent was pending on that learner's own page. Filled by
+                         App\Support\ConsentStanding through the roster meta. --}}
+                    <div class="sp-consent-returned" id="vpConsentReturnedNote" hidden></div>
                     <div class="student-profile-grid">
                         <div><span>Status:</span><b id="vpConsentStatus">-</b></div>
                         <div><span>Response:</span><b id="vpConsentChoice">-</b></div>
+                        <div><span>Guardian's signed form:</span><b id="vpConsentReturned">-</b></div>
                         <div><span>Signed by guardian:</span><b id="vpConsentSigned">-</b></div>
                         <div><span>Reviewed by adviser:</span><b id="vpConsentReviewed">-</b></div>
                     </div>
@@ -808,12 +816,38 @@ const STUDENT_PROFILE_LRN = @json($lrn);
         setText('vpBloodPressure', record.blood_pressure || '-');
 
         const consent = meta.consent_detail || {};
-        const consentLabels = { approved: 'Approved', partial: 'Partial', declined: 'Declined', pending: 'Pending' };
-        setText('vpConsentTabBadge', consentLabels[meta.consent] || 'Pending');
+        // The labels are the server's, typed once in App\Support\ConsentStanding,
+        // so this badge and the Consent column on My Students cannot word one
+        // answer two ways. `consent_badge` is what to print; `consent` is what
+        // decides whether a service may be given, and they differ on exactly one
+        // learner: the one whose guardian returned a form nobody has keyed in.
+        const consentLabels = @json(\App\Support\ConsentStanding::LABELS);
+        setText('vpConsentTabBadge', consentLabels[meta.consent_badge] || consentLabels[meta.consent] || 'Pending');
         setText('vpConsentStatus', consent.status || 'Not started');
-        setText('vpConsentChoice', consent.choice || 'Awaiting guardian response');
+        setText('vpConsentChoice', consent.choice || (consent.returned
+            ? 'Not recorded — read the answer on the signed form'
+            : 'Awaiting guardian response'));
         setText('vpConsentSigned', consent.signed_at || '-');
         setText('vpConsentReviewed', consent.reviewed_at || '-');
+
+        // What the adviser came here to see: the guardian has filled the form in
+        // and the school holds it.
+        const returnedNote = document.getElementById('vpConsentReturnedNote');
+        if (consent.returned) {
+            const on = consent.returned_at ? ' on ' + consent.returned_at : '';
+            const by = consent.returned_by ? ', uploaded by ' + consent.returned_by : '';
+            setText('vpConsentReturned', 'Received' + on + (consent.returned_by ? ' \u00b7 ' + consent.returned_by : ''));
+            if (returnedNote) {
+                returnedNote.textContent = consent.answer_recorded
+                    ? 'The guardian has filled up and returned this consent' + on + by + '.'
+                    : 'The guardian has filled up and returned this consent' + on + by
+                        + '. What they answered has not been recorded here — open the signed form on the Consent Forms page to read it.';
+                returnedNote.hidden = false;
+            }
+        } else {
+            setText('vpConsentReturned', 'Not received');
+            if (returnedNote) { returnedNote.textContent = ''; returnedNote.hidden = true; }
+        }
 
         // Baseline against endline. A phase nobody measured is an em dash,
         // never the other phase's figures — the server sends blanks for it and
