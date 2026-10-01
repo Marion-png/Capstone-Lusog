@@ -398,12 +398,34 @@
 
                 <div class="ms-table-scroll">
                     <table class="ms-table">
+                        {{-- Baseline and endline are two column groups, each
+                             named on the table: a weight with no period on it
+                             cannot be compared down a column. Every figure is
+                             the server's one reading (meta.nutrition, from
+                             App\Support\NutritionalHealthStatus) — the same
+                             values this learner's Nutritional Health Status tab
+                             prints, so a row and a profile cannot disagree, and
+                             nothing is recomputed here. --}}
                         <thead>
+                            <tr class="ms-group-row">
+                                <th colspan="4"></th>
+                                <th colspan="4" class="ms-group">Baseline</th>
+                                <th colspan="4" class="ms-group">Endline</th>
+                                <th colspan="4"></th>
+                            </tr>
                             <tr>
                                 <th>LRN</th>
                                 <th>Student Name</th>
                                 <th>Sex</th>
                                 <th>Age</th>
+                                <th>Weight</th>
+                                <th>Height</th>
+                                <th>BMI</th>
+                                <th>Status</th>
+                                <th>Weight</th>
+                                <th>Height</th>
+                                <th>BMI</th>
+                                <th>Status</th>
                                 <th>Health Status</th>
                                 <th>Profile Status</th>
                                 <th>Consent</th>
@@ -431,6 +453,24 @@
                                     // returned a form nobody has keyed an answer from.
                                     $consentKey = $meta['consent_badge'] ?? $meta['consent'];
                                     $healthStatus = trim((string) ($prototypeRecord['nutritional_status_bmi_for_age'] ?? ''));
+
+                                    // The server already decided these figures and
+                                    // the classification behind them; nothing is
+                                    // recomputed on the row.
+                                    $nutrition = is_array($meta['nutrition'] ?? null) ? $meta['nutrition'] : [];
+                                    $phases = [
+                                        'baseline' => is_array($nutrition['baseline'] ?? null) ? $nutrition['baseline'] : [],
+                                        'endline' => is_array($nutrition['endline'] ?? null) ? $nutrition['endline'] : [],
+                                    ];
+
+                                    // A phase nobody measured is an em dash on its
+                                    // own four cells — never the other phase's
+                                    // figures, and never a zero.
+                                    $cell = function (array $phase, string $key, string $unit = ''): string {
+                                        $value = trim((string) ($phase[$key] ?? ''));
+
+                                        return $value === '' ? '—' : ($unit === '' ? $value : $value.' '.$unit);
+                                    };
                                 @endphp
                                 <tr class="js-student-row"
                                     data-name="{{ strtolower($fullName) }}"
@@ -440,6 +480,13 @@
                                     <td class="ms-student-name">{{ $fullName }}</td>
                                     <td>{{ $prototypeRecord['gender'] ?? '-' }}</td>
                                     <td>{{ $prototypeRecord['age'] ?? '-' }}</td>
+                                    @foreach (['baseline', 'endline'] as $phaseKey)
+                                        @php $phase = $phases[$phaseKey]; @endphp
+                                        <td class="ms-num">{{ $cell($phase, 'weight_kg', 'kg') }}</td>
+                                        <td class="ms-num">{{ $cell($phase, 'height_cm', 'cm') }}</td>
+                                        <td class="ms-num">{{ $cell($phase, 'bmi', 'kg/m²') }}</td>
+                                        <td>{{ $cell($phase, 'bmi_status') }}</td>
+                                    @endforeach
                                     <td>{{ $healthStatus !== '' ? $healthStatus : 'Not assessed' }}</td>
                                     <td><span class="ms-badge ms-profile-{{ $profileKey }}"@if ($profileKey !== 'complete' && $profileWhy !== '') title="{{ $profileWhy }}"@endif>{{ $profileBadges[$profileKey] }}</span></td>
                                     <td><span class="ms-badge ms-consent-{{ $consentKey }}">{{ $consentBadges[$consentKey] }}</span></td>
@@ -463,7 +510,7 @@
                                 </tr>
                             @empty
                                 <tr class="js-students-empty">
-                                    <td colspan="8">
+                                    <td colspan="16">
                                         <div class="ms-empty-state">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
                                             <h4>No Students Yet</h4>
@@ -474,7 +521,7 @@
                                 </tr>
                             @endforelse
                             <tr class="js-students-nomatch" hidden>
-                                <td colspan="8">
+                                <td colspan="16">
                                     <div class="ms-empty-state">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                                         <h4>No Students Found</h4>

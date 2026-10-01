@@ -47,6 +47,21 @@ class SchoolHeadMasterlistController extends Controller
     private const STATUS_OPTIONS = ['Severely Wasted', 'Wasted', 'Normal', 'Overweight', 'Obese', 'not_measured'];
 
     /**
+     * Which weighing's columns are on screen.
+     *
+     * This narrows the **columns**, not the learners — the same thing the
+     * coordinator's Attendance filter does when asking for absences drops the
+     * Present column. Sixteen columns is a lot to read across when the
+     * question is only "what did the baseline say", and a nurse working
+     * through a class one weighing at a time should not have to scroll past
+     * the other. `''` is both, which is what the page opens on, because the
+     * comparison is the reason the two groups are named side by side.
+     *
+     * @var list<string>
+     */
+    private const WEIGHINGS = ['baseline', 'endline'];
+
+    /**
      * The roles that may read the school's nutritional health status.
      *
      * The School Head reads it to monitor the school. **The School Nurse reads
@@ -420,6 +435,13 @@ class SchoolHeadMasterlistController extends Controller
             $attendance = '';
         }
 
+        // A value off the query string that is not one of the two shows both,
+        // rather than emptying the table of figures.
+        $weighing = trim((string) $request->query('weighing', ''));
+        if (! in_array($weighing, self::WEIGHINGS, true)) {
+            $weighing = '';
+        }
+
         return [
             'school_year' => $schoolYear,
             'grade' => $grade,
@@ -429,6 +451,7 @@ class SchoolHeadMasterlistController extends Controller
             'latest' => $latest,
             'standing' => $standing,
             'attendance' => $attendance,
+            'weighing' => $weighing,
         ];
     }
 

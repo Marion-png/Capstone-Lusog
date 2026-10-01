@@ -92,8 +92,51 @@ class StudentImportSheet
      */
     public static function read(UploadedFile $file): array
     {
-        $matrix = self::readMatrix($file);
+        $rows = [];
+        $missing = [];
+        $read = false;
 
+        // **Every worksheet, not just the first.** A school that keeps its
+        // class masterlist with one tab per sex — a MALE sheet and a FEMALE
+        // sheet — had half its class silently dropped by a reader that stopped
+        // after the first, and a workbook whose first tab is a cover page
+        // imported nobody at all. Each tab heads its own list, so the header is
+        // found again per tab rather than once for the file.
+        foreach (self::readSheets($file) as $sheet) {
+            $result = self::readSheet($sheet['rows'], $sheet['name'], count($rows));
+
+            if ($result['missing'] !== []) {
+                // Remember why the first unreadable tab failed, in case no tab
+                // turns out to hold a list — a cover page or a summary tab is
+                // not an error as long as the learners are on another one.
+                $missing = $missing === [] ? $result['missing'] : $missing;
+
+                continue;
+            }
+
+            $read = true;
+            $rows = array_merge($rows, $result['rows']);
+        }
+
+        if (! $read) {
+            return ['rows' => [], 'missing' => $missing !== [] ? $missing : self::REQUIRED_HEADERS, 'total' => 0];
+        }
+
+        return ['rows' => $rows, 'missing' => [], 'total' => count($rows)];
+    }
+
+    /**
+     * One worksheet, read into enrolment rows.
+     *
+     * @param  list<list<string>>  $matrix
+     * @param  string  $sheetName  the tab's own name, which on a masterlist
+     *                             split by sex is where that sex is recorded
+     * @param  int  $lineOffset  rows already read from earlier tabs, so a
+     *                           reported line is unique across the workbook
+     * @return array{rows: list<array{line: int, data: array<string, string>}>, missing: list<string>}
+     */
+    private static function readSheet(array $matrix, string $sheetName, int $lineOffset): array
+    {
         // The header row is the first row with a recognisable LRN column.
         $headerIndex = null;
         $columns = [];
@@ -107,7 +150,7 @@ class StudentImportSheet
         }
 
         if ($headerIndex === null) {
-            return ['rows' => [], 'missing' => self::REQUIRED_HEADERS, 'total' => 0];
+            return ['rows' => [], 'missing' => self::REQUIRED_HEADERS];
         }
 
         // A masterlist names the three columns once, in a merged caption —
@@ -116,14 +159,19 @@ class StudentImportSheet
 
         $missing = array_values(array_diff(self::REQUIRED_HEADERS, $columns));
         if ($missing !== []) {
-            return ['rows' => [], 'missing' => $missing, 'total' => 0];
+            return ['rows' => [], 'missing' => $missing];
         }
 
         $rows = [];
         // The sex of the band the reader is currently inside, if the sheet
         // uses them. Empty until a band row says otherwise, so a sheet with a
         // Sex column of its own is unaffected.
-        $band = '';
+        //
+        // A tab named MALE or FEMALE is a band too — the same fact recorded in
+        // the tab rather than in a row, and the only copy of it on a workbook
+        // split that way. A band row inside the tab still wins, because it is
+        // the more specific statement.
+        $band = self::sexFromSheetName($sheetName) ?? '';
 
         foreach (array_slice($matrix, $headerIndex + 1, null, true) as $index => $cells) {
             $data = [];
@@ -157,10 +205,25 @@ class StudentImportSheet
                 $data['gender'] = $band;
             }
 
-            $rows[] = ['line' => $index + 1, 'data' => $data];
+            $rows[] = ['line' => $lineOffset + $index + 1, 'data' => $data];
         }
 
-        return ['rows' => $rows, 'missing' => [], 'total' => count($rows)];
+        return ['rows' => $rows, 'missing' => []];
+    }
+
+    /**
+     * The sex a worksheet's own name records, if it records one.
+     *
+     * Read off the same list the band rows are (`SEX_BANDS`), so a tab called
+     * "FEMALE" and a row reading "FEMALE" mean the same thing. A tab named
+     * anything else — "Sheet1", "Class List", "Grade 7 Matiyaga" — records no
+     * sex, and its learners keep whatever the sheet itself says.
+     */
+    private static function sexFromSheetName(string $name): ?string
+    {
+        $key = strtolower(trim($name));
+
+        return self::SEX_BANDS[$key] ?? null;
     }
 
     /**
@@ -329,13 +392,21 @@ class StudentImportSheet
     /**
      * @return list<list<string>>
      */
-    private static function readMatrix(UploadedFile $file): array
+    /**
+     * The file as worksheets, each with its own name.
+     *
+     * A CSV is one unnamed sheet; an XLSX is however many tabs it has, because
+     * a school may split its class masterlist across them.
+     *
+     * @return list<array{name: string, rows: list<list<string>>}>
+     */
+    private static function readSheets(UploadedFile $file): array
     {
         $extension = strtolower((string) ($file->getClientOriginalExtension() ?: $file->guessExtension() ?: ''));
 
         return in_array($extension, ['xlsx', 'xls'], true)
             ? self::readXlsx($file)
-            : self::readCsv($file);
+            : [['name' => '', 'rows' => self::readCsv($file)]];
     }
 
     /** @return list<list<string>> */
@@ -364,17 +435,28 @@ class StudentImportSheet
         return $matrix;
     }
 
-    /** @return list<list<string>> */
+    /**
+     * Every worksheet in the workbook, in order, each with its name.
+     *
+     * It used to stop after the first, which dropped the whole second half of
+     * a class kept as a MALE tab and a FEMALE tab. MAX_ROWS is counted over
+     * the workbook rather than per tab, so a huge file is still bounded.
+     *
+     * @return list<array{name: string, rows: list<list<string>>}>
+     */
     private static function readXlsx(UploadedFile $file): array
     {
         $reader = new XlsxReader;
-        $matrix = [];
+        $sheets = [];
+        $total = 0;
         $reader->open((string) $file->getRealPath());
 
         try {
             foreach ($reader->getSheetIterator() as $sheet) {
+                $matrix = [];
+
                 foreach ($sheet->getRowIterator() as $row) {
-                    if (count($matrix) > self::MAX_ROWS + 1) {
+                    if ($total > self::MAX_ROWS + 1) {
                         break;
                     }
                     $cells = [];
@@ -385,14 +467,19 @@ class StudentImportSheet
                         $cells[] = trim((string) $value);
                     }
                     $matrix[] = $cells;
+                    $total++;
                 }
 
-                break; // The first worksheet holds the list.
+                $sheets[] = ['name' => (string) $sheet->getName(), 'rows' => $matrix];
+
+                if ($total > self::MAX_ROWS + 1) {
+                    break;
+                }
             }
         } finally {
             $reader->close();
         }
 
-        return $matrix;
+        return $sheets;
     }
 }

@@ -493,6 +493,26 @@ tbody tr:hover td{background:#f7fbf8}
 .sp-panel.active{display:block}
 
 .sp-note{margin-top:9px;font-size:.72rem;color:var(--muted);line-height:1.5}
+/* Whether the School Nurse has recorded this learner Sheet 2. Stated above
+   the panel, because it is the answer the adviser opened the tab for. Green
+   is the healthy/done signal only; the pending state stays neutral. */
+.sp-sheet2-standing{margin:0 0 12px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:#F7FAF8;font-size:.78rem;line-height:1.5}
+.sp-sheet2-standing strong{display:block;font-size:.8rem;margin-bottom:2px;color:var(--g900)}
+.sp-sheet2-standing.is-done{border-color:#BFE3CC;background:#F2FAF5}
+.sp-sheet2-standing.is-done strong{color:#14653C}
+/* The guardian signed form as filed: what it is called, when it came in,
+   and the one audited route that serves it. */
+.sp-consent-file{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--card)}
+.sp-consent-file-name{font-size:.78rem;font-weight:700;color:var(--g900);word-break:break-word}
+.sp-consent-file-meta{font-size:.72rem;color:var(--muted)}
+.sp-consent-file-open{margin-left:auto;font-size:.74rem;font-weight:700;color:var(--g700)}
+.sp-consent-file-open:hover{color:var(--g900)}
+/* The two weigh-ins as named column groups. The spanning header carries no
+   bottom rule so it reads as a caption over its four columns, and figures
+   are right-aligned on the theme tokens so a column reads down. */
+.ms-group-row th{border-bottom:none;padding-bottom:0;font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ms-group-row th.ms-group{text-align:center;color:var(--g900);font-weight:700;border-bottom:2px solid var(--border)}
+.ms-num{text-align:right;white-space:nowrap;font-variant-numeric:var(--lg-figures,tabular-nums lining-nums slashed-zero)}
 /* A guardian has returned their signed consent. It is an answer, so it is
    stated above the figures rather than as a footnote under them. */
 .sp-consent-returned{margin:0 0 12px;padding:10px 12px;border:1px solid #BCD3EE;border-radius:9px;background:#F1F6FC;font-size:.78rem;line-height:1.5;color:#1E4E8C}

@@ -256,4 +256,113 @@ class MedicineExpiryAndReceiptTest extends TestCase
             ->assertSee(route('medicine-inventory.receive', $this->paracetamol))
             ->assertSee('id="receiveForm"', false);
     }
+    // ── Add medicine is a dialog ────────────────────────────────────────
+
+    /**
+     * Adding an item happens in a dialog, over the list the nurse was reading.
+     *
+     * It used to be a page of its own, so the one action the inventory screen
+     * exists for threw the screen away to perform it. The fields are one
+     * partial, posting to the one existing write path — a dialog that asked for
+     * something different from the page would be a second way to create stock.
+     */
+    #[Test]
+    public function add_medicine_opens_in_a_dialog_over_the_inventory(): void
+    {
+        $html = $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('dashboard.medicine-inventory'))
+            ->assertOk()
+            ->getContent();
+
+        // The dialog is on the page, in the same anatomy Receive Stock uses.
+        $this->assertStringContainsString('id="addMedicineBackdrop"', $html);
+        $this->assertStringContainsString('data-add-medicine-open', $html);
+        $this->assertStringContainsString('data-add-medicine-close', $html);
+
+        // One write path: the dialog posts where the standalone page posts.
+        $this->assertStringContainsString('action="'.route('medicine-inventory.store').'"', $html);
+
+        // And it carries the real fields, not a cut-down copy of them.
+        foreach (['catalogue_name', 'stock_quantity', 'minimum_threshold', 'unit', 'notes'] as $field) {
+            $this->assertStringContainsString('name="'.$field.'"', $html, $field.' is missing from the dialog.');
+        }
+    }
+
+    /**
+     * Without JavaScript the button is still a link to the page it always was.
+     *
+     * A control that only works with a script is a control some people do not
+     * have, and this one creates the stock record every other screen counts.
+     */
+    #[Test]
+    public function the_button_still_reaches_the_standalone_page_without_javascript(): void
+    {
+        $html = $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('dashboard.medicine-inventory'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString(
+            'href="'.route('medicine-inventory.create').'" class="btn btn-primary" data-add-medicine-open',
+            $html,
+            'The button is an anchor the script upgrades, not a scripted button.'
+        );
+
+        // The page is still there, and renders the same fields from the same
+        // partial — so the two can never ask for different things.
+        $page = $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('medicine-inventory.create'))
+            ->assertOk()
+            ->getContent();
+
+        foreach (['catalogue_name', 'stock_quantity', 'minimum_threshold', 'unit'] as $field) {
+            $this->assertStringContainsString('name="'.$field.'"', $page);
+        }
+    }
+
+    /** A refused save comes back to the list with the dialog reopened. */
+    #[Test]
+    public function a_refused_save_reopens_the_dialog_on_the_inventory(): void
+    {
+        $before = Medicine::count();
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->from(route('dashboard.medicine-inventory'))
+            ->post(route('medicine-inventory.store'), [
+                // No medicine chosen, so the catalogue rule refuses it.
+                'catalogue_name' => '',
+                'stock_quantity' => 10,
+                'minimum_threshold' => 20,
+                'unit' => 'tablets',
+            ])
+            ->assertRedirect(route('dashboard.medicine-inventory'))
+            ->assertSessionHasErrors();
+
+        $this->assertSame($before, Medicine::count(), 'A refused save writes nothing.');
+
+        // The page it lands on reopens the dialog rather than closing over an
+        // error nobody saw.
+        $html = $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('dashboard.medicine-inventory'))
+            ->assertOk()
+            ->getContent();
+
+        // The reopen is a server-side @if, so the call is in the script only
+        // when the error bag actually holds something. The marker is the
+        // labelled call: a bare `open();` also appears in the click handler.
+        $this->assertStringContainsString('open(); // reopened after a refused save', $html);
+    }
+
+    /** A clean visit leaves the dialog shut. */
+    #[Test]
+    public function a_clean_visit_does_not_open_the_dialog(): void
+    {
+        $html = $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('dashboard.medicine-inventory'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('id="addMedicineBackdrop" hidden', $html);
+        $this->assertStringNotContainsString('open(); // reopened after a refused save', $html);
+    }
 }

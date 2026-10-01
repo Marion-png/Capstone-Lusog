@@ -30,6 +30,7 @@ use App\Http\Controllers\SchoolHeadInventoryController;
 use App\Http\Controllers\SchoolHeadMasterlistController;
 use App\Http\Controllers\SchoolHeadProgramController;
 use App\Http\Controllers\SchoolHeadReportsController;
+use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StudentHealthRecordController;
 use App\Http\Controllers\StudentIncidentReportController;
 use App\Http\Controllers\StudentMedicalDocumentController;
@@ -1478,6 +1479,24 @@ Route::post('/health-records', function (Request $request) {
     return back();
 })->name('health-records.store');
 
+/*
+ * Account settings — every role, one page.
+ *
+ * It sits on /dashboard/settings rather than under a role's own path because
+ * every role opens the same page. `EnsureActiveSession::rolesForPath()` falls
+ * through to [null, …] here, which means "any role may view this", so a
+ * signed-in session is left exactly as it is instead of being re-seeded as
+ * another role the way a role-specific URL would do.
+ *
+ * The write is the person's own credential and nothing else: the account is
+ * resolved from the session inside the controller, so neither route takes an
+ * account to act on.
+ */
+Route::get('/dashboard/settings', [SettingsController::class, 'index'])
+    ->name('settings');
+
+Route::post('/dashboard/settings/password', [SettingsController::class, 'updatePassword'])
+    ->name('settings.password');
 Route::post('/logout', function (Request $request) {
     AuditTrail::record('logout', null, null, 'Logged out');
 

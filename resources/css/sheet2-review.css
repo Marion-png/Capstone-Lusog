@@ -1,0 +1,14 @@
+/*
+ * Sheet 2 as the clinic rules it — the body-systems grid and the lettered
+ * section captions. Inlined by partials/sheet2-review-script, the one
+ * renderer both student profiles read, so the clinic's sheet is not styled
+ * twice and cannot look like two different documents on two desks.
+ */
+.s2-section { margin-top: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--g900); }
+.s2-section:first-child { margin-top: 0; }
+.s2-table { width: 100%; border-collapse: collapse; font-size: .78rem; margin-bottom: 4px; }
+.s2-table th, .s2-table td { border: 1px solid var(--border); padding: 5px 8px; text-align: left; vertical-align: top; }
+.s2-table thead th { background: var(--g50); font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-3); }
+.s2-table tbody th { font-weight: 600; color: var(--text-1); width: 30%; }
+.s2-table td.is-abnormal { color: #9A4E10; font-weight: 700; }
+.s2-table + .student-profile-grid { margin-top: 8px; }

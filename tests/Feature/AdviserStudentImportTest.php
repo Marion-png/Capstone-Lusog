@@ -12,6 +12,8 @@ use App\Support\StudentDataCompleteness;
 use App\Support\StudentImportSheet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use OpenSpout\Common\Entity\Row;
+use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -650,5 +652,135 @@ class AdviserStudentImportTest extends TestCase
         $zip->close();
 
         return $path;
+    }
+
+    /**
+     * A class kept as a MALE tab and a FEMALE tab enrols both halves.
+     *
+     * The reader stopped after the first worksheet, so a school that splits its
+     * masterlist across tabs had the whole second half of the class silently
+     * dropped — the learners never reached the reader, which is why their names
+     * never appeared. Each tab heads its own list, so the header is found again
+     * per tab, and a tab named MALE or FEMALE records that sex exactly as a
+     * band row inside one does.
+     */
+    #[Test]
+    public function a_masterlist_split_across_gender_tabs_enrols_every_tab(): void
+    {
+        $file = $this->workbook([
+            'MALE' => [
+                ['NO', 'LAST NAME', 'FIRST NAME', 'LRN'],
+                ['1', 'Dela Cruz', 'Juan', '200000000001'],
+                ['2', 'Santos', 'Pedro', '200000000002'],
+            ],
+            'FEMALE' => [
+                ['NO', 'LAST NAME', 'FIRST NAME', 'LRN'],
+                ['1', 'Reyes', 'Ana', '200000000003'],
+                ['2', 'Lim', 'Rosa', '200000000004'],
+            ],
+        ]);
+
+        $this->import($file, ['assigned_section' => 'MATATAG'])->assertRedirect();
+
+        $learners = StudentHealthRecord::query()->get()->keyBy(
+            fn (StudentHealthRecord $r): string => (string) $r->student_id
+        );
+
+        // Both tabs, not just the first.
+        $this->assertCount(4, $learners, 'Every tab\'s learners are enrolled.');
+
+        // And the names came through, which is what the second tab was losing.
+        $this->assertSame('Dela Cruz, Juan', $learners['200000000001']->student_name);
+        $this->assertSame('Lim, Rosa', $learners['200000000004']->student_name);
+
+        // The tab is where that half's sex is recorded.
+        $sex = fn (string $lrn): string => (string) ($learners[$lrn]->student_details['gender'] ?? '');
+        $this->assertSame('Male', $sex('200000000001'));
+        $this->assertSame('Male', $sex('200000000002'));
+        $this->assertSame('Female', $sex('200000000003'));
+        $this->assertSame('Female', $sex('200000000004'));
+    }
+
+    /**
+     * A tab that holds no list is skipped, not treated as a failure.
+     *
+     * A workbook often opens on a cover page or a summary. Refusing the file
+     * over it would reject the one document every class already holds, and
+     * reading only the first tab imported nobody at all.
+     */
+    #[Test]
+    public function a_cover_tab_is_skipped_and_the_list_tab_is_read(): void
+    {
+        $file = $this->workbook([
+            'Summary' => [
+                ['CLASS MASTERLIST'],
+                ['Total enrolment', '2'],
+            ],
+            'Class List' => [
+                ['NO', 'LAST NAME', 'FIRST NAME', 'LRN'],
+                ['1', 'Reyes', 'Ana', '200000000011'],
+                ['2', 'Lim', 'Rosa', '200000000012'],
+            ],
+        ]);
+
+        $this->import($file, ['assigned_section' => 'MATATAG'])->assertRedirect();
+
+        $this->assertSame(2, StudentHealthRecord::query()->count());
+
+        // A tab name that is not a sex records none, so these keep the sheet's
+        // own answer — which this sheet does not give.
+        $learner = StudentHealthRecord::query()->where('student_id', '200000000011')->firstOrFail();
+        $this->assertSame('', (string) ($learner->student_details['gender'] ?? ''));
+    }
+
+    /** A workbook with no list on any tab is still refused, and says why. */
+    #[Test]
+    public function a_workbook_with_no_list_on_any_tab_is_refused(): void
+    {
+        $file = $this->workbook([
+            'Cover' => [['CLASS MASTERLIST'], ['Grade 7']],
+            'Notes' => [['Nothing here']],
+        ]);
+
+        $this->import($file, ['assigned_section' => 'MATATAG'])
+            ->assertRedirect()
+            ->assertSessionHasErrors('students_file');
+
+        $this->assertSame(0, StudentHealthRecord::query()->count());
+    }
+
+    /**
+     * A workbook of named worksheets, each a list of rows.
+     *
+     * @param  array<string, list<list<string>>>  $sheets
+     */
+    private function workbook(array $sheets): UploadedFile
+    {
+        if (! class_exists(XlsxWriter::class)) {
+            $this->markTestSkipped('OpenSpout is not installed on this machine (composer.lock pins it to PHP 8.4).');
+        }
+
+        $path = tempnam(sys_get_temp_dir(), 'classlist-').'.xlsx';
+
+        $writer = new XlsxWriter;
+        $writer->openToFile($path);
+
+        $first = true;
+        foreach ($sheets as $name => $rows) {
+            if (! $first) {
+                $writer->addNewSheetAndMakeItCurrent();
+            }
+            $writer->getCurrentSheet()->setName((string) $name);
+
+            foreach ($rows as $cells) {
+                $writer->addRow(Row::fromValues($cells));
+            }
+
+            $first = false;
+        }
+
+        $writer->close();
+
+        return new UploadedFile($path, 'class-list.xlsx', null, null, true);
     }
 }

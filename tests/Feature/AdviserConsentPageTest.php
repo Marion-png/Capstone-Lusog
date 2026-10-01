@@ -639,4 +639,152 @@ class AdviserConsentPageTest extends TestCase
 
         return $meta;
     }
+
+    /**
+     * The uploaded form is on the learner's profile, not just described there.
+     *
+     * The Consent tab said a form had been returned and offered nothing to
+     * open: the meta carried the date and the uploader but never the document.
+     * It is read off the same row the upload wrote — no second copy and no
+     * duplicated path.
+     */
+    /** @test */
+    public function the_uploaded_consent_form_is_shown_on_the_students_profile(): void
+    {
+        $this->enrol();
+
+        $this->flushSession()->withSession($this->adviserSession())
+            ->post(route('parental-consent.store'), [
+                'lrn' => '123456789012',
+                'consent' => UploadedFile::fake()->create('sulat-pahibalo.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $upload = ParentalConsentForm::latest('id')->firstOrFail();
+
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'))
+            ->assertOk()
+            ->getContent();
+
+        $meta = $this->profileMeta($html);
+
+        // The filed name and the one audited route that serves it.
+        $this->assertSame('sulat-pahibalo.pdf', $meta['consent_detail']['file_name']);
+        $this->assertSame(
+            route('parental-consent.download', $upload->id),
+            $meta['consent_detail']['file_url']
+        );
+
+        // And the panel has somewhere to put them.
+        $this->assertStringContainsString('id="vpConsentFile"', $html);
+    }
+
+    /** With nothing uploaded there is no document, and no link to a missing one. */
+    /** @test */
+    public function a_learner_with_no_uploaded_form_offers_no_document(): void
+    {
+        $this->enrol();
+
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'))
+            ->assertOk()
+            ->getContent();
+
+        $meta = $this->profileMeta($html);
+        $this->assertNull($meta['consent_detail']['file_name']);
+        $this->assertNull($meta['consent_detail']['file_url']);
+    }
+
+    /**
+     * The adviser who filed the form can open it again.
+     *
+     * The download was clinic-only, so the one desk that scans a guardian's
+     * form and uploads it could never check its own filing — a link on their
+     * profile would have 403'd.
+     */
+    /** @test */
+    public function the_learners_own_adviser_can_open_the_uploaded_form(): void
+    {
+        $this->enrol();
+
+        $this->flushSession()->withSession($this->adviserSession())
+            ->post(route('parental-consent.store'), [
+                'lrn' => '123456789012',
+                'consent' => UploadedFile::fake()->create('sulat-pahibalo.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $upload = ParentalConsentForm::latest('id')->firstOrFail();
+
+        $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('parental-consent.download', $upload->id))
+            ->assertOk();
+
+        // The clinic still reads it, as before.
+        $this->flushSession()->withSession([
+            'active_role' => 'school_nurse',
+            'active_name' => 'Ana Reyes',
+            'active_institution_id' => $this->institution->id,
+        ])->get(route('parental-consent.download', $upload->id))->assertOk();
+    }
+
+    /**
+     * An adviser is scoped twice, and the second lock holds here too: another
+     * class's consent form is a document about a child they do not teach.
+     */
+    /** @test */
+    public function another_classes_consent_form_is_not_served_to_an_adviser(): void
+    {
+        $this->enrol();
+
+        $this->flushSession()->withSession($this->adviserSession())
+            ->post(route('parental-consent.store'), [
+                'lrn' => '123456789012',
+                'consent' => UploadedFile::fake()->create('sulat-pahibalo.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $upload = ParentalConsentForm::latest('id')->firstOrFail();
+
+        $other = $this->adviserSession();
+        $other['assigned_section'] = 'Rosal';
+
+        $this->flushSession()->withSession($other)
+            ->get(route('parental-consent.download', $upload->id))
+            ->assertNotFound();
+
+        // And a role with no business here is still refused outright.
+        $this->flushSession()->withSession([
+            'active_role' => 'feeding_coor',
+            'active_name' => 'Coordinator',
+            'active_institution_id' => $this->institution->id,
+        ])->get(route('parental-consent.download', $upload->id))->assertForbidden();
+    }
+
+    /** A re-upload shows the latest form, and the rows are kept as history. */
+    /** @test */
+    public function a_reupload_shows_the_latest_form(): void
+    {
+        $this->enrol();
+
+        foreach (['first-try.pdf', 'corrected.pdf'] as $name) {
+            $this->flushSession()->withSession($this->adviserSession())
+                ->post(route('parental-consent.store'), [
+                    'lrn' => '123456789012',
+                    'consent' => UploadedFile::fake()->create($name, 40, 'application/pdf'),
+                ])
+                ->assertSessionHasNoErrors();
+        }
+
+        $this->assertSame(2, ParentalConsentForm::count(), 'Both uploads are kept.');
+
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'))
+            ->assertOk()
+            ->getContent();
+
+        $meta = $this->profileMeta($html);
+        $this->assertSame('corrected.pdf', $meta['consent_detail']['file_name']);
+    }
 }

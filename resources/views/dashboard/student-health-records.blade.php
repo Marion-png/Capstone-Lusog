@@ -180,13 +180,35 @@
 
                 <div class="shr-scroll">
                     <table class="shr-table">
+                        {{-- Baseline and endline are two column groups, each
+                             named on the table, because a weight with no period
+                             on it cannot be compared down a column. Every figure
+                             is the server's one reading
+                             (App\Support\NutritionalHealthStatus, carried on the
+                             roster row by StudentRosterSync) — the same values
+                             the profile's Nutritional Health Status tab prints,
+                             so a row and a profile cannot disagree. --}}
                         <thead>
+                            <tr class="shr-group-row">
+                                <th colspan="5"></th>
+                                <th colspan="4" class="shr-group">Baseline</th>
+                                <th colspan="4" class="shr-group">Endline</th>
+                                <th colspan="3"></th>
+                            </tr>
                             <tr>
                                 <th>LRN</th>
                                 <th>Student Name</th>
                                 <th>Gender</th>
                                 <th>Age</th>
                                 <th>Section</th>
+                                <th>Weight</th>
+                                <th>Height</th>
+                                <th>BMI</th>
+                                <th>Status</th>
+                                <th>Weight</th>
+                                <th>Height</th>
+                                <th>BMI</th>
+                                <th>Status</th>
                                 <th>Health Status</th>
                                 <th>Profile</th>
                                 <th>Action</th>
@@ -204,6 +226,24 @@
                                     $rowSex = trim((string) ($record['gender'] ?? ''));
                                     $rowHealth = trim((string) ($record['nutritional_status_bmi_for_age'] ?? ''));
                                     $examined = ! empty($record['examination']);
+
+                                    // Never recomputed here: the figures and the
+                                    // classification are the ones the server
+                                    // already decided for this learner.
+                                    $nutrition = is_array($record['nutrition'] ?? null) ? $record['nutrition'] : [];
+                                    $phases = [
+                                        'baseline' => is_array($nutrition['baseline'] ?? null) ? $nutrition['baseline'] : [],
+                                        'endline' => is_array($nutrition['endline'] ?? null) ? $nutrition['endline'] : [],
+                                    ];
+
+                                    // A phase nobody measured is an em dash on
+                                    // its own four cells — never the other
+                                    // phase's figures, and never a zero.
+                                    $cell = function (array $phase, string $key, string $unit = ''): string {
+                                        $value = trim((string) ($phase[$key] ?? ''));
+
+                                        return $value === '' ? '—' : ($unit === '' ? $value : $value.' '.$unit);
+                                    };
                                 @endphp
                                 <tr class="js-record-row"
                                     data-record='@json($record, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP)'
@@ -218,6 +258,13 @@
                                     <td>{{ $rowSex !== '' ? $rowSex : '-' }}</td>
                                     <td>{{ $record['age'] ?? '-' }}</td>
                                     <td>{{ $rowSection !== '' ? $rowSection : '-' }}</td>
+                                    @foreach (['baseline', 'endline'] as $phaseKey)
+                                        @php $phase = $phases[$phaseKey]; @endphp
+                                        <td class="shr-num">{{ $cell($phase, 'weight_kg', 'kg') }}</td>
+                                        <td class="shr-num">{{ $cell($phase, 'height_cm', 'cm') }}</td>
+                                        <td class="shr-num">{{ $cell($phase, 'bmi', 'kg/m²') }}</td>
+                                        <td>{{ $cell($phase, 'bmi_status') }}</td>
+                                    @endforeach
                                     <td>{{ $rowHealth !== '' ? $rowHealth : 'Not assessed' }}</td>
                                     <td>
                                         <span class="shr-status {{ $examined ? 'is-done' : 'is-pending' }}">{{ $examined ? 'Examined' : 'Pending' }}</span>
@@ -231,7 +278,7 @@
                                 </tr>
                             @empty
                                 <tr class="js-records-empty">
-                                    <td colspan="8">
+                                    <td colspan="16">
                                         <div class="shr-empty">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
                                             <h4>No Adviser Submissions Yet</h4>
@@ -241,7 +288,7 @@
                                 </tr>
                             @endforelse
                             <tr class="js-records-nomatch" hidden>
-                                <td colspan="8">
+                                <td colspan="16">
                                     <div class="shr-empty">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                                         <h4>No Students Found</h4>
@@ -324,7 +371,7 @@
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-nutrition">Nutritional Health Status</button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-consent">Consent <span class="sp-tab-badge" id="pConsentBadge">&ndash;</span></button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-consultation">Consultation Log <span class="sp-tab-badge" id="pConsultBadge">0</span></button>
-            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-documents">Documents <span class="sp-tab-badge" id="pDocsBadge">0</span></button>
+            <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-documents">Medical Documents <span class="sp-tab-badge" id="pDocsBadge">0</span></button>
             <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="p-incidents">Incident Reports <span class="sp-tab-badge" id="vpIncidentsTabBadge">0</span></button>
         </div>
         <div class="student-profile-body">
@@ -557,6 +604,7 @@
     </div>{{-- /.student-profile-modal --}}
 </div>{{-- /.profile-backdrop --}}
 
+@include('partials.sheet2-review-script')
 @include('partials.student-documents-script')
 @include('partials.student-incidents-script')
 
@@ -707,92 +755,16 @@
         'No medical or family history was recorded for this learner.'
     );
 
-    // Sheet 2 as the nurse filled it on Fill Medical Record — F. body systems
-    // through J. summary, in the clinic's own layout. Until the nurse has
-    // filled it, the tab shows the adviser's checklist as before. Built from
-    // DOM nodes: every value is something a person typed about a child.
-    const SHEET2_SYSTEMS = @json(\App\Support\Sheet2Review::SYSTEMS);
-
-    const renderSheet2 = (host, sheet) => {
-        host.textContent = '';
-        const text = (v) => (v === null || v === undefined) ? '' : String(v);
-        const dash = (v) => text(v).trim() !== '' ? text(v) : '—';
-
-        const section = (title) => {
-            const h = document.createElement('div');
-            h.className = 'sp-review-title s2-section';
-            h.textContent = title;
-            host.appendChild(h);
-        };
-        const kvGrid = (pairs) => {
-            const grid = document.createElement('div');
-            grid.className = 'student-profile-grid';
-            pairs.forEach(([label, value]) => {
-                const cell = document.createElement('div');
-                const k = document.createElement('span');
-                k.textContent = label + ':';
-                const v = document.createElement('b');
-                v.textContent = dash(value);
-                cell.append(k, v);
-                grid.appendChild(cell);
-            });
-            host.appendChild(grid);
-        };
-
-        section('F. Evaluation of Body Systems');
-        const table = document.createElement('table');
-        table.className = 's2-table';
-        const thead = document.createElement('thead');
-        const hr = document.createElement('tr');
-        ['Body System', 'Findings', 'Notes / Details'].forEach((t) => {
-            const th = document.createElement('th');
-            th.textContent = t;
-            hr.appendChild(th);
-        });
-        thead.appendChild(hr);
-        table.appendChild(thead);
-        const tbody = document.createElement('tbody');
-        const systems = (sheet && sheet.systems) || {};
-        Object.entries(SHEET2_SYSTEMS).forEach(([key, label]) => {
-            const row = systems[key] || {};
-            const tr = document.createElement('tr');
-            const th = document.createElement('th');
-            th.scope = 'row';
-            th.textContent = label;
-            const finding = document.createElement('td');
-            finding.textContent = dash(row.finding);
-            if (text(row.finding) === 'Abnormal') finding.className = 'is-abnormal';
-            const notes = document.createElement('td');
-            notes.textContent = text(row.notes);
-            tr.append(th, finding, notes);
-            tbody.appendChild(tr);
-        });
-        table.appendChild(tbody);
-        host.appendChild(table);
-
-        const vision = (sheet && sheet.vision) || {};
-        const hearing = (sheet && sheet.hearing) || {};
-        section('G. Vision and Hearing Screening');
-        kvGrid([['Right Eye', vision.right], ['Left Eye', vision.left], ['Vision Result', vision.result], ['Hearing Result', hearing.result]]);
-
-        const oral = (sheet && sheet.oral) || {};
-        section('H. Oral Health Examination');
-        kvGrid([['Teeth Condition', oral.teeth], ['Last Dental Visit', oral.last_visit || 'N/A'], ['Referral', oral.referral]]);
-
-        const imm = (sheet && sheet.immunization) || {};
-        section('I. Immunization Status');
-        kvGrid([['Status', imm.status], ['Missing / Needed Vaccines', imm.missing || 'None'], ['Date Record Reviewed', imm.reviewed_at]]);
-
-        const summary = (sheet && sheet.summary) || {};
-        section('J. Assessment Summary and Recommendations');
-        kvGrid([['Summary of Findings', summary.findings], ['Recommendations / Referrals', summary.recommendations], ['Examiner', summary.examiner], ['Date', summary.date]]);
-    };
+    // Sheet 2's layout is one renderer, shared with the class adviser's
+    // profile: partials/sheet2-review-script exposes window.Sheet2Render.
+    // It used to live inline here and nowhere else, which is why the
+    // adviser's own profile could not show a sheet the nurse had filled.
 
     const renderSystemsReview = (review, examination) => {
         const host = document.getElementById('pdSystemsReview');
-        const sheet = examination && typeof examination === 'object' ? examination.sheet2 : null;
-        if (host && sheet && typeof sheet === 'object' && Object.keys(sheet).length > 0) {
-            renderSheet2(host, sheet);
+        const sheet = Sheet2Render.fromExamination(examination);
+        if (host && Sheet2Render.isFilled(sheet)) {
+            Sheet2Render.into(host, sheet);
             return;
         }
         renderReview(
@@ -960,10 +932,17 @@
                 return;
             }
 
+            // A figure carries its unit; one nobody took falls through to
+            // dash() like the statuses do, so a row reads one way.
+            const unit = (value, u) => {
+                const text = String(value == null ? '' : value).trim();
+                return text === '' ? '' : text + ' ' + u;
+            };
+
             const rows = [
-                ['Height', p.height_cm ? p.height_cm + ' cm' : ''],
-                ['Weight', p.weight_kg ? p.weight_kg + ' kg' : ''],
-                ['BMI', p.bmi],
+                ['Height', unit(p.height_cm, 'cm')],
+                ['Weight', unit(p.weight_kg, 'kg')],
+                ['BMI', unit(p.bmi, 'kg/m²')],
                 ['BMI-for-Age', p.bmi_status],
                 ['Height-for-Age', p.hfa_status],
             ];
@@ -1183,6 +1162,18 @@
 
                 const medCertRow = `<div class="kv"><div class="k">Med. Cert Attached:</div><div class="v">${data.medical_cert_attached ? 'Yes' : 'No'}</div></div>`;
 
+                // The button already opened the document; this says which
+                // document it is, off the same row the upload wrote. The filed
+                // name is whatever the uploader's own machine called the file,
+                // so it is escaped before it goes near innerHTML.
+                const escName = (v) => String(v == null ? '' : v)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+                const fileRow = data.has_file
+                    ? `<div class="kv"><div class="k">Signed Form:</div><div class="v">${escName(data.file_name || 'Signed consent form')}</div></div>`
+                    : '';
+
                 const viewBtn = data.has_file && data.consent_id
                     ? `<div style="margin-top:14px;">
                            <a href="/parental-consent/${data.consent_id}/download" target="_blank" rel="noopener noreferrer"
@@ -1207,6 +1198,7 @@
                     <div class="kv" style="margin-top:8px;border-top:1px solid #DCE8E0;padding-top:8px;"><div class="k">School Year:</div><div class="v">${data.school_year || '—'}</div></div>
                     <div class="kv"><div class="k">Submitted By:</div><div class="v">${data.uploaded_by || '—'}</div></div>
                     <div class="kv"><div class="k">Submitted On:</div><div class="v">${data.uploaded_at || '—'}</div></div>
+                    ${fileRow}
                     ${viewBtn}`;
 
             } else {
@@ -1246,7 +1238,7 @@
                 // tabs. Whose work is outstanding is what decides where.
                 const adviserPending = `
                     <div style="padding:10px 12px;background:#FDF4E2;border:1px solid #fcd34d;border-radius:8px;font-size:.78rem;color:#8A5A06;margin-bottom:16px;">
-                        The Class Adviser has not yet submitted an MLHAT health assessment for this student.
+                        The Class Adviser has not yet submitted an MLHAT Sheet 1 health assessment for this student.
                     </div>`;
 
                 // Sheet 1: the adviser's half of the card, so their

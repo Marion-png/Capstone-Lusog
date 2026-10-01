@@ -24,6 +24,7 @@ use App\Support\PriorityHealthRule;
 use App\Support\ProfileCompletionRule;
 use App\Support\RequestMemo;
 use App\Support\SchemaCache;
+use App\Support\Sheet2Review;
 use App\Support\StudentDataCompleteness;
 use App\Support\StudentMedicalDocuments;
 use App\Support\StudentRosterSync;
@@ -262,6 +263,7 @@ class StudentHealthRecordController extends Controller
                 'programme_complete' => false,
                 'completion_outstanding' => '',
                 'consent_detail' => [],
+                'sheet2' => ['source' => 'none', 'completed' => false, 'status' => 'Pending', 'examiner' => '', 'date' => ''],
                 'feeding' => [],
                 'documents' => collect(),
                 'consultations' => collect(),
@@ -364,6 +366,11 @@ class StudentHealthRecordController extends Controller
         $cycle = $this->adviserCycle($institutionId);
         $attendedIds = $this->recordsWithConfirmedAttendance($shRecords);
 
+        // The session roster keyed by LRN. The loop below walks LRNs, so a
+        // reading that needs the row itself (Sheet 2 falls back to it when a
+        // learner has no database record yet) has to look it up.
+        $rowByLrn = $roster->keyBy(fn ($row) => (string) ($row['lrn'] ?? ''));
+
         $meta = [];
         foreach ($lrns as $lrn) {
             $shRecord = $shRecords->get($lrn);
@@ -384,6 +391,16 @@ class StudentHealthRecordController extends Controller
                 'at_risk' => (bool) ($shRecord?->is_at_risk),
                 // Read-only summaries for the Consent and Nutritional Health
                 // Status tabs of the student profile.
+                // Sheet 2's standing, read off the sheet the nurse actually
+                // saved rather than a flag beside it. `Sheet2Review::read()` is
+                // the one reading — the nurse's form, their profile tab and the
+                // MLAT download all go through it — and its `source` is already
+                // the codebase's vocabulary: 'nurse' once the nurse has filled
+                // it, 'adviser' or 'none' before that. The adviser's panel used
+                // to render `systems_review` (their own checklist) and never
+                // look at `examination['sheet2']` at all, so a learner the nurse
+                // had examined still read "No systems review was recorded".
+                'sheet2' => $this->sheet2Standing($rowByLrn->get($lrn, []), $shRecord),
                 'consent_detail' => [
                     'status' => $consent
                         ? (HealthConsentForm::statusBadges()[$consent->status]['label'] ?? $consent->status)
@@ -404,6 +421,13 @@ class StudentHealthRecordController extends Controller
                     // consent: the guardian answered on paper, and the answer is
                     // read off the document rather than off this screen.
                     'answer_recorded' => ConsentStanding::uploadAnswerLabel($upload) !== null,
+                    // The document itself, off the same row the upload wrote:
+                    // its filed name and the one audited route that serves it.
+                    // A panel that says a form was returned and offers no way
+                    // to open it leaves the adviser unable to check their own
+                    // filing.
+                    'file_name' => $returned ? ($upload->file_original_name ?: 'Signed consent form') : null,
+                    'file_url' => $returned ? route('parental-consent.download', $upload->id) : null,
                 ],
                 'feeding' => [
                     'baseline_status' => $shRecord?->baseline_nutritional_status,
@@ -770,6 +794,46 @@ class StudentHealthRecordController extends Controller
             ->forCurrentSchoolYear()
             ->get()
             ->keyBy('student_id'));
+    }
+
+    /**
+     * Where one learner's Sheet 2 stands, and who signed it.
+     *
+     * Display only: the adviser reads this sheet and cannot write it (the
+     * guarantee is `AdviserController::enrolLearner`, which keeps whatever is
+     * on file and ignores whatever the form posts). The labels are the two the
+     * nurse's own Health Assessment queue prints, so one learner's Sheet 2 is
+     * not "Completed" on one desk and something else on the other.
+     *
+     * @param  array<string, mixed>  $row  the session roster row
+     * @return array{source: string, completed: bool, status: string, examiner: string, date: string}
+     */
+    private function sheet2Standing(array $row, ?StudentHealthRecord $shRecord): array
+    {
+        // The database is the source of truth; the session row is a working
+        // copy that StudentRosterSync rebuilds from it. Prefer the record so a
+        // sheet the nurse saved seconds ago is read even if the session's copy
+        // is behind.
+        $examination = $shRecord?->examination ?? ($row['examination'] ?? []);
+        $examination = is_array($examination) ? $examination : [];
+
+        $details = $shRecord?->student_details;
+        $review = is_array($details) ? ($details['systems_review'] ?? null) : null;
+        $review ??= $row['systems_review'] ?? [];
+        $review = is_array($review) ? $review : [];
+
+        $sheet = Sheet2Review::read($examination, $review);
+        $completed = ($sheet['source'] ?? '') === 'nurse';
+
+        return [
+            'source' => (string) ($sheet['source'] ?? 'none'),
+            'completed' => $completed,
+            'status' => $completed ? 'Completed' : 'Pending',
+            // Who examined the learner and when, as the nurse's sheet records
+            // it — never a guess, so an unsigned sheet reports neither.
+            'examiner' => $completed ? (string) ($sheet['summary']['examiner'] ?? '') : '',
+            'date' => $completed ? (string) ($sheet['summary']['date'] ?? '') : '',
+        ];
     }
 
     /** This year's consent forms for a set of LRNs, keyed by LRN. */

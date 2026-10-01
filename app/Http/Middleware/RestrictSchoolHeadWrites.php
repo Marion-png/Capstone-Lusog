@@ -30,9 +30,12 @@ class RestrictSchoolHeadWrites
      * Deliberately short, and of exactly two kinds.
      *
      * The first is **how a person gets into or out of the app at all**: signing
-     * in, signing out, and asking for an account. None of it is school data —
-     * it is the browser's own session — and refusing it does not protect a
-     * learner's measurement, it strands whoever is sitting at the keyboard. A
+     * in, signing out, asking for an account, and changing the password on the
+     * account they are signed in with. None of it is school data — it is the
+     * browser's own session and the credential that session is made from — and
+     * refusing it does not protect a learner's measurement, it strands whoever
+     * is sitting at the keyboard. A head who cannot change their own password
+     * is a head who keeps the one the System Admin typed for them. A
      * session that still says `school_head` (a real head who has not signed
      * out, or a demo session this app seeds on any /dashboard/school-head URL)
      * would otherwise refuse the very form that replaces it, so signing in as
@@ -42,11 +45,14 @@ class RestrictSchoolHeadWrites
      * There is no second kind. The role's one write over school data — recording
      * a decision on a report — was removed with the Approve / Return / Lock
      * buttons, so the School Head now writes nothing at all beyond their own
-     * session. That is the invariant stated exactly: the head reads, monitors
-     * and exports; every other role writes.
+     * session and their own credential. That is the invariant stated exactly:
+     * the head reads, monitors and exports; every other role writes.
      *
      * Nothing that touches a learner's measurement, enrolment, attendance,
-     * inventory or an approved account belongs on this list.
+     * inventory or **another person's** account belongs on this list.
+     * `settings.password` is not an exception to that: it takes no account to
+     * act on, resolving the row from the session in `AccountSettings`, so the
+     * only account a head can reach through it is the one they are using.
      *
      * Every entry must be a name a write route actually carries. An unnamed
      * POST route reports its name as null, matches nothing here, and is refused
@@ -59,6 +65,7 @@ class RestrictSchoolHeadWrites
         'logout',
         'admin.login.submit',
         'account.request.submit',
+        'settings.password',
     ];
 
     /** Methods that change state. Everything else is a read. */

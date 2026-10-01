@@ -403,7 +403,7 @@ class NurseHealthRecordsPageTest extends TestCase
 
         $response->assertSee('Consultation Log')
             ->assertSee('Consent')
-            ->assertSee('Documents');
+            ->assertSee('data-panel="p-documents">Medical Documents', false);
 
         // Live badge targets the scripts fill in.
         foreach (['pConsultBadge', 'pConsentBadge', 'pDocsBadge'] as $badgeId) {
@@ -835,12 +835,12 @@ class NurseHealthRecordsPageTest extends TestCase
     /**
      * Two absences, two tabs — decided by whose work is outstanding.
      *
-     * "The Class Adviser has not yet submitted an MLHAT" is a fact about
-     * Sheet 1, the adviser's half of the card, so it is said there whatever
-     * the nurse has done. "No health assessment on file" was on Sheet 2, above
-     * the nurse's own systems review — and once the nurse has filled that
-     * sheet it contradicts the panel underneath it, so it is drawn only while
-     * Sheet 2 is genuinely empty.
+     * "The Class Adviser has not yet submitted an MLHAT Sheet 1 health
+     * assessment" is a fact about Sheet 1, the adviser's half of the card, so
+     * it is said there whatever the nurse has done. "No health assessment on
+     * file" was on Sheet 2, above the nurse's own systems review — and once
+     * the nurse has filled that sheet it contradicts the panel underneath it,
+     * so it is drawn only while Sheet 2 is genuinely empty.
      */
     #[Test]
     public function the_mlhat_notices_sit_on_the_tab_whose_work_is_outstanding(): void
@@ -913,5 +913,114 @@ class NurseHealthRecordsPageTest extends TestCase
         // one learner's history start disagreeing.
         $this->assertSame(2, substr_count($html, 'class="js-history-list"'));
         $this->assertStringContainsString("querySelectorAll('.js-history-list')", $html);
+    }
+
+    /**
+     * The roster lists both weigh-ins, each named, each with its own figures.
+     *
+     * One "Health Status" column said nothing about which weighing it came
+     * from, and the figures behind it were only on the profile. The two periods
+     * are two column groups now, and every value is the server's one reading
+     * (NutritionalHealthStatus, carried on the row by StudentRosterSync) — so a
+     * row and that learner's profile tab cannot print different numbers.
+     */
+    #[Test]
+    public function the_roster_lists_both_weigh_ins_with_their_figures(): void
+    {
+        $record = StudentHealthRecord::create([
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'institution_id' => $this->institution->id,
+            'student_id' => '100000000001',
+            'student_name' => 'Gomez, Jose',
+            'school_name' => 'Sta. Ana NHS',
+            'section' => 'Grade 10 / Dalton',
+            'weight' => 40,
+            'bmi_value' => 17.8,
+            'nutritional_status' => 'Wasted',
+            'baseline_height_cm' => 150,
+            'baseline_weight_kg' => 40,
+            'baseline_bmi_value' => 17.8,
+            'baseline_nutritional_status' => 'Wasted',
+            'baseline_recorded_at' => '2026-07-01',
+            'endline_height_cm' => 152,
+            'endline_weight_kg' => 45,
+            'endline_bmi_value' => 19.5,
+            'endline_nutritional_status' => 'Normal',
+            'endline_recorded_at' => '2026-12-01',
+        ]);
+
+        $html = $this->withSession($this->nurseSession([]))
+            ->get('/dashboard/student-health-records')
+            ->assertOk()
+            ->getContent();
+
+        // Two named groups over four columns each.
+        $this->assertStringContainsString('class="shr-group">Baseline</th>', $html);
+        $this->assertStringContainsString('class="shr-group">Endline</th>', $html);
+
+        // Both periods' figures, each with its unit, from the stored values.
+        foreach (['40 kg', '150 cm', '17.8 kg/m²', 'Wasted',
+            '45 kg', '152 cm', '19.5 kg/m²', 'Normal'] as $cell) {
+            $this->assertStringContainsString($cell, $html, $cell.' must be on the row.');
+        }
+
+        // The empty rows span the wider table rather than stopping short.
+        $this->assertStringNotContainsString('colspan="8"', $html);
+
+        $this->assertNotNull($record->fresh());
+    }
+
+    /**
+     * An unrecorded endline empties its own four cells and nothing else.
+     *
+     * The other period keeps its figures: a learner nobody has re-weighed is
+     * not a learner with no baseline, and carrying one phase across to the
+     * other is the error NutritionalHealthStatus exists to prevent.
+     */
+    #[Test]
+    public function a_missing_endline_dashes_only_its_own_cells(): void
+    {
+        StudentHealthRecord::create([
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'institution_id' => $this->institution->id,
+            'student_id' => '100000000002',
+            'student_name' => 'Reyes, Ana',
+            'school_name' => 'Sta. Ana NHS',
+            'section' => 'Grade 10 / Dalton',
+            'weight' => 38,
+            'bmi_value' => 16.9,
+            'nutritional_status' => 'Wasted',
+            'baseline_height_cm' => 150,
+            'baseline_weight_kg' => 38,
+            'baseline_bmi_value' => 16.9,
+            'baseline_nutritional_status' => 'Wasted',
+            'baseline_recorded_at' => '2026-07-01',
+        ]);
+
+        $html = $this->withSession($this->nurseSession([]))
+            ->get('/dashboard/student-health-records')
+            ->assertOk()
+            ->getContent();
+
+        // The baseline still reads.
+        $this->assertStringContainsString('38 kg', $html);
+        $this->assertStringContainsString('16.9 kg/m²', $html);
+
+        // The row carries four em-dashed cells for the weighing nobody took,
+        // and no endline figure is invented from the baseline.
+        $row = $this->rosterRow($html, '100000000002');
+        $this->assertSame(4, substr_count($row, '>—</td>'), 'The endline cells are empty, and only those.');
+        $this->assertStringNotContainsString('0 kg', $row);
+    }
+
+    /** One learner's row out of the roster table. */
+    private function rosterRow(string $html, string $lrn): string
+    {
+        $start = strpos($html, 'data-lrn="'.$lrn.'"');
+        $this->assertNotFalse($start, 'The learner must be on the roster.');
+        $end = strpos($html, '</tr>', $start);
+        $this->assertNotFalse($end);
+
+        return substr($html, $start, $end - $start);
     }
 }

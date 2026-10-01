@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
+use App\Support\AdviserClassScope;
 use App\Support\EncryptedFileStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -184,19 +185,33 @@ class ParentalConsentFormController extends Controller
             'other_illness_detail' => $form?->other_illness_detail,
             'medical_cert_attached' => (bool) $form?->medical_cert_attached,
             'has_file' => $form?->file_path !== null,
+            // The name the guardian's form was filed under, off the same row
+            // the upload wrote it to. A screen that offers the document should
+            // be able to say which document it is offering.
+            'file_name' => $form?->file_path !== null ? ($form->file_original_name ?: null) : null,
         ]);
     }
 
     /**
      * Serve a consent form file for download.
-     * Restricted to school_nurse and clinic_staff.
+     *
+     * The clinic reads it, and so does **the learner's own class adviser** —
+     * they are the desk that scanned the guardian's form and filed it, and a
+     * role that may upload a document but never open it again cannot check its
+     * own work. The same split `MlatExportController::download` keeps, and the
+     * same per-section test: `AdviserClassScope::coversRecord()`, so an adviser
+     * reaches their own class and no colleague's. `parental-consent/*` is
+     * already in `AuditSensitiveAccess::SENSITIVE_PATTERNS`, so every one of
+     * these reads is recorded whoever made it.
      */
     public function download(Request $request, int $id): Response
     {
+        $role = (string) $request->session()->get('active_role', '');
+
         abort_unless(
-            in_array($request->session()->get('active_role'), ['clinic_staff', 'school_nurse'], true),
+            in_array($role, ['clinic_staff', 'school_nurse', 'class_adviser'], true),
             403,
-            'Only Clinic Staff or School Nurse may download consent forms.'
+            'Only the clinic or the learner\'s class adviser may open consent forms.'
         );
 
         $form = ParentalConsentForm::with('studentHealthRecord')->find($id);
@@ -209,6 +224,17 @@ class ParentalConsentFormController extends Controller
             404,
             'Consent form not found.'
         );
+
+        // An adviser is scoped twice — to their school, and within it to one
+        // class. Fails closed: no record to test against is not a pass.
+        if ($role === 'class_adviser') {
+            $record = $form->studentHealthRecord;
+            abort_if(
+                $record === null || ! AdviserClassScope::coversRecord($request, $record),
+                404,
+                'Consent form not found.'
+            );
+        }
 
         abort_if($form->file_path === null, 404, 'No file was uploaded for this consent record.');
 

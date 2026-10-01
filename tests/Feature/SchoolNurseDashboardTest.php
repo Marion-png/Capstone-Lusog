@@ -341,4 +341,107 @@ class SchoolNurseDashboardTest extends TestCase
         $this->assertSame(0, $response->viewData('consultationsToday'));
         $response->assertDontSee('Outsider, Nina')->assertDontSee('Migraine');
     }
+
+    /**
+     * The Health Assessment queue's action follows the Status beside it.
+     *
+     * A row reading "Completed" used to offer "Fill Medical Record", telling
+     * the nurse to do work that is already on file. Both states open the one
+     * existing form, so this is the label and the affordance changing, never a
+     * second form or a second way to write an examination.
+     */
+    #[Test]
+    public function a_completed_row_offers_an_edit_and_a_pending_row_a_fill(): void
+    {
+        $session = $this->nurseSession();
+        $session['school_health_card_records'] = [
+            [
+                'last_name' => 'Gomez', 'first_name' => 'Jose',
+                'lrn' => '100000000001', 'grade_level' => 'Grade 10', 'section' => 'Dalton',
+                // Nothing on file: this learner is Pending.
+                'examination' => [],
+            ],
+            [
+                'last_name' => 'Reyes', 'first_name' => 'Ana',
+                'lrn' => '100000000002', 'grade_level' => 'Grade 10', 'section' => 'Dalton',
+                // The nurse has examined this one: Completed.
+                'examination' => ['date_of_examination' => now()->toDateString()],
+            ],
+        ];
+
+        $html = $this->withSession($session)->get('/nurse')->assertOk()->getContent();
+
+        // One of each, and each keyed to its own row's form.
+        $this->assertSame(1, substr_count($html, 'Fill Medical Record'));
+        $this->assertSame(1, substr_count($html, 'aria-label="Edit Medical Record"'));
+        $this->assertStringContainsString('Edit Medical Record', $html);
+
+        $pendingAt = strpos($html, route('nurse.examine', 0));
+        $completedAt = strpos($html, route('nurse.examine', 1));
+        $this->assertNotFalse($pendingAt);
+        $this->assertNotFalse($completedAt);
+        $this->assertTrue(
+            $pendingAt < strpos($html, 'Fill Medical Record') && strpos($html, 'Fill Medical Record') < $completedAt,
+            'The Fill button belongs to the row with nothing on file.'
+        );
+
+        // The pencil carries its own accessible name — the label is beside it,
+        // but the glyph is what a nurse aims at.
+        $this->assertStringContainsString('aria-label="Edit Medical Record"', $html);
+        $this->assertStringContainsString('title="Edit Medical Record"', $html);
+
+        // Both states read the same Status the row prints, so the badge and the
+        // button cannot disagree about one learner.
+        $this->assertStringContainsString('>Completed</span>', $html);
+        $this->assertStringContainsString('>Pending</span>', $html);
+    }
+
+    /**
+     * One form, whichever button opened it — and its save updates the row it
+     * was opened on rather than filing a second examination.
+     */
+    #[Test]
+    public function editing_a_completed_record_reopens_the_one_form_and_updates_in_place(): void
+    {
+        $record = StudentHealthRecord::create([
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'institution_id' => $this->institution->id,
+            'student_id' => '100000000002',
+            'student_name' => 'Reyes, Ana',
+            'school_name' => 'Sta. Ana NHS',
+            'section' => 'Grade 10 / Dalton',
+            'weight' => 42.0,
+            'bmi_value' => 17.1,
+            'nutritional_status' => 'Wasted',
+            'examination' => ['date_of_examination' => '2026-09-01', 'others' => 'First pass'],
+        ]);
+
+        $session = $this->nurseSession();
+        $session['school_health_card_records'] = [
+            [
+                'last_name' => 'Reyes', 'first_name' => 'Ana',
+                'lrn' => '100000000002', 'grade_level' => 'Grade 10', 'section' => 'Dalton',
+                'height_cm' => 150, 'weight_kg' => 42,
+                'examination' => ['date_of_examination' => '2026-09-01', 'others' => 'First pass'],
+            ],
+        ];
+
+        // The form opens prefilled with what is already on file.
+        $this->withSession($session)
+            ->get(route('nurse.examine', 0))
+            ->assertOk()
+            ->assertSee('value="2026-09-01"', false);
+
+        $before = StudentHealthRecord::count();
+
+        $this->withSession($session)->post(route('nurse.examine.save', 0), [
+            'date_of_examination' => '2026-09-20',
+            'others' => 'Corrected on review',
+        ])->assertRedirect();
+
+        // The same record, updated — not a second one.
+        $this->assertSame($before, StudentHealthRecord::count());
+        $this->assertSame('2026-09-20', $record->fresh()->examination['date_of_examination']);
+        $this->assertSame('Corrected on review', $record->fresh()->examination['others']);
+    }
 }

@@ -87,7 +87,7 @@
 
             <div class="sp-tabs" role="tablist" aria-label="Student profile sections">
                 <button type="button" class="sp-tab active" role="tab" aria-selected="true" data-panel="vpTabSheet1">Sheet 1 <span class="sp-tab-badge">Learner Info</span></button>
-                <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabSheet2">Sheet 2 <span class="sp-tab-badge">Systems Review</span></button>
+                <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabSheet2">Sheet 2 <span class="sp-tab-badge" id="vpSheet2TabBadge">&ndash;</span></button>
                 <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabConsent">Consent <span class="sp-tab-badge" id="vpConsentTabBadge">&ndash;</span></button>
                 <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabFeeding">Nutritional Health Status <span class="sp-tab-badge" id="vpFeedingTabBadge">&ndash;</span></button>
                 <button type="button" class="sp-tab" role="tab" aria-selected="false" data-panel="vpTabNotes">Clinic Notes <span class="sp-tab-badge" id="vpNotesTabBadge">0</span></button>
@@ -156,6 +156,13 @@
             <div class="sp-panel" id="vpTabSheet2" role="tabpanel">
                 <section class="student-profile-section">
                     <h4>Systems Review</h4>
+                    {{-- Sheet 2 is the School Nurse's, so its standing is read off
+                         the sheet they saved (App\Support\Sheet2Review through the
+                         roster meta) and never off a flag kept here. The panel used
+                         to render the adviser's own checklist alone, so a learner
+                         the nurse had examined still read "No systems review was
+                         recorded". Display only: nothing here writes the sheet. --}}
+                    <div class="sp-sheet2-standing" id="vpSheet2Standing" hidden></div>
                     <div id="vpSystemsReview"></div>
                 </section>
             </div>
@@ -177,6 +184,11 @@
                         <div><span>Signed by guardian:</span><b id="vpConsentSigned">-</b></div>
                         <div><span>Reviewed by adviser:</span><b id="vpConsentReviewed">-</b></div>
                     </div>
+                    {{-- The uploaded form itself. It is served by the one audited
+                         route (parental-consent.download), re-scoped to this
+                         adviser's own class, so the link is the document rather
+                         than a copy of it. --}}
+                    <div class="sp-consent-file" id="vpConsentFile" hidden></div>
                     <div class="sp-note">Open the Consent Forms page to send, review, or print this learner's Sulat-Pahibalo.</div>
                 </section>
             </div>
@@ -269,6 +281,7 @@
     </div>
 </div>
 
+@include('partials.sheet2-review-script')
 @include('partials.student-documents-script')
 @include('partials.student-incidents-script', ['lrn' => $lrn])
 {{-- Profile photo. The adviser sets it; everyone permitted sees it in place
@@ -386,9 +399,21 @@ const STUDENT_PROFILE_LRN = @json($lrn);
 
     // Built with DOM nodes rather than innerHTML: every value here is
     // adviser-typed free text.
-    const renderSystemsReview = (review) => {
+    // Sheet 2 belongs to the School Nurse, so when they have filled it this
+    // panel shows *their* sheet, through the one shared renderer
+    // (partials/sheet2-review-script) rather than a second layout of it. The
+    // adviser's own checklist is the fallback for a learner the nurse has not
+    // examined yet — it is what Sheet 2 was before the nurse's form existed,
+    // and those older reviews are still read here.
+    const renderSystemsReview = (review, examination) => {
         const host = document.getElementById('vpSystemsReview');
         if (!host) {
+            return;
+        }
+
+        const nurseSheet = Sheet2Render.fromExamination(examination);
+        if (Sheet2Render.isFilled(nurseSheet)) {
+            Sheet2Render.into(host, nurseSheet);
             return;
         }
 
@@ -788,7 +813,38 @@ const STUDENT_PROFILE_LRN = @json($lrn);
         setText('vpS1Sex', record.gender || '-');
         setText('vpS1GradeSection', gradeSection);
 
-        renderSystemsReview(record.systems_review);
+        // The nurse's examination travels on the same row (StudentRosterSync
+        // carries `examination`), and the standing beside it is the server's one
+        // reading of it — so the badge, the notice and the panel cannot disagree
+        // about whether Sheet 2 is on file.
+        const sheet2 = meta.sheet2 || {};
+        setText('vpSheet2TabBadge', sheet2.status || 'Pending');
+
+        const standing = document.getElementById('vpSheet2Standing');
+        if (standing) {
+            standing.textContent = '';
+            standing.hidden = false;
+
+            const strong = document.createElement('strong');
+            const line = document.createElement('span');
+
+            if (sheet2.completed) {
+                strong.textContent = 'Sheet 2 completed';
+                const by = sheet2.examiner ? ' by ' + sheet2.examiner : '';
+                const on = sheet2.date ? ' on ' + sheet2.date : '';
+                line.textContent = 'The School Nurse recorded this learner\u2019s systems review'
+                    + by + on + '. Their sheet is below, as they filed it.';
+                standing.className = 'sp-sheet2-standing is-done';
+            } else {
+                strong.textContent = 'Sheet 2 pending';
+                line.textContent = 'The School Nurse has not yet recorded this learner\u2019s systems review on Fill Medical Record.';
+                standing.className = 'sp-sheet2-standing';
+            }
+
+            standing.append(strong, line);
+        }
+
+        renderSystemsReview(record.systems_review, record.examination);
         renderHealthHistory(record.health_history);
 
         const history = record.health_history && typeof record.health_history === 'object'
@@ -849,12 +905,46 @@ const STUDENT_PROFILE_LRN = @json($lrn);
             if (returnedNote) { returnedNote.textContent = ''; returnedNote.hidden = true; }
         }
 
+        // The document, when one is on file. Built from DOM nodes: the filed
+        // name is whatever the uploader's own machine called the file.
+        const fileBox = document.getElementById('vpConsentFile');
+        if (fileBox) {
+            fileBox.textContent = '';
+            fileBox.hidden = !(consent.returned && consent.file_url);
+
+            if (!fileBox.hidden) {
+                const label = document.createElement('span');
+                label.className = 'sp-consent-file-name';
+                label.textContent = consent.file_name || 'Signed consent form';
+
+                const meta = document.createElement('span');
+                meta.className = 'sp-consent-file-meta';
+                meta.textContent = consent.returned_at ? 'Uploaded ' + consent.returned_at : '';
+
+                const open = document.createElement('a');
+                open.className = 'sp-consent-file-open';
+                open.href = consent.file_url;
+                open.target = '_blank';
+                open.rel = 'noopener noreferrer';
+                open.textContent = 'View consent form';
+
+                fileBox.append(label, meta, open);
+            }
+        }
+
         // Baseline against endline. A phase nobody measured is an em dash,
         // never the other phase's figures — the server sends blanks for it and
         // this only prints what it was sent.
         const nutrition = meta.nutrition || {};
         const nhsTable = document.getElementById('vpNhsTable');
         const nhsEmpty = document.getElementById('vpNhsEmpty');
+        // A figure carries its unit; a figure nobody took is an em dash, the
+        // same mark the statuses and the list columns use.
+        const nhsUnit = (value, unit) => {
+            const text = String(value == null ? '' : value).trim();
+            return text === '' ? '—' : text + ' ' + unit;
+        };
+
         const nhsDash = (value) => {
             const text = String(value == null ? '' : value).trim();
             return text === '' ? '\u2014' : text;
@@ -867,9 +957,9 @@ const STUDENT_PROFILE_LRN = @json($lrn);
         }
 
         [['B', nutrition.baseline || {}], ['E', nutrition.endline || {}]].forEach(([suffix, phase]) => {
-            setText('vpNhsHeight' + suffix, phase.height_cm ? `${phase.height_cm} cm` : '');
-            setText('vpNhsWeight' + suffix, phase.weight_kg ? `${phase.weight_kg} kg` : '');
-            setText('vpNhsBmi' + suffix, nhsDash(phase.bmi));
+            setText('vpNhsHeight' + suffix, nhsUnit(phase.height_cm, 'cm'));
+            setText('vpNhsWeight' + suffix, nhsUnit(phase.weight_kg, 'kg'));
+            setText('vpNhsBmi' + suffix, nhsUnit(phase.bmi, 'kg/m²'));
             setText('vpNhsBmiStatus' + suffix, nhsDash(phase.bmi_status));
             setText('vpNhsHfa' + suffix, nhsDash(phase.hfa_status));
         });

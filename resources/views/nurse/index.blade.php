@@ -159,10 +159,26 @@
                                 @endif
                             </td>
                             <td>
-                                <a href="{{ route('nurse.examine', $index) }}" class="btn btn-primary">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                    Fill Medical Record
-                                </a>
+                                {{-- The action follows the Status beside it, read off the
+                                     same `$examined` rather than a second test of its own:
+                                     a row reading Completed used to offer "Fill Medical
+                                     Record", telling the nurse to do work that is already
+                                     on file. Both branches open the one existing form
+                                     (`nurse.examine`), which prefills from the record and
+                                     whose save updates it in place — there is no second
+                                     form and no second write path. --}}
+                                @if ($examined)
+                                    <a href="{{ route('nurse.examine', $index) }}" class="btn btn-secondary"
+                                       title="Edit Medical Record" aria-label="Edit Medical Record">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                        Edit Medical Record
+                                    </a>
+                                @else
+                                    <a href="{{ route('nurse.examine', $index) }}" class="btn btn-primary">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                        Fill Medical Record
+                                    </a>
+                                @endif
                             </td>
                         </tr>
                     @empty

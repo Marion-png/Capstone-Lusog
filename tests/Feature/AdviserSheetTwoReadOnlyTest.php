@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
+use App\Support\Sheet2Review;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -307,5 +308,227 @@ class AdviserSheetTwoReadOnlyTest extends TestCase
         $this->assertStringNotContainsString('<input', $panel);
         $this->assertStringNotContainsString('<textarea', $panel);
         $this->assertStringNotContainsString('name="systems_review', $panel);
+    }
+
+    /**
+     * The nurse fills Sheet 2; the adviser's profile says so.
+     *
+     * The panel rendered `systems_review` — the adviser's own checklist — and
+     * never looked at `examination['sheet2']`, where the nurse's sheet is
+     * saved, so a learner the nurse had examined still read "No systems review
+     * was recorded for this learner" on the adviser's desk. The standing is
+     * derived from the one saved sheet through Sheet2Review, never from a
+     * second flag beside it that could drift.
+     */
+    #[Test]
+    public function a_sheet_the_nurse_filled_reads_as_completed_on_the_advisers_profile(): void
+    {
+        $record = $this->enrolledLearner();
+
+        // The adviser's own checklist is on file, and it is not the nurse's
+        // sheet: the tab stays Pending until the nurse has recorded one.
+        $meta = $this->profileMeta($record->student_id);
+        $this->assertSame('adviser', $meta['sheet2']['source']);
+        $this->assertFalse($meta['sheet2']['completed']);
+        $this->assertSame('Pending', $meta['sheet2']['status']);
+        $this->assertSame('', $meta['sheet2']['examiner']);
+
+        $this->nurseFillsSheetTwo($record);
+
+        $meta = $this->profileMeta($record->student_id);
+        $this->assertSame('nurse', $meta['sheet2']['source']);
+        $this->assertTrue($meta['sheet2']['completed']);
+        $this->assertSame('Completed', $meta['sheet2']['status']);
+
+        // Attributed to whoever examined the learner, on the date they did.
+        $this->assertSame('Ana Reyes', $meta['sheet2']['examiner']);
+        $this->assertSame('2026-09-15', $meta['sheet2']['date']);
+    }
+
+    /** A nurse's correction keeps it completed, and is read on the next load. */
+    #[Test]
+    public function the_nurses_edit_keeps_it_completed_and_reaches_the_adviser(): void
+    {
+        $record = $this->enrolledLearner();
+        $this->nurseFillsSheetTwo($record);
+
+        $examination = $record->fresh()->examination;
+        $examination[Sheet2Review::KEY]['summary']['findings'] = 'Corrected on review';
+        $record->update(['examination' => $examination]);
+
+        $meta = $this->profileMeta($record->student_id);
+        $this->assertTrue($meta['sheet2']['completed']);
+        $this->assertSame('Completed', $meta['sheet2']['status']);
+    }
+
+    /** It is display only: the panel renders no control over the nurse's sheet. */
+    #[Test]
+    public function the_standing_adds_no_way_for_the_adviser_to_write_sheet_two(): void
+    {
+        $record = $this->enrolledLearner();
+        $this->nurseFillsSheetTwo($record);
+
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', $record->student_id))
+            ->assertOk()
+            ->getContent();
+
+        $panel = $this->sheetTwoPanel($html);
+        $this->assertStringContainsString('id="vpSheet2Standing"', $panel);
+        $this->assertStringNotContainsString('<form', $panel);
+        $this->assertStringNotContainsString('name="systems_review', $panel);
+        $this->assertStringNotContainsString('<input', $panel);
+
+        // The badge carries the standing rather than a fixed caption.
+        $this->assertStringContainsString('id="vpSheet2TabBadge"', $html);
+        $this->assertStringNotContainsString('<span class="sp-tab-badge">Systems Review</span>', $html);
+    }
+
+    /** A learner in another class is still out of reach, standing or not. */
+    #[Test]
+    public function another_classes_learner_is_still_out_of_reach(): void
+    {
+        $record = $this->enrolledLearner();
+        $this->nurseFillsSheetTwo($record);
+
+        $session = $this->adviserSession();
+        $session['assigned_section'] = 'Rizal';
+
+        $this->flushSession()->withSession($session)
+            ->get(route('dashboard.class-adviser.student-profile', $record->student_id))
+            ->assertRedirect(route('dashboard.class-adviser', ['tab' => 'saved']));
+    }
+
+    /** The nurse's Sheet 2, in the one shape NurseController writes it in. */
+    private function nurseFillsSheetTwo(StudentHealthRecord $record): void
+    {
+        $examination = is_array($record->examination) ? $record->examination : [];
+        $examination[Sheet2Review::KEY] = Sheet2Review::fromInput([
+            'systems' => ['skin' => ['finding' => 'Normal', 'notes' => '']],
+            'vision_result' => 'Pass',
+            'hearing_result' => 'Passed Both',
+            'summary_findings' => 'Fit for class.',
+            'examiner' => 'Ana Reyes',
+            'examiner_date' => '2026-09-15',
+        ]);
+
+        $record->update(['examination' => $examination]);
+    }
+
+    /**
+     * The meta payload the adviser's profile renders its Sheet 2 tab from.
+     *
+     * @return array<string, mixed>
+     */
+    private function profileMeta(string $lrn): array
+    {
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', $lrn))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertSame(
+            1,
+            preg_match('/const STUDENT_PROFILE_META = (.+);$/m', $html, $m),
+            'The profile must hand its meta to the browser.'
+        );
+
+        $meta = json_decode(trim($m[1]), true);
+        $this->assertIsArray($meta);
+
+        return $meta;
+    }
+
+    /** The Sheet 2 panel alone, so an assertion cannot catch another tab. */
+    private function sheetTwoPanel(string $html): string
+    {
+        $start = strpos($html, 'id="vpTabSheet2"');
+        $this->assertNotFalse($start);
+        $end = strpos($html, 'id="vpTabConsent"', $start);
+        $this->assertNotFalse($end);
+
+        return substr($html, $start, $end - $start);
+    }
+
+    /**
+     * The adviser sees the nurse's sheet, through the one shared renderer.
+     *
+     * Reporting "Completed" above a panel that still read "No systems review
+     * was recorded" is two answers to one question. The nurse's renderer was
+     * inline on their own profile and nowhere else, so the only honest fix was
+     * to make it one partial both pages read — copying the layout would have
+     * given the clinic's sheet a second place to drift.
+     */
+    #[Test]
+    public function the_advisers_panel_renders_the_nurses_sheet_through_the_shared_partial(): void
+    {
+        $record = $this->enrolledLearner();
+        $this->nurseFillsSheetTwo($record);
+
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', $record->student_id))
+            ->assertOk()
+            ->getContent();
+
+        // One renderer, included rather than reimplemented.
+        $this->assertStringContainsString('window.Sheet2Render', $html);
+        $this->assertSame(
+            1,
+            substr_count($html, 'const renderSheet2 ='),
+            'Sheet 2 is laid out once, in the shared partial.'
+        );
+
+        // The panel reaches for the nurse's sheet before the adviser's checklist.
+        $this->assertStringContainsString('Sheet2Render.fromExamination(examination)', $html);
+        $this->assertStringContainsString('renderSystemsReview(record.systems_review, record.examination)', $html);
+
+        // The clinic's own section captions and grid travel with it.
+        $this->assertStringContainsString('F. Evaluation of Body Systems', $html);
+        $this->assertStringContainsString('J. Assessment Summary and Recommendations', $html);
+        $this->assertStringContainsString('.s2-table', $html, 'The sheet carries its own styling.');
+    }
+
+    /**
+     * The nurse's profile reads the same one partial — the inline copy is gone,
+     * so the two desks cannot show the clinic's sheet two different ways.
+     */
+    #[Test]
+    public function the_nurses_profile_reads_the_same_shared_renderer(): void
+    {
+        $record = $this->enrolledLearner();
+        $this->nurseFillsSheetTwo($record);
+
+        $html = $this->withSession([
+            'active_role' => 'school_nurse',
+            'active_name' => 'Ana Reyes',
+            'active_institution_id' => $this->school->id,
+            'active_school_name' => 'Sta. Ana NHS',
+        ])->get('/dashboard/student-health-records')->assertOk()->getContent();
+
+        $this->assertStringContainsString('window.Sheet2Render', $html);
+        $this->assertSame(1, substr_count($html, 'const renderSheet2 ='));
+        $this->assertStringContainsString('Sheet2Render.into(host, sheet)', $html);
+    }
+
+    /**
+     * A learner the nurse has not examined still shows the adviser's own
+     * checklist — those reviews predate the nurse's form and are not migrated
+     * away, so the fallback has to keep reading them.
+     */
+    #[Test]
+    public function an_unexamined_learner_still_shows_the_advisers_checklist(): void
+    {
+        $record = $this->enrolledLearner();
+
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', $record->student_id))
+            ->assertOk()
+            ->getContent();
+
+        // The fallback path is still wired, and the standing still reads Pending.
+        $this->assertStringContainsString('No systems review was recorded for this learner.', $html);
+
+        $meta = $this->profileMeta($record->student_id);
+        $this->assertSame('Pending', $meta['sheet2']['status']);
     }
 }

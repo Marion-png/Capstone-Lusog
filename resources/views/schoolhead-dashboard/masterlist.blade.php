@@ -140,6 +140,17 @@
 					@endforeach
 				</select>
 			</div>
+			{{-- Which weighing is on screen. It narrows the columns, not the
+			     learners: the figures below are the same reading either way, and
+			     the count beside the table does not move. --}}
+			<div class="sh-filter">
+				<label class="field-label" for="mlWeighing">Weighing shown</label>
+				<select class="select" name="weighing" id="mlWeighing">
+					<option value="" @selected($filters['weighing'] === '')>Baseline and endline</option>
+					<option value="baseline" @selected($filters['weighing'] === 'baseline')>Baseline only</option>
+					<option value="endline" @selected($filters['weighing'] === 'endline')>Endline only</option>
+				</select>
+			</div>
 			<div class="sh-filter">
 				<label class="field-label" for="mlBaseline">Baseline status</label>
 				<select class="select" name="baseline" id="mlBaseline">
@@ -209,12 +220,25 @@
 						     column that is the endline on one row and the baseline
 						     on the next cannot be compared down, and the head
 						     reading it has no way to tell which is which. --}}
+						@php
+							$showBaseline = $filters['weighing'] !== 'endline';
+							$showEndline = $filters['weighing'] !== 'baseline';
+							// Change compares the two weighings, so it has nothing to say
+							// when only one is on screen — the same reason the
+							// coordinator's Attendance roll drops the Present column when
+							// asked for absences. Counted, never typed.
+							$showMovement = $showBaseline && $showEndline;
+						@endphp
 						<thead>
 							<tr class="sh-group-row">
 								<th colspan="6"></th>
-								<th colspan="4" class="sh-group sh-group-baseline">Baseline weighing</th>
-								<th colspan="4" class="sh-group sh-group-endline">Endline weighing</th>
-								<th></th>
+								@if ($showBaseline)
+									<th colspan="4" class="sh-group sh-group-baseline">Baseline weighing</th>
+								@endif
+								@if ($showEndline)
+									<th colspan="4" class="sh-group sh-group-endline">Endline weighing</th>
+								@endif
+								@if ($showMovement)<th></th>@endif
 							</tr>
 							<tr>
 								<th class="num">#</th>
@@ -223,15 +247,19 @@
 								<th data-sort="section">Grade &amp; Section</th>
 								<th data-sort="sex">Gender</th>
 								<th class="num" data-sort="age">Age</th>
-								<th class="num" data-sort="baselineWeight">Weight (kg)</th>
-								<th class="num" data-sort="baselineHeight">Height (cm)</th>
-								<th class="num" data-sort="baselineBmi">BMI</th>
-								<th data-sort="baseline">Status</th>
-								<th class="num" data-sort="endlineWeight">Weight (kg)</th>
-								<th class="num" data-sort="endlineHeight">Height (cm)</th>
-								<th class="num" data-sort="endlineBmi">BMI</th>
-								<th data-sort="latest">Status</th>
-								<th data-sort="movement">Change</th>
+								@if ($showBaseline)
+									<th class="num" data-sort="baselineWeight">Weight (kg)</th>
+									<th class="num" data-sort="baselineHeight">Height (cm)</th>
+									<th class="num" data-sort="baselineBmi">BMI</th>
+									<th data-sort="baseline">Status</th>
+								@endif
+								@if ($showEndline)
+									<th class="num" data-sort="endlineWeight">Weight (kg)</th>
+									<th class="num" data-sort="endlineHeight">Height (cm)</th>
+									<th class="num" data-sort="endlineBmi">BMI</th>
+									<th data-sort="latest">Status</th>
+								@endif
+								@if ($showMovement)<th data-sort="movement">Change</th>@endif
 							</tr>
 						</thead>
 						<tbody>
@@ -272,24 +300,30 @@
 									<td class="num">{{ $row['age'] !== '' ? $row['age'] : '—' }}</td>
 									{{-- Baseline. A figure nobody recorded is an em dash,
 									     never the other weighing's number. --}}
-									<td class="num">{{ $row['baseline_weight'] !== '' ? $row['baseline_weight'] : '—' }}</td>
-									<td class="num">{{ $row['baseline_height'] !== '' ? $row['baseline_height'] : '—' }}</td>
-									<td class="num">{{ $row['baseline_bmi'] !== '' ? $row['baseline_bmi'] : '—' }}</td>
-									<td><span class="badge {{ $shStatusBadge($row['baseline']) }}">{{ $shStatusLabel($row['baseline']) }}</span></td>
+									@if ($showBaseline)
+										<td class="num">{{ $row['baseline_weight'] !== '' ? $row['baseline_weight'] : '—' }}</td>
+										<td class="num">{{ $row['baseline_height'] !== '' ? $row['baseline_height'] : '—' }}</td>
+										<td class="num">{{ $row['baseline_bmi'] !== '' ? $row['baseline_bmi'] : '—' }}</td>
+										<td><span class="badge {{ $shStatusBadge($row['baseline']) }}">{{ $shStatusLabel($row['baseline']) }}</span></td>
+									@endif
 									{{-- Endline. The status column stays the record's own
 									     `latest` reading, which is what the Latest filter
 									     above the table narrows on. --}}
-									<td class="num">{{ $row['endline_weight'] !== '' ? $row['endline_weight'] : '—' }}</td>
-									<td class="num">{{ $row['endline_height'] !== '' ? $row['endline_height'] : '—' }}</td>
-									<td class="num">{{ $row['endline_bmi'] !== '' ? $row['endline_bmi'] : '—' }}</td>
-									<td><span class="badge {{ $shStatusBadge($row['latest']) }}">{{ $shStatusLabel($row['latest']) }}</span></td>
-									<td>
-										@if ($row['movement'] === 'unknown')
-											<span class="muted">&mdash;</span>
-										@else
-											<span class="badge {{ $shMoveBadge($row['movement']) }}">{{ SchoolHeadOverview::movementLabel($row['movement']) }}</span>
-										@endif
-									</td>
+									@if ($showEndline)
+										<td class="num">{{ $row['endline_weight'] !== '' ? $row['endline_weight'] : '—' }}</td>
+										<td class="num">{{ $row['endline_height'] !== '' ? $row['endline_height'] : '—' }}</td>
+										<td class="num">{{ $row['endline_bmi'] !== '' ? $row['endline_bmi'] : '—' }}</td>
+										<td><span class="badge {{ $shStatusBadge($row['latest']) }}">{{ $shStatusLabel($row['latest']) }}</span></td>
+									@endif
+									@if ($showMovement)
+										<td>
+											@if ($row['movement'] === 'unknown')
+												<span class="muted">&mdash;</span>
+											@else
+												<span class="badge {{ $shMoveBadge($row['movement']) }}">{{ SchoolHeadOverview::movementLabel($row['movement']) }}</span>
+											@endif
+										</td>
+									@endif
 								</tr>
 							@endforeach
 						</tbody>

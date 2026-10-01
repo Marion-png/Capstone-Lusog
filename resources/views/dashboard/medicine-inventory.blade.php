@@ -51,7 +51,12 @@
                     <h1 class="page-title">Medicine <span>Inventory</span></h1>
                     <p class="page-sub">Track current stock against reorder thresholds and add medicines quickly.</p>
                 </div>
-                <a href="{{ route('medicine-inventory.create') }}" class="btn btn-primary">
+                {{-- A dialog, not a page: the nurse adds an item without losing
+                     the list they were reading, the same way Receive Stock and
+                     New Consultation work. It stays an anchor to the standalone
+                     page so it still works without JavaScript — the script below
+                     upgrades it in place. --}}
+                <a href="{{ route('medicine-inventory.create') }}" class="btn btn-primary" data-add-medicine-open>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Add Medicine
                 </a>
@@ -414,6 +419,70 @@
     })();
     </script>
 @endif
+
+{{-- ── Add medicine ──
+     The same fields the standalone page carries (partials/medicine-form-fields)
+     posting to the same `medicine-inventory.store`, so there is one write path
+     and the dialog cannot ask for something the page does not. `store()`
+     validates and redirects back on failure, so the dialog reopens carrying its
+     errors rather than failing out of sight. --}}
+<div class="inv-modal-backdrop" id="addMedicineBackdrop" hidden>
+    <div class="inv-modal" role="dialog" aria-modal="true" aria-labelledby="addMedicineTitle">
+        <form method="POST" action="{{ route('medicine-inventory.store') }}">
+            @csrf
+            <div class="inv-modal-head">
+                <div>
+                    <div class="page-eyebrow">Inventory</div>
+                    <h2 id="addMedicineTitle" class="inv-modal-title">Add Medicine</h2>
+                    <p class="inv-modal-sub">A new item on the school clinic's stock list.</p>
+                </div>
+                <button type="button" class="inv-modal-close" data-add-medicine-close aria-label="Close">&times;</button>
+            </div>
+            <div class="inv-modal-body">
+                @include('partials.medicine-form-fields', ['gridClass' => 'inv-form-grid'])
+            </div>
+            <div class="inv-modal-foot">
+                <button type="button" class="btn btn-secondary" data-add-medicine-close>Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Medicine</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(() => {
+    const backdrop = document.getElementById('addMedicineBackdrop');
+    if (!backdrop) return;
+
+    const open = () => {
+        backdrop.hidden = false;
+        document.body.classList.add('inv-modal-open');
+        document.getElementById('catalogue_name')?.focus();
+    };
+    const close = () => {
+        backdrop.hidden = true;
+        document.body.classList.remove('inv-modal-open');
+    };
+
+    document.querySelectorAll('[data-add-medicine-open]').forEach((control) => {
+        control.addEventListener('click', (event) => {
+            // The anchor is the no-JS path; with JS the dialog answers instead.
+            event.preventDefault();
+            open();
+        });
+    });
+
+    backdrop.querySelectorAll('[data-add-medicine-close]').forEach((button) => button.addEventListener('click', close));
+    backdrop.addEventListener('click', (event) => { if (event.target === backdrop) close(); });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !backdrop.hidden) close(); });
+
+    // A refused save comes back here, so the dialog reopens on the values the
+    // nurse typed rather than closing over an error nobody saw.
+    @if ($errors->hasAny(['name', 'catalogue_name', 'custom_name', 'off_catalogue_reason', 'stock_quantity', 'minimum_threshold', 'unit', 'notes']))
+        open(); // reopened after a refused save
+    @endif
+})();
+</script>
 
 @include('partials.nurse-page-transition')
 </body>
