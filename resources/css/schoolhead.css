@@ -793,6 +793,192 @@
 .sh-spark { display: block; margin-top: 8px; width: 100%; max-width: 260px; height: 40px; }
 .sh-spark-axis { display: flex; justify-content: space-between; gap: 10px; max-width: 260px; margin-top: 5px; font-size: .68rem; color: var(--lg-ink-soft); }
 
+/* School Head presentation. Screen-only and role-scoped so shared nurse
+   views and the DepEd print layouts keep their existing appearance. */
+@media screen {
+	/* Keep page headers and the topbar on the original shared theme. */
+	.sh-workspace .card,
+	.sh-workspace .table-card,
+	.sh-workspace .sh-detail-modal { --lg-ink-soft: #586D60; }
+	.sh-workspace .card,
+	.sh-workspace .table-card { border-radius: 14px; box-shadow: 0 3px 14px rgba(21, 40, 31, .035); }
+	.sh-workspace .card:hover { box-shadow: 0 5px 18px rgba(21, 40, 31, .055); }
+	.sh-workspace .section { padding: 22px 24px; }
+	.sh-workspace .section-head {
+		align-items: center;
+		margin-bottom: 20px;
+		padding-bottom: 16px;
+		border-bottom: 1px solid var(--lg-border);
+	}
+	.sh-workspace .section-title { font-size: .98rem; font-weight: 700; }
+	.sh-workspace .section-meta { line-height: 1.5; }
+	.sh-workspace .kpi { min-height: 154px; padding: 20px; gap: 14px; }
+	.sh-workspace .kpi::before { inset: 0 auto 0 0; width: 3px; height: auto; }
+	.sh-workspace .kpi-label { color: var(--lg-ink-soft); line-height: 1.5; }
+	.sh-workspace .kpi-icon { width: 36px; height: 36px; border-radius: 10px; }
+	.sh-workspace .kpi-value { font-size: 2.15rem; }
+	.sh-workspace .kpi-hint { margin-top: auto; line-height: 1.55; }
+	.sh-workspace .sh-toolbar {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+		gap: 16px;
+		padding: 20px 24px;
+	}
+	.sh-workspace.sh-masterlist-page .sh-toolbar { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+	.sh-workspace .sh-filter { min-width: 0; }
+	.sh-workspace .sh-filter-action { align-self: end; }
+	.sh-workspace .sh-filter-action:not(:has(.btn)) { display: none; }
+	.sh-workspace :where(.card, .modal-panel) .field-label { font-size: .7rem; font-weight: 600; letter-spacing: .02em; }
+	.sh-workspace :where(.card, .modal-panel) .select,
+	.sh-workspace :where(.card, .modal-panel) .input { min-height: 40px; border-radius: 8px; }
+	.sh-workspace :where(.card, .modal-panel) .btn { min-height: 38px; border-radius: 8px; }
+	.sh-workspace :where(.card, .modal-panel) .btn-secondary { border-color: var(--lg-border-strong); }
+	.sh-workspace .sh-figs { gap: 10px; background: none; border: none; overflow: visible; }
+	.sh-workspace .sh-fig { padding: 16px; background: var(--lg-page); border: 1px solid var(--lg-border); border-radius: 10px; }
+	.sh-workspace .sh-fig-label { white-space: normal; line-height: 1.45; }
+	.sh-workspace .sh-fig-value { font-size: 1.3rem; margin-top: 8px; }
+	.sh-workspace .sh-fig-hint { line-height: 1.5; }
+	.sh-workspace .sh-meter { gap: 15px; }
+	.sh-workspace .sh-perf { gap: 18px; }
+	.sh-workspace .sh-col { max-width: none; }
+	.sh-workspace .sh-callout { padding: 14px 16px; background: var(--lg-page); }
+	.sh-workspace .sh-empty { padding: 26px 18px; border: 1px dashed var(--lg-border-strong); border-radius: 10px; background: var(--lg-page); line-height: 1.6; }
+	.sh-workspace .sh-queue-item { padding: 16px; background: var(--lg-page); }
+	.sh-workspace .sh-queue-text strong { line-height: 1.5; }
+	.sh-workspace .sh-listhead { padding: 20px 24px; background: var(--lg-card); border-radius: 14px 14px 0 0; }
+	.sh-workspace .card-title { font-weight: 700; }
+	.sh-workspace .card-sub { margin-top: 6px; line-height: 1.5; }
+	.sh-workspace .lg-search { border-radius: 8px; }
+	.sh-workspace .sh-search input { min-height: 40px; }
+	.sh-workspace .sh-table th { padding: 13px 16px; font-size: .67rem; letter-spacing: .045em; }
+	.sh-workspace .sh-table td { padding: 14px 16px; font-size: .8rem; line-height: 1.5; }
+	.sh-workspace .sh-table th:first-child,
+	.sh-workspace .sh-table td:first-child { padding-left: 24px; }
+	.sh-workspace .sh-table th:last-child,
+	.sh-workspace .sh-table td:last-child { padding-right: 24px; }
+	.sh-workspace .sh-table tbody tr:nth-child(even) { background: #FAFCFB; }
+	.sh-workspace .sh-table .sh-group-row th { padding-top: 14px; padding-bottom: 9px; }
+	.sh-workspace .sh-group-baseline { background: var(--lg-rail); }
+	.sh-workspace .sh-group-endline { background: var(--lg-mint); }
+	.sh-workspace .sh-table td.sh-name.is-link { padding: 0; }
+	.sh-workspace .sh-namebtn { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; line-height: 1.5; }
+	.sh-workspace .sh-namebtn::after { content: "\203A"; color: var(--lg-emerald); font-size: 1.2rem; flex: 0 0 auto; }
+	.sh-workspace .sh-namebtn strong { color: var(--lg-emerald-dark); }
+	.sh-workspace .sh-seg { padding: 4px; }
+	.sh-workspace .sh-seg-btn { padding: 7px 16px; }
+	.sh-workspace .sh-grid { gap: 7px; }
+	.sh-workspace .sh-cell { border-radius: 7px; font-size: .68rem; }
+	.sh-workspace .sh-reports { gap: 14px; }
+	.sh-workspace .sh-report { padding: 20px; gap: 16px; background: var(--lg-page); box-shadow: none; }
+	.sh-workspace .sh-report-main { flex: 1 1 280px; }
+	.sh-workspace .sh-report-head strong { font-size: .94rem; }
+	.sh-workspace .sh-report-sub { margin-top: 7px; }
+	.sh-workspace .sh-report-icon { width: 44px; height: 48px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--lg-border); border-radius: 10px; background: var(--lg-card); color: var(--lg-emerald-deep); }
+	.sh-workspace .sh-report-icon svg { width: 23px; height: 23px; }
+	.sh-workspace .sh-link { padding: 20px; }
+	.sh-workspace .sh-link-icon { width: 40px; height: 40px; border-radius: 10px; }
+	.sh-workspace .sh-link-text span { margin-top: 6px; }
+
+	/* The learner dialog has a generous measurement column. Its own table
+	   scrolls on small screens instead of compressing values into one another. */
+	.sh-workspace .modal-backdrop { background: rgba(16, 35, 25, .54); backdrop-filter: blur(4px); }
+	.sh-workspace .sh-detail-modal { width: min(1060px, 100%); max-height: calc(100dvh - 32px); border: 1px solid var(--lg-border); border-radius: 18px; box-shadow: 0 28px 90px rgba(16, 35, 25, .3); }
+	.sh-workspace .sh-detail-modal .modal-head { align-items: flex-start; padding: 18px 24px; gap: 16px; background: var(--lg-card); }
+	.sh-workspace .sh-learner-icon { display: grid; place-items: center; width: 54px; height: 54px; flex: 0 0 auto; border-radius: 14px; background: var(--lg-mint); color: var(--lg-emerald-deep); }
+	.sh-workspace .sh-learner-icon svg { width: 27px; height: 27px; }
+	.sh-workspace .sh-detail-ident { flex: 1 1 auto; }
+	.sh-workspace .sh-detail-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 6px; }
+	.sh-workspace .sh-modal-eyebrow { color: var(--lg-emerald-deep); letter-spacing: .12em; font-size: .66rem; }
+	.sh-workspace .sh-readonly { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border: 1px solid var(--lg-border); border-radius: 5px; color: var(--lg-ink-soft); font-size: .64rem; font-weight: 600; }
+	.sh-workspace .sh-readonly svg { width: 12px; height: 12px; }
+	.sh-workspace .sh-detail-modal .modal-title { font-size: 1.45rem; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+	.sh-workspace .sh-modal-meta { line-height: 1.65; overflow-wrap: anywhere; }
+	.sh-workspace .sh-detail-modal .modal-close { display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 auto; padding: 0; background: var(--lg-page); font-size: 1.5rem; }
+	.sh-workspace .sh-detail { grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr); align-items: start; gap: 20px; padding: 20px 24px; }
+	.sh-workspace .sh-panel-box { padding: 18px 20px; border-radius: 12px; }
+	.sh-workspace .sh-record-section-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+	.sh-workspace .sh-record-section-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 auto; border-radius: 9px; color: var(--lg-emerald-deep); background: var(--lg-mint); }
+	.sh-workspace .sh-record-section-icon svg { width: 18px; height: 18px; }
+	.sh-workspace .sh-panel-title { margin-bottom: 0; color: var(--lg-ink); font-size: .84rem; letter-spacing: -.01em; text-transform: none; }
+	.sh-workspace .sh-record-caption { display: block; margin-top: 4px; color: var(--lg-ink-soft); font-size: .75rem; line-height: 1.5; }
+	.sh-workspace .sh-history-scroll { margin: 0 -20px; }
+	.sh-workspace .sh-history-scroll:focus-visible { outline: 2px solid var(--lg-emerald); outline-offset: -2px; }
+	.sh-workspace .sh-history-table { min-width: 510px; }
+	.sh-workspace .sh-history-table th,
+	.sh-workspace .sh-history-table td { padding: 12px 10px; }
+	.sh-workspace .sh-history-table th { background: var(--lg-rail); font-size: .63rem; letter-spacing: .025em; }
+	.sh-workspace .sh-history-table th:first-child,
+	.sh-workspace .sh-history-table td:first-child { padding-left: 20px; }
+	.sh-workspace .sh-history-table th:last-child,
+	.sh-workspace .sh-history-table td:last-child { padding-right: 20px; }
+	.sh-workspace .sh-history-table td { font-size: .79rem; white-space: nowrap; }
+	.sh-workspace .sh-history-table .sh-reading { min-width: 145px; }
+	.sh-workspace .sh-reading strong { display: block; font-size: .76rem; }
+	.sh-workspace .sh-reading-date { display: block; margin-top: 5px; color: var(--lg-ink-soft); font-size: .72rem; }
+	.sh-workspace .sh-history-table .sh-reading-bmi { font-weight: 700; }
+	.sh-workspace .sh-history-table .badge { font-size: .67rem; padding: 4px 7px; }
+	.sh-workspace .sh-unit { display: block; margin-top: 3px; font-size: .6rem; font-weight: 500; letter-spacing: 0; text-transform: none; }
+	.sh-workspace .sh-bmi-trend { margin-top: 16px; padding: 12px 16px; background: var(--lg-page); border: 1px solid var(--lg-border); border-radius: 9px; }
+	.sh-workspace .sh-bmi-trend .sh-panel-sub { margin: 0; font-size: .72rem; }
+	.sh-workspace .sh-bmi-plot { padding: 12px 5px 7px; }
+	.sh-workspace .sh-spark { width: 100%; max-width: none; height: 40px; margin: 0; overflow: visible; }
+	.sh-workspace .sh-spark-axis { max-width: none; margin-top: 6px; flex-wrap: wrap; font-size: .69rem; }
+	.sh-workspace .sh-spark-axis strong { color: var(--lg-ink); margin-left: 3px; }
+	.sh-workspace .sh-record-label { display: block; color: var(--lg-ink-soft); font-size: .72rem; font-weight: 500; }
+	.sh-workspace .sh-enrolment { padding-bottom: 12px; border-bottom: 1px solid var(--lg-border); }
+	.sh-workspace .sh-enrolment > strong { display: block; margin-top: 6px; font-size: .87rem; line-height: 1.5; }
+	.sh-workspace .sh-attendance-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 14px 0; }
+	.sh-workspace .sh-attendance-rate { font-size: 1.85rem; letter-spacing: -.04em; line-height: 1.2; }
+	.sh-workspace .sh-attendance-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+	.sh-workspace .sh-attendance-counts > div { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px; border: 1px solid var(--lg-border); border-radius: 8px; background: var(--lg-page); }
+	.sh-workspace .sh-attendance-counts dt { font-size: .66rem; color: var(--lg-ink-soft); }
+	.sh-workspace .sh-attendance-counts dd { font-size: 1.1rem; font-weight: 700; font-variant-numeric: var(--lg-figures); }
+	.sh-workspace .sh-attendance-standing { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+	.sh-workspace .sh-record-rule { display: flex; align-items: flex-start; gap: 7px; padding-top: 10px; margin-top: 10px; border-top: 1px solid var(--lg-border); color: var(--lg-ink-soft); font-size: .71rem; line-height: 1.65; }
+	.sh-workspace .sh-record-rule svg { width: 14px; height: 14px; margin-top: 2px; flex: 0 0 auto; }
+	.sh-workspace .sh-record-empty { display: grid; justify-items: center; gap: 12px; padding: 32px 20px; border: 1px dashed var(--lg-border-strong); border-radius: 9px; background: var(--lg-page); font-size: .8rem; line-height: 1.6; text-align: center; color: var(--lg-ink-soft); }
+	.sh-workspace .sh-record-empty svg { width: 28px; height: 28px; color: var(--lg-emerald-deep); }
+	.sh-workspace .sh-detail-modal .modal-foot { padding: 14px 24px; }
+	.sh-workspace .sh-modal-note { display: flex; align-items: center; gap: 8px; flex: 1 1 280px; font-size: .72rem; }
+	.sh-workspace .sh-modal-note svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--lg-emerald-deep); }
+	.sh-workspace .sh-detail-modal .sh-modal-actions .btn { min-width: 88px; background: var(--lg-emerald-deep); border-color: var(--lg-emerald-deep); color: #fff; }
+	.sh-workspace .sh-detail-modal .sh-modal-actions .btn:hover { background: var(--lg-emerald-dark); border-color: var(--lg-emerald-dark); }
+}
+
+@media screen and (max-width: 1100px) {
+	.sh-workspace .sh-detail { grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr); padding: 20px; gap: 16px; }
+	.sh-workspace.sh-masterlist-page .sh-toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media screen and (max-width: 900px) {
+	.sh-workspace .sh-detail { grid-template-columns: minmax(0, 1fr); }
+	.sh-workspace .sh-feeding-record { width: 100%; }
+	.sh-workspace.sh-masterlist-page .sh-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media screen and (max-width: 620px) {
+	.sh-workspace .section,
+	.sh-workspace .sh-toolbar,
+	.sh-workspace .sh-listhead { padding: 18px; }
+	.sh-workspace .sh-compare { grid-template-columns: minmax(0, 1fr); }
+	.sh-workspace .sh-report { align-items: flex-start; padding: 16px; }
+	.sh-workspace .sh-report-main { flex: 1 1 160px; }
+	.sh-workspace .sh-report-actions .btn { flex: 1 1 auto; }
+	.sh-workspace .modal-backdrop { padding: 10px; }
+	.sh-workspace .sh-detail-modal { max-height: calc(100dvh - 20px); border-radius: 14px; }
+	.sh-workspace .sh-detail-modal .modal-head { padding: 18px 16px; gap: 10px; }
+	.sh-workspace .sh-learner-icon { width: 40px; height: 40px; border-radius: 10px; }
+	.sh-workspace .sh-learner-icon svg { width: 22px; height: 22px; }
+	.sh-workspace .sh-detail-modal .modal-title { font-size: 1.1rem; }
+	.sh-workspace .sh-modal-meta { font-size: .74rem; }
+	.sh-workspace .sh-detail-heading { gap: 6px; }
+	.sh-workspace .sh-detail { padding: 14px; gap: 14px; }
+	.sh-workspace .sh-detail-modal .modal-foot { padding: 12px 16px; }
+	.sh-workspace .sh-modal-note { flex-basis: 190px; }
+}
+@media screen and (max-width: 400px) {
+	.sh-workspace.sh-masterlist-page .sh-toolbar { grid-template-columns: minmax(0, 1fr); }
+	.sh-workspace .sh-learner-icon { display: none; }
+}
+
 /* ══ Responsive ═════════════════════════════════════════════════════ */
 
 @media (max-width: 1180px) {
@@ -853,6 +1039,7 @@
 	.sh-panel-action,
 	.sh-section-link,
 	.sh-seg,
+	.sh-report-icon,
 	.modal-backdrop,
 	.ann-board,
 	.flash { display: none !important; }

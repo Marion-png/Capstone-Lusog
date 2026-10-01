@@ -19,7 +19,7 @@
 	<style>{!! file_get_contents(resource_path('css/feeding-sbfp-forms.css')) !!}</style>
 	<style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
 </head>
-<body>
+<body class="sh-workspace">
 @include('partials.schoolhead-sidebar', ['active' => 'reports'])
 
 @php

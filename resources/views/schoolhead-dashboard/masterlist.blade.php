@@ -22,7 +22,7 @@
 		<style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
 	@endif
 </head>
-<body>
+<body class="{{ $mlIsNurse ? '' : 'sh-workspace sh-masterlist-page' }}">
 @if ($mlIsNurse)
 	@include('partials.nurse-lusog-sidebar', ['active' => 'nutritional-status'])
 @else
@@ -306,6 +306,9 @@
 		     the printer. There is no edit control anywhere in it. ── --}}
 		@foreach ($rows as $row)
 			<template class="sh-detail-source" data-detail-for="{{ $row['id'] }}">
+				@if (! $mlIsNurse)
+					@include('schoolhead-dashboard.partials.learner-record', ['row' => $row])
+				@else
 				<div class="sh-detail">
 					<section class="sh-panel-box">
 						<h3 class="sh-panel-title">Measurement History</h3>
@@ -367,6 +370,7 @@
 						<p class="sh-panel-note">{{ $rule }}.</p>
 					</section>
 				</div>
+				@endif
 			</template>
 		@endforeach
 	</div>
@@ -375,8 +379,16 @@
 <div class="modal-backdrop" id="detailBackdrop" role="dialog" aria-modal="true" aria-labelledby="detailTitle" hidden>
 	<div class="modal-panel sh-detail-modal">
 		<div class="modal-head">
+			@if (! $mlIsNurse)
+				<div class="sh-learner-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg></div>
+			@endif
 			<div class="sh-detail-ident">
-				<p class="sh-modal-eyebrow">Learner record</p>
+				<div class="sh-detail-heading">
+					<p class="sh-modal-eyebrow">Learner record</p>
+					@if (! $mlIsNurse)
+						<span class="sh-readonly"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>Read-only</span>
+					@endif
+				</div>
 				<p class="modal-title" id="detailTitle"></p>
 				<p class="sh-modal-meta" id="detailMeta"></p>
 			</div>
@@ -386,7 +398,7 @@
 		<div class="modal-body sh-detail-body" id="detailBody"></div>
 
 		<div class="modal-foot">
-			<span class="sh-modal-note">Read-only &mdash; measurements are recorded by the class adviser.</span>
+			<span class="sh-modal-note">@if (! $mlIsNurse)<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>@endif Read-only &mdash; measurements are recorded by the class adviser.</span>
 			<div class="sh-modal-actions">
 				<button type="button" class="btn btn-secondary" data-detail-close>Close</button>
 			</div>

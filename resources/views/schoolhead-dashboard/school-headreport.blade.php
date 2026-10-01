@@ -16,7 +16,7 @@
 	<style>{!! file_get_contents(resource_path('css/schoolhead.css')) !!}</style>
 	<style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
 </head>
-<body>
+<body class="sh-workspace">
 @include('partials.schoolhead-sidebar', ['active' => 'reports'])
 
 @php
@@ -198,9 +198,13 @@
 					<div class="section-head">
 						<h2 class="section-title">{{ $panel['label'] }}</h2>
 						<span class="badge {{ $panel['measured'] > 0 ? 'badge-info' : 'badge-neutral' }}">
-							{{ $panel['date'] ?? 'Not yet recorded' }}
+							{{ $panel['date'] ?? ($phase === 'endline' ? 'After 120 feeding days' : 'Not yet recorded') }}
 						</span>
 					</div>
+
+					@if ($phase === 'endline')
+						<p class="sh-callout">Endline weighing is scheduled after the <strong>120-day feeding cycle</strong>.</p>
+					@endif
 
 					<div class="table-card">
 						<div class="table-scroll">
@@ -324,6 +328,7 @@
 			<ul class="sh-reports">
 				@foreach ($reports as $report)
 					<li class="card sh-report">
+						<span class="sh-report-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span>
 						<div class="sh-report-main">
 							<div class="sh-report-head">
 								<strong>{{ $report['name'] }}</strong>
@@ -334,6 +339,9 @@
 								@endif
 							</div>
 							<p class="sh-report-sub">{{ $report['summary'] }}</p>
+							@if ($report['key'] === 'endline')
+								<p class="sh-report-detail">Endline weighing takes place after 120 feeding days.</p>
+							@endif
 							<p class="sh-report-detail tnum">{{ $report['detail'] }}</p>
 							@unless ($report['complete'])
 								<p class="sh-report-detail">{{ $report['blocked_reason'] }}</p>
@@ -358,6 +366,7 @@
 				{{-- The masterlist is always current: it lists who is enrolled,
 				     and there is no weighing to finish before it can be handed in. --}}
 				<li class="card sh-report">
+					<span class="sh-report-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 9v12M13 13h4M13 17h4"/></svg></span>
 					<div class="sh-report-main">
 						<div class="sh-report-head">
 							<strong>Masterlist</strong>
