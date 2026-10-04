@@ -14,6 +14,7 @@ use App\Support\SchoolLetterhead;
 use App\Support\StudentImportSheet;
 use App\Support\StudentRosterSync;
 use App\Support\StudentVitalSigns;
+use App\Support\UploadReadFailure;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -245,10 +246,16 @@ class AdviserController extends Controller
     {
         try {
             $scan = $scanner->scan($file);
-        } catch (Throwable $e) {
+        } catch (UploadReadFailure $e) {
             // Deliberately no partial write: a failed read leaves the roster
             // exactly as it was.
             return back()->with('error', 'Could not read the masterlist. '.$e->getMessage());
+        } catch (Throwable $e) {
+            // Anything else may name a server path or an endpoint: logged,
+            // never shown.
+            report($e);
+
+            return back()->with('error', 'Could not read the masterlist. Please try again.');
         }
 
         if (! $scan['matches_template']) {

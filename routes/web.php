@@ -1604,8 +1604,8 @@ Route::post('/admin-login', function (Request $request) {
         'password' => ['required', 'string'],
     ]);
 
-    $expectedUsername = (string) env('SYSTEM_ADMIN_USERNAME', 'systemadmin');
-    $expectedPassword = (string) env('SYSTEM_ADMIN_PASSWORD', 'admin123');
+    $expectedUsername = (string) config('app.system_admin.username');
+    $expectedPassword = (string) config('app.system_admin.password');
 
     if ($validated['username'] !== $expectedUsername || $validated['password'] !== $expectedPassword) {
         AuditTrail::record('login_failed', null, null, "Failed System Admin login attempt for username '{$validated['username']}'");

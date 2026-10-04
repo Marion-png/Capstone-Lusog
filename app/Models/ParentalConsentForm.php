@@ -38,6 +38,9 @@ class ParentalConsentForm extends Model
         'uploaded_by_name',
     ];
 
+    /** Where the files sit on disk is the server's business; pages link by id. */
+    protected $hidden = ['file_path', 'med_cert_path'];
+
     /**
      * Consent decisions and health details are encrypted at rest. Only
      * program_type / school_year / student_health_record_id remain plain

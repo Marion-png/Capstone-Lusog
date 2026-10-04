@@ -742,9 +742,11 @@ class AdviserStudentImportTest extends TestCase
             'Notes' => [['Nothing here']],
         ]);
 
+        // Refused the way a sheet without its headings is: a flashed error
+        // naming the missing column, not a validation error on the upload.
         $this->import($file, ['assigned_section' => 'MATATAG'])
-            ->assertRedirect()
-            ->assertSessionHasErrors('students_file');
+            ->assertRedirect(route('dashboard.class-adviser', ['tab' => 'form']))
+            ->assertSessionHas('error', fn (string $message): bool => str_contains($message, 'LRN'));
 
         $this->assertSame(0, StudentHealthRecord::query()->count());
     }

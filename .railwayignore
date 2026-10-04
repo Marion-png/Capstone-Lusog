@@ -1,0 +1,30 @@
+# Added to .gitignore for `railway up`. The nested storage .gitignore files
+# already exclude these; they are repeated here because what they hold is
+# learners' encrypted documents and live sessions from a developer's machine,
+# and an upload must never carry them whichever ignore rules the CLI honours.
+.env
+.env.*
+!.env.example
+# Contents only: Laravel needs each directory to exist (view:cache fails on a
+# missing storage/framework/views), so its placeholder .gitignore travels.
+storage/app/private/*
+!storage/app/private/.gitignore
+storage/app/public/*
+!storage/app/public/.gitignore
+storage/framework/sessions/*
+!storage/framework/sessions/.gitignore
+storage/framework/cache/data/*
+!storage/framework/cache/data/.gitignore
+storage/framework/views/*
+!storage/framework/views/.gitignore
+storage/logs/*
+!storage/logs/.gitignore
+bootstrap/cache/*.php
+# A Windows developer's PHP config (extension_dir and CA paths on C:\). The
+# Linux build picks up a php.ini at the root, and this one stops every
+# extension loading there, OpenSSL included.
+php.ini
+certs/
+try-app-key.php
+schema.sql
+.claude/

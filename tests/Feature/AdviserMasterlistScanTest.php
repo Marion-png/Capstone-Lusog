@@ -8,6 +8,7 @@ use App\Models\StudentHealthRecord;
 use App\Support\ClassMasterlistTemplate;
 use App\Support\MasterlistSheetScanner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
@@ -400,6 +401,30 @@ class AdviserMasterlistScanTest extends TestCase
 
         // Three attempts in all, then given up on.
         Http::assertSentCount(3);
+    }
+
+    /**
+     * A reader that cannot be reached says so without quoting the transport.
+     *
+     * The client library's own message names the endpoint and the library;
+     * it used to be appended to the teacher's error. It goes to the log.
+     */
+    #[Test]
+    public function an_unreachable_reader_does_not_show_the_transport_error(): void
+    {
+        Http::fake(function () {
+            throw new ConnectionException(
+                'cURL error 28: Operation timed out for https://generativelanguage.googleapis.com/v1beta/models/x:generateContent'
+            );
+        });
+
+        $this->scan()->assertSessionHas('error');
+
+        $error = (string) session('error');
+        $this->assertStringContainsString('could not be sent for reading', $error);
+        $this->assertStringNotContainsString('googleapis', $error);
+        $this->assertStringNotContainsString('cURL', $error);
+        $this->assertSame(0, StudentHealthRecord::count());
     }
 
     /** A wrong model id keeps the provider's own words — it is not transient. */

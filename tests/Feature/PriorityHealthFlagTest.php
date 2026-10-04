@@ -50,13 +50,15 @@ class PriorityHealthFlagTest extends TestCase
     /** A learner on this adviser's roster, with an optional assessment. */
     private function learner(string $lrn, string $name, array $assessmentFlags = []): StudentHealthRecord
     {
+        // Stored as AdviserController::store writes it: grade and section are
+        // one "Grade / Section" string, and StudentRosterSync rebuilds the
+        // session row from it, so a bare "Dalton" falls outside the class.
         $record = StudentHealthRecord::create([
             'institution_id' => $this->school->id,
             'student_id' => $lrn,
             'student_name' => $name,
             'school_name' => 'Sta. Ana NHS',
-            'grade_level' => 'Grade 10',
-            'section' => 'Dalton',
+            'section' => 'Grade 10 / Dalton',
             'school_year' => StudentHealthRecord::currentSchoolYear(),
             'weight' => '40',
             'bmi_value' => '18',

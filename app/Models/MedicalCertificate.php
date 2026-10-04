@@ -25,6 +25,9 @@ class MedicalCertificate extends Model
         'uploaded_by_role',
     ];
 
+    /** Where the file sits on disk is the server's business; pages link by id. */
+    protected $hidden = ['file_path'];
+
     protected $casts = [
         'diagnosis_date' => 'date',
         'doctor_clinic' => EncryptedString::class,

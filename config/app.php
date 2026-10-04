@@ -43,6 +43,40 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Prototype Sessions
+    |--------------------------------------------------------------------------
+    |
+    | EnsureActiveSession seeds a demo session for whichever role a protected
+    | URL belongs to, so every role's UI opens without signing in. That is a
+    | development convenience: on a reachable deployment it hands every role,
+    | System Admin included, to anyone holding the link. Off unless the
+    | environment is local or testing; PROTOTYPE_SESSIONS overrides it.
+    |
+    */
+
+    'prototype_sessions' => (bool) env(
+        'PROTOTYPE_SESSIONS',
+        in_array(env('APP_ENV', 'production'), ['local', 'testing'], true)
+    ),
+
+    /*
+    |--------------------------------------------------------------------------
+    | System Admin Credentials
+    |--------------------------------------------------------------------------
+    |
+    | /admin-login does not read the accounts table; it checks these. Read
+    | here rather than with env() at the route, because a cached config
+    | (php artisan optimize, which every deploy runs) no longer loads .env.
+    |
+    */
+
+    'system_admin' => [
+        'username' => env('SYSTEM_ADMIN_USERNAME', 'systemadmin'),
+        'password' => env('SYSTEM_ADMIN_PASSWORD', 'admin123'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Application URL
     |--------------------------------------------------------------------------
     |

@@ -19,7 +19,19 @@ class EnsureActiveSession
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if ($this->requiresActiveSession($request)) {
+        if ($this->requiresActiveSession($request) && ! config('app.prototype_sessions')) {
+            // A prototype session left over from before the switch was turned
+            // off belongs to no account, so it is not a sign-in.
+            if ($this->isPrototypeSession($request)) {
+                $request->session()->flush();
+            }
+
+            if (! $request->session()->has('active_role')) {
+                return $this->withNoCacheHeaders($request->expectsJson()
+                    ? response()->json(['message' => 'Sign in to continue.'], 401)
+                    : redirect()->route('login'));
+            }
+        } elseif ($this->requiresActiveSession($request)) {
             [$allowedRoles, $defaultRole] = $this->rolesForPath($request);
 
             if (! $request->session()->has('active_role')) {

@@ -103,6 +103,13 @@ class HealthConsentForm extends Model
     ];
 
     /**
+     * Never serialized: the token is the parent's link (whoever holds it can
+     * answer the form), the signature is a drawn image of a parent's hand, and
+     * the photograph's location on disk is the server's business.
+     */
+    protected $hidden = ['token', 'signature', 'paper_form_path'];
+
+    /**
      * Student identity, consent answers, health details, and the signature
      * image are encrypted at rest. token / student_lrn / school_year /
      * status / institution_id / adviser_unread stay plain — queries filter

@@ -36,6 +36,9 @@ class AttendanceImport extends Model
         'photo_purged_at',
     ];
 
+    /** Where the photo sits on disk is the server's business. */
+    protected $hidden = ['stored_path'];
+
     protected $casts = [
         'uploaded_by_name' => EncryptedString::class,
         'row_errors' => EncryptedArray::class,

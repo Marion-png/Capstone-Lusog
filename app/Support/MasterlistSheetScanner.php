@@ -6,7 +6,6 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
-use RuntimeException;
 use Throwable;
 
 /**
@@ -101,7 +100,7 @@ class MasterlistSheetScanner
     public function scan(UploadedFile $sheet): array
     {
         if (! self::isConfigured()) {
-            throw new RuntimeException('Masterlist scanning is not configured. Set GEMINI_API_KEY.');
+            throw new UploadReadFailure('Masterlist scanning is not configured. Set GEMINI_API_KEY.');
         }
 
         $payload = $this->ask($sheet);
@@ -122,7 +121,7 @@ class MasterlistSheetScanner
         $contents = @file_get_contents((string) $sheet->getRealPath());
 
         if ($contents === false || $contents === '') {
-            throw new RuntimeException('The uploaded file could not be read.');
+            throw new UploadReadFailure('The uploaded file could not be read.');
         }
 
         try {
@@ -169,7 +168,12 @@ class MasterlistSheetScanner
                     ],
                 ]);
         } catch (Throwable $e) {
-            throw new RuntimeException('The masterlist could not be sent for reading. '.$e->getMessage(), 0, $e);
+            // A transport error's own message names the endpoint and the
+            // client library; it goes to the log, and the teacher is told
+            // what they can act on.
+            report($e);
+
+            throw new UploadReadFailure('The masterlist could not be sent for reading. Check the connection and try again.', 0, $e);
         }
 
         if ($response->failed()) {
@@ -179,7 +183,7 @@ class MasterlistSheetScanner
             // here, and "HTTP 503" on an enrolment screen tells nobody to
             // simply try again in a minute.
             if (in_array($response->status(), [429, 503], true)) {
-                throw new RuntimeException('The reader is busy at the moment and nothing was enrolled. Try again in a few minutes.');
+                throw new UploadReadFailure('The reader is busy at the moment and nothing was enrolled. Try again in a few minutes.');
             }
 
             // Everything else keeps the provider's own message: a wrong model
@@ -187,13 +191,13 @@ class MasterlistSheetScanner
             // it.
             $reason = trim((string) $response->json('error.message', ''));
 
-            throw new RuntimeException('The reader returned HTTP '.$response->status().($reason !== '' ? ': '.$reason : '.'));
+            throw new UploadReadFailure('The reader returned HTTP '.$response->status().($reason !== '' ? ': '.$reason : '.'));
         }
 
         $body = $response->json();
 
         if (! is_array($body)) {
-            throw new RuntimeException('The reader returned an unreadable result. Please try again.');
+            throw new UploadReadFailure('The reader returned an unreadable result. Please try again.');
         }
 
         return $body;
@@ -405,7 +409,7 @@ class MasterlistSheetScanner
         }
 
         if (count($rows) > self::MAX_ROWS) {
-            throw new RuntimeException('A single upload is limited to '.self::MAX_ROWS.' learners.');
+            throw new UploadReadFailure('A single upload is limited to '.self::MAX_ROWS.' learners.');
         }
 
         return [
@@ -433,13 +437,13 @@ class MasterlistSheetScanner
         $blocked = trim((string) data_get($body, 'promptFeedback.blockReason', ''));
 
         if ($blocked !== '') {
-            throw new RuntimeException('The image could not be processed ('.$blocked.'). Try a clearer photo of the masterlist.');
+            throw new UploadReadFailure('The image could not be processed ('.$blocked.'). Try a clearer photo of the masterlist.');
         }
 
         $finish = trim((string) data_get($body, 'candidates.0.finishReason', ''));
 
         if ($finish !== '' && ! in_array($finish, ['STOP', 'MAX_TOKENS'], true)) {
-            throw new RuntimeException('The image could not be processed ('.$finish.'). Try a clearer photo of the masterlist.');
+            throw new UploadReadFailure('The image could not be processed ('.$finish.'). Try a clearer photo of the masterlist.');
         }
 
         $text = '';
@@ -452,7 +456,7 @@ class MasterlistSheetScanner
         $decoded = json_decode(trim($text), true);
 
         if (! is_array($decoded)) {
-            throw new RuntimeException('The scan returned an unreadable result. Please try again.');
+            throw new UploadReadFailure('The scan returned an unreadable result. Please try again.');
         }
 
         return $decoded;

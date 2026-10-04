@@ -16,6 +16,7 @@ use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
+use App\Support\UploadReadFailure;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -401,7 +402,11 @@ class FeedingProgramController extends Controller
         try {
             $parsed = (new AttendanceSheetParser)->parse($file);
         } catch (Throwable $e) {
-            return back()->with('error', 'Could not read the uploaded file. Make sure it is a valid CSV or Excel sheet. ('.$e->getMessage().')');
+            // The spreadsheet library's own message can name the temporary
+            // file on the server: logged, never shown.
+            report($e);
+
+            return back()->with('error', 'Could not read the uploaded file. Make sure it is a valid CSV or Excel sheet.');
         }
 
         if (! empty($parsed['error'])) {
@@ -571,10 +576,16 @@ class FeedingProgramController extends Controller
 
         try {
             $result = $scanner->scan($photo, $roster, $anchorDate);
-        } catch (Throwable $e) {
+        } catch (UploadReadFailure $e) {
             // Deliberately no partial write: a failed scan leaves the period
             // exactly as it was.
             return back()->with('error', 'Could not read the attendance photo. '.$e->getMessage());
+        } catch (Throwable $e) {
+            // A provider error carries request ids and endpoint details:
+            // logged, never shown.
+            report($e);
+
+            return back()->with('error', 'Could not read the attendance photo. Please try again.');
         }
 
         $sessions = $this->normalizeScannedSessions($result, $roster);

@@ -80,4 +80,43 @@ class PrototypeSessionTest extends TestCase
         // Real advisers are still redirected by the page's own role check.
         $response->assertRedirect(route('dashboard.class-adviser'));
     }
+
+    #[Test]
+    public function with_prototype_sessions_off_a_protected_page_asks_for_a_sign_in(): void
+    {
+        config(['app.prototype_sessions' => false]);
+
+        $this->get('/dashboard/system-admin')
+            ->assertRedirect(route('login'))
+            ->assertSessionMissing('active_role');
+
+        $this->getJson('/dashboard/school-nurse')->assertStatus(401);
+    }
+
+    #[Test]
+    public function with_prototype_sessions_off_a_leftover_prototype_session_is_dropped(): void
+    {
+        config(['app.prototype_sessions' => false]);
+
+        $this->withSession($this->prototypeSession('system_admin'))
+            ->get('/dashboard/system-admin')
+            ->assertRedirect(route('login'))
+            ->assertSessionMissing('active_role');
+    }
+
+    #[Test]
+    public function with_prototype_sessions_off_a_real_account_session_still_opens_its_pages(): void
+    {
+        config(['app.prototype_sessions' => false]);
+        $institution = Institution::firstOrCreate(['name' => 'Real School'], ['status' => 'active']);
+
+        $this->withSession([
+            'active_role' => 'school_nurse',
+            'active_name' => 'Ana Reyes',
+            'active_username' => 'ana.reyes',
+            'active_institution_id' => $institution->id,
+        ])->get('/dashboard/student-health-records')
+            ->assertStatus(200)
+            ->assertSessionHas('active_role', 'school_nurse');
+    }
 }

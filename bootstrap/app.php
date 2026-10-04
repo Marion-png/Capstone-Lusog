@@ -5,6 +5,7 @@ use App\Http\Middleware\EnsureActiveSession;
 use App\Http\Middleware\FreshRequestState;
 use App\Http\Middleware\InstitutionScope;
 use App\Http\Middleware\RestrictSchoolHeadWrites;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -21,6 +22,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // First in, so nothing downstream reads a cache left over from the
         // previous request.
         $middleware->prepend(FreshRequestState::class);
+        // Railway terminates TLS at its edge and forwards plain HTTP; trusting
+        // its X-Forwarded-* headers is what makes asset() and route() emit
+        // https:// rather than mixed-content http:// links.
+        $middleware->trustProxies(at: '*');
+        $middleware->append(SecurityHeaders::class);
         $middleware->appendToGroup('web', EnsureActiveSession::class);
         $middleware->appendToGroup('web', InstitutionScope::class);
         $middleware->appendToGroup('web', AuditSensitiveAccess::class);

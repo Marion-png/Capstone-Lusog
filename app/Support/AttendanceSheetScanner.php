@@ -7,7 +7,6 @@ use Anthropic\Messages\Base64ImageSource;
 use Anthropic\Messages\ImageBlockParam;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
-use RuntimeException;
 use Throwable;
 
 /**
@@ -64,11 +63,11 @@ class AttendanceSheetScanner
     public function scan(UploadedFile $photo, array $roster, ?string $anchorDate = null): array
     {
         if ($roster === []) {
-            throw new RuntimeException('No learners on file to match against.');
+            throw new UploadReadFailure('No learners on file to match against.');
         }
 
         if (! self::isConfigured()) {
-            throw new RuntimeException('Attendance scanning is not configured. Set ANTHROPIC_API_KEY.');
+            throw new UploadReadFailure('Attendance scanning is not configured. Set ANTHROPIC_API_KEY.');
         }
 
         $client = $this->client ?? new Client(apiKey: (string) config('services.anthropic.key'));
@@ -365,7 +364,7 @@ class AttendanceSheetScanner
         // A refusal returns HTTP 200 with empty/partial content — check before
         // reading, or a declined scan looks like a sheet with no marks.
         if (($message->stopReason ?? null) === 'refusal') {
-            throw new RuntimeException('The image could not be processed. Try a clearer photo of the attendance sheet.');
+            throw new UploadReadFailure('The image could not be processed. Try a clearer photo of the attendance sheet.');
         }
 
         $text = '';
@@ -377,7 +376,7 @@ class AttendanceSheetScanner
 
         $decoded = json_decode(trim($text), true);
         if (! is_array($decoded)) {
-            throw new RuntimeException('The scan returned an unreadable result. Please try again.');
+            throw new UploadReadFailure('The scan returned an unreadable result. Please try again.');
         }
 
         return $decoded;

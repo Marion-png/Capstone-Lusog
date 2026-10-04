@@ -31,7 +31,7 @@ demo session for that role, so every UI can be reached by typing its URL.
 
 ## Stack
 
-- PHP 8.2 · Laravel 12 · Blade · Tailwind CSS 4 · Vite
+- PHP 8.4 · Laravel 12 · Blade · Tailwind CSS 4 · Vite
 - PostgreSQL, deployed on Railway (the only database this app runs against)
 - PHPUnit with in-memory SQLite for the test suite
 - OpenSpout for XLSX exports; the Anthropic SDK for reading photographed attendance sheets (optional)

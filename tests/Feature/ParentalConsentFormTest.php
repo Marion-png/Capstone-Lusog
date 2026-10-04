@@ -377,12 +377,22 @@ class ParentalConsentFormTest extends TestCase
             ->assertOk();
     }
 
-    /** @test */
-    public function class_adviser_cannot_download_consent_forms(): void
+    /**
+     * An adviser may open their own learners' consent forms (see
+     * AdviserConsentPageTest), never another class's — and is told the form
+     * does not exist rather than that it is forbidden, so its existence is
+     * not confirmed either.
+     *
+     * @test
+     */
+    public function class_adviser_cannot_download_another_class_consent_form(): void
     {
+        $record = $this->makeRecord('LRN777', 'Grade 2 / Rosal');
+        $consent = $this->makeConsent($record);
+
         $this->withSession($this->adviserSession())
-            ->get(route('parental-consent.download', 999))
-            ->assertStatus(403);
+            ->get(route('parental-consent.download', $consent->id))
+            ->assertNotFound();
     }
 
     /** @test */

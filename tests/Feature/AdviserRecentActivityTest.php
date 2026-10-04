@@ -54,12 +54,22 @@ class AdviserRecentActivityTest extends TestCase
 
     private function record(string $lrn = 'LRN001', string $name = 'Gomez, Jose'): StudentHealthRecord
     {
+        // The full adviser entry is persisted in student_details, exactly as
+        // AdviserController::store writes it. StudentRosterSync rebuilds the
+        // session row from the database, so a middle name held only in the
+        // session would be replaced by the record's own.
+        [$last, $first] = array_map('trim', explode(',', $name, 2)) + [1 => ''];
+
         return StudentHealthRecord::create([
             'institution_id' => $this->inst->id,
             'school_year' => StudentHealthRecord::currentSchoolYear(),
             'student_id' => $lrn,
             'student_name' => $name,
             'section' => 'Grade 10 / Dalton',
+            'student_details' => [
+                'last_name' => $last, 'first_name' => $first, 'middle_name' => 'Cruz',
+                'lrn' => $lrn, 'grade_level' => 'Grade 10', 'section' => 'Dalton',
+            ],
             'weight' => 40, 'bmi_value' => 17.7, 'nutritional_status' => 'Normal',
         ]);
     }
