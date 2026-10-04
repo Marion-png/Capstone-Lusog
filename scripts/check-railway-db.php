@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Check that this machine is wired to the deployed Railway PostgreSQL and that
  * the accounts on it can actually be signed in with.
@@ -11,16 +12,24 @@
 require __DIR__.'/../vendor/autoload.php';
 
 $app = require __DIR__.'/../bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app->make(Kernel::class)->bootstrap();
 
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 $fail = 0;
-$ok = static function (string $m) { echo "  OK    $m\n"; };
-$bad = static function (string $m) use (&$fail) { $fail++; echo "  FAIL  $m\n"; };
-$warn = static function (string $m) { echo "  WARN  $m\n"; };
+$ok = static function (string $m) {
+    echo "  OK    $m\n";
+};
+$bad = static function (string $m) use (&$fail) {
+    $fail++;
+    echo "  FAIL  $m\n";
+};
+$warn = static function (string $m) {
+    echo "  WARN  $m\n";
+};
 
 echo "\n=== 1. Where is this app pointed? ===\n";
 
@@ -90,8 +99,12 @@ if (! Schema::hasTable('accounts')) {
     } else {
         $ok($accounts->count().' account(s) present.');
 
-        $withHash = $accounts->filter(function ($a) { return filled($a->password_hash ?? null); });
-        $bcrypt = $withHash->filter(function ($a) { return str_starts_with((string) $a->password_hash, '$2y$'); });
+        $withHash = $accounts->filter(function ($a) {
+            return filled($a->password_hash ?? null);
+        });
+        $bcrypt = $withHash->filter(function ($a) {
+            return str_starts_with((string) $a->password_hash, '$2y$');
+        });
 
         if ($withHash->isNotEmpty() && $bcrypt->count() === $withHash->count()) {
             $ok('Every password is a bcrypt hash Hash::check() can verify.');
@@ -101,7 +114,9 @@ if (! Schema::hasTable('accounts')) {
 
         // accounts is a plaintext table by design, so a collaborator's account
         // works regardless of which APP_KEY wrote the encrypted student data.
-        $garbled = $accounts->filter(function ($a) { return str_starts_with((string) $a->username, 'eyJpdiI6'); });
+        $garbled = $accounts->filter(function ($a) {
+            return str_starts_with((string) $a->username, 'eyJpdiI6');
+        });
 
         if ($garbled->isEmpty()) {
             $ok('Usernames are readable (the accounts table is plaintext by design).');
@@ -174,6 +189,7 @@ $reference = [
 foreach ($reference as $table => $label) {
     if (! Schema::hasTable($table)) {
         $bad("Missing table: $table");
+
         continue;
     }
 

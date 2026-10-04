@@ -4,8 +4,14 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="csrf-token" content="{{ csrf_token() }}">
-	@php $mlIsNurse = session('active_role') === 'school_nurse'; @endphp
-	<title>Nutritional Health Status - {{ $mlIsNurse ? 'School Nurse' : 'School Head' }} - SIGLA</title>
+	@php
+		$mlRole = (string) session('active_role', '');
+		$mlIsNurse = in_array($mlRole, ['school_nurse', 'clinic_teacher'], true);
+		$mlRoleLabel = \App\Support\AccountSettings::roleLabel($mlRole);
+		// The clinic reads this list under its own path, the head under theirs.
+		$mlRoutePrefix = $mlRole === 'clinic_teacher' ? 'dashboard.clinic-teacher' : 'dashboard.school-nurse';
+	@endphp
+	<title>Nutritional Health Status - {{ $mlIsNurse ? $mlRoleLabel : 'School Head' }} - SIGLA</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
@@ -24,7 +30,7 @@
 </head>
 <body class="{{ $mlIsNurse ? '' : 'sh-workspace sh-masterlist-page' }}">
 @if ($mlIsNurse)
-	@include('partials.nurse-lusog-sidebar', ['active' => 'nutritional-status'])
+	@include('partials.clinic-rail', ['active' => 'nutritional-status'])
 @else
 	@include('partials.schoolhead-sidebar', ['active' => 'masterlist'])
 @endif
@@ -59,7 +65,7 @@
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>{{ $mlIsNurse ? 'School Nurse' : 'School Head' }}</span><span class="bc-sep">&rsaquo;</span><span>Nutritional Health Status</span></div>
+		<div class="topbar-bc"><span>{{ $mlIsNurse ? $mlRoleLabel : 'School Head' }}</span><span class="bc-sep">&rsaquo;</span><span>Nutritional Health Status</span></div>
 		@include('partials.live-clock')
 	</header>
 
@@ -81,7 +87,7 @@
 				</p>
 			</div>
 			<div class="sh-actions">
-				<a class="btn btn-secondary" href="{{ route($mlIsNurse ? 'dashboard.school-nurse.nutritional-status.export' : 'dashboard.school-head.masterlist.export', request()->query()) }}">
+				<a class="btn btn-secondary" href="{{ route($mlIsNurse ? $mlRoutePrefix.'.nutritional-status.export' : 'dashboard.school-head.masterlist.export', request()->query()) }}">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
 					Export list
 				</a>

@@ -360,6 +360,7 @@ class NutricorConsolidatedReportTest extends TestCase
         $this->assertSame(25.0, $bl['Severely Wasted']['percent']);
         $this->assertSame(75.0, $bl['Normal']['percent']);
     }
+
     /**
      * "Underweight" is a retired label, not a fifth category. The classifier
      * stopped emitting it, so the report carries the DepEd scale's four

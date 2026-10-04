@@ -40,6 +40,7 @@ class AccountSettings
     public const ROLE_LABELS = [
         'school_nurse' => 'School Nurse',
         'clinic_staff' => 'Clinic Staff',
+        'clinic_teacher' => 'Clinic Teacher',
         'class_adviser' => 'Class Adviser',
         'school_head' => 'School Head',
         'feeding_coor' => 'Feeding Coordinator',

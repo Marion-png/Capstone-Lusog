@@ -52,6 +52,7 @@ class Announcement extends Model
     public const AUDIENCES = [
         'class_adviser' => 'Class Advisers',
         'clinic_staff' => 'Clinic Staff',
+        'clinic_teacher' => 'Clinic Teacher',
         'school_head' => 'School Head',
         'feeding_coor' => 'Feeding Coordinator',
         'school_nurse' => 'School Nurse',

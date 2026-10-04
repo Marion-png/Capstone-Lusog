@@ -12,6 +12,7 @@ class InstitutionScope
     const SCOPED_ROLES = [
         'school_nurse',
         'clinic_staff',
+        'clinic_teacher',
         'class_adviser',
         'school_head',
         'feeding_coor',

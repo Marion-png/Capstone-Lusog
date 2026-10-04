@@ -75,13 +75,13 @@ class SchoolHeadMasterlistController extends Controller
      *
      * @var list<string>
      */
-    private const READ_ROLES = ['school_head', 'school_nurse'];
+    private const READ_ROLES = ['school_head', 'school_nurse', 'clinic_teacher'];
 
     public function index(Request $request): View|RedirectResponse
     {
         if (! $this->mayRead($request)) {
             return redirect()->route('login')
-                ->with('error', 'Only the School Head and the School Nurse can open the nutritional health status list.');
+                ->with('error', 'Only the School Head and the school clinic can open the nutritional health status list.');
         }
 
         return view('schoolhead-dashboard.masterlist', $this->build($request));

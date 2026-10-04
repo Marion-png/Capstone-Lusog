@@ -58,12 +58,13 @@ Two more guards share the `web` group and are described in their own sections: `
 
 ### Role System
 
-Roles stored as strings in `session('active_role')`. The seven roles are:
+Roles stored as strings in `session('active_role')`. The eight roles are:
 
 | session value | Description |
 |---|---|
 | `school_nurse` | **School Nurse** — manages deworming, consultations, health records |
 | `clinic_staff` | Consultation logging, medicine inventory |
+| `clinic_teacher` | **Clinic Teacher** — a teacher covering the school clinic. Reads the School Nurse's screens; dispenses **paracetamol only** and never writes stock (see the Clinic Teacher section) |
 | `class_adviser` | Student data entry, medical certificates, consent forms |
 | `school_head` | **School Head** — reviews, monitors, approves and exports; never encodes. Read-only over every other write path (see the School Head section) |
 | `feeding_coor` | SBFP: uploads attendance (gates the workflow), fills SBFP forms, views auto-tabulated BMI reports |
@@ -166,6 +167,27 @@ The list holds **one** kind of route: how a person gets into or out of the app �
 8. **Inventory Overview is stock and standing, and nothing else** (`SchoolHeadInventoryController`). The role has `medicine.view-inventory` but not receipt or dispensing, so the page renders no receive form, no dispense action and no adjustment — and `RestrictSchoolHeadWrites` refuses those endpoints regardless of what a page renders. **A list of who a medicine went to is deliberately absent**: it names the learner and why, which is clinical information about a child, and "are we running out of paracetamol" does not need it. Consumption reaches this page only through `App\Support\MedicineUsage`, which groups on the plain `medicine_id` / `quantity` / `dispensed_at` columns and cannot answer who received any of it.
 9. **The status fills are a validated five-slot set** (`--sh-sw` / `--sh-w` / `--sh-n` / `--sh-ow` / `--sh-ob` in `schoolhead.css`). Normal and Overweight reuse the theme's already-validated `--series-healthy` / `--series-risk` unchanged; the other three were stepped against them and the whole set passes all six dataviz checks on the card surface. Re-run the validator before changing any of them.
 
+### Clinic Teacher (the nurse's screens, one medicine)
+
+A teacher who covers the school clinic when the nurse is not in it. The role is **not a narrower Clinic Staff** — it reads the School Nurse's whole module set (the clinic dashboard, health records, the assessment queue, Fill/Edit Medical Record, the consultation log, the nutrition module, consent forms, the inventory, data visualization) — and it is not a nurse either. Two boundaries make it its own role, and both are enforced on the write:
+
+- **It dispenses paracetamol and nothing else.** `App\Support\DispensingRights` is the one reading of who may hand a medicine over and which: the nurse has the whole shelf, a Clinic Teacher has paracetamol, Clinic Staff have nothing (that was already true and is unchanged). Paracetamol is matched on the **name**, never on an id or an exact catalogue string — the DepEd list carries it twice already and a school may hold a third spelling, so an allow-list of ids would silently narrow to whichever rows existed when it was written. The New Consultation dialog lists the **whole** shelf so the teacher can see what the clinic holds, disables what this role may not give and prints the restriction under the field; none of that is the enforcement. `ConsultationController` asks `DispensingRights::allows()` again **inside the transaction**, against the row it actually read, so a replayed form or a crafted `medicine_id` is refused — and because it throws there, a refused dispense takes the consultation down with it and leaves no visit and no stock movement to reconcile. `ClinicTeacherRoleTest` pins the crafted-request case and the rollback.
+- **It reads the shelf; it does not change what the school owns.** `MedicineInventoryController` now splits one guard into two — `VIEW_ROLES` (the whole clinic, including this role) and `STOCK_WRITE_ROLES` (not this role) — so Add Medicine and Receive Stock are refused at the endpoint as well as being absent from the page. Stock still moves for this role through the one path it is allowed: a dispense on a consultation.
+
+Everything else is deliberately **shared, not copied**. `App\Support\ClinicDashboard::read()` is the one reading behind both the nurse's dashboard and this role's, so two desks cannot report different figures for one clinic on the same afternoon, and the nutrition module, the masterlist and the feeding-programme page are the same controllers rendered in this role's rail (`partials/clinic-teacher-sidebar`, dispatched by `partials/clinic-rail`). The role's URLs live under `/dashboard/clinic-teacher` because `EnsureActiveSession` seeds a prototype session for whichever role a URL belongs to — a demo Clinic Teacher opening `/dashboard/school-nurse` would be re-seeded as the nurse before the page rendered. The feeding-programme page is read-only for this role exactly as it is for the nurse.
+
+### Account settings (every role, own password only)
+
+`/dashboard/settings` (`SettingsController`, `partials/settings-panels`) answers two questions: which account am I signed in as, and how do I change its password. Before it existed, two rails carried a Settings item pointing at `#` and **nobody in the application could change their password at all**.
+
+It is deliberately not a user management screen. A name, role, school and class assignment are printed and not editable — they are the System Admin's, and a second place to change a role is a second place for two screens to disagree about who somebody is. Four rules hold:
+
+- **The account is resolved from the session, never from the request** (`App\Support\AccountSettings`). Neither route takes an account to act on, so there is no id to swap for somebody else's. Usernames are unique per school, so the lookup is keyed on both.
+- **One declaration of what a password is** (`App\Support\AccountPassword`), read by this page *and* by the registration route — a change path with looser rules than registration is a way around them.
+- **A missing hash is a hole, and this is the only way to close it.** The login route matches an account whose `password_hash` is empty against *any* password. That is a real state (an approved request can carry a null hash), so Settings offers to **set** one and does not ask for a current password that never existed.
+- **The School Head may change their own password.** `settings.password` is on `RestrictSchoolHeadWrites::ALLOWED_ROUTES` as the first kind of entry — how a person gets into or out of the app — because it is the credential their session is made from rather than school data, and it cannot reach another account. The System Admin's credentials are environment variables, so that role is told so instead of being offered a form that could not work.
+
+The page is one body in two shells: the LUSOG rail for seven roles, and `nutricor/settings` for the role whose pages are built on its own layout. `UserSettingsTest` guards all of it.
 ### Routing Pattern
 
 All routes are inline closures or controller actions in `routes/web.php` — no route groups by role and no route-level role middleware. Role checks are manual string comparisons on `session('active_role')` inside the closure or controller; the only blanket enforcement is the global `web` middleware named under Route Guard. Every write route must carry a name (`RestrictSchoolHeadWrites` matches on it, and `SchoolHeadRoleTest` fails an unnamed one).
@@ -295,7 +317,7 @@ Blade templates with Tailwind CSS 4. No Livewire. Alpine.js is used inline in so
 
 - The theme also declares `--asb-*` (sidebar) and `--ann-*` / `--clock-*` (announcements board, live-clock pill). Those partials and `role-sidebar.css` read every colour through `var(--token, <fallback>)`; the fallbacks now hold the same LUSOG values as the tokens, so a page cannot drift off-palette by failing to load them. Retheme by changing the token — edit a fallback only to keep it in step with its token, never to give one role a different colour.
 
-**One palette, every role.** A page is on the palette one of two ways, never both: pages migrated to the design system inline `css/lusog-theme.css`; every other page inlines `css/lusog-palette.css` **after** its own styles, which re-points the older private ramps (`--g900`, `--text-3`, `--border`, …) at LUSOG values. Loading order is the whole mechanism — the palette wins by coming last, so a page that inlines it before its own `:root` silently keeps the old greens. Legacy sheets no longer hardcode hex greens; write new rules against `--lg-*`. `SharedPaletteTest` guards both the coverage and the ordering across all seven roles.
+**One palette, every role.** A page is on the palette one of two ways, never both: pages migrated to the design system inline `css/lusog-theme.css`; every other page inlines `css/lusog-palette.css` **after** its own styles, which re-points the older private ramps (`--g900`, `--text-3`, `--border`, …) at LUSOG values. Loading order is the whole mechanism — the palette wins by coming last, so a page that inlines it before its own `:root` silently keeps the old greens. Legacy sheets no longer hardcode hex greens; write new rules against `--lg-*`. `SharedPaletteTest` guards both the coverage and the ordering across all eight roles.
 
 - Every role's rail shows the full `images/lusog-logo.png` lockup — the `.sb-logo-full` (nurse) or `.asb-logo-full` (all other roles) image, not an icon-plus-wordmark pair.
 - The dashboard's BMI zone colours (`.grad-under/-healthy/-over` in `feeding-dashboard.css`) are a validated set, not a palette picked by eye. Re-run the dataviz validator before changing any of them — the brief's lighter `#F2B84B` / `#43A866` both fail the CVD and contrast checks as line colours.

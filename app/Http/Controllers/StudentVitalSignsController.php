@@ -86,7 +86,7 @@ class StudentVitalSignsController extends Controller
     {
         $role = (string) $request->session()->get('active_role');
 
-        if (! in_array($role, ['school_nurse', 'clinic_staff', 'class_adviser'], true)) {
+        if (! in_array($role, ['school_nurse', 'clinic_staff', 'class_adviser', 'clinic_teacher'], true)) {
             return null;
         }
 

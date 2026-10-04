@@ -171,7 +171,7 @@ class HealthAssessmentController extends Controller
         $activeRole = (string) $request->session()->get('active_role', '');
 
         abort_unless(
-            in_array($activeRole, ['class_adviser', 'school_nurse', 'clinic_staff'], true),
+            in_array($activeRole, ['class_adviser', 'school_nurse', 'clinic_staff', 'clinic_teacher'], true),
             403,
             'Access denied.'
         );
@@ -340,7 +340,7 @@ class HealthAssessmentController extends Controller
     /** Read-only view of a submitted assessment (adviser, nurse, clinic staff). */
     public function show(Request $request, HealthAssessment $assessment)
     {
-        if ($redirect = $this->requirePageRole($request, ['class_adviser', 'school_nurse', 'clinic_staff'])) {
+        if ($redirect = $this->requirePageRole($request, ['class_adviser', 'school_nurse', 'clinic_staff', 'clinic_teacher'])) {
             return $redirect;
         }
 
@@ -364,7 +364,7 @@ class HealthAssessmentController extends Controller
      */
     public function nurseIndex(Request $request)
     {
-        if ($redirect = $this->requirePageRole($request, ['school_nurse', 'clinic_staff'])) {
+        if ($redirect = $this->requirePageRole($request, ['school_nurse', 'clinic_staff', 'clinic_teacher'])) {
             return $redirect;
         }
 

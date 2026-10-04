@@ -17,7 +17,7 @@ class MedicineInventoryController extends Controller
 {
     public function create(Request $request): View|RedirectResponse
     {
-        if ($redirect = $this->requireClinicRole($request)) {
+        if ($redirect = $this->requireStockWriter($request)) {
             return $redirect;
         }
 
@@ -95,6 +95,9 @@ class MedicineInventoryController extends Controller
             'expiry_warning_days' => Medicine::EXPIRY_WARNING_DAYS,
             'supports_expiry' => Medicine::supportsExpiry(),
             'supports_receipts' => SchemaCache::hasTable('medicine_receipts'),
+            // Reading the shelf and changing it are two rights; the page
+            // draws the write controls only for the second one.
+            'may_write_stock' => self::mayWriteStock($request->session()->get('active_role')),
             // Usage per medicine for the Current Inventory table — one query
             // for the page, keyed by medicine id.
             'usage' => $medicines->mapWithKeys(fn (Medicine $m): array => [
@@ -138,7 +141,7 @@ class MedicineInventoryController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        if ($redirect = $this->requireClinicRole($request)) {
+        if ($redirect = $this->requireStockWriter($request)) {
             return $redirect;
         }
 
@@ -201,7 +204,7 @@ class MedicineInventoryController extends Controller
      */
     public function receive(Request $request, Medicine $medicine): RedirectResponse
     {
-        if ($redirect = $this->requireClinicRole($request)) {
+        if ($redirect = $this->requireStockWriter($request)) {
             return $redirect;
         }
 
@@ -275,18 +278,81 @@ class MedicineInventoryController extends Controller
     }
 
     /**
-     * Redirects a non-nurse/clinic-staff session to its own dashboard
-     * instead of letting it view or write medicine inventory data.
+     * Who may READ the inventory.
+     *
+     * The whole school clinic: the nurse, clinic staff, and the Clinic Teacher
+     * covering the clinic — "are we running out of paracetamol" is a question
+     * each of them has to be able to answer. Writing it is a narrower right;
+     * see requireStockWriter().
+     */
+    private const VIEW_ROLES = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'system_admin'];
+
+    /**
+     * Who may CHANGE what the school owns — Add Medicine and Receive Stock.
+     *
+     * Deliberately not the Clinic Teacher. Creating a stock item and booking
+     * in a delivery decide what the school holds and what every other screen
+     * counts; a teacher covering the clinic reads the shelf and draws on it
+     * through a consultation, and the one draw they may make is governed by
+     * App\Support\DispensingRights. Clinic staff keep both rights they already
+     * had.
+     *
+     * The rail simply not offering the buttons is not enforcement — a stale
+     * tab, a replayed form or a hand-made request reaches these endpoints all
+     * the same — so the boundary is drawn here.
+     */
+    private const STOCK_WRITE_ROLES = ['school_nurse', 'clinic_staff', 'system_admin'];
+
+    /** May this session change the school's stock records? */
+    public static function mayWriteStock(?string $role): bool
+    {
+        return in_array((string) $role, self::STOCK_WRITE_ROLES, true);
+    }
+
+    /**
+     * Redirects a session that may not read the inventory to its own
+     * dashboard instead of serving it medicine data.
      */
     private function requireClinicRole(Request $request): ?RedirectResponse
     {
+        return $this->requireRole($request, self::VIEW_ROLES);
+    }
+
+    /**
+     * Redirects a session that may read the inventory but not change it back
+     * to the list, saying why, rather than to another role's dashboard — it
+     * is their own page and they are entitled to be on it.
+     */
+    private function requireStockWriter(Request $request): ?RedirectResponse
+    {
+        if ($redirect = $this->requireClinicRole($request)) {
+            return $redirect;
+        }
+
+        if (self::mayWriteStock($request->session()->get('active_role'))) {
+            return null;
+        }
+
+        return redirect()->route('dashboard.medicine-inventory')->with(
+            'error',
+            'Adding a medicine and receiving a delivery are the School Nurse\'s. '
+            .'You can read the inventory, and stock you dispense on a consultation is deducted automatically.'
+        );
+    }
+
+    /**
+     * @param  list<string>  $roles
+     */
+    private function requireRole(Request $request, array $roles): ?RedirectResponse
+    {
         $role = (string) $request->session()->get('active_role', '');
-        if (in_array($role, ['school_nurse', 'clinic_staff', 'system_admin'], true)) {
+        if (in_array($role, $roles, true)) {
             return null;
         }
 
         $redirectByRole = [
             'class_adviser' => 'dashboard.class-adviser',
+            'clinic_teacher' => 'dashboard.clinic-teacher',
             'school_head' => 'dashboard.school-head',
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
             'nutricor' => 'dashboard.nutricor-dashboard',

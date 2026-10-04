@@ -31,7 +31,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 class MlatExportController extends Controller
 {
     /** Who may download a learner's assessment. */
-    public const ROLES = ['school_nurse', 'clinic_staff', 'class_adviser'];
+    public const ROLES = ['school_nurse', 'clinic_staff', 'class_adviser', 'clinic_teacher'];
 
     /** The clinic's colours: the teal band and the light head row. */
     private const BAND = '0F6E62';

@@ -1,0 +1,62 @@
+/*
+ * Account settings page.
+ *
+ * Two panels, nothing the theme already owns. Cards, buttons, inputs, flashes
+ * and .field-label all come from css/lusog-theme.css, which this sheet is
+ * inlined after; everything here is the page's own layout.
+ */
+
+.set-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+}
+
+.set-panel { padding: 18px 20px 20px; }
+
+/* The account's details read down as a label/value list rather than across as
+   a table: there is one record, so a table head would name columns of one. */
+.set-list { margin: 14px 0 0; display: grid; gap: 0; }
+
+.set-item {
+    display: grid;
+    grid-template-columns: 136px minmax(0, 1fr);
+    gap: 14px;
+    padding: 9px 0;
+    border-top: 1px solid var(--lg-border, #DCE8E0);
+}
+.set-item:first-child { border-top: 0; padding-top: 4px; }
+
+.set-item dt {
+    font-size: .78rem;
+    font-weight: 500;
+    color: var(--lg-ink-soft, #55645C);
+}
+.set-item dd {
+    margin: 0;
+    font-size: .85rem;
+    font-weight: 500;
+    color: var(--lg-ink, #102217);
+    overflow-wrap: anywhere;
+}
+
+.set-note { margin: 14px 0 0; font-size: .74rem; line-height: 1.5; }
+
+.set-form { margin-top: 14px; display: grid; gap: 13px; }
+.set-field { display: grid; gap: 6px; }
+.set-hint { font-size: .72rem; }
+.set-actions { margin-top: 3px; }
+
+/* A refusal or a warning sits above the form it belongs to, not beside it. */
+.set-blocked, .set-nopass { margin: 14px 0 0; font-size: .8rem; line-height: 1.5; }
+
+/* The password field is a secret, so it is never set in the figure face —
+   tabular digits in a masked field only help somebody counting over a
+   shoulder. */
+.set-form input[type="password"] { font-variant-numeric: normal; letter-spacing: .04em; }
+
+@media (max-width: 900px) {
+    .set-grid { grid-template-columns: minmax(0, 1fr); }
+    .set-item { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}

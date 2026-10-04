@@ -29,7 +29,7 @@ use Illuminate\Http\Response;
 class ConsultationPhotoController extends Controller
 {
     /** The desks that run the clinic, and therefore take the photographs. */
-    private const CLINIC_ROLES = ['school_nurse', 'clinic_staff'];
+    private const CLINIC_ROLES = ['school_nurse', 'clinic_staff', 'clinic_teacher'];
 
     public function index(Request $request, Consultation $consultation): JsonResponse
     {

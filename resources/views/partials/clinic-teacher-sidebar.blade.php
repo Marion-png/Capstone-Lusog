@@ -1,26 +1,40 @@
 {{--
-    School Nurse side rail, LUSOG design system.
+    Clinic Teacher side rail, LUSOG design system.
 
     Pass $active to highlight the current item: 'dashboard' | 'records' |
-    'queue' | 'consultations' | 'feeding' | 'deworming' | 'consent' |
-    'assessments' | 'inventory' | 'dispensing' | 'visualization' | 'reports'.
+    'queue' | 'consultations' | 'nutritional-status' | 'consent' |
+    'inventory' | 'visualization' | 'reports'.
 
-    Markup only — the .sb-* rules live in css/nurse-sidebar.css, which the
-    page must inline after css/lusog-theme.css. This replaces the older
-    .nsb-* rail in partials/nurse-sidebar.blade.php; both exist while the
-    remaining nurse pages are still being moved over.
+    Same .sb-* markup and css/nurse-sidebar.css as the School Nurse and
+    Clinic Staff rails — a teacher covering the clinic works the same screens
+    the nurse does, so the rail is the nurse's module list and not a third
+    design.
+
+    Two things differ, and only two:
+
+      - Dashboard points at dashboard.clinic-teacher rather than the nurse's
+        URL. The page behind it is the same reading (App\Support\ClinicDashboard),
+        but the URL has to belong to this role: EnsureActiveSession re-seeds a
+        prototype session for whichever role a URL belongs to, so a demo
+        Clinic Teacher on /dashboard/school-nurse would become a demo nurse
+        before the page rendered.
+      - There is no entry that writes inventory. Receive Stock and Add
+        Medicine are the nurse's; this role reads the shelf and draws on it
+        through a consultation. The restriction lives on those endpoints, not
+        on this rail — a rail entry that is merely absent is not enforcement.
 --}}
 @php
     $active = $active ?? 'dashboard';
 
-    // Cards the adviser has handed over but nobody has examined yet. Same
-    // source as the old rail so the number does not change meaning.
-    $nurseSbPending = collect(session('school_health_card_records', []))
+    // Cards the advisers have handed over that nobody has examined yet — the
+    // same count the nurse's rail carries, from the same source, so the badge
+    // does not change meaning between the two desks.
+    $ctSbPending = collect(session('school_health_card_records', []))
         ->filter(fn ($row) => empty($row['examination']))
         ->count();
 
-    $nurseSbName = trim((string) session('active_name', 'School Nurse')) ?: 'School Nurse';
-    $nurseSbInitials = collect(preg_split('/\s+/', $nurseSbName))
+    $ctSbName = trim((string) session('active_name', 'Clinic Teacher')) ?: 'Clinic Teacher';
+    $ctSbInitials = collect(preg_split('/\s+/', $ctSbName))
         ->filter()
         ->map(fn ($part) => strtoupper(substr($part, 0, 1)))
         ->take(2)
@@ -34,20 +48,15 @@
 
     <nav class="sb-nav">
         <div class="sb-section-label">Main</div>
-        <a href="{{ route('dashboard.school-nurse') }}" class="sb-link {{ $active === 'dashboard' ? 'active' : '' }}">
+        <a href="{{ route('dashboard.clinic-teacher') }}" class="sb-link {{ $active === 'dashboard' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
             Dashboard
         </a>
         <a href="{{ route('dashboard.student-health-records') }}" class="sb-link {{ $active === 'records' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Health Records
-            @if ($nurseSbPending > 0)<span class="sb-count alert">{{ $nurseSbPending }}</span>@endif
+            @if ($ctSbPending > 0)<span class="sb-count alert">{{ $ctSbPending }}</span>@endif
         </a>
-        {{-- One entry, not two. This and the old "Health Assessments" tab were
-             the same job under different names — the nurse reading what the
-             class advisers submitted — so the rail now names it once. The
-             route behind it is unchanged (nurse.index); only the label moved.
-             health-assessments.nurse-index is still live for old links. --}}
         <a href="{{ route('nurse.index') }}" class="sb-link {{ $active === 'queue' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
             Health Assessment
@@ -56,47 +65,22 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
             Consultation Log
         </a>
-
-        {{-- The whole school's weigh-ins in one list. The nurse already opens
-             every learner's record one at a time; this answers "how many
-             children are wasted this year" without paging through a roster.
-             It is the School Head's Nutritional Health Status list, read by
-             one controller and rendered in whichever rail the reader belongs
-             to — never a second copy that could report different figures. --}}
-        <a href="{{ route('dashboard.school-nurse.nutritional-status') }}" class="sb-link {{ $active === 'nutritional-status' ? 'active' : '' }}">
+        <a href="{{ route('dashboard.clinic-teacher.nutritional-status') }}" class="sb-link {{ $active === 'nutritional-status' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 16l4-5 3 3 5-7"/></svg>
             Nutritional Health Status
         </a>
 
-        {{-- "Nutritional Status Report" used to sit here, under Health
-             Programs. It is the same module as Nutritional Health Status above
-             — one nurse asking one question about nutrition — so it is now a
-             view inside it (partials/nurse-nutrition-tabs) rather than a
-             second entry with nearly the same name. The page, its route and
-             its figures are unchanged; only the way in moved. --}}
         <div class="sb-section-label">Health Programs</div>
-        {{-- Deworming Program is deliberately not listed. The page, its
-             routes and its data are all still live at
-             dashboard.school-nurse.deworming — only the rail entry is
-             hidden. Deworming also remains a parental-consent service and
-             a field on the medical examination; neither is affected. --}}
         <a href="{{ route('consent-forms.nurse-index') }}" class="sb-link {{ $active === 'consent' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
             Consent Forms
         </a>
-        {{-- Health Assessments is deliberately not listed. It and the Review
-             Queue were two names for one job, so the rail carries it once, as
-             "Health Assessment", under Clinic. The page and its routes are
-             still live at health-assessments.nurse-index — only the duplicate
-             rail entry is gone, exactly as Deworming was handled above. --}}
 
         <div class="sb-section-label">Inventory</div>
         <a href="{{ route('dashboard.medicine-inventory') }}" class="sb-link {{ $active === 'inventory' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="2" width="18" height="20" rx="2"/><path d="M9 2v4h6V2"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
             Medicine Inventory
         </a>
-        {{-- No Dispensing Log tab: a dispense is recorded in the consultation
-             dialog, on the visit it belongs to, and nowhere else. --}}
 
         <div class="sb-section-label">Reports</div>
         <a href="{{ route('dashboard.data-visualization') }}" class="sb-link {{ $active === 'visualization' ? 'active' : '' }}">
@@ -116,9 +100,9 @@
     </nav>
 
     <div class="sb-user">
-        <div class="sb-avatar">{{ $nurseSbInitials ?: 'SN' }}</div>
+        <div class="sb-avatar">{{ $ctSbInitials ?: 'CT' }}</div>
         <div class="sb-user-meta">
-            <div class="sb-user-name">{{ $nurseSbName }}</div>
+            <div class="sb-user-name">{{ $ctSbName }}</div>
             <div class="sb-user-role">{{ session('active_school_name', 'No school assigned') }}</div>
         </div>
         {{-- Signing out changes state, so it posts a CSRF-protected form

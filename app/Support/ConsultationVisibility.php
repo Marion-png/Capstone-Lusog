@@ -61,7 +61,7 @@ class ConsultationVisibility
      *
      * @var list<string>
      */
-    public const DETAIL_ROLES = ['school_nurse', 'clinic_staff'];
+    public const DETAIL_ROLES = ['school_nurse', 'clinic_staff', 'clinic_teacher'];
 
     /** Shown in place of a redacted clinical field. */
     public const REDACTED_LABEL = 'Recorded by the clinic';

@@ -133,7 +133,7 @@ class ParentalConsentFormController extends Controller
         $activeRole = (string) $request->session()->get('active_role', '');
 
         abort_unless(
-            in_array($activeRole, ['class_adviser', 'clinic_staff', 'school_nurse'], true),
+            in_array($activeRole, ['class_adviser', 'clinic_staff', 'school_nurse', 'clinic_teacher'], true),
             403,
             'Access denied.'
         );
@@ -209,7 +209,7 @@ class ParentalConsentFormController extends Controller
         $role = (string) $request->session()->get('active_role', '');
 
         abort_unless(
-            in_array($role, ['clinic_staff', 'school_nurse', 'class_adviser'], true),
+            in_array($role, ['clinic_staff', 'school_nurse', 'class_adviser', 'clinic_teacher'], true),
             403,
             'Only the clinic or the learner\'s class adviser may open consent forms.'
         );

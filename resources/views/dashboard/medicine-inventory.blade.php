@@ -28,7 +28,14 @@
     @endphp
 
     <header class="topbar">
-        <div class="topbar-bc"><span>{{ session('active_role') === 'clinic_staff' ? 'Clinic Staff' : 'School Nurse' }}</span><span class="bc-sep">&rsaquo;</span><span>Medicine Inventory</span></div>
+        @php
+            // Reading the shelf and changing it are two rights.
+            // `$supports_receipts` keeps its own meaning — whether the schema
+            // has the table — so the two questions never fold into one.
+            $invMayWriteStock = $may_write_stock ?? true;
+            $invMayReceive = $supports_receipts && $invMayWriteStock;
+        @endphp
+        <div class="topbar-bc"><span>{{ \App\Support\AccountSettings::roleLabel(session('active_role')) }}</span><span class="bc-sep">&rsaquo;</span><span>Medicine Inventory</span></div>
 
         @include('partials.nurse-learner-search')
         <div class="topbar-spacer"></div>
@@ -56,10 +63,12 @@
                      New Consultation work. It stays an anchor to the standalone
                      page so it still works without JavaScript — the script below
                      upgrades it in place. --}}
-                <a href="{{ route('medicine-inventory.create') }}" class="btn btn-primary" data-add-medicine-open>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    Add Medicine
-                </a>
+                @if ($invMayWriteStock)
+                    <a href="{{ route('medicine-inventory.create') }}" class="btn btn-primary" data-add-medicine-open>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Add Medicine
+                    </a>
+                @endif
             </div>
         </div>
 
@@ -250,7 +259,7 @@
                             @endif
                             <th>Status</th>
                             <th>Updated</th>
-                            @if ($supports_receipts)
+                            @if ($invMayReceive)
                                 <th></th>
                             @endif
                         </tr>
@@ -306,7 +315,7 @@
                                 @endif
                             </td>
                             <td class="tnum">{{ $medicine->updated_at?->format('Y-m-d') ?? '—' }}</td>
-                            @if ($supports_receipts)
+                            @if ($invMayReceive)
                                 <td class="inv-actions">
                                     <button type="button" class="btn btn-secondary btn-sm" data-receive-open
                                             data-medicine-id="{{ $medicine->id }}"
@@ -322,7 +331,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ 8 + (int) $supports_expiry + (int) $supports_receipts }}" class="table-empty">No medicine records yet. Use Add Medicine to create your first item.</td>
+                            <td colspan="{{ 8 + (int) $supports_expiry + (int) $invMayReceive }}" class="table-empty">No medicine records yet. Use Add Medicine to create your first item.</td>
                         </tr>
                     @endforelse
                     </tbody>
@@ -332,7 +341,7 @@
     </div>
 </div>
 
-@if ($supports_receipts)
+@if ($invMayReceive)
     {{-- ── Receive stock ──
          One dialog for every row: the button carries the item, the dialog
          posts to that item's own receive route. A delivery is the logbook's
@@ -420,6 +429,7 @@
     </script>
 @endif
 
+@if ($invMayWriteStock)
 {{-- ── Add medicine ──
      The same fields the standalone page carries (partials/medicine-form-fields)
      posting to the same `medicine-inventory.store`, so there is one write path
@@ -483,6 +493,7 @@
     @endif
 })();
 </script>
+@endif
 
 @include('partials.nurse-page-transition')
 </body>

@@ -8,6 +8,8 @@ use App\Models\ConsultationPhoto;
 use App\Models\Medicine;
 use App\Models\MedicineDispense;
 use App\Models\StudentHealthRecord;
+use App\Support\AccountSettings;
+use App\Support\DispensingRights;
 use App\Support\EncryptedFileStorage;
 use App\Support\LearnerSearchIndex;
 use App\Support\SchemaCache;
@@ -211,10 +213,14 @@ class ConsultationController extends Controller
 
         $institutionId = $request->session()->get('active_institution_id');
 
-        // Dispensing is the school nurse's, and this is now the only path to it:
-        // clinic staff log consultations but are deliberately not admitted to
-        // the dispensing path, and this must not become a way around that.
-        $mayDispense = $request->session()->get('active_role') === 'school_nurse';
+        // This is the only path into the dispensing log, so the rule about who
+        // may use it is applied here rather than only on the form that draws
+        // it. Clinic staff log consultations and are deliberately not admitted;
+        // the School Nurse has the whole shelf; a Clinic Teacher has
+        // paracetamol and nothing else, which is checked against the medicine
+        // itself inside the transaction below.
+        $activeRole = (string) $request->session()->get('active_role', '');
+        $mayDispense = DispensingRights::mayDispense($activeRole);
         $medicineId = $mayDispense ? ($validated['medicine_id'] ?? null) : null;
         $quantity = max(1, (int) ($validated['medicine_quantity'] ?? 1));
 
@@ -226,7 +232,7 @@ class ConsultationController extends Controller
         // Either both land or neither does.
         $photoCount = 0;
 
-        DB::transaction(function () use ($validated, $conditionName, $conditionId, $institutionId, $medicineId, $quantity, $photos, $request, &$dispensed, &$photoCount) {
+        DB::transaction(function () use ($validated, $conditionName, $conditionId, $institutionId, $medicineId, $quantity, $photos, $request, $activeRole, &$dispensed, &$photoCount) {
             // The note travels only where its column has been migrated, so an
             // older database still records the visit. Whether the clinic
             // shared it with the class adviser rides with it — a note nobody
@@ -294,6 +300,17 @@ class ConsultationController extends Controller
                 ])->errorBag('consultation');
             }
 
+            // A disabled <option> is a hint to whoever is looking at the
+            // screen; a medicine id off the wire is not bound by it. So the
+            // restriction is applied to the row that was actually found, and
+            // refusing here rolls the whole save back — a refused dispense
+            // leaves no consultation and no stock movement behind it.
+            if (! DispensingRights::allows($activeRole, $medicine->name)) {
+                throw ValidationException::withMessages([
+                    'medicine_id' => DispensingRights::refusalMessage($activeRole, $medicine->name),
+                ])->errorBag('consultation');
+            }
+
             if ($medicine->stock_quantity < $quantity) {
                 throw ValidationException::withMessages([
                     'medicine_quantity' => "Only {$medicine->stock_quantity} {$medicine->unit} of {$medicine->name} left in stock.",
@@ -307,8 +324,11 @@ class ConsultationController extends Controller
                 'student_name' => $validated['student_name'],
                 'reason' => $conditionName,
                 'quantity' => $quantity,
-                'dispensed_by_name' => (string) $request->session()->get('active_name', 'School Nurse'),
-                'dispensed_by_role' => (string) $request->session()->get('active_role', 'school_nurse'),
+                // Whoever handed it over, not a default of whoever usually
+                // does: a Clinic Teacher's paracetamol must not be filed as the
+                // nurse's.
+                'dispensed_by_name' => (string) $request->session()->get('active_name', AccountSettings::roleLabel($activeRole)),
+                'dispensed_by_role' => $activeRole,
                 'dispensed_at' => now(),
             ]);
 
@@ -355,7 +375,7 @@ class ConsultationController extends Controller
     private function requireClinicRole(Request $request): ?RedirectResponse
     {
         $role = (string) $request->session()->get('active_role', '');
-        if (in_array($role, ['school_nurse', 'clinic_staff', 'system_admin'], true)) {
+        if (in_array($role, ['school_nurse', 'clinic_staff', 'system_admin', 'clinic_teacher'], true)) {
             return null;
         }
 

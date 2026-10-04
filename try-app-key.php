@@ -1,4 +1,9 @@
 <?php
+
+use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Encryption\Encrypter;
+use Illuminate\Support\Facades\DB;
+
 /**
  * Test whether an APP_KEY can decrypt the Railway data — without touching .env.
  *
@@ -17,9 +22,9 @@ if ($key === '') {
 }
 
 $app = require __DIR__.'/bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$app->make(Kernel::class)->bootstrap();
 
-$row = Illuminate\Support\Facades\DB::table('student_health_records')
+$row = DB::table('student_health_records')
     ->whereNotNull('student_name')
     ->first();
 
@@ -29,11 +34,11 @@ if (! $row) {
 }
 
 $raw = base64_decode(substr($key, 7));
-$encrypter = new Illuminate\Encryption\Encrypter($raw, config('app.cipher'));
+$encrypter = new Encrypter($raw, config('app.cipher'));
 
 try {
     $name = $encrypter->decryptString($row->student_name);
-    echo "MATCH — this key decrypts the data. Sample: ".substr($name, 0, 3)."***\n";
+    echo 'MATCH — this key decrypts the data. Sample: '.substr($name, 0, 3)."***\n";
 } catch (Throwable $e) {
     echo "NO MATCH — this key cannot decrypt the data.\n";
 }

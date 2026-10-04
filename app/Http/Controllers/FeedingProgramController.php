@@ -37,8 +37,12 @@ class FeedingProgramController extends Controller
     {
         $activeRole = (string) $request->session()->get('active_role', '');
         $currentRouteName = (string) optional($request->route())->getName();
-        $isNurseFeedingRoute = $currentRouteName === 'dashboard.school-nurse.feeding-program';
-        $isReadOnly = $isNurseFeedingRoute || $activeRole === 'school_nurse';
+        $isNurseFeedingRoute = in_array($currentRouteName, [
+            'dashboard.school-nurse.feeding-program',
+            'dashboard.clinic-teacher.feeding-program',
+        ], true);
+        // The clinic reads this page; only the Feeding Coordinator writes it.
+        $isReadOnly = $isNurseFeedingRoute || in_array($activeRole, ['school_nurse', 'clinic_teacher'], true);
 
         $institutionId = $request->session()->get('active_institution_id');
 

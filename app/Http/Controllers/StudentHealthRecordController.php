@@ -1293,7 +1293,7 @@ class StudentHealthRecordController extends Controller
         $activeRole = (string) $request->session()->get('active_role', '');
 
         abort_unless(
-            in_array($activeRole, ['class_adviser', 'clinic_staff', 'school_nurse'], true),
+            in_array($activeRole, ['class_adviser', 'clinic_staff', 'school_nurse', 'clinic_teacher'], true),
             403,
             'Access denied.'
         );

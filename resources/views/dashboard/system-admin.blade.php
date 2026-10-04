@@ -39,12 +39,13 @@
 	$roleLabel = [
 		'school_nurse' => 'School Nurse',
 		'clinic_staff' => 'Clinic Staff',
+		'clinic_teacher' => 'Clinic Teacher',
 		'class_adviser' => 'Class Adviser',
 		'school_head' => 'School Head',
 		'feeding_coor' => 'Feeding Coordinator',
 		'nutricor' => 'Nutritional Coordinator',
 	];
-	$schoolScopedRoles = ['school_nurse', 'clinic_staff', 'school_head', 'feeding_coor', 'nutricor'];
+	$schoolScopedRoles = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'school_head', 'feeding_coor', 'nutricor'];
 
 	// One rendering of the assignment cell for all three tables, so an
 	// adviser's class and a nurse's school read the same way wherever

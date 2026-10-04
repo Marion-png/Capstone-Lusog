@@ -46,6 +46,7 @@ class AccountSeeder extends Seeder
             ['Jose Reyes', 'adviser2', 'class_adviser', 'Grade 7', 'Rizal'],
             ['Nurse Cruz', 'nurse1', 'school_nurse', null, null],
             ['Clinic Staff', 'clinic1', 'clinic_staff', null, null],
+            ['Clinic Teacher', 'clinicteacher1', 'clinic_teacher', null, null],
             ['Principal Lim', 'head1', 'school_head', null, null],
             ['Feeding Coordinator', 'feeding1', 'feeding_coor', null, null],
             ['Nutrition Coordinator', 'nutri1', 'nutricor', null, null],

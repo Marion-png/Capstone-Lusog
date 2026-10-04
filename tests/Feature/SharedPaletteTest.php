@@ -41,6 +41,13 @@ class SharedPaletteTest extends TestCase
             'nurse deworming' => ['/dashboard/school-nurse/deworming', 'school_nurse'],
             'nurse data visualization' => ['/dashboard/data-visualization', 'school_nurse'],
             'nurse health assessments' => ['/dashboard/school-nurse/health-assessments', 'school_nurse'],
+            'clinic teacher dashboard' => ['/dashboard/clinic-teacher', 'clinic_teacher'],
+            // Settings is one page in six different shells, so it is
+            // covered in a theme rail and in the Nutrition Coordinator's
+            // own legacy layout — the two halves of the palette rule.
+            'settings (nurse rail)' => ['/dashboard/settings', 'school_nurse'],
+            'settings (role rail)' => ['/dashboard/settings', 'school_head'],
+            'settings (nutricor layout)' => ['/dashboard/settings', 'nutricor'],
         ];
     }
 

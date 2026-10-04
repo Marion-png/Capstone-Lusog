@@ -82,10 +82,11 @@ class EnsureActiveSession
             $request->is('dashboard/feedingcor*') => [['feeding_coor'], 'feeding_coor'],
             $request->is('dashboard/nutricor*') => [['nutricor'], 'nutricor'],
             $request->is('dashboard/clinic-staff*') => [['clinic_staff'], 'clinic_staff'],
-            $request->is('dashboard/consultation-log*', 'dashboard/medicine-inventory*') => [['clinic_staff', 'school_nurse'], 'clinic_staff'],
-            $request->is('dashboard/student-health-records*', 'dashboard/data-visualization*') => [['school_nurse', 'clinic_staff'], 'school_nurse'],
-            $request->is('dashboard/consent-forms*', 'dashboard/health-assessments*') => [['class_adviser', 'school_nurse', 'clinic_staff'], 'school_nurse'],
-            $request->is('dashboard/school-nurse*', 'nurse', 'nurse/*') => [['school_nurse'], 'school_nurse'],
+            $request->is('dashboard/clinic-teacher*') => [['clinic_teacher'], 'clinic_teacher'],
+            $request->is('dashboard/consultation-log*', 'dashboard/medicine-inventory*') => [['clinic_staff', 'school_nurse', 'clinic_teacher'], 'clinic_staff'],
+            $request->is('dashboard/student-health-records*', 'dashboard/data-visualization*') => [['school_nurse', 'clinic_staff', 'clinic_teacher'], 'school_nurse'],
+            $request->is('dashboard/consent-forms*', 'dashboard/health-assessments*') => [['class_adviser', 'school_nurse', 'clinic_staff', 'clinic_teacher'], 'school_nurse'],
+            $request->is('dashboard/school-nurse*', 'nurse', 'nurse/*') => [['school_nurse', 'clinic_teacher'], 'school_nurse'],
             default => [null, 'school_nurse'],
         };
     }

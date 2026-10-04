@@ -21,7 +21,7 @@ class StudentMedicalDocuments
      * same list — a document belongs to the learner, not to whoever uploaded
      * it — so each row records the role it came from.
      */
-    public const UPLOAD_ROLES = ['class_adviser', 'school_nurse', 'clinic_staff'];
+    public const UPLOAD_ROLES = ['class_adviser', 'school_nurse', 'clinic_staff', 'clinic_teacher'];
 
     /**
      * @param  iterable<int, string>  $lrns
@@ -97,6 +97,7 @@ class StudentMedicalDocuments
             'class_adviser' => 'Class Adviser',
             'school_nurse' => 'School Nurse',
             'clinic_staff' => 'Clinic Staff',
+            'clinic_teacher' => 'Clinic Teacher',
             default => null,
         };
     }

@@ -377,6 +377,7 @@
                             <option value="" disabled {{ old('role') ? '' : 'selected' }}>Select role</option>
                             <option value="school_nurse" {{ old('role') === 'school_nurse' ? 'selected' : '' }}>School Nurse</option>
                             <option value="clinic_staff" {{ old('role') === 'clinic_staff' ? 'selected' : '' }}>Clinic Staff</option>
+                            <option value="clinic_teacher" {{ old('role') === 'clinic_teacher' ? 'selected' : '' }}>Clinic Teacher</option>
                             <option value="class_adviser" {{ old('role') === 'class_adviser' ? 'selected' : '' }}>Class Adviser</option>
                             <option value="school_head" {{ old('role') === 'school_head' ? 'selected' : '' }}>School Head</option>
                             <option value="feeding_coor" {{ old('role') === 'feeding_coor' ? 'selected' : '' }}>Feeding Coordinator</option>
@@ -447,7 +448,7 @@
     </section>
 
     <script>
-        const SCOPED_ROLES = ['school_nurse', 'clinic_staff', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor'];
+        const SCOPED_ROLES = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor'];
 
         const requestForm     = document.getElementById('accountRequestForm');
         const roleSelect      = document.getElementById('role');

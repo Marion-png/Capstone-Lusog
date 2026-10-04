@@ -19,11 +19,15 @@
     <style>{!! file_get_contents(resource_path('css/nurse-sidebar.css')) !!}</style>
 </head>
 <body>
-@include('partials.nurse-lusog-sidebar', ['active' => 'dashboard'])
+{{-- The School Nurse and the Clinic Teacher read the same clinic, so they
+     read the same dashboard — one reading, in whichever rail the reader
+     belongs to, never a second copy that could report different figures. --}}
+@include('partials.clinic-rail', ['active' => 'dashboard'])
 
 <div class="main">
     @php
-        $nurseName = session('active_name', 'School Nurse');
+        $cdRoleLabel = \App\Support\AccountSettings::roleLabel(session('active_role'));
+        $nurseName = session('active_name', $cdRoleLabel);
         $schoolName = session('active_school_name', 'No school assigned');
         $schoolYear = \App\Models\StudentHealthRecord::currentSchoolYear();
         $greetHour = (int) now()->format('G');
@@ -31,7 +35,7 @@
     @endphp
 
     <header class="topbar">
-        <div class="topbar-bc"><span>School Nurse</span><span class="bc-sep">&rsaquo;</span><span>Dashboard</span></div>
+        <div class="topbar-bc"><span>{{ $cdRoleLabel }}</span><span class="bc-sep">&rsaquo;</span><span>Dashboard</span></div>
 
         @include('partials.nurse-learner-search')
 
@@ -43,7 +47,7 @@
         <div class="page-header">
             <div class="card-head" style="margin-bottom:0">
                 <div>
-                    <div class="page-eyebrow">{{ $greeting }}, School Nurse</div>
+                    <div class="page-eyebrow">{{ $greeting }}, {{ $cdRoleLabel }}</div>
                     <h1 class="page-title">Dashboard <span>School Clinic</span></h1>
                     <p class="page-sub">
                         {{ $nurseName }} &middot; {{ $schoolName }} &middot; School Year {{ $schoolYear }}.

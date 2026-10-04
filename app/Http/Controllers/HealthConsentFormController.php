@@ -459,7 +459,7 @@ class HealthConsentFormController extends Controller
      */
     public function paperFormImage(Request $request, HealthConsentForm $form)
     {
-        if ($redirect = $this->requireRole($request, ['class_adviser', 'school_nurse', 'clinic_staff', 'school_head'])) {
+        if ($redirect = $this->requireRole($request, ['class_adviser', 'school_nurse', 'clinic_staff', 'school_head', 'clinic_teacher'])) {
             return $redirect;
         }
 
@@ -542,7 +542,7 @@ class HealthConsentFormController extends Controller
 
     public function nurseIndex(Request $request)
     {
-        if ($redirect = $this->requireRole($request, ['school_nurse', 'clinic_staff'])) {
+        if ($redirect = $this->requireRole($request, ['school_nurse', 'clinic_staff', 'clinic_teacher'])) {
             return $redirect;
         }
 
@@ -738,7 +738,7 @@ class HealthConsentFormController extends Controller
     /** School Nurse: read-only view of one completed form. */
     public function nurseShow(Request $request, HealthConsentForm $form)
     {
-        if ($redirect = $this->requireRole($request, ['school_nurse', 'clinic_staff'])) {
+        if ($redirect = $this->requireRole($request, ['school_nurse', 'clinic_staff', 'clinic_teacher'])) {
             return $redirect;
         }
 
@@ -794,7 +794,7 @@ class HealthConsentFormController extends Controller
     /** Print / export-as-PDF view (browser print dialog). */
     public function print(Request $request, HealthConsentForm $form)
     {
-        if ($redirect = $this->requireRole($request, ['class_adviser', 'school_nurse', 'clinic_staff'])) {
+        if ($redirect = $this->requireRole($request, ['class_adviser', 'school_nurse', 'clinic_staff', 'clinic_teacher'])) {
             return $redirect;
         }
 

@@ -112,7 +112,7 @@ class MedicalCertificateController extends Controller
     public function download(Request $request, int $id): Response
     {
         abort_unless(
-            in_array($request->session()->get('active_role'), ['clinic_staff', 'school_nurse'], true),
+            in_array($request->session()->get('active_role'), ['clinic_staff', 'school_nurse', 'clinic_teacher'], true),
             403,
             'Only Clinic Staff or School Nurse may download medical certificates.'
         );
@@ -146,7 +146,7 @@ class MedicalCertificateController extends Controller
         $activeRole = (string) $request->session()->get('active_role', '');
 
         abort_unless(
-            in_array($activeRole, ['class_adviser', 'clinic_staff', 'school_nurse'], true),
+            in_array($activeRole, ['class_adviser', 'clinic_staff', 'school_nurse', 'clinic_teacher'], true),
             403,
             'Access denied.'
         );

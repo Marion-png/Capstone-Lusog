@@ -44,6 +44,7 @@ use App\Models\Medicine;
 use App\Models\MedicineDispense;
 use App\Models\StudentHealthRecord;
 use App\Support\AuditTrail;
+use App\Support\ClinicDashboard;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingProgramCycle;
 use App\Support\StudentRosterSync;
@@ -85,7 +86,7 @@ Route::get('/account-request', function () {
 })->name('account.request');
 
 Route::post('/account-request', function (Request $request) {
-    $scopedRoles = ['school_nurse', 'clinic_staff', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor'];
+    $scopedRoles = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor'];
 
     $validated = $request->validate([
         // A person's name: letters, spaces, hyphens, apostrophes and the dots
@@ -98,7 +99,7 @@ Route::post('/account-request', function (Request $request) {
         // At least one letter and one digit, so "password" and "12345678" are
         // both refused.
         'password' => ['required', 'string', 'min:8', 'max:72', 'confirmed', 'regex:/^(?=.*[\pL])(?=.*\d).+$/u'],
-        'role' => ['required', 'in:school_nurse,clinic_staff,class_adviser,school_head,feeding_coor,nutricor'],
+        'role' => ['required', 'in:school_nurse,clinic_staff,clinic_teacher,class_adviser,school_head,feeding_coor,nutricor'],
         'institution_id' => ['nullable', 'integer', 'exists:institutions,id'],
         'assigned_grade_level' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:50'],
         'assigned_section' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:100'],
@@ -238,9 +239,10 @@ Route::post('/nurse/{index}/examine', [NurseController::class, 'saveExamination'
 
 Route::get('/dashboard/school-nurse', function (Request $request) {
     $role = (string) $request->session()->get('active_role', '');
-    if (! in_array($role, ['school_nurse', 'clinic_staff', 'system_admin'], true)) {
+    if (! in_array($role, ['school_nurse', 'clinic_staff', 'clinic_teacher', 'system_admin'], true)) {
         $redirectByRole = [
             'class_adviser' => 'dashboard.class-adviser',
+            'clinic_teacher' => 'dashboard.clinic-teacher',
             'school_head' => 'dashboard.school-head',
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
             'nutricor' => 'dashboard.nutricor-dashboard',
@@ -252,79 +254,18 @@ Route::get('/dashboard/school-nurse', function (Request $request) {
 
     $institutionId = $request->session()->get('active_institution_id');
 
-    $totalRecords = 0;
-    $consultationsToday = 0;
-    $atRiskCount = 0;
-    $lowStockCount = 0;
-    $recentConsultations = collect();
-    $topConditions = collect();
-    $lowStockMedicines = collect();
-
-    if (Schema::hasTable('student_health_records')) {
-        $totalRecords = StudentHealthRecord::query()
-            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-            ->forCurrentSchoolYear()
-            ->count();
-        $atRiskCount = StudentHealthRecord::query()
-            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-            ->forCurrentSchoolYear()
-            ->where('is_at_risk', true)
-            ->count();
-    }
-
-    if (Schema::hasTable('consultations')) {
-        $consultationsToday = Consultation::query()
-            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-            ->whereDate('consulted_at', now()->toDateString())
-            ->count();
-
-        $recentConsultations = Consultation::query()
-            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-            ->latest('consulted_at')->latest('id')
-            ->limit(8)
-            ->get();
-
-        // `condition` is encrypted at rest, so this month's rows are fetched
-        // and tallied in PHP — a SQL GROUP BY would group ciphertext, giving
-        // one "condition" per row.
-        $topConditions = Consultation::query()
-            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-            ->whereMonth('consulted_at', now()->month)
-            ->whereYear('consulted_at', now()->year)
-            ->get()
-            ->groupBy(fn (Consultation $c) => strtolower(trim((string) $c->condition)))
-            ->reject(fn ($group, $name) => $name === '')
-            ->map(fn ($group, $name) => ['name' => $name, 'total' => $group->count()])
-            ->sortByDesc('total')
-            ->values()
-            ->take(4);
-    }
-
-    if (Schema::hasTable('medicines')) {
-        $lowStockCount = Medicine::query()
-            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-            ->whereColumn('stock_quantity', '<=', 'minimum_threshold')
-            ->count();
-
-        $lowStockMedicines = Medicine::query()
-            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-            ->whereColumn('stock_quantity', '<=', 'minimum_threshold')
-            ->orderBy('stock_quantity')
-            ->limit(4)
-            ->get();
-    }
-
-    return view('dashboard.school-nurse', compact(
-        'totalRecords', 'consultationsToday', 'atRiskCount', 'lowStockCount',
-        'recentConsultations', 'topConditions', 'lowStockMedicines'
-    ));
+    // Four cards, this month's conditions, the stock monitor and the recent
+    // visits — one reading, shared with the Clinic Teacher's dashboard, which
+    // is this same screen in that role's rail.
+    return view('dashboard.school-nurse', ClinicDashboard::read($institutionId ? (int) $institutionId : null));
 })->name('dashboard.school-nurse');
 
 Route::get('/dashboard/student-health-records', function () {
     $role = (string) session('active_role', '');
-    if (! in_array($role, ['school_nurse', 'clinic_staff', 'system_admin'], true)) {
+    if (! in_array($role, ['school_nurse', 'clinic_staff', 'clinic_teacher', 'system_admin'], true)) {
         $redirectByRole = [
             'class_adviser' => 'dashboard.class-adviser',
+            'clinic_teacher' => 'dashboard.clinic-teacher',
             'school_head' => 'dashboard.school-head',
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
             'nutricor' => 'dashboard.nutricor-dashboard',
@@ -344,9 +285,10 @@ Route::get('/dashboard/student-health-records', function () {
 
 Route::get('/dashboard/school-nurse/deworming', function (Request $request) {
     $role = (string) $request->session()->get('active_role', '');
-    if (! in_array($role, ['school_nurse', 'clinic_staff', 'system_admin'], true)) {
+    if (! in_array($role, ['school_nurse', 'clinic_staff', 'clinic_teacher', 'system_admin'], true)) {
         $redirectByRole = [
             'class_adviser' => 'dashboard.class-adviser',
+            'clinic_teacher' => 'dashboard.clinic-teacher',
             'school_head' => 'dashboard.school-head',
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
             'nutricor' => 'dashboard.nutricor-dashboard',
@@ -529,9 +471,10 @@ Route::post('/api/conditions', [ConditionController::class, 'store'])
 
 Route::get('/dashboard/data-visualization', function () {
     $role = (string) session('active_role', '');
-    if (! in_array($role, ['school_nurse', 'clinic_staff', 'system_admin'], true)) {
+    if (! in_array($role, ['school_nurse', 'clinic_staff', 'clinic_teacher', 'system_admin'], true)) {
         $redirectByRole = [
             'class_adviser' => 'dashboard.class-adviser',
+            'clinic_teacher' => 'dashboard.clinic-teacher',
             'school_head' => 'dashboard.school-head',
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
             'nutricor' => 'dashboard.nutricor-dashboard',
@@ -574,6 +517,7 @@ Route::get('/dashboard/clinic-staff', function (Request $request) {
     if (! in_array($role, ['clinic_staff', 'school_nurse', 'system_admin'], true)) {
         $redirectByRole = [
             'class_adviser' => 'dashboard.class-adviser',
+            'clinic_teacher' => 'dashboard.clinic-teacher',
             'school_head' => 'dashboard.school-head',
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
             'nutricor' => 'dashboard.nutricor-dashboard',
@@ -1045,6 +989,55 @@ Route::get('/dashboard/feedingcor-program', function (Request $request) {
 Route::get('/dashboard/school-nurse/feeding-program', [FeedingProgramController::class, 'index'])
     ->name('dashboard.school-nurse.feeding-program');
 
+/*
+ * Clinic Teacher.
+ *
+ * A teacher who covers the school clinic. The role reads the same screens the
+ * School Nurse does (App\Support\ClinicDashboard, the health records, the
+ * assessment queue, the consultation log, the nutrition module, the consent
+ * forms, the inventory), so these routes hand the nurse's own controllers to
+ * this role's rail rather than copying a screen — two copies of one figure is
+ * two figures.
+ *
+ * What the role does NOT get is a write over the shelf: Receive Stock and Add
+ * Medicine stay the nurse's, and the one medicine a Clinic Teacher may hand
+ * over is paracetamol (App\Support\DispensingRights, enforced on the write in
+ * ConsultationController).
+ *
+ * The URLs live under /dashboard/clinic-teacher because EnsureActiveSession
+ * seeds a prototype session for whichever role a URL belongs to — a demo
+ * Clinic Teacher opening /dashboard/school-nurse would be re-seeded as the
+ * nurse before the page rendered.
+ */
+Route::get('/dashboard/clinic-teacher', function (Request $request) {
+    $role = (string) $request->session()->get('active_role', '');
+    if (! in_array($role, ['clinic_teacher', 'school_nurse', 'system_admin'], true)) {
+        $redirectByRole = [
+            'class_adviser' => 'dashboard.class-adviser',
+            'clinic_staff' => 'dashboard.clinic-staff',
+            'school_head' => 'dashboard.school-head',
+            'feeding_coor' => 'dashboard.feedingcor-dashboard',
+            'nutricor' => 'dashboard.nutricor-dashboard',
+            'system_admin' => 'dashboard.system-admin',
+        ];
+
+        return redirect()->route($redirectByRole[$role] ?? 'login');
+    }
+
+    $institutionId = $request->session()->get('active_institution_id');
+
+    return view('dashboard.school-nurse', ClinicDashboard::read($institutionId ? (int) $institutionId : null));
+})->name('dashboard.clinic-teacher');
+
+Route::get('/dashboard/clinic-teacher/nutritional-status', [SchoolHeadMasterlistController::class, 'index'])
+    ->name('dashboard.clinic-teacher.nutritional-status');
+
+Route::get('/dashboard/clinic-teacher/nutritional-status/export', [SchoolHeadMasterlistController::class, 'export'])
+    ->name('dashboard.clinic-teacher.nutritional-status.export');
+
+Route::get('/dashboard/clinic-teacher/feeding-program', [FeedingProgramController::class, 'index'])
+    ->name('dashboard.clinic-teacher.feeding-program');
+
 Route::post('/dashboard/feedingcor-program/attendance/import', [FeedingProgramController::class, 'importAttendance'])
     ->name('feedingcor-program.attendance.import');
 
@@ -1116,7 +1109,9 @@ Route::get('/dashboard/system-admin', function () {
         $routeByRole = [
             'school_nurse' => 'dashboard.school-nurse',
             'clinic_staff' => 'dashboard.clinic-staff',
+            'clinic_teacher' => 'dashboard.clinic-teacher',
             'class_adviser' => 'dashboard.class-adviser',
+            'clinic_teacher' => 'dashboard.clinic-teacher',
             'school_head' => 'dashboard.school-head',
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
             'nutricor' => 'dashboard.nutricor-dashboard',
@@ -1336,12 +1331,12 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
             ->with('error', 'Only System Admin can create user accounts.');
     }
 
-    $scopedRoles = ['school_nurse', 'clinic_staff', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor'];
+    $scopedRoles = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor'];
 
     $validated = $request->validate([
         'name' => ['required', 'string', 'max:255'],
         'username' => ['required', 'string', 'max:255'],
-        'role' => ['required', 'in:school_nurse,clinic_staff,class_adviser,school_head,feeding_coor,nutricor'],
+        'role' => ['required', 'in:school_nurse,clinic_staff,clinic_teacher,class_adviser,school_head,feeding_coor,nutricor'],
         'institution_id' => ['nullable', 'integer', 'exists:institutions,id'],
         'assigned_grade_level' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:50'],
         'assigned_section' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:100'],
@@ -1592,6 +1587,7 @@ Route::post('/login', function (Request $request) {
     $routeByRole = [
         'school_nurse' => 'dashboard.school-nurse',
         'clinic_staff' => 'dashboard.clinic-staff',
+        'clinic_teacher' => 'dashboard.clinic-teacher',
         'class_adviser' => 'dashboard.class-adviser',
         'school_head' => 'dashboard.school-head',
         'feeding_coor' => 'dashboard.feedingcor-dashboard',

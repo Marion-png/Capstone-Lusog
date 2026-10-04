@@ -37,7 +37,7 @@ class ConditionController extends Controller
     {
         // Check role authorization
         $activeRole = strtolower(trim((string) $request->session()->get('active_role', '')));
-        $allowedRoles = ['school_nurse', 'clinic_staff'];
+        $allowedRoles = ['school_nurse', 'clinic_staff', 'clinic_teacher'];
 
         if (! in_array($activeRole, $allowedRoles, true)) {
             return response()->json(

@@ -29,10 +29,15 @@
     // stock down in the same transaction as the consultation, so the
     // inventory cannot drift from what the clinic actually handed over.
     //
-    // Nurse only, enforced again in ConsultationController: clinic staff log
-    // consultations but are deliberately not admitted to the dispensing
-    // path, and this must not become a way around that.
-    $consultMayDispense = session('active_role') === 'school_nurse';
+    // Who may dispense, and which medicines, is App\Support\DispensingRights'
+    // answer — the same one ConsultationController asks again before it
+    // writes. Clinic staff log consultations and are not admitted at all; a
+    // Clinic Teacher is admitted to paracetamol only. What this page draws
+    // is never the enforcement: a disabled option is a hint, and the write
+    // is where the rule holds.
+    $consultRole = (string) session('active_role', '');
+    $consultMayDispense = \App\Support\DispensingRights::mayDispense($consultRole);
+    $consultDispenseNotice = \App\Support\DispensingRights::restrictionNotice($consultRole);
 
     // The school's learners, for the name picker: opened cold, the nurse
     // types a name and chooses the learner, and the grade and section come
@@ -272,8 +277,11 @@
                             <select id="cm_medicine_id" name="medicine_id">
                                 <option value="">None</option>
                                 @foreach ($consultMedicines as $medicine)
-                                    <option value="{{ $medicine->id }}" @selected((string) old('medicine_id') === (string) $medicine->id)>
-                                        {{ $medicine->name }} ({{ $medicine->stock_quantity }} {{ $medicine->unit }} left)
+                                    @php $cmAllowed = \App\Support\DispensingRights::allows($consultRole, $medicine->name); @endphp
+                                    <option value="{{ $medicine->id }}"
+                                            @selected($cmAllowed && (string) old('medicine_id') === (string) $medicine->id)
+                                            @disabled(! $cmAllowed)>
+                                        {{ $medicine->name }} ({{ $medicine->stock_quantity }} {{ $medicine->unit }} left)@unless ($cmAllowed) &mdash; School Nurse only @endunless
                                     </option>
                                 @endforeach
                             </select>
@@ -290,6 +298,9 @@
                             @endif
                         </div>
                     </div>
+                    @if ($consultDispenseNotice !== '')
+                        <div class="bmodal-hint cm-dispense-limit">{{ $consultDispenseNotice }}</div>
+                    @endif
                     <div class="bmodal-hint">Deducted from inventory when this consultation is saved.</div>
                 @endif
 
@@ -364,6 +375,19 @@
     /* Photos of the injury: a drop target that is also the camera button on
        a phone (capture="environment"), then thumbnails of what was chosen so
        the nurse sees the picture before it is filed against a child. */
+    /* The dispensing limit on a restricted role, and the greyed options it
+       explains. Amber, not red: nothing has gone wrong — this is what the
+       role is for. A disabled option keeps its text legible enough to read,
+       because the point of listing it is that the reader can see the shelf. */
+    #consultModal .cm-dispense-limit {
+        margin-top: 6px;
+        padding: 7px 9px;
+        border: 1px solid #EBD3A0;
+        border-radius: 8px;
+        background: var(--lg-amber-tint, #FDF4E3);
+        color: var(--lg-amber-ink, #7A5A16);
+    }
+    #consultModal select option:disabled { color: #8A9A91; }
     #consultModal .cm-photo-drop {
         display: flex; align-items: center; gap: 9px;
         padding: 10px 12px; margin-top: 4px;

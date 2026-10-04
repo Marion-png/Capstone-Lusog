@@ -13,16 +13,23 @@
     routes: the rail is the merge, not a rewrite of either screen.
 --}}
 @php
+    // The School Nurse and the Clinic Teacher open the same two readings;
+    // each role's own path keeps EnsureActiveSession from re-seeding the
+    // session as the other one.
+    $nutritionPrefix = session('active_role') === 'clinic_teacher'
+        ? 'dashboard.clinic-teacher'
+        : 'dashboard.school-nurse';
+
     $nutritionTabs = [
         'learners' => [
             'label' => 'Learners',
             'hint' => 'Every learner, baseline against endline',
-            'url' => route('dashboard.school-nurse.nutritional-status'),
+            'url' => route($nutritionPrefix.'.nutritional-status'),
         ],
         'programme' => [
             'label' => 'Feeding Programme',
             'hint' => 'Cycle, turnout and at-risk beneficiaries',
-            'url' => route('dashboard.school-nurse.feeding-program'),
+            'url' => route($nutritionPrefix.'.feeding-program'),
         ],
     ];
 @endphp

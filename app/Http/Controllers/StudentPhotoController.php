@@ -40,7 +40,7 @@ class StudentPhotoController extends Controller
     private const WRITE_ROLES = ['class_adviser'];
 
     /** The desks that meet the learner in person. */
-    private const READ_ROLES = ['class_adviser', 'school_nurse', 'clinic_staff', 'feeding_coor'];
+    private const READ_ROLES = ['class_adviser', 'school_nurse', 'clinic_staff', 'feeding_coor', 'clinic_teacher'];
 
     public function show(Request $request, string $lrn): Response
     {

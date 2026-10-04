@@ -19,7 +19,7 @@ class ClinicNote extends Model
     use HasFactory;
 
     /** Roles allowed to read and write clinic notes. */
-    public const CLINIC_ROLES = ['school_nurse', 'clinic_staff'];
+    public const CLINIC_ROLES = ['school_nurse', 'clinic_staff', 'clinic_teacher'];
 
     protected $fillable = [
         'institution_id',

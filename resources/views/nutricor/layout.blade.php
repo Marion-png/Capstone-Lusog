@@ -349,6 +349,9 @@
         <a href="{{ route('dashboard.nutricor-reports') }}" class="sb-link {{ request()->routeIs('dashboard.nutricor-reports') ? 'active' : '' }}"><i class="fas fa-file-alt"></i>Reports</a>
         <a href="{{ route('dashboard.nutricor-comparison') }}" class="sb-link {{ request()->routeIs('dashboard.nutricor-comparison') ? 'active' : '' }}"><i class="fas fa-code-branch"></i>Baseline/Endline</a>
         <a href="{{ route('dashboard.nutricor-consolidated') }}" class="sb-link {{ request()->routeIs('dashboard.nutricor-consolidated') ? 'active' : '' }}"><i class="fas fa-table"></i>Consolidated Report</a>
+
+        <div class="sb-section-label">System</div>
+        <a href="{{ route('settings') }}" class="sb-link {{ request()->routeIs('settings') ? 'active' : '' }}"><i class="fas fa-cog"></i>Settings</a>
     </nav>
     <div class="sb-user">
         @php
@@ -379,7 +382,7 @@
 
     <div class="content">
         <div class="page-header">
-            <div class="page-eyebrow">SBFP Monitoring</div>
+            <div class="page-eyebrow">@yield('page_eyebrow', 'SBFP Monitoring')</div>
             <h1 class="page-title">@yield('page_title')</h1>
             <p class="page-sub">@yield('page_subtitle')</p>
         </div>

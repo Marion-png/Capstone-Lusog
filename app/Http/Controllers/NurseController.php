@@ -332,7 +332,7 @@ class NurseController extends Controller
     private function requireNurseRole(Request $request): ?RedirectResponse
     {
         $role = (string) $request->session()->get('active_role', '');
-        if (in_array($role, ['school_nurse', 'clinic_staff', 'system_admin'], true)) {
+        if (in_array($role, ['school_nurse', 'clinic_staff', 'system_admin', 'clinic_teacher'], true)) {
             return null;
         }
 
