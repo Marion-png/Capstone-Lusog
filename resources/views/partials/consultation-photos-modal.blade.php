@@ -59,11 +59,35 @@
             </div>
 
             <div class="cphoto-side-body">
+                {{-- What was written about the visit on New Consultation,
+                     read-only. It reaches this dialog only for the clinic's
+                     own desks — the endpoint leaves it out for anybody else. --}}
+                <section class="cphoto-visit" id="cphotoVisit" hidden>
+                    <div class="cphoto-label">Visit notes / comments</div>
+                    <p class="cphoto-visit-notes" id="cphotoVisitNotes"></p>
+                    <button type="button" class="cphoto-more" id="cphotoVisitMore" aria-expanded="false" hidden>Show more</button>
+                    <span class="cphoto-item-shared" id="cphotoVisitShared" hidden>Shared with class adviser</span>
+                </section>
+
                 {{-- The comment on the photo on screen, and what can be done
-                     with that photo. --}}
+                     with that photo. The comment can be written or changed
+                     here at any time, not only when the photo is taken. --}}
                 <section class="cphoto-detail" id="cphotoDetail" hidden>
-                    <div class="cphoto-label">Comment</div>
+                    <div class="cphoto-label-row">
+                        <div class="cphoto-label">Photo comment</div>
+                        <button type="button" class="cphoto-edit" id="cphotoEditComment">Edit comment</button>
+                    </div>
                     <p class="cphoto-comment" id="cphotoStageCaption"></p>
+                    <div class="cphoto-editor" id="cphotoEditor" hidden>
+                        <textarea id="cphotoEditText" maxlength="500" rows="3" aria-label="Photo comment"
+                                  placeholder="What the photo shows, e.g. Graze to the left knee, cleaned and dressed"></textarea>
+                        <div class="cphoto-error" id="cphotoEditError" role="alert" hidden></div>
+                        <div class="cphoto-editor-actions">
+                            <button type="button" class="btn btn-primary" id="cphotoEditSave">Save comment</button>
+                            <button type="button" class="btn btn-secondary" id="cphotoEditCancel">Cancel</button>
+                            <span class="cphoto-editor-count" id="cphotoEditCount" aria-live="polite">0 / 500</span>
+                        </div>
+                    </div>
                     <div class="cphoto-meta" id="cphotoDetailMeta"></div>
                     <label class="cphoto-share">
                         <input type="checkbox" id="cphotoDetailShare">

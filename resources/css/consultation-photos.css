@@ -47,7 +47,27 @@
 .cphoto-side-body{flex:1;min-height:0;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:18px}
 .cphoto-label{margin-bottom:6px}
 
-/* The comment on the photo on screen. */
+/* The visit's own Notes / comments, from New Consultation. A long note is
+   folded to five lines until "Show more". */
+.cphoto-visit{padding-bottom:16px;border-bottom:1px solid var(--lg-border,#DCE8E0)}
+.cphoto-visit-notes{margin:0;font-size:.86rem;line-height:1.5;color:var(--lg-ink,#1F2D25);white-space:pre-wrap;overflow-wrap:anywhere}
+.cphoto-visit-notes.is-clamped{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
+.cphoto-visit-notes.is-uncommented{font-size:.8rem;font-style:italic;color:var(--lg-ink-soft,#6B7C72)}
+.cphoto-more{display:block;margin-top:4px;padding:0;border:none;background:none;font:inherit;font-size:.74rem;font-weight:600;color:var(--lg-emerald-deep,#126B3A);cursor:pointer}
+.cphoto-visit .cphoto-item-shared{display:inline-block;margin-top:8px}
+.cphoto-visit[hidden],.cphoto-more[hidden],.cphoto-item-shared[hidden],.cphoto-editor[hidden],.cphoto-comment[hidden],.cphoto-edit[hidden]{display:none !important}
+
+/* The comment on the photo on screen, and its editor. */
+.cphoto-label-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.cphoto-label-row .cphoto-label{margin-bottom:0}
+.cphoto-edit{border:none;background:none;font:inherit;font-size:.74rem;font-weight:600;color:var(--lg-emerald-deep,#126B3A);cursor:pointer;padding:3px 8px;border-radius:6px}
+.cphoto-edit:hover{background:var(--lg-mint,#E7F5EC)}
+.cphoto-edit:focus-visible,.cphoto-more:focus-visible{outline:none;box-shadow:var(--lg-focus,0 0 0 3px rgba(31,138,76,.28))}
+.cphoto-editor{display:grid;gap:8px}
+.cphoto-editor textarea{width:100%;box-sizing:border-box;min-height:84px;resize:vertical;font:inherit;font-size:.86rem;line-height:1.45;padding:8px 10px;border:1px solid var(--lg-border,#DCE8E0);border-radius:8px;background:#fff;color:var(--lg-ink,#1F2D25)}
+.cphoto-editor textarea:focus{outline:none;border-color:var(--lg-emerald,#1F8A4C);box-shadow:var(--lg-focus,0 0 0 3px rgba(31,138,76,.28))}
+.cphoto-editor-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cphoto-editor-count{margin-left:auto;font-size:.68rem;font-variant-numeric:tabular-nums;color:var(--lg-ink-soft,#6B7C72)}
 .cphoto-comment{margin:0;font-size:.92rem;line-height:1.5;color:var(--lg-ink,#1F2D25);white-space:pre-wrap;overflow-wrap:anywhere}
 .cphoto-comment.is-uncommented{font-size:.8rem;font-style:italic;color:var(--lg-ink-soft,#6B7C72)}
 .cphoto-meta{margin-top:6px;font-size:.72rem;color:var(--lg-ink-soft,#6B7C72)}

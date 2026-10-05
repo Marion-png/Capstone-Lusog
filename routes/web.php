@@ -881,6 +881,8 @@ Route::get('/health-records/consultation-photos/{photo}', [ConsultationPhotoCont
     ->whereNumber('photo')->name('consultation-photos.view');
 Route::post('/health-records/consultation-photos/{photo}/share', [ConsultationPhotoController::class, 'share'])
     ->whereNumber('photo')->name('consultation-photos.share');
+Route::post('/health-records/consultation-photos/{photo}/caption', [ConsultationPhotoController::class, 'caption'])
+    ->whereNumber('photo')->name('consultation-photos.caption');
 Route::delete('/health-records/consultation-photos/{photo}', [ConsultationPhotoController::class, 'destroy'])
     ->whereNumber('photo')->name('consultation-photos.destroy');
 

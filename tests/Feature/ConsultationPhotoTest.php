@@ -577,13 +577,128 @@ class ConsultationPhotoTest extends TestCase
             $this->assertStringContainsString('id="'.$id.'"', $html);
         }
         $this->assertStringContainsString('No photo uploaded for this consultation.', $html);
-        // Beside the photo: its comment, then every photo with its own.
-        $this->assertStringContainsString('<div class="cphoto-label">Comment</div>', $html);
+        // Beside the photo: the visit's notes, the photo's own comment with a
+        // way to write or change it, then every photo with its own.
+        $this->assertStringContainsString('<div class="cphoto-label">Visit notes / comments</div>', $html);
+        $this->assertStringContainsString('<div class="cphoto-label">Photo comment</div>', $html);
         $this->assertStringContainsString('id="cphotoStageCaption"', $html);
+        $this->assertStringContainsString('id="cphotoEditComment"', $html);
+        $this->assertStringContainsString('id="cphotoEditText"', $html);
         $this->assertStringContainsString('id="cphotoAll"', $html);
         // A thumbnail puts its photo on the stage rather than opening a tab.
         $this->assertStringContainsString('thumb.dataset.select = String(photo.id)', $html);
         $this->assertStringNotContainsString("link.target = '_blank'", $html);
+    }
+
+    // ── Comments ─────────────────────────────────────────────────────
+
+    /**
+     * A comment could only be typed at upload. The clinic can now write one
+     * on a photo already taken, or correct it — encrypted, and on the audit
+     * trail with what it replaced.
+     */
+    #[Test]
+    public function the_clinic_can_comment_on_a_photo_after_it_was_taken(): void
+    {
+        $visit = $this->visit();
+        $this->upload($visit)->assertCreated();
+        $photo = ConsultationPhoto::firstOrFail();
+        $audited = AuditLog::where('subject_type', 'ConsultationPhoto')->count();
+
+        foreach (['school_nurse', 'clinic_staff', 'clinic_teacher'] as $role) {
+            $photos = $this->withSession($this->sessionFor($role))
+                ->postJson(route('consultation-photos.caption', $photo), ['caption' => 'Swelling, left wrist ('.$role.')'])
+                ->assertOk()
+                ->json('photos');
+
+            $this->assertSame('Swelling, left wrist ('.$role.')', $photos[0]['caption']);
+        }
+
+        $this->assertSame('Swelling, left wrist (clinic_teacher)', $photo->fresh()->caption);
+        $this->assertStringNotContainsString(
+            'Swelling',
+            (string) DB::table('consultation_photos')->where('id', $photo->id)->value('caption'),
+            'The comment is encrypted at rest.'
+        );
+        $this->assertSame($audited + 3, AuditLog::where('subject_type', 'ConsultationPhoto')->count());
+    }
+
+    #[Test]
+    public function a_photo_comment_can_be_cleared(): void
+    {
+        $visit = $this->visit();
+        $this->upload($visit, ['caption' => 'Wrong photo description'])->assertCreated();
+        $photo = ConsultationPhoto::firstOrFail();
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->postJson(route('consultation-photos.caption', $photo), ['caption' => '   '])
+            ->assertOk();
+
+        $this->assertNull($photo->fresh()->caption);
+    }
+
+    /** The same rule as at upload, so a comment means the same whenever it was written. */
+    #[Test]
+    public function a_photo_comment_is_held_to_the_upload_rule(): void
+    {
+        $visit = $this->visit();
+        $this->upload($visit)->assertCreated();
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->postJson(route('consultation-photos.caption', ConsultationPhoto::firstOrFail()), ['caption' => str_repeat('a', 501)])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('caption');
+    }
+
+    #[Test]
+    public function only_the_clinic_may_comment_on_a_photo(): void
+    {
+        $this->learner();
+        $visit = $this->visit();
+        $this->upload($visit, ['shared_with_adviser' => '1', 'caption' => 'Original'])->assertCreated();
+        $photo = ConsultationPhoto::firstOrFail();
+
+        foreach (['class_adviser', 'school_head', 'feeding_coor'] as $role) {
+            $this->withSession($this->sessionFor($role))
+                ->postJson(route('consultation-photos.caption', $photo), ['caption' => 'Changed'])
+                ->assertForbidden();
+        }
+
+        // Another school's clinic cannot reach it either.
+        $other = Institution::create(['name' => 'Other School', 'status' => 'active']);
+        $this->withSession(array_merge($this->sessionFor('school_nurse'), ['active_institution_id' => $other->id]))
+            ->postJson(route('consultation-photos.caption', $photo), ['caption' => 'Changed'])
+            ->assertForbidden();
+
+        $this->assertSame('Original', $photo->fresh()->caption);
+    }
+
+    /**
+     * The clinic reads the visit's own Notes / comments beside the photos. An
+     * adviser reading a shared photo through the same endpoint does not: a
+     * visit note is clinical text, and a shared photo is not a way round that.
+     */
+    #[Test]
+    public function the_visit_notes_come_with_the_photos_for_the_clinic_only(): void
+    {
+        $this->learner();
+        $visit = $this->visit();
+        $visit->update(['notes' => 'Advised rest; recheck dressing tomorrow.']);
+        $this->upload($visit, ['shared_with_adviser' => '1'])->assertCreated();
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->getJson(route('consultation-photos.index', $visit))
+            ->assertOk()
+            ->assertJsonPath('visit.notes', 'Advised rest; recheck dressing tomorrow.')
+            ->assertJsonPath('visit.notes_shared_with_adviser', false);
+
+        $adviser = $this->withSession($this->sessionFor('class_adviser'))
+            ->getJson(route('consultation-photos.index', $visit))
+            ->assertOk();
+
+        $this->assertCount(1, $adviser->json('photos'));
+        $this->assertArrayNotHasKey('visit', $adviser->json());
+        $this->assertStringNotContainsString('Advised rest', $adviser->getContent());
     }
 
     /** A photo row written straight to storage, under the name given. */

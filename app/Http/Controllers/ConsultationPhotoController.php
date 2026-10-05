@@ -43,7 +43,21 @@ class ConsultationPhotoController extends Controller
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
-        return response()->json(['photos' => $this->listFor($consultation, $role)]);
+        $payload = ['photos' => $this->listFor($consultation, $role)];
+
+        // The visit's own Notes / comments, so the clinic reads the photos
+        // and what was written about the visit side by side. Clinical text:
+        // it goes to the desks that may see consultation detail and nobody
+        // else — an adviser reading shared photos through this endpoint gets
+        // the photos and nothing more.
+        if (ConsultationVisibility::maySeeDetails($role)) {
+            $payload['visit'] = [
+                'notes' => (string) $consultation->notes,
+                'notes_shared_with_adviser' => (bool) $consultation->notes_shared_with_adviser,
+            ];
+        }
+
+        return response()->json($payload);
     }
 
     public function store(Request $request, Consultation $consultation): JsonResponse
@@ -110,6 +124,35 @@ class ConsultationPhotoController extends Controller
         ]);
 
         $photo->update(['shared_with_adviser' => (bool) $validated['shared_with_adviser']]);
+
+        return response()->json([
+            'photos' => $this->listFor($photo->consultation, (string) $request->session()->get('active_role')),
+        ]);
+    }
+
+    /**
+     * Write or change the comment on a photo after it was taken.
+     *
+     * A comment could only be typed at upload, so a nurse who noticed
+     * something later — or mistyped — had no way to say so short of removing
+     * the photo and taking it again. Through the model, never a raw update:
+     * the cast keeps the comment encrypted, and Auditable records the old and
+     * new text and who changed it.
+     */
+    public function caption(Request $request, ConsultationPhoto $photo): JsonResponse
+    {
+        if (! $this->isClinic($request) || ! $this->photoInSchool($request, $photo)) {
+            return response()->json(['message' => 'Only the clinic may comment on a photo.'], 403);
+        }
+
+        $validated = $request->validate([
+            // The same rule the upload applies, so a comment means the same
+            // thing whenever it was written.
+            'caption' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $caption = trim((string) ($validated['caption'] ?? ''));
+        $photo->update(['caption' => $caption !== '' ? $caption : null]);
 
         return response()->json([
             'photos' => $this->listFor($photo->consultation, (string) $request->session()->get('active_role')),

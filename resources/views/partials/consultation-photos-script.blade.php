@@ -42,6 +42,21 @@
     const allPanel = document.getElementById('cphotoAll');
     const allCount = document.getElementById('cphotoAllCount');
 
+    // Writing or changing the comment on the photo on screen.
+    const editBtn = document.getElementById('cphotoEditComment');
+    const editor = document.getElementById('cphotoEditor');
+    const editText = document.getElementById('cphotoEditText');
+    const editError = document.getElementById('cphotoEditError');
+    const editSave = document.getElementById('cphotoEditSave');
+    const editCancel = document.getElementById('cphotoEditCancel');
+    const editCount = document.getElementById('cphotoEditCount');
+
+    // The visit's own Notes / comments, from New Consultation.
+    const visitSection = document.getElementById('cphotoVisit');
+    const visitNotes = document.getElementById('cphotoVisitNotes');
+    const visitMore = document.getElementById('cphotoVisitMore');
+    const visitShared = document.getElementById('cphotoVisitShared');
+
     const base = @json(url('health-records'));
     let consultationId = null;
 
@@ -56,6 +71,8 @@
     let loadSeq = 0;
     // What Try again re-runs: the list, or the image on the stage.
     let retry = null;
+    // The photo whose comment is being written, while the editor is open.
+    let editingId = null;
 
     const indexUrl = (id) => base + '/consultations/' + encodeURIComponent(id) + '/photos';
     const photoUrl = (id) => base + '/consultation-photos/' + encodeURIComponent(id);
@@ -97,15 +114,67 @@
 
     const currentIndex = () => photos.findIndex((photo) => String(photo.id) === String(currentId));
 
+    // ── The comment editor ────────────────────────────────────────────
+
+    const photoById = (id) => photos.find((photo) => String(photo.id) === String(id));
+
+    const countChars = () => {
+        if (editCount && editText) editCount.textContent = editText.value.length + ' / ' + (editText.maxLength > 0 ? editText.maxLength : 500);
+    };
+
+    const showEditError = (message) => {
+        if (!editError) return;
+        editError.textContent = message;
+        editError.hidden = message === '';
+    };
+
+    const stopEdit = () => {
+        editingId = null;
+        if (editor) editor.hidden = true;
+        if (comment) comment.hidden = false;
+        if (editBtn) editBtn.hidden = false;
+        showEditError('');
+    };
+
+    const startEdit = () => {
+        const photo = photoById(currentId);
+        if (!photo || !editor || !editText) return;
+        editingId = photo.id;
+        editText.value = photo.caption || '';
+        countChars();
+        showEditError('');
+        editor.hidden = false;
+        if (comment) comment.hidden = true;
+        if (editBtn) editBtn.hidden = true;
+        editText.focus();
+    };
+
+    // Typing that was not saved is somebody's work; it is never thrown away
+    // without asking.
+    const editIsDirty = () => {
+        if (editingId === null || !editText) return false;
+        return editText.value.trim() !== String(photoById(editingId)?.caption || '').trim();
+    };
+
+    const leaveEdit = () => {
+        if (editIsDirty() && !window.confirm('Discard the comment you were writing?')) return false;
+        stopEdit();
+        return true;
+    };
+
     // The comment and the actions belong to the photo on the stage.
     const showDetail = (photo) => {
         if (detail) detail.hidden = !photo;
         if (!photo) return;
 
+        // An editor open on another photo has nothing to say about this one.
+        if (editingId !== null && String(editingId) !== String(photo.id)) stopEdit();
+
         if (comment) {
             comment.textContent = photo.caption || 'No comment was added to this photo.';
             comment.classList.toggle('is-uncommented', !photo.caption);
         }
+        if (editBtn) editBtn.textContent = photo.caption ? 'Edit comment' : 'Add comment';
         if (detailMeta) detailMeta.textContent = metaOf(photo);
         if (detailShare) detailShare.checked = Boolean(photo.shared_with_adviser);
         if (openFull) openFull.href = photo.url;
@@ -167,6 +236,7 @@
     };
 
     const select = (id) => {
+        if (String(id) !== String(currentId) && !leaveEdit()) return;
         currentId = id;
         showPhoto();
     };
@@ -175,6 +245,31 @@
         if (photos.length < 2) return;
         const index = currentIndex();
         select(photos[(index + by + photos.length) % photos.length].id);
+    };
+
+    // ── The visit's notes ─────────────────────────────────────────────
+
+    // A long note is folded to a few lines, so the photo's own comment is
+    // still in view; "Show more" unfolds it.
+    const showVisit = (visit) => {
+        if (!visitSection) return;
+        if (!visit) { visitSection.hidden = true; return; }
+
+        const notes = String(visit.notes || '').trim();
+        const long = notes.length > 280 || notes.split('\n').length > 5;
+
+        if (visitNotes) {
+            visitNotes.textContent = notes || 'No notes or comments were written for this visit.';
+            visitNotes.classList.toggle('is-uncommented', notes === '');
+            visitNotes.classList.toggle('is-clamped', long);
+        }
+        if (visitMore) {
+            visitMore.hidden = !long;
+            visitMore.textContent = 'Show more';
+            visitMore.setAttribute('aria-expanded', 'false');
+        }
+        if (visitShared) visitShared.hidden = !(notes && visit.notes_shared_with_adviser);
+        visitSection.hidden = false;
     };
 
     // ── The list ──────────────────────────────────────────────────────
@@ -259,7 +354,9 @@
                 );
                 return;
             }
-            render((await response.json()).photos);
+            const data = await response.json();
+            showVisit(data.visit || null);
+            render(data.photos);
         } catch (_) {
             if (id === consultationId) {
                 stageFailed('The photos could not be loaded.', 'Check your connection and try again.', null);
@@ -278,6 +375,8 @@
         if (addPanel) addPanel.open = false;
         if (sub) sub.textContent = student ? 'Photos for ' + student : '';
         list.textContent = '';
+        stopEdit();
+        if (visitSection) visitSection.hidden = true;
         if (detail) detail.hidden = true;
         if (allPanel) allPanel.hidden = true;
         if (stageCount) stageCount.hidden = true;
@@ -298,6 +397,7 @@
 
     const close = () => {
         if (backdrop.hidden || backdrop.classList.contains('is-closing')) return;
+        if (!leaveEdit()) return;
 
         const finish = () => {
             backdrop.classList.remove('is-closing');
@@ -344,6 +444,8 @@
 
     document.addEventListener('keydown', (e) => {
         if (backdrop.hidden) return;
+        // Esc while writing a comment leaves the comment, not the dialog.
+        if (e.key === 'Escape' && editingId !== null) { e.preventDefault(); leaveEdit(); return; }
         if (e.key === 'Escape') { close(); return; }
         // Arrows move between photos, unless someone is typing a comment.
         if (e.target.closest && e.target.closest('input, textarea, select')) return;
@@ -356,6 +458,9 @@
         const id = consultationId;
         const file = fileInput?.files && fileInput.files[0];
         if (!file) { showError('Choose a photo first.'); return; }
+        // The new photo takes the stage, so a comment half-written on the
+        // old one is settled first.
+        if (!leaveEdit()) return;
 
         showError('');
         uploadBtn.disabled = true;
@@ -422,6 +527,8 @@
     detailRemove?.addEventListener('click', async () => {
         if (currentId === null) return;
         if (!window.confirm('Remove this photo? This is recorded in the audit trail.')) return;
+        // A comment being written on a photo that is going is moot.
+        stopEdit();
 
         try {
             const response = await fetch(photoUrl(currentId), {
@@ -431,6 +538,65 @@
             if (!response.ok) return;
             render((await response.json()).photos);
         } catch (_) { /* the photo stays until the next successful read */ }
+    });
+
+    // Saving a comment: written through the server, then redrawn from the
+    // list it answers with, so the stage, the list and the editor agree.
+    const saveComment = async () => {
+        if (editingId === null || !editText) return;
+        const id = editingId;
+
+        showEditError('');
+        if (editSave) editSave.disabled = true;
+
+        try {
+            const response = await fetch(photoUrl(id) + '/caption', {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': token,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ caption: editText.value }),
+            });
+
+            if (response.status === 422) {
+                const data = await response.json();
+                const first = Object.values(data.errors || {})[0];
+                showEditError(Array.isArray(first) ? first[0] : 'That comment could not be saved.');
+                return;
+            }
+            if (!response.ok) {
+                showEditError(response.status === 403
+                    ? 'Only the clinic can comment on a photo.'
+                    : 'The comment could not be saved. Try again.');
+                return;
+            }
+
+            const data = await response.json();
+            if (String(editingId) !== String(id)) return;
+            stopEdit();
+            render(data.photos);
+        } catch (_) {
+            showEditError('The comment could not be saved. Check your connection and try again.');
+        } finally {
+            if (editSave) editSave.disabled = false;
+        }
+    };
+
+    editBtn?.addEventListener('click', startEdit);
+    editCancel?.addEventListener('click', () => { leaveEdit(); });
+    editSave?.addEventListener('click', saveComment);
+    editText?.addEventListener('input', countChars);
+    editText?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveComment(); }
+    });
+
+    visitMore?.addEventListener('click', () => {
+        const expanded = visitMore.getAttribute('aria-expanded') === 'true';
+        visitNotes?.classList.toggle('is-clamped', expanded);
+        visitMore.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        visitMore.textContent = expanded ? 'Show more' : 'Show less';
     });
 })();
 </script>
