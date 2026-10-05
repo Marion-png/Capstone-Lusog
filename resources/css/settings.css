@@ -1,7 +1,7 @@
 /*
  * Account settings page.
  *
- * Two panels, nothing the theme already owns. Cards, buttons, inputs, flashes
+ * Account panels. Cards, buttons, inputs, flashes
  * and .field-label all come from css/lusog-theme.css, which this sheet is
  * inlined after; everything here is the page's own layout.
  */
@@ -47,6 +47,10 @@
 .set-field { display: grid; gap: 6px; }
 .set-hint { font-size: .72rem; }
 .set-actions { margin-top: 3px; }
+.set-assignment { grid-column: 1 / -1; }
+.set-assignment-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.set-confirm { display: flex; align-items: flex-start; gap: 9px; font-size: .8rem; line-height: 1.5; cursor: pointer; }
+.set-confirm input { margin-top: 3px; flex: 0 0 auto; accent-color: var(--lg-emerald, #1F8A4C); }
 
 /* A refusal or a warning sits above the form it belongs to, not beside it. */
 .set-blocked, .set-nopass { margin: 14px 0 0; font-size: .8rem; line-height: 1.5; }
@@ -59,4 +63,5 @@
 @media (max-width: 900px) {
     .set-grid { grid-template-columns: minmax(0, 1fr); }
     .set-item { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+    .set-assignment-fields { grid-template-columns: minmax(0, 1fr); }
 }

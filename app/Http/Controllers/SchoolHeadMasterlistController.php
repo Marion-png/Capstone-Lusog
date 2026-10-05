@@ -3,11 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
+use App\Support\AccountSettings;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingBeneficiarySummary;
+use App\Support\MasterlistSheet;
+use App\Support\NutritionalHealthStatus;
 use App\Support\SchoolHeadOverview;
+use App\Support\SchoolLetterhead;
 use App\Support\StudentRecordPurge;
 use App\Support\StudentRetention;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -128,6 +133,7 @@ class SchoolHeadMasterlistController extends Controller
             'BASELINE WEIGHT (KG)', 'BASELINE HEIGHT (CM)', 'BASELINE BMI',
             'ENDLINE WEIGHT (KG)', 'ENDLINE HEIGHT (CM)', 'ENDLINE BMI',
             'BASELINE STATUS', 'LATEST STATUS', 'CHANGE',
+            'BASELINE HEIGHT-FOR-AGE', 'ENDLINE HEIGHT-FOR-AGE',
             'BENEFICIARY', 'ATTENDANCE', 'ATTENDANCE STANDING',
         ]));
 
@@ -150,6 +156,8 @@ class SchoolHeadMasterlistController extends Controller
                 $row['baseline'] !== '' ? $row['baseline'] : SchoolHeadOverview::NOT_MEASURED,
                 $row['latest'] !== '' ? $row['latest'] : SchoolHeadOverview::NOT_MEASURED,
                 SchoolHeadOverview::movementLabel($row['movement']),
+                $row['baseline_hfa'] !== '' ? $row['baseline_hfa'] : '—',
+                $row['endline_hfa'] !== '' ? $row['endline_hfa'] : '—',
                 $row['standing_label'],
                 // An em dash, never 0%: no confirmed session is not a turnout of nothing.
                 $row['rate'] !== null ? $this->percent($row['rate']).'%' : '—',
@@ -162,6 +170,183 @@ class SchoolHeadMasterlistController extends Controller
         $filename = 'Masterlist-'.str_replace('/', '-', $data['schoolYear']).'-'.now()->format('Ymd').'.xlsx';
 
         return response()->download($path, $filename)->deleteFileAfterSend();
+    }
+
+    /**
+     * Print list: the list on screen, written as the school's masterlist form.
+     *
+     * It is the Feeding Coordinator's Export Masterlist form — letterhead,
+     * title, a ruled numbered table padded to the form's twenty lines, the
+     * Prepared by / Noted by block — written through the same MasterlistSheet,
+     * so the two files cannot drift apart. Only the title, the columns and the
+     * rows are this list's own. Export list beside it is the plain data table
+     * and is unchanged.
+     *
+     * The rows are the page's own reading (build()), so every filter on the
+     * query string applies exactly as it does on screen and nothing outside the
+     * reader's school can reach the file. The search and the sort run in the
+     * browser, so when either has changed what is on screen the page sends the
+     * ids of the rows still showing, in their order. Those ids only choose and
+     * order rows build() already allowed: an id off the wire adds nobody.
+     *
+     * A GET, unlike the coordinator's POST: this is a read, and the School Head
+     * is refused every POST by RestrictSchoolHeadWrites.
+     */
+    public function printList(Request $request): BinaryFileResponse|JsonResponse|RedirectResponse
+    {
+        if (! $this->mayRead($request)) {
+            $message = 'Only the School Head and the school clinic can print the nutritional health status list.';
+
+            // The page fetches the file so the button can report a failure;
+            // a redirect would come back to that fetch as a login page.
+            return $request->expectsJson()
+                ? response()->json(['message' => $message], 403)
+                : redirect()->route('login')->with('error', $message);
+        }
+
+        $data = $this->build($request);
+        $filters = $data['filters'];
+        $rows = $this->onScreen($request, $data['rows']);
+
+        // The same columns the table draws for the weighing on screen. Grade
+        // and Section are split, and named, as the coordinator's form names
+        // them.
+        $showBaseline = $filters['weighing'] !== 'endline';
+        $showEndline = $filters['weighing'] !== 'baseline';
+        $showMovement = $showBaseline && $showEndline;
+
+        $columns = ['LRN', 'Name', 'Grade', 'Section', 'Gender', 'Age'];
+        if ($showBaseline) {
+            array_push($columns, 'Baseline Weight (kg)', 'Baseline Height (cm)', 'Baseline BMI', 'Baseline Status', 'Baseline Height-for-Age');
+        }
+        if ($showEndline) {
+            // The table prints the record's latest reading under its endline
+            // group; the file names that column for what it holds.
+            array_push($columns, 'Endline Weight (kg)', 'Endline Height (cm)', 'Endline BMI', 'Latest Status', 'Endline Height-for-Age');
+        }
+        if ($showMovement) {
+            $columns[] = 'Change';
+        }
+
+        // A reading nobody took is an em dash, as on screen. A figure that was
+        // taken goes in as a number so it sorts and sums in Excel; the LRN
+        // stays text, or Excel would print a twelve-digit LRN in scientific
+        // notation.
+        $text = static fn (string $value): string => $value !== '' ? $value : '—';
+        $figure = static fn (string $value): string|int|float => $value === '' ? '—' : (is_numeric($value) ? $value + 0 : $value);
+        $status = static fn (string $value): string => $value !== '' ? $value : SchoolHeadOverview::NOT_MEASURED;
+
+        $cells = $rows->map(function (array $row) use ($showBaseline, $showEndline, $showMovement, $text, $figure, $status): array {
+            [$grade, $section] = MasterlistSheet::gradeAndSection($row['section']);
+            $line = [$text($row['lrn']), $row['name'], $grade, $section, $text($row['sex']), $figure($row['age'])];
+
+            if ($showBaseline) {
+                array_push($line, $figure($row['baseline_weight']), $figure($row['baseline_height']), $figure($row['baseline_bmi']), $status($row['baseline']), $text($row['baseline_hfa']));
+            }
+            if ($showEndline) {
+                array_push($line, $figure($row['endline_weight']), $figure($row['endline_height']), $figure($row['endline_bmi']), $status($row['latest']), $text($row['endline_hfa']));
+            }
+            if ($showMovement) {
+                $line[] = $row['movement'] === 'unknown' ? '—' : SchoolHeadOverview::movementLabel($row['movement']);
+            }
+
+            return $line;
+        })->all();
+
+        // tempnam() creates the file it names, so the reservation is released
+        // before the writer claims the .xlsx path.
+        $reserved = tempnam(sys_get_temp_dir(), 'nutrition-list-');
+        $path = $reserved.'.xlsx';
+        @unlink($reserved);
+
+        $writer = new XlsxWriter;
+        $writer->openToFile($path);
+
+        $institutionId = $request->session()->get('active_institution_id');
+
+        MasterlistSheet::write(
+            $writer,
+            letterhead: SchoolLetterhead::for($institutionId, (string) $data['schoolName']),
+            title: 'Nutritional Health Status',
+            schoolYear: $data['schoolYear'],
+            columns: $columns,
+            rows: $cells,
+            preparedBy: (string) $request->session()->get('active_name', ''),
+            preparedRole: AccountSettings::roleLabel($request->session()->get('active_role')),
+            scope: $this->scopeLine($filters),
+        );
+
+        $writer->close();
+
+        // The coordinator's pattern — list, year, date — with the grade and
+        // section in it when the list was narrowed to them.
+        $scopeSlug = collect([$filters['grade'], $filters['section']])
+            ->map(fn (string $part): string => trim((string) preg_replace('/[^A-Za-z0-9]+/', '-', $part), '-'))
+            ->filter()
+            ->implode('-');
+
+        $filename = 'Nutritional-Health-Status-'
+            .($scopeSlug !== '' ? $scopeSlug.'-' : '')
+            .str_replace('/', '-', $data['schoolYear']).'-'.now()->format('Ymd').'.xlsx';
+
+        return response()->download($path, $filename)->deleteFileAfterSend();
+    }
+
+    /**
+     * The rows in the order the reader had them on screen.
+     *
+     * No `ids` means no search and no sort, so the server's order is the
+     * page's. An empty `ids` means a search nobody matched, and prints an
+     * empty form rather than falling back to the whole school.
+     *
+     * @param  Collection<int, array<string, mixed>>  $rows
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function onScreen(Request $request, Collection $rows): Collection
+    {
+        if (! $request->query->has('ids')) {
+            return $rows;
+        }
+
+        $raw = $request->query('ids');
+        $ids = collect(is_array($raw) ? $raw : explode(',', (string) $raw))
+            ->map(fn ($id): int => (int) trim((string) $id))
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique();
+
+        $byId = $rows->keyBy('id');
+
+        return $ids->map(fn (int $id) => $byId->get($id))->filter()->values();
+    }
+
+    /**
+     * What the list was narrowed to, in words. The weighing filter is left
+     * out: it chooses columns, not learners.
+     *
+     * @param  array<string, string>  $filters
+     */
+    private function scopeLine(array $filters): string
+    {
+        $statusLabel = fn (string $status): string => $status === 'not_measured' ? SchoolHeadOverview::NOT_MEASURED : $status;
+
+        return collect([
+            $filters['grade'],
+            $filters['section'],
+            $filters['sex'],
+            $filters['baseline'] !== '' ? 'Baseline: '.$statusLabel($filters['baseline']) : '',
+            $filters['latest'] !== '' ? 'Latest: '.$statusLabel($filters['latest']) : '',
+            match ($filters['standing']) {
+                'beneficiary' => 'Enrolled beneficiaries',
+                'pending' => 'Awaiting enrolment',
+                'not_eligible' => 'Not beneficiaries',
+                default => '',
+            },
+            match ($filters['attendance']) {
+                '' => '',
+                'no_sessions' => 'Attendance: No confirmed session',
+                default => 'Attendance: '.FeedingAtRiskRule::statusLabel($filters['attendance']),
+            },
+        ])->filter()->implode(' · ');
     }
 
     /**
@@ -255,6 +440,10 @@ class SchoolHeadMasterlistController extends Controller
         // in the ordinary case.
         $retention = $nearing[(string) $record->student_id] ?? null;
 
+        // Height-for-age is read where the student profile reads it, so the
+        // list and the learner's own tab cannot classify one child two ways.
+        $growth = NutritionalHealthStatus::forRecord($record);
+
         return [
             'id' => $record->id,
             'lrn' => (string) $record->student_id,
@@ -282,6 +471,11 @@ class SchoolHeadMasterlistController extends Controller
             'endline_weight' => $this->firstFilled([$record->endline_weight_kg]),
             'endline_height' => $this->firstFilled([$record->endline_height_cm]),
             'endline_bmi' => $this->firstFilled([$record->endline_bmi_value]),
+            // The adviser's classification at entry for the baseline; the
+            // endline is computed from the endline height and age, since it is
+            // stored nowhere. A phase nobody measured is blank.
+            'baseline_hfa' => $growth['baseline']['hfa_status'],
+            'endline_hfa' => $growth['endline']['hfa_status'],
             'endline' => SchoolHeadOverview::phaseStatus($record, 'endline'),
             'baseline' => $baseline,
             'latest' => $latest,

@@ -6,6 +6,7 @@ use App\Http\Middleware\FreshRequestState;
 use App\Http\Middleware\InstitutionScope;
 use App\Http\Middleware\RestrictSchoolHeadWrites;
 use App\Http\Middleware\SecurityHeaders;
+use App\Http\Middleware\SyncTeacherAssignment;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -29,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(SecurityHeaders::class);
         $middleware->appendToGroup('web', EnsureActiveSession::class);
         $middleware->appendToGroup('web', InstitutionScope::class);
+        $middleware->appendToGroup('web', SyncTeacherAssignment::class);
         $middleware->appendToGroup('web', AuditSensitiveAccess::class);
         // Last, and after the audit: a School Head write that is about to be
         // refused is still an attempt worth recording before it is turned away.

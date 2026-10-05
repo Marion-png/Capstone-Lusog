@@ -37,11 +37,36 @@ class EncryptedFileStorage
         }
 
         $name = $downloadName ?: basename($path);
+        $type = self::mimeFromName($name);
+
+        // Every response carries nosniff, so a browser renders a file only as
+        // the type this header names. A photo whose name gives nothing away —
+        // a camera's "image", a ".jfif" — was still validated as an image on
+        // the way in, so it is read off its own bytes rather than handed over
+        // as octet-stream, which an <img> will not draw and a tab downloads.
+        // Only ever as a raster image: those cannot run as script.
+        if ($type === 'application/octet-stream' && $disposition === 'inline') {
+            $type = self::rasterImageType($contents) ?? $type;
+        }
 
         return response($contents, 200, [
-            'Content-Type' => self::mimeFromName($name),
+            'Content-Type' => $type,
             'Content-Disposition' => $disposition.'; filename="'.str_replace('"', '', $name).'"',
         ]);
+    }
+
+    /** The image type the bytes declare, if it is one a browser draws and cannot execute. */
+    private static function rasterImageType(string $contents): ?string
+    {
+        if (! class_exists(\finfo::class)) {
+            return null;
+        }
+
+        $sniffed = (new \finfo(FILEINFO_MIME_TYPE))->buffer($contents);
+
+        return in_array($sniffed, ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'], true)
+            ? $sniffed
+            : null;
     }
 
     /**
@@ -64,6 +89,11 @@ class EncryptedFileStorage
             'pdf' => 'application/pdf',
             'jpg', 'jpeg' => 'image/jpeg',
             'png' => 'image/png',
+            // Accepted by the consultation and learner photo uploads; without
+            // these a WebP was sent as octet-stream and drew as a broken image.
+            'webp' => 'image/webp',
+            'heic' => 'image/heic',
+            'heif' => 'image/heif',
             'doc' => 'application/msword',
             'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             'xls' => 'application/vnd.ms-excel',

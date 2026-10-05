@@ -52,6 +52,16 @@
 	};
 	$shStatusLabel = fn (string $status) => $status !== '' ? $status : SchoolHeadOverview::NOT_MEASURED;
 
+	// Height-for-age on the same scale: stunting carries the risk colours, a
+	// normal height the healthy one, and a tall learner is information rather
+	// than a warning.
+	$shHfaBadge = fn (string $status) => match (true) {
+		str_contains(strtolower($status), 'severely stunted') => 'badge-critical',
+		str_contains(strtolower($status), 'stunted') => 'badge-risk',
+		str_contains(strtolower($status), 'normal') => 'badge-normal',
+		default => 'badge-neutral',
+	};
+
 	$shMoveBadge = fn (string $move) => match ($move) {
 		'improved' => 'badge-normal',
 		'declined' => 'badge-critical',
@@ -91,12 +101,20 @@
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
 					Export list
 				</a>
-				<button type="button" class="btn btn-secondary" id="shPrint">
+				{{-- Print list writes the school's masterlist form as a workbook:
+				     the Feeding Coordinator's Export Masterlist layout
+				     (MasterlistSheet), holding the rows on screen. The href alone
+				     is the filtered list in the server's order, so it still
+				     downloads without JS; the script adds the search and the sort
+				     and says when it is working or has failed. --}}
+				<a class="btn btn-secondary" id="shPrint" href="{{ route($mlIsNurse ? $mlRoutePrefix.'.nutritional-status.print' : 'dashboard.school-head.masterlist.print', request()->query()) }}">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
-					Print list
-				</button>
+					<span data-print-label>Print list</span>
+				</a>
 			</div>
 		</div>
+
+		<p class="flash err" id="shPrintError" role="alert" hidden></p>
 
 		<div class="print-masthead" aria-hidden="true">
 			<h2>Nutritional Health Status</h2>
@@ -239,10 +257,10 @@
 							<tr class="sh-group-row">
 								<th colspan="6"></th>
 								@if ($showBaseline)
-									<th colspan="4" class="sh-group sh-group-baseline">Baseline weighing</th>
+									<th colspan="5" class="sh-group sh-group-baseline">Baseline weighing</th>
 								@endif
 								@if ($showEndline)
-									<th colspan="4" class="sh-group sh-group-endline">Endline weighing</th>
+									<th colspan="5" class="sh-group sh-group-endline">Endline weighing</th>
 								@endif
 								@if ($showMovement)<th></th>@endif
 							</tr>
@@ -258,12 +276,14 @@
 									<th class="num" data-sort="baselineHeight">Height (cm)</th>
 									<th class="num" data-sort="baselineBmi">BMI</th>
 									<th data-sort="baseline">Status</th>
+									<th data-sort="baselineHfa">Height-for-Age</th>
 								@endif
 								@if ($showEndline)
 									<th class="num" data-sort="endlineWeight">Weight (kg)</th>
 									<th class="num" data-sort="endlineHeight">Height (cm)</th>
 									<th class="num" data-sort="endlineBmi">BMI</th>
 									<th data-sort="latest">Status</th>
+									<th data-sort="endlineHfa">Height-for-Age</th>
 								@endif
 								@if ($showMovement)<th data-sort="movement">Change</th>@endif
 							</tr>
@@ -289,6 +309,8 @@
 								    data-bmi="{{ $row['bmi'] }}"
 								    data-baseline="{{ $shStatusLabel($row['baseline']) }}"
 								    data-latest="{{ $shStatusLabel($row['latest']) }}"
+								    data-baseline-hfa="{{ $row['baseline_hfa'] }}"
+								    data-endline-hfa="{{ $row['endline_hfa'] }}"
 								    data-movement="{{ SchoolHeadOverview::movementLabel($row['movement']) }}"
 								    data-meta="{{ $row['section'] }}{{ $row['sex'] !== '' ? ' · '.$row['sex'] : '' }}"
 								    data-standing="{{ $row['standing_label'] }}">
@@ -324,6 +346,13 @@
 										<td class="num">{{ $row['baseline_height'] !== '' ? $row['baseline_height'] : '—' }}</td>
 										<td class="num">{{ $row['baseline_bmi'] !== '' ? $row['baseline_bmi'] : '—' }}</td>
 										<td><span class="badge {{ $shStatusBadge($row['baseline']) }}">{{ $shStatusLabel($row['baseline']) }}</span></td>
+										<td>
+											@if ($row['baseline_hfa'] === '')
+												<span class="muted">&mdash;</span>
+											@else
+												<span class="badge {{ $shHfaBadge($row['baseline_hfa']) }}">{{ $row['baseline_hfa'] }}</span>
+											@endif
+										</td>
 									@endif
 									{{-- Endline. The status column stays the record's own
 									     `latest` reading, which is what the Latest filter
@@ -333,6 +362,13 @@
 										<td class="num">{{ $row['endline_height'] !== '' ? $row['endline_height'] : '—' }}</td>
 										<td class="num">{{ $row['endline_bmi'] !== '' ? $row['endline_bmi'] : '—' }}</td>
 										<td><span class="badge {{ $shStatusBadge($row['latest']) }}">{{ $shStatusLabel($row['latest']) }}</span></td>
+										<td>
+											@if ($row['endline_hfa'] === '')
+												<span class="muted">&mdash;</span>
+											@else
+												<span class="badge {{ $shHfaBadge($row['endline_hfa']) }}">{{ $row['endline_hfa'] }}</span>
+											@endif
+										</td>
 									@endif
 									@if ($showMovement)
 										<td>
@@ -461,7 +497,73 @@
 
 <script>
 (() => {
-	document.getElementById('shPrint')?.addEventListener('click', () => window.print());
+	// ── Print list ─────────────────────────────────────────────────────
+	// Downloads the masterlist form rather than opening the print dialog.
+	// When a search or a sort has changed what is on screen, the ids of the
+	// rows still showing go with the request, in screen order, so the file
+	// holds what the reader was reading. It is fetched rather than followed so
+	// the button can say it is working, and say so when it fails: a download
+	// that fails silently looks like one that never started.
+	const printLink = document.getElementById('shPrint');
+	const printError = document.getElementById('shPrintError');
+	let onScreenIds = () => null; // set once the table below is wired
+
+	printLink?.addEventListener('click', async (event) => {
+		event.preventDefault();
+		if (printLink.getAttribute('aria-busy') === 'true') return;
+
+		const label = printLink.querySelector('[data-print-label]');
+		const idle = label ? label.textContent : '';
+		const url = new URL(printLink.href, window.location.href);
+		const ids = onScreenIds();
+		if (ids !== null) url.searchParams.set('ids', ids.join(','));
+
+		printLink.setAttribute('aria-busy', 'true');
+		printLink.setAttribute('aria-disabled', 'true');
+		printLink.classList.add('disabled');
+		if (label) label.textContent = 'Preparing…';
+		if (printError) printError.hidden = true;
+
+		try {
+			const response = await fetch(url, {
+				credentials: 'same-origin',
+				headers: { 'X-Requested-With': 'XMLHttpRequest' },
+			});
+			const type = response.headers.get('content-type') || '';
+
+			if (!response.ok || !type.includes('spreadsheetml')) {
+				const body = type.includes('json') ? await response.json().catch(() => ({})) : {};
+				throw new Error(
+					response.status === 401 ? 'Your session has ended. Sign in again, then print the list.'
+						: response.status === 403 && body.message ? body.message
+						: 'The list could not be exported. Check your connection and try again.'
+				);
+			}
+
+			const disposition = response.headers.get('content-disposition') || '';
+			const named = disposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+			const file = URL.createObjectURL(await response.blob());
+			const save = document.createElement('a');
+			save.href = file;
+			save.download = named ? decodeURIComponent(named[1]) : 'Nutritional-Health-Status.xlsx';
+			document.body.appendChild(save);
+			save.click();
+			save.remove();
+			setTimeout(() => URL.revokeObjectURL(file), 1000);
+		} catch (error) {
+			if (printError) {
+				printError.textContent = error instanceof TypeError
+					? 'The list could not be exported. Check your connection and try again.'
+					: error.message;
+				printError.hidden = false;
+			}
+		} finally {
+			printLink.removeAttribute('aria-busy');
+			printLink.removeAttribute('aria-disabled');
+			printLink.classList.remove('disabled');
+			if (label) label.textContent = idle;
+		}
+	});
 
 	// Every control in the toolbar applies itself — an Apply button nobody
 	// presses is a filter that silently does nothing.
@@ -548,6 +650,15 @@
 			if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); apply(); }
 		});
 	});
+
+	// What Print list sends: nothing while the page is in the server's own
+	// order, else the rows still showing, read off the table in the order
+	// they are drawn (a sort moves them in the table, not in `rows`).
+	onScreenIds = () => (sortKey === null && (search?.value.trim() ?? '') === '')
+		? null
+		: Array.from(body.querySelectorAll('tr.sh-row'))
+			.filter((row) => !row.hidden)
+			.map((row) => row.dataset.row);
 
 	// ── The learner's record ───────────────────────────────────────────
 	const backdrop = document.getElementById('detailBackdrop');

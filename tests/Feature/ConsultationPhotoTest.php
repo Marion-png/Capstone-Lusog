@@ -9,6 +9,7 @@ use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
@@ -417,7 +418,7 @@ class ConsultationPhotoTest extends TestCase
 
         $this->assertStringContainsString('class="clog-photo-btn has-photos"', $html);
         $this->assertStringContainsString('View photos', $html);
-        $this->assertStringContainsString('<span class="clog-photo-count">1</span>', $html);
+        $this->assertStringContainsString('<span class="clog-photo-count" data-photos-count>1</span>', $html);
 
         $this->assertStringContainsString('<span class="clog-photo-none">', $html);
         $this->assertStringContainsString('No photos attached', $html);
@@ -493,6 +494,112 @@ class ConsultationPhotoTest extends TestCase
 
         $this->assertSame(0, Consultation::count());
         $this->assertSame(0, ConsultationPhoto::count());
+    }
+
+    // ── Viewing a photo ─────────────────────────────────────────────
+
+    /**
+     * A WebP is an accepted upload, so it must come back as an image. It used
+     * to be sent as octet-stream, which under nosniff an <img> will not draw
+     * and a new tab downloads instead of showing.
+     */
+    #[Test]
+    public function a_webp_photo_is_served_as_an_image(): void
+    {
+        $visit = $this->visit();
+        $this->upload($visit, ['photo' => UploadedFile::fake()->create('rash.webp', 80, 'image/webp')])->assertCreated();
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('consultation-photos.view', ConsultationPhoto::firstOrFail()))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/webp')
+            ->assertHeader('Content-Disposition', 'inline; filename="rash.webp"');
+    }
+
+    /** A photo whose name says nothing (a camera's "image") is typed off its own bytes. */
+    #[Test]
+    public function a_photo_whose_name_hides_its_type_is_served_from_its_bytes(): void
+    {
+        $photo = $this->storedPhoto('image', base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+        ));
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('consultation-photos.view', $photo))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/png');
+    }
+
+    /** Reading the bytes never promotes a file to a type that can run as script. */
+    #[Test]
+    public function bytes_that_are_not_an_image_are_never_served_as_one(): void
+    {
+        $photo = $this->storedPhoto('image', '<html><script>alert(1)</script></html>');
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('consultation-photos.view', $photo))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/octet-stream');
+    }
+
+    /** The viewer opens on the newest photo, so a photo just added is the one shown. */
+    #[Test]
+    public function the_newest_photo_comes_first(): void
+    {
+        $visit = $this->visit();
+        $this->upload($visit, ['caption' => 'First'])->assertCreated();
+        $this->upload($visit, ['caption' => 'Replacement'])->assertCreated();
+
+        $photos = $this->withSession($this->sessionFor('school_nurse'))
+            ->getJson(route('consultation-photos.index', $visit))
+            ->assertOk()
+            ->json('photos');
+
+        $this->assertSame('Replacement', $photos[0]['caption']);
+        $this->assertSame(route('consultation-photos.view', $photos[0]['id']), $photos[0]['url']);
+    }
+
+    /**
+     * View photos opens on the photo itself — a viewer with its loading, empty
+     * and error states — not on a grid of links that leave the page.
+     */
+    #[Test]
+    public function the_dialog_opens_on_the_photo_itself(): void
+    {
+        $this->upload($this->visit())->assertCreated();
+
+        $html = $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('dashboard.consultation-log'))
+            ->assertOk()
+            ->getContent();
+
+        foreach (['cphotoStage', 'cphotoStageImg', 'cphotoStageLoading', 'cphotoStageError', 'cphotoRetry', 'cphotoPrev', 'cphotoNext'] as $id) {
+            $this->assertStringContainsString('id="'.$id.'"', $html);
+        }
+        $this->assertStringContainsString('No photo uploaded for this consultation.', $html);
+        // Beside the photo: its comment, then every photo with its own.
+        $this->assertStringContainsString('<div class="cphoto-label">Comment</div>', $html);
+        $this->assertStringContainsString('id="cphotoStageCaption"', $html);
+        $this->assertStringContainsString('id="cphotoAll"', $html);
+        // A thumbnail puts its photo on the stage rather than opening a tab.
+        $this->assertStringContainsString('thumb.dataset.select = String(photo.id)', $html);
+        $this->assertStringNotContainsString("link.target = '_blank'", $html);
+    }
+
+    /** A photo row written straight to storage, under the name given. */
+    private function storedPhoto(string $name, string $bytes): ConsultationPhoto
+    {
+        $visit = $this->visit();
+        $path = 'consultation-photos/'.uniqid().'_'.$name;
+        Storage::disk('local')->put($path, Crypt::encryptString($bytes));
+
+        return ConsultationPhoto::create([
+            'consultation_id' => $visit->id,
+            'institution_id' => $visit->institution_id,
+            'file_path' => $path,
+            'file_original_name' => $name,
+            'file_size' => strlen($bytes),
+        ]);
     }
 
     /** The dialog offers the photo field, and the profile's log opens the photos too. */

@@ -1,12 +1,8 @@
 {{--
     Account settings — the body, shared by every role.
 
-    Two panels and nothing else: the account the signed-in person is using,
-    and the one thing about it they may change. It is deliberately not a user
-    management screen — a role, a school and a class assignment are the System
-    Admin's to set, and a second place to change them is a second place for two
-    screens to disagree about who somebody is. So they are printed here, not
-    edited.
+    Account details, password changes and teacher class reassignment. Each
+    form acts only on the signed-in account; roles and schools stay read-only.
 
     The shell around this is the role's own (dashboard/settings for the six
     roles on the LUSOG rail, nutricor/settings for that role's layout), because
@@ -14,7 +10,7 @@
     copy so the two shells cannot drift.
 
     Expects: $profile (App\Support\AccountSettings::profileFor) and
-    $passwordBlockedReason.
+    $passwordBlockedReason, $assignmentSchoolYear and $assignmentCatalog.
 --}}
 @php
     use App\Support\AccountPassword;
@@ -53,7 +49,7 @@
         <div class="card-head">
             <div>
                 <div class="card-title">Your account</div>
-                <div class="card-sub">Set by the System Admin when the account was approved.</div>
+                <div class="card-sub">Your current account details and school.</div>
             </div>
         </div>
 
@@ -67,8 +63,10 @@
         </dl>
 
         <p class="set-note muted">
-            A name, role, school or class that is wrong here is changed by the System Admin,
-            not from this page &mdash; they are what every other screen decides your access by.
+            Contact the System Admin to correct your name, role or school.
+            @if ($profile['shows_assignment'])
+                Use Teaching assignment below when your grade or section changes.
+            @endif
         </p>
     </section>
 
@@ -136,4 +134,8 @@
             </form>
         @endif
     </section>
+
+    @if ($profile['shows_assignment'])
+        @include('partials.settings-assignment')
+    @endif
 </div>

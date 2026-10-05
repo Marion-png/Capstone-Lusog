@@ -658,6 +658,12 @@ Route::get('/dashboard/school-head/masterlist', [SchoolHeadMasterlistController:
 Route::get('/dashboard/school-head/masterlist/export', [SchoolHeadMasterlistController::class, 'export'])
     ->name('dashboard.school-head.masterlist.export');
 
+// Print list: the same list written as the school's masterlist form, in the
+// Feeding Coordinator's layout (MasterlistSheet). A GET because it is a read,
+// and RestrictSchoolHeadWrites refuses the head every POST.
+Route::get('/dashboard/school-head/masterlist/print', [SchoolHeadMasterlistController::class, 'printList'])
+    ->name('dashboard.school-head.masterlist.print');
+
 // The same list, under the nurse's own path. It is one controller and one
 // reading — but the URL has to live under dashboard/school-nurse, because
 // EnsureActiveSession seeds a prototype session for whichever role a URL
@@ -668,6 +674,9 @@ Route::get('/dashboard/school-nurse/nutritional-status', [SchoolHeadMasterlistCo
 
 Route::get('/dashboard/school-nurse/nutritional-status/export', [SchoolHeadMasterlistController::class, 'export'])
     ->name('dashboard.school-nurse.nutritional-status.export');
+
+Route::get('/dashboard/school-nurse/nutritional-status/print', [SchoolHeadMasterlistController::class, 'printList'])
+    ->name('dashboard.school-nurse.nutritional-status.print');
 
 // Keeps the school head's dashboard current without a reload: the page polls
 // the pulse (a stamp, no data) and only re-reads the metrics when it moves.
@@ -1062,6 +1071,9 @@ Route::get('/dashboard/clinic-teacher/nutritional-status', [SchoolHeadMasterlist
 
 Route::get('/dashboard/clinic-teacher/nutritional-status/export', [SchoolHeadMasterlistController::class, 'export'])
     ->name('dashboard.clinic-teacher.nutritional-status.export');
+
+Route::get('/dashboard/clinic-teacher/nutritional-status/print', [SchoolHeadMasterlistController::class, 'printList'])
+    ->name('dashboard.clinic-teacher.nutritional-status.print');
 
 Route::get('/dashboard/clinic-teacher/feeding-program', [FeedingProgramController::class, 'index'])
     ->name('dashboard.clinic-teacher.feeding-program');
@@ -1511,15 +1523,17 @@ Route::post('/health-records', function (Request $request) {
  * signed-in session is left exactly as it is instead of being re-seeded as
  * another role the way a role-specific URL would do.
  *
- * The write is the person's own credential and nothing else: the account is
- * resolved from the session inside the controller, so neither route takes an
- * account to act on.
+ * Each write resolves the person's own account from the session. Teachers can
+ * also update their grade and section here when a new assignment takes effect.
  */
 Route::get('/dashboard/settings', [SettingsController::class, 'index'])
     ->name('settings');
 
 Route::post('/dashboard/settings/password', [SettingsController::class, 'updatePassword'])
     ->name('settings.password');
+
+Route::post('/dashboard/settings/assignment', [SettingsController::class, 'updateAssignment'])
+    ->name('settings.assignment');
 Route::post('/logout', function (Request $request) {
     AuditTrail::record('logout', null, null, 'Logged out');
 
@@ -1596,7 +1610,7 @@ Route::post('/login', function (Request $request) {
     $account = $candidates->first();
     $role = (string) ($account['role'] ?? '');
 
-    if ($role === 'class_adviser') {
+    if (in_array($role, \App\Support\AccountSettings::TEACHER_ROLES, true)) {
         $request->session()->put('assigned_grade_level', $account['assigned_grade_level'] ?? null);
         $request->session()->put('assigned_section', $account['assigned_section'] ?? null);
         $request->session()->put('assigned_school_name', $account['school_name'] ?? null);

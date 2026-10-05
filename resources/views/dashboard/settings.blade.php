@@ -46,7 +46,7 @@
         <div class="page-header">
             <div class="page-eyebrow">Account</div>
             <h1 class="page-title">Your <span>Settings</span></h1>
-            <p class="page-sub">The account you are signed in with, and your password.</p>
+            <p class="page-sub">Your account, password@if ($profile['shows_assignment']) and teaching assignment@endif.</p>
         </div>
 
         @include('partials.settings-panels')

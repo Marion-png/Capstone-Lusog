@@ -51,6 +51,9 @@ class AccountSettings
     /** The session username the prototype guard seeds; it owns no account row. */
     public const PROTOTYPE_USERNAME = 'prototype';
 
+    /** Teachers who may maintain their own grade and section in Settings. */
+    public const TEACHER_ROLES = ['class_adviser', 'clinic_teacher'];
+
     public static function roleLabel(?string $role): string
     {
         $role = (string) $role;
@@ -78,15 +81,39 @@ class AccountSettings
 
         $institutionId = $session->get('active_institution_id');
 
-        $row = DB::table('accounts')
-            ->whereRaw('LOWER(TRIM(username)) = ?', [$username])
-            // A null institution is matched as null, not ignored: an unscoped
-            // row and a school's row are two different accounts.
-            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-            ->when(! $institutionId, fn ($q) => $q->whereNull('institution_id'))
-            ->first();
+        return RequestMemo::remember('account-settings:'.json_encode([$username, $institutionId]), function () use ($username, $institutionId) {
+            $row = DB::table('accounts')
+                ->whereRaw('LOWER(TRIM(username)) = ?', [$username])
+                // Usernames are unique per school, not globally.
+                ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+                ->when(! $institutionId, fn ($q) => $q->whereNull('institution_id'))
+                ->first();
 
-        return $row ? (array) $row : null;
+            return $row ? (array) $row : null;
+        });
+    }
+
+    /**
+     * Keep every signed-in browser on the stored teacher assignment. Clinic
+     * teachers retain school-wide access; only advisers use this as a scope.
+     */
+    public static function syncTeacherAssignment(Request $request, array $account): void
+    {
+        $session = $request->session();
+        $grade = (string) ($account['assigned_grade_level'] ?? '');
+        $section = (string) ($account['assigned_section'] ?? '');
+
+        if ($grade !== (string) $session->get('assigned_grade_level', '')
+            || $section !== (string) $session->get('assigned_section', '')) {
+            // Normal roster reads rebuild this from current-year records.
+            $session->forget('school_health_card_records');
+        }
+
+        $session->put([
+            'assigned_grade_level' => $grade,
+            'assigned_section' => $section,
+            'assigned_school_name' => $account['school_name'] ?? $session->get('active_school_name'),
+        ]);
     }
 
     /**
@@ -108,9 +135,8 @@ class AccountSettings
         $hasAccount = $account !== null;
         $hasPassword = $hasAccount && trim((string) ($account['password_hash'] ?? '')) !== '';
 
-        // Only a class adviser carries one, and it is the other half of their
-        // scope — the thing that decides which learners they can open — so it
-        // is printed where they can check it.
+        // Both teacher roles can record an assignment. Only the adviser uses
+        // it to limit learner access; clinic permissions remain school-wide.
         $grade = (string) ($account['assigned_grade_level'] ?? $session->get('assigned_grade_level', ''));
         $section = (string) ($account['assigned_section'] ?? $session->get('assigned_section', ''));
 
@@ -122,7 +148,11 @@ class AccountSettings
             'school_name' => trim((string) ($account['school_name'] ?? $session->get('active_school_name', ''))),
             'assigned_grade_level' => $grade,
             'assigned_section' => $section,
-            'shows_assignment' => $role === 'class_adviser',
+            'shows_assignment' => in_array($role, self::TEACHER_ROLES, true),
+            'can_change_assignment' => $hasAccount
+                && in_array($role, self::TEACHER_ROLES, true)
+                && ($account['role'] ?? null) === $role
+                && ! empty($account['institution_id']),
             'has_account' => $hasAccount,
             'has_password' => $hasPassword,
             // The System Admin's credentials are environment variables, so

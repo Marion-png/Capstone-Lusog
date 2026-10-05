@@ -2,24 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\InstitutionSection;
+use App\Models\StudentHealthRecord;
 use App\Support\AccountPassword;
 use App\Support\AccountSettings;
 use App\Support\AuditTrail;
+use App\Support\RequestMemo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 /**
- * Every role's own account settings — one page, one write.
- *
- * It answers two questions and nothing else: which account am I signed in as,
- * and how do I change its password. It is deliberately **not** a user
- * management screen: a person can read their own details and change their own
- * password, and nothing here edits a role, a school, a class assignment or
- * anybody else's account. Those are the System Admin's, on their own screen,
- * for the same reason a learner's measurement belongs to the class adviser —
- * a second place to change a role is a second place for two screens to
- * disagree about who somebody is.
+ * Own account settings: passwords for all stored accounts, and grade/section
+ * reassignment for teachers when their new school-year assignment takes effect.
+ * Roles, schools and other people's accounts are never editable here.
  *
  * The account is resolved from the session by `AccountSettings`, never from
  * the request, so there is no id to swap for somebody else's.
@@ -43,7 +40,81 @@ class SettingsController extends Controller
         return view($view, [
             'profile' => $profile,
             'passwordBlockedReason' => AccountSettings::passwordBlockedReason($profile),
+            'assignmentSchoolYear' => StudentHealthRecord::currentSchoolYear(),
+            'assignmentCatalog' => $profile['can_change_assignment']
+                ? InstitutionSection::catalogFor((int) $request->session()->get('active_institution_id'))
+                : [],
         ]);
+    }
+
+    /** Update the teacher's current assignment without moving student records. */
+    public function updateAssignment(Request $request)
+    {
+        $profile = AccountSettings::profileFor($request);
+        abort_unless($profile['can_change_assignment'], 403, 'Only teachers with a stored account can update their own assignment.');
+
+        $schoolYear = StudentHealthRecord::currentSchoolYear();
+        $validated = $request->validateWithBag('assignment', [
+            'assigned_grade_level' => ['required', 'string', 'max:50'],
+            'assigned_section' => ['required', 'string', 'max:100'],
+            'school_year' => ['required', Rule::in([$schoolYear])],
+            'confirm_assignment' => ['accepted'],
+        ], [
+            'school_year.in' => 'The school year has changed. Reload Settings before updating your assignment.',
+            'confirm_assignment.accepted' => 'Confirm that this is your assigned class and the change should take effect now.',
+        ]);
+
+        $institutionId = (int) $request->session()->get('active_institution_id');
+        $grade = trim($validated['assigned_grade_level']);
+        $section = trim($validated['assigned_section']);
+
+        if (InstitutionSection::hasCatalog($institutionId)) {
+            $canonical = InstitutionSection::canonical($institutionId, $grade, $section);
+
+            if ($canonical === null) {
+                return redirect()->route('settings')->withInput($request->only([
+                    'assigned_grade_level', 'assigned_section',
+                ]))->withErrors([
+                    'assigned_section' => 'Select a grade level and section offered by your school.',
+                ], 'assignment');
+            }
+
+            [$grade, $section] = $canonical;
+        }
+
+        $account = DB::transaction(function () use ($profile, $institutionId, $grade, $section, $schoolYear) {
+            // Lock the account so concurrent saves record the actual previous
+            // assignment. The request supplies neither the account nor school.
+            $row = DB::table('accounts')
+                ->where('id', $profile['account_id'])
+                ->where('institution_id', $institutionId)
+                ->where('role', $profile['role'])
+                ->lockForUpdate()->first();
+
+            abort_unless($row, 403);
+            $old = [
+                'assigned_grade_level' => $row->assigned_grade_level,
+                'assigned_section' => $row->assigned_section,
+            ];
+            $new = ['assigned_grade_level' => $grade, 'assigned_section' => $section];
+
+            if ($old !== $new) {
+                DB::table('accounts')->where('id', $row->id)->update($new + ['updated_at' => now()]);
+                AuditTrail::record('updated', 'Account', (int) $row->id, 'Changed own teaching assignment', [
+                    'school_year' => $schoolYear,
+                    'old' => $old,
+                    'new' => $new,
+                ]);
+            }
+
+            return array_merge((array) $row, $new);
+        });
+
+        RequestMemo::forgetPrefix('account-settings:');
+        AccountSettings::syncTeacherAssignment($request, $account);
+
+        return redirect()->route('settings')->with('success',
+            "Your assignment for SY {$schoolYear} is now {$grade} / {$section}. Student records have not been moved.");
     }
 
     /**
@@ -116,6 +187,7 @@ class SettingsController extends Controller
             'password_hash' => Hash::make($newPassword),
             'updated_at' => now(),
         ]);
+        RequestMemo::forgetPrefix('account-settings:');
 
         // The account row is written by `DB::table`, which bypasses Eloquent
         // and so bypasses the Auditable trait — this write has to record

@@ -4,18 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
 use App\Support\FeedingBeneficiarySummary;
+use App\Support\MasterlistSheet;
 use App\Support\SchemaCache;
 use App\Support\SchoolLetterhead;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use OpenSpout\Common\Entity\Cell;
-use OpenSpout\Common\Entity\Row;
-use OpenSpout\Common\Entity\Style\Border;
-use OpenSpout\Common\Entity\Style\BorderName;
-use OpenSpout\Common\Entity\Style\BorderPart;
-use OpenSpout\Common\Entity\Style\BorderWidth;
-use OpenSpout\Common\Entity\Style\CellAlignment;
-use OpenSpout\Common\Entity\Style\Style;
 use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -117,13 +110,20 @@ class FeedingMasterlistExportController extends Controller
         $writer = new XlsxWriter;
         $writer->openToFile($path);
 
-        $this->writeSheet(
+        // The form itself — heading, the four-column ruled table, and the
+        // signature block — is the SBFP Forms masterlist, so a printed export
+        // and a printed form are the same document. MasterlistSheet holds the
+        // layout; the Nutritional Health Status list's Print list writes
+        // through it too.
+        MasterlistSheet::write(
             $writer,
-            $rows,
-            SchoolLetterhead::for($institutionId, (string) $request->session()->get('active_school_name', 'School')),
-            $schoolYear,
-            (string) $request->session()->get('active_name', ''),
-            $title
+            letterhead: SchoolLetterhead::for($institutionId, (string) $request->session()->get('active_school_name', 'School')),
+            title: $title,
+            schoolYear: $schoolYear,
+            columns: ['Name', 'Grade', 'Section'],
+            rows: array_map(static fn (array $row): array => [$row['name'], $row['grade'], $row['section']], $rows),
+            preparedBy: (string) $request->session()->get('active_name', ''),
+            preparedRole: 'Feeding Coordinator',
         );
 
         $writer->close();
@@ -193,95 +193,16 @@ class FeedingMasterlistExportController extends Controller
 
         return $records
             ->map(function (StudentHealthRecord $record): array {
-                [$grade, $section] = FeedingBeneficiarySummary::splitSection((string) $record->section);
+                [$grade, $section] = MasterlistSheet::gradeAndSection((string) $record->section);
 
                 return [
                     'name' => (string) $record->student_name,
-                    // "Grade 8" prints as 8 on the DepEd form: the column head
-                    // already says Grade.
-                    'grade' => (string) preg_replace('/^grade\s*/i', '', $grade),
+                    'grade' => $grade,
                     'section' => $section,
                 ];
             })
             ->values()
             ->all();
-    }
-
-    /**
-     * The form itself. The heading block, the four-column table and the
-     * signature block are the SBFP Forms masterlist, so a printed export and a
-     * printed form are the same document.
-     *
-     * @param  list<array{name: string, grade: string, section: string}>  $rows
-     */
-    /**
-     * @param  array<string, string>  $letterhead
-     */
-    private function writeSheet(XlsxWriter $writer, array $rows, array $letterhead, string $schoolYear, string $preparedBy, string $formTitle): void
-    {
-        $title = (new Style)->withFontBold(true)->withFontSize(12);
-        $heading = (new Style)->withFontBold(true)->withFontSize(10);
-        $centered = (new Style)->withCellAlignment(CellAlignment::CENTER);
-
-        // A hairline box, as on the printed sheet: the DepEd form is a ruled
-        // table, and an unruled block of names is not the same document.
-        $box = static fn (): Border => new Border(
-            new BorderPart(BorderName::TOP, width: BorderWidth::THIN),
-            new BorderPart(BorderName::BOTTOM, width: BorderWidth::THIN),
-            new BorderPart(BorderName::LEFT, width: BorderWidth::THIN),
-            new BorderPart(BorderName::RIGHT, width: BorderWidth::THIN),
-        );
-
-        $ruled = (new Style)->withBorder($box());
-        $ruledHead = (new Style)->withFontBold(true)->withBorder($box());
-
-        // One style per row, applied cell by cell — this OpenSpout takes a row
-        // style through its cells rather than as a second argument.
-        $line = static fn (array $values, ?Style $style = null): Row => new Row(array_values(array_map(
-            static fn ($value): Cell => Cell::fromValue($value, $style),
-            $values
-        )));
-
-        // The DepEd heading, read through SchoolLetterhead so this sheet, the
-        // printed SBFP form and the attendance export all head the same school
-        // the same way.
-        foreach (SchoolLetterhead::lines($letterhead) as $headingLine) {
-            $writer->addRow($line([$headingLine], $centered));
-        }
-
-        $writer->addRow($line([$letterhead['school']], $title));
-        // The address the school is on file with. A school with none gets an
-        // empty line to write on, never a neighbouring school's street.
-        $writer->addRow($line([$letterhead['address']], $centered));
-        // The title names WHICH list this is — the enrolled beneficiaries, the
-        // learners the measurement qualifies, or the waiting list. They are
-        // three documents the school keeps separately, and one heading over all
-        // three is how they get filed as each other.
-        $writer->addRow($line([$formTitle], $heading));
-        $writer->addRow($line(['S.Y. '.$schoolYear], $centered));
-        $writer->addRow($line(['']));
-
-        $writer->addRow($line(['No.', 'Name', 'Grade', 'Section'], $ruledHead));
-
-        foreach ($rows as $index => $row) {
-            $writer->addRow($line([
-                $index + 1,
-                $row['name'],
-                $row['grade'],
-                $row['section'],
-            ], $ruled));
-        }
-
-        // The printed form always carries blank rows to write into by hand, so
-        // a short list is still a usable sheet at the feeding line.
-        for ($blank = count($rows); $blank < 20; $blank++) {
-            $writer->addRow($line([$blank + 1, '', '', ''], $ruled));
-        }
-
-        $writer->addRow($line(['']));
-        $writer->addRow($line(['Prepared by:', '', 'Noted by:']));
-        $writer->addRow($line([$preparedBy, '', '']));
-        $writer->addRow($line(['Feeding Coordinator', '', 'Principal']));
     }
 
     private function isCoordinator(Request $request): bool
