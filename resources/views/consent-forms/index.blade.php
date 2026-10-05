@@ -258,14 +258,45 @@
                     </div>
                 </div>
 
-                {{-- No Consent Status here. What the parent answered is recorded
-                     in one place — Record Signed Paper Form, where the adviser
-                     reads the sheet field by field and attests to it — and two
-                     screens asking the same question is how they come to
-                     disagree about what a parent agreed to. This dialog files
-                     the document; it does not decide what the document says.
-                     An upload with no answer recorded reads as PENDING, never
-                     as consent given. --}}
+                {{-- What the guardian answered.
+
+                     This was once left out, on the reasoning that two screens
+                     asking the same question is how they come to disagree. The
+                     answer is still recorded in full on Record Signed Paper
+                     Form, field by field and attested — but leaving it out here
+                     meant a filed form read as PENDING forever, so the school
+                     could see that a consent had come back and never whether it
+                     said yes or no.
+
+                     They cannot disagree, because ConsentStanding::for() does
+                     not treat them as equals: the parent's own answer, or an
+                     attested paper record, is read FIRST and returned, and this
+                     is consulted only when there is no answered form. It is the
+                     fallback that was always empty, not a second opinion.
+
+                     Optional on purpose. An adviser filing a stack of forms
+                     must never be made to guess, and "not recorded yet" is a
+                     real answer here exactly as it is in the scanner: an upload
+                     with no answer still reads as PENDING and authorises
+                     nothing. --}}
+                <div class="pc-field">
+                    <label for="pc_consent_type">What did the guardian answer? <span class="pc-optional">(Optional)</span></label>
+                    <div class="pc-input">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                        <select id="pc_consent_type" name="consent_type">
+                            <option value="">Not recorded yet</option>
+                            <option value="full" @selected(old('consent_type') === 'full')>Full consent &mdash; agreed to every service</option>
+                            <option value="partial" @selected(old('consent_type') === 'partial')>Partial consent &mdash; agreed, with exceptions</option>
+                            <option value="refused" @selected(old('consent_type') === 'refused')>Declined &mdash; did not agree</option>
+                        </select>
+                    </div>
+                    <p class="pc-hint">
+                        Read it off the signed form. Leave it as <strong>Not recorded yet</strong> if you are
+                        filing the document now and will read it later &mdash; the form still counts as returned,
+                        but no service may be given until an answer is on file.
+                    </p>
+                </div>
+
                 <div class="pc-field">
                     <label>Upload Signed Sulat-Pahibalo Form <span class="pc-req">*</span></label>
                     <div class="pc-drop" id="pcDrop" role="button" tabindex="0">

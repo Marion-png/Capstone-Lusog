@@ -278,9 +278,8 @@
 {{-- Today's Record Attendance dialog, and the read-back that confirms it.
      Both are the shared partials the Attendance tab includes — never a copy —
      so a mark entered from either screen is the same mark, entered the same
-     way, through the one audited endpoint. They sit outside .main because the
-     page transition puts a transform on it, which would make a fixed backdrop
-     a child of that box rather than of the viewport. --}}
+     way, through the one audited endpoint. They sit outside .main so fixed
+     backdrops always remain relative to the viewport. --}}
 @include('feedingcor-dashboard.partials.attendance-record-modal', [
 	'selectedDate' => $recordSelectedDate,
 	'selectedDateLabel' => $recordSelectedDateLabel,
@@ -512,43 +511,6 @@
 	});
 })();
 
-(() => {
-	const main = document.querySelector('.main');
-	if (!main) {
-		return;
-	}
-
-	requestAnimationFrame(() => {
-		main.classList.add('page-ready');
-	});
-
-	window.addEventListener('pageshow', () => {
-		main.classList.add('page-ready');
-	});
-
-	document.querySelectorAll('.asb-link[href]').forEach((link) => {
-		link.addEventListener('click', (event) => {
-			const href = link.getAttribute('href');
-			if (!href || href === '#' || link.classList.contains('active')) {
-				return;
-			}
-			if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
-				return;
-			}
-
-			event.preventDefault();
-			main.classList.remove('page-ready');
-			main.classList.add('page-exit');
-			// The fade is feedback that the click landed, not something the
-			// navigation waits on: the browser keeps painting this page (still
-			// fading) until the next document commits, so the request is sent
-			// now rather than a third of a second from now. Waiting for the
-			// animation first added that delay to every single tab switch, on
-			// top of however long the page itself took to come back.
-			requestAnimationFrame(() => { window.location.href = href; });
-		});
-	});
-})();
 </script>
 {{-- One readout for every chart on this page. Included here rather than
      inside a chart partial: these panels are re-rendered by the live pulse,

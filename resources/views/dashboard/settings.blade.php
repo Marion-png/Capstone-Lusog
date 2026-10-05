@@ -53,8 +53,6 @@
     </div>
 </div>
 
-{{-- Both rail families fade their main pane in under html.js, so a page that
-     never adds .page-ready renders blank. --}}
 @if ($setIsClinic)
     @include('partials.nurse-page-transition')
 @else

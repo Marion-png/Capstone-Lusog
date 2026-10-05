@@ -188,8 +188,7 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
    an animation that only exists on screen.
 
    Pure CSS with `both` fill, deliberately: a JS-driven reveal that fails
-   to run leaves the page invisible, which is how the nurse rail's
-   .page-ready trap works. An animation cannot fail that way.
+   to run can leave a page invisible. An animation cannot fail that way.
    ─────────────────────────────────────────────────────────────── */
 @media screen {
     @keyframes cf-rise-in {

@@ -193,9 +193,8 @@
 	</div>
 </div>
 
-{{-- Outside .main on purpose: the page transition puts a transform on it,
-     which would make this fixed backdrop a child of that box rather than of
-     the viewport. Every dialog in this role sits here for the same reason. --}}
+{{-- Outside .main so this fixed backdrop always remains relative to the
+     viewport. Every dialog in this role follows the same placement. --}}
 @if ($rows->isNotEmpty() && ! $sessionLocked && $isFeedingDay)
 	{{-- A recorded session cannot be reopened, so the marks are read back and
 	     confirmed before they are posted. Same dialog the Attendance tab uses,

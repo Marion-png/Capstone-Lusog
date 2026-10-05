@@ -594,8 +594,6 @@
 })();
 </script>
 @if ($mlIsNurse)
-	{{-- nurse-sidebar.css starts .sidebar ~ .main at opacity 0 under html.js,
-	     so a nurse page that never adds .page-ready renders blank. --}}
 	@include('partials.nurse-page-transition')
 @else
 	@include('partials.role-page-transition')

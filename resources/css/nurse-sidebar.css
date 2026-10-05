@@ -101,14 +101,8 @@
 .topbar-spacer { margin-left: auto; }
 
 .sidebar ~ .main { margin-left: 252px; }
-html.js .sidebar ~ .main { opacity: 0; transform: translateY(12px); transition: opacity .3s ease, transform .3s ease; }
-html.js .sidebar ~ .main.page-ready { opacity: 1; transform: translateY(0); }
-html.js .sidebar ~ .main.page-exit { opacity: 0; transform: translateY(12px); }
 
 @media (max-width: 900px) {
 	.sidebar { display: none; }
 	.sidebar ~ .main { margin-left: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-	html.js .sidebar ~ .main { transition-duration: .01ms !important; }
 }

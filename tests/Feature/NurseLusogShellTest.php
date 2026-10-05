@@ -10,11 +10,11 @@ use Tests\TestCase;
 /**
  * The School Nurse pages render on the LUSOG design system.
  *
- * Every nurse tab must inline css/lusog-theme.css, use the logo-led .sb-*
- * rail from partials/nurse-lusog-sidebar, and add .page-ready — without
- * which css/nurse-sidebar.css leaves `.sidebar ~ .main` at opacity 0 and
- * the page renders blank under JS. This guards against a page drifting
- * back to the retired .nsb-* rail or to a private copy of the shell.
+ * Every nurse tab must inline css/lusog-theme.css and use the logo-led .sb-*
+ * rail from partials/nurse-lusog-sidebar. Its main pane must remain visible
+ * without a JavaScript page-transition gate, which keeps tab changes direct
+ * and guards against a page drifting back to the retired .nsb-* rail or to a
+ * private copy of the shell.
  */
 class NurseLusogShellTest extends TestCase
 {
@@ -90,7 +90,8 @@ class NurseLusogShellTest extends TestCase
 
         $this->assertStringContainsString('--lg-emerald', $html, "{$uri} does not inline the LUSOG theme");
         $this->assertStringContainsString('sb-section-label', $html, "{$uri} does not render the LUSOG nurse rail");
-        $this->assertStringContainsString('page-ready', $html, "{$uri} would render blank: nothing adds .page-ready");
+        $this->assertStringNotContainsString('page-ready', $html, "{$uri} still hides its main pane for a page-enter animation");
+        $this->assertStringNotContainsString('page-exit', $html, "{$uri} still fades its main pane before following a tab");
     }
 
     /**
@@ -179,7 +180,7 @@ class NurseLusogShellTest extends TestCase
         // never land on the School Head's menu.
         $this->assertStringContainsString('sb-section-label', $html);
         $this->assertStringNotContainsString('asb-link-text', $html);
-        $this->assertStringContainsString('page-ready', $html, 'A nurse page that never adds .page-ready renders blank.');
+        $this->assertStringNotContainsString('page-ready', $html, 'The nurse page should not need a JavaScript visibility gate.');
         $this->assertStringContainsString('<span>School Nurse</span>', $html);
 
         // And the rail offers it.

@@ -547,7 +547,6 @@
 		{ key: 'form8', code: 'Form 8', title: 'Monthly / Quarterly Report', category: 'report', description: 'Implementation and financial status summary for SBFP reporting.' },
 	];
 
-	const main = document.querySelector('.main');
 	const formsGrid = document.getElementById('formsGrid');
 	const formsFilter = document.getElementById('formsFilter');
 	const overviewTabBtn = document.getElementById('overviewTabBtn');
@@ -1354,39 +1353,6 @@
 		updateModeToggleLabels();
 		setModal(encodeFormBackdrop, true);
 	};
-
-	if (main) {
-		requestAnimationFrame(() => {
-			main.classList.add('page-ready');
-		});
-
-		window.addEventListener('pageshow', () => {
-			main.classList.add('page-ready');
-		});
-
-		document.querySelectorAll('.sb-link[href], .asb-link[href]').forEach((link) => {
-			link.addEventListener('click', (event) => {
-				const href = link.getAttribute('href');
-				if (!href || href === '#' || link.classList.contains('active')) {
-					return;
-				}
-				if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
-					return;
-				}
-
-				event.preventDefault();
-				main.classList.remove('page-ready');
-				main.classList.add('page-exit');
-				// The fade is feedback that the click landed, not something the
-				// navigation waits on: the browser keeps painting this page (still
-				// fading) until the next document commits, so the request is sent
-				// now rather than a third of a second from now. Waiting for the
-				// animation first added that delay to every single tab switch, on
-				// top of however long the page itself took to come back.
-				requestAnimationFrame(() => { window.location.href = href; });
-			});
-		});
-	}
 
 	if (formsFilter) {
 		formsFilter.addEventListener('change', renderForms);

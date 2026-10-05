@@ -28,9 +28,12 @@ class ParentalConsentFormController extends Controller
 
         $validated = $request->validate([
             'lrn' => ['required', 'string', 'max:50'],
-            // Nullable since the upload dialog stopped asking: what the parent
-            // answered is recorded on Record Signed Paper Form, and an upload
-            // with no answer on it reads as pending rather than as consent.
+            // The dialog asks, but does not insist: an adviser filing a stack
+            // of forms must not be made to guess, so "not recorded yet" stays a
+            // real answer and an upload carrying none reads as pending rather
+            // than as a consent. ConsentStanding::for() reads the parent's own
+            // answer, or an attested paper record, ahead of this one, so the
+            // two can never contradict each other.
             'consent_type' => ['nullable', 'string', 'in:full,partial,refused'],
             'partial_exception' => ['nullable', 'string', 'max:500'],
             'refused_reason' => ['nullable', 'string', 'max:500'],
@@ -115,7 +118,7 @@ class ParentalConsentFormController extends Controller
         $typeLabel = match ($validated['consent_type'] ?? null) {
             'full' => 'Full consent',
             'partial' => 'Partial consent',
-            'refused' => 'Consent refused',
+            'refused' => 'Declined consent',
             // No answer was recorded with the document, and the message says
             // what actually happened rather than implying a consent was given.
             default => 'Signed form',

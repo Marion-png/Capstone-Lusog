@@ -231,25 +231,31 @@ class AdviserConsentPageTest extends TestCase
 
         $student = strpos($html, 'id="pc_lrn"');
         $year = strpos($html, 'id="pc_school_year"');
+        $answer = strpos($html, 'id="pc_consent_type"');
         $signedForm = strpos($html, 'id="pc_file"');
         $medCert = strpos($html, 'id="pc_med_cert"');
         $notes = strpos($html, 'id="pc_notes"');
 
-        foreach ([$student, $year, $signedForm, $medCert, $notes] as $position) {
+        foreach ([$student, $year, $answer, $signedForm, $medCert, $notes] as $position) {
             $this->assertNotFalse($position);
         }
 
-        // This dialog files the document; it no longer asks what the document
-        // says. What the parent answered is recorded once, on Record Signed
-        // Paper Form, where the adviser reads the sheet and attests to it.
-        // The radio group is gone; the list's own "Consent Status" column
-        // header is not, and is a different thing entirely.
-        $this->assertStringNotContainsString('name="consent_type"', $html);
+        // The dialog asks what the guardian answered again, after a spell
+        // when it did not — without that, a filed form read as PENDING for
+        // ever and the school could see a consent had come back but never
+        // whether it said yes or no. It is **one optional select**, not the
+        // old radio group: the write-in fields it used to reveal are still
+        // gone, because the detail of a partial or a refusal is recorded on
+        // Record Signed Paper Form, where the adviser attests to it.
+        $this->assertStringContainsString('name="consent_type"', $html);
+        $this->assertStringContainsString('Not recorded yet', $html);
+        $this->assertStringNotContainsString('name="consent_type" required', $html);
         $this->assertStringNotContainsString('id="pcPartialField"', $html);
         $this->assertStringNotContainsString('id="pcRefusedField"', $html);
 
         $this->assertTrue($student < $year, 'Select Student comes first.');
-        $this->assertTrue($year < $signedForm, 'School Year precedes the signed form upload.');
+        $this->assertTrue($year < $answer, 'School Year precedes the guardian answer.');
+        $this->assertTrue($answer < $signedForm, 'The guardian answer precedes the signed form upload.');
         $this->assertTrue($signedForm < $medCert, 'Medical Certificate follows the signed form.');
         $this->assertTrue($medCert < $notes, 'Additional Notes come last.');
 

@@ -1179,6 +1179,101 @@ window.switchAdviserTab = (targetId) => {
 
     window.switchAdviserTab(targetId);
 })();
+// ── Dashboard ↔ My Students ↔ Enroll Student, in place ──────────────
+//
+// All three panels are in this document every time it is served — `?tab=`
+// only decides which one carries `.active`. Following a link to switch tabs
+// therefore re-ran the whole dashboard (23 database round trips, ~8 seconds
+// against the hosted Postgres) and re-sent 223 KB, to reveal markup that was
+// already on the page being looked at. So a link that points back at this
+// page with nothing but `?tab=` is answered here: the panel is swapped, the
+// address bar is updated with pushState, and nothing is fetched.
+//
+// The URL still changes, so back/forward, a bookmark and a refresh all land
+// on the right panel — a refresh simply server-renders it, as before, and
+// without JavaScript every one of these is still the plain link it was.
+//
+// Anything carrying more than `?tab=` (`?edit=`, `?q=` from the topbar
+// search) is left to navigate normally, because the server renders state
+// for it that a panel swap would not.
+(() => {
+    if (typeof window.switchAdviserTab !== 'function') {
+        return;
+    }
+
+    const PANEL_FOR = {
+        '': 'prototype-dashboard-panel',
+        saved: 'prototype-saved-panel',
+        form: 'prototype-form-panel',
+    };
+    // ?tab=form is reached from My Students, so the rail keeps that lit.
+    const RAIL_FOR = { '': 'dashboard', saved: 'students', form: 'students' };
+    const isPanelKey = (key) => Object.prototype.hasOwnProperty.call(PANEL_FOR, key);
+
+    const tabOf = (href) => new URL(href, window.location.href).searchParams.get('tab') ?? '';
+
+    const isSamePageTab = (link) => {
+        const url = new URL(link.href, window.location.href);
+        if (url.origin !== window.location.origin || url.pathname !== window.location.pathname) {
+            return false;
+        }
+        if (url.hash !== '') {
+            return false;
+        }
+        const keys = Array.from(url.searchParams.keys());
+        return keys.every((key) => key === 'tab') && isPanelKey(url.searchParams.get('tab') ?? '');
+    };
+
+    const show = (tab) => {
+        window.switchAdviserTab(PANEL_FOR[tab]);
+
+        document.querySelectorAll('.asb-link[data-adviser-rail]').forEach((link) => {
+            link.classList.toggle('active', link.dataset.adviserRail === RAIL_FOR[tab]);
+        });
+
+        // A chart drawn while its panel was hidden was laid out at 0×0. Chart.js 4
+        // usually heals itself through its ResizeObserver; asking explicitly
+        // costs nothing and does not rely on it.
+        window.requestAnimationFrame(() => {
+            if (typeof Chart !== 'undefined' && Chart.instances) {
+                Object.values(Chart.instances).forEach((chart) => chart.resize());
+            }
+        });
+
+        window.scrollTo(0, 0);
+    };
+
+    document.addEventListener('click', (event) => {
+        if (event.defaultPrevented || event.button !== 0) return;
+        // A new tab or window is the reader asking for a real navigation.
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+        const link = event.target.closest('a[href]');
+        if (!link || (link.target && link.target !== '_self') || link.hasAttribute('download')) return;
+        if (!isSamePageTab(link)) return;
+
+        event.preventDefault();
+
+        const tab = tabOf(link.href);
+        if (tabOf(window.location.href) !== tab) {
+            window.history.pushState({ adviserTab: tab }, '', link.href);
+        }
+        show(tab);
+    });
+
+    // Back and forward between tabs replay the swap rather than reloading.
+    window.addEventListener('popstate', () => {
+        const url = new URL(window.location.href);
+        const keys = Array.from(url.searchParams.keys());
+        if (keys.every((key) => key === 'tab') && isPanelKey(url.searchParams.get('tab') ?? '')) {
+            show(url.searchParams.get('tab') ?? '');
+        } else {
+            // A history entry this page did not make (an ?edit= or ?q= view):
+            // let the server render it.
+            window.location.reload();
+        }
+    });
+})();
 
 (() => {
     if (typeof Chart === 'undefined') {
