@@ -657,5 +657,6 @@
     });
 })();
 </script>
+@include('partials.workspace-live')
 </body>
 </html>

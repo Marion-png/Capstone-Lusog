@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\StudentHealthRecord;
 use App\Support\SchoolHeadHealthOverview;
 use App\Support\SchoolHeadOverview;
-use App\Support\SchoolHeadPulse;
+use App\Support\SchoolPulse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -73,7 +73,7 @@ class SchoolHeadHealthController extends Controller
             'filterOptions' => $options,
             'clinic' => $health->clinic(),
             'students' => $overview->records->count(),
-            'stamp' => SchoolHeadPulse::stamp($institutionId),
+            'stamp' => SchoolPulse::stamp($institutionId),
         ]);
     }
 

@@ -6,7 +6,7 @@ use App\Models\HealthConsentForm;
 use App\Models\StudentHealthRecord;
 use App\Support\SchoolHeadHealthOverview;
 use App\Support\SchoolHeadOverview;
-use App\Support\SchoolHeadPulse;
+use App\Support\SchoolPulse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -209,7 +209,7 @@ class SchoolHeadConsentController extends Controller
             'consent' => $consent,
             'rows' => $rows,
             'shown' => $rows->count(),
-            'stamp' => SchoolHeadPulse::stamp($institutionId),
+            'stamp' => SchoolPulse::stamp($institutionId),
         ];
     }
 

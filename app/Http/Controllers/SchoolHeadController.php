@@ -6,7 +6,7 @@ use App\Models\StudentHealthRecord;
 use App\Support\SchemaCache;
 use App\Support\SchoolHeadHealthOverview;
 use App\Support\SchoolHeadOverview;
-use App\Support\SchoolHeadPulse;
+use App\Support\SchoolPulse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -654,12 +654,12 @@ class SchoolHeadController extends Controller
 
     /**
      * A fingerprint of every table the head's screens read — see
-     * SchoolHeadPulse, which every School Head tab shares so that an adviser's
+     * SchoolPulse, which every School Head tab shares so that an adviser's
      * or a nurse's entry reaches all of them on the same signal.
      */
     private function metricsStamp(Request $request): string
     {
-        return SchoolHeadPulse::stamp($request->session()->get('active_institution_id'));
+        return SchoolPulse::stamp($request->session()->get('active_institution_id'));
     }
 
     private function isSchoolHead(Request $request): bool

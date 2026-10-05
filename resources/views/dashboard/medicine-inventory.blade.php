@@ -496,5 +496,6 @@
 @endif
 
 @include('partials.nurse-page-transition')
+@include('partials.workspace-live')
 </body>
 </html>

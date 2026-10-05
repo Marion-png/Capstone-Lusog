@@ -115,7 +115,13 @@ class DashboardQueryBudgetTest extends TestCase
     public static function pulseEndpoints(): array
     {
         return [
-            'school head (ten watched tables)' => ['school_head', '/dashboard/school-head/metrics/pulse'],
+            // The shared stamp, polled by every role on every reading screen,
+            // so it is the one whose cost is paid most often of all. Its table
+            // list is the longest in the app — which is precisely why it must
+            // stay at a single UNION ALL.
+            'workspace, every role (thirteen watched tables)' => ['school_nurse', '/dashboard/pulse'],
+            'workspace, clinic teacher' => ['clinic_teacher', '/dashboard/pulse'],
+            'school head (the same thirteen)' => ['school_head', '/dashboard/school-head/metrics/pulse'],
             'feeding coordinator (two)' => ['feeding_coor', '/dashboard/feedingcor-dashboard/metrics/pulse'],
             'class adviser (four)' => ['class_adviser', '/dashboard/class-adviser/activity/pulse'],
         ];

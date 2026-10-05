@@ -43,6 +43,7 @@ class AuditSensitiveAccess
      * personal information.
      */
     private const NON_SENSITIVE_PATTERNS = [
+        'dashboard/pulse',
         'dashboard/class-adviser/activity/pulse',
         'dashboard/school-head/metrics/pulse',
         'dashboard/feedingcor-dashboard/metrics/pulse',

@@ -1020,5 +1020,6 @@ const STUDENT_PROFILE_LRN = @json($lrn);
 })();
 </script>
 @include('partials.sidebar-hover-pin')
+@include('partials.workspace-live')
 </body>
 </html>

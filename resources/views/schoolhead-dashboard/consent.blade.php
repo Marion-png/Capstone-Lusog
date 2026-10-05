@@ -332,7 +332,7 @@
 		}
 	})();
 </script>
-@include('partials.schoolhead-live')
+@include('partials.workspace-live')
 @include('partials.role-page-transition')
 </body>
 </html>

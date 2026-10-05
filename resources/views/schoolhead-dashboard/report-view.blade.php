@@ -199,7 +199,7 @@
 @endif
 {{-- The report is derived at read time, so an adviser's weighing recorded while
      this page is open changes what it says. The pulse reloads it when it does. --}}
-@include('partials.schoolhead-live')
+@include('partials.workspace-live')
 @include('partials.role-page-transition')
 </body>
 </html>

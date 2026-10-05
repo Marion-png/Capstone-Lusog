@@ -134,5 +134,6 @@
         @endif
     </div>
 </div>
+@include('partials.workspace-live')
 </body>
 </html>

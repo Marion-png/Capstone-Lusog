@@ -47,6 +47,7 @@ use App\Support\AuditTrail;
 use App\Support\ClinicDashboard;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingProgramCycle;
+use App\Support\SchoolPulse;
 use App\Support\StudentRosterSync;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -672,6 +673,33 @@ Route::get('/dashboard/school-nurse/nutritional-status/export', [SchoolHeadMaste
 // the pulse (a stamp, no data) and only re-reads the metrics when it moves.
 Route::get('/dashboard/school-head/metrics', [SchoolHeadController::class, 'metrics'])
     ->name('dashboard.school-head.metrics');
+
+/*
+ * The school's own change stamp, polled by every role.
+ *
+ * Nobody works alone: an adviser's submission has to reach the nurse's open
+ * screen, the nurse's examination the head's. This answers one question —
+ * "has anything in this school moved?" — as a hash of row counts and
+ * last-touched times across App\Support\SchoolPulse::WATCHED_TABLES, in one
+ * round trip, carrying no personal information at all. That is what makes it
+ * safe to poll on a timer and exempt in AuditSensitiveAccess; a page pays for
+ * the real re-read only when the stamp actually moves.
+ *
+ * Scoped to the session's own school, so a neighbouring school's write never
+ * moves it. Open to every signed-in role, because every role reads something
+ * another one writes — and it is a stamp, so there is nothing here to leak.
+ */
+Route::get('/dashboard/pulse', function (Request $request) {
+    if (! $request->session()->has('active_role')) {
+        return response()->json(['message' => 'Forbidden.'], 403);
+    }
+
+    $institutionId = $request->session()->get('active_institution_id');
+
+    return response()->json([
+        'stamp' => SchoolPulse::stamp($institutionId ? (int) $institutionId : null),
+    ]);
+})->name('workspace.pulse');
 
 Route::get('/dashboard/school-head/metrics/pulse', [SchoolHeadController::class, 'pulse'])
     ->name('dashboard.school-head.metrics.pulse');

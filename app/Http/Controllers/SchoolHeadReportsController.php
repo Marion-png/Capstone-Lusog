@@ -7,8 +7,8 @@ use App\Support\BmiAssessmentReport;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramForecast;
 use App\Support\SchoolHeadOverview;
-use App\Support\SchoolHeadPulse;
 use App\Support\SchoolLetterhead;
+use App\Support\SchoolPulse;
 use App\Support\SchoolSignatories;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -146,7 +146,7 @@ class SchoolHeadReportsController extends Controller
                     ?: trim((string) $request->session()->get('active_name', '')),
             ],
             'masterlistRows' => $report === 'masterlist' ? $this->masterlistRows($overview) : [],
-            'stamp' => SchoolHeadPulse::stamp($institutionId),
+            'stamp' => SchoolPulse::stamp($institutionId),
         ]);
     }
 

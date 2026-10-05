@@ -309,7 +309,7 @@
      it — same id, same script — on every refresh. The listeners are delegated
      from the document, so marks the refresh brings in are covered anyway. --}}
 @include('partials.chart-tooltip')
-@include('partials.schoolhead-live')
+@include('partials.workspace-live')
 @include('partials.role-page-transition')
 </body>
 </html>
