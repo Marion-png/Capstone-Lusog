@@ -6,6 +6,8 @@ use App\Models\StudentHealthRecord;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\SchoolHeadOverview;
+use App\Support\StudentRecordPurge;
+use App\Support\StudentRetention;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -189,8 +191,18 @@ class SchoolHeadMasterlistController extends Controller
 
         $standings = $overview->standings();
 
+        // Learners whose records are close to their retention date, read
+        // once for the page. This is the **only** list in the app where such
+        // a learner can appear at all: every clinic screen reads the current
+        // school year, and a learner nearing deletion is by definition not
+        // enrolled in it, so without the year selector above this table the
+        // warning would have nowhere to show.
+        $nearing = StudentRetention::maySeeNotice($request->session()->get('active_role'))
+            ? StudentRecordPurge::nearingAt($institutionId)
+            : [];
+
         $rows = $scoped
-            ->map(fn (StudentHealthRecord $record): array => $this->buildRow($record, $standings, $overview))
+            ->map(fn (StudentHealthRecord $record): array => $this->buildRow($record, $standings, $overview, $nearing))
             ->values();
 
         $total = $rows->count();
@@ -216,9 +228,10 @@ class SchoolHeadMasterlistController extends Controller
      * One learner's row, and the read-only history behind it.
      *
      * @param  array<int, array<string, mixed>>  $standings
+     * @param  array<string, array<string, mixed>>  $nearing  LRN => retention standing
      * @return array<string, mixed>
      */
-    private function buildRow(StudentHealthRecord $record, array $standings, SchoolHeadOverview $overview): array
+    private function buildRow(StudentHealthRecord $record, array $standings, SchoolHeadOverview $overview, array $nearing = []): array
     {
         $details = is_array($record->student_details) ? $record->student_details : [];
         $baseline = SchoolHeadOverview::phaseStatus($record, 'baseline');
@@ -237,9 +250,16 @@ class SchoolHeadMasterlistController extends Controller
             default => $standing['status'],
         };
 
+        // Empty unless this reader may be told and the record is actually
+        // close to its date, so the column stays blank for the whole school
+        // in the ordinary case.
+        $retention = $nearing[(string) $record->student_id] ?? null;
+
         return [
             'id' => $record->id,
             'lrn' => (string) $record->student_id,
+            'retention_notice' => $retention === null ? '' : StudentRetention::warningFor($retention),
+            'retention_due' => (bool) ($retention['is_due'] ?? false),
             'name' => (string) $record->student_name,
             'section' => trim((string) $record->section) !== '' ? trim((string) $record->section) : 'Unassigned',
             'grade' => FeedingBeneficiarySummary::gradeNumber((string) $record->section),

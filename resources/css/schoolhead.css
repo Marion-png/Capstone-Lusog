@@ -1104,3 +1104,25 @@
 /* Programme outlook: the projected row reads as a projection — tinted, and
    labelled so — never as another year of record. */
 .sh-outlook-projection td { background: var(--lg-info-tint); border-top: 2px solid var(--lg-info); }
+
+/* ── Retention notice ──
+   A record nearing its deletion date, under the learner's name on the
+   Nutritional Health Status list. Amber while there is still time to act and
+   coral once the date has passed, on the theme's monitoring and critical
+   steps — never green, and never a bare icon: the sentence names the date and
+   what prevents it, because a warning nobody can act on is noise. It prints,
+   since a filed copy of the list should say which records are about to go. */
+.sh-retention {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin-top: 5px;
+    max-width: 34ch;
+    font-size: .68rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--lg-amber-ink, #7A5A16);
+    white-space: normal;
+}
+.sh-retention svg { width: 12px; height: 12px; flex: 0 0 auto; margin-top: 1px; }
+.sh-retention.is-due { color: var(--lg-danger-ink, #8C2F2F); font-weight: 600; }

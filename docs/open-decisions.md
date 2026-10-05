@@ -100,11 +100,43 @@ rather than a hunt through templates.
 
 ## 2. How long a learner's record is kept after they stop appearing
 
-**Status:** OPEN — needs Ma'am Nanette, or DepEd's own records retention policy
+**Status:** SETTLED at **5 years** (2026-10-09) — implemented
 **Raised:** 2026-09-04 (consultation; discussed, not resolved)
-**Decider:** Ma'am Nanette / DepEd policy — not an informal call
-**Touches:** nothing yet. No retention rule is implemented, so today the
-answer is "forever by default".
+**Decider:** project owner. DepEd's own schedule, if one is published, still
+overrides it — which is why the figure is `config('retention.years')` and not
+a constant.
+**Touches:** `App\Support\StudentRetention`, `App\Support\StudentRecordPurge`,
+`students:purge-expired`, `config/retention.php`, the Nutritional Health
+Status list's warning. Guarded by `StudentRetentionTest`.
+
+### Settled
+
+Five years from the **end of the last school year the learner was enrolled**.
+The countdown is derived from `MAX(school_year)` on the learner's own rows —
+no flag, no archive state, nothing to keep in step — so re-enrolling clears it
+by construction. A learner enrolled in the current school year is never a
+candidate at all.
+
+**Two of the questions below were answered by implementing it, and two were
+not:**
+
+- *Clock start* — the last recorded school year, not a date somebody enters.
+- *Delete or anonymise* — **hard delete**, chosen deliberately. The
+  consequence recorded under "What implementing a decision would take" below
+  stands: a purge changes what a past DepEd return would say, because the BMI
+  grids and `SchoolHeadOverview` recompute historical figures from the rows
+  that have now gone. Anonymising in place instead would be a contained change
+  to `StudentRecordPurge`.
+- *Still open:* whether DepEd publishes a schedule that should override the 5,
+  and whether the feeding programme's historical figures need to survive.
+
+Two things are deliberately **not** deleted, and both are reasoned in
+`StudentRecordPurge`: `medicine_dispenses` (a stock movement, not a fact about
+one child — deleting it would rewrite the clinic's inventory history) and
+`consultations` (no LRN at all, only an encrypted name, so they cannot be
+matched without guessing).
+
+### Originally recorded as open
 
 ### Settled in the same conversation
 

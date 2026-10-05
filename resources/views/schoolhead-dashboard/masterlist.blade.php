@@ -300,6 +300,19 @@
 										<button type="button" class="sh-namebtn" data-detail-open="{{ $row['id'] }}">
 											<strong>{{ $row['name'] }}</strong>
 										</button>
+										{{-- A record approaching its retention date. It sits under
+										     the name because the only thing that stops the deletion is
+										     enrolling this learner again, so it has to be attached to
+										     them rather than to a column somebody can filter away. It
+										     is rendered only for the roles in
+										     StudentRetention::NOTICE_ROLES — the controller leaves it
+										     empty for anybody else. --}}
+										@if ($row['retention_notice'] !== '')
+											<span class="sh-retention {{ $row['retention_due'] ? 'is-due' : '' }}">
+												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="7" x2="12" y2="13"/><line x1="12" y1="16" x2="12" y2="16"/></svg>
+												{{ $row['retention_notice'] }}
+											</span>
+										@endif
 									</td>
 									<td>{{ $row['section'] }}</td>
 									<td>{{ $row['sex'] !== '' ? $row['sex'] : '—' }}</td>
