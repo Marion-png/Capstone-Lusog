@@ -28,6 +28,8 @@ class MedicineUsage
     /** Months of history the trend reads over, including the current one. */
     public const MONTHS = 6;
 
+    private const MEMO_PREFIX = 'medicine-usage:';
+
     /**
      * Usage per calendar month for one medicine, oldest month first.
      *
@@ -53,6 +55,11 @@ class MedicineUsage
      * Usage per medicine per month across the school, keyed by medicine id
      * then by `Y-m`. One query for the whole page.
      *
+     * Memoized for the request: the inventory table asks `summaryFor()` once
+     * per medicine, and without the memo each of those asks re-ran this query,
+     * so the page cost one round trip per item on the shelf. A dispense saved
+     * in the same request drops the memo (see `forget()`).
+     *
      * @return Collection<int, Collection<string, int>>
      */
     public static function monthlyTotals(mixed $institutionId, int $months = self::MONTHS): Collection
@@ -62,8 +69,9 @@ class MedicineUsage
         }
 
         $since = self::monthWindow($months)->first()->copy()->startOfMonth();
+        $key = self::MEMO_PREFIX.($institutionId ?? '-').':'.$since->format('Y-m');
 
-        return MedicineDispense::query()
+        return RequestMemo::remember($key, fn (): Collection => MedicineDispense::query()
             ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
             ->where('dispensed_at', '>=', $since)
             ->get(['medicine_id', 'quantity', 'dispensed_at'])
@@ -71,7 +79,13 @@ class MedicineUsage
             ->map(fn (Collection $rows): Collection => $rows
                 ->groupBy(fn (MedicineDispense $row): string => $row->dispensed_at->format('Y-m'))
                 ->map(fn (Collection $inMonth): int => (int) $inMonth->sum('quantity'))
-            );
+            ));
+    }
+
+    /** Drop the memoized totals; called whenever a dispense is written or removed. */
+    public static function forget(): void
+    {
+        RequestMemo::forgetPrefix(self::MEMO_PREFIX);
     }
 
     /**

@@ -74,9 +74,13 @@ class ConsultationVisibility
     /**
      * One visit, as the given role may see it.
      *
+     * A caller presenting many visits passes each one's shared-photo count
+     * from `sharedPhotoCounts()`, so the list costs one count query rather
+     * than one per visit.
+     *
      * @return array<string, mixed>
      */
-    public static function present(Consultation $consultation, ?string $role): array
+    public static function present(Consultation $consultation, ?string $role, ?int $sharedPhotoCount = null): array
     {
         // The visit itself — that it happened, and when. Never redacted: this
         // is the part a class adviser is entitled to.
@@ -92,7 +96,7 @@ class ConsultationVisibility
             'time' => $consultation->consulted_at?->format('g:i A'),
             'consulted_at_label' => $consultation->consulted_at?->format('M j, Y \a\t g:i A'),
             'details_visible' => self::maySeeDetails($role),
-            'shared_photo_count' => self::sharedPhotoCount($consultation),
+            'shared_photo_count' => $sharedPhotoCount ?? self::sharedPhotoCount($consultation),
         ];
 
         if (! self::maySeeDetails($role)) {
@@ -158,6 +162,39 @@ class ConsultationVisibility
     }
 
     /**
+     * Shared-photo counts for many visits in one query, keyed by consultation
+     * id. A visit with no shared photograph reads 0.
+     *
+     * @param  iterable<Consultation>  $consultations
+     * @return array<int, int>
+     */
+    public static function sharedPhotoCounts(iterable $consultations): array
+    {
+        $counts = [];
+        foreach ($consultations as $consultation) {
+            $counts[(int) $consultation->id] = 0;
+        }
+
+        if ($counts === [] || ! SchemaCache::hasTable('consultation_photos')) {
+            return $counts;
+        }
+
+        $shared = ConsultationPhoto::query()
+            ->whereIn('consultation_id', array_keys($counts))
+            ->sharedWithAdviser()
+            ->groupBy('consultation_id')
+            ->selectRaw('consultation_id, count(*) as shared')
+            ->toBase()
+            ->get();
+
+        foreach ($shared as $row) {
+            $counts[(int) $row->consultation_id] = (int) $row->shared;
+        }
+
+        return $counts;
+    }
+
+    /**
      * A learner's visits, as the given role may see them.
      *
      * @param  iterable<Consultation>  $consultations
@@ -165,10 +202,12 @@ class ConsultationVisibility
      */
     public static function presentMany(iterable $consultations, ?string $role): array
     {
+        $consultations = is_array($consultations) ? $consultations : iterator_to_array($consultations, false);
+        $counts = self::sharedPhotoCounts($consultations);
         $rows = [];
 
         foreach ($consultations as $consultation) {
-            $rows[] = self::present($consultation, $role);
+            $rows[] = self::present($consultation, $role, $counts[(int) $consultation->id] ?? 0);
         }
 
         return $rows;

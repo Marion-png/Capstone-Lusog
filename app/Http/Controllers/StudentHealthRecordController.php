@@ -499,7 +499,7 @@ class StudentHealthRecordController extends Controller
             ->filter(fn ($s) => $s['last'] !== '' && $s['first'] !== '')
             ->values();
 
-        $byLrn = collect();
+        $matched = [];
         foreach ($consultations as $consultation) {
             $normalisedName = $this->normaliseNameForMatching((string) $consultation->student_name);
 
@@ -507,10 +507,16 @@ class StudentHealthRecordController extends Controller
                 fn ($s) => str_contains($normalisedName, $s['last']) && str_contains($normalisedName, $s['first'])
             );
 
-            if ($match === null) {
-                continue;
+            if ($match !== null) {
+                $matched[] = [$match['lrn'], $consultation];
             }
+        }
 
+        // One count query for every matched visit, not one per visit.
+        $photoCounts = ConsultationVisibility::sharedPhotoCounts(array_column($matched, 1));
+
+        $byLrn = collect();
+        foreach ($matched as [$lrn, $consultation]) {
             // The class adviser gets the visit, not the clinical narrative:
             // date, time, and that the learner attended the clinic. The
             // complaint, the diagnosis and the treatment belong to the desks
@@ -520,9 +526,10 @@ class StudentHealthRecordController extends Controller
             $entry = ConsultationVisibility::present(
                 $consultation,
                 session('active_role'),
+                $photoCounts[(int) $consultation->id] ?? 0,
             );
 
-            $byLrn->put($match['lrn'], $byLrn->get($match['lrn'], collect())->push($entry));
+            $byLrn->put($lrn, $byLrn->get($lrn, collect())->push($entry));
         }
 
         return $byLrn;

@@ -2,7 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\Consultation;
+use App\Models\ConsultationPhoto;
 use App\Models\Institution;
+use App\Models\Medicine;
+use App\Models\MedicineDispense;
 use App\Models\StudentHealthRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -198,5 +202,173 @@ class DashboardQueryBudgetTest extends TestCase
         $large = count($this->readsFor('feeding_coor', '/dashboard/feedingcor-dashboard'));
 
         $this->assertSame($small, $large, 'The coordinator dashboard issues a query per learner rather than a fixed set.');
+    }
+
+    /** @return array<string, array{0: string, 1: string}> */
+    public static function clinicListPages(): array
+    {
+        return [
+            'class adviser dashboard (a photo count per visit)' => ['class_adviser', '/dashboard/class-adviser'],
+            'medicine inventory (a usage read per medicine)' => ['school_nurse', '/dashboard/medicine-inventory'],
+            'consultation log' => ['school_nurse', '/dashboard/consultation-log'],
+        ];
+    }
+
+    /**
+     * Each of these once issued a query per row it listed, so a clinic that
+     * kept using the system made its own pages slower every week.
+     */
+    #[Test]
+    #[DataProvider('clinicListPages')]
+    public function a_clinic_list_does_not_query_per_row(string $role, string $url): void
+    {
+        $learner = $this->classLearner();
+
+        $this->addClinicRows($learner, 2);
+        $small = count($this->readsFor($role, $url));
+
+        $this->addClinicRows($learner, 12);
+        $large = count($this->readsFor($role, $url));
+
+        $this->assertSame($small, $large, "{$url} issues a query per visit or medicine rather than a fixed set.");
+    }
+
+    /** Batching the counts must not move them between visits. */
+    #[Test]
+    public function the_adviser_sees_each_visits_own_shared_photo_count(): void
+    {
+        $learner = $this->classLearner();
+        [$withShared, $withNone, $withPrivate] = [
+            $this->visitFor($learner),
+            $this->visitFor($learner),
+            $this->visitFor($learner),
+        ];
+        $this->photoOn($withShared, true);
+        $this->photoOn($withShared, true);
+        $this->photoOn($withShared, false);
+        $this->photoOn($withPrivate, false);
+
+        $visits = collect($this->withSession($this->sessionFor('class_adviser'))
+            ->get('/dashboard/class-adviser')->assertOk()
+            ->viewData('rosterMeta')[$learner->student_id]['consultations'])
+            ->pluck('shared_photo_count', 'id');
+
+        $this->assertSame(2, $visits[$withShared->id]);
+        $this->assertSame(0, $visits[$withNone->id]);
+        $this->assertSame(0, $visits[$withPrivate->id], 'A photo the nurse did not share is never counted for the adviser.');
+    }
+
+    /** The log's figures are read in two queries now; each must still count its own visits. */
+    #[Test]
+    public function the_consultation_log_figures_count_the_right_visits(): void
+    {
+        $this->travelTo(now()->setDate(2026, 10, 7)->setTime(10, 0)); // a Wednesday
+
+        foreach ([
+            ['2026-10-07 08:15:00', 'referred'],   // today
+            ['2026-10-07 09:40:00', 'treated'],    // today
+            ['2026-10-05 13:00:00', 'treated'],    // Monday, this week
+            ['2026-10-04 23:30:00', 'referred'],   // Sunday, last week, this month
+            ['2026-09-30 10:00:00', 'treated'],    // last month
+            ['2025-10-07 10:00:00', 'treated'],    // this month a year ago
+        ] as [$at, $status]) {
+            Consultation::create([
+                'institution_id' => $this->institution->id,
+                'consulted_at' => $at,
+                'student_name' => 'Learner, Number 0',
+                'grade_section' => 'Grade 7 - Sampaguita',
+                'condition' => 'Headache',
+                'treatment_given' => 'Rest',
+                'status' => $status,
+            ]);
+        }
+
+        $response = $this->withSession($this->sessionFor('school_nurse'))
+            ->get('/dashboard/consultation-log')->assertOk();
+
+        $this->assertSame(
+            ['total' => 6, 'month' => 4, 'week' => 3, 'today' => 2, 'referrals' => 2],
+            $response->viewData('stats'),
+        );
+        $this->assertSame(
+            ['Mon' => 1, 'Tue' => 0, 'Wed' => 2, 'Thu' => 0, 'Fri' => 0, 'Sat' => 0, 'Sun' => 0],
+            collect($response->viewData('dailyTrend'))->pluck('count', 'label')->all(),
+        );
+        $this->assertSame(6, $response->viewData('consultations')->total());
+    }
+
+    /** A learner in the adviser's own class, named so clinic visits match them. */
+    private function classLearner(): StudentHealthRecord
+    {
+        return StudentHealthRecord::create([
+            'institution_id' => $this->institution->id,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'student_name' => 'Dela Cruz, Juan',
+            'student_id' => '123456789012',
+            'school_name' => 'Budget School',
+            'section' => 'Grade 7 / Sampaguita',
+            'weight' => 30,
+            'bmi_value' => 15,
+            'nutritional_status' => 'Normal',
+            'baseline_nutritional_status' => 'Normal',
+            'student_details' => [
+                'lrn' => '123456789012', 'last_name' => 'Dela Cruz', 'first_name' => 'Juan',
+                'gender' => 'Male', 'grade_level' => 'Grade 7', 'section' => 'Sampaguita',
+            ],
+        ]);
+    }
+
+    private function visitFor(StudentHealthRecord $learner): Consultation
+    {
+        return Consultation::create([
+            'institution_id' => $this->institution->id,
+            'consulted_at' => now(),
+            'student_name' => $learner->student_name,
+            'grade_section' => 'Grade 7 - Sampaguita',
+            'condition' => 'Headache',
+            'treatment_given' => 'Rest',
+            'status' => 'treated',
+        ]);
+    }
+
+    private function photoOn(Consultation $visit, bool $shared): void
+    {
+        ConsultationPhoto::create([
+            'consultation_id' => $visit->id,
+            'institution_id' => $visit->institution_id,
+            'file_path' => 'consultation-photos/'.$visit->id.'-'.uniqid().'.jpg',
+            'file_original_name' => 'photo.jpg',
+            'file_size' => 10,
+            'shared_with_adviser' => $shared,
+        ]);
+    }
+
+    /** Visits (each with a shared photo), medicines and dispenses — the rows the clinic pages list. */
+    private function addClinicRows(StudentHealthRecord $learner, int $count): void
+    {
+        foreach (range(1, $count) as $i) {
+            $visit = $this->visitFor($learner);
+            $this->photoOn($visit, true);
+
+            $medicine = Medicine::create([
+                'institution_id' => $this->institution->id,
+                'name' => 'Medicine '.uniqid(),
+                'stock_quantity' => 20,
+                'minimum_threshold' => 5,
+                'unit' => 'tablet',
+            ]);
+
+            MedicineDispense::create([
+                'institution_id' => $this->institution->id,
+                'medicine_id' => $medicine->id,
+                'student_lrn' => $learner->student_id,
+                'student_name' => $learner->student_name,
+                'reason' => 'Headache',
+                'quantity' => 1,
+                'dispensed_by_name' => 'Nurse',
+                'dispensed_by_role' => 'school_nurse',
+                'dispensed_at' => now()->subDays($i % 40),
+            ]);
+        }
     }
 }

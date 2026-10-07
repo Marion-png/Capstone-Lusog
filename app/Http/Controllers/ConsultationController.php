@@ -15,6 +15,7 @@ use App\Support\LearnerSearchIndex;
 use App\Support\SchemaCache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -39,10 +40,36 @@ class ConsultationController extends Controller
             return $q;
         };
 
+        // The headline figures in one aggregate rather than a COUNT each.
+        // consulted_at and status are plain columns, so they may be counted in
+        // SQL; ranges rather than date functions keep the one statement valid
+        // on both Postgres and SQLite.
+        $monthStart = now()->startOfMonth();
+        $weekStart = now()->startOfWeek();
+        $weekEnd = $weekStart->copy()->addWeek();
+
+        $totals = $baseQuery()->toBase()
+            ->selectRaw(
+                'count(*) as total, '
+                .'coalesce(sum(case when consulted_at >= ? and consulted_at < ? then 1 else 0 end), 0) as month, '
+                .'coalesce(sum(case when status = ? then 1 else 0 end), 0) as referrals',
+                [$monthStart->toDateTimeString(), $monthStart->copy()->addMonth()->toDateTimeString(), 'referred'],
+            )
+            ->first();
+
+        // This week's visits, read once: the week and today figures and the
+        // seven-day trend are all counted from these timestamps.
+        $thisWeek = $baseQuery()->toBase()
+            ->where('consulted_at', '>=', $weekStart->toDateTimeString())
+            ->where('consulted_at', '<', $weekEnd->toDateTimeString())
+            ->pluck('consulted_at')
+            ->map(fn ($at): string => Carbon::parse($at)->toDateString())
+            ->countBy();
+
         $consultations = $baseQuery()
             ->latest('consulted_at')
             ->latest('id')
-            ->paginate(10);
+            ->paginate(10, total: (int) $totals->total);
 
         // How many photographs each visit on this page carries — one grouped
         // query on plain columns, so the row can say "No photos attached" or
@@ -69,15 +96,12 @@ class ConsultationController extends Controller
             ->map(fn ($total, $conditionName) => (object) ['condition_name' => $conditionName, 'total' => $total])
             ->values();
 
-        $weekStart = now()->startOfWeek();
-        $dailyTrend = collect(range(0, 6))->map(function (int $offset) use ($weekStart, $baseQuery): array {
+        $dailyTrend = collect(range(0, 6))->map(function (int $offset) use ($weekStart, $thisWeek): array {
             $day = $weekStart->copy()->addDays($offset);
 
             return [
                 'label' => $day->format('D'),
-                'count' => $baseQuery()
-                    ->whereDate('consulted_at', $day->toDateString())
-                    ->count(),
+                'count' => (int) $thisWeek->get($day->toDateString(), 0),
             ];
         });
 
@@ -85,11 +109,11 @@ class ConsultationController extends Controller
             'consultations' => $consultations,
             'photoCounts' => $photoCounts,
             'stats' => [
-                'total' => $baseQuery()->count(),
-                'month' => $baseQuery()->whereMonth('consulted_at', now()->month)->whereYear('consulted_at', now()->year)->count(),
-                'week' => $baseQuery()->whereBetween('consulted_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
-                'today' => $baseQuery()->whereDate('consulted_at', now()->toDateString())->count(),
-                'referrals' => $baseQuery()->where('status', 'referred')->count(),
+                'total' => (int) $totals->total,
+                'month' => (int) $totals->month,
+                'week' => (int) $thisWeek->sum(),
+                'today' => (int) $thisWeek->get(now()->toDateString(), 0),
+                'referrals' => (int) $totals->referrals,
             ],
             'topConditionStats' => $topConditionStats,
             'dailyTrend' => $dailyTrend,

@@ -94,7 +94,10 @@ railway service scale --service lusog-web southeast-asia=1 us-east=0
 
 The first deploy landed in **US East** (`iad`). Each round trip then crossed
 the Pacific: a bare redirect took 4.4 s and a dashboard 8–13 s, against
-milliseconds once both services share a region. The `lusog-web-volume` is
+milliseconds once both services share a region. It was moved to Southeast
+Asia on 2026-10-07; measured from inside the container, a new database
+connection then costs 11–17 ms and a query 1.5–2.8 ms, and the warm login page,
+redirects and pulses answer in 30–60 ms. The `lusog-web-volume` is
 region-bound: Railway migrates it with the service, and the site is down while
 it copies (seconds while it is small). A service with a volume runs one
 replica, never several.

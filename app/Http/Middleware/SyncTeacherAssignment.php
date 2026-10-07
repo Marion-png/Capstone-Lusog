@@ -13,7 +13,10 @@ class SyncTeacherAssignment
     {
         $role = (string) $request->session()->get('active_role', '');
 
-        if (in_array($role, AccountSettings::TEACHER_ROLES, true)) {
+        // The change-detection polls return a hash and nothing scoped to the
+        // class, so they skip the account lookup; the next page view syncs.
+        if (in_array($role, AccountSettings::TEACHER_ROLES, true)
+            && ! $request->is(...AuditSensitiveAccess::NON_SENSITIVE_PATTERNS)) {
             $account = AccountSettings::accountFor($request);
 
             if ($account !== null && ($account['role'] ?? null) === $role) {

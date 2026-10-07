@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
+use App\Support\MedicineUsage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -32,6 +33,13 @@ class MedicineDispense extends Model
         'dispensed_by_role',
         'dispensed_at',
     ];
+
+    protected static function booted(): void
+    {
+        // Usage totals are memoized per request; a new draw on stock moves them.
+        static::saved(static fn () => MedicineUsage::forget());
+        static::deleted(static fn () => MedicineUsage::forget());
+    }
 
     /**
      * Who the medicine went to, and why, is sensitive personal information

@@ -41,8 +41,12 @@ class AuditSensitiveAccess
      * timer, so auditing them would bury real access records in noise without
      * recording any access to personal data. Never exempt a path that returns
      * personal information.
+     *
+     * SyncTeacherAssignment reads this list too: a poll renders nothing that
+     * depends on the class assignment, so it skips that account lookup and the
+     * pulse stays at one query.
      */
-    private const NON_SENSITIVE_PATTERNS = [
+    public const NON_SENSITIVE_PATTERNS = [
         'dashboard/pulse',
         'dashboard/class-adviser/activity/pulse',
         'dashboard/school-head/metrics/pulse',
