@@ -123,13 +123,50 @@
                      shows every date. --}}
                 <input type="date" class="input" id="consultDateFilter" max="{{ now()->toDateString() }}" aria-label="Filter consultations by date">
             </div>
+            {{-- Grade, section and gender are read per visit by
+                 ClinicDashboard::consultationFilters(): the first two off the
+                 label the row prints, the gender off the learner the name
+                 matches on the roster. Personnel stays an option because staff
+                 visits are on this table and have no grade. --}}
+            @php
+                $cfGrades = $consultationFilters['grades'] ?? [];
+                $cfSections = $consultationFilters['sections'] ?? [];
+                $cfSectionMap = collect($cfSections)->mapWithKeys(fn ($names, $grade) => [strtolower($grade) => $names])->all();
+                $cfAllSections = collect($cfSections)->flatten()
+                    ->unique(fn ($name) => strtolower($name))
+                    ->sort(fn ($a, $b) => strnatcasecmp($a, $b))
+                    ->values();
+            @endphp
             <div>
-                <label class="field-label" for="consultLevelFilter">Level</label>
-                <select class="select" id="consultLevelFilter">
-                    <option value="all">All Levels</option>
-                    <option value="junior">Junior High</option>
-                    <option value="senior">Senior High</option>
+                <label class="field-label" for="consultGradeFilter">Grade Level</label>
+                <select class="select" id="consultGradeFilter">
+                    <option value="all">All grade levels</option>
+                    @foreach ($cfGrades as $grade)
+                        <option value="{{ strtolower($grade) }}">{{ $grade }}</option>
+                    @endforeach
                     <option value="personnel">Personnel</option>
+                </select>
+            </div>
+            <div>
+                <label class="field-label" for="consultSectionFilter">Section</label>
+                {{-- Rebuilt for the chosen grade in the script below: a section
+                     belongs to one grade, and offering the whole list would let
+                     the nurse pick a pair that names nobody. --}}
+                <select class="select" id="consultSectionFilter"
+                        data-sections='@json($cfSectionMap, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP)'>
+                    <option value="all">All sections</option>
+                    @foreach ($cfAllSections as $section)
+                        <option value="{{ strtolower($section) }}">{{ $section }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="field-label" for="consultSexFilter">Gender</label>
+                <select class="select" id="consultSexFilter">
+                    <option value="all">All</option>
+                    @foreach (\App\Support\FeedingBeneficiarySummary::SEX_OPTIONS as $sex)
+                        <option value="{{ strtolower($sex) }}">{{ $sex }}</option>
+                    @endforeach
                 </select>
             </div>
             <div class="spacer"></div>
@@ -162,15 +199,11 @@
                                 ? '?'
                                 : strtoupper(substr($nameParts[0], 0, 1).substr(end($nameParts), 0, 1));
 
-                            // grade_section is encrypted, so the level bucket is derived
-                            // here in PHP from the decrypted label rather than in SQL.
-                            preg_match('/\d{1,2}/', $gradeSection, $gradeMatch);
-                            $gradeNumber = isset($gradeMatch[0]) ? (int) $gradeMatch[0] : null;
-                            $level = match (true) {
-                                $gradeNumber !== null && $gradeNumber >= 7 && $gradeNumber <= 10 => 'junior',
-                                $gradeNumber !== null && $gradeNumber >= 11 && $gradeNumber <= 12 => 'senior',
-                                default => 'personnel',
-                            };
+                            // Decided once, server-side, from the decrypted values
+                            // (see ClinicDashboard::consultationFilters). A visit
+                            // with no grade is a staff visit: Personnel.
+                            $cfRow = $consultationFilters['rows'][$c->id] ?? ['grade' => '', 'section' => '', 'sex' => ''];
+                            $rowGrade = $cfRow['grade'] !== '' ? strtolower($cfRow['grade']) : 'personnel';
 
                             // The row carries its own calendar date, stamped
                             // server-side so the filter never depends on the
@@ -179,7 +212,9 @@
                         @endphp
                         <tr class="js-consult-row"
                             data-search="{{ strtolower($studentName.' '.$gradeSection.' '.$condition.' '.$treatment) }}"
-                            data-level="{{ $level }}"
+                            data-grade="{{ $rowGrade }}"
+                            data-section="{{ strtolower($cfRow['section']) }}"
+                            data-sex="{{ strtolower($cfRow['sex']) }}"
                             data-date="{{ $consultedOn }}">
                             <td>
                                 <div class="td-person">
@@ -188,7 +223,7 @@
                                 </div>
                             </td>
                             <td>{{ $gradeSection !== '' ? $gradeSection : '—' }}</td>
-                            <td class="tnum">{{ $consultedAt?->format('M j, Y') ?? '—' }}</td>
+                            <td class="tnum">{{ $c->consulted_at?->format('M j, Y') ?? '—' }}</td>
                             <td>{{ $condition !== '' ? $condition : '—' }}</td>
                             <td>{{ $treatment !== '' ? $treatment : '—' }}</td>
                             <td>
@@ -309,14 +344,17 @@
 
 
 <script>
-// Recent Consultations: search + date/level filters over the rendered rows.
+// Recent Consultations: search + date/grade/section/gender filters over the
+// rendered rows.
 (() => {
     const search = document.getElementById('consultSearch');
     const dateFilter = document.getElementById('consultDateFilter');
-    const levelFilter = document.getElementById('consultLevelFilter');
+    const gradeFilter = document.getElementById('consultGradeFilter');
+    const sectionFilter = document.getElementById('consultSectionFilter');
+    const sexFilter = document.getElementById('consultSexFilter');
     const tbody = document.getElementById('consultTableBody');
 
-    if (!search || !dateFilter || !levelFilter || !tbody) {
+    if (!search || !dateFilter || !gradeFilter || !sectionFilter || !sexFilter || !tbody) {
         return;
     }
 
@@ -324,20 +362,59 @@
     const noMatch = document.getElementById('consultNoMatch');
     const count = document.getElementById('consultCount');
 
+    let sectionsByGrade = {};
+    try {
+        sectionsByGrade = JSON.parse(sectionFilter.dataset.sections || '{}') || {};
+    } catch (error) {
+        sectionsByGrade = {};
+    }
+
+    const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+
+    // The section list follows the grade: one grade's sections, every
+    // section under "All grade levels", none for Personnel. A section the
+    // new grade does not run is cleared rather than left matching nobody.
+    const rebuildSections = () => {
+        const grade = gradeFilter.value;
+        const previous = sectionFilter.value;
+        let names = [];
+
+        if (grade === 'all') {
+            const seen = new Map();
+            Object.values(sectionsByGrade).flat().forEach((name) => {
+                if (!seen.has(name.toLowerCase())) seen.set(name.toLowerCase(), name);
+            });
+            names = Array.from(seen.values()).sort(byName);
+        } else {
+            names = (sectionsByGrade[grade] || []).slice();
+        }
+
+        sectionFilter.replaceChildren(
+            new Option('All sections', 'all'),
+            ...names.map((name) => new Option(name, name.toLowerCase()))
+        );
+        sectionFilter.value = names.some((name) => name.toLowerCase() === previous) ? previous : 'all';
+        sectionFilter.disabled = names.length === 0;
+    };
+
     // Each row is stamped server-side with its calendar date, so matching
     // the picked day never depends on the browser's clock or timezone.
     const apply = () => {
         const keyword = search.value.trim().toLowerCase();
         const date = dateFilter.value;
-        const level = levelFilter.value;
+        const grade = gradeFilter.value;
+        const section = sectionFilter.value;
+        const sex = sexFilter.value;
         let visible = 0;
 
         rows.forEach((row) => {
             const haystack = row.dataset.search || '';
             const matchesKeyword = !keyword || haystack.includes(keyword);
             const matchesPeriod = !date || (row.dataset.date || '') === date;
-            const matchesLevel = level === 'all' || (row.dataset.level || '') === level;
-            const show = matchesKeyword && matchesPeriod && matchesLevel;
+            const matchesGrade = grade === 'all' || (row.dataset.grade || '') === grade;
+            const matchesSection = section === 'all' || (row.dataset.section || '') === section;
+            const matchesSex = sex === 'all' || (row.dataset.sex || '') === sex;
+            const show = matchesKeyword && matchesPeriod && matchesGrade && matchesSection && matchesSex;
 
             row.hidden = !show;
             if (show) {
@@ -356,7 +433,13 @@
     search.addEventListener('input', apply);
     dateFilter.addEventListener('change', apply);
     dateFilter.addEventListener('input', apply);
-    levelFilter.addEventListener('change', apply);
+    gradeFilter.addEventListener('change', () => {
+        rebuildSections();
+        apply();
+    });
+    sectionFilter.addEventListener('change', apply);
+    sexFilter.addEventListener('change', apply);
+    rebuildSections();
     apply();
 })();
 </script>

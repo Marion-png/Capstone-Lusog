@@ -314,8 +314,8 @@ class NurseHealthRecordsPageTest extends TestCase
 
         $html = $response->getContent();
 
-        // The three filters are dropdowns, each built from the roster.
-        foreach (['grade', 'sex', 'section'] as $group) {
+        // The four filters are dropdowns, each built from the roster.
+        foreach (['grade', 'sex', 'section', 'status'] as $group) {
             $this->assertStringContainsString('data-filter="'.$group.'"', $html);
         }
 
@@ -334,6 +334,50 @@ class NurseHealthRecordsPageTest extends TestCase
         $this->assertStringContainsString('data-grade="Grade 7"', $html);
         $this->assertStringContainsString('data-sex="female"', $html);
         $this->assertStringContainsString('data-section="dalton"', $html);
+    }
+
+    #[Test]
+    public function the_status_filter_reads_the_health_status_column(): void
+    {
+        $roster = [
+            $this->learner(['lrn' => '1', 'last_name' => 'Alpha', 'nutritional_status_bmi_for_age' => 'Normal']),
+            $this->learner(['lrn' => '2', 'last_name' => 'Bravo', 'nutritional_status_bmi_for_age' => 'normal ']),
+            $this->learner(['lrn' => '3', 'last_name' => 'Charlie', 'nutritional_status_bmi_for_age' => 'Underweight']),
+            $this->learner(['lrn' => '4', 'last_name' => 'Delta', 'nutritional_status_bmi_for_age' => 'Severely Wasted']),
+            $this->learner(['lrn' => '5', 'last_name' => 'Echo', 'nutritional_status_bmi_for_age' => '']),
+        ];
+
+        $html = $this->withSession($this->nurseSession($roster))
+            ->get('/dashboard/student-health-records')
+            ->assertOk()
+            ->getContent();
+
+        // Two spellings of Normal are one option, and the retired
+        // "Underweight" is counted under Wasted, as everywhere else.
+        $options = [
+            '<option value="Severely Wasted">Severely Wasted (1)</option>',
+            '<option value="Wasted">Wasted (1)</option>',
+            '<option value="Normal">Normal (2)</option>',
+            '<option value="Not assessed">Not assessed (1)</option>',
+        ];
+        foreach ($options as $option) {
+            $this->assertStringContainsString($option, $html);
+        }
+
+        // Scale order, with the unassessed learners last.
+        $positions = array_map(fn (string $option) => strpos($html, $option), $options);
+        $sorted = $positions;
+        sort($sorted);
+        $this->assertSame($sorted, $positions);
+
+        // A status nobody holds never becomes an option.
+        $this->assertStringNotContainsString('<option value="Overweight">', $html);
+
+        // The row carries the label it is filtered on, and the cell prints
+        // that same label — never the retired word.
+        $this->assertStringContainsString('data-status="Wasted"', $html);
+        $this->assertStringContainsString('data-status="Not assessed"', $html);
+        $this->assertStringNotContainsString('<td>Underweight</td>', $html);
     }
 
     #[Test]

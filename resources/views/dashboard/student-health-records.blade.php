@@ -57,6 +57,30 @@
         ->filter()
         ->countBy()
         ->sortKeys();
+
+    // The Health Status column, read through the one normaliser every other
+    // screen counts with: a legacy "Underweight" is Wasted, and "normal" and
+    // "Normal" are one option rather than two. The cell prints the same
+    // label, so choosing Wasted never lists a row reading something else.
+    $healthStatusOf = function (array $row): string {
+        $status = \App\Support\FeedingBeneficiarySummary::normalize(
+            trim((string) ($row['nutritional_status_bmi_for_age'] ?? ''))
+        );
+
+        return $status !== '' ? $status : 'Not assessed';
+    };
+
+    // In scale order, not alphabetical — a status list is read from severe
+    // to above normal — with anything off the scale after it and the
+    // learners nobody has assessed last.
+    $statusScale = array_flip(['Severely Wasted', 'Wasted', 'Normal', 'Overweight', 'Obese']);
+    $statusRank = fn (string $status): int => $status === 'Not assessed'
+        ? PHP_INT_MAX
+        : ($statusScale[$status] ?? count($statusScale));
+    $statusOptions = collect($records)
+        ->map($healthStatusOf)
+        ->countBy()
+        ->sortKeysUsing(fn (string $a, string $b): int => [$statusRank($a), $a] <=> [$statusRank($b), $b]);
 @endphp
 @include('partials.clinic-rail', ['active' => 'records'])
 
@@ -165,6 +189,19 @@
                             @endforeach
                         </select>
                     </div>
+
+                    {{-- Narrows on the Health Status column, so it is named
+                         after it: "Status" alone could as well mean the
+                         Examined / Pending column beside it. --}}
+                    <div class="shr-filter-group">
+                        <label class="shr-filter-label" for="shrStatusFilter">Health Status</label>
+                        <select class="shr-select" id="shrStatusFilter" data-filter="status">
+                            <option value="all">All statuses ({{ count($records) }})</option>
+                            @foreach ($statusOptions as $status => $count)
+                                <option value="{{ $status }}">{{ $status }} ({{ $count }})</option>
+                            @endforeach
+                        </select>
+                    </div>
                 </div>
             </section>
 
@@ -224,7 +261,7 @@
                                     $rowGrade = trim((string) ($record['grade_level'] ?? ''));
                                     $rowSection = trim((string) ($record['section'] ?? ''));
                                     $rowSex = trim((string) ($record['gender'] ?? ''));
-                                    $rowHealth = trim((string) ($record['nutritional_status_bmi_for_age'] ?? ''));
+                                    $rowHealth = $healthStatusOf($record);
                                     $examined = ! empty($record['examination']);
 
                                     // Never recomputed here: the figures and the
@@ -252,7 +289,8 @@
                                     data-search="{{ strtolower($fullName . ' ' . $rowLrn) }}"
                                     data-grade="{{ $rowGrade }}"
                                     data-section="{{ strtolower($rowSection) }}"
-                                    data-sex="{{ strtolower($rowSex) }}">
+                                    data-sex="{{ strtolower($rowSex) }}"
+                                    data-status="{{ $rowHealth }}">
                                     <td><strong>{{ $rowLrn !== '' ? $rowLrn : '-' }}</strong></td>
                                     <td class="shr-name">{{ $fullName !== '' ? $fullName : '-' }}</td>
                                     <td>{{ $rowSex !== '' ? $rowSex : '-' }}</td>
@@ -265,7 +303,7 @@
                                         <td class="shr-num">{{ $cell($phase, 'bmi', 'kg/m²') }}</td>
                                         <td>{{ $cell($phase, 'bmi_status') }}</td>
                                     @endforeach
-                                    <td>{{ $rowHealth !== '' ? $rowHealth : 'Not assessed' }}</td>
+                                    <td>{{ $rowHealth }}</td>
                                     <td>
                                         <span class="shr-status {{ $examined ? 'is-done' : 'is-pending' }}">{{ $examined ? 'Examined' : 'Pending' }}</span>
                                     </td>
@@ -292,7 +330,7 @@
                                     <div class="shr-empty">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                                         <h4>No Students Found</h4>
-                                        <p>No learners match your current grade, sex, section, or search filters.</p>
+                                        <p>No learners match your current grade, gender, section, health status, or search filters.</p>
                                     </div>
                                 </td>
                             </tr>
@@ -1708,13 +1746,13 @@
         closeProfile();
     });
 
-    // ── Grade / sex / section chips + search over the rendered rows ──
+    // ── Grade / gender / section / health status + search over the rows ──
     const search = document.getElementById('shrSearch');
     const noMatchRow = document.querySelector('.js-records-nomatch');
     const countBadge = document.getElementById('shrCountBadge');
     const totalLabel = document.getElementById('shrTotalLabel');
     const showingLabel = document.getElementById('shrShowingLabel');
-    const filters = { grade: 'all', sex: 'all', section: 'all' };
+    const filters = { grade: 'all', sex: 'all', section: 'all', status: 'all' };
 
     const applyFilters = () => {
         const keyword = search ? search.value.trim().toLowerCase() : '';
@@ -1724,7 +1762,8 @@
             const matches = (!keyword || (row.dataset.search || '').includes(keyword))
                 && (filters.grade === 'all' || (row.dataset.grade || '') === filters.grade)
                 && (filters.sex === 'all' || (row.dataset.sex || '') === filters.sex)
-                && (filters.section === 'all' || (row.dataset.section || '') === filters.section);
+                && (filters.section === 'all' || (row.dataset.section || '') === filters.section)
+                && (filters.status === 'all' || (row.dataset.status || '') === filters.status);
 
             row.hidden = !matches;
             if (matches) {
@@ -1746,6 +1785,7 @@
             if (filters.grade !== 'all') parts.push(filters.grade);
             if (filters.sex !== 'all') parts.push(filters.sex.charAt(0).toUpperCase() + filters.sex.slice(1));
             if (filters.section !== 'all') parts.push(filters.section.charAt(0).toUpperCase() + filters.section.slice(1));
+            if (filters.status !== 'all') parts.push(filters.status);
             if (keyword) parts.push('"' + keyword + '"');
             showingLabel.textContent = parts.length ? parts.join(' · ') : 'All Students';
         }

@@ -146,17 +146,90 @@ class SchoolNurseDashboardTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        // Grade buckets are derived from the decrypted label, in PHP.
-        $this->assertStringContainsString('data-level="junior"', $html);
-        $this->assertStringContainsString('data-level="senior"', $html);
-        $this->assertStringContainsString('data-level="personnel"', $html);
+        // Grade and section are read off the decrypted label, in PHP; a
+        // label with no grade is a staff visit.
+        $this->assertStringContainsString('data-grade="grade 9"', $html);
+        $this->assertStringContainsString('data-section="rizal"', $html);
+        $this->assertStringContainsString('data-grade="grade 12"', $html);
+        $this->assertStringContainsString('data-section="stem a"', $html);
+        $this->assertStringContainsString('data-grade="personnel"', $html);
         $this->assertStringContainsString('id="consultSearch"', $html);
+
+        // Grade levels replace the old Junior / Senior High buckets, and a
+        // grade a visit was typed under is selectable even with no roster.
+        $this->assertStringContainsString('id="consultGradeFilter"', $html);
+        $this->assertStringContainsString('<option value="grade 9">Grade 9</option>', $html);
+        $this->assertStringContainsString('<option value="personnel">Personnel</option>', $html);
+        $this->assertStringNotContainsString('consultLevelFilter', $html);
+        $this->assertStringNotContainsString('Junior High', $html);
+        $this->assertStringContainsString('id="consultSectionFilter"', $html);
+        $this->assertStringContainsString('<option value="rizal">Rizal</option>', $html);
+        $this->assertStringContainsString('id="consultSexFilter"', $html);
+        $this->assertStringContainsString('<option value="male">Male</option>', $html);
+        $this->assertStringContainsString('<option value="female">Female</option>', $html);
+
+        // Each row prints the day it was logged.
+        $this->assertStringContainsString(now()->format('M j, Y'), $html);
 
         // The date filter is a calendar, and each row carries the calendar
         // date it is matched against — stamped server-side.
         $this->assertStringContainsString('type="date" class="input" id="consultDateFilter"', $html);
         $this->assertStringNotContainsString('<option value="today">', $html);
         $this->assertStringContainsString('data-date="'.now()->toDateString().'"', $html);
+    }
+
+    #[Test]
+    public function a_visit_takes_its_gender_and_class_from_the_learner_its_name_matches(): void
+    {
+        $learner = fn (string $lrn, string $name, string $section, string $gender) => StudentHealthRecord::create([
+            'institution_id' => $this->institution->id,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'student_id' => $lrn,
+            'student_name' => $name,
+            'section' => $section,
+            'student_details' => ['gender' => $gender],
+        ]);
+
+        $learner('LRN1', 'Reyes, Maria S.', 'Grade 8 / Sampaguita', 'F');
+        $learner('LRN2', 'Gomez, Jose', 'Grade 7 / Curie', 'male');
+        // Two learners share a name; only the visit's grade tells them apart.
+        $learner('LRN3', 'Tan, Leo', 'Grade 9 / Rizal', 'Male');
+        $learner('LRN4', 'Tan, Leo', 'Grade 10 / Dalton', 'Female');
+
+        // Typed in another order and without the middle initial.
+        $this->consultation(['student_name' => 'Maria Reyes', 'grade_section' => 'Grade 8 - Sampaguita']);
+        // A label with no grade borrows the matched learner's class.
+        $this->consultation(['student_name' => 'Gomez, Jose', 'grade_section' => 'Curie']);
+        $this->consultation(['student_name' => 'Tan, Leo', 'grade_section' => 'Grade 10 - Dalton']);
+        // Nobody on the roster: no gender is guessed.
+        $this->consultation(['student_name' => 'Santos, Mr.', 'grade_section' => 'Faculty']);
+
+        $html = $this->withSession($this->nurseSession())
+            ->get('/dashboard/school-nurse')
+            ->assertOk()
+            ->getContent();
+
+        $rows = [];
+        preg_match_all('/<tr class="js-consult-row"(.*?)>/s', $html, $match);
+        foreach ($match[1] as $attributes) {
+            preg_match('/data-grade="([^"]*)"\s+data-section="([^"]*)"\s+data-sex="([^"]*)"/', $attributes, $hook);
+            preg_match('/data-search="([^"]*)"/', $attributes, $search);
+            $rows[$search[1]] = array_slice($hook, 1);
+        }
+
+        $this->assertSame(['grade 8', 'sampaguita', 'female'], $rows['maria reyes grade 8 - sampaguita fever rest and fluids']);
+        $this->assertSame(['grade 7', 'curie', 'male'], $rows['gomez, jose curie fever rest and fluids']);
+        $this->assertSame(['grade 10', 'dalton', 'female'], $rows['tan, leo grade 10 - dalton fever rest and fluids']);
+        $this->assertSame(['personnel', '', ''], $rows['santos, mr. faculty fever rest and fluids']);
+
+        // The section control knows which grade runs which section.
+        preg_match("/data-sections='([^']*)'/", $html, $sections);
+        $this->assertSame([
+            'grade 7' => ['Curie'],
+            'grade 8' => ['Sampaguita'],
+            'grade 9' => ['Rizal'],
+            'grade 10' => ['Dalton'],
+        ], json_decode($sections[1], true));
     }
 
     #[Test]

@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\Consultation;
 use App\Models\Medicine;
 use App\Models\StudentHealthRecord;
+use Illuminate\Support\Collection;
 
 /**
  * The clinic dashboard's figures, read once.
@@ -39,11 +40,14 @@ class ClinicDashboard
      */
     public static function read(?int $institutionId): array
     {
+        $recent = self::recentConsultations($institutionId);
+
         return [
             'totalRecords' => self::totalRecords($institutionId),
             'atRiskCount' => self::atRiskCount($institutionId),
             'consultationsToday' => self::consultationsToday($institutionId),
-            'recentConsultations' => self::recentConsultations($institutionId),
+            'recentConsultations' => $recent,
+            'consultationFilters' => self::consultationFilters($institutionId, $recent),
             'topConditions' => self::topConditions($institutionId),
             'lowStockCount' => self::lowStockCount($institutionId),
             'lowStockMedicines' => self::lowStockMedicines($institutionId),
@@ -100,6 +104,168 @@ class ClinicDashboard
             ->latest('consulted_at')->latest('id')
             ->limit(self::RECENT_CONSULTATIONS)
             ->get();
+    }
+
+    /**
+     * What the consultations table filters on: each visit's grade, section and
+     * gender, and the options the three controls offer.
+     *
+     * A visit carries only a name and a typed "Grade 10 - Rizal" label — no
+     * LRN and no gender — so the grade and section are read off the label the
+     * row prints, and the gender off the learner the name matches on the
+     * roster. Every one of those is encrypted at rest, so all of it runs here
+     * in PHP. The roster is the memoized `rosterFor()` read the topbar search
+     * already makes, so this costs no second trip.
+     *
+     * A visit whose name matches no learner, or more than one that its grade
+     * and section cannot tell apart, has no gender. It is left out when a
+     * gender is chosen rather than guessed into one.
+     *
+     * @param  Collection<int, Consultation>  $consultations
+     * @return array{rows: array<int, array{grade: string, section: string, sex: string}>, grades: list<string>, sections: array<string, list<string>>}
+     */
+    private static function consultationFilters(?int $institutionId, Collection $consultations): array
+    {
+        $roster = $institutionId && SchemaCache::hasTable('student_health_records')
+            ? StudentHealthRecord::rosterFor($institutionId)
+            : collect();
+
+        $learners = $roster
+            ->map(function (StudentHealthRecord $record): array {
+                [$grade, $section] = FeedingBeneficiarySummary::splitSection((string) $record->section);
+
+                return [
+                    'tokens' => self::nameTokens((string) $record->student_name),
+                    'grade' => $grade === 'Unassigned' ? '' : $grade,
+                    'section' => $section === 'Unassigned' ? '' : $section,
+                    'sex' => FeedingBeneficiarySummary::sexOf($record),
+                ];
+            })
+            ->filter(fn (array $learner): bool => $learner['tokens'] !== [])
+            ->values()
+            ->all();
+
+        $rows = [];
+        foreach ($consultations as $consultation) {
+            [$grade, $section] = self::gradeAndSection((string) $consultation->grade_section);
+            $learner = self::learnerFor(self::nameTokens((string) $consultation->student_name), $grade, $section, $learners);
+
+            // A label with no grade in it borrows the matched learner's class,
+            // so a visit typed "Rizal, Grade 9" can still be found.
+            if ($grade === '' && $learner !== null) {
+                $grade = $learner['grade'];
+                $section = $section !== '' ? $section : $learner['section'];
+            }
+
+            $rows[$consultation->id] = [
+                'grade' => $grade,
+                'section' => $section,
+                'sex' => $learner['sex'] ?? '',
+            ];
+        }
+
+        // The school's own grades and sections, plus any a visit was typed
+        // under, so no row is unreachable from the controls. Sections keep
+        // the roster's spelling where both name one.
+        $sections = [];
+        foreach (array_merge($learners, array_values($rows)) as $entry) {
+            if ($entry['grade'] === '') {
+                continue;
+            }
+            $sections[$entry['grade']] ??= [];
+            if ($entry['section'] !== '') {
+                $sections[$entry['grade']][mb_strtolower($entry['section'])] ??= $entry['section'];
+            }
+        }
+
+        uksort($sections, 'strnatcasecmp');
+        $sections = array_map(function (array $names): array {
+            $names = array_values($names);
+            natcasesort($names);
+
+            return array_values($names);
+        }, $sections);
+
+        return [
+            'rows' => $rows,
+            'grades' => array_keys($sections),
+            'sections' => $sections,
+        ];
+    }
+
+    /**
+     * "Grade 10 - Rizal" → ['Grade 10', 'Rizal']. The label is typed, so this
+     * accepts the spellings a nurse actually uses ("G10-Rizal", "10 / Rizal",
+     * "Gr. 8 Sampaguita") and reads a label that does not open with a grade —
+     * "Faculty", "Personnel" — as having none.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private static function gradeAndSection(string $label): array
+    {
+        if (! preg_match('/^\s*(?:grade|gr\.?|g)?\s*(1[0-2]|[1-9])(?![\d\p{L}])\s*[-–—\/|,:.]?\s*(.*)$/iu', $label, $match)) {
+            return ['', ''];
+        }
+
+        return ['Grade '.$match[1], trim($match[2], " \t-–—/|,:.")];
+    }
+
+    /**
+     * The words of a name, lowercased, without initials — so "Gomez, Jose C."
+     * and "Jose Gomez" compare equal however the visit was typed.
+     *
+     * @return list<string>
+     */
+    private static function nameTokens(string $name): array
+    {
+        preg_match_all("/\p{L}[\p{L}'’-]*/u", mb_strtolower($name), $match);
+
+        return array_values(array_unique(array_filter(
+            $match[0],
+            fn (string $token): bool => mb_strlen($token) > 1
+        )));
+    }
+
+    /**
+     * The one learner a visit's name belongs to, or null.
+     *
+     * A learner matches when every word of their name is in the visit's. A
+     * grade on the visit must agree with the learner's; several matches are
+     * then narrowed to the exact name, then to the section, and a tie that
+     * survives both is no match at all.
+     *
+     * @param  list<string>  $visitTokens
+     * @param  list<array{tokens: list<string>, grade: string, section: string, sex: string}>  $learners
+     * @return array{tokens: list<string>, grade: string, section: string, sex: string}|null
+     */
+    private static function learnerFor(array $visitTokens, string $grade, string $section, array $learners): ?array
+    {
+        if ($visitTokens === []) {
+            return null;
+        }
+
+        $candidates = array_values(array_filter(
+            $learners,
+            fn (array $learner): bool => array_diff($learner['tokens'], $visitTokens) === []
+                && ($grade === '' || $learner['grade'] === '' || strcasecmp($learner['grade'], $grade) === 0)
+        ));
+
+        if (count($candidates) > 1) {
+            $exact = array_values(array_filter(
+                $candidates,
+                fn (array $learner): bool => count($learner['tokens']) === count($visitTokens)
+            ));
+            $candidates = $exact !== [] ? $exact : $candidates;
+        }
+
+        if (count($candidates) > 1 && $section !== '') {
+            $candidates = array_values(array_filter(
+                $candidates,
+                fn (array $learner): bool => strcasecmp($learner['section'], $section) === 0
+            ));
+        }
+
+        return count($candidates) === 1 ? $candidates[0] : null;
     }
 
     private static function topConditions(?int $institutionId)
