@@ -3,7 +3,8 @@
 
     Pass $active to highlight the current item: 'dashboard' | 'records' |
     'queue' | 'consultations' | 'feeding' | 'deworming' | 'consent' |
-    'assessments' | 'inventory' | 'dispensing' | 'visualization' | 'reports'.
+    'assessments' | 'inventory' | 'dispensing' | 'visualization' | 'exchange' |
+    'reports'.
 
     Markup only — the .sb-* rules live in css/nurse-sidebar.css, which the
     page must inline after css/lusog-theme.css. This replaces the older
@@ -102,6 +103,13 @@
         <a href="{{ route('dashboard.data-visualization') }}" class="sb-link {{ $active === 'visualization' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             Data Visualization
+        </a>
+        {{-- HL7 FHIR R4 outbound exchange (FhirExchangeController). The
+             nurse's alone: it is the one screen that sends a learner's record
+             outside the school. --}}
+        <a href="{{ route('dashboard.school-nurse.data-exchange') }}" class="sb-link {{ $active === 'exchange' ? 'active' : '' }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+            Health Data Exchange
         </a>
         <a href="#" class="sb-link {{ $active === 'reports' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>

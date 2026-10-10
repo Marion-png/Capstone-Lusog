@@ -14,6 +14,7 @@ use App\Http\Controllers\FeedingCoordinatorController;
 use App\Http\Controllers\FeedingEnrollmentController;
 use App\Http\Controllers\FeedingMasterlistExportController;
 use App\Http\Controllers\FeedingProgramController;
+use App\Http\Controllers\FhirExchangeController;
 use App\Http\Controllers\HealthAssessmentController;
 use App\Http\Controllers\HealthConsentFormController;
 use App\Http\Controllers\MedicalCertificateController;
@@ -678,6 +679,28 @@ Route::get('/dashboard/school-nurse/nutritional-status/export', [SchoolHeadMaste
 Route::get('/dashboard/school-nurse/nutritional-status/print', [SchoolHeadMasterlistController::class, 'printList'])
     ->name('dashboard.school-nurse.nutritional-status.print');
 
+// Health Data Exchange — one learner's record as an HL7 FHIR R4 bundle, sent
+// to the receiving server over HTTPS (docs/fhir-interoperability.md). The
+// School Nurse's alone, under the nurse's path for the same reason as above.
+Route::get('/dashboard/school-nurse/data-exchange', [FhirExchangeController::class, 'index'])
+    ->name('dashboard.school-nurse.data-exchange');
+
+Route::get('/dashboard/school-nurse/data-exchange/learners/{lrn}', [FhirExchangeController::class, 'preview'])
+    ->where('lrn', '[A-Za-z0-9\-]+')
+    ->name('dashboard.school-nurse.data-exchange.preview');
+
+Route::get('/dashboard/school-nurse/data-exchange/learners/{lrn}/download', [FhirExchangeController::class, 'download'])
+    ->where('lrn', '[A-Za-z0-9\-]+')
+    ->name('dashboard.school-nurse.data-exchange.download');
+
+Route::post('/dashboard/school-nurse/data-exchange/learners/{lrn}/transmit', [FhirExchangeController::class, 'transmit'])
+    ->where('lrn', '[A-Za-z0-9\-]+')
+    ->name('dashboard.school-nurse.data-exchange.transmit');
+
+Route::get('/dashboard/school-nurse/data-exchange/transmissions/{transmission}', [FhirExchangeController::class, 'transmission'])
+    ->whereNumber('transmission')
+    ->name('dashboard.school-nurse.data-exchange.transmission');
+
 // Keeps the school head's dashboard current without a reload: the page polls
 // the pulse (a stamp, no data) and only re-reads the metrics when it moves.
 Route::get('/dashboard/school-head/metrics', [SchoolHeadController::class, 'metrics'])
@@ -1179,19 +1202,38 @@ Route::get('/dashboard/system-admin', function () {
     // Per-school feeding policy. The threshold is the one figure the SRS
     // requires to be school-configurable, so it is administered here rather
     // than living in config alone.
+    // Every setting is additive, so each column is asked for only when its
+    // migration has actually run.
+    $policyColumns = array_merge(['feeding_at_risk_threshold'], array_values(array_filter([
+        'feeding_min_observation_days',
+        'feeding_at_risk_mode',
+        'feeding_absence_flag_days',
+        'feeding_absence_removal_days',
+        'feeding_cycle_days',
+    ], fn (string $column): bool => Schema::hasColumn('institutions', $column))));
+
+    // Only the schools in use: the one this deployment serves, any school
+    // that holds accounts or learner records, and any school somebody has
+    // set a policy for (so a setting is never hidden from the person who
+    // made it). The rest of the division catalogue stays in the table —
+    // nothing is deleted — it simply has nothing to administer.
     $institutions = Schema::hasTable('institutions')
-        ? Institution::query()->orderBy('name')->get(array_merge(
-            ['id', 'name', 'feeding_at_risk_threshold'],
-            // Every setting is additive, so each column is asked for only when
-            // its migration has actually run.
-            array_values(array_filter([
-                'feeding_min_observation_days',
-                'feeding_at_risk_mode',
-                'feeding_absence_flag_days',
-                'feeding_absence_removal_days',
-                'feeding_cycle_days',
-            ], fn (string $column): bool => Schema::hasColumn('institutions', $column)))
-        ))
+        ? Institution::query()
+            ->where(function ($query) use ($policyColumns) {
+                $query->where('name', Institution::REGISTRATION_SCHOOL);
+
+                foreach (['accounts', 'student_health_records'] as $table) {
+                    if (Schema::hasTable($table)) {
+                        $query->orWhereIn('id', DB::table($table)->select('institution_id')->whereNotNull('institution_id'));
+                    }
+                }
+
+                foreach ($policyColumns as $column) {
+                    $query->orWhereNotNull($column);
+                }
+            })
+            ->orderBy('name')
+            ->get(array_merge(['id', 'name'], $policyColumns))
         : collect();
 
     return view('dashboard.system-admin', [

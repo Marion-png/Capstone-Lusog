@@ -193,7 +193,9 @@ class AdviserRecentActivityTest extends TestCase
     {
         $this->record();
 
-        AuditLog::query()->delete();
+        // The trail is append-only, so the test counts from where it stands
+        // rather than clearing it.
+        $before = AuditLog::count();
 
         $response = $this->withSession($this->adviserSession())
             ->getJson('/dashboard/class-adviser/activity/pulse')
@@ -202,14 +204,14 @@ class AdviserRecentActivityTest extends TestCase
         $response->assertDontSee('Gomez');
         $response->assertDontSee('LRN001');
         $this->assertSame(['stamp'], array_keys($response->json()));
-        $this->assertSame(0, AuditLog::count(), 'The no-PII pulse must not write audit rows.');
+        $this->assertSame($before, AuditLog::count(), 'The no-PII pulse must not write audit rows.');
 
         // The feed itself does return names, so it stays audited.
         $this->withSession($this->adviserSession())
             ->getJson('/dashboard/class-adviser/activity')
             ->assertOk();
 
-        $this->assertGreaterThan(0, AuditLog::count());
+        $this->assertGreaterThan($before, AuditLog::count());
     }
 
     #[Test]

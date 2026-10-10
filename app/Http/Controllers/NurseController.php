@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\TransmitFhirRecord;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
+use App\Support\FhirTransmitter;
 use App\Support\SchemaCache;
 use App\Support\Sheet2Review;
 use App\Support\StudentRosterSync;
@@ -317,6 +319,13 @@ class NurseController extends Controller
                     'endline_nutritional_status' => $lockedBmiStatus !== '' ? $lockedBmiStatus : $studentRecord->endline_nutritional_status,
                     'endline_recorded_at' => $examDate,
                 ]);
+
+                // With FHIR_AUTO_TRANSMIT on, the learner's record follows the
+                // examination out to the receiving FHIR server — after the
+                // response, so the nurse never waits on another server.
+                if (config('services.fhir.auto_transmit') && FhirTransmitter::isConfigured()) {
+                    TransmitFhirRecord::dispatchAfterResponse((int) $studentRecord->id, FhirTransmitter::actorFromSession());
+                }
             }
         }
 

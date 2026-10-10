@@ -113,7 +113,11 @@ class EnsureActiveSession
             Institution::seedDefaults();
         }
 
-        return Institution::active()->orderBy('name')->first();
+        // The school this deployment serves, so a demo session opens on the
+        // learners that exist rather than on the alphabetically first school
+        // of the division catalogue, which holds nobody.
+        return Institution::registrationSchool()
+            ?? Institution::active()->orderBy('name')->first();
     }
 
     private function requiresActiveSession(Request $request): bool

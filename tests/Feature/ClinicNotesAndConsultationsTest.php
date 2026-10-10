@@ -98,14 +98,18 @@ class ClinicNotesAndConsultationsTest extends TestCase
     public function writing_a_clinic_note_is_audited(): void
     {
         $this->learner();
-        AuditLog::query()->delete();
+        // The trail is append-only, so only entries written after this point
+        // are looked at rather than clearing the ones before it.
+        $before = (int) AuditLog::max('id');
 
         $this->withSession($this->nurseSession())
             ->postJson('/api/student-clinic-notes', ['lrn' => 'LRN001', 'note' => 'Observed and advised rest.'])
             ->assertCreated();
 
         $this->assertTrue(
-            AuditLog::where('auditable_type', 'ClinicNote')->orWhere('action', 'created')->exists(),
+            AuditLog::where('id', '>', $before)
+                ->where(fn ($q) => $q->where('subject_type', 'ClinicNote')->orWhere('action', 'created'))
+                ->exists(),
             'Creating a clinic note must leave an audit entry.'
         );
     }

@@ -235,7 +235,19 @@ Every access and action on personal/sensitive personal information is logged to 
 - Login, failed login, and logout events are recorded in the login/logout routes.
 - The middleware decides **what** to record on the way in and writes the row in `terminate()`, once the response has been sent. A refused write is still recorded exactly as before (the decision was taken before the action ran) — the reader simply no longer waits on an `INSERT` before their page starts rendering.
 - Audit entries are evidence: never update or delete `audit_logs` rows from application code (`AuditLog` has no updated_at and no edit path). The System Admin views them at `/dashboard/system-admin/audit-logs`.
-- `AuditTrailTest` guards this invariant; keep it passing.
+- **Immutability is enforced, not only observed** (migration `2026_10_10_000002`). The `AuditLog` model throws on update and delete; database triggers refuse `UPDATE`, `DELETE` and (Postgres) `TRUNCATE` on `audit_logs` from any query, mass queries included; and every entry is sealed on creation with an HMAC over all its fields (`row_hash`, `App\Support\AuditSeal`, keyed from `APP_KEY`). `php artisan audit:verify` and the Audit Trail screen's Seal column report a row altered behind the triggers' back. A test must never clear the trail — count from a baseline (`AuditLog::count()` / `max('id')`) instead; the database will refuse the delete. Rows from before the migration read *Unsealed*, never trusted.
+- `AuditTrailTest` and `AuditLogImmutabilityTest` guard this invariant; keep them passing.
+
+### HL7 FHIR Exchange (invariant)
+
+The School Nurse's **Health Data Exchange** (`FhirExchangeController`, `dashboard/school-nurse/data-exchange`) serialises one learner's record as an HL7 FHIR R4 **transaction Bundle** and POSTs it to `FHIR_ENDPOINT`. `docs/fhir-interoperability.md` is the full account; the rules:
+
+- **One serialiser, one transmitter.** `App\Support\FhirBundle::forRecord()` builds the bundle at read time from the same readers the screens use (`NutritionalHealthStatus`, `StudentVitalSigns`, `normalizeSex()`), so a bundle cannot classify a child differently from the profile. `App\Support\FhirTransmitter::transmit()` is the only outbound path — the screen, the `fhir:transmit` command and the opt-in automatic send after an examination (`FHIR_AUTO_TRANSMIT`, `App\Jobs\TransmitFhirRecord`, dispatched after the response) all call it. Never add a second.
+- **HTTPS or nothing.** A non-`https://` endpoint is refused before sending and recorded as `blocked`; certificates are verified and TLS 1.2 is the floor. No setting relaxes either.
+- **Evidence before disclosure.** A `pending` `fhir_transmissions` row (payload, server reply, error and sender encrypted; SHA-256 of the exact bytes plain) is written before the request, then settled; every attempt is audited with host and digest, never the payload. Credentials live in env vars only and are never stored.
+- **Minimum necessary, pseudonymised by default.** Guardian, address, phone, clinic notes and consent answers never enter a bundle. `FHIR_DEIDENTIFY` (default true) replaces name and LRN with an HMAC pseudonym and the birth date with the year, labelled `PSEUDED`. A measurement nobody took produces no Observation.
+- **Every entry is a conditional `PUT` on an identifier**, so re-sending updates rather than duplicates and the transmitter may retry 408/429/5xx.
+- **The nurse's alone, and scoped.** `FhirTransmitter::ROLES` is `school_nurse`; another school's learner or transmission is a 404. `fhir_transmissions` is purged with the learner (`StudentRecordPurge::LRN_KEYED`). `phpunit.xml` blanks every `FHIR_*` credential; tests fake the HTTP client. `FhirInteroperabilityTest` guards all of it.
 
 ### Round Trips Are The Cost (invariant)
 

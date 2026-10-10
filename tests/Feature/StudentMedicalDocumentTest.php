@@ -369,7 +369,9 @@ class StudentMedicalDocumentTest extends TestCase
         $this->makeLearner('LRN001');
         $this->upload('LRN001')->assertCreated();
 
-        AuditLog::query()->delete();
+        // The trail is append-only, so the test counts from where it stands
+        // rather than clearing it.
+        $before = AuditLog::count();
 
         $response = $this->withSession($this->adviserSession())
             ->getJson(route('student-documents.pulse', ['lrn' => 'LRN001']))
@@ -378,13 +380,13 @@ class StudentMedicalDocumentTest extends TestCase
         $this->assertSame(['stamp'], array_keys($response->json()));
         $response->assertDontSee('clearance.pdf');
         $response->assertDontSee('Test Adviser');
-        $this->assertSame(0, AuditLog::count(), 'The no-PII pulse must not write audit rows.');
+        $this->assertSame($before, AuditLog::count(), 'The no-PII pulse must not write audit rows.');
 
         // The list itself does return names and file names, so it stays audited.
         $this->withSession($this->adviserSession())
             ->getJson(route('student-documents.index', ['lrn' => 'LRN001']))
             ->assertOk();
-        $this->assertGreaterThan(0, AuditLog::count());
+        $this->assertGreaterThan($before, AuditLog::count());
     }
 
     #[Test]

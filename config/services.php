@@ -64,4 +64,38 @@ return [
         'max_upload_kb' => (int) env('GEMINI_MAX_UPLOAD_KB', 10240),
     ],
 
+    /*
+     * HL7 FHIR R4 outbound exchange — see docs/fhir-interoperability.md.
+     *
+     * `endpoint` is the receiving server's base URL; a transaction Bundle is
+     * POSTed to it. It must be https:// — App\Support\FhirTransmitter refuses
+     * anything else and records the refusal, so a mistyped http:// URL can
+     * never put a learner's record on the wire in clear text. With no endpoint
+     * the exchange screen still previews and downloads bundles; it only
+     * cannot send them.
+     *
+     * Credentials are environment variables and nothing else: a bearer token,
+     * or a username and password for HTTP Basic (Mirth Connect's HTTP
+     * Listener, for instance). They are never stored in the database and
+     * never written to a transmission record or the audit trail.
+     *
+     * `deidentify` defaults to true: the Patient is sent under a keyed
+     * pseudonym with no name, no LRN and the birth year only. Turn it off only
+     * for a receiver the school has a data-sharing agreement with — a public
+     * test server is not one.
+     */
+    'fhir' => [
+        'endpoint' => env('FHIR_ENDPOINT'),
+        'auth_token' => env('FHIR_AUTH_TOKEN'),
+        'username' => env('FHIR_USERNAME'),
+        'password' => env('FHIR_PASSWORD'),
+        'deidentify' => filter_var(env('FHIR_DEIDENTIFY', true), FILTER_VALIDATE_BOOL),
+        'auto_transmit' => filter_var(env('FHIR_AUTO_TRANSMIT', false), FILTER_VALIDATE_BOOL),
+        'timeout' => (int) env('FHIR_TIMEOUT', 30),
+        // The namespace every identifier and local code in a bundle is minted
+        // under. It names this application, not DepEd, and must stay stable:
+        // receivers match on it to recognise a learner they already hold.
+        'system_base' => rtrim((string) env('FHIR_SYSTEM_BASE', 'https://lusog-web-production.up.railway.app/fhir'), '/'),
+    ],
+
 ];

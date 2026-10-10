@@ -144,38 +144,103 @@
 .sa-audit-table td { line-height: 1.45; }
 .sa-audit-actor { font-weight: 600; color: var(--lg-ink); }
 .sa-audit-desc { max-width: 42ch; }
-/* The change payload is the exception to "no monospace in prose": it is
-   data, folded away until asked for. The summary is a link-coloured
-   word, never underlined. */
-.sa-audit-details summary {
+/* The entry's View opens a dialog. The trigger is a link-coloured word,
+   never underlined. */
+.sa-audit-view {
+	border: none;
+	background: none;
+	font: inherit;
 	cursor: pointer;
-	list-style: none;
 	font-size: .74rem;
 	font-weight: 600;
 	color: var(--lg-emerald);
 	border-radius: 6px;
 	padding: 2px 6px;
 	margin: -2px -6px;
-	display: inline-block;
 }
-.sa-audit-details summary::-webkit-details-marker { display: none; }
-.sa-audit-details summary:hover { background: var(--lg-mint); color: var(--lg-emerald-dark); }
-.sa-audit-details summary:focus-visible { outline: none; box-shadow: var(--lg-focus); }
-.sa-audit-details[open] summary { color: var(--lg-emerald-dark); }
-.sa-audit-details pre {
-	margin-top: 8px;
+.sa-audit-view:hover { background: var(--lg-mint); color: var(--lg-emerald-dark); }
+.sa-audit-view:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+
+/* ── The entry dialog ──
+   Same anatomy and timings as the product's other dialogs (backdrop / panel
+   / head / body / foot), declared here because this page loads none of the
+   feeding sheets that carry them. */
+.modal-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(21, 40, 31, .48);
+	display: none;
+	align-items: flex-start;
+	justify-content: center;
+	z-index: 250;
+	padding: 16px;
+	overflow-y: auto;
+}
+.modal-backdrop.open, .modal-backdrop.is-closing { display: flex; }
+.modal-panel {
+	width: min(680px, 100%);
+	max-height: calc(100vh - 32px);
+	background: var(--lg-card);
+	border-radius: var(--lg-r-card);
+	box-shadow: 0 24px 64px rgba(21, 40, 31, .28);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	margin: auto;
+}
+.modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 18px 20px 14px; border-bottom: 1px solid var(--lg-border); }
+.modal-title { margin-top: 4px; font-size: 1.02rem; font-weight: 600; letter-spacing: -.01em; color: var(--lg-ink); overflow-wrap: anywhere; }
+.modal-close { background: none; font-size: 1.4rem; line-height: 1; color: var(--lg-ink-soft); cursor: pointer; padding: 2px 8px; border-radius: 8px; border: 1px solid var(--lg-border); }
+.modal-close:hover { color: var(--lg-ink); background: var(--lg-rail); }
+.modal-close:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+.modal-body { overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--lg-border); background: var(--lg-card); }
+
+.modal-backdrop.open { animation: sa-modal-backdrop-in .18s ease both; }
+.modal-backdrop.is-closing { animation: sa-modal-backdrop-out .14s ease both; }
+.modal-backdrop.open .modal-panel { animation: sa-modal-in .18s cubic-bezier(.22, .61, .36, 1) both; }
+.modal-backdrop.is-closing .modal-panel { animation: sa-modal-out .14s cubic-bezier(.4, 0, 1, 1) both; }
+@keyframes sa-modal-in  { from { opacity: 0; transform: translateY(10px) scale(.99); } to { opacity: 1; transform: none; } }
+@keyframes sa-modal-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px) scale(.99); } }
+@keyframes sa-modal-backdrop-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sa-modal-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+	.modal-backdrop.open, .modal-backdrop.is-closing,
+	.modal-backdrop.open .modal-panel, .modal-backdrop.is-closing .modal-panel { animation: none; }
+}
+
+.sa-audit-eyebrow { font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--lg-ink-soft); }
+.sa-audit-modal-body { padding: 16px 20px 20px; }
+
+/* One entry, so a label/value list rather than a table of one row. */
+.sa-audit-facts { margin: 0; display: grid; }
+.sa-audit-facts > div {
+	display: grid;
+	grid-template-columns: 110px minmax(0, 1fr);
+	gap: 12px;
+	padding: 8px 0;
+	border-top: 1px solid var(--lg-border);
+}
+.sa-audit-facts > div:first-child { border-top: 0; padding-top: 0; }
+.sa-audit-facts dt { font-size: .74rem; font-weight: 500; color: var(--lg-ink-soft); }
+.sa-audit-facts dd { margin: 0; font-size: .8rem; color: var(--lg-ink); overflow-wrap: anywhere; }
+.sa-audit-facts dd .sa-cell-sub { display: block; }
+
+/* The change payload is the exception to "no monospace in prose": it is
+   data, shown only when asked for. */
+.sa-audit-json {
+	margin: 14px 0 0;
 	background: var(--lg-rail);
 	border: 1px solid var(--lg-border);
 	border-radius: 8px;
-	padding: 10px;
+	padding: 12px;
 	font-family: var(--lg-mono);
-	font-size: .7rem;
-	line-height: 1.5;
+	font-size: .72rem;
+	line-height: 1.55;
 	color: #3E5348;
 	white-space: pre-wrap;
-	word-break: break-all;
-	max-width: 420px;
-	max-height: 220px;
+	word-break: break-word;
+	max-height: 44vh;
 	overflow: auto;
 }
 
@@ -191,6 +256,8 @@
 @media (max-width: 620px) {
 	.sa-policy-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.sa-policy-foot .btn { width: 100%; }
+	.sa-audit-facts > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+	.sa-audit-close { width: 100%; }
 }
 @media (max-width: 420px) {
 	.sa-policy-grid { grid-template-columns: 1fr; }

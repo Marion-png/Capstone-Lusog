@@ -39,6 +39,15 @@
              and leave the network in the test path. -->
         <env name="ANTHROPIC_API_KEY" value=""/>
         <env name="GEMINI_API_KEY" value=""/>
+        <!-- Same rule for the FHIR receiver: no test may send a learner's
+             record anywhere. A test that transmits sets the endpoint itself
+             and fakes the HTTP client. -->
+        <env name="FHIR_ENDPOINT" value=""/>
+        <env name="FHIR_AUTH_TOKEN" value=""/>
+        <env name="FHIR_USERNAME" value=""/>
+        <env name="FHIR_PASSWORD" value=""/>
+        <env name="FHIR_DEIDENTIFY" value="true"/>
+        <env name="FHIR_AUTO_TRANSMIT" value="false"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

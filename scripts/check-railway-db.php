@@ -9,15 +9,15 @@
  * Read-only: it opens a connection, counts rows and tries one decryption. It
  * writes nothing, so it is safe to run against the shared database.
  */
-require __DIR__.'/../vendor/autoload.php';
-
-$app = require __DIR__.'/../bootstrap/app.php';
-$app->make(Kernel::class)->bootstrap();
-
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+
+require __DIR__.'/../vendor/autoload.php';
+
+$app = require __DIR__.'/../bootstrap/app.php';
+$app->make(Kernel::class)->bootstrap();
 
 $fail = 0;
 $ok = static function (string $m) {
@@ -136,7 +136,7 @@ if (! Schema::hasTable('accounts')) {
         }
         echo "\n";
 
-        $known = ['school_nurse', 'clinic_staff', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor', 'system_admin'];
+        $known = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor', 'system_admin'];
         $unknown = $accounts->pluck('role')->unique()->diff($known);
 
         if ($unknown->isEmpty()) {

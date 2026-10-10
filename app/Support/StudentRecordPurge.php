@@ -68,6 +68,11 @@ final class StudentRecordPurge
         'medical_certificates' => ['file_path'],
         'health_consent_forms' => ['paper_form_path'],
         'student_photos' => ['file_path'],
+        // The stored copy of every FHIR bundle sent about the learner. The
+        // fact that a disclosure happened stays on the audit trail (host,
+        // digest, date — nothing personal); the copy of what was disclosed
+        // goes with the record it was copied from.
+        'fhir_transmissions' => [],
     ];
 
     /**

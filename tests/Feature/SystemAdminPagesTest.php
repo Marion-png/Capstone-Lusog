@@ -180,7 +180,13 @@ class SystemAdminPagesTest extends TestCase
             ->assertSee('StudentHealthRecord #7')
             ->assertSee('adviser.store')
             ->assertSee('&quot;weight&quot;', false)
-            ->assertSee('2 entries shown');
+            ->assertSee('2 entries shown')
+            // View opens the entry in a dialog rather than unfolding it in
+            // the row; the row's own render is held in a template for it.
+            ->assertSee('id="auditBackdrop"', false)
+            ->assertSee('role="dialog"', false)
+            ->assertSee('<template id="sa-audit-entry-', false)
+            ->assertDontSee('<details class="sa-audit-details"', false);
 
         // Filtering narrows the list and offers the way back.
         $this->withSession($this->adminSession())
