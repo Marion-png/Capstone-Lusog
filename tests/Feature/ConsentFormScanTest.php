@@ -114,7 +114,7 @@ class ConsentFormScanTest extends TestCase
             $answers[$key] = $services[$key] ?? ConsentFormScanner::NOT_TICKED;
         }
 
-        return array_merge([
+        $draft = array_merge([
             'consent_choice' => HealthConsentForm::CONSENT_SPECIFIC,
             'services' => $answers,
             'parent_guardian_name' => 'Maria Cruz',
@@ -123,6 +123,30 @@ class ConsentFormScanTest extends TestCase
             'unreadable' => false,
             'note' => '',
         ], $overrides);
+
+        // The boxes agree with the summary unless a test says otherwise.
+        if (! array_key_exists('consent_boxes', $overrides)) {
+            $draft['consent_boxes'] = $this->boxes((string) $draft['consent_choice']);
+        }
+
+        return $draft;
+    }
+
+    /**
+     * The three consent boxes with only `$ticked` marked (none for anything
+     * else), each overridable.
+     *
+     * @param  array<string, string>  $overrides
+     * @return array<string, string>
+     */
+    private function boxes(string $ticked, array $overrides = []): array
+    {
+        $boxes = [];
+        foreach (array_keys(ConsentFormScanner::CONSENT_BOXES) as $box) {
+            $boxes[$box] = $box === $ticked ? ConsentFormScanner::TICKED : ConsentFormScanner::NOT_TICKED;
+        }
+
+        return array_merge($boxes, $overrides);
     }
 
     private function scanRequest()
@@ -253,6 +277,111 @@ class ConsentFormScanTest extends TestCase
         $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['services']['checkup']);
         $this->assertSame('', $draft['parent_guardian_name']);
         $this->assertFalse($draft['signature_present']);
+    }
+
+    // ── Whether the parent consented ─────────────────────────────────
+
+    /**
+     * The service list at the top of the letter was ticked by the school
+     * before it was printed. A reader that took it for the parent's answer
+     * reported "agreed to all" on every letter covering every service — so the
+     * answer is read from the parent's own three boxes, and a fully ticked
+     * service list decides nothing.
+     */
+    #[Test]
+    public function the_consent_is_read_from_the_parents_boxes_not_the_service_list(): void
+    {
+        $everyService = array_fill_keys(array_keys(ConsentFormScanner::serviceKeys()), ConsentFormScanner::TICKED);
+
+        $refused = ConsentFormScanner::interpret($this->draft($everyService, [
+            'consent_choice' => HealthConsentForm::CONSENT_DENY,
+            'written' => ['refusal_reason' => ['text' => 'Takot sa tusok', 'confident' => true, 'readable' => true]],
+        ]));
+        $this->assertSame(HealthConsentForm::CONSENT_DENY, $refused['consent_choice']);
+        $this->assertSame('', $refused['consent_reason']);
+
+        // Every service ticked, no consent box ticked: the parent has not
+        // answered, and "all" is the one thing this must not report.
+        $silent = ConsentFormScanner::interpret($this->draft($everyService, [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'consent_boxes' => $this->boxes(''),
+        ]));
+        $this->assertSame(ConsentFormScanner::UNCLEAR, $silent['consent_choice']);
+        $this->assertTrue($silent['needs_review']);
+    }
+
+    #[Test]
+    public function one_ticked_box_is_read_as_its_answer(): void
+    {
+        foreach (array_keys(ConsentFormScanner::CONSENT_BOXES) as $choice) {
+            $written = match ($choice) {
+                HealthConsentForm::CONSENT_SPECIFIC => ['consent_exceptions' => ['text' => 'Bakuna', 'confident' => true, 'readable' => true]],
+                HealthConsentForm::CONSENT_DENY => ['refusal_reason' => ['text' => 'Relihiyon', 'confident' => true, 'readable' => true]],
+                default => [],
+            };
+
+            $draft = ConsentFormScanner::interpret($this->draft([], [
+                'consent_choice' => $choice,
+                'written' => $written,
+            ]));
+
+            $this->assertSame($choice, $draft['consent_choice'], 'One tick in the '.$choice.' box is that answer.');
+            $this->assertSame('', $draft['consent_reason']);
+        }
+    }
+
+    /**
+     * Anything but one clear tick is unclear, and says why: the reason is what
+     * tells the adviser whether to look at the paper again or ask the parent.
+     */
+    #[Test]
+    public function a_sheet_that_does_not_say_one_thing_is_unclear(): void
+    {
+        $all = HealthConsentForm::CONSENT_ALL;
+        $deny = HealthConsentForm::CONSENT_DENY;
+
+        foreach ([
+            'no box ticked' => ['consent_boxes' => $this->boxes('')],
+            'two boxes ticked' => ['consent_boxes' => $this->boxes($all, [$deny => ConsentFormScanner::TICKED])],
+            'a box nobody could make out' => ['consent_boxes' => $this->boxes($all, [$deny => ConsentFormScanner::UNCLEAR])],
+            'an answer off the list' => ['consent_boxes' => $this->boxes($all, [$deny => 'maybe'])],
+            'a box left out' => ['consent_boxes' => array_diff_key($this->boxes($all), [$deny => true])],
+            'no boxes reported at all' => ['consent_boxes' => null],
+            'a summary that disagrees with the boxes' => ['consent_boxes' => $this->boxes($all), 'consent_choice' => $deny],
+            'a refusal written under an "Oo"' => [
+                'consent_boxes' => $this->boxes($all),
+                'written' => ['refusal_reason' => ['text' => 'Dili gusto', 'confident' => true, 'readable' => true]],
+            ],
+            'unreadable writing on another box\'s line' => [
+                'consent_boxes' => $this->boxes($deny),
+                'consent_choice' => $deny,
+                'written' => ['consent_exceptions' => ['text' => '', 'confident' => false, 'readable' => false]],
+            ],
+        ] as $because => $overrides) {
+            $draft = ConsentFormScanner::interpret($this->draft([], array_merge(['consent_choice' => $all], $overrides)));
+
+            $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['consent_choice'], 'Unclear when there is '.$because);
+            $this->assertNotSame('', $draft['consent_reason'], 'The adviser is told why for '.$because);
+            $this->assertTrue($draft['needs_review'], 'needs_review is set by '.$because);
+        }
+    }
+
+    /** The reader is made to answer for each of the three boxes. */
+    #[Test]
+    public function the_reader_is_asked_about_each_consent_box(): void
+    {
+        $schema = (new \ReflectionMethod(ConsentFormScanner::class, 'responseSchema'))
+            ->invoke(new ConsentFormScanner)['schema'];
+
+        $this->assertContains('consent_boxes', $schema['required']);
+        $this->assertSame(
+            array_keys(ConsentFormScanner::CONSENT_BOXES),
+            $schema['properties']['consent_boxes']['required'],
+        );
+        $this->assertSame(
+            [HealthConsentForm::CONSENT_ALL, HealthConsentForm::CONSENT_SPECIFIC, HealthConsentForm::CONSENT_DENY],
+            array_keys(ConsentFormScanner::CONSENT_BOXES),
+        );
     }
 
     // ── Availability and failure ─────────────────────────────────────
