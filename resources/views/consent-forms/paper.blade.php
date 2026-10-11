@@ -197,7 +197,11 @@
                 if (radio) { radio.checked = true; radio.dispatchEvent(new Event('change', { bubbles: true })); }
                 setFlag('consent_choice', '');
             } else {
-                setFlag('consent_choice', 'Could not tell which box was shaded — read it off the paper.');
+                // A guess left over from an earlier reading must not survive a
+                // reading that could not decide.
+                form.querySelectorAll('input[name="consent_choice"]').forEach((radio) => { radio.checked = false; });
+                syncConditionals();
+                setFlag('consent_choice', draft.consent_reason || 'Could not tell which box was ticked — read it off the paper.');
             }
 
             Object.entries(draft.written || {}).forEach(([field, entry]) => {
