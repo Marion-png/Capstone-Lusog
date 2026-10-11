@@ -18,6 +18,18 @@
 <body>
 @include('partials.nurse-lusog-sidebar', ['active' => 'exchange'])
 
+@php
+    // The shared status scale, as on the Nutritional Health Status list.
+    $fxStatusBadge = fn (string $status) => match ($status) {
+        'Severely Wasted' => 'badge-critical',
+        'Wasted', 'Underweight' => 'badge-risk',
+        'Normal' => 'badge-normal',
+        'Overweight', 'Obese' => 'badge-monitor',
+        default => 'badge-neutral',
+    };
+    $serverTone = $server['secure'] ? 'ok' : ($server['configured'] ? 'bad' : 'off');
+@endphp
+
 <div class="main">
     <header class="topbar">
         <div class="topbar-bc"><span>School Nurse</span><span class="bc-sep">&rsaquo;</span><span>Health Data Exchange</span></div>
@@ -40,37 +52,37 @@
             <p class="page-sub">HL7 FHIR R4 &middot; transaction bundles over HTTPS</p>
         </div>
 
+        <section class="card fx-server is-{{ $serverTone }}" aria-label="Receiving server">
+            <div class="fx-server-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><line x1="6" y1="7" x2="6.01" y2="7"/><line x1="6" y1="17" x2="6.01" y2="17"/></svg>
+            </div>
+            <div class="fx-server-main">
+                <div class="fx-server-label">Receiving Server</div>
+                <div class="fx-server-url">{{ $server['configured'] ? ($server['url'] ?: $server['host']) : 'Not configured' }}</div>
+            </div>
+            <dl class="fx-server-facts">
+                <div>
+                    <dt>Transport</dt>
+                    <dd>
+                        @if ($server['secure'])
+                            <span class="badge badge-normal">HTTPS &middot; TLS 1.2+</span>
+                        @elseif ($server['configured'])
+                            <span class="badge badge-critical">Not HTTPS &mdash; sending refused</span>
+                        @else
+                            <span class="badge badge-monitor">FHIR_ENDPOINT is empty</span>
+                        @endif
+                    </dd>
+                </div>
+                <div><dt>Credentials</dt><dd>{{ $server['auth'] === 'None' ? 'None' : $server['auth'] }}</dd></div>
+                <div>
+                    <dt>Disclosure</dt>
+                    <dd title="{{ $server['deidentified'] ? 'No name, no LRN, birth year only' : 'Name, LRN and birth date' }}">{{ $server['deidentified'] ? 'Pseudonymised' : 'Identified' }}</dd>
+                </div>
+                <div><dt>Auto-send</dt><dd>{{ $server['auto'] ? 'On examination' : 'Off' }}</dd></div>
+            </dl>
+        </section>
+
         <div class="kpi-grid">
-            <div class="card kpi {{ $server['secure'] ? 'accent-brand' : ($server['configured'] ? 'accent-danger' : 'accent-amber') }}">
-                <div class="kpi-top">
-                    <div class="kpi-label">Receiving Server</div>
-                    <div class="kpi-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><line x1="6" y1="7" x2="6.01" y2="7"/><line x1="6" y1="17" x2="6.01" y2="17"/></svg>
-                    </div>
-                </div>
-                <div class="kpi-value fx-kpi-text">{{ $server['configured'] ? $server['host'] : 'Not configured' }}</div>
-                <div class="kpi-hint">
-                    @if ($server['secure'])
-                        HTTPS &middot; TLS 1.2+ &middot; {{ $server['auth'] === 'None' ? 'no credentials' : $server['auth'] }}
-                    @elseif ($server['configured'])
-                        Not HTTPS &mdash; sending refused
-                    @else
-                        FHIR_ENDPOINT is empty
-                    @endif
-                </div>
-            </div>
-
-            <div class="card kpi accent-info">
-                <div class="kpi-top">
-                    <div class="kpi-label">Disclosure Mode</div>
-                    <div class="kpi-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    </div>
-                </div>
-                <div class="kpi-value fx-kpi-text">{{ $server['deidentified'] ? 'Pseudonymised' : 'Identified' }}</div>
-                <div class="kpi-hint">{{ $server['deidentified'] ? 'No name, no LRN, birth year only' : 'Name, LRN and birth date' }}{{ $server['auto'] ? ' · auto-send on examination' : '' }}</div>
-            </div>
-
             <div class="card kpi accent-success">
                 <div class="kpi-top">
                     <div class="kpi-label">Transmitted</div>
@@ -80,6 +92,28 @@
                 </div>
                 <div class="kpi-value">{{ number_format($counts['sent']) }}</div>
                 <div class="kpi-hint">{{ $counts['last_sent'] ? 'Last '.$counts['last_sent']->format('M j, Y g:i A') : 'None yet' }}</div>
+            </div>
+
+            <div class="card kpi accent-brand">
+                <div class="kpi-top">
+                    <div class="kpi-label">Learners Sent</div>
+                    <div class="kpi-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>
+                    </div>
+                </div>
+                <div class="kpi-value">{{ number_format($counts['learners_sent']) }}</div>
+                <div class="kpi-hint">of {{ number_format($learners->count()) }} on the roll</div>
+            </div>
+
+            <div class="card kpi accent-info">
+                <div class="kpi-top">
+                    <div class="kpi-label">Not Yet Sent</div>
+                    <div class="kpi-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                    </div>
+                </div>
+                <div class="kpi-value">{{ number_format($counts['learners_unsent']) }}</div>
+                <div class="kpi-hint">This school year</div>
             </div>
 
             <div class="card kpi {{ $counts['failed'] > 0 ? 'accent-danger' : 'accent-info' }}">
@@ -95,48 +129,65 @@
         </div>
 
         <section class="fx-section">
-            <div class="card-head">
-                <div>
-                    <div class="card-title">Learners</div>
-                    <div class="card-sub">{{ number_format($learners->count()) }} on this school year's roll</div>
-                </div>
-            </div>
-
-            <div class="toolbar">
-                <div style="flex:1;min-width:240px">
-                    <label class="field-label" for="fxSearch">Search</label>
-                    <div class="lg-search">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        <input type="text" id="fxSearch" placeholder="Name, LRN, grade or section" autocomplete="off">
+            <div class="table-card">
+                <div class="fx-card-head">
+                    <div>
+                        <div class="card-title">Learners</div>
+                        <div class="card-sub">{{ number_format($learners->count()) }} on this school year's roll</div>
+                    </div>
+                    <div class="fx-card-tools">
+                        <div class="fx-seg" role="group" aria-label="Filter learners">
+                            <button type="button" class="is-active" data-filter="all" aria-pressed="true">All <span class="fx-seg-count">{{ number_format($learners->count()) }}</span></button>
+                            <button type="button" data-filter="unsent" aria-pressed="false">Not Yet Sent <span class="fx-seg-count">{{ number_format($counts['learners_unsent']) }}</span></button>
+                            <button type="button" data-filter="sent" aria-pressed="false">Sent <span class="fx-seg-count">{{ number_format($counts['learners_sent']) }}</span></button>
+                        </div>
+                        <div class="lg-search">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text" id="fxSearch" placeholder="Name, LRN, grade or section" autocomplete="off" aria-label="Search learners">
+                        </div>
                     </div>
                 </div>
-                <div class="spacer"></div>
-                <div class="toolbar-count" id="fxCount">{{ number_format($learners->count()) }} learners</div>
-            </div>
 
-            <div class="table-card">
                 <div class="table-scroll">
                     <table>
                         <thead>
                             <tr>
                                 <th>Learner</th>
-                                <th>LRN</th>
                                 <th>Grade &amp; Section</th>
                                 <th>Nutritional Status</th>
                                 <th>Last Sent</th>
+                                <th>Patient ID</th>
                             </tr>
                         </thead>
                         <tbody id="fxLearners">
                             @forelse ($learners as $learner)
                                 @php $gradeSection = trim($learner['grade'].($learner['section'] !== '' ? ' — '.$learner['section'] : '')); @endphp
-                                <tr class="js-fx-row" data-search="{{ mb_strtolower($learner['name'].' '.$learner['lrn'].' '.$gradeSection) }}">
+                                <tr class="js-fx-row"
+                                    data-sent="{{ $learner['transmission'] ? '1' : '0' }}"
+                                    data-search="{{ mb_strtolower($learner['name'].' '.$learner['lrn'].' '.$gradeSection.' '.($learner['patient']['id'] ?? '')) }}">
                                     <td class="fx-name is-link">
-                                        <a href="{{ route('dashboard.school-nurse.data-exchange.preview', $learner['lrn']) }}">{{ $learner['name'] !== '' ? $learner['name'] : $learner['lrn'] }}</a>
+                                        <a href="{{ route('dashboard.school-nurse.data-exchange.preview', $learner['lrn']) }}">
+                                            {{ $learner['name'] !== '' ? $learner['name'] : $learner['lrn'] }}
+                                            <span class="fx-name-sub">LRN {{ $learner['lrn'] }}</span>
+                                        </a>
                                     </td>
-                                    <td class="tnum">{{ $learner['lrn'] }}</td>
                                     <td>{{ $gradeSection !== '' ? $gradeSection : '—' }}</td>
-                                    <td>{{ $learner['status'] !== '' ? $learner['status'] : 'Not measured' }}</td>
-                                    <td class="tnum">{{ $learner['last_sent'] ? $learner['last_sent']->format('M j, Y g:i A') : '—' }}</td>
+                                    <td><span class="badge {{ $fxStatusBadge($learner['status']) }}">{{ $learner['status'] !== '' ? $learner['status'] : 'Not measured' }}</span></td>
+                                    <td class="tnum fx-nowrap">
+                                        @if ($learner['last_sent'])
+                                            {{ $learner['last_sent']->format('M j, Y') }}
+                                            <span class="fx-time">{{ $learner['last_sent']->format('g:i A') }}</span>
+                                        @else
+                                            <span class="muted">—</span>
+                                        @endif
+                                    </td>
+                                    <td class="fx-nowrap">
+                                        @if ($learner['patient'])
+                                            <a class="fx-id is-link" href="{{ route('dashboard.school-nurse.data-exchange.transmission', $learner['transmission']) }}" title="{{ $learner['patient']['url'] }}">{{ $learner['patient']['id'] }}</a>
+                                        @else
+                                            <span class="muted">—</span>
+                                        @endif
+                                    </td>
                                 </tr>
                             @empty
                                 <tr><td colspan="5" class="table-empty">No learners on this school year's roll.</td></tr>
@@ -145,53 +196,58 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="fx-card-foot" id="fxCount">{{ number_format($learners->count()) }} {{ $learners->count() === 1 ? 'learner' : 'learners' }}</div>
             </div>
         </section>
 
         <section class="fx-section">
-            <div class="card-head">
-                <div>
-                    <div class="card-title">Transmission Log</div>
-                    <div class="card-sub">Most recent first</div>
-                </div>
-            </div>
-
             <div class="table-card">
+                <div class="fx-card-head">
+                    <div>
+                        <div class="card-title">Transmission Log</div>
+                        <div class="card-sub">Most recent first</div>
+                    </div>
+                </div>
+
                 <div class="table-scroll">
                     <table>
                         <thead>
                             <tr>
                                 <th>Date &amp; Time</th>
                                 <th>Learner</th>
+                                <th>Patient ID</th>
                                 <th>Server</th>
                                 <th class="num">Resources</th>
                                 <th>Status</th>
                                 <th class="num">HTTP</th>
-                                <th>SHA-256</th>
                                 <th>Sent By</th>
                             </tr>
                         </thead>
                         <tbody>
                             @forelse ($transmissions as $transmission)
                                 @php
-                                    $badge = match ($transmission->status) {
-                                        'sent' => ['badge-normal', 'Sent'],
-                                        'blocked' => ['badge-critical', 'Refused'],
-                                        'pending' => ['badge-monitor', 'Pending'],
-                                        default => ['badge-risk', 'Failed'],
-                                    };
                                     $when = $transmission->sent_at ?? $transmission->created_at;
+                                    $logPatient = $transmission->patientOutcome();
                                 @endphp
                                 <tr>
                                     <td class="fx-name is-link tnum">
-                                        <a href="{{ route('dashboard.school-nurse.data-exchange.transmission', $transmission) }}">{{ $when?->format('M j, Y g:i A') }}</a>
+                                        <a href="{{ route('dashboard.school-nurse.data-exchange.transmission', $transmission) }}">
+                                            {{ $when?->format('M j, Y') }}
+                                            <span class="fx-name-sub is-plain">{{ $when?->format('g:i:s A') }} &middot; #{{ $transmission->id }}</span>
+                                        </a>
                                     </td>
                                     <td>{{ $names[$transmission->student_lrn] ?? $transmission->student_lrn }}</td>
+                                    <td class="fx-nowrap">
+                                        @if ($logPatient)
+                                            <span class="fx-id" title="{{ $logPatient['url'] }}">{{ $logPatient['id'] }}</span>
+                                        @else
+                                            <span class="muted">—</span>
+                                        @endif
+                                    </td>
                                     <td>{{ $transmission->endpoint_host ?: '—' }}</td>
                                     <td class="num">{{ $transmission->resource_count }}</td>
-                                    <td><span class="badge {{ $badge[0] }}">{{ $badge[1] }}</span></td>
+                                    <td>@include('partials.fhir-status-badge', ['status' => $transmission->status])</td>
                                     <td class="num">{{ $transmission->http_status ?: '—' }}</td>
-                                    <td><span class="fx-hash" title="{{ $transmission->payload_sha256 }}">{{ substr((string) $transmission->payload_sha256, 0, 12) }}…</span></td>
                                     <td>{{ $transmission->sent_by_name ?: ($transmission->trigger === 'console' ? 'Console' : '—') }}</td>
                                 </tr>
                             @empty
@@ -216,18 +272,38 @@
     const rows = Array.from(body.querySelectorAll('.js-fx-row'));
     const none = document.getElementById('fxNoMatch');
     const count = document.getElementById('fxCount');
+    const filters = Array.from(document.querySelectorAll('[data-filter]'));
+    let filter = 'all';
 
-    search.addEventListener('input', () => {
+    const apply = () => {
         const term = search.value.trim().toLowerCase();
         let shown = 0;
         rows.forEach((row) => {
-            const show = !term || (row.dataset.search || '').includes(term);
+            const sent = row.dataset.sent === '1';
+            const inFilter = filter === 'all' || (filter === 'sent' ? sent : !sent);
+            const show = inFilter && (!term || (row.dataset.search || '').includes(term));
             row.hidden = !show;
             if (show) shown += 1;
         });
-        if (none) none.hidden = rows.length === 0 || shown > 0;
+        if (none) {
+            none.hidden = rows.length === 0 || shown > 0;
+            none.querySelector('td').textContent = term ? 'No learner matches your search.' : 'No learner in this view.';
+        }
         if (count) count.textContent = shown.toLocaleString() + (shown === 1 ? ' learner' : ' learners');
+    };
+
+    filters.forEach((button) => {
+        button.addEventListener('click', () => {
+            filter = button.dataset.filter;
+            filters.forEach((other) => {
+                other.classList.toggle('is-active', other === button);
+                other.setAttribute('aria-pressed', other === button ? 'true' : 'false');
+            });
+            apply();
+        });
     });
+
+    search.addEventListener('input', apply);
 })();
 </script>
 </body>

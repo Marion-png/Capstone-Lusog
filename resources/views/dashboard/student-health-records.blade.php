@@ -378,17 +378,10 @@
             </div>
             {{-- The nurse also records the examination, so Print sits beside it. --}}
             <div class="sp-identity-actions">
-                <button type="button" class="btn btn-secondary" id="profilePrint">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                    Print
-                </button>
-                {{-- The MLAT as the clinic's own two-sheet workbook, so it can
-                     be filed rather than retyped (App\Support\MlatWorkbook).
-                     The href is set per learner when the profile opens. --}}
-                <a href="#" class="btn btn-secondary" id="profileDownloadMlat" data-mlat-url="{{ route('student-mlat.download', ['lrn' => '__LRN__']) }}" hidden>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Download MLAT
-                </a>
+                {{-- Print and Download, one MLAT sheet at a time, in the clinic's
+                     own form (App\Support\MlatWorkbook). Pointed at the learner
+                     when the profile opens. --}}
+                @include('partials.mlat-menus', ['mlatId' => 'profileMlatMenus'])
                 {{-- Opens the consultation dialog over this profile, with the
                      learner already filled in — the profile stays behind it
                      rather than being navigated away from. --}}
@@ -643,6 +636,7 @@
 </div>{{-- /.profile-backdrop --}}
 
 @include('partials.sheet2-review-script')
+@include('partials.mlat-menus-script')
 @include('partials.student-documents-script')
 @include('partials.student-incidents-script')
 
@@ -651,7 +645,6 @@
     const backdrop = document.getElementById('profileBackdrop');
     const rows = Array.from(document.querySelectorAll('.js-record-row'));
     const closeBtn = document.getElementById('profileClose');
-    const printBtn = document.getElementById('profilePrint');
     const fillLink = document.getElementById('profileFillLink');
     const consultLink = document.getElementById('profileConsultLink');
     const openLrn = new URLSearchParams(window.location.search).get('open') || '';
@@ -1030,16 +1023,9 @@
             consultLink.dataset.consultLrn = lrn;
         }
 
-        // The MLAT download is keyed by LRN; a row with none has no record
-        // on file to write out, so the link is hidden rather than dangling.
-        const mlatLink = document.getElementById('profileDownloadMlat');
-        if (mlatLink) {
-            const lrn = String(record.lrn || '').trim();
-            mlatLink.hidden = lrn === '';
-            mlatLink.href = lrn === ''
-                ? '#'
-                : (mlatLink.dataset.mlatUrl || '').replace('__LRN__', encodeURIComponent(lrn));
-        }
+        // The MLAT's Print and Download are keyed by LRN; a row with none has
+        // no record on file to write out, so the menus hide rather than dangle.
+        window.MlatMenus?.setLearner(document.getElementById('profileMlatMenus'), record.lrn);
         const fullName = [record.last_name, ',', record.first_name, record.middle_name ? (' ' + String(record.middle_name).charAt(0).toUpperCase() + '.') : '']
             .join(' ')
             .replace(' ,', ',')
@@ -1656,9 +1642,6 @@
 
     if (closeBtn) {
         closeBtn.addEventListener('click', closeProfile);
-    }
-    if (printBtn) {
-        printBtn.addEventListener('click', () => window.print());
     }
 
     // ── The consultation dialog stacks over the profile ──────────────

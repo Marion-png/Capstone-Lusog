@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\MlatExportController;
 use App\Models\AuditLog;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
@@ -351,26 +352,286 @@ class MlatExportTest extends TestCase
         $this->assertStringContainsString('E. VITAL SIGNS & ANTHROPOMETRICS', $flat);
     }
 
-    /** Both profiles offer the download. */
+    /** Both profiles offer Print and Download as a menu of the two sheets. */
     #[Test]
-    public function both_profiles_offer_the_download(): void
+    public function both_profiles_offer_print_and_download_per_sheet(): void
     {
         $this->learner();
 
-        $this->withSession(array_merge($this->sessionFor('school_nurse'), ['school_health_card_records' => [[
+        // The nurse's profile is one dialog reused for every learner, so its
+        // menus carry the LRN as a placeholder until a profile opens.
+        $nurse = $this->withSession(array_merge($this->sessionFor('school_nurse'), ['school_health_card_records' => [[
             'lrn' => '109876543201', 'last_name' => 'Penduko', 'first_name' => 'Pedro', 'grade_level' => 'Grade 8', 'section' => 'Sampaguita',
         ]]]))
             ->get(route('dashboard.student-health-records'))
             ->assertOk()
-            ->assertSee('id="profileDownloadMlat"', false)
-            ->assertSee('Download MLAT');
+            ->assertSee('id="profileMlatMenus"', false)
+            ->assertSeeInOrder(['Print', 'MLAT Sheet 1', 'MLAT Sheet 2', 'Download', 'MLAT Sheet 1', 'MLAT Sheet 2']);
+        foreach ([1, 2] as $sheet) {
+            $nurse->assertSee(route('student-mlat.print', ['lrn' => '__LRN__', 'sheet' => $sheet]), false);
+            $nurse->assertSee(route('student-mlat.download', ['lrn' => '__LRN__', 'sheet' => $sheet]), false);
+        }
 
-        $this->withSession(array_merge($this->sessionFor('class_adviser'), ['school_health_card_records' => [[
+        $adviser = $this->withSession(array_merge($this->sessionFor('class_adviser'), ['school_health_card_records' => [[
             'lrn' => '109876543201', 'last_name' => 'Penduko', 'first_name' => 'Pedro', 'grade_level' => 'Grade 8', 'section' => 'Sampaguita',
         ]]]))
             ->get(route('dashboard.class-adviser.student-profile', '109876543201'))
             ->assertOk()
-            ->assertSee(route('student-mlat.download', '109876543201'))
-            ->assertSee('Download MLAT');
+            ->assertSee('id="vpMlatMenus"', false)
+            ->assertSeeInOrder(['Print', 'MLAT Sheet 1', 'MLAT Sheet 2', 'Download', 'MLAT Sheet 1', 'MLAT Sheet 2']);
+        foreach ([1, 2] as $sheet) {
+            $adviser->assertSee(route('student-mlat.print', ['lrn' => '109876543201', 'sheet' => $sheet]), false);
+            $adviser->assertSee(route('student-mlat.download', ['lrn' => '109876543201', 'sheet' => $sheet]), false);
+        }
+    }
+
+    // ── One sheet at a time ─────────────────────────────────────────
+
+    /** Sheet 1's layout is the one the clinic approved: no in-row merges, rules or wrapping were added to it. */
+    #[Test]
+    public function sheet_one_keeps_its_layout(): void
+    {
+        $sheet = MlatWorkbook::build($this->learner())['sheets'][0];
+
+        foreach ($sheet['rows'] as $row) {
+            $this->assertSame([], $row['merges']);
+            $this->assertFalse($row['ruled']);
+            $this->assertFalse($row['wrap']);
+        }
+        $this->assertSame([40, 34, 22, 26, 26, 14, 14, 16], $sheet['widths']);
+        $this->assertSame('landscape', $sheet['orientation']);
+    }
+
+    /**
+     * Sheet 2 in the form's format: the body-systems table ruled and as wide
+     * as the form, the notes and the nurse's prose wrapping inside it.
+     */
+    #[Test]
+    public function sheet_two_is_formatted_as_a_form(): void
+    {
+        $sheet = MlatWorkbook::build($this->learner())['sheets'][1];
+        $row = fn (string $label): array => collect($sheet['rows'])->first(fn ($r) => str_starts_with($r['cells'][0] ?? '', $label));
+
+        $this->assertSame('portrait', $sheet['orientation']);
+        $this->assertSame([34, 38, 34, 26, 26, 12], $sheet['widths']);
+
+        // F. A ruled table whose notes column runs C to F.
+        $head = $row('Body System');
+        $this->assertSame(MlatWorkbook::R_HEAD, $head['register']);
+        $this->assertTrue($head['ruled']);
+        $this->assertSame([[2, 5]], $head['merges']);
+        foreach (array_values(Sheet2Review::SYSTEMS) as $system) {
+            $this->assertTrue($row($system)['ruled'], $system.' is a line of the ruled table.');
+            $this->assertTrue($row($system)['wrap']);
+            $this->assertSame([[2, 5]], $row($system)['merges']);
+        }
+
+        // I. and J. wrap inside the form's width.
+        $this->assertSame([[2, 3], [4, 5]], $row('Status:')['merges']);
+        $this->assertSame([[1, 5]], $row('Summary of Findings')['merges']);
+        $this->assertTrue($row('Summary of Findings')['wrap']);
+        $this->assertSame([[1, 5]], $row('Recommendations')['merges']);
+    }
+
+    private function readWorkbook(string $contents): array
+    {
+        $path = tempnam(sys_get_temp_dir(), 'mlat-read-').'.xlsx';
+        file_put_contents($path, $contents);
+
+        $reader = new XlsxReader;
+        $reader->open($path);
+        $sheets = [];
+        foreach ($reader->getSheetIterator() as $sheet) {
+            $rows = [];
+            foreach ($sheet->getRowIterator() as $row) {
+                $rows[] = array_map(fn ($v) => trim((string) $v), $row->toArray());
+            }
+            $sheets[$sheet->getName()] = $rows;
+        }
+        $reader->close();
+
+        $zip = new \ZipArchive;
+        $zip->open($path);
+        $xml = (string) $zip->getFromName('xl/worksheets/sheet1.xml');
+        $zip->close();
+        @unlink($path);
+
+        return [$sheets, $xml];
+    }
+
+    /** Each sheet downloads on its own, named for the sheet, in its own columns. */
+    #[Test]
+    public function each_sheet_downloads_on_its_own(): void
+    {
+        if (! class_exists(XlsxWriter::class)) {
+            $this->markTestSkipped('OpenSpout is not installed on this machine (composer.lock pins it to PHP 8.4).');
+        }
+
+        // A summary long enough to need several lines.
+        $record = $this->learner();
+        $details = $record->student_details;
+        $details['systems_review']['summary'] = str_repeat('Controlled bronchial asthma with seasonal flare-ups. ', 6);
+        $record->forceFill(['student_details' => $details])->save();
+
+        $one = $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('student-mlat.download', ['lrn' => '109876543201', 'sheet' => 1]))
+            ->assertOk();
+        $this->assertStringContainsString('MLAT-Pedro-Penduko-Sheet-1.xlsx', (string) $one->headers->get('Content-Disposition'));
+        [$sheets, $xml] = $this->readWorkbook($one->getFile()->getContent());
+        $this->assertSame(['Sheet 1'], array_keys($sheets));
+        $this->assertSame(MlatWorkbook::SHEET_ONE, $sheets['Sheet 1'][1][0]);
+        $this->assertStringContainsString('<col min="1" max="1" width="40"', $xml);
+        $this->assertStringContainsString('orientation="landscape"', $xml);
+
+        $two = $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('student-mlat.download', ['lrn' => '109876543201', 'sheet' => 2]))
+            ->assertOk();
+        $this->assertStringContainsString('MLAT-Pedro-Penduko-Sheet-2.xlsx', (string) $two->headers->get('Content-Disposition'));
+        [$sheets, $xml] = $this->readWorkbook($two->getFile()->getContent());
+        $this->assertSame(['Sheet 2'], array_keys($sheets));
+        $this->assertSame(MlatWorkbook::SHEET_TWO, $sheets['Sheet 2'][1][0]);
+
+        // Its own columns — it used to be written in Sheet 1's.
+        $this->assertStringContainsString('<col min="1" max="1" width="34"', $xml);
+        $this->assertStringContainsString('<col min="2" max="2" width="38"', $xml);
+        $this->assertStringContainsString('orientation="portrait"', $xml);
+        // The notes column merged C–F on the heading row (row 5).
+        $this->assertStringContainsString('<mergeCell ref="C5:F5"/>', $xml);
+        // The summary wraps, and its merged row is tall enough to show it.
+        // (The reader skips blank rows, so the row number comes from the model.)
+        $summaryRow = collect(MlatWorkbook::build($record->fresh())['sheets'][1]['rows'])
+            ->search(fn ($r) => ($r['cells'][0] ?? '') === 'Summary of Findings:') + 1;
+        $this->assertSame(1, preg_match('/<row r="'.$summaryRow.'"[^>]* ht="(\d+)/', $xml, $height));
+        $this->assertGreaterThan(16, (int) $height[1]);
+        $this->assertStringContainsString('<mergeCell ref="B'.$summaryRow.':F'.$summaryRow.'"/>', $xml);
+
+        $this->assertTrue(
+            AuditLog::query()->where('action', 'downloaded')->get()->contains(fn ($log) => str_contains((string) $log->description, 'MLAT Sheet 2')),
+            'The audit trail says which sheet left the school.'
+        );
+    }
+
+    #[Test]
+    public function an_unknown_sheet_is_not_found(): void
+    {
+        $this->learner();
+
+        foreach (['3', '0', 'x'] as $sheet) {
+            $this->withSession($this->sessionFor('school_nurse'))
+                ->get(route('student-mlat.download', ['lrn' => '109876543201', 'sheet' => $sheet]))
+                ->assertNotFound();
+            $this->withSession($this->sessionFor('school_nurse'))
+                ->get(route('student-mlat.print', ['lrn' => '109876543201', 'sheet' => $sheet]))
+                ->assertNotFound();
+        }
+
+        // Printing is always one sheet.
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('student-mlat.print', '109876543201'))
+            ->assertNotFound();
+    }
+
+    // ── Print ───────────────────────────────────────────────────────
+
+    /** The printed sheet is laid out from the same model as the file, in the same registers. */
+    #[Test]
+    public function each_sheet_prints_as_the_form(): void
+    {
+        $this->learner();
+
+        $one = $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('student-mlat.print', ['lrn' => '109876543201', 'sheet' => 1]))
+            ->assertOk()
+            ->assertSee('data-mlat-sheet="MLAT Sheet 1"', false)
+            ->assertSee('size: landscape', false)
+            ->assertSee(MlatWorkbook::TITLE)
+            ->assertSee(MlatWorkbook::SHEET_ONE)
+            ->assertSee('E. VITAL SIGNS &amp; ANTHROPOMETRICS', false)
+            ->assertSee('Pedro Penduko')
+            ->assertSee('15.56 (Severely Wasted)');
+        $this->assertSame(8, substr_count($one->getContent(), '<col style='), 'Sheet 1 prints in its eight columns.');
+
+        $two = $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('student-mlat.print', ['lrn' => '109876543201', 'sheet' => 2]))
+            ->assertOk()
+            ->assertSee('data-mlat-sheet="MLAT Sheet 2"', false)
+            ->assertSee('size: portrait', false)
+            ->assertSee(MlatWorkbook::SHEET_TWO)
+            ->assertDontSee(MlatWorkbook::SHEET_ONE)
+            ->assertSee('Controlled bronchial asthma.');
+        $this->assertSame(6, substr_count($two->getContent(), '<col style='), 'Sheet 2 prints in its six columns.');
+        $this->assertStringContainsString('class="r-head is-ruled"', $two->getContent());
+
+        $this->assertTrue(AuditLog::query()->where('action', 'printed')->exists(), 'Printing is on the audit trail.');
+    }
+
+    /** Whatever was typed about the child prints as text, and a date never splits across lines. */
+    #[Test]
+    public function the_printed_sheet_escapes_what_was_typed(): void
+    {
+        $record = $this->learner();
+        $details = $record->student_details;
+        $details['systems_review']['summary'] = '<script>alert(1)</script> & <b>bold</b>';
+        $record->forceFill(['student_details' => $details])->save();
+
+        $html = $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('student-mlat.print', ['lrn' => '109876543201', 'sheet' => 2]))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringNotContainsString('<script>alert(1)', $html);
+        $this->assertStringNotContainsString('<b>bold</b>', $html);
+        $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt; &amp; &lt;b&gt;bold&lt;/b&gt;', $html);
+        $this->assertStringContainsString('Date Record Reviewed: <span class="mlat-date">2026-08-02</span>', $html);
+    }
+
+    /** Print is guarded exactly as the download is. */
+    #[Test]
+    public function the_print_is_scoped_to_the_clinic_and_the_learners_adviser(): void
+    {
+        $this->learner();
+        $url = route('student-mlat.print', ['lrn' => '109876543201', 'sheet' => 1]);
+
+        $this->withSession($this->sessionFor('school_head'))->get($url)->assertForbidden();
+        $this->withSession(array_merge($this->sessionFor('class_adviser'), ['assigned_section' => 'Rizal']))->get($url)->assertForbidden();
+        $this->withSession($this->sessionFor('class_adviser'))->get($url)->assertOk();
+
+        $other = Institution::create(['name' => 'Other School', 'status' => 'active']);
+        $this->withSession(array_merge($this->sessionFor('school_nurse'), ['active_institution_id' => $other->id]))
+            ->get($url)
+            ->assertNotFound();
+    }
+
+    /**
+     * Where the file has no merge, the printed sheet lets text run on over
+     * the empty cells beside it as the spreadsheet does — and keeps every
+     * column its own where the form rules a table or shades a heading.
+     */
+    #[Test]
+    public function the_printed_layout_follows_the_spreadsheet(): void
+    {
+        $workbook = MlatWorkbook::build($this->learner(), 'San Antonio National High School');
+        $byFirst = fn (array $rows, string $label): array => collect($rows)->first(fn ($r) => ($r['cells'][0]['text'] ?? '') === $label);
+
+        $one = MlatExportController::printRows($workbook['sheets'][0]);
+        $this->assertSame([['text' => MlatWorkbook::TITLE, 'span' => 8]], $one[0]['cells']);
+        // "Pedro Penduko" runs on over the empty third column.
+        $this->assertSame(
+            [['text' => 'Name of Learner:', 'span' => 1], ['text' => 'Pedro Penduko', 'span' => 2], ['text' => 'Learner ID / Grade & Section:', 'span' => 1], ['text' => '109876543201 / Grade 8 - Sampaguita', 'span' => 4]],
+            $byFirst($one, 'Name of Learner:')['cells']
+        );
+        // The measurements heading keeps all eight of its columns.
+        $this->assertCount(8, $byFirst($one, 'Evaluation Period')['cells']);
+
+        $two = MlatExportController::printRows($workbook['sheets'][1]);
+        $this->assertSame(
+            [['text' => 'Genitourinary', 'span' => 1], ['text' => '', 'span' => 1], ['text' => '', 'span' => 4]],
+            $byFirst($two, 'Genitourinary')['cells'],
+            'A blank line of the ruled table stays three ruled cells.'
+        );
+        $this->assertSame(
+            [['text' => 'Summary of Findings:', 'span' => 1], ['text' => 'Controlled bronchial asthma.', 'span' => 5]],
+            $byFirst($two, 'Summary of Findings:')['cells']
+        );
     }
 }

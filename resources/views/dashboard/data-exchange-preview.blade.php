@@ -49,29 +49,46 @@
             Health Data Exchange
         </a>
 
-        <div class="page-header">
-            <div class="card-head" style="margin-bottom:0">
-                <div>
-                    <div class="page-eyebrow">FHIR R4 &middot; Transaction Bundle</div>
-                    <h1 class="page-title">{{ $learnerName }} <span>Bundle</span></h1>
-                    <p class="page-sub">LRN {{ $record->student_id }}{{ $gradeSection !== '' ? ' · '.$gradeSection : '' }} &middot; S.Y. {{ $record->school_year }}</p>
-                </div>
-                <div class="fx-actions">
-                    <a href="{{ route('dashboard.school-nurse.data-exchange.download', $record->student_id) }}" class="btn btn-secondary">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        Download JSON
-                    </a>
-                    <form method="POST" action="{{ route('dashboard.school-nurse.data-exchange.transmit', $record->student_id) }}"
-                          data-confirm="Send {{ $learnerName }}'s record to {{ $server['host'] ?: 'the receiving server' }}?">
-                        @csrf
-                        <button type="submit" class="btn btn-primary" @disabled(! $server['configured'])>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                            Transmit
-                        </button>
-                    </form>
-                </div>
+        <div class="page-header fx-page-header">
+            <div>
+                <div class="page-eyebrow">FHIR R4 &middot; Transaction Bundle</div>
+                <h1 class="page-title">{{ $learnerName }} <span>Bundle</span></h1>
+                <p class="page-sub">LRN {{ $record->student_id }}{{ $gradeSection !== '' ? ' · '.$gradeSection : '' }} &middot; S.Y. {{ $record->school_year }}</p>
+            </div>
+            <div class="fx-actions">
+                <a href="{{ route('dashboard.school-nurse.data-exchange.download', $record->student_id) }}" class="btn btn-secondary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Download JSON
+                </a>
+                <form method="POST" action="{{ route('dashboard.school-nurse.data-exchange.transmit', $record->student_id) }}"
+                      data-confirm="Send {{ $learnerName }}'s record to {{ $server['host'] ?: 'the receiving server' }}?">
+                    @csrf
+                    <button type="submit" class="btn btn-primary" @disabled(! $server['configured'])>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        Transmit
+                    </button>
+                </form>
             </div>
         </div>
+
+        @if ($patient)
+            <section class="fx-onserver" aria-label="On the receiving server">
+                <div class="fx-onserver-id">
+                    <div class="fx-pid-label">Patient ID</div>
+                    <div class="fx-onserver-value">
+                        <span class="fx-id is-lg">{{ $patient['id'] }}</span>
+                        <button type="button" class="fx-copy" data-copy-text="{{ $patient['id'] }}">Copy ID</button>
+                    </div>
+                </div>
+                <div class="fx-onserver-url">
+                    <div class="fx-pid-label">
+                        Resource URL
+                        <a href="{{ route('dashboard.school-nurse.data-exchange.transmission', $latestSent) }}" class="fx-onserver-link">#{{ $latestSent->id }} &middot; {{ ($latestSent->sent_at ?? $latestSent->created_at)?->format('M j, Y g:i A') }}</a>
+                    </div>
+                    @include('partials.fhir-read-url', ['outcome' => $patient])
+                </div>
+            </section>
+        @endif
 
         <div class="kpi-grid">
             <div class="card kpi accent-brand">
@@ -161,18 +178,16 @@
                     @else
                         <ul class="fx-history">
                             @foreach ($history as $item)
-                                @php
-                                    $badge = match ($item->status) {
-                                        'sent' => ['badge-normal', 'Sent'],
-                                        'blocked' => ['badge-critical', 'Refused'],
-                                        'pending' => ['badge-monitor', 'Pending'],
-                                        default => ['badge-risk', 'Failed'],
-                                    };
-                                @endphp
+                                @php $itemPatient = $item->patientOutcome(); @endphp
                                 <li>
                                     <a href="{{ route('dashboard.school-nurse.data-exchange.transmission', $item) }}">
-                                        <span class="tnum">{{ ($item->sent_at ?? $item->created_at)?->format('M j, Y g:i A') }}</span>
-                                        <span class="badge {{ $badge[0] }}">{{ $badge[1] }}</span>
+                                        <span class="fx-history-when">
+                                            <span class="tnum">{{ ($item->sent_at ?? $item->created_at)?->format('M j, Y g:i A') }}</span>
+                                            @if ($itemPatient)
+                                                <span class="fx-id">{{ $itemPatient['id'] }}</span>
+                                            @endif
+                                        </span>
+                                        @include('partials.fhir-status-badge', ['status' => $item->status])
                                     </a>
                                 </li>
                             @endforeach

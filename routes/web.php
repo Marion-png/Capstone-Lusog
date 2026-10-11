@@ -886,6 +886,10 @@ Route::delete('/health-records/students/{lrn}/incidents/{id}', [StudentIncidentR
 // prototype nurse session to class_adviser on an /adviser/* URL.
 Route::get('/health-records/students/{lrn}/mlat', [MlatExportController::class, 'download'])
     ->name('student-mlat.download');
+// One sheet of the same form as a page to print — the model the workbook is
+// written from, laid out for paper.
+Route::get('/health-records/students/{lrn}/mlat/print', [MlatExportController::class, 'printSheet'])
+    ->name('student-mlat.print');
 
 Route::get('/health-records/students/{lrn}/vitals', [StudentVitalSignsController::class, 'show'])
     ->name('student-vitals.show');
@@ -1021,9 +1025,12 @@ Route::post('/announcements/{announcement}/restore', [AnnouncementController::cl
     ->whereNumber('announcement')
     ->name('announcements.restore');
 
-// Dashboard upcoming events — create/remove restricted to Event::CREATOR_ROLES (school_nurse for now)
+// Dashboard upcoming events — create/edit/remove restricted to Event::CREATOR_ROLES (school_nurse for now)
 Route::post('/events', [EventController::class, 'store'])
     ->name('events.store');
+Route::post('/events/{event}/update', [EventController::class, 'update'])
+    ->whereNumber('event')
+    ->name('events.update');
 Route::post('/events/{event}/delete', [EventController::class, 'destroy'])
     ->whereNumber('event')
     ->name('events.destroy');

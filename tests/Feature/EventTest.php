@@ -166,6 +166,127 @@ class EventTest extends TestCase
         $this->assertSame(0, Event::count());
     }
 
+    private function postedEvent(?int $institutionId = null): Event
+    {
+        return Event::create([
+            'institution_id' => $institutionId ?? $this->institution->id,
+            'title' => 'Deworming Day',
+            'description' => 'Bring signed consent forms.',
+            'event_date' => now()->addDays(3)->toDateString(),
+            'category' => 'program',
+            'created_by_name' => 'Nurse Reyes',
+            'created_by_role' => 'school_nurse',
+        ]);
+    }
+
+    #[Test]
+    public function school_nurse_can_edit_a_posted_event(): void
+    {
+        $event = $this->postedEvent();
+        $newDate = now()->addDays(10)->toDateString();
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->post(route('events.update', $event), [
+                'event_id' => $event->id,
+                'title' => 'Deworming Day (moved)',
+                'description' => '',
+                'event_date' => $newDate,
+                'category' => 'deadline',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('event_success', 'Event updated.');
+
+        $event->refresh();
+        $this->assertSame('Deworming Day (moved)', $event->title);
+        $this->assertNull($event->description);
+        $this->assertSame($newDate, $event->event_date->toDateString());
+        $this->assertSame('deadline', $event->category);
+        // Correcting an event does not move it to another school or author.
+        $this->assertSame($this->institution->id, $event->institution_id);
+        $this->assertSame('Nurse Reyes', $event->created_by_name);
+        $this->assertSame(1, Event::count());
+    }
+
+    #[Test]
+    public function other_roles_cannot_edit_an_event(): void
+    {
+        $event = $this->postedEvent();
+
+        foreach (['class_adviser', 'clinic_staff', 'clinic_teacher', 'school_head', 'feeding_coor', 'nutricor', 'system_admin'] as $role) {
+            $this->withSession($this->sessionFor($role))
+                ->post(route('events.update', $event), [
+                    'title' => 'Hijacked',
+                    'event_date' => now()->addDay()->toDateString(),
+                    'category' => 'deadline',
+                ])
+                ->assertStatus(403);
+        }
+
+        $this->assertSame('Deworming Day', $event->fresh()->title);
+    }
+
+    #[Test]
+    public function school_nurse_cannot_edit_another_schools_event(): void
+    {
+        $otherSchool = Institution::create(['name' => 'Other School', 'status' => 'active']);
+        $event = $this->postedEvent($otherSchool->id);
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->post(route('events.update', $event), [
+                'title' => 'Not yours',
+                'event_date' => now()->addDay()->toDateString(),
+                'category' => 'program',
+            ])
+            ->assertStatus(404);
+
+        $this->assertSame('Deworming Day', $event->fresh()->title);
+    }
+
+    #[Test]
+    public function a_failed_edit_reopens_the_edit_dialog_on_that_event(): void
+    {
+        $event = $this->postedEvent();
+
+        // Errors land in their own bag, so the Add dialog is not the one that opens.
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->from('/dashboard/school-nurse')
+            ->post(route('events.update', $event), ['event_id' => $event->id, 'title' => '', 'category' => 'program'])
+            ->assertSessionHasErrors(['title', 'event_date'], null, 'eventEdit')
+            ->assertSessionDoesntHaveErrors(['title'], null, 'event');
+
+        $this->assertSame('Deworming Day', $event->fresh()->title);
+
+        $html = $this->withSession($this->sessionFor('school_nurse'))
+            ->get('/dashboard/school-nurse')
+            ->getContent();
+
+        $this->assertMatchesRegularExpression('/id="evtEditModal"[^>]*data-bmodal-autoopen/s', $html);
+        $this->assertStringContainsString('action="'.route('events.update', $event).'"', $html);
+        $this->assertDoesNotMatchRegularExpression('/id="evtAddModal"[^>]*data-bmodal-autoopen/s', $html);
+    }
+
+    #[Test]
+    public function only_school_nurse_sees_the_edit_control(): void
+    {
+        $event = $this->postedEvent();
+
+        $this->withSession($this->sessionFor('school_nurse'))
+            ->get('/dashboard/school-nurse')
+            ->assertSee('data-evt-edit', false)
+            ->assertSee(route('events.update', $event), false)
+            ->assertSee('id="evtEditModal"', false);
+
+        $session = $this->sessionFor('class_adviser');
+        $session['assigned_grade_level'] = 'Grade 7/SPED';
+        $session['assigned_section'] = 'SPED-A';
+
+        $this->withSession($session)
+            ->get('/dashboard/class-adviser')
+            ->assertSee('Deworming Day')
+            ->assertDontSee('data-evt-edit', false)
+            ->assertDontSee(route('events.update', $event), false);
+    }
+
     #[Test]
     public function school_nurse_cannot_delete_another_schools_event(): void
     {

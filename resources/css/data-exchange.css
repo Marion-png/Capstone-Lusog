@@ -3,33 +3,358 @@
  *
  * Cards, KPIs, tables, badges, buttons and flashes come from
  * css/lusog-theme.css, which this sheet is inlined after; everything here is
- * the page's own layout: the learner and log tables, the bundle viewer and
- * the fact lists beside it.
+ * the page's own layout: the receiving-server strip, the learner and log
+ * tables, the transmission result with the id the server assigned, the
+ * bundle viewer and the fact lists beside it.
  */
 
 .fx-section { margin-top: 22px; }
+.fx-nowrap { white-space: nowrap; }
+
+/* Title on the left, the page's actions on the right. */
+.fx-page-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
 
 /* A KPI whose value is a word (a host, a mode) rather than a figure. */
 .kpi-value.fx-kpi-text { font-size: 1.05rem; line-height: 1.3; overflow-wrap: anywhere; }
-.fx-section > .card-head { margin-bottom: 12px; }
+
+/* ── Receiving server ────────────────────────────────────────────────
+   The connection the whole page depends on, stated once, above the
+   figures. The left rule carries its standing: green when sending is
+   possible, red when the endpoint is refused, amber when there is none. */
+.fx-server {
+    --fx-tone: var(--lg-green);
+    --fx-tint: var(--lg-mint);
+    --fx-ink: var(--lg-success-ink);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px 22px;
+    margin-bottom: 18px;
+    padding: 18px 22px;
+    border-left: 4px solid var(--fx-tone);
+}
+.fx-server.is-bad { --fx-tone: var(--lg-danger); --fx-tint: var(--lg-danger-tint); --fx-ink: var(--lg-danger-ink); }
+.fx-server.is-off { --fx-tone: var(--lg-amber); --fx-tint: var(--lg-amber-tint); --fx-ink: var(--lg-amber-ink); }
+.fx-server-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 11px;
+    display: grid;
+    place-items: center;
+    background: var(--fx-tint);
+    color: var(--fx-ink);
+}
+.fx-server-icon svg { width: 20px; height: 20px; }
+.fx-server-label,
+.fx-pid-label {
+    font-size: .66rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--lg-ink-soft);
+}
+.fx-server-url {
+    margin-top: 4px;
+    font-family: var(--lg-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    font-size: .92rem;
+    font-weight: 600;
+    color: var(--lg-ink);
+    overflow-wrap: anywhere;
+}
+.fx-server-facts {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(4, auto);
+    gap: 6px 26px;
+}
+.fx-server-facts > div { min-width: 0; }
+.fx-server-facts dt { font-size: .66rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--lg-ink-soft); }
+.fx-server-facts dd { margin: 5px 0 0; font-size: .8rem; font-weight: 600; color: var(--lg-ink); white-space: nowrap; }
+
+/* ── Table cards ─────────────────────────────────────────────────────
+   The head and its controls live inside the card, so a table and the
+   filter that shapes it read as one object. */
+.fx-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px 16px;
+    flex-wrap: wrap;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--lg-border);
+}
+.fx-card-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fx-card-tools .lg-search input { min-width: 250px; }
+.fx-card-foot {
+    padding: 10px 18px;
+    border-top: 1px solid var(--lg-border);
+    background: var(--lg-page);
+    font-size: .74rem;
+    color: var(--lg-ink-soft);
+    font-variant-numeric: var(--lg-figures);
+}
+
+/* Segmented control: the learner filter and the JSON tabs. */
+.fx-seg {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 3px;
+    background: var(--lg-rail);
+    border: 1px solid var(--lg-border);
+    border-radius: 10px;
+}
+.fx-seg button {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    font-size: .76rem;
+    font-weight: 600;
+    color: var(--lg-ink-soft);
+    padding: 6px 12px;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background .14s ease, color .14s ease, box-shadow .14s ease;
+}
+.fx-seg button:hover { color: var(--lg-ink); }
+.fx-seg button:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+.fx-seg button.is-active { background: var(--lg-card); color: var(--lg-ink); box-shadow: 0 1px 3px rgba(31, 45, 37, .12); }
+.fx-seg-count {
+    min-width: 20px;
+    padding: 1px 6px;
+    border-radius: var(--lg-r-pill);
+    background: rgba(31, 45, 37, .07);
+    font-size: .68rem;
+    font-weight: 700;
+    text-align: center;
+    font-variant-numeric: var(--lg-figures);
+    font-feature-settings: var(--lg-figure-features);
+}
+.fx-seg button.is-active .fx-seg-count { background: var(--lg-mint); color: var(--lg-success-ink); }
 
 /* The whole name cell is the target, as on every roster in the app. */
-.fx-name.is-link { padding: 0; }
+.fx-name.is-link { padding: 0; min-width: 170px; }
 .fx-name.is-link a {
     display: block;
-    padding: 11px 14px;
+    padding: 10px 14px;
     color: var(--lg-ink, #1F2D25);
     font-weight: 600;
     text-decoration: none;
 }
 .fx-name.is-link a:hover,
 .fx-name.is-link a:focus-visible { color: var(--lg-emerald, #1F8A4C); background: var(--lg-mint, #E7F5EC); outline: none; }
+.fx-name-sub {
+    display: block;
+    margin-top: 2px;
+    font-family: var(--lg-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    font-size: .68rem;
+    font-weight: 500;
+    color: var(--lg-ink-soft);
+}
+.fx-name-sub.is-plain { font-family: inherit; font-size: .7rem; font-variant-numeric: var(--lg-figures); }
+.fx-time { margin-left: 4px; color: var(--lg-ink-soft); }
+
+/* ── The id a server assigned ────────────────────────────────────────
+   One treatment wherever it appears — the log, the roster, the result —
+   so the eye learns it once: monospaced, emerald on mint. */
+.fx-id {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--lg-mint);
+    border: 1px solid #BFE2CC;
+    color: var(--lg-emerald-deep);
+    font-family: var(--lg-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    font-size: .76rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1.4;
+    text-decoration: none;
+    white-space: nowrap;
+}
+a.fx-id:hover, a.fx-id:focus-visible { background: #D3EEDD; border-color: var(--lg-emerald); outline: none; }
+.fx-id.is-lg { font-size: 1.15rem; padding: 4px 12px; border-radius: 8px; }
+.fx-ver {
+    flex: 0 0 auto;
+    font-family: var(--lg-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    font-size: .68rem;
+    color: var(--lg-ink-soft);
+}
+
+/* The GET line: method, the endpoint path in quiet ink, and the id
+   picked out of it in solid emerald. */
+.fx-request {
+    display: flex;
+    align-items: center;
+    gap: 8px 10px;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    background: var(--lg-page);
+    border: 1px solid var(--lg-border);
+    border-radius: 10px;
+    min-width: 0;
+}
+.fx-method {
+    flex: 0 0 auto;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: var(--lg-emerald-deep);
+    color: #fff;
+    font-family: var(--lg-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+}
+.fx-url {
+    flex: 1 1 240px;
+    min-width: 0;
+    font-family: var(--lg-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    font-size: .84rem;
+    line-height: 1.6;
+    color: var(--lg-ink-soft);
+    overflow-wrap: anywhere;
+}
+.fx-url-base { color: #4E6158; }
+.fx-url-id {
+    padding: 2px 7px;
+    margin-left: 1px;
+    border-radius: 5px;
+    background: var(--lg-emerald);
+    color: #fff;
+    font-weight: 700;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+}
+.fx-request-actions { display: inline-flex; gap: 6px; flex: 0 0 auto; margin-left: auto; }
+
+.fx-request.is-compact { padding: 5px 6px 5px 6px; gap: 8px; flex-wrap: nowrap; background: transparent; border-color: transparent; }
+.fx-request.is-compact .fx-method { padding: 2px 6px; font-size: .62rem; }
+.fx-request.is-compact .fx-url { flex: 0 1 auto; font-size: .72rem; white-space: nowrap; overflow-wrap: normal; }
+.fx-request.is-compact .fx-url-id { padding: 1px 5px; }
+.fx-request.is-compact .fx-request-actions { margin-left: 4px; }
+
+/* ── Transmission result ─────────────────────────────────────────────
+   What happened, and when it worked, the Patient id the server now holds
+   it under — the first thing on the page, not a row in a table. */
+.fx-result {
+    --fx-tone: var(--lg-green);
+    --fx-tint: var(--lg-mint);
+    --fx-ink: var(--lg-success-ink);
+    margin-bottom: 18px;
+    padding: 18px 22px 20px;
+    background: var(--lg-card);
+    border: 1px solid var(--lg-border);
+    border-left: 4px solid var(--fx-tone);
+    border-radius: var(--lg-r-card);
+    box-shadow: var(--lg-shadow);
+}
+.fx-result.is-failed  { --fx-tone: var(--lg-orange); --fx-tint: var(--lg-orange-tint); --fx-ink: var(--lg-orange-ink); }
+.fx-result.is-blocked { --fx-tone: var(--lg-danger); --fx-tint: var(--lg-danger-tint); --fx-ink: var(--lg-danger-ink); }
+.fx-result.is-pending { --fx-tone: var(--lg-amber);  --fx-tint: var(--lg-amber-tint);  --fx-ink: var(--lg-amber-ink); }
+.fx-result-head { display: flex; align-items: center; gap: 14px; }
+.fx-result-icon {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--fx-tint);
+    color: var(--fx-ink);
+}
+.fx-result-icon svg { width: 19px; height: 19px; }
+.fx-result-text { flex: 1 1 auto; min-width: 0; }
+.fx-result-title { margin: 0; font-size: 1.08rem; font-weight: 700; letter-spacing: -.01em; color: var(--lg-ink); }
+.fx-result-meta { margin-top: 2px; font-size: .78rem; color: var(--lg-ink-soft); font-variant-numeric: var(--lg-figures); overflow-wrap: anywhere; }
+.fx-result .fx-result-error { margin: 16px 0 0; }
+
+.fx-result-body {
+    display: grid;
+    grid-template-columns: minmax(200px, auto) minmax(0, 1fr);
+    gap: 16px;
+    align-items: stretch;
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid var(--lg-border);
+}
+.fx-pid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 18px;
+    background: var(--lg-mint);
+    border: 1px solid #BFE2CC;
+    border-radius: 12px;
+}
+.fx-pid .fx-pid-label { color: var(--lg-success-ink); }
+.fx-pid-id {
+    font-family: var(--lg-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    font-size: 2.1rem;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -.01em;
+    color: var(--lg-emerald-deep);
+    overflow-wrap: anywhere;
+}
+.fx-pid-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
+.fx-pid-version { font-size: .72rem; font-weight: 600; color: var(--lg-success-ink); }
+.fx-result-url { display: flex; flex-direction: column; justify-content: center; gap: 8px; min-width: 0; }
+.fx-result-url .fx-request { padding: 14px 14px; }
+.fx-result-url .fx-url { font-size: .95rem; }
+
+/* The learner's Patient id on their bundle page, from the latest send. */
+.fx-onserver {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 14px 22px;
+    align-items: center;
+    margin-bottom: 18px;
+    padding: 14px 18px;
+    background: var(--lg-card);
+    border: 1px solid var(--lg-border);
+    border-left: 4px solid var(--lg-green);
+    border-radius: var(--lg-r-card);
+    box-shadow: var(--lg-shadow);
+}
+.fx-onserver-id, .fx-onserver-url { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.fx-onserver-value { display: flex; align-items: center; gap: 10px; }
+.fx-onserver .fx-pid-label { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.fx-onserver-link {
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--lg-emerald-deep);
+    text-decoration: none;
+    font-variant-numeric: var(--lg-figures);
+}
+.fx-onserver-link:hover, .fx-onserver-link:focus-visible { color: var(--lg-emerald); outline: none; }
+
+/* Server outcomes: the Patient row carries a mint wash so it is found
+   among a dozen Observations without reading every type. */
+.fx-outcomes tbody tr.is-patient td { background: #F3FAF5; }
+.fx-outcomes tbody tr.is-patient:hover td { background: var(--lg-mint); }
+.fx-resource { min-width: 220px; }
+.fx-resource strong { display: block; color: var(--lg-ink); font-weight: 600; }
+.fx-resource span { display: block; margin-top: 2px; font-size: .72rem; color: var(--lg-ink-soft); }
 
 .fx-hash {
     font-family: var(--lg-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
     font-size: .72rem;
     letter-spacing: 0;
-    color: var(--lg-ink-soft, #6B7C72);
+    color: var(--lg-ink-soft);
     overflow-wrap: anywhere;
 }
 
@@ -67,24 +392,47 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
+    flex-wrap: wrap;
     padding: 12px 16px;
-    border-bottom: 1px solid var(--lg-border, #DCE8E0);
+    border-bottom: 1px solid var(--lg-border);
 }
 .fx-code-title { font-size: .85rem; font-weight: 600; color: var(--lg-ink, #1F2D25); }
 .fx-code-meta { font-size: .72rem; color: var(--lg-ink-soft, #6B7C72); }
 
+/* Panes behind the JSON tabs: every pane shows without the script. */
+.js .fx-pane:not(.is-active) { display: none; }
+.fx-pane-meta {
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--lg-border);
+    background: var(--lg-card);
+    font-size: .72rem;
+    color: var(--lg-ink-soft);
+    font-variant-numeric: var(--lg-figures);
+}
+
 .fx-copy {
-    border: 1px solid var(--lg-border, #DCE8E0);
-    background: var(--lg-card, #FFFFFF);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid var(--lg-border);
+    background: var(--lg-card);
     color: var(--lg-emerald-deep, #126B3A);
     border-radius: 8px;
     padding: 5px 10px;
     font: inherit;
     font-size: .72rem;
     font-weight: 600;
+    line-height: 1.3;
+    white-space: nowrap;
+    text-decoration: none;
     cursor: pointer;
+    transition: background .14s ease, border-color .14s ease, color .14s ease;
 }
-.fx-copy:hover, .fx-copy:focus-visible { background: var(--lg-mint, #E7F5EC); outline: none; }
+.fx-copy svg { width: 12px; height: 12px; }
+.fx-copy:hover, .fx-copy:focus-visible { background: var(--lg-mint); border-color: var(--lg-border-strong); outline: none; }
+.fx-copy:focus-visible { box-shadow: var(--lg-focus); }
+.fx-copy.is-done { background: var(--lg-emerald); border-color: var(--lg-emerald); color: #fff; }
+.fx-copy[hidden] { display: none; }
 
 .fx-json {
     margin: 0;
@@ -145,6 +493,7 @@
     text-decoration: none;
 }
 .fx-history a:hover, .fx-history a:focus-visible { color: var(--lg-emerald, #1F8A4C); outline: none; }
+.fx-history-when { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
 .fx-empty { margin: 0; font-size: .78rem; color: var(--lg-ink-soft, #6B7C72); }
 .fx-inset { padding: 14px 16px; }
 .fx-inset .fx-error { margin: 0; }
@@ -161,11 +510,29 @@
     overflow-wrap: anywhere;
 }
 
+@media (max-width: 1240px) {
+    .fx-server { grid-template-columns: auto minmax(0, 1fr); }
+    .fx-server-facts { grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(0, 1fr)); padding-top: 14px; border-top: 1px solid var(--lg-border); }
+}
+
 @media (max-width: 1100px) {
     .fx-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
+@media (max-width: 900px) {
+    .fx-result-body, .fx-onserver { grid-template-columns: minmax(0, 1fr); }
+}
+
 @media (max-width: 640px) {
+    .fx-server { padding: 16px; gap: 12px 14px; }
+    .fx-server-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+    .fx-server-facts dd { white-space: normal; }
+    .fx-card-tools, .fx-card-tools .lg-search { width: 100%; }
+    .fx-card-tools .lg-search input { min-width: 0; }
+    .fx-result { padding: 16px; }
+    .fx-result-head { flex-wrap: wrap; }
+    .fx-pid-id { font-size: 1.7rem; }
+    .fx-request-actions { margin-left: 0; }
     .fx-facts > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
     .fx-json { max-height: 480px; }
 }

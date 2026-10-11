@@ -31,7 +31,7 @@
 		if ($action === 'transmitted') {
 			return 'badge-monitor';
 		}
-		if (in_array($action, ['viewed', 'read', 'downloaded', 'accessed'], true)) {
+		if (in_array($action, ['viewed', 'read', 'downloaded', 'printed', 'accessed'], true)) {
 			return 'badge-info';
 		}
 		return 'badge-neutral';

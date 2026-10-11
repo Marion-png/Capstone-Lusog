@@ -391,7 +391,7 @@ class AdviserMyStudentsTest extends TestCase
 
         // Print and Edit Profile (which navigates to the real edit form) are
         // offered, and each clinic-recorded panel states its read-only intent.
-        $this->assertStringContainsString('id="vpPrint"', $card);
+        $this->assertStringContainsString('id="vpMlatMenus-print"', $card);
         $this->assertStringContainsString('id="vpEditProfile"', $html);
         // Clinic Notes is read-only; Consultation Log is read-only AND redacted,
         // so it carries its own notice saying what is withheld and why.

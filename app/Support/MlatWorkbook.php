@@ -18,11 +18,13 @@ use Carbon\Carbon;
  *
  * It builds a **model**, not a file: a list of sheets, each a list of rows,
  * each row a list of cell values plus the register it is printed in (title
- * band, section band, column head, plain). MlatExportController writes that
- * model out through OpenSpout. Keeping the content separate from the writer
- * is what makes every cell testable without a spreadsheet library — and what
- * keeps the form's layout in one place should a second writer (print, PDF)
- * ever need it.
+ * band, section band, column head, plain) and how its cells sit — merged
+ * across the whole row, merged across a run of columns inside it, ruled as a
+ * table, wrapped. MlatExportController has two writers for that one model:
+ * the .xlsx through OpenSpout, and the printed sheet in a browser. Keeping
+ * the content separate from the writers is what makes every cell testable
+ * without a spreadsheet library — and what makes the file the clinic files
+ * and the page it prints the same form.
  *
  * Everything printed is read from the learner's record — the adviser's Sheet 1
  * and Sheet 2, the nurse's vital signs and examination, the baseline and
@@ -53,8 +55,11 @@ class MlatWorkbook
 
     public const SHEET_TWO_COLUMNS = 6;
 
+    /** The sheets by number, as the Print and Download menus name them. */
+    public const SHEETS = [1 => 'MLAT Sheet 1', 2 => 'MLAT Sheet 2'];
+
     /**
-     * @return array{sheets: list<array{name: string, columns: int, widths: list<float>, rows: list<array{cells: list<string>, register: string, merge: bool}>}>, file_name: string}
+     * @return array{sheets: list<array{name: string, label: string, columns: int, widths: list<float>, orientation: string, rows: list<array{cells: list<string>, register: string, merge: bool, merges: list<array{0: int, 1: int}>, ruled: bool, wrap: bool}>}>, file_name: string, learner: string}
      */
     public static function build(StudentHealthRecord $record, string $schoolName = ''): array
     {
@@ -69,10 +74,31 @@ class MlatWorkbook
 
         return [
             'file_name' => self::fileName($name, $lrn),
+            'learner' => $name,
             'sheets' => [
                 self::sheetOne($record, $details, $history, $exam, $vitals, $name, $lrn, $schoolName),
                 self::sheetTwo($review, $exam),
             ],
+        ];
+    }
+
+    /**
+     * The workbook cut down to one sheet, numbered as SHEETS numbers them, and
+     * named so the two files do not overwrite each other in a Downloads folder.
+     *
+     * @param  array{sheets: list<array<string, mixed>>, file_name: string, learner: string}  $workbook
+     * @return array{sheets: list<array<string, mixed>>, file_name: string, learner: string}
+     */
+    public static function only(array $workbook, int $sheet): array
+    {
+        if (! isset(self::SHEETS[$sheet], $workbook['sheets'][$sheet - 1])) {
+            throw new \InvalidArgumentException("The MLAT has no sheet {$sheet}.");
+        }
+
+        return [
+            'file_name' => preg_replace('/\.xlsx$/', '', $workbook['file_name']).'-Sheet-'.$sheet.'.xlsx',
+            'learner' => $workbook['learner'],
+            'sheets' => [$workbook['sheets'][$sheet - 1]],
         ];
     }
 
@@ -205,8 +231,11 @@ class MlatWorkbook
 
         return [
             'name' => 'Sheet 1',
+            'label' => self::SHEETS[1],
             'columns' => self::SHEET_ONE_COLUMNS,
             'widths' => [40, 34, 22, 26, 26, 14, 14, 16],
+            // Eight columns and a measurements table do not fit a page upright.
+            'orientation' => 'landscape',
             'rows' => $rows,
         ];
     }
@@ -224,16 +253,23 @@ class MlatWorkbook
     {
         $sheet = Sheet2Review::read($exam, $review);
 
+        $last = self::SHEET_TWO_COLUMNS - 1;
+
         $rows = [];
         $rows[] = self::row([self::TITLE], self::R_TITLE, true);
         $rows[] = self::row([self::SHEET_TWO], self::R_SUBTITLE, true);
         $rows[] = self::blank();
 
         // ── F. Body systems ──
+        // A ruled three-column table as wide as the form: the notes column
+        // runs to the form's right edge, so a finding's details have room
+        // and the heading's fill ends where the table does rather than in a
+        // run of empty shaded cells beside it.
+        $notes = [[2, $last]];
         $rows[] = self::row(['F. EVALUATION OF BODY SYSTEMS'], self::R_BAND, true);
-        $rows[] = self::row(['Body System', 'Findings (Check / Status)', 'Notes / Details'], self::R_HEAD);
+        $rows[] = self::row(['Body System', 'Findings (Check / Status)', 'Notes / Details'], self::R_HEAD, merges: $notes, ruled: true);
         foreach ($sheet['systems'] as $system) {
-            $rows[] = self::row([$system['label'], $system['finding'], $system['notes']]);
+            $rows[] = self::row([$system['label'], $system['finding'], $system['notes']], merges: $notes, ruled: true, wrap: true);
         }
         $rows[] = self::blank();
 
@@ -260,6 +296,8 @@ class MlatWorkbook
         $rows[] = self::blank();
 
         // ── I. Immunization ──
+        // The vaccines still needed can be a list, so they wrap inside their
+        // own two columns instead of running into the review date.
         $rows[] = self::row(['I. IMMUNIZATION STATUS'], self::R_BAND, true);
         $rows[] = self::row([
             'Status: '.$sheet['immunization']['status'],
@@ -267,21 +305,26 @@ class MlatWorkbook
             'Missing/Needed Vaccines: '.self::noneOr($sheet['immunization']['missing']),
             '',
             'Date Record Reviewed: '.$sheet['immunization']['reviewed_at'],
-        ]);
+        ], merges: [[2, 3], [4, $last]], wrap: true);
         $rows[] = self::blank();
 
         // ── J. Summary and recommendations ──
+        // The nurse's prose, wrapped within the form's width rather than
+        // running off its right edge on one line.
+        $prose = [[1, $last]];
         $rows[] = self::row(['J. ASSESSMENT SUMMARY AND RECOMMENDATIONS'], self::R_BAND, true);
-        $rows[] = self::row(['Summary of Findings:', $sheet['summary']['findings']]);
+        $rows[] = self::row(['Summary of Findings:', $sheet['summary']['findings']], merges: $prose, wrap: true);
         $rows[] = self::blank();
-        $rows[] = self::row(['Recommendations / Referrals:', $sheet['summary']['recommendations']]);
+        $rows[] = self::row(['Recommendations / Referrals:', $sheet['summary']['recommendations']], merges: $prose, wrap: true);
         $rows[] = self::blank();
         $rows[] = self::row(['Examiner Signature / Name:', $sheet['summary']['examiner'], '', 'Date:', $sheet['summary']['date']]);
 
         return [
             'name' => 'Sheet 2',
+            'label' => self::SHEETS[2],
             'columns' => self::SHEET_TWO_COLUMNS,
             'widths' => [34, 38, 34, 26, 26, 12],
+            'orientation' => 'portrait',
             'rows' => $rows,
         ];
     }
@@ -289,15 +332,37 @@ class MlatWorkbook
     // ── Cell helpers ───────────────────────────────────────────────────
 
     /**
+     * One row of the form.
+     *
+     * `cells` stay aligned to the sheet's columns: a cell covered by a merge
+     * keeps its place as an empty string, so cell N is always column N.
+     *
      * @param  list<string>  $cells
-     * @return array{cells: list<string>, register: string, merge: bool}
+     * @param  bool  $merge  one cell across the whole width (the bands)
+     * @param  list<array{0: int, 1: int}>  $merges  runs of columns, first to last (0-based), each written as one cell
+     * @param  bool  $ruled  a line of a bordered table
+     * @param  bool  $wrap  long text wraps inside its cell and the row grows to hold it
+     * @return array{cells: list<string>, register: string, merge: bool, merges: list<array{0: int, 1: int}>, ruled: bool, wrap: bool}
      */
-    private static function row(array $cells, string $register = self::R_PLAIN, bool $merge = false): array
-    {
-        return ['cells' => array_map(fn ($c): string => (string) $c, $cells), 'register' => $register, 'merge' => $merge];
+    private static function row(
+        array $cells,
+        string $register = self::R_PLAIN,
+        bool $merge = false,
+        array $merges = [],
+        bool $ruled = false,
+        bool $wrap = false,
+    ): array {
+        return [
+            'cells' => array_map(fn ($c): string => (string) $c, $cells),
+            'register' => $register,
+            'merge' => $merge,
+            'merges' => $merges,
+            'ruled' => $ruled,
+            'wrap' => $wrap,
+        ];
     }
 
-    /** @return array{cells: list<string>, register: string, merge: bool} */
+    /** @return array{cells: list<string>, register: string, merge: bool, merges: list<array{0: int, 1: int}>, ruled: bool, wrap: bool} */
     private static function blank(): array
     {
         return self::row(['']);

@@ -1,6 +1,6 @@
 {{--
     Upcoming events board, shared across dashboards. Only Event::CREATOR_ROLES
-    (school_nurse, for now) can create/remove — everyone else sees a
+    (school_nurse, for now) can create/edit/remove — everyone else sees a
     read-only list. Self-contained styles, same pattern as
     partials/announcements.blade.php.
 --}}
@@ -10,6 +10,13 @@
     $upcomingEvents = \App\Support\SchemaCache::hasTable('events')
         ? Event::forActiveInstitution()->upcoming()->limit(6)->get()
         : collect();
+
+    // Old input belongs to whichever dialog was submitted. The Add and Edit
+    // forms share field names, so a failed edit must not leave its values
+    // sitting in the Add dialog, and the reverse.
+    $addFailed = $errors->event->any();
+    $editFailed = $errors->eventEdit->any();
+    $editEventId = $editFailed ? (int) old('event_id') : 0;
 @endphp
 <style>
     .evt-board { background: #fff; border: 1px solid #DCE8E0; border-radius: 12px; box-shadow: 0 1px 4px rgba(5,46,22,.06); margin-bottom: 18px; }
@@ -41,10 +48,18 @@
     .evt-cat-deadline { background: #FCECEC; color: #b91c1c; }
     .evt-cat-program { background: #E7F5EC; color: #14653C; }
     .evt-item-desc { font-size: .78rem; color: #6B7C72; margin-top: 3px; }
-    .evt-item-delete-form { margin-left: auto; flex-shrink: 0; }
+    /* Edit sits before Remove and reads quieter than it: correcting an event
+       is the routine act, deleting it the exceptional one. */
+    .evt-item-actions { margin-left: auto; flex-shrink: 0; align-self: flex-start; display: flex; align-items: center; gap: 2px; }
+    /* Flex, not inline: as a flex item the form is a block, and its button
+       would sit on the page's own (taller) text line inside it — a few
+       pixels below Edit. */
+    .evt-item-delete-form { display: flex; }
     .evt-item-delete-btn { background: none; border: none; border-radius: 5px; color: #b91c1c; font-size: .7rem; font-weight: 600; cursor: pointer; font-family: inherit; padding: 2px 6px; white-space: nowrap; }
     /* Tinted, never underlined — nothing in this app rules a line through a word. */
     .evt-item-delete-btn:hover { background: #FCECEC; }
+    .evt-item-edit-btn { background: none; border: none; border-radius: 5px; color: #3E5348; font-size: .7rem; font-weight: 600; cursor: pointer; font-family: inherit; padding: 2px 6px; white-space: nowrap; }
+    .evt-item-edit-btn:hover { background: #eef3f0; color: #126B3A; }
     .evt-empty { padding: 22px 18px; text-align: center; color: #94a3b8; font-size: .8rem; }
 </style>
 
@@ -82,10 +97,22 @@
                         @endif
                     </div>
                     @if ($canCreateEvent)
-                        <form method="POST" action="{{ route('events.destroy', $item) }}" class="evt-item-delete-form" onsubmit="return confirm('Remove this event?');">
-                            @csrf
-                            <button type="submit" class="evt-item-delete-btn">Remove</button>
-                        </form>
+                        <div class="evt-item-actions">
+                            {{-- One edit dialog for the whole board; the row
+                                 carries what it opens with. --}}
+                            <button type="button" class="evt-item-edit-btn" data-bmodal-open="evtEditModal"
+                                    data-evt-edit
+                                    data-evt-id="{{ $item->id }}"
+                                    data-evt-action="{{ route('events.update', $item) }}"
+                                    data-evt-title="{{ $item->title }}"
+                                    data-evt-date="{{ $item->event_date->format('Y-m-d') }}"
+                                    data-evt-category="{{ $item->category }}"
+                                    data-evt-description="{{ $item->description }}">Edit</button>
+                            <form method="POST" action="{{ route('events.destroy', $item) }}" class="evt-item-delete-form" onsubmit="return confirm('Remove this event?');">
+                                @csrf
+                                <button type="submit" class="evt-item-delete-btn">Remove</button>
+                            </form>
+                        </div>
                     @endif
                 </div>
             @endforeach
@@ -119,7 +146,7 @@
                         <label for="evtTitle">Event title</label>
                         <input type="text" id="evtTitle" name="title" maxlength="150" required
                                placeholder="e.g. Grade 7 deworming day"
-                               value="{{ old('title') }}">
+                               value="{{ $addFailed ? old('title') : '' }}">
                         @if ($errors->event->has('title'))
                             <div class="bmodal-error">{{ $errors->event->first('title') }}</div>
                         @endif
@@ -128,7 +155,7 @@
                     <div class="bmodal-field bmodal-grid">
                         <div>
                             <label for="evtDate">Date</label>
-                            <input type="date" id="evtDate" name="event_date" required value="{{ old('event_date') }}">
+                            <input type="date" id="evtDate" name="event_date" required value="{{ $addFailed ? old('event_date') : '' }}">
                             @if ($errors->event->has('event_date'))
                                 <div class="bmodal-error">{{ $errors->event->first('event_date') }}</div>
                             @endif
@@ -137,7 +164,7 @@
                             <label for="evtCategory">Category</label>
                             <select id="evtCategory" name="category" required>
                                 @foreach (Event::CATEGORIES as $key => $label)
-                                    <option value="{{ $key }}" @selected(old('category') === $key)>{{ $label }}</option>
+                                    <option value="{{ $key }}" @selected($addFailed && old('category') === $key)>{{ $label }}</option>
                                 @endforeach
                             </select>
                             @if ($errors->event->has('category'))
@@ -149,7 +176,7 @@
                     <div class="bmodal-field">
                         <label for="evtDescription">Description <span style="text-transform:none;letter-spacing:0;font-weight:500">(optional)</span></label>
                         <textarea id="evtDescription" name="description" maxlength="1000"
-                                  placeholder="Anything staff should know in advance...">{{ old('description') }}</textarea>
+                                  placeholder="Anything staff should know in advance...">{{ $addFailed ? old('description') : '' }}</textarea>
                         @if ($errors->event->has('description'))
                             <div class="bmodal-error">{{ $errors->event->first('description') }}</div>
                         @endif
@@ -163,4 +190,101 @@
             </form>
         </div>
     </div>
+
+    {{-- Edit. One dialog for every event on the board: the Edit button that
+         opens it fills the form and points it at that event. A failed save
+         comes back with the event's id in the old input, so the dialog
+         re-opens on the same event with what was typed. --}}
+    <div class="bmodal" id="evtEditModal" role="dialog" aria-modal="true" aria-labelledby="evtEditModalTitle"
+         @if ($editEventId > 0) data-bmodal-autoopen @endif>
+        <div class="bmodal-panel">
+            <form method="POST" id="evtEditForm" action="{{ $editEventId > 0 ? route('events.update', $editEventId) : '#' }}">
+                @csrf
+                <input type="hidden" name="event_id" id="evtEditId" value="{{ $editEventId > 0 ? $editEventId : '' }}">
+                <div class="bmodal-head">
+                    <div>
+                        <div class="bmodal-eyebrow">Upcoming Events</div>
+                        <div class="bmodal-title" id="evtEditModalTitle">Edit event</div>
+                        <div class="bmodal-sub">Shown on every staff dashboard at {{ session('active_school_name', 'this school') }}.</div>
+                    </div>
+                    <button type="button" class="bmodal-close" data-bmodal-close aria-label="Close">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+
+                <div class="bmodal-body">
+                    <div class="bmodal-field">
+                        <label for="evtEditTitle">Event title</label>
+                        <input type="text" id="evtEditTitle" name="title" maxlength="150" required
+                               value="{{ $editFailed ? old('title') : '' }}">
+                        @if ($errors->eventEdit->has('title'))
+                            <div class="bmodal-error">{{ $errors->eventEdit->first('title') }}</div>
+                        @endif
+                    </div>
+
+                    <div class="bmodal-field bmodal-grid">
+                        <div>
+                            <label for="evtEditDate">Date</label>
+                            <input type="date" id="evtEditDate" name="event_date" required value="{{ $editFailed ? old('event_date') : '' }}">
+                            @if ($errors->eventEdit->has('event_date'))
+                                <div class="bmodal-error">{{ $errors->eventEdit->first('event_date') }}</div>
+                            @endif
+                        </div>
+                        <div>
+                            <label for="evtEditCategory">Category</label>
+                            <select id="evtEditCategory" name="category" required>
+                                @foreach (Event::CATEGORIES as $key => $label)
+                                    <option value="{{ $key }}" @selected($editFailed && old('category') === $key)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                            @if ($errors->eventEdit->has('category'))
+                                <div class="bmodal-error">{{ $errors->eventEdit->first('category') }}</div>
+                            @endif
+                        </div>
+                    </div>
+
+                    <div class="bmodal-field">
+                        <label for="evtEditDescription">Description <span style="text-transform:none;letter-spacing:0;font-weight:500">(optional)</span></label>
+                        <textarea id="evtEditDescription" name="description" maxlength="1000">{{ $editFailed ? old('description') : '' }}</textarea>
+                        @if ($errors->eventEdit->has('description'))
+                            <div class="bmodal-error">{{ $errors->eventEdit->first('description') }}</div>
+                        @endif
+                    </div>
+                </div>
+
+                <div class="bmodal-foot">
+                    <button type="button" class="bmodal-btn bmodal-btn-ghost" data-bmodal-close>Cancel</button>
+                    <button type="submit" class="bmodal-btn bmodal-btn-primary">Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    // Fill the edit dialog from the row before it opens. Bound on the board
+    // rather than the document: the dialog controller opens on a document
+    // listener, and the board's listener runs first, so the fields are filled
+    // by the time it focuses the first one.
+    (() => {
+        const board = document.querySelector('.evt-board');
+        const form = document.getElementById('evtEditForm');
+        if (!board || !form) return;
+
+        board.addEventListener('click', (event) => {
+            const trigger = event.target.closest('[data-evt-edit]');
+            if (!trigger) return;
+
+            const data = trigger.dataset;
+            form.action = data.evtAction || '#';
+            form.querySelector('#evtEditId').value = data.evtId || '';
+            form.querySelector('#evtEditTitle').value = data.evtTitle || '';
+            form.querySelector('#evtEditDate').value = data.evtDate || '';
+            form.querySelector('#evtEditCategory').value = data.evtCategory || '';
+            form.querySelector('#evtEditDescription').value = data.evtDescription || '';
+
+            // Messages from a failed save of another event are not about this one.
+            form.querySelectorAll('.bmodal-error').forEach((node) => node.remove());
+        });
+    })();
+    </script>
 @endif

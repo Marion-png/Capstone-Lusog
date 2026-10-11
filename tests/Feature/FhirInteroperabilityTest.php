@@ -451,6 +451,121 @@ class FhirInteroperabilityTest extends TestCase
             ->assertSee('Observation/1001/_history/1');
     }
 
+    /**
+     * A HAPI-shaped reply: the entries answer the request's in order, so the
+     * second is the learner's Patient.
+     */
+    private function hapiResponse(int $entries, string $patientId = '96973'): array
+    {
+        return [
+            'resourceType' => 'Bundle',
+            'type' => 'transaction-response',
+            'entry' => array_map(fn ($i) => ['response' => [
+                'status' => '201 Created',
+                'location' => match ($i) {
+                    1 => 'Organization/96972/_history/1',
+                    2 => 'Patient/'.$patientId.'/_history/1',
+                    default => 'Observation/'.(97000 + $i).'/_history/1',
+                },
+            ]], range(1, $entries)),
+        ];
+    }
+
+    #[Test]
+    public function the_server_assigned_ids_are_read_off_the_reply(): void
+    {
+        $record = $this->learner();
+        Http::fake([self::ENDPOINT => Http::response($this->hapiResponse(15), 200)]);
+
+        $this->withSession($this->nurse())
+            ->post(route('dashboard.school-nurse.data-exchange.transmit', $record->student_id));
+
+        $transmission = FhirTransmission::sole();
+        $outcomes = $transmission->serverOutcomes();
+
+        $this->assertSame('Organization', $outcomes[0]['resource_type']);
+        $this->assertSame('San Antonio National High School', $outcomes[0]['label']);
+        $this->assertSame('Patient', $outcomes[1]['resource_type']);
+        $this->assertSame('96973', $outcomes[1]['id']);
+        $this->assertSame('1', $outcomes[1]['version']);
+        $this->assertTrue($outcomes[1]['created']);
+        $this->assertSame(self::ENDPOINT.'/Patient/', $outcomes[1]['url_prefix']);
+        $this->assertSame(self::ENDPOINT.'/Patient/96973', $outcomes[1]['url']);
+        $this->assertSame(self::ENDPOINT.'/Observation/97003', $outcomes[2]['url']);
+
+        $patient = $transmission->patientOutcome();
+        $this->assertSame('96973', $patient['id']);
+        $this->assertSame(self::ENDPOINT.'/Patient/96973', $patient['url']);
+    }
+
+    #[Test]
+    public function an_absolute_location_still_yields_the_id(): void
+    {
+        $transmission = new FhirTransmission([
+            'status' => FhirTransmission::STATUS_SENT,
+            'endpoint_url' => self::ENDPOINT,
+            'response_body' => json_encode(['resourceType' => 'Bundle', 'entry' => [
+                ['response' => ['status' => '200 OK', 'location' => 'https://fhir.example.test/FHIR/Patient/a1b2-c3/_history/4']],
+            ]]),
+        ]);
+
+        $patient = $transmission->patientOutcome();
+        $this->assertSame('a1b2-c3', $patient['id']);
+        $this->assertSame('4', $patient['version']);
+        $this->assertFalse($patient['created']);
+    }
+
+    #[Test]
+    public function a_failed_send_has_no_patient_id(): void
+    {
+        $record = $this->learner();
+        Http::fake([self::ENDPOINT => Http::response(['resourceType' => 'OperationOutcome', 'issue' => [['diagnostics' => 'Bad']]], 400)]);
+
+        $this->withSession($this->nurse())
+            ->post(route('dashboard.school-nurse.data-exchange.transmit', $record->student_id));
+
+        $transmission = FhirTransmission::sole();
+        $this->assertNull($transmission->patientOutcome());
+
+        $this->withSession($this->nurse())
+            ->get(route('dashboard.school-nurse.data-exchange.transmission', $transmission))
+            ->assertOk()
+            ->assertSee('Not delivered')
+            ->assertDontSee('id="fxPatientId"', false);
+    }
+
+    #[Test]
+    public function the_patient_id_is_picked_out_of_the_resource_url_once_transmitted(): void
+    {
+        $record = $this->learner();
+        Http::fake([self::ENDPOINT => Http::response($this->hapiResponse(15), 200)]);
+
+        $this->withSession($this->nurse())
+            ->post(route('dashboard.school-nurse.data-exchange.transmit', $record->student_id));
+        $transmission = FhirTransmission::sole();
+
+        $this->withSession($this->nurse())
+            ->get(route('dashboard.school-nurse.data-exchange.transmission', $transmission))
+            ->assertOk()
+            ->assertSee('<div class="fx-pid-id" id="fxPatientId">96973</div>', false)
+            ->assertSee('<span class="fx-url-base">'.str_replace('/', '/<wbr>', self::ENDPOINT.'/Patient/').'</span><mark class="fx-url-id">96973</mark>', false)
+            ->assertSee('data-copy-text="96973"', false)
+            ->assertSee('data-copy-text="'.self::ENDPOINT.'/Patient/96973"', false);
+
+        // The learner's row, the log and their bundle page carry it too.
+        $this->withSession($this->nurse())
+            ->get(route('dashboard.school-nurse.data-exchange'))
+            ->assertOk()
+            ->assertSee('title="'.self::ENDPOINT.'/Patient/96973">96973</a>', false)
+            ->assertSee('<span class="fx-id" title="'.self::ENDPOINT.'/Patient/96973">96973</span>', false);
+
+        $this->withSession($this->nurse())
+            ->get(route('dashboard.school-nurse.data-exchange.preview', $record->student_id))
+            ->assertOk()
+            ->assertSee('<span class="fx-id is-lg">96973</span>', false)
+            ->assertSee('<mark class="fx-url-id">96973</mark>', false);
+    }
+
     #[Test]
     public function the_nurse_rail_links_to_the_exchange(): void
     {

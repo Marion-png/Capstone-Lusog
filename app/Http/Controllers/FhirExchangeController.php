@@ -38,14 +38,18 @@ class FhirExchangeController extends Controller
             ->values();
 
         $transmissions = $this->transmissions($institutionId);
-        $lastSentByLrn = $transmissions
-            ->where('status', FhirTransmission::STATUS_SENT)
-            ->groupBy('student_lrn')
-            ->map(fn ($group) => $group->max('sent_at'));
 
-        $learners = $records->map(function (StudentHealthRecord $record) use ($lastSentByLrn) {
+        // Newest first, so the first sent row per learner is their latest:
+        // the one whose Patient id the receiving server now holds.
+        $latestSentByLrn = $transmissions
+            ->where('status', FhirTransmission::STATUS_SENT)
+            ->unique('student_lrn')
+            ->keyBy('student_lrn');
+
+        $learners = $records->map(function (StudentHealthRecord $record) use ($latestSentByLrn) {
             $details = is_array($record->student_details) ? $record->student_details : [];
             $nutrition = NutritionalHealthStatus::forRecord($record);
+            $latest = $latestSentByLrn->get((string) $record->student_id);
 
             return [
                 'lrn' => (string) $record->student_id,
@@ -53,11 +57,14 @@ class FhirExchangeController extends Controller
                 'grade' => trim((string) ($details['grade_level'] ?? '')),
                 'section' => trim((string) ($details['section'] ?? '')),
                 'status' => $nutrition['endline']['bmi_status'] ?: $nutrition['baseline']['bmi_status'],
-                'last_sent' => $lastSentByLrn->get((string) $record->student_id),
+                'last_sent' => $latest?->sent_at,
+                'transmission' => $latest,
+                'patient' => $latest?->patientOutcome(),
             ];
         });
 
         $names = $records->mapWithKeys(fn (StudentHealthRecord $r) => [(string) $r->student_id => (string) $r->student_name]);
+        $sentLearners = $learners->whereNotNull('transmission')->count();
 
         return view('dashboard.data-exchange', [
             'learners' => $learners,
@@ -67,6 +74,8 @@ class FhirExchangeController extends Controller
                 'sent' => $transmissions->where('status', FhirTransmission::STATUS_SENT)->count(),
                 'failed' => $transmissions->whereIn('status', [FhirTransmission::STATUS_FAILED, FhirTransmission::STATUS_BLOCKED])->count(),
                 'last_sent' => $transmissions->where('status', FhirTransmission::STATUS_SENT)->max('sent_at'),
+                'learners_sent' => $sentLearners,
+                'learners_unsent' => $learners->count() - $sentLearners,
             ],
             'server' => $this->server(),
         ]);
@@ -79,6 +88,10 @@ class FhirExchangeController extends Controller
 
         $bundle = FhirBundle::forRecord($record);
         $json = FhirBundle::encode($bundle);
+        $history = $this->transmissions($institutionId)
+            ->where('student_lrn', (string) $record->student_id)
+            ->take(10);
+        $latestSent = $history->firstWhere('status', FhirTransmission::STATUS_SENT);
 
         return view('dashboard.data-exchange-preview', [
             'record' => $record,
@@ -87,9 +100,9 @@ class FhirExchangeController extends Controller
             'bytes' => strlen($json),
             'sha256' => hash('sha256', $json),
             'deidentified' => FhirBundle::deidentifies(),
-            'history' => $this->transmissions($institutionId)
-                ->where('student_lrn', (string) $record->student_id)
-                ->take(10),
+            'history' => $history,
+            'latestSent' => $latestSent,
+            'patient' => $latestSent?->patientOutcome(),
             'server' => $this->server(),
         ]);
     }
@@ -153,10 +166,14 @@ class FhirExchangeController extends Controller
                 ->find($transmission->student_health_record_id)
             : null;
 
+        $outcomes = $transmission->serverOutcomes();
+
         return view('dashboard.data-exchange-transmission', [
             'transmission' => $transmission,
             'record' => $record,
-            'outcomes' => $transmission->serverOutcomes(),
+            'outcomes' => $outcomes,
+            'patient' => $transmission->patientOutcome(),
+            'created' => count(array_filter($outcomes, fn (array $o) => $o['created'])),
             'intact' => $transmission->payloadIntact(),
             'responseJson' => $this->pretty((string) $transmission->response_body),
         ]);
