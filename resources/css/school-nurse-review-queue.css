@@ -34,7 +34,17 @@
 .btn-view-consent:focus-visible { outline: none; box-shadow: var(--lg-focus); }
 .btn-view-consent svg { width: 11px; height: 11px; }
 
+/* Section heading over the filters, then the filters over the table. The
+   count rides the right end of the filter row rather than a spacer, which
+   the theme would give a 180px minimum. */
+.queue-title { margin-top: 20px; }
+.queue-filters .toolbar-count { margin-left: auto; min-width: 0; }
+@media (max-width: 620px) {
+	.queue-filters .toolbar-count { margin-left: 0; padding-bottom: 0; }
+}
+
 /* Empty queue — a settled state, not a failure, so it stays quiet. */
 .queue-empty { text-align: center; padding: 52px 20px; color: var(--lg-ink-soft); }
 .queue-empty svg { width: 42px; height: 42px; margin-bottom: 12px; opacity: .35; }
 .queue-empty p { font-size: .84rem; max-width: 46ch; margin: 0 auto; line-height: 1.55; }
+.queue-empty-clear { margin-top: 14px; }

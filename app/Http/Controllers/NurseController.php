@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Jobs\TransmitFhirRecord;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
+use App\Support\FeedingBeneficiarySummary;
 use App\Support\FhirTransmitter;
 use App\Support\SchemaCache;
 use App\Support\Sheet2Review;
@@ -16,6 +17,15 @@ use Illuminate\View\View;
 
 class NurseController extends Controller
 {
+    /**
+     * The Health Assessment queue's Status column, keyed by the value its
+     * filter carries on the query string. These are the only two answers a
+     * row can give, so they are the only two the filter offers.
+     *
+     * @var array<string, string>
+     */
+    public const QUEUE_STATUSES = ['pending' => 'Pending', 'completed' => 'Completed'];
+
     public function index(Request $request): View|RedirectResponse
     {
         if ($redirect = $this->requireNurseRole($request)) {
@@ -24,7 +34,26 @@ class NurseController extends Controller
 
         StudentRosterSync::syncToSession($request);
 
-        $records = self::dedupedRoster($request->session()->get('school_health_card_records', []));
+        $queue = self::dedupedRoster($request->session()->get('school_health_card_records', []));
+
+        // The filters live on the query string rather than in the browser
+        // alone: this page reloads itself whenever another desk writes
+        // (partials/workspace-live), and a filter only the browser held would
+        // be wiped by that reload. Every column they read is encrypted at
+        // rest, so they are applied here, in PHP, never as a WHERE.
+        $filterOptions = self::queueFilterOptions($queue);
+        $filters = self::queueFilters($request, $filterOptions);
+
+        // Grade and gender are scope: they move the cards and the table
+        // together. Status narrows the table alone, so the cards keep
+        // reporting both halves — pending and completed — of whatever the
+        // scope is, rather than reading zero for the half filtered away.
+        $scoped = array_filter($queue, fn (array $row): bool => ($filters['grade'] === '' || self::gradeOf($row) === $filters['grade'])
+            && ($filters['sex'] === '' || self::sexOf($row) === $filters['sex']));
+
+        $records = array_filter($scoped, fn (array $row): bool => $filters['status'] === '' || self::queueStatusOf($row) === $filters['status']);
+
+        $scopedPending = count(array_filter($scoped, fn (array $row): bool => self::queueStatusOf($row) === 'pending'));
 
         $consentByLrn = [];
 
@@ -56,7 +85,101 @@ class NurseController extends Controller
         return view('nurse.index', [
             'records' => $records,
             'consentByLrn' => $consentByLrn,
+            'filters' => $filters,
+            'filterOptions' => $filterOptions,
+            'queueSize' => count($queue),
+            'queueCounts' => [
+                'total' => count($scoped),
+                'pending' => $scopedPending,
+                'completed' => count($scoped) - $scopedPending,
+            ],
         ]);
+    }
+
+    /**
+     * A queue row's Status: Completed once the nurse's examination is on
+     * file, Pending until then — the same test the Status badge and the
+     * Fill / Edit button beside it are drawn from.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    public static function queueStatusOf(array $row): string
+    {
+        return empty($row['examination']) ? 'pending' : 'completed';
+    }
+
+    /** @param  array<string, mixed>  $row */
+    private static function gradeOf(array $row): string
+    {
+        return trim((string) ($row['grade_level'] ?? ''));
+    }
+
+    /**
+     * Gender through the one normaliser every other screen filters with:
+     * advisers have typed "M", "male" and "Male", and those are one learner
+     * group, not three.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    public static function sexOf(array $row): string
+    {
+        return FeedingBeneficiarySummary::normalizeSex((string) ($row['gender'] ?? ''));
+    }
+
+    /**
+     * Each filter's options with how many learners in the whole queue answer
+     * to them. Grades are read off the queue itself, so no grade is offered
+     * that would match nobody, and they run in grade order (7, 8 … 10), not
+     * string order (10, 7, 8).
+     *
+     * @param  array<int, array<string, mixed>>  $queue
+     * @return array{grade: array<string, int>, sex: array<string, int>, status: array<string, int>}
+     */
+    private static function queueFilterOptions(array $queue): array
+    {
+        $rows = collect($queue);
+
+        return [
+            'grade' => $rows->map(fn (array $row): string => self::gradeOf($row))
+                ->filter()
+                ->countBy()
+                ->sortKeysUsing('strnatcasecmp')
+                ->all(),
+            'sex' => collect(FeedingBeneficiarySummary::SEX_OPTIONS)
+                ->mapWithKeys(fn (string $sex): array => [$sex => $rows->filter(fn (array $row): bool => self::sexOf($row) === $sex)->count()])
+                ->all(),
+            'status' => collect(self::QUEUE_STATUSES)
+                ->mapWithKeys(fn (string $label, string $key): array => [$key => $rows->filter(fn (array $row): bool => self::queueStatusOf($row) === $key)->count()])
+                ->all(),
+        ];
+    }
+
+    /**
+     * The filters off the query string. A value that is not one of the
+     * options on offer is dropped rather than emptying the page — the query
+     * string is the reader's to edit, and a stale grade from an old link
+     * decides nothing.
+     *
+     * @param  array{grade: array<string, int>, sex: array<string, int>, status: array<string, int>}  $options
+     * @return array{grade: string, sex: string, status: string}
+     */
+    private static function queueFilters(Request $request, array $options): array
+    {
+        $read = function (string $key) use ($request): string {
+            $value = $request->query($key);
+
+            return is_string($value) ? trim($value) : '';
+        };
+
+        $grade = $read('grade');
+        $sex = $read('sex');
+        $status = $read('status');
+
+        return [
+            'grade' => $grade !== '' && array_key_exists($grade, $options['grade']) ? $grade : '',
+            'sex' => in_array($sex, FeedingBeneficiarySummary::SEX_OPTIONS, true) ? $sex : '',
+            'status' => array_key_exists($status, self::QUEUE_STATUSES) ? $status : '',
+        ];
     }
 
     /**
