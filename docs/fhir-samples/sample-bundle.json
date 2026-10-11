@@ -1,0 +1,1022 @@
+{
+    "resourceType": "Bundle",
+    "meta": {
+        "lastUpdated": "2026-10-11T14:21:20+00:00",
+        "security": [
+            {
+                "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+                "code": "R",
+                "display": "restricted"
+            }
+        ]
+    },
+    "identifier": {
+        "system": "https://lusog-web-production.up.railway.app/fhir/sid/bundle",
+        "value": "c2d63320-3974-4873-bdcb-f65c0189a596"
+    },
+    "type": "transaction",
+    "timestamp": "2026-10-11T14:21:20+00:00",
+    "entry": [
+        {
+            "fullUrl": "urn:uuid:f0d5f0b2-4b68-4a13-8cc4-adecf39d06d8",
+            "resource": {
+                "resourceType": "Organization",
+                "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>San Antonio National High School</p></div>"
+                },
+                "identifier": [
+                    {
+                        "system": "https://lusog-web-production.up.railway.app/fhir/sid/institution",
+                        "value": "1"
+                    }
+                ],
+                "active": true,
+                "type": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/organization-type",
+                                "code": "edu",
+                                "display": "Educational Institute"
+                            }
+                        ]
+                    }
+                ],
+                "name": "San Antonio National High School",
+                "address": [
+                    {
+                        "text": "Purok 3, San Antonio, Davao City",
+                        "country": "PH"
+                    }
+                ]
+            },
+            "request": {
+                "method": "PUT",
+                "url": "Organization?identifier=https%3A%2F%2Flusog-web-production.up.railway.app%2Ffhir%2Fsid%2Finstitution%7C1"
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:2972959e-8a68-47e5-99a1-6746e6536a97",
+            "resource": {
+                "resourceType": "Patient",
+                "meta": {
+                    "security": [
+                        {
+                            "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+                            "code": "R",
+                            "display": "restricted"
+                        }
+                    ]
+                },
+                "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Pedro Santos Penduko · male · born 2011-08-20</p></div>"
+                },
+                "identifier": [
+                    {
+                        "use": "official",
+                        "type": {
+                            "text": "DepEd Learner Reference Number"
+                        },
+                        "system": "https://lusog-web-production.up.railway.app/fhir/sid/lrn",
+                        "value": "109876543201"
+                    }
+                ],
+                "active": true,
+                "name": [
+                    {
+                        "use": "official",
+                        "text": "Pedro Santos Penduko",
+                        "family": "Penduko",
+                        "given": [
+                            "Pedro",
+                            "Santos"
+                        ]
+                    }
+                ],
+                "gender": "male",
+                "birthDate": "2011-08-20",
+                "managingOrganization": {
+                    "reference": "urn:uuid:f0d5f0b2-4b68-4a13-8cc4-adecf39d06d8",
+                    "display": "San Antonio National High School"
+                }
+            },
+            "request": {
+                "method": "PUT",
+                "url": "Patient?identifier=https%3A%2F%2Flusog-web-production.up.railway.app%2Ffhir%2Fsid%2Flrn%7C109876543201"
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:4f229fd2-214f-467f-8819-5d1c6f555e48",
+            "resource": {
+                "resourceType": "Observation",
+                "meta": {
+                    "profile": [
+                        "http://hl7.org/fhir/StructureDefinition/bodyheight"
+                    ]
+                },
+                "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Body height (baseline weigh-in): 150 cm (2026-07-02)</p></div>"
+                },
+                "identifier": [
+                    {
+                        "system": "https://lusog-web-production.up.railway.app/fhir/sid/observation",
+                        "value": "1-baseline-body-height"
+                    }
+                ],
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "vital-signs",
+                                "display": "Vital Signs"
+                            }
+                        ],
+                        "text": "Vital Signs"
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": "http://loinc.org",
+                            "code": "8302-2",
+                            "display": "Body height"
+                        }
+                    ],
+                    "text": "Body height (baseline weigh-in)"
+                },
+                "subject": {
+                    "reference": "urn:uuid:2972959e-8a68-47e5-99a1-6746e6536a97"
+                },
+                "performer": [
+                    {
+                        "reference": "urn:uuid:f0d5f0b2-4b68-4a13-8cc4-adecf39d06d8"
+                    }
+                ],
+                "effectiveDateTime": "2026-07-02",
+                "valueQuantity": {
+                    "value": 150.0,
+                    "unit": "cm",
+                    "system": "http://unitsofmeasure.org",
+                    "code": "cm"
+                }
+            },
+            "request": {
+                "method": "PUT",
+                "url": "Observation?identifier=https%3A%2F%2Flusog-web-production.up.railway.app%2Ffhir%2Fsid%2Fobservation%7C1-baseline-body-height"
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:f880abf5-b7c1-447e-a1f0-d9e7835ba921",
+            "resource": {
+                "resourceType": "Observation",
+                "meta": {
+                    "profile": [
+                        "http://hl7.org/fhir/StructureDefinition/bodyweight"
+                    ]
+                },
+                "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Body weight (baseline weigh-in): 35 kg (2026-07-02)</p></div>"
+                },
+                "identifier": [
+                    {
+                        "system": "https://lusog-web-production.up.railway.app/fhir/sid/observation",
+                        "value": "1-baseline-body-weight"
+                    }
+                ],
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "vital-signs",
+                                "display": "Vital Signs"
+                            }
+                        ],
+                        "text": "Vital Signs"
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": "http://loinc.org",
+                            "code": "29463-7",
+                            "display": "Body weight"
+                        }
+                    ],
+                    "text": "Body weight (baseline weigh-in)"
+                },
+                "subject": {
+                    "reference": "urn:uuid:2972959e-8a68-47e5-99a1-6746e6536a97"
+                },
+                "performer": [
+                    {
+                        "reference": "urn:uuid:f0d5f0b2-4b68-4a13-8cc4-adecf39d06d8"
+                    }
+                ],
+                "effectiveDateTime": "2026-07-02",
+                "valueQuantity": {
+                    "value": 35.0,
+                    "unit": "kg",
+                    "system": "http://unitsofmeasure.org",
+                    "code": "kg"
+                }
+            },
+            "request": {
+                "method": "PUT",
+                "url": "Observation?identifier=https%3A%2F%2Flusog-web-production.up.railway.app%2Ffhir%2Fsid%2Fobservation%7C1-baseline-body-weight"
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:d6b5924c-cdb6-4e5f-a266-b1c3c59859cb",
+            "resource": {
+                "resourceType": "Observation",
+                "meta": {
+                    "profile": [
+                        "http://hl7.org/fhir/StructureDefinition/bmi"
+                    ]
+                },
+                "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Body mass index (BMI) [Ratio] (baseline weigh-in): 15.6 kg/m2 (2026-07-02)</p></div>"
+                },
+                "identifier": [
+                    {
+                        "system": "https://lusog-web-production.up.railway.app/fhir/sid/observation",
+                        "value": "1-baseline-bmi"
+                    }
+                ],
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "vital-signs",
+                                "display": "Vital Signs"
+                            }
+                        ],
+                        "text": "Vital Signs"
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": "http://loinc.org",
+                            "code": "39156-5",
+                            "display": "Body mass index (BMI) [Ratio]"
+                        }
+                    ],
+                    "text": "Body mass index (BMI) [Ratio] (baseline weigh-in)"
+                },
+                "subject": {
+                    "reference": "urn:uuid:2972959e-8a68-47e5-99a1-6746e6536a97"
+                },
+                "performer": [
+                    {
+                        "reference": "urn:uuid:f0d5f0b2-4b68-4a13-8cc4-adecf39d06d8"
+                    }
+                ],
+                "effectiveDateTime": "2026-07-02",
+                "valueQuantity": {
+                    "value": 15.6,
+                    "unit": "kg/m2",
+                    "system": "http://unitsofmeasure.org",
+                    "code": "kg/m2"
+                }
+            },
+            "request": {
+                "method": "PUT",
+                "url": "Observation?identifier=https%3A%2F%2Flusog-web-production.up.railway.app%2Ffhir%2Fsid%2Fobservation%7C1-baseline-bmi"
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:5bcbae2e-359b-4b79-9fd8-42376a37f729",
+            "resource": {
+                "resourceType": "Observation",
+                "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>BMI-for-age nutritional status (baseline weigh-in): Severely Wasted (2026-07-02)</p></div>"
+                },
+                "identifier": [
+                    {
+                        "system": "https://lusog-web-production.up.railway.app/fhir/sid/observation",
+                        "value": "1-baseline-bmi-for-age-status"
+                    }
+                ],
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "exam",
+                                "display": "Exam"
+                            }
+                        ],
+                        "text": "Exam"
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": "https://lusog-web-production.up.railway.app/fhir/CodeSystem/observation",
+                            "code": "bmi-for-age-status",
+                            "display": "BMI-for-age nutritional status"
+                        }
+                    ],
+                    "text": "BMI-for-age nutritional status (baseline weigh-in)"
+                },
+                "subject": {
+                    "reference": "urn:uuid:2972959e-8a68-47e5-99a1-6746e6536a97"
+                },
+                "performer": [
+                    {
+                        "reference": "urn:uuid:f0d5f0b2-4b68-4a13-8cc4-adecf39d06d8"
+                    }
+                ],
+                "effectiveDateTime": "2026-07-02",
+                "valueCodeableConcept": {
+                    "coding": [
+                        {
+                            "system": "https://lusog-web-production.up.railway.app/fhir/CodeSystem/nutritional-status",
+                            "code": "severely-wasted",
+                            "display": "Severely Wasted"
+                        }
+                    ],
+                    "text": "Severely Wasted"
+                },
+                "derivedFrom": [
+                    {
+                        "reference": "urn:uuid:d6b5924c-cdb6-4e5f-a266-b1c3c59859cb"
+                    }
+                ]
+            },
+            "request": {
+                "method": "PUT",
+                "url": "Observation?identifier=https%3A%2F%2Flusog-web-production.up.railway.app%2Ffhir%2Fsid%2Fobservation%7C1-baseline-bmi-for-age-status"
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:6a93952b-e0d9-4066-a988-b954ab8afcc5",
+            "resource": {
+                "resourceType": "Observation",
+                "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Height-for-age nutritional status (baseline weigh-in): Normal (2026-07-02)</p></div>"
+                },
+                "identifier": [
+                    {
+                        "system": "https://lusog-web-production.up.railway.app/fhir/sid/observation",
+                        "value": "1-baseline-height-for-age-status"
+                    }
+                ],
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "exam",
+                                "display": "Exam"
+                            }
+                        ],
+                        "text": "Exam"
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": "https://lusog-web-production.up.railway.app/fhir/CodeSystem/observation",
+                            "code": "height-for-age-status",
+                            "display": "Height-for-age nutritional status"
+                        }
+                    ],
+                    "text": "Height-for-age nutritional status (baseline weigh-in)"
+                },
+                "subject": {
+                    "reference": "urn:uuid:2972959e-8a68-47e5-99a1-6746e6536a97"
+                },
+                "performer": [
+                    {
+                        "reference": "urn:uuid:f0d5f0b2-4b68-4a13-8cc4-adecf39d06d8"
+                    }
+                ],
+                "effectiveDateTime": "2026-07-02",
+                "valueCodeableConcept": {
+                    "coding": [
+                        {
+                            "system": "https://lusog-web-production.up.railway.app/fhir/CodeSystem/nutritional-status",
+                            "code": "normal",
+                            "display": "Normal"
+                        }
+                    ],
+                    "text": "Normal"
+                }
+            },
+            "request": {
+                "method": "PUT",
+                "url": "Observation?identifier=https%3A%2F%2Flusog-web-production.up.railway.app%2Ffhir%2Fsid%2Fobservation%7C1-baseline-height-for-age-status"
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:607d580a-430a-4dd0-8d7f-a3b9c0e78653",
+            "resource": {
+                "resourceType": "Observation",
+                "meta": {
+                    "profile": [
+                        "http://hl7.org/fhir/StructureDefinition/bodyheight"
+                    ]
+                },
+                "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Body height (endline weigh-in): 152 cm (2026-09-30)</p></div>"
+                },
+                "identifier": [
+                    {
+                        "system": "https://lusog-web-production.up.railway.app/fhir/sid/observation",
+                        "value": "1-endline-body-height"
+                    }
+                ],
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "vital-signs",
+                                "display": "Vital Signs"
+                            }
+                        ],
+                        "text": "Vital Signs"
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": "http://loinc.org",
+                            "code": "8302-2",
+                            "display": "Body height"
+                        }
+                    ],
+                    "text": "Body height (endline weigh-in)"
+                },
+                "subject": {
+                    "reference": "urn:uuid:2972959e-8a68-47e5-99a1-6746e6536a97"
+                },
+                "performer": [
+                    {
+                        "reference": "urn:uuid:f0d5f0b2-4b68-4a13-8cc4-adecf39d06d8"
+                    }
+                ],
+                "effectiveDateTime": "2026-09-30",
+                "valueQuantity": {
+                    "value": 152.0,
+                    "unit": "cm",
+                    "system": "http://unitsofmeasure.org",
+                    "code": "cm"
+                }
+            },
+            "request": {
+                "method": "PUT",
+                "url": "Observation?identifier=https%3A%2F%2Flusog-web-production.up.railway.app%2Ffhir%2Fsid%2Fobservation%7C1-endline-body-height"
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:6f187e6b-b3bd-4c30-bc5a-cc068c68ad54",
+            "resource": {
+                "resourceType": "Observation",
+                "meta": {
+                    "profile": [
+                        "http://hl7.org/fhir/StructureDefinition/bodyweight"
+                    ]
+                },
+                "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Body weight (endline weigh-in): 45 kg (2026-09-30)</p></div>"
+                },
+                "identifier": [
+                    {
+                        "system": "https://lusog-web-production.up.railway.app/fhir/sid/observation",
+                        "value": "1-endline-body-weight"
+                    }
+                ],
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "vital-signs",
+                                "display": "Vital Signs"
+                            }
+                        ],
+                        "text": "Vital Signs"
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": "http://loinc.org",
+                            "code": "29463-7",
+                            "display": "Body weight"
+                        }
+                    ],
+                    "text": "Body weight (endline weigh-in)"
+                },
+                "subject": {
+                    "reference": "urn:uuid:2972959e-8a68-47e5-99a1-6746e6536a97"
+                },
+                "performer": [
+                    {
+                        "reference": "urn:uuid:f0d5f0b2-4b68-4a13-8cc4-adecf39d06d8"
+                    }
+                ],
+                "effectiveDateTime": "2026-09-30",
+                "valueQuantity": {
+                    "value": 45.0,
+                    "unit": "kg",
+                    "system": "http://unitsofmeasure.org",
+                    "code": "kg"
+                }
+            },
+            "request": {
+                "method": "PUT",
+                "url": "Observation?identifier=https%3A%2F%2Flusog-web-production.up.railway.app%2Ffhir%2Fsid%2Fobservation%7C1-endline-body-weight"
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:fce0ff0d-020f-40ec-850e-1eecc2ad22d5",
+            "resource": {
+                "resourceType": "Observation",
+                "meta": {
+                    "profile": [
+                        "http://hl7.org/fhir/StructureDefinition/bmi"
+                    ]
+                },
+                "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Body mass index (BMI) [Ratio] (endline weigh-in): 19.5 kg/m2 (2026-09-30)</p></div>"
+                },
+                "identifier": [
+                    {
+                        "system": "https://lusog-web-production.up.railway.app/fhir/sid/observation",
+                        "value": "1-endline-bmi"
+                    }
+                ],
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "vital-signs",
+                                "display": "Vital Signs"
+                            }
+                        ],
+                        "text": "Vital Signs"
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": "http://loinc.org",
+                            "code": "39156-5",
+                            "display": "Body mass index (BMI) [Ratio]"
+                        }
+                    ],
+                    "text": "Body mass index (BMI) [Ratio] (endline weigh-in)"
+                },
+                "subject": {
+                    "reference": "urn:uuid:2972959e-8a68-47e5-99a1-6746e6536a97"
+                },
+                "performer": [
+                    {
+                        "reference": "urn:uuid:f0d5f0b2-4b68-4a13-8cc4-adecf39d06d8"
+                    }
+                ],
+                "effectiveDateTime": "2026-09-30",
+                "valueQuantity": {
+                    "value": 19.5,
+                    "unit": "kg/m2",
+                    "system": "http://unitsofmeasure.org",
+                    "code": "kg/m2"
+                }
+            },
+            "request": {
+                "method": "PUT",
+                "url": "Observation?identifier=https%3A%2F%2Flusog-web-production.up.railway.app%2Ffhir%2Fsid%2Fobservation%7C1-endline-bmi"
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:c59ec4d9-f500-49de-9d29-3a3354f71fae",
+            "resource": {
+                "resourceType": "Observation",
+                "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>BMI-for-age nutritional status (endline weigh-in): Normal (2026-09-30)</p></div>"
+                },
+                "identifier": [
+                    {
+                        "system": "https://lusog-web-production.up.railway.app/fhir/sid/observation",
+                        "value": "1-endline-bmi-for-age-status"
+                    }
+                ],
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "exam",
+                                "display": "Exam"
+                            }
+                        ],
+                        "text": "Exam"
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": "https://lusog-web-production.up.railway.app/fhir/CodeSystem/observation",
+                            "code": "bmi-for-age-status",
+                            "display": "BMI-for-age nutritional status"
+                        }
+                    ],
+                    "text": "BMI-for-age nutritional status (endline weigh-in)"
+                },
+                "subject": {
+                    "reference": "urn:uuid:2972959e-8a68-47e5-99a1-6746e6536a97"
+                },
+                "performer": [
+                    {
+                        "reference": "urn:uuid:f0d5f0b2-4b68-4a13-8cc4-adecf39d06d8"
+                    }
+                ],
+                "effectiveDateTime": "2026-09-30",
+                "valueCodeableConcept": {
+                    "coding": [
+                        {
+                            "system": "https://lusog-web-production.up.railway.app/fhir/CodeSystem/nutritional-status",
+                            "code": "normal",
+                            "display": "Normal"
+                        }
+                    ],
+                    "text": "Normal"
+                },
+                "derivedFrom": [
+                    {
+                        "reference": "urn:uuid:fce0ff0d-020f-40ec-850e-1eecc2ad22d5"
+                    }
+                ]
+            },
+            "request": {
+                "method": "PUT",
+                "url": "Observation?identifier=https%3A%2F%2Flusog-web-production.up.railway.app%2Ffhir%2Fsid%2Fobservation%7C1-endline-bmi-for-age-status"
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:8041e1bf-6a40-43eb-b831-02e7e9013570",
+            "resource": {
+                "resourceType": "Observation",
+                "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Height-for-age nutritional status (endline weigh-in): Normal Height-for-Age (2026-09-30)</p></div>"
+                },
+                "identifier": [
+                    {
+                        "system": "https://lusog-web-production.up.railway.app/fhir/sid/observation",
+                        "value": "1-endline-height-for-age-status"
+                    }
+                ],
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "exam",
+                                "display": "Exam"
+                            }
+                        ],
+                        "text": "Exam"
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": "https://lusog-web-production.up.railway.app/fhir/CodeSystem/observation",
+                            "code": "height-for-age-status",
+                            "display": "Height-for-age nutritional status"
+                        }
+                    ],
+                    "text": "Height-for-age nutritional status (endline weigh-in)"
+                },
+                "subject": {
+                    "reference": "urn:uuid:2972959e-8a68-47e5-99a1-6746e6536a97"
+                },
+                "performer": [
+                    {
+                        "reference": "urn:uuid:f0d5f0b2-4b68-4a13-8cc4-adecf39d06d8"
+                    }
+                ],
+                "effectiveDateTime": "2026-09-30",
+                "valueCodeableConcept": {
+                    "coding": [
+                        {
+                            "system": "https://lusog-web-production.up.railway.app/fhir/CodeSystem/nutritional-status",
+                            "code": "normal-height-for-age",
+                            "display": "Normal Height-for-Age"
+                        }
+                    ],
+                    "text": "Normal Height-for-Age"
+                }
+            },
+            "request": {
+                "method": "PUT",
+                "url": "Observation?identifier=https%3A%2F%2Flusog-web-production.up.railway.app%2Ffhir%2Fsid%2Fobservation%7C1-endline-height-for-age-status"
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:9b7b3435-b9a6-40dd-b2b7-a07f91e1fd11",
+            "resource": {
+                "resourceType": "Observation",
+                "meta": {
+                    "profile": [
+                        "http://hl7.org/fhir/StructureDefinition/bodytemp"
+                    ]
+                },
+                "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Body temperature: 36.8 Cel (2026-09-30T09:15:00+00:00)</p></div>"
+                },
+                "identifier": [
+                    {
+                        "system": "https://lusog-web-production.up.railway.app/fhir/sid/observation",
+                        "value": "1-vitals-body-temperature"
+                    }
+                ],
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "vital-signs",
+                                "display": "Vital Signs"
+                            }
+                        ],
+                        "text": "Vital Signs"
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": "http://loinc.org",
+                            "code": "8310-5",
+                            "display": "Body temperature"
+                        }
+                    ],
+                    "text": "Body temperature"
+                },
+                "subject": {
+                    "reference": "urn:uuid:2972959e-8a68-47e5-99a1-6746e6536a97"
+                },
+                "performer": [
+                    {
+                        "reference": "urn:uuid:f0d5f0b2-4b68-4a13-8cc4-adecf39d06d8"
+                    }
+                ],
+                "effectiveDateTime": "2026-09-30T09:15:00+00:00",
+                "valueQuantity": {
+                    "value": 36.8,
+                    "unit": "Cel",
+                    "system": "http://unitsofmeasure.org",
+                    "code": "Cel"
+                }
+            },
+            "request": {
+                "method": "PUT",
+                "url": "Observation?identifier=https%3A%2F%2Flusog-web-production.up.railway.app%2Ffhir%2Fsid%2Fobservation%7C1-vitals-body-temperature"
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:315cc8a0-96ec-46db-980f-31029a17e8f1",
+            "resource": {
+                "resourceType": "Observation",
+                "meta": {
+                    "profile": [
+                        "http://hl7.org/fhir/StructureDefinition/heartrate"
+                    ]
+                },
+                "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Pulse rate: 82 beats/minute (2026-09-30T09:15:00+00:00)</p></div>"
+                },
+                "identifier": [
+                    {
+                        "system": "https://lusog-web-production.up.railway.app/fhir/sid/observation",
+                        "value": "1-vitals-heart-rate"
+                    }
+                ],
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "vital-signs",
+                                "display": "Vital Signs"
+                            }
+                        ],
+                        "text": "Vital Signs"
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": "http://loinc.org",
+                            "code": "8867-4",
+                            "display": "Heart rate"
+                        }
+                    ],
+                    "text": "Pulse rate"
+                },
+                "subject": {
+                    "reference": "urn:uuid:2972959e-8a68-47e5-99a1-6746e6536a97"
+                },
+                "performer": [
+                    {
+                        "reference": "urn:uuid:f0d5f0b2-4b68-4a13-8cc4-adecf39d06d8"
+                    }
+                ],
+                "effectiveDateTime": "2026-09-30T09:15:00+00:00",
+                "valueQuantity": {
+                    "value": 82.0,
+                    "unit": "beats/minute",
+                    "system": "http://unitsofmeasure.org",
+                    "code": "/min"
+                }
+            },
+            "request": {
+                "method": "PUT",
+                "url": "Observation?identifier=https%3A%2F%2Flusog-web-production.up.railway.app%2Ffhir%2Fsid%2Fobservation%7C1-vitals-heart-rate"
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:684e642f-d184-4c2a-b047-fb43ded8c35f",
+            "resource": {
+                "resourceType": "Observation",
+                "meta": {
+                    "profile": [
+                        "http://hl7.org/fhir/StructureDefinition/bp"
+                    ]
+                },
+                "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Blood pressure: 110/70 mmHg (2026-09-30T09:15:00+00:00)</p></div>"
+                },
+                "identifier": [
+                    {
+                        "system": "https://lusog-web-production.up.railway.app/fhir/sid/observation",
+                        "value": "1-vitals-blood-pressure"
+                    }
+                ],
+                "status": "final",
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                                "code": "vital-signs",
+                                "display": "Vital Signs"
+                            }
+                        ],
+                        "text": "Vital Signs"
+                    }
+                ],
+                "code": {
+                    "coding": [
+                        {
+                            "system": "http://loinc.org",
+                            "code": "85354-9",
+                            "display": "Blood pressure panel with all children optional"
+                        }
+                    ],
+                    "text": "Blood pressure"
+                },
+                "subject": {
+                    "reference": "urn:uuid:2972959e-8a68-47e5-99a1-6746e6536a97"
+                },
+                "performer": [
+                    {
+                        "reference": "urn:uuid:f0d5f0b2-4b68-4a13-8cc4-adecf39d06d8"
+                    }
+                ],
+                "effectiveDateTime": "2026-09-30T09:15:00+00:00",
+                "component": [
+                    {
+                        "code": {
+                            "coding": [
+                                {
+                                    "system": "http://loinc.org",
+                                    "code": "8480-6",
+                                    "display": "Systolic blood pressure"
+                                }
+                            ]
+                        },
+                        "valueQuantity": {
+                            "value": 110.0,
+                            "unit": "mmHg",
+                            "system": "http://unitsofmeasure.org",
+                            "code": "mm[Hg]"
+                        }
+                    },
+                    {
+                        "code": {
+                            "coding": [
+                                {
+                                    "system": "http://loinc.org",
+                                    "code": "8462-4",
+                                    "display": "Diastolic blood pressure"
+                                }
+                            ]
+                        },
+                        "valueQuantity": {
+                            "value": 70.0,
+                            "unit": "mmHg",
+                            "system": "http://unitsofmeasure.org",
+                            "code": "mm[Hg]"
+                        }
+                    }
+                ]
+            },
+            "request": {
+                "method": "PUT",
+                "url": "Observation?identifier=https%3A%2F%2Flusog-web-production.up.railway.app%2Ffhir%2Fsid%2Fobservation%7C1-vitals-blood-pressure"
+            }
+        },
+        {
+            "fullUrl": "urn:uuid:d58a52cd-4469-4265-bccc-cb4a0654e8df",
+            "resource": {
+                "resourceType": "Condition",
+                "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p>Asthma — Confirmed</p></div>"
+                },
+                "identifier": [
+                    {
+                        "system": "https://lusog-web-production.up.railway.app/fhir/sid/condition",
+                        "value": "condition-1"
+                    }
+                ],
+                "clinicalStatus": {
+                    "coding": [
+                        {
+                            "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+                            "code": "active",
+                            "display": "Active"
+                        }
+                    ]
+                },
+                "verificationStatus": {
+                    "coding": [
+                        {
+                            "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+                            "code": "confirmed",
+                            "display": "Confirmed"
+                        }
+                    ]
+                },
+                "category": [
+                    {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                                "code": "problem-list-item",
+                                "display": "Problem List Item"
+                            }
+                        ]
+                    }
+                ],
+                "code": {
+                    "text": "Asthma"
+                },
+                "subject": {
+                    "reference": "urn:uuid:2972959e-8a68-47e5-99a1-6746e6536a97"
+                },
+                "recordedDate": "2026-10-11T14:21:20+00:00"
+            },
+            "request": {
+                "method": "PUT",
+                "url": "Condition?identifier=https%3A%2F%2Flusog-web-production.up.railway.app%2Ffhir%2Fsid%2Fcondition%7Ccondition-1"
+            }
+        }
+    ]
+}
