@@ -86,6 +86,50 @@
 .template-table .ml-row td { height: 36px; }
 .template-table .ml-cell { overflow-wrap: anywhere; }
 
+/* ── Class Masterlist (the School Nurse's copy of the advisers' form) ──
+   Drawn from the same model the .xlsx is written from, so it keeps that
+   file's register: the heading lines unruled and centred, then a ruled grid
+   of hairline boxes. The theme's table rules (padding, hover tint, row
+   rules) are undone here because this is paper, not app chrome. ── */
+.cm-sheet { padding: 18px 16px 22px; }
+.cm-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.cm-table td {
+	padding: 4px 6px;
+	height: 26px;
+	border: 1px solid #111827;
+	background: none;
+	font-size: .74rem;
+	color: #111827;
+	text-align: left;
+	overflow-wrap: anywhere;
+}
+.cm-table tbody tr:hover td { background: none; }
+.cm-table tr.cm-school td,
+.cm-table tr.cm-heading td,
+.cm-table tr.cm-class td,
+.cm-table tr.cm-plain td {
+	height: auto;
+	padding: 2px 6px;
+	border: 0;
+	text-align: center;
+	font-weight: 700;
+	text-transform: uppercase;
+}
+.cm-table tr.cm-school td { font-size: .92rem; }
+.cm-table tr.cm-heading:has(+ tr.cm-head) td { padding-bottom: 10px; }
+.cm-table tr.cm-head td { text-align: center; font-weight: 700; text-transform: uppercase; background: #f3f4f6; }
+.cm-table tr.cm-head td.cm-caption { text-transform: none; }
+.cm-table tr.cm-band td { font-weight: 700; }
+.cm-table tr.cm-line td:first-child { text-align: center; }
+.cm-table tr.cm-plain td { text-align: left; font-weight: 700; padding-top: 10px; }
+/* A value the form has none for is a line to write on, never a guess. */
+.cm-blank { display: inline-block; width: min(280px, 80%); height: 1.1em; border-bottom: 1px solid #111827; vertical-align: bottom; }
+.cm-table tr.cm-plain .cm-blank,
+.cm-signed,
+.cm-label { display: inline-block; width: 260px; text-align: center; }
+.cm-signed { border-bottom: 1px solid #111827; min-height: 1.1em; }
+.cm-label { font-weight: 400; }
+
 /* ── Letterhead ──────────────────────────────────────────────────────
    The seals sit either side of the heading lines, as they do on the printed
    form: three columns, the middle one centred and elastic. A school with no
@@ -336,7 +380,9 @@
 @media print {
 	* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 	html, body { height: auto; overflow: visible; background: #fff; }
-	.asb-sidebar, .topbar, .sheet-tools, .page-header, .selector-wrap, .placeholder-panel, .auto-note { display: none !important; }
+	/* `.sidebar` is the School Nurse's rail: the nurse reads this page as
+	   Forms & Templates, and nurse-sidebar.css carries no print rule of its own. */
+	.asb-sidebar, .sidebar, .topbar, .sheet-tools, .page-header, .selector-wrap, .placeholder-panel, .auto-note { display: none !important; }
 	/* The chart is part of the form now, so it prints with it. A little
 	   shorter on paper, and never split across a page break — half a chart
 	   over a fold is not a reading of anything. */
@@ -362,6 +408,8 @@
 	.cell-input, .designation-input { border: none; border-radius: 0; padding: 1px 2px; font-size: 8.5pt; background: transparent; box-shadow: none; }
 	.cell-input[readonly] { background: #f3f4f6; }
 	.template-table .ml-row td { height: 16pt; }
+	.cm-sheet { padding: 6px 4px; }
+	.cm-table td { padding: 2px 4px; height: 15pt; font-size: 8.5pt; }
 	.bmi-table .bmi-input { padding: 1px 0; font-size: 8.5pt; }
 	.bmi-table .sex-cell { font-size: 8pt; }
 	input[type=number] { -moz-appearance: textfield; appearance: textfield; }

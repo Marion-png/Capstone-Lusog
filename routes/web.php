@@ -45,6 +45,7 @@ use App\Models\InstitutionSection;
 use App\Models\Medicine;
 use App\Models\MedicineDispense;
 use App\Models\StudentHealthRecord;
+use App\Support\AccountSettings;
 use App\Support\AuditTrail;
 use App\Support\ClinicDashboard;
 use App\Support\FeedingAtRiskRule;
@@ -1050,6 +1051,20 @@ Route::get('/dashboard/feedingcor-program', function (Request $request) {
 Route::get('/dashboard/school-nurse/feeding-program', [FeedingProgramController::class, 'index'])
     ->name('dashboard.school-nurse.feeding-program');
 
+// The nurse's Forms & Templates: the Feeding Coordinator's SBFP forms page,
+// read in the nurse's rail without the narrative report, plus the class
+// advisers' blank CLASS MASTERLIST. Same controllers as the coordinator's and
+// the adviser's — never a copy — under the nurse's own path, because
+// EnsureActiveSession seeds a demo session for whichever role a URL belongs to.
+Route::get('/dashboard/school-nurse/forms', [FeedingCoordinatorController::class, 'sbfpForms'])
+    ->name('dashboard.school-nurse.forms');
+
+Route::get('/dashboard/school-nurse/forms/roster', [FeedingCoordinatorController::class, 'sbfpFormsRoster'])
+    ->name('dashboard.school-nurse.forms.roster');
+
+Route::get('/dashboard/school-nurse/forms/class-masterlist', [AdviserController::class, 'importTemplate'])
+    ->name('dashboard.school-nurse.forms.class-masterlist');
+
 /*
  * Clinic Teacher.
  *
@@ -1653,7 +1668,7 @@ Route::post('/login', function (Request $request) {
     $account = $candidates->first();
     $role = (string) ($account['role'] ?? '');
 
-    if (in_array($role, \App\Support\AccountSettings::TEACHER_ROLES, true)) {
+    if (in_array($role, AccountSettings::TEACHER_ROLES, true)) {
         $request->session()->put('assigned_grade_level', $account['assigned_grade_level'] ?? null);
         $request->session()->put('assigned_section', $account['assigned_section'] ?? null);
         $request->session()->put('assigned_school_name', $account['school_name'] ?? null);

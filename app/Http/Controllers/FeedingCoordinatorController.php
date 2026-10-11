@@ -6,6 +6,7 @@ use App\Models\FeedingAttendance;
 use App\Models\StudentHealthRecord;
 use App\Support\BmiAssessmentReport;
 use App\Support\ChangeStamp;
+use App\Support\ClassMasterlistTemplate;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
@@ -15,21 +16,38 @@ use App\Support\FeedingReportNarrative;
 use App\Support\RequestMemo;
 use App\Support\SchemaCache;
 use App\Support\SchoolLetterhead;
+use App\Support\SchoolPulse;
 use App\Support\SchoolSignatories;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class FeedingCoordinatorController extends Controller
 {
-    public function sbfpForms(Request $request): View
+    /**
+     * Who may open the SBFP forms page. The School Nurse reads it as their
+     * Forms & Templates tab — every form but the narrative report, which is
+     * the coordinator's own account of the programme — in their own rail,
+     * from this one controller, so the two desks can never print different
+     * figures on the same form.
+     */
+    public const FORM_READERS = ['feeding_coor', 'school_nurse'];
+
+    public function sbfpForms(Request $request): View|RedirectResponse
     {
+        if (! $this->readsForms($request)) {
+            return redirect()->route('login')
+                ->with('error', 'Only the Feeding Coordinator and the School Nurse can open the SBFP forms.');
+        }
+
+        $forNurse = $this->readsAsNurse($request);
         $institutionId = $request->session()->get('active_institution_id');
 
         // Stamped before the roster is read, so an enrolment landing between
         // the two is caught by the next pulse rather than missed by both.
-        $rosterStamp = $this->metricsStamp($institutionId);
+        $rosterStamp = $this->formsStamp($request);
         [$records, $studentsByGrade, $sectionsByGrade] = $this->sbfpRoster($institutionId);
 
         // The narrative below reports the programme, and the programme only
@@ -39,7 +57,15 @@ class FeedingCoordinatorController extends Controller
 
         $letterhead = SchoolLetterhead::for($institutionId, (string) $request->session()->get('active_school_name', ''));
 
+        // The class advisers' blank CLASS MASTERLIST, for the nurse only: one
+        // model drawn on the page and written to the download, so the two are
+        // the same form.
+        $classMasterlist = $forNurse ? ClassMasterlistTemplate::forSession($request->session()) : null;
+
         return view('feedingcor-dashboard.sbfp-forms', [
+            'forNurse' => $forNurse,
+            'classMasterlist' => $classMasterlist,
+            'classMasterlistRows' => $classMasterlist !== null ? ClassMasterlistTemplate::printRows($classMasterlist) : [],
             'studentsByGrade' => $studentsByGrade,
             'gradeOptions' => array_keys($studentsByGrade),
             'sectionsByGrade' => $sectionsByGrade,
@@ -71,7 +97,10 @@ class FeedingCoordinatorController extends Controller
             // this is the school's report on its programme, and a narrative
             // that silently described one grade would be read as describing
             // all of them.
-            'narrative' => FeedingReportNarrative::build(
+            //
+            // Not drafted at all for the nurse, whose page carries no
+            // narrative report.
+            'narrative' => $forNurse ? [] : FeedingReportNarrative::build(
                 $unfilteredRecords,
                 (string) ($letterhead['school'] ?? $request->session()->get('active_school_name', '')),
                 StudentHealthRecord::currentSchoolYear(),
@@ -79,6 +108,34 @@ class FeedingCoordinatorController extends Controller
                 FeedingAtRiskRule::forInstitution($institutionId),
             ),
         ]);
+    }
+
+    private function readsForms(Request $request): bool
+    {
+        return in_array((string) $request->session()->get('active_role', ''), self::FORM_READERS, true);
+    }
+
+    private function readsAsNurse(Request $request): bool
+    {
+        return $request->session()->get('active_role') === 'school_nurse';
+    }
+
+    /**
+     * The stamp the forms page's live roster compares against — the one its
+     * reader's pulse serves. The coordinator polls their own pulse; the nurse
+     * polls the school-wide one every nurse screen already reads
+     * (`workspace.pulse`), because the coordinator's lives under
+     * /dashboard/feedingcor, where a demo session would be re-seeded as the
+     * coordinator. Two kinds of stamp must never be compared with each other,
+     * or the roster is re-read on every tick.
+     */
+    private function formsStamp(Request $request): string
+    {
+        $institutionId = $request->session()->get('active_institution_id');
+
+        return $this->readsAsNurse($request)
+            ? SchoolPulse::stamp($institutionId ? (int) $institutionId : null)
+            : $this->metricsStamp($institutionId);
     }
 
     /**
@@ -185,12 +242,12 @@ class FeedingCoordinatorController extends Controller
      */
     public function sbfpFormsRoster(Request $request): JsonResponse
     {
-        if (! $this->isCoordinator($request)) {
+        if (! $this->readsForms($request)) {
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
         $institutionId = $request->session()->get('active_institution_id');
-        $stamp = $this->metricsStamp($institutionId);
+        $stamp = $this->formsStamp($request);
         [, $studentsByGrade, $sectionsByGrade] = $this->sbfpRoster($institutionId);
 
         return response()->json([

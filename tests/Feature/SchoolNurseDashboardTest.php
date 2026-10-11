@@ -257,6 +257,7 @@ class SchoolNurseDashboardTest extends TestCase
             '/dashboard/consultation-log' => 'dashboard.consultation-log',
             '/dashboard/medicine-inventory' => 'dashboard.medicine-inventory',
             '/dashboard/data-visualization' => 'dashboard.data-visualization',
+            '/dashboard/school-nurse/forms' => 'dashboard.school-nurse.forms',
         ];
 
         // Still on the older .nsb-* rail. Move each entry up to $lusogPages

@@ -44,6 +44,7 @@ class NurseSearchOnEveryTabTest extends TestCase
             'Medicine Inventory' => ['dashboard.medicine-inventory'],
             'Feeding Program' => ['dashboard.school-nurse.feeding-program'],
             'Data Visualization' => ['dashboard.data-visualization'],
+            'Forms & Templates' => ['dashboard.school-nurse.forms'],
             'Consent Forms' => ['consent-forms.nurse-index'],
             'Health Assessments' => ['health-assessments.nurse-index'],
         ];

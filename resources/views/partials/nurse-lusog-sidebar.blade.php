@@ -3,8 +3,8 @@
 
     Pass $active to highlight the current item: 'dashboard' | 'records' |
     'queue' | 'consultations' | 'feeding' | 'deworming' | 'consent' |
-    'assessments' | 'inventory' | 'dispensing' | 'visualization' | 'exchange' |
-    'reports'.
+    'assessments' | 'inventory' | 'dispensing' | 'visualization' | 'forms' |
+    'exchange' | 'reports'.
 
     Markup only — the .sb-* rules live in css/nurse-sidebar.css, which the
     page must inline after css/lusog-theme.css. This replaces the older
@@ -103,6 +103,14 @@
         <a href="{{ route('dashboard.data-visualization') }}" class="sb-link {{ $active === 'visualization' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             Data Visualization
+        </a>
+        {{-- The Feeding Coordinator's SBFP forms (BMI reports and both master
+             lists, never the narrative report) and the class advisers' blank
+             Class Masterlist — read from the same controllers those roles
+             use, so a form printed here and one printed there agree. --}}
+        <a href="{{ route('dashboard.school-nurse.forms') }}" class="sb-link {{ $active === 'forms' ? 'active' : '' }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+            Forms &amp; Templates
         </a>
         {{-- HL7 FHIR R4 outbound exchange (FhirExchangeController). The
              nurse's alone: it is the one screen that sends a learner's record

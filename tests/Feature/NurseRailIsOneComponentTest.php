@@ -44,6 +44,7 @@ class NurseRailIsOneComponentTest extends TestCase
             'Feeding Program' => ['dashboard.school-nurse.feeding-program'],
             'Medicine Inventory' => ['dashboard.medicine-inventory'],
             'Data Visualization' => ['dashboard.data-visualization'],
+            'Forms & Templates' => ['dashboard.school-nurse.forms'],
         ];
     }
 

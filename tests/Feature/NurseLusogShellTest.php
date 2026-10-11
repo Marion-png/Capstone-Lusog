@@ -31,6 +31,7 @@ class NurseLusogShellTest extends TestCase
             'medicine inventory' => ['/dashboard/medicine-inventory'],
             'data visualization' => ['/dashboard/data-visualization'],
             'feeding program' => ['/dashboard/school-nurse/feeding-program'],
+            'forms and templates' => ['/dashboard/school-nurse/forms'],
         ];
     }
 

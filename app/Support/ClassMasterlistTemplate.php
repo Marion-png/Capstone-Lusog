@@ -2,6 +2,9 @@
 
 namespace App\Support;
 
+use App\Models\StudentHealthRecord;
+use Illuminate\Contracts\Session\Session;
+
 /**
  * The DepEd CLASS MASTERLIST, as the blank sheet an adviser fills in.
  *
@@ -17,9 +20,10 @@ namespace App\Support;
  * document — which is the whole point of offering a template at all.
  *
  * It builds a **model**, not a file: rows, the register each is printed in, the
- * merges the form's heading needs and the column widths. AdviserController
- * writes that out through OpenSpout. Keeping the layout separate from the
- * writer is what makes every cell testable without a spreadsheet library.
+ * merges the form's heading needs and the column widths. ClassMasterlistWorkbook
+ * writes that out through OpenSpout, and printRows() lays the same model out for
+ * the school nurse's Forms & Templates page. Keeping the layout separate from
+ * the writers is what makes every cell testable without a spreadsheet library.
  *
  * Two details of the form are deliberate rather than accidental, because
  * App\Support\StudentImportSheet reads this exact shape back:
@@ -172,6 +176,119 @@ final class ClassMasterlistTemplate
             'widths' => self::WIDTHS,
             'file_name' => self::fileName($classLabel, $schoolYear),
         ];
+    }
+
+    /**
+     * The blank form as the signed-in reader is handed it.
+     *
+     * A class adviser's copy is headed with their own class and signed with
+     * their own name. Anybody else who opens it — the school nurse keeps it
+     * beside the SBFP forms — has no class and is not its adviser, so both
+     * lines print blank to write on rather than putting the reader's own name
+     * over "ADVISER".
+     *
+     * @return array{rows: list<array{cells: list<string>, register: string}>, merges: list<array{0: int, 1: int, 2: int, 3: int}>, widths: list<int>, file_name: string}
+     */
+    public static function forSession(Session $session): array
+    {
+        $isAdviser = $session->get('active_role') === 'class_adviser';
+
+        return self::build(
+            SchoolLetterhead::for(
+                $session->get('active_institution_id'),
+                (string) $session->get('active_school_name', '')
+            ),
+            $isAdviser
+                ? self::classLabel(
+                    (string) $session->get('assigned_grade_level', ''),
+                    (string) $session->get('assigned_section', '')
+                )
+                : '',
+            StudentHealthRecord::currentSchoolYear(),
+            $isAdviser ? (string) $session->get('active_name', '') : ''
+        );
+    }
+
+    /**
+     * The model laid out for a page, the way the workbook lays it out.
+     *
+     * The second writer of the same model, so the sheet on screen and the
+     * file that downloads cannot drift apart. A merge becomes a colspan /
+     * rowspan and the cells it covers are dropped. Where the file has no
+     * merge, a band label and the signature lines run on over the empty cells
+     * beside them — in a spreadsheet that text simply spills across, and on a
+     * page it would otherwise be squeezed into the narrow NO column. Ruled
+     * learner lines never run on: each cell is a box to write in.
+     *
+     * `signature` marks the line the adviser signs on, the one above the
+     * SIGNATORY_LABEL, so a page can rule it even when no name is printed.
+     *
+     * @param  array{rows: list<array{cells: list<string>, register: string}>, merges: list<array{0: int, 1: int, 2: int, 3: int}>}  $template
+     * @return list<array{register: string, signature: bool, cells: list<array{text: string, colspan: int, rowspan: int}>}>
+     */
+    public static function printRows(array $template): array
+    {
+        $anchors = [];
+        $covered = [];
+
+        foreach ($template['merges'] as [$left, $top, $right, $bottom]) {
+            $anchors[$top][$left] = [$right - $left + 1, $bottom - $top + 1];
+
+            for ($row = $top; $row <= $bottom; $row++) {
+                for ($column = $left; $column <= $right; $column++) {
+                    if ($row !== $top || $column !== $left) {
+                        $covered[$row][$column] = true;
+                    }
+                }
+            }
+        }
+
+        $rows = array_values($template['rows']);
+        $runsOn = [self::R_BAND, self::R_PLAIN];
+        $printed = [];
+
+        foreach ($rows as $index => $row) {
+            $number = $index + 1;
+            $cells = [];
+            $column = 0;
+
+            while ($column < self::COLUMNS) {
+                if (isset($covered[$number][$column])) {
+                    $column++;
+
+                    continue;
+                }
+
+                $text = (string) ($row['cells'][$column] ?? '');
+
+                if (isset($anchors[$number][$column])) {
+                    [$colspan, $rowspan] = $anchors[$number][$column];
+                } else {
+                    $colspan = 1;
+                    $rowspan = 1;
+
+                    if (in_array($row['register'], $runsOn, true) && ! isset($anchors[$number])) {
+                        while ($column + $colspan < self::COLUMNS
+                            && trim((string) ($row['cells'][$column + $colspan] ?? '')) === '') {
+                            $colspan++;
+                        }
+                    }
+                }
+
+                $cells[] = ['text' => $text, 'colspan' => $colspan, 'rowspan' => $rowspan];
+                $column += $colspan;
+            }
+
+            $next = $rows[$index + 1]['cells'][0] ?? null;
+
+            $printed[] = [
+                'register' => $row['register'],
+                'signature' => $row['register'] === self::R_PLAIN && $next === self::SIGNATORY_LABEL,
+                'cells' => $cells,
+            ];
+        }
+
+        return $printed;
     }
 
     /**

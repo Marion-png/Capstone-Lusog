@@ -1,10 +1,18 @@
 ﻿<!DOCTYPE html>
+{{--
+	One page, two readers. The Feeding Coordinator reads it as their
+	Nutritional Health Status Report tab; the School Nurse reads it as Forms &
+	Templates, in their own rail, with every form but the narrative report and
+	with the class advisers' blank Class Masterlist added. Same controller, same
+	reading — never a second copy that could print different figures.
+--}}
+@php $forNurse = $forNurse ?? false; @endphp
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="csrf-token" content="{{ csrf_token() }}">
-	<title>Nutritional Health Status Report - Feeding Coordinator - SIGLA</title>
+	<title>{{ $forNurse ? 'Forms & Templates - School Nurse - SIGLA' : 'Nutritional Health Status Report - Feeding Coordinator - SIGLA' }}</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
@@ -15,22 +23,47 @@
     @if (file_exists($pageCssPath))
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
-	<style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
+	{{-- The reader's own rail sheet, last, as every LUSOG page orders it. --}}
+	@if ($forNurse)
+		<style>{!! file_get_contents(resource_path('css/nurse-sidebar.css')) !!}</style>
+	@else
+		<style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
+	@endif
 	<style id="printPageStyle">@page{size:A4 portrait;margin:10mm}</style>
 </head>
 <body>
-@include('partials.feedingcor-sidebar', ['active' => 'forms'])
+@if ($forNurse)
+	@include('partials.nurse-lusog-sidebar', ['active' => 'forms'])
+@else
+	@include('partials.feedingcor-sidebar', ['active' => 'forms'])
+@endif
 
 <div class="main">
-	<header class="topbar">
-		<div class="topbar-bc"><span>Dashboard</span><span class="bc-sep">&rsaquo;</span><span>Nutritional Health Status Report</span></div>
-		@include('partials.live-clock')
-	</header>
+	@if ($forNurse)
+		<header class="topbar">
+			<div class="topbar-bc"><span>School Nurse</span><span class="bc-sep">&rsaquo;</span><span>Forms &amp; Templates</span></div>
+
+			@include('partials.nurse-learner-search')
+			<div class="topbar-spacer"></div>
+			<div class="topbar-chip"><span class="dot"></span>{{ session('active_school_name', 'No school assigned') }} &middot; SY {{ $schoolYear }}</div>
+			@include('partials.live-clock')
+		</header>
+	@else
+		<header class="topbar">
+			<div class="topbar-bc"><span>Dashboard</span><span class="bc-sep">&rsaquo;</span><span>Nutritional Health Status Report</span></div>
+			@include('partials.live-clock')
+		</header>
+	@endif
 
 	<div class="content">
 		<div class="page-header">
-			<h1 class="page-title">Nutritional Health Status <span>Report</span></h1>
-			<p class="page-sub">Select a form template, then encode the required fields in a clean sheet view.</p>
+			@if ($forNurse)
+				<h1 class="page-title">Forms &amp; <span>Templates</span></h1>
+				<p class="page-sub">The Feeding Coordinator's SBFP forms and the class advisers' Class Masterlist, filled from the same records. Select a template to view, print or download it.</p>
+			@else
+				<h1 class="page-title">Nutritional Health Status <span>Report</span></h1>
+				<p class="page-sub">Select a form template, then encode the required fields in a clean sheet view.</p>
+			@endif
 		</div>
 
 		<section class="selector-wrap">
@@ -54,9 +87,18 @@
 							<option value="feeding-beneficiaries">Feeding Program - Master List of Beneficiaries</option>
 							<option value="feeding-masterlist">Feeding Program - Masterlist of Qualified Recipients</option>
 						</optgroup>
-						<optgroup label="Feeding Program (hand-encoded)">
-							<option value="feeding-narrative">Feeding Program - Narrative Report</option>
-						</optgroup>
+						{{-- The narrative report is the coordinator's own account of
+						     the programme, so the nurse's copy of this page leaves it
+						     out; the nurse gets the advisers' class masterlist instead. --}}
+						@if ($forNurse)
+							<optgroup label="Class Adviser (blank template)">
+								<option value="class-masterlist">Class Masterlist</option>
+							</optgroup>
+						@else
+							<optgroup label="Feeding Program (hand-encoded)">
+								<option value="feeding-narrative">Feeding Program - Narrative Report</option>
+							</optgroup>
+						@endif
 					</select>
 				</div>
 				<div id="reportPhaseField">
@@ -67,7 +109,7 @@
 						<option value="both">Both Baseline and Endline</option>
 					</select>
 				</div>
-				<div>
+				<div id="gradeLevelField">
 					<label class="selector-label" for="gradeLevelSelect">Grade Level <span class="muted">(auto-fill from adviser records)</span></label>
 					<select id="gradeLevelSelect" class="select selector-input" aria-label="Select grade level to auto-fill">
 						<option value="">All Grade Level</option>
@@ -78,7 +120,7 @@
 						@endforelse
 					</select>
 				</div>
-				<div>
+				<div id="sectionField">
 					{{-- Cascades off the grade, because a section belongs to one:
 					     offering every section in the school would let a
 					     coordinator pick a pair that names nobody. --}}
@@ -204,6 +246,9 @@
 			</div>
 		</section>
 
+		{{-- Not in the document at all for the nurse: a hidden panel would
+		     still carry the coordinator's drafted report in its markup. --}}
+		@unless ($forNurse)
 		<section class="sheet-wrap form-panel" id="narrativePanel" data-template="feeding-narrative">
 			<div class="sheet-tools">
 				<div class="sheet-status" id="narrativeDraftStatus">Draft not saved yet.</div>
@@ -254,6 +299,14 @@
 				</div>
 			</div>
 		</section>
+		@endunless
+
+		@if ($forNurse && $classMasterlist !== null)
+			@include('feedingcor-dashboard.partials.class-masterlist-sheet', [
+				'rows' => $classMasterlistRows,
+				'widths' => $classMasterlist['widths'],
+			])
+		@endif
 
 		{{-- The Masterlist of Qualified Recipients names a learner only once the
 		     Feeding Coordinator has enrolled them, on the Dashboard or the
@@ -393,6 +446,8 @@
 	const sectionSelect = document.getElementById('sectionSelect');
 	const reportPhaseSelect = document.getElementById('reportPhaseSelect');
 	const reportPhaseField = document.getElementById('reportPhaseField');
+	const gradeLevelField = document.getElementById('gradeLevelField');
+	const sectionField = document.getElementById('sectionField');
 	const emptyStatePanel = document.getElementById('emptyStatePanel');
 
 	// Adviser-entered students grouped by grade level (one grade per form).
@@ -593,6 +648,14 @@
 			reportPhaseField.style.display = selected === 'bmi-report' ? '' : 'none';
 		}
 
+		// The class masterlist is a blank form an adviser fills in for their own
+		// class, so the roster's grade and section have nothing to narrow on it.
+		[gradeLevelField, sectionField].forEach((field) => {
+			if (field) {
+				field.style.display = selected === 'class-masterlist' ? 'none' : '';
+			}
+		});
+
 		if (printPageStyle) {
 			const orientation = landscapeTemplates.includes(selected) ? 'landscape' : 'portrait';
 			printPageStyle.textContent = `@page{size:A4 ${orientation};margin:10mm}`;
@@ -713,7 +776,8 @@
 
 	// BMI Baseline / Final reports are tabulated server-side and rendered
 	// read-only, so there is no client-side compute or draft here — only print.
-	['printBmiBaselineBtn', 'printBmiFinalBtn'].forEach((id) => {
+	// The nurse's blank class masterlist is the same: nothing to save, only print.
+	['printBmiBaselineBtn', 'printBmiFinalBtn', 'printClassMasterlistBtn'].forEach((id) => {
 		const btn = document.getElementById(id);
 		if (btn) {
 			btn.addEventListener('click', () => window.print());
@@ -1017,8 +1081,12 @@
 	// pulse (a stamp, no personal information). Only then is the roster re-read
 	// and both master lists redrawn from it, so the forms follow the roster
 	// without a reload. Checked again the moment the tab is looked at.
-	const pulseUrl = @json(route('dashboard.feedingcor.metrics.pulse'));
-	const rosterUrl = @json(route('dashboard.feedingcor-sbfp-forms.roster'));
+	//
+	// Each reader polls the pulse its own screens already read, and re-reads
+	// the roster under its own path; the server stamps the roster with that
+	// same pulse, so the two are always compared like with like.
+	const pulseUrl = @json($forNurse ? route('workspace.pulse') : route('dashboard.feedingcor.metrics.pulse'));
+	const rosterUrl = @json($forNurse ? route('dashboard.school-nurse.forms.roster') : route('dashboard.feedingcor-sbfp-forms.roster'));
 	let rosterStamp = @json($rosterStamp ?? '');
 	let rosterChecking = false;
 
@@ -1103,6 +1171,10 @@
      it — same id, same script — on every refresh. The listeners are delegated
      from the document, so marks the refresh brings in are covered anyway. --}}
 @include('partials.chart-tooltip')
-@include('partials.role-page-transition')
+@if ($forNurse)
+	@include('partials.nurse-page-transition')
+@else
+	@include('partials.role-page-transition')
+@endif
 </body>
 </html>
