@@ -12,27 +12,27 @@
     <script>document.documentElement.classList.add('js');</script>
     {{-- LUSOG order: theme, then this page's sheet, then the nurse rail. --}}
     <style>{!! file_get_contents(resource_path('css/lusog-theme.css')) !!}</style>
-    @php $pageCssPath = resource_path('css/school-nurse-data-visualization.css'); @endphp
-    @if (file_exists($pageCssPath))
-        <style>{!! file_get_contents($pageCssPath) !!}</style>
-    @endif
+    <style>{!! file_get_contents(resource_path('css/school-nurse-data-visualization.css')) !!}</style>
     <style>{!! file_get_contents(resource_path('css/nurse-sidebar.css')) !!}</style>
 </head>
 <body>
-@include('partials.nurse-lusog-sidebar', ['active' => 'visualization'])
+{{-- The School Nurse, the Clinic Teacher and Clinic Staff read the same
+     clinic, so each opens this page in their own rail. --}}
+@include('partials.clinic-rail', ['active' => 'visualization'])
 
 <div class="main">
     @php
+        $roleLabel = \App\Support\AccountSettings::roleLabel(session('active_role'));
         $schoolName = session('active_school_name', 'No school assigned');
-        $schoolYear = \App\Models\StudentHealthRecord::currentSchoolYear();
+        $currentYear = \App\Models\StudentHealthRecord::currentSchoolYear();
     @endphp
 
     <header class="topbar">
-        <div class="topbar-bc"><span>School Nurse</span><span class="bc-sep">&rsaquo;</span><span>Data Visualization</span></div>
+        <div class="topbar-bc"><span>{{ $roleLabel }}</span><span class="bc-sep">&rsaquo;</span><span>Data Visualization</span></div>
 
         @include('partials.nurse-learner-search')
         <div class="topbar-spacer"></div>
-        <div class="topbar-chip"><span class="dot"></span>{{ $schoolName }} &middot; SY {{ $schoolYear }}</div>
+        <div class="topbar-chip"><span class="dot"></span>{{ $schoolName }} &middot; SY {{ $currentYear }}</div>
         @include('partials.live-clock')
     </header>
 
@@ -40,131 +40,360 @@
         <div class="page-header">
             <div class="page-eyebrow">Reports</div>
             <h1 class="page-title">Manuscript-Based <span>Data Visualization</span></h1>
-            <p class="page-sub">Input-Process-Output aligned view: BMI status, consultations, trends, inventory thresholds, and feeding program outcomes.</p>
+            <p class="page-sub">{{ $schoolName }} &middot; S.Y. {{ $schoolYear }}</p>
         </div>
 
-        {{-- These charts are illustrative layouts, not this school's figures:
-             every value below is fixed in the markup. Wiring them to the
-             student, consultation, inventory and feeding tables is a separate
-             piece of work — until then the banner says so, rather than letting
-             a reader take the numbers for their own. --}}
-        <div class="alert-bar is-info">
-            <div class="alert-body">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                <div>
-                    <strong>Sample layout &mdash; not live data</strong>
-                    <span>These charts show the intended reports. The figures are placeholders and are not read from {{ $schoolName }}'s records.</span>
-                </div>
+        {{-- One filter row above everything it scopes. The school year is a
+             navigation (the grade and section lists belong to its roll); grade
+             and section re-read the panels in place; the weighing only picks
+             which of the already-rendered phases is on screen. --}}
+        <form method="GET" action="{{ route('dashboard.data-visualization') }}" class="card nv-toolbar" id="nvFilters"
+            data-sections="{{ json_encode($filterOptions['sectionsByGrade']) }}">
+            <div class="nv-filter">
+                <label class="field-label" for="nvYear">School year</label>
+                <select class="select" name="school_year" id="nvYear">
+                    @foreach ($schoolYears as $year)
+                        <option value="{{ $year }}" @selected($filters['school_year'] === $year)>{{ $year }}</option>
+                    @endforeach
+                </select>
             </div>
-        </div>
-
-        <section class="viz-grid">
-            <article class="card viz-card">
-                <div class="viz-head">
-                    <div class="viz-title">Nutritional Status Donut Chart</div>
-                    <div class="viz-meta">Source: Student Profile Module (BMI baseline: height and weight)</div>
-                </div>
-                <div class="viz-body donut-wrap">
-                    <div class="donut" style="background:conic-gradient(var(--lg-emerald) 0 49%, var(--lg-amber) 49% 73%, var(--lg-danger) 73% 87%, var(--lg-info) 87% 100%)" aria-hidden="true"></div>
-                    <div>
-                        <div class="legend-item"><span class="legend-dot" style="background:var(--lg-emerald)"></span>Normal &mdash; 49%</div>
-                        <div class="legend-item"><span class="legend-dot" style="background:var(--lg-amber)"></span>Wasted &mdash; 24%</div>
-                        <div class="legend-item"><span class="legend-dot" style="background:var(--lg-danger)"></span>Severely Wasted &mdash; 14%</div>
-                        <div class="legend-item"><span class="legend-dot" style="background:var(--lg-info)"></span>Overweight/Obese &mdash; 13%</div>
-                    </div>
-                </div>
-            </article>
-
-            <article class="card viz-card">
-                <div class="viz-head">
-                    <div class="viz-title">Top Consultation Cases Bar Chart</div>
-                    <div class="viz-meta">Source: Consultation Module (condition field)</div>
-                </div>
-                <div class="viz-body">
-                    <div class="bars">
-                        <div class="bar" style="height:95%"></div>
-                        <div class="bar" style="height:84%"></div>
-                        <div class="bar" style="height:70%"></div>
-                        <div class="bar" style="height:57%"></div>
-                        <div class="bar" style="height:48%"></div>
-                        <div class="bar" style="height:35%"></div>
-                    </div>
-                </div>
-            </article>
-
-            <article class="card viz-card">
-                <div class="viz-head">
-                    <div class="viz-title">Consultation Trend Line Chart</div>
-                    <div class="viz-meta">Source: Consultation Module (dates grouped by month)</div>
-                </div>
-                <div class="viz-body">
-                    <svg class="line" viewBox="0 0 560 220" preserveAspectRatio="none" aria-label="Monthly consultation trend">
-                        <polyline points="18,166 96,138 174,150 252,112 330,94 408,120 486,78 542,98" fill="none" stroke="var(--series-healthy)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
-                        {{-- 2px surface ring on each point, so a marker stays
-                             legible where the line crosses the grid. --}}
-                        @foreach ([[18,166],[96,138],[174,150],[252,112],[330,94],[408,120],[486,78],[542,98]] as [$px, $py])
-                            <circle cx="{{ $px }}" cy="{{ $py }}" r="5" fill="var(--series-healthy)" stroke="#fff" stroke-width="2" />
-                        @endforeach
-                    </svg>
-                </div>
-            </article>
-
-            <article class="card viz-card">
-                <div class="viz-head">
-                    <div class="viz-title">Medicine Inventory Gauges</div>
-                    <div class="viz-meta">Source: Medicine Inventory Module (stock quantity vs minimum threshold)</div>
-                </div>
-                <div class="viz-body">
-                    @php
-                        // Fixed sample rows. Colour follows the status scale:
-                        // below the reorder point is critical, just above it is
-                        // monitoring, comfortably above is healthy.
-                        $gauges = [
-                            ['Paracetamol', 18, 'var(--lg-danger)'],
-                            ['Amoxicillin', 24, 'var(--lg-amber)'],
-                            ['Antihistamine', 34, 'var(--lg-amber)'],
-                            ['Vitamin C', 67, 'var(--lg-emerald)'],
-                        ];
-                    @endphp
-                    @foreach ($gauges as [$name, $pct, $colour])
-                        <div class="gauge">
-                            <div class="gauge-top"><strong>{{ $name }}</strong><span class="tnum">{{ $pct }}% / min 20%</span></div>
-                            <div class="gauge-bar"><div class="gauge-fill" style="width:{{ $pct }}%;background:{{ $colour }}"></div></div>
-                        </div>
+            <div class="nv-filter">
+                <label class="field-label" for="nvGrade">Grade</label>
+                <select class="select" name="grade" id="nvGrade">
+                    <option value="">All grades</option>
+                    @foreach ($filterOptions['grades'] as $grade)
+                        <option value="{{ $grade }}" @selected($filters['grade'] === $grade)>{{ $grade }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="nv-filter">
+                <label class="field-label" for="nvSection">Section</label>
+                <select class="select" name="section" id="nvSection">
+                    <option value="">All sections</option>
+                    @foreach ($filterOptions['sections'] as $section)
+                        <option value="{{ $section }}" @selected($filters['section'] === $section)>{{ $section }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <fieldset class="nv-filter">
+                <legend class="field-label">Weighing</legend>
+                <div class="nv-seg">
+                    @foreach ($phases as $key => $label)
+                        <input type="radio" name="phase" id="nvPhase-{{ $key }}" value="{{ $key }}" @checked($filters['phase'] === $key)>
+                        <label for="nvPhase-{{ $key }}">{{ $label }}</label>
                     @endforeach
                 </div>
-            </article>
+            </fieldset>
+            <noscript><button type="submit" class="btn btn-secondary">Apply</button></noscript>
+        </form>
 
-            <article class="card viz-card is-wide" style="grid-column:1 / -1;">
-                <div class="viz-head">
-                    <div class="viz-title">Feeding Program Stacked Bar Chart</div>
-                    <div class="viz-meta">Source: Feeding Program Module (baseline vs endline nutritional status)</div>
-                </div>
-                <div class="viz-body">
-                    <div class="stack-wrap">
-                        @foreach ([[34,24,20],[30,30,16],[44,20,12],[50,18,10],[56,12,8],[62,10,6]] as [$g, $a, $r])
-                            <div class="stack">
-                                <div class="seg-g" style="height:{{ $g }}%"></div>
-                                <div class="seg-a" style="height:{{ $a }}%"></div>
-                                <div class="seg-r" style="height:{{ $r }}%"></div>
-                            </div>
-                        @endforeach
-                    </div>
-                    <div class="months">
-                        <span>Baseline</span><span>Month 1</span><span>Month 2</span>
-                        <span>Month 3</span><span>Month 4</span><span>Endline</span>
-                    </div>
-                    <div class="legend-item" style="margin-top:12px">
-                        <span class="legend-dot" style="background:var(--lg-emerald)"></span>Normal
-                        <span class="legend-dot" style="background:var(--lg-amber);margin-left:14px"></span>Wasted
-                        <span class="legend-dot" style="background:var(--lg-danger);margin-left:14px"></span>Severely Wasted
-                    </div>
-                </div>
-            </article>
-        </section>
+        <div class="nv-live" id="nvLive"
+            data-phase="{{ $filters['phase'] }}"
+            data-source="{{ route('dashboard.data-visualization.data') }}"
+            data-pulse="{{ route('workspace.pulse') }}"
+            data-stamp="{{ $stamp }}">
+            <section class="kpi-grid" data-pane="kpis">
+                @include('dashboard.visualization.kpis')
+            </section>
+
+            <section class="nv-grid">
+                <article class="card nv-card" data-pane="nutrition">
+                    @include('dashboard.visualization.nutrition')
+                </article>
+                <article class="card nv-card" data-pane="grades">
+                    @include('dashboard.visualization.grades')
+                </article>
+                <article class="card nv-card is-wide" data-pane="trend">
+                    @include('dashboard.visualization.trend')
+                </article>
+                <article class="card nv-card" data-pane="cases">
+                    @include('dashboard.visualization.cases')
+                </article>
+                <article class="card nv-card" data-pane="stock">
+                    @include('dashboard.visualization.stock')
+                </article>
+                <article class="card nv-card is-wide" data-pane="feeding">
+                    @include('dashboard.visualization.feeding')
+                </article>
+            </section>
+        </div>
     </div>
 </div>
 
+{{-- One readout for every chart. Delegated from the document, so panels the
+     live refresh swaps in are covered without re-binding anything. --}}
+@include('partials.chart-tooltip')
 @include('partials.nurse-page-transition')
+
+<script>
+(() => {
+    const live = document.getElementById('nvLive');
+    const form = document.getElementById('nvFilters');
+    if (!live || !form) return;
+
+    const PULSE_MS = 20000;
+    const dataUrl = live.dataset.source;
+    const pulseUrl = live.dataset.pulse;
+    let stamp = live.dataset.stamp || '';
+    let inflight = null;
+
+    let sectionsByGrade = {};
+    try { sectionsByGrade = JSON.parse(form.dataset.sections || '{}') || {}; } catch (e) { sectionsByGrade = {}; }
+
+    // Everything the reader chose that is not in the query string. Re-applied
+    // after every refresh, so a live update never undoes a click.
+    const ui = { tables: new Set(), hidden: new Set(), expanded: false };
+
+    const sync = () => {
+        live.querySelectorAll('[data-pane]').forEach((pane) => {
+            const asTable = ui.tables.has(pane.dataset.pane);
+            pane.classList.toggle('is-table', asTable);
+            pane.querySelectorAll('[data-view-toggle]').forEach((button) => {
+                button.setAttribute('aria-pressed', asTable ? 'true' : 'false');
+            });
+        });
+
+        const trend = live.querySelector('[data-pane="trend"]');
+        if (trend) {
+            ['treated', 'referred'].forEach((series) => {
+                const hidden = ui.hidden.has(series);
+                trend.classList.toggle('hide-' + series, hidden);
+                trend.querySelectorAll('[data-series-toggle="' + series + '"]').forEach((button) => {
+                    button.setAttribute('aria-pressed', hidden ? 'false' : 'true');
+                });
+            });
+        }
+
+        const stock = live.querySelector('[data-pane="stock"]');
+        if (stock) {
+            stock.classList.toggle('is-expanded', ui.expanded);
+            stock.querySelectorAll('[data-stock-toggle]').forEach((button) => {
+                button.setAttribute('aria-expanded', ui.expanded ? 'true' : 'false');
+            });
+        }
+    };
+
+    // ── The query string is the shareable state ──
+    const params = () => {
+        const query = new URLSearchParams();
+        new FormData(form).forEach((value, key) => {
+            if (String(value) !== '') query.set(key, String(value));
+        });
+        return query.toString();
+    };
+
+    // Kept in the address bar so a reload or a shared link opens the same view.
+    const remember = () => {
+        const query = params();
+        try {
+            history.replaceState(null, '', window.location.pathname + (query ? '?' + query : ''));
+        } catch (error) {
+            // Nothing depends on the address bar; the view itself has changed.
+        }
+    };
+
+    // ── Re-read every panel, holding the old render dimmed meanwhile ──
+    const refresh = async () => {
+        if (inflight) inflight.abort();
+        const controller = new AbortController();
+        inflight = controller;
+
+        live.classList.add('is-refreshing');
+        live.setAttribute('aria-busy', 'true');
+
+        try {
+            const query = params();
+            const response = await fetch(dataUrl + (query ? '?' + query : ''), {
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+                signal: controller.signal,
+            });
+            if (!response.ok) return;
+
+            const payload = await response.json();
+            if (payload.stamp) stamp = payload.stamp;
+
+            Object.entries(payload.html || {}).forEach(([key, html]) => {
+                const pane = live.querySelector('[data-pane="' + key + '"]');
+                if (pane) pane.innerHTML = html;
+            });
+            sync();
+        } catch (error) {
+            // Superseded by a newer request, or offline: the next pulse retries.
+        } finally {
+            if (inflight === controller) {
+                inflight = null;
+                live.classList.remove('is-refreshing');
+                live.removeAttribute('aria-busy');
+            }
+        }
+    };
+
+    // ── Filters ──
+    const yearSelect = document.getElementById('nvYear');
+    const gradeSelect = document.getElementById('nvGrade');
+    const sectionSelect = document.getElementById('nvSection');
+
+    const rebuildSections = () => {
+        const grade = gradeSelect.value;
+        const chosen = sectionSelect.value;
+        let names = [];
+        if (grade && Array.isArray(sectionsByGrade[grade])) {
+            names = sectionsByGrade[grade];
+        } else {
+            const all = new Set();
+            Object.values(sectionsByGrade).forEach((list) => (list || []).forEach((name) => all.add(name)));
+            names = Array.from(all).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+        }
+
+        sectionSelect.replaceChildren();
+        const first = document.createElement('option');
+        first.value = '';
+        first.textContent = 'All sections';
+        sectionSelect.appendChild(first);
+        names.forEach((name) => {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            sectionSelect.appendChild(option);
+        });
+        sectionSelect.value = names.includes(chosen) ? chosen : '';
+    };
+
+    yearSelect?.addEventListener('change', () => {
+        // A different year is a different roll: its grades and sections are
+        // only known once the page is read for it. form.submit() navigates
+        // without firing the submit listener below.
+        gradeSelect.value = '';
+        sectionSelect.value = '';
+        form.submit();
+    });
+
+    gradeSelect?.addEventListener('change', () => {
+        rebuildSections();
+        remember();
+        refresh();
+    });
+
+    sectionSelect?.addEventListener('change', () => {
+        remember();
+        refresh();
+    });
+
+    form.querySelectorAll('input[name="phase"]').forEach((radio) => {
+        radio.addEventListener('change', () => {
+            if (!radio.checked) return;
+            live.dataset.phase = radio.value;
+            remember();
+        });
+    });
+
+    form.addEventListener('submit', (event) => {
+        // Only the year navigates; any other submission (Enter on a control)
+        // re-reads in place.
+        event.preventDefault();
+        remember();
+        refresh();
+    });
+
+    // ── Card controls (delegated: the panels are replaced on refresh) ──
+    live.addEventListener('click', (event) => {
+        const viewToggle = event.target.closest('[data-view-toggle]');
+        if (viewToggle) {
+            const key = viewToggle.closest('[data-pane]')?.dataset.pane;
+            if (key) {
+                ui.tables.has(key) ? ui.tables.delete(key) : ui.tables.add(key);
+                sync();
+            }
+            return;
+        }
+
+        const seriesToggle = event.target.closest('[data-series-toggle]');
+        if (seriesToggle) {
+            const series = seriesToggle.dataset.seriesToggle;
+            if (ui.hidden.has(series)) {
+                ui.hidden.delete(series);
+            } else if (ui.hidden.size === 0) {
+                // Never hide the last line: an empty plot answers nothing.
+                ui.hidden.add(series);
+            }
+            sync();
+            return;
+        }
+
+        if (event.target.closest('[data-stock-toggle]')) {
+            ui.expanded = !ui.expanded;
+            sync();
+        }
+    });
+
+    // ── Donut readout: the centre names whatever slice or legend row is under the pointer ──
+    const focusDonut = (donutWrap, status) => {
+        const donut = donutWrap.querySelector('.nv-donut');
+        const value = donutWrap.querySelector('[data-center-value]');
+        const label = donutWrap.querySelector('[data-center-label]');
+        if (!donut || !value || !label) return;
+
+        if (!status) {
+            donut.classList.remove('is-focusing');
+            donutWrap.querySelectorAll('.is-active').forEach((el) => el.classList.remove('is-active'));
+            value.textContent = value.dataset.default || '';
+            label.textContent = label.dataset.default || '';
+            return;
+        }
+
+        const source = donutWrap.querySelector('[data-legend][data-status="' + CSS.escape(status) + '"]');
+        if (!source) return;
+
+        donut.classList.add('is-focusing');
+        donutWrap.querySelectorAll('[data-status]').forEach((el) => {
+            el.classList.toggle('is-active', el.dataset.status === status);
+        });
+        value.textContent = source.dataset.share || '';
+        label.textContent = status + ' · ' + (source.dataset.count || '0');
+    };
+
+    live.addEventListener('pointerover', (event) => {
+        const mark = event.target.closest('[data-donut] [data-status]');
+        if (!mark) return;
+        focusDonut(mark.closest('[data-donut]'), mark.dataset.status);
+    });
+
+    live.addEventListener('pointerout', (event) => {
+        const mark = event.target.closest('[data-donut] [data-status]');
+        if (!mark) return;
+        const next = event.relatedTarget && event.relatedTarget.closest ? event.relatedTarget.closest('[data-donut] [data-status]') : null;
+        if (!next) focusDonut(mark.closest('[data-donut]'), null);
+    });
+
+    // ── Live: poll the school's shared stamp; re-read only when it moves ──
+    const pulse = async () => {
+        if (document.hidden || inflight) return;
+
+        try {
+            const response = await fetch(pulseUrl, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            if (!response.ok) return;
+
+            const payload = await response.json();
+            if (!payload.stamp || payload.stamp === stamp) return;
+
+            stamp = payload.stamp;
+            refresh();
+        } catch (error) {
+            // Offline, or a dropped request: the next pulse retries.
+        }
+    };
+
+    window.setInterval(pulse, PULSE_MS);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) pulse();
+    });
+
+    sync();
+})();
+</script>
 </body>
 </html>

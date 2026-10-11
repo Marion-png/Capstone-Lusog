@@ -472,15 +472,14 @@ final class SchoolHeadHealthOverview
             $counts[$row['state']]++;
         }
 
-        // Worst first, then emptiest, then by name.
+        // Worst first, then emptiest, then by name. Compared as tuples: a
+        // closure handed to sortBy([...]) is called as a two-row comparator,
+        // so one that reads a single row's key never actually sorted anything.
         $order = array_flip(self::STOCK_STATES);
         $attention = $rows
             ->filter(fn (array $row): bool => $row['state'] !== 'good')
-            ->sortBy([
-                fn (array $row): int => $order[$row['state']],
-                fn (array $row): float => $row['level'],
-                fn (array $row): string => strtolower($row['name']),
-            ])
+            ->sort(fn (array $a, array $b): int => [$order[$a['state']], $a['level'], strtolower($a['name'])]
+                <=> [$order[$b['state']], $b['level'], strtolower($b['name'])])
             ->values();
 
         return $this->inventory = [
@@ -492,10 +491,10 @@ final class SchoolHeadHealthOverview
             'needs_attention' => $attention->count(),
             'units' => (int) $rows->sum('stock'),
             'dispensed_this_month' => $this->dispensedThisMonth,
-            'rows' => $rows->sortBy([
-                fn (array $row): int => $order[$row['state']],
-                fn (array $row): string => strtolower($row['name']),
-            ])->values(),
+            'rows' => $rows
+                ->sort(fn (array $a, array $b): int => [$order[$a['state']], strtolower($a['name'])]
+                    <=> [$order[$b['state']], strtolower($b['name'])])
+                ->values(),
             'attention_rows' => $attention,
         ];
     }
@@ -626,20 +625,37 @@ final class SchoolHeadHealthOverview
      * The complaints themselves, which are encrypted and so are counted here
      * rather than grouped in SQL.
      *
+     * A complaint is typed, so "Headache", "headache" and "Headache " are one
+     * complaint, not three bars each a third of the length they should be.
+     * The label printed is the newest visit's spelling (the rows arrive newest
+     * first), capitalised when it was typed all in lower case.
+     *
      * @return list<array<string, mixed>>
      */
     private function byComplaint(): array
     {
         $total = $this->consultations->count();
         $counts = [];
+        $labels = [];
 
         foreach ($this->consultations as $consultation) {
-            $label = trim((string) $consultation->condition);
+            $label = trim((string) preg_replace('/\s+/u', ' ', (string) $consultation->condition));
             $label = $label !== '' ? $label : 'Not recorded';
-            $counts[$label] = ($counts[$label] ?? 0) + 1;
+            $key = mb_strtolower($label);
+
+            if (! isset($labels[$key])) {
+                $labels[$key] = $label === $key ? mb_strtoupper(mb_substr($label, 0, 1)).mb_substr($label, 1) : $label;
+            }
+
+            $counts[$key] = ($counts[$key] ?? 0) + 1;
         }
 
-        return $this->rank($counts, $total);
+        $byLabel = [];
+        foreach ($counts as $key => $count) {
+            $byLabel[$labels[$key]] = $count;
+        }
+
+        return $this->rank($byLabel, $total);
     }
 
     /**

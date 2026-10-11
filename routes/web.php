@@ -7,6 +7,7 @@ use App\Http\Controllers\ConditionController;
 use App\Http\Controllers\ConsentFormScanController;
 use App\Http\Controllers\ConsultationController;
 use App\Http\Controllers\ConsultationPhotoController;
+use App\Http\Controllers\DataVisualizationController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\FeedingAtRiskController;
 use App\Http\Controllers\FeedingAttendanceController;
@@ -471,23 +472,14 @@ Route::get('/api/conditions', [ConditionController::class, 'index'])
 Route::post('/api/conditions', [ConditionController::class, 'store'])
     ->name('api.conditions.store');
 
-Route::get('/dashboard/data-visualization', function () {
-    $role = (string) session('active_role', '');
-    if (! in_array($role, ['school_nurse', 'clinic_staff', 'clinic_teacher', 'system_admin'], true)) {
-        $redirectByRole = [
-            'class_adviser' => 'dashboard.class-adviser',
-            'clinic_teacher' => 'dashboard.clinic-teacher',
-            'school_head' => 'dashboard.school-head',
-            'feeding_coor' => 'dashboard.feedingcor-dashboard',
-            'nutricor' => 'dashboard.nutricor-dashboard',
-            'system_admin' => 'dashboard.system-admin',
-        ];
+// Every chart is read live from the school's records (ClinicVisualization).
+// The page polls the shared `workspace.pulse` stamp and, only when it moves
+// or a filter changes, re-reads the panels from `.data` and swaps them in.
+Route::get('/dashboard/data-visualization', [DataVisualizationController::class, 'index'])
+    ->name('dashboard.data-visualization');
 
-        return redirect()->route($redirectByRole[$role] ?? 'login');
-    }
-
-    return view('dashboard.data-visualization');
-})->name('dashboard.data-visualization');
+Route::get('/dashboard/data-visualization/data', [DataVisualizationController::class, 'data'])
+    ->name('dashboard.data-visualization.data');
 
 Route::get('/dashboard/medicine-inventory', [MedicineInventoryController::class, 'index'])
     ->name('dashboard.medicine-inventory');
