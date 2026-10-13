@@ -27,13 +27,18 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
 .cf-flash { margin-bottom: 14px; padding: 11px 14px; border-radius: 10px; font-size: .84rem; }
 .cf-flash-ok { background: var(--g100); color: #14653C; border: 1px solid var(--g300); }
 .cf-flash-err { background: #FCECEC; color: #A32B2B; border: 1px solid #fecaca; }
+/* Neutral information (teal), not a warning: an earlier school year is a
+   record being read, and nothing on it is wrong. */
+.cf-flash-info { background: var(--lg-info-tint, #E8F2F5); color: var(--lg-info-ink, #1F5F70); border: 1px solid #CFE3EA; line-height: 1.5; }
+.cf-flash-info a { color: var(--lg-info-ink, #1F5F70); font-weight: 700; text-decoration: none; margin-left: 4px; white-space: nowrap; }
+.cf-flash-info a:hover { color: var(--lg-ink, #1F2D25); }
 
 /* ── Student list table ──────────────────────────────────────── */
 .cf-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
 .cf-table th { text-align: left; font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--border); }
 .cf-table td { padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .cf-table tr:last-child td { border-bottom: none; }
-/* ── The nurse list's one filter ──
+/* ── The nurse list's filters (school year, parent's answer) ──
    Above the card, not inside its head: a control that decides what a table
    contains has to be visible before the table, and the head names the answer
    currently on screen. */

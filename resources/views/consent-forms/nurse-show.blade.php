@@ -14,7 +14,15 @@
     <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
 <body>
-@php $badge = $form->statusBadge(); @endphp
+@php
+    $badge = $form->statusBadge();
+    // Back to the list this form was opened from, in the year it belongs to —
+    // a form from an earlier year is reached through that year's list, and
+    // the School Head reads consents on their own tab, not the clinic's.
+    $backUrl = session('active_role') === 'school_head'
+        ? route('dashboard.school-head.consent', ['school_year' => $form->school_year])
+        : route('consent-forms.nurse-index', $form->school_year === \App\Models\HealthConsentForm::currentSchoolYear() ? [] : ['school_year' => $form->school_year]);
+@endphp
 
 <header class="cf-topbar">
     <img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA">
@@ -22,7 +30,7 @@
         <div class="cf-topbar-title">Consent Form &mdash; {{ $form->student_name }}</div>
         <div class="cf-topbar-sub">Read-only &middot; SY {{ $form->school_year }}</div>
     </div>
-    <a href="{{ route('consent-forms.nurse-index') }}" class="cf-back">&larr; All Consent Forms</a>
+    <a href="{{ $backUrl }}" class="cf-back">&larr; All Consent Forms</a>
 </header>
 
 <div class="cf-wrap">

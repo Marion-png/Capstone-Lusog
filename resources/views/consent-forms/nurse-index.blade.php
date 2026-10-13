@@ -30,16 +30,37 @@
 
 <div class="cf-wrap">
     <h1 class="cf-page-title">Consent Forms</h1>
-    <p class="cf-page-sub">Every consent on file for this school, however it arrived — the letters the class advisers sent, replied to or not, and the signed forms they scanned and uploaded. These are read-only — consent information cannot be altered.</p>
+    <p class="cf-page-sub">Every consent on file for this school in S.Y. {{ $schoolYear }}, however it arrived — the letters the class advisers sent, replied to or not, and the signed forms they scanned and uploaded. These are read-only — consent information cannot be altered.</p>
 
     @if (session('error')) <div class="cf-flash cf-flash-err">{{ session('error') }}</div> @endif
+
+    {{-- An earlier year is a record, and says so: its forms and scans are kept
+         exactly as they were left when the year ended, and a letter still
+         "awaiting" there was never answered rather than still on its way. --}}
+    @unless ($isCurrentYear)
+        <div class="cf-flash cf-flash-info" id="pastYearNotice">
+            <b>S.Y. {{ $schoolYear }} has ended.</b> Its consent forms and the signed forms scanned with them are kept
+            as they were when the year closed. A consent covers the year it was given in &mdash; it does not authorise a
+            service this school year.
+            <a href="{{ route('consent-forms.nurse-index') }}">Back to S.Y. {{ $currentSchoolYear }}</a>
+        </div>
+    @endunless
 
     {{-- What the parent answered, as a filter. The three answers stay apart:
          a parent who agreed *except* for certain services did consent, and the
          nurse's next question is always which ones — so folding them in with
          "consented to all" would hide the very learners whose letter has to be
-         read before a service is given. --}}
+         read before a service is given.
+
+         The school year sits first and in the same form, so changing either
+         control keeps the other's choice. --}}
     <form method="GET" class="cf-filter" id="nurseConsentFilter">
+        <label for="consentYear">School year</label>
+        <select name="school_year" id="consentYear" onchange="this.form.submit()">
+            @foreach ($schoolYears as $year)
+                <option value="{{ $year }}" @selected($schoolYear === $year)>S.Y. {{ $year }}{{ $year === $currentSchoolYear ? ' (current)' : '' }}</option>
+            @endforeach
+        </select>
         <label for="consentFilter">Parent's answer</label>
         <select name="consent" id="consentFilter" onchange="this.form.submit()">
             <option value="">All answers ({{ $totalForms }})</option>
@@ -49,7 +70,7 @@
         </select>
         <noscript><button type="submit" class="cf-btn cf-btn-outline">Apply</button></noscript>
         @if ($consentFilter !== '')
-            <a href="{{ route('consent-forms.nurse-index') }}" class="cf-filter-clear">Clear</a>
+            <a href="{{ route('consent-forms.nurse-index', $yearQuery) }}" class="cf-filter-clear">Clear</a>
         @endif
     </form>
 
@@ -59,6 +80,7 @@
                 {{ $consentFilter !== '' ? $consentFilters[$consentFilter] : 'All Consents on File' }}
                 <span class="cf-count">{{ $rows->count() }}</span>
             </h2>
+            <span class="cf-muted">S.Y. {{ $schoolYear }}</span>
         </div>
         @if ($rows->isEmpty())
             {{-- An empty filtered list is a real answer about this school, and
@@ -67,9 +89,11 @@
             <div class="cf-empty">
                 @if ($consentFilter !== '')
                     No learner's form reads &ldquo;{{ $consentFilters[$consentFilter] }}&rdquo;.
-                    <a href="{{ route('consent-forms.nurse-index') }}">Show all {{ $totalForms }}</a>.
-                @else
+                    <a href="{{ route('consent-forms.nurse-index', $yearQuery) }}">Show all {{ $totalForms }}</a>.
+                @elseif ($isCurrentYear)
                     No consent forms on file yet.
+                @else
+                    No consent forms were filed in S.Y. {{ $schoolYear }}.
                 @endif
             </div>
         @else

@@ -138,18 +138,24 @@ final class AdviserClassScope
     }
 
     /**
-     * The school's learners for the current year, narrowed to what this session
-     * may read.
+     * The school's learners for one school year (the current one by default),
+     * narrowed to what this session may read.
+     *
+     * An earlier year is narrowed by the same rule as the current one — the
+     * record's own grade and section against this session's assignment — so a
+     * year selector shows the class as it stood that year and never widens the
+     * scope to another adviser's learners.
      *
      * Reads through StudentHealthRecord::rosterFor(), so it shares the one
      * memoized fetch the rest of the request uses rather than adding a query.
      *
      * @return Collection<int, StudentHealthRecord>
      */
-    public static function records(Request $request): Collection
+    public static function records(Request $request, ?string $schoolYear = null): Collection
     {
-        return StudentHealthRecord::currentYearForInstitution(
-            $request->session()->get('active_institution_id')
+        return StudentHealthRecord::rosterFor(
+            $request->session()->get('active_institution_id'),
+            $schoolYear
         )->filter(fn (StudentHealthRecord $record): bool => self::coversRecord($request, $record))->values();
     }
 }

@@ -214,8 +214,14 @@ class AdviserConsentPageTest extends TestCase
         $response->assertSee('No deworming', false);
         $response->assertSee('status_label', false);
 
-        // The scan itself is never linked — advisers cannot download consents.
-        $response->assertDontSee('parental-consent/', false);
+        // The scan opens through the one audited download, which serves the
+        // learner's own adviser (see the_learners_own_adviser_can_open_the_
+        // uploaded_form) — never a path on disk.
+        $upload = ParentalConsentForm::latest('id')->firstOrFail();
+        $this->assertSame(1, preg_match("/data-detail='([^']*)'/", $response->getContent(), $m));
+        $detail = json_decode($m[1], true);
+        $this->assertSame(route('parental-consent.download', $upload->id), $detail['file_url']);
+        $response->assertDontSee('parental-consents/', false);
     }
 
     /** @test */

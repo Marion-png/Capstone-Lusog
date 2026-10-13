@@ -411,7 +411,20 @@ tbody tr:hover td{background:#f7fbf8}
 .pc-strip-warn{background:#fff8e6;color:#8a5a00}
 .pc-strip-warn svg{color:#b45309}
 .pc-strip-note{color:var(--muted)}
+/* A link at the end of a strip: colour and weight carry it, never an underline. */
+.pc-strip-link{margin-left:auto;font-weight:700;color:var(--g700);text-decoration:none;white-space:nowrap}
+.pc-strip-link:hover{color:var(--g900)}
+/* The school-year control in the Parent's Consent header. */
+.pc-year{display:flex;align-items:center;gap:9px}
+.pc-year label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+/* An earlier school year being read: neutral information (teal), not a warning. */
+.pc-past-year{background:var(--lg-info-tint,#E8F2F5);color:var(--lg-info-ink,#1F5F70);margin-bottom:16px;line-height:1.5}
+.pc-past-year svg{color:var(--lg-info,#3D8FA3)}
+.pc-past-year .pc-strip-link{color:var(--lg-info-ink,#1F5F70)}
+.pc-past-year .pc-strip-link:hover{color:var(--lg-ink,#1F2D25)}
+.pc-past-year span{flex:1 1 320px}
 @media (max-width:620px){.pc-detail-grid{grid-template-columns:1fr}}
+@media (max-width:760px){.pc-year{width:100%}.pc-year .ms-filter-select{flex:1}}
 
 @media (max-width:760px){.pc-choices{grid-template-columns:1fr}}
 

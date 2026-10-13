@@ -10,6 +10,7 @@ use App\Support\ConsentFormScanner;
 use App\Support\ConsentStanding;
 use App\Support\EncryptedFileStorage;
 use App\Support\SchemaCache;
+use App\Support\SchoolHeadOverview;
 use App\Support\StudentRosterSync;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,15 +19,28 @@ use Illuminate\Support\Str;
 
 class HealthConsentFormController extends Controller
 {
-    /** Adviser: list of assigned students with the status of each consent form. */
+    /**
+     * Adviser: list of assigned students with the status of each consent form.
+     *
+     * Any school year the school holds records for can be read here, not only
+     * the current one. A consent is filed under the year it was given, and
+     * nothing deletes it when that year ends — but a page that reads the
+     * current year alone hides every one of them on the first of June, which
+     * to the adviser is the same as losing them. An earlier year is read-only:
+     * a new consent is always filed under the current year.
+     */
     public function index(Request $request)
     {
         if ($redirect = $this->requireRole($request, ['class_adviser'])) {
             return $redirect;
         }
 
-        $students = $this->assignedStudents($request);
-        $schoolYear = HealthConsentForm::currentSchoolYear();
+        [$schoolYear, $schoolYears] = $this->readSchoolYear($request);
+        $isCurrentYear = $schoolYear === HealthConsentForm::currentSchoolYear();
+
+        $students = $isCurrentYear
+            ? $this->assignedStudents($request)
+            : $this->classInYear($request, $schoolYear);
         $institutionId = $request->session()->get('active_institution_id');
 
         $forms = HealthConsentForm::where('school_year', $schoolYear)
@@ -39,7 +53,7 @@ class HealthConsentFormController extends Controller
             ->when($institutionId, fn ($q, $id) => $q->where('institution_id', $id))
             ->count();
 
-        $uploads = $this->uploadedConsentsByLrn($request, $students->pluck('lrn')->filter()->values());
+        $uploads = $this->uploadedConsentsByLrn($request, $students->pluck('lrn')->filter()->values(), $schoolYear);
 
         // One row per learner, combining the e-signature workflow with any
         // scanned Sulat-Pahibalo that was uploaded for them.
@@ -63,6 +77,12 @@ class HealthConsentFormController extends Controller
                 'notes' => $upload?->notes
                     ?: ($upload?->partial_exception ?: ($upload?->refused_reason ?: null)),
                 'file_name' => $upload?->file_original_name,
+                // The audited download, which serves the learner's own adviser
+                // as well as the clinic — so the scan filed in an earlier year
+                // can still be opened, not just named.
+                'file_url' => $upload !== null && $upload->file_path !== null
+                    ? route('parental-consent.download', $upload->id)
+                    : null,
                 'med_cert_name' => $upload?->med_cert_original_name,
                 // Surfaced so a record awaiting its scan still shows what the
                 // parent answered, without that answer being read as consent.
@@ -77,6 +97,9 @@ class HealthConsentFormController extends Controller
             'students' => $students,
             'forms' => $forms,
             'schoolYear' => $schoolYear,
+            'schoolYears' => $schoolYears,
+            'currentSchoolYear' => HealthConsentForm::currentSchoolYear(),
+            'isCurrentYear' => $isCurrentYear,
             'unreadCount' => $unreadCount,
             'rows' => $rows,
             // The upload dialog offers to read the parent's answer off the
@@ -96,11 +119,68 @@ class HealthConsentFormController extends Controller
     }
 
     /**
-     * Latest uploaded consent scan per learner for the current school year,
-     * keyed by LRN. parental_consent_forms hangs off student_health_records,
-     * so the join goes through the plain student_id column.
+     * The school year a consent list is reading, and every year it may read.
+     *
+     * The years are the ones the school holds learner records for, newest
+     * first — the same list the School Head's tabs offer — so a year with
+     * nobody on its roll is never a choice. A value off the query string that
+     * is not on that list falls back to the current year rather than emptying
+     * the page.
+     *
+     * @return array{0: string, 1: list<string>}
      */
-    private function uploadedConsentsByLrn(Request $request, Collection $lrns): Collection
+    private function readSchoolYear(Request $request): array
+    {
+        $institutionId = $request->session()->get('active_institution_id');
+        $years = SchoolHeadOverview::schoolYears($institutionId ? (int) $institutionId : null);
+        $requested = trim((string) $request->query('school_year', ''));
+
+        return [
+            in_array($requested, $years, true) ? $requested : HealthConsentForm::currentSchoolYear(),
+            $years,
+        ];
+    }
+
+    /**
+     * The adviser's class as it stood in an earlier school year.
+     *
+     * The session roster holds the current year only, so an earlier year is
+     * read from that year's own rows — narrowed by AdviserClassScope exactly as
+     * the current year is, on the grade and section each record carried then.
+     * Same shape as `assignedStudents()`, so the page renders either alike.
+     */
+    private function classInYear(Request $request, string $schoolYear): Collection
+    {
+        return AdviserClassScope::records($request, $schoolYear)
+            ->unique(fn (StudentHealthRecord $record): string => (string) $record->student_id)
+            ->map(function (StudentHealthRecord $record): array {
+                $details = is_array($record->student_details) ? $record->student_details : [];
+                [$grade, $section] = array_pad(explode(' / ', (string) $record->section, 2), 2, '');
+                $name = trim(($details['last_name'] ?? '').', '.($details['first_name'] ?? '').' '.($details['middle_name'] ?? ''));
+
+                return [
+                    'lrn' => (string) $record->student_id,
+                    // A record saved before the full entry was kept carries its
+                    // name in the legacy column only.
+                    'name' => trim($name, ', ') !== '' ? $name : (string) $record->student_name,
+                    'grade_level' => trim($grade),
+                    'section' => trim($section),
+                    'parent_guardian' => (string) ($details['parent_guardian'] ?? ''),
+                    'address' => (string) ($details['address'] ?? ''),
+                    'division' => (string) ($details['division'] ?? ''),
+                ];
+            })
+            // The names are decrypted, so the order is set here, never in SQL.
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+    }
+
+    /**
+     * Latest uploaded consent scan per learner for one school year, keyed by
+     * LRN. parental_consent_forms hangs off student_health_records, so the
+     * join goes through the plain student_id column.
+     */
+    private function uploadedConsentsByLrn(Request $request, Collection $lrns, string $schoolYear): Collection
     {
         if ($lrns->isEmpty() || ! SchemaCache::hasTable('parental_consent_forms')) {
             return collect();
@@ -112,7 +192,7 @@ class HealthConsentFormController extends Controller
                 fn ($q, $id) => $q->where('institution_id', $id)
             )
             ->whereIn('student_id', $lrns)
-            ->forCurrentSchoolYear()
+            ->forCurrentSchoolYear($schoolYear)
             ->get();
 
         if ($records->isEmpty()) {
@@ -123,7 +203,7 @@ class HealthConsentFormController extends Controller
 
         // Sorted oldest-first so keyBy leaves the most recent upload per learner.
         return ParentalConsentForm::whereIn('student_health_record_id', $records->pluck('id'))
-            ->where('school_year', ParentalConsentForm::currentSchoolYear())
+            ->where('school_year', $schoolYear)
             ->get()
             ->sortBy('created_at')
             ->keyBy(fn (ParentalConsentForm $upload) => (string) ($lrnByRecordId[$upload->student_health_record_id] ?? ''));
@@ -550,7 +630,13 @@ class HealthConsentFormController extends Controller
             return $redirect;
         }
 
-        $rows = $this->nurseConsentRows($request);
+        // One school year at a time, the current one by default. A consent
+        // answers for the year it was given in, so two years on one list would
+        // put two different answers about one child side by side — and an
+        // earlier year's forms and scans stay reachable here after it ends.
+        [$schoolYear, $schoolYears] = $this->readSchoolYear($request);
+
+        $rows = $this->nurseConsentRows($request, $schoolYear);
 
         // Every answer on a row is decrypted at rest, so the filter runs in
         // PHP after the fetch — never as a WHERE. A value off the query string
@@ -569,11 +655,20 @@ class HealthConsentFormController extends Controller
             )->values();
         }
 
+        $currentSchoolYear = HealthConsentForm::currentSchoolYear();
+
         return view('consent-forms.nurse-index', [
             'rows' => $rows,
             'consentFilter' => $choice,
             'consentFilters' => self::NURSE_CONSENT_FILTERS,
             'totalForms' => $total,
+            'schoolYear' => $schoolYear,
+            'schoolYears' => $schoolYears,
+            'currentSchoolYear' => $currentSchoolYear,
+            'isCurrentYear' => $schoolYear === $currentSchoolYear,
+            // Carried on every link that resets the answer filter, so clearing
+            // it never drops the reader back into a different year.
+            'yearQuery' => $schoolYear === $currentSchoolYear ? [] : ['school_year' => $schoolYear],
         ]);
     }
 
@@ -595,7 +690,7 @@ class HealthConsentFormController extends Controller
      *
      * @return Collection<int, array<string, mixed>>
      */
-    private function nurseConsentRows(Request $request): Collection
+    private function nurseConsentRows(Request $request, string $schoolYear): Collection
     {
         // A letter that is out but unanswered belongs here too. The nurse
         // plans a deworming round off this list, and "nobody has replied for
@@ -606,6 +701,7 @@ class HealthConsentFormController extends Controller
             HealthConsentForm::STATUS_SIGNED,
             HealthConsentForm::STATUS_REVIEWED,
         ])
+            ->where('school_year', $schoolYear)
             ->when($request->session()->get('active_institution_id'), fn ($q, $id) => $q->where('institution_id', $id))
             ->get();
 
@@ -616,11 +712,11 @@ class HealthConsentFormController extends Controller
         }
 
         $records = SchemaCache::hasTable('parental_consent_forms')
-            ? StudentHealthRecord::rosterFor($request->session()->get('active_institution_id'))
+            ? StudentHealthRecord::rosterFor($request->session()->get('active_institution_id'), $schoolYear)
             : collect();
         $recordsById = $records->keyBy('id');
 
-        foreach ($this->uploadedConsentsForNurse($records) as $lrn => $upload) {
+        foreach ($this->uploadedConsentsForNurse($records, $schoolYear) as $lrn => $upload) {
             $existing = $rows[(string) $lrn] ?? null;
 
             if ($existing !== null && $existing['answer'] !== 'awaiting') {
@@ -645,16 +741,17 @@ class HealthConsentFormController extends Controller
     }
 
     /**
-     * The scanned consents on file for this school year, keyed by LRN.
+     * The scanned consents on file for one school year, keyed by LRN.
      *
-     * Given the roster already read for this request: `parental_consent_forms`
-     * hangs off `student_health_records`, and the join goes through the plain
-     * `student_id` column because the learner's name is encrypted.
+     * Given that year's roster, already read for this request:
+     * `parental_consent_forms` hangs off `student_health_records`, and the join
+     * goes through the plain `student_id` column because the learner's name is
+     * encrypted.
      *
      * @param  Collection<int, StudentHealthRecord>  $records
      * @return Collection<string, ParentalConsentForm>
      */
-    private function uploadedConsentsForNurse(Collection $records): Collection
+    private function uploadedConsentsForNurse(Collection $records, string $schoolYear): Collection
     {
         if ($records->isEmpty()) {
             return collect();
@@ -664,7 +761,7 @@ class HealthConsentFormController extends Controller
 
         // Sorted oldest-first so keyBy leaves the most recent upload per learner.
         return ParentalConsentForm::whereIn('student_health_record_id', $records->pluck('id'))
-            ->where('school_year', ParentalConsentForm::currentSchoolYear())
+            ->where('school_year', $schoolYear)
             ->get()
             ->sortBy('created_at')
             ->keyBy(fn (ParentalConsentForm $upload) => (string) ($lrnByRecordId[$upload->student_health_record_id] ?? ''));

@@ -40,7 +40,33 @@
                 <h2 class="ms-page-title">Parent's Consent</h2>
                 <p class="ms-page-sub">{{ $pcGradeSection }} &middot; School Year {{ $schoolYear }}</p>
             </div>
+            {{-- Consents are filed per school year and kept after it ends, so
+                 an earlier year's forms are one choice away rather than gone
+                 from the page on the first of June. --}}
+            <form method="GET" class="pc-year" id="consentYearForm">
+                <label for="consentYear">School year</label>
+                <select name="school_year" id="consentYear" class="ms-filter-select" onchange="this.form.submit()">
+                    @foreach ($schoolYears as $year)
+                        <option value="{{ $year }}" @selected($schoolYear === $year)>S.Y. {{ $year }}{{ $year === $currentSchoolYear ? ' (current)' : '' }}</option>
+                    @endforeach
+                </select>
+                <noscript><button type="submit" class="btn btn-secondary">Show</button></noscript>
+            </form>
         </div>
+
+        {{-- An earlier year is a record being read, not a list to work from:
+             nothing here can be uploaded or changed, and a new consent is
+             always filed under the current year. --}}
+        @unless ($isCurrentYear)
+            <div class="pc-strip pc-past-year" id="pastYearNotice">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span>
+                    <b>S.Y. {{ $schoolYear }} has ended.</b> These are your class's consent records as they were when
+                    the year closed, with the signed forms that were uploaded. They are read-only.
+                </span>
+                <a href="{{ route('consent-forms.index') }}" class="pc-strip-link">Back to S.Y. {{ $currentSchoolYear }}</a>
+            </div>
+        @endunless
 
         <div class="pc-banner">
             <div>
@@ -105,10 +131,12 @@
                         <option value="partial">&mdash; Agreed, with exceptions</option>
                         <option value="pending">Awaiting response</option>
                     </select>
-                    <button type="button" class="btn" id="openUploadConsent">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        Upload Consent
-                    </button>
+                    @if ($isCurrentYear)
+                        <button type="button" class="btn" id="openUploadConsent">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            Upload Consent
+                        </button>
+                    @endif
                 </div>
             </div>
 
@@ -145,6 +173,7 @@
                                     'has_form_file' => $row['has_form_file'],
                                     'has_med_cert' => $row['has_med_cert'],
                                     'file_name' => $row['file_name'],
+                                    'file_url' => $row['file_url'],
                                     'med_cert_name' => $row['med_cert_name'],
                                     'recorded_response' => $row['recorded_response'],
                                 ];
@@ -181,9 +210,11 @@
                                         <button type="button" class="ms-act ms-act-view js-consent-view" title="View Details" aria-label="View Details">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                         </button>
-                                        <button type="button" class="ms-act ms-act-consent js-consent-upload" title="Upload Form" aria-label="Upload Form" data-lrn="{{ $row['lrn'] }}">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                                        </button>
+                                        @if ($isCurrentYear)
+                                            <button type="button" class="ms-act ms-act-consent js-consent-upload" title="Upload Form" aria-label="Upload Form" data-lrn="{{ $row['lrn'] }}">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                            </button>
+                                        @endif
                                     </div>
                                 </td>
                             </tr>
@@ -192,9 +223,14 @@
                                 <td colspan="8">
                                     <div class="ms-empty-state">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                                        <h4>No Learners Yet</h4>
-                                        <p>Enrol learners on My Students before preparing their consent forms.</p>
-                                        <a class="btn" href="{{ route('dashboard.class-adviser', ['tab' => 'saved']) }}">Go to My Students</a>
+                                        @if ($isCurrentYear)
+                                            <h4>No Learners Yet</h4>
+                                            <p>Enrol learners on My Students before preparing their consent forms.</p>
+                                            <a class="btn" href="{{ route('dashboard.class-adviser', ['tab' => 'saved']) }}">Go to My Students</a>
+                                        @else
+                                            <h4>No Learners in S.Y. {{ $schoolYear }}</h4>
+                                            <p>Nobody was enrolled in {{ $pcGradeSection }} that school year.</p>
+                                        @endif
                                     </div>
                                 </td>
                             </tr>
@@ -223,6 +259,10 @@
 </div>
 
 {{-- ── Upload the signed Sulat-Pahibalo ─────────────────────────────── --}}
+{{-- Current year only: an upload is always filed under the current school
+     year, so offering it while an earlier year is on screen would file the
+     form somewhere other than the list the adviser is looking at. --}}
+@if ($isCurrentYear)
 <div class="confirm-overlay pc-modal" id="uploadConsentModal" aria-hidden="true">
     <div class="confirm-modal" role="dialog" aria-modal="true" aria-label="Upload Sulat-Pahibalo">
         <div class="confirm-head">
@@ -357,6 +397,7 @@
         </form>
     </div>
 </div>
+@endif
 
 {{-- ── Consent details (read-only) ──────────────────────────────────── --}}
 <div class="confirm-overlay pc-modal" id="consentDetailModal" aria-hidden="true">
@@ -394,6 +435,7 @@
             <div class="pc-strip pc-strip-ok" id="cdFileStrip" hidden>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 Uploaded Form: <b id="cdFileName">-</b>
+                <a id="cdFileLink" class="pc-strip-link" href="#" target="_blank" rel="noopener" hidden>Open</a>
             </div>
 
             <div class="pc-strip pc-strip-ok" id="cdMedCertStrip" hidden>
@@ -780,9 +822,17 @@
                 const fileStrip = document.getElementById('cdFileStrip');
                 if (fileStrip) {
                     fileStrip.hidden = !detail.has_form_file;
-                    // Advisers may not download consent scans, so file names are
-                    // shown as text and never as links.
                     setText('cdFileName', detail.file_name || 'Uploaded file');
+
+                    // The learner's own adviser may open the scan they filed,
+                    // through the same audited route the clinic uses — which
+                    // is what keeps an earlier year's form readable, not just
+                    // named.
+                    const fileLink = document.getElementById('cdFileLink');
+                    if (fileLink) {
+                        fileLink.hidden = !detail.file_url;
+                        fileLink.href = detail.file_url || '#';
+                    }
                 }
 
                 const medStrip = document.getElementById('cdMedCertStrip');
