@@ -6,6 +6,7 @@ use App\Models\FeedingAttendance;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
@@ -139,7 +140,7 @@ class FeedingExcusedAbsenceTest extends TestCase
         // Three of three attended, not three of five: the two excused sessions
         // are out of the denominator as well as the numerator.
         $this->assertSame(100.0, $rule->attendanceRate($marks));
-        $this->assertFalse($rule->isAtRisk($marks));
+        $this->assertFalse($rule->thresholdReached($marks));
 
         $withAbsence = array_map(
             static fn (object $row): ?bool => FeedingAttendanceMark::forRule($row),
@@ -443,14 +444,14 @@ class FeedingExcusedAbsenceTest extends TestCase
     // ── The school's own rule ───────────────────────────────────────────
 
     #[Test]
-    public function one_week_of_unexcused_absence_flags_a_learner(): void
+    public function seven_days_of_unexcused_absence_reach_the_flag_threshold(): void
     {
-        // Four feeding sessions is one week: Monday to Thursday is what the
-        // budget currently covers.
-        $rule = new FeedingAtRiskRule(FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS, 80, 3, 10, 4, 8);
+        // The adviser's flow: a notice at day 3, the flag threshold at day 7.
+        $rule = new FeedingAtRiskRule(FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS, 80, 3, 10, 7, 3);
 
-        $this->assertFalse($rule->isAtRisk([false, false, false]));
-        $this->assertTrue($rule->isAtRisk([true, true, false, false, false, false]));
+        $this->assertTrue($rule->reachesNotice([true, false, false, false]));
+        $this->assertFalse($rule->thresholdReached(array_fill(0, 6, false)));
+        $this->assertTrue($rule->thresholdReached(array_merge([true, true], array_fill(0, 7, false))));
     }
 
     /**
@@ -461,60 +462,73 @@ class FeedingExcusedAbsenceTest extends TestCase
     #[Test]
     public function the_time_based_rule_flags_a_learner_a_percentage_would_miss(): void
     {
-        $marks = array_merge(array_fill(0, 40, true), array_fill(0, 4, false));
+        $marks = array_merge(array_fill(0, 40, true), array_fill(0, 7, false));
 
         $rate = new FeedingAtRiskRule(FeedingAtRiskRule::MODE_ATTENDANCE_RATE, 80, 3, 10);
-        $timeBased = new FeedingAtRiskRule(FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS, 80, 3, 10, 4, 8);
+        $timeBased = new FeedingAtRiskRule(FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS, 80, 3, 10, 7, 3);
 
-        $this->assertFalse($rate->isAtRisk($marks), '40 of 44 is over 90%, so the rate rule sees nothing.');
-        $this->assertTrue($timeBased->isAtRisk($marks));
+        $this->assertFalse($rate->thresholdReached($marks), '40 of 47 is over 80%, so the rate rule sees nothing.');
+        $this->assertTrue($timeBased->thresholdReached($marks));
     }
 
     /** An excused absence does not build a run — that is what the buffer means. */
     #[Test]
     public function excused_absences_never_build_toward_the_flag(): void
     {
-        $rule = new FeedingAtRiskRule(FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS, 80, 3, 10, 4, 8);
+        $rule = new FeedingAtRiskRule(FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS, 80, 3, 10, 7, 3);
 
         $excused = (object) ['is_present' => false, 'needs_review' => false, 'is_excused' => true];
         $marks = array_map(
             static fn (object $row): ?bool => FeedingAttendanceMark::forRule($row),
-            array_fill(0, 6, $excused)
+            array_fill(0, 9, $excused)
         );
 
-        $this->assertFalse($rule->isAtRisk($marks));
+        $this->assertFalse($rule->thresholdReached($marks));
+        $this->assertFalse($rule->reachesNotice($marks));
         $this->assertSame(0, $rule->currentAbsenceRun($marks));
     }
 
     /**
-     * The window would otherwise hold the flag back for another six sessions —
-     * a fortnight after the child stopped coming, which is the delay the rule
-     * exists to remove.
+     * A run carries its own evidence, so the rate's observation window would
+     * only hold the notice back — the delay the rule exists to remove.
      */
     #[Test]
-    public function the_time_based_rule_classifies_as_soon_as_the_run_is_complete(): void
+    public function the_time_based_rule_needs_no_observation_window(): void
     {
-        $rule = new FeedingAtRiskRule(FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS, 80, 3, 10, 4, 8);
+        $rule = new FeedingAtRiskRule(FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS, 80, 3, 10, 7, 3);
 
-        $this->assertTrue($rule->hasEnoughObservation([false, false, false, false]));
-        $this->assertFalse($rule->hasEnoughObservation([false, false, false]));
+        $this->assertTrue($rule->hasEnoughObservation([false]));
+        $this->assertFalse($rule->hasEnoughObservation([]));
+        $this->assertFalse($rule->usesObservationWindow());
     }
 
+    /**
+     * No figure, notice or threshold ever changes a learner's enrolment — not
+     * at day 7, not at day 14, and not once the stored flags are rewritten.
+     */
     #[Test]
-    public function the_removal_review_opens_at_two_weeks_and_removes_nobody(): void
+    public function a_long_absence_changes_nobodys_enrolment(): void
     {
-        $rule = new FeedingAtRiskRule(FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS, 80, 3, 10, 4, 8);
-
-        $oneWeek = array_fill(0, 4, false);
-        $twoWeeks = array_fill(0, 8, false);
-
-        $this->assertFalse($rule->needsRemovalReview($oneWeek));
-        $this->assertTrue($rule->needsRemovalReview($twoWeeks));
-
-        // A learner the rule says is worth reviewing is still enrolled: nothing
-        // in this application takes a child off the feeding line on a count.
+        $this->institution->update(['feeding_at_risk_mode' => FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS]);
         $learner = $this->makeStudent();
-        $this->assertTrue(FeedingBeneficiarySummary::isEnrolled($learner->fresh()));
+
+        foreach (range(1, 14) as $back) {
+            FeedingAttendance::create([
+                'student_health_record_id' => $learner->id,
+                'session_date' => $this->feedingDay($back),
+                'is_present' => false,
+                'needs_review' => false,
+                'source' => FeedingAttendance::SOURCE_MANUAL_ENTRY,
+            ]);
+        }
+
+        FeedingAttendanceFlag::refreshStoredFlags($this->institution->id);
+
+        $learner = $learner->fresh();
+        $this->assertTrue(FeedingBeneficiarySummary::isEnrolled($learner));
+        $this->assertNull($learner->feeding_removed_at);
+        // Two weeks away is still only awaiting the coordinator's confirmation.
+        $this->assertFalse((bool) $learner->is_at_risk);
     }
 
     #[Test]
@@ -522,15 +536,20 @@ class FeedingExcusedAbsenceTest extends TestCase
     {
         $this->institution->update([
             'feeding_at_risk_mode' => FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS,
-            'feeding_absence_flag_days' => 4,
-            'feeding_absence_removal_days' => 8,
+            'feeding_absence_notice_days' => 2,
+            'feeding_absence_flag_days' => 5,
         ]);
 
         $rule = FeedingAtRiskRule::forInstitution($this->institution->id);
 
         $this->assertSame(FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS, $rule->mode());
-        $this->assertSame(4, $rule->absenceFlagDays());
-        $this->assertSame(8, $rule->absenceRemovalDays());
+        $this->assertSame(2, $rule->absenceNoticeDays());
+        $this->assertSame(5, $rule->absenceFlagDays());
+
+        // A school that has set no figures runs the adviser's: 3 and 7.
+        $plain = Institution::create(['name' => 'Plain School', 'status' => 'active']);
+        $this->assertSame(3, FeedingAtRiskRule::forInstitution($plain->id)->absenceNoticeDays());
+        $this->assertSame(7, FeedingAtRiskRule::forInstitution($plain->id)->absenceFlagDays());
 
         // A school that has chosen nothing keeps the platform default rather
         // than being switched to somebody else's policy.
@@ -711,8 +730,8 @@ class FeedingExcusedAbsenceTest extends TestCase
         $this->withSession($admin)
             ->post("/dashboard/system-admin/institutions/{$this->institution->id}/at-risk-threshold", [
                 'at_risk_mode' => FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS,
-                'absence_flag_days' => 4,
-                'absence_removal_days' => 8,
+                'absence_notice_days' => 3,
+                'absence_flag_days' => 7,
                 'cycle_days' => 90,
             ])
             ->assertRedirect();
@@ -720,8 +739,26 @@ class FeedingExcusedAbsenceTest extends TestCase
         $school = $this->institution->fresh();
 
         $this->assertSame(FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS, $school->feeding_at_risk_mode);
-        $this->assertSame(4, $school->feeding_absence_flag_days);
-        $this->assertSame(8, $school->feeding_absence_removal_days);
+        $this->assertSame(3, $school->feeding_absence_notice_days);
+        $this->assertSame(7, $school->feeding_absence_flag_days);
         $this->assertSame(90, $school->feeding_cycle_days);
+    }
+
+    #[Test]
+    public function the_notice_must_come_before_the_flag(): void
+    {
+        $admin = ['active_role' => 'system_admin', 'active_name' => 'Admin', 'active_username' => 'systemadmin'];
+
+        $this->withSession($admin)
+            ->post("/dashboard/system-admin/institutions/{$this->institution->id}/at-risk-threshold", [
+                'absence_notice_days' => 7,
+                'absence_flag_days' => 7,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $school = $this->institution->fresh();
+        $this->assertNull($school->feeding_absence_notice_days);
+        $this->assertNull($school->feeding_absence_flag_days);
     }
 }

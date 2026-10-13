@@ -3,68 +3,67 @@
 namespace App\Http\Controllers;
 
 use App\Models\FeedingAttendance;
+use App\Models\FeedingAttendanceConfirmation;
 use App\Models\FeedingFollowUp;
 use App\Models\StudentHealthRecord;
 use App\Support\AuditTrail;
 use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
-use App\Support\FeedingRiskSeverity;
 use App\Support\SchemaCache;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
- * The Feeding Coordinator's At-Risk Students tab.
+ * The Feeding Coordinator's At-Risk Students tab — where the attendance flow
+ * the capstone adviser set is worked:
  *
- * It answers one question the other tabs do not: **which beneficiaries are
- * below the school's attendance threshold, why, and who needs following up.**
+ *   day 3 of unexcused absence in a row → ATTENDANCE NOTICE: verify the record
+ *   day 7                                → AWAITING CONFIRMATION: confirm it
+ *   confirmed                            → FLAGGED FOR FOLLOW-UP: record follow-ups
+ *                                          until one is Resolved
  *
- * That is deliberately not what the Attendance tab does. Attendance records
- * marks — who was fed on which day. This tab records nothing about a session at
- * all: it reads the marks the Attendance tab wrote, judges them with the
- * school's own rule, and adds the one thing no rule can derive — what a human
- * did about it. So there is no way to mark a learner present or absent here, and
- * there never should be: a second write path into feeding_attendances is exactly
- * how two screens start disagreeing about a child's attendance.
+ * Every standing comes from FeedingAttendanceFlag, the one reading every other
+ * screen counts from, so this tab and the Dashboard cannot disagree about who is
+ * flagged.
  *
- * Everything on screen is derived at read time from three sources:
+ * Three things a human enters here, each through one endpoint, scoped to the
+ * coordinator's school and audited:
  *
- * - `feeding_attendances` — the marks, with NULL still meaning "unconfirmed" and
- *   voting neither way (see FeedingAtRiskRule);
- * - FeedingAtRiskRule::forInstitution() — the school's own threshold, never a
- *   constant in this file, so a System Admin moving it moves this page;
- * - FeedingRiskSeverity — the Critical / At Risk / Watch bands, which are a
- *   monitoring aid layered on the rule and never a replacement for it. Only
- *   at-risk learners are counted by the At-Risk Students figure; a Watch learner
- *   is above the threshold and must never be added to it.
+ * - the **confirmation** that a learner's record is correct
+ *   (`feeding_attendance_confirmations`) — the only thing that flags anybody;
+ * - a **correction** to one of the absences being verified, through the one
+ *   audited correction path (`feedingcor-program.beneficiary.attendance.correct`)
+ *   — verifying a record has to be able to find it wrong;
+ * - the **follow-up** (`feeding_follow_ups`) on a flagged learner.
  *
- * The only stored thing is the follow-up (`feeding_follow_ups`), which is
- * scoped, audited and encrypted like every other note about a named child. It
- * records what was done, never a conclusion about the learner — and resolving a
- * concern never touches enrolment, which follows its own workflow.
+ * None of them touches enrolment. A flag is a reason to follow a learner up,
+ * never to stop feeding them, so there is no removal and no enrolment endpoint
+ * on this page.
  */
 class FeedingAtRiskController extends Controller
 {
     /** How many recent marks the detail view prints as a sequence. */
     private const RECENT_MARK_COUNT = 5;
 
-    /** How many recent absences the detail view lists for follow-up. */
-    private const RECENT_ABSENCE_COUNT = 6;
+    /** How many recent absences the detail view lists for a flagged learner. */
+    private const RECENT_ABSENCE_COUNT = 7;
 
     /** Attendance bands the list can be narrowed to. */
     private const ATTENDANCE_BANDS = ['below_50', '50_69', '70_79', '80_plus', 'no_sessions'];
 
     /** Absence bands the list can be narrowed to. */
-    private const ABSENCE_BANDS = ['1_2', '3_5', '6_plus'];
+    private const ABSENCE_BANDS = ['1_2', '3_6', '7_plus'];
 
     public function index(Request $request): View|RedirectResponse
     {
@@ -80,9 +79,8 @@ class FeedingAtRiskController extends Controller
      * used so a live view and a reloaded one cannot drift.
      *
      * The list itself is deliberately not returned. It holds rows the coordinator
-     * has expanded to read, and replacing it under their hands while they work
-     * through a follow-up would throw away their place in it — the same reason
-     * the Attendance tab never live-replaces its marking sheet.
+     * has opened to read, and replacing it under their hands while they verify a
+     * record would throw away their place in it.
      */
     public function metrics(Request $request): JsonResponse
     {
@@ -101,11 +99,9 @@ class FeedingAtRiskController extends Controller
     }
 
     /**
-     * The at-risk list as it stands on screen — the same rows, the same order,
-     * narrowed by the same filters.
-     *
-     * It carries learner names, so it is a read of personal data like any other:
-     * the route sits under dashboard/* and is audited by AuditSensitiveAccess.
+     * The list as it stands on screen — the same rows, the same order, narrowed
+     * by the same filters. It carries learner names, so the route sits under
+     * dashboard/* and is audited by AuditSensitiveAccess.
      */
     public function export(Request $request): BinaryFileResponse|RedirectResponse
     {
@@ -128,17 +124,19 @@ class FeedingAtRiskController extends Controller
         $writer->addRow(Row::fromValues(['AT-RISK FEEDING BENEFICIARIES']));
         $writer->addRow(Row::fromValues([(string) $data['schoolName']]));
         $writer->addRow(Row::fromValues(['S.Y. '.$data['schoolYear']]));
-        $writer->addRow(Row::fromValues(['At-risk threshold: '.$data['cards']['threshold_label'].'%']));
+        $writer->addRow(Row::fromValues([
+            'Attendance notice: '.$data['cards']['notice_label'].' · Flag threshold: '.$data['cards']['threshold_label'],
+        ]));
         $writer->addRow(Row::fromValues([]));
 
         $writer->addRow(Row::fromValues([
-            'PRIORITY', 'STUDENT', 'GRADE', 'SECTION', 'PRESENT', 'ABSENT',
-            'ATTENDANCE', 'DAYS REMAINING', 'RISK', 'FOLLOW-UP STATUS', 'LAST FOLLOW-UP',
+            'PRIORITY', 'STUDENT', 'GRADE', 'SECTION', 'PRESENT', 'ABSENT', 'ATTENDANCE',
+            'CONSECUTIVE ABSENCES', 'STATUS', 'CONFIRMED ON', 'FOLLOW-UP STATUS', 'LAST FOLLOW-UP',
         ]));
 
         foreach ($data['rows'] as $row) {
             $writer->addRow(Row::fromValues([
-                FeedingRiskSeverity::priorityLabel($row['priority']),
+                FeedingAttendanceFlag::priorityLabel($row['priority']),
                 $row['name'],
                 $row['grade_number'],
                 $row['section'],
@@ -146,8 +144,9 @@ class FeedingAtRiskController extends Controller
                 $row['absent'],
                 // An em dash, never 0%: no confirmed session is not a turnout of nothing.
                 $row['rate'] !== null ? number_format($row['rate'], 0).'%' : '—',
-                $row['days_remaining'],
-                FeedingRiskSeverity::severityLabel($row['severity']),
+                $row['run'],
+                $row['state_label'],
+                $row['confirmation']['date_label'] ?? '—',
                 $row['follow_up']['status_label'],
                 $row['follow_up']['date_label'] ?? '—',
             ]));
@@ -161,14 +160,124 @@ class FeedingAtRiskController extends Controller
     }
 
     /**
-     * Records one follow-up on one beneficiary.
+     * The coordinator's word that one learner's attendance record is correct.
      *
-     * Coordinator-only, re-scoped to the coordinator's own school, written
-     * through the model — never a raw insert, because the casts are what keep
-     * the note and the staff name encrypted — and audited with the learner it
-     * concerns and the status it moved to. The free text is not put in the audit
-     * description: the entry says a follow-up happened, the encrypted row says
-     * what was in it.
+     * The stage is decided here, from the learner's standing as the server reads
+     * it now — never from the form — so a stale tab or a replayed post cannot
+     * flag a learner whose record no longer reaches the threshold:
+     *
+     * - ATTENDANCE NOTICE → a NOTICE-stage verification. It acknowledges the
+     *   notice and flags nobody.
+     * - AWAITING CONFIRMATION → a FLAG-stage confirmation. This, and nothing
+     *   else, flags the learner for follow-up.
+     *
+     * Anything else has nothing to confirm and is refused. Enrolment is never
+     * touched.
+     */
+    public function confirmAttendance(Request $request): RedirectResponse
+    {
+        if (! $this->isCoordinator($request)) {
+            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can confirm attendance.');
+        }
+
+        if (! SchemaCache::hasTable('feeding_attendance_confirmations')) {
+            return back()->with('error', 'Attendance confirmations are not available yet. Run the pending migrations.');
+        }
+
+        $validated = $request->validate([
+            'record_id' => ['required', 'integer'],
+            'remarks' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $institutionId = $request->session()->get('active_institution_id');
+        $learner = $this->scopedLearner($institutionId, (int) $validated['record_id']);
+
+        if (! $learner) {
+            return redirect()
+                ->route('dashboard.feedingcor-at-risk')
+                ->with('error', 'That learner is not on this school’s roster.');
+        }
+
+        if (! FeedingBeneficiarySummary::isBeneficiary($learner)) {
+            return redirect()
+                ->route('dashboard.feedingcor-at-risk')
+                ->with('error', 'Attendance can only be confirmed for an enrolled beneficiary.');
+        }
+
+        $rule = FeedingAtRiskRule::forInstitution($institutionId);
+        $standing = FeedingAttendanceFlag::forRecords(collect([$learner]), $rule)[$learner->id];
+
+        $stage = match (true) {
+            $standing['state'] === FeedingAttendanceFlag::AWAITING_CONFIRMATION => FeedingAttendanceConfirmation::STAGE_FLAG,
+            $standing['state'] === FeedingAttendanceFlag::NOTICE && ! $standing['notice_verified'] => FeedingAttendanceConfirmation::STAGE_NOTICE,
+            default => null,
+        };
+
+        if ($stage === null) {
+            return back()->with('error', 'There is no attendance record waiting to be confirmed for this learner.');
+        }
+
+        $evidence = $standing['evidence'];
+        $confirmer = trim((string) $request->session()->get('active_name', '')) ?: null;
+
+        $confirmation = DB::transaction(function () use ($learner, $institutionId, $stage, $evidence, $standing, $confirmer, $validated): FeedingAttendanceConfirmation {
+            // Through the model: the casts are what keep the staff name and the
+            // remark encrypted, and Auditable records the row itself.
+            $confirmation = FeedingAttendanceConfirmation::create([
+                'student_health_record_id' => $learner->id,
+                'institution_id' => $institutionId,
+                'school_year' => (string) $learner->school_year,
+                'stage' => $stage,
+                'run_started_on' => $stage === FeedingAttendanceConfirmation::STAGE_NOTICE
+                    ? $standing['run_started_on']
+                    : ($evidence[0] ?? $standing['run_started_on']),
+                'confirmed_through' => $evidence !== [] ? end($evidence) : null,
+                'absences' => count($evidence),
+                'confirmed_by_name' => $confirmer,
+                'confirmed_by_role' => 'feeding_coor',
+                'remarks' => $this->text($validated['remarks'] ?? null),
+            ]);
+
+            // The clinic dashboards count the stored flag, so it moves with the
+            // confirmation rather than at the next attendance write.
+            FeedingAttendanceFlag::refreshStoredFlags($institutionId);
+
+            return $confirmation;
+        });
+
+        AuditTrail::record(
+            $stage === FeedingAttendanceConfirmation::STAGE_FLAG ? 'feeding_attendance_confirmed' : 'feeding_attendance_verified',
+            'StudentHealthRecord',
+            $learner->id,
+            $stage === FeedingAttendanceConfirmation::STAGE_FLAG
+                ? 'Confirmed the attendance record of learner #'.$learner->id.' and flagged them for follow-up ('.count($evidence).' unexcused absences)'
+                : 'Verified the attendance record of learner #'.$learner->id.' at the attendance notice ('.count($evidence).' unexcused absences)',
+            [
+                'confirmation_id' => $confirmation->id,
+                'stage' => $stage,
+                'run_started_on' => $confirmation->run_started_on?->toDateString(),
+                'confirmed_through' => $confirmation->confirmed_through?->toDateString(),
+                'absences' => $confirmation->absences,
+            ],
+        );
+
+        return back()->with('success', $stage === FeedingAttendanceConfirmation::STAGE_FLAG
+            ? 'Attendance confirmed. '.$learner->student_name.' is flagged for follow-up.'
+            : 'Attendance verified for '.$learner->student_name.'.');
+    }
+
+    /**
+     * Records one follow-up on one flagged beneficiary.
+     *
+     * Only a learner whose record the coordinator has confirmed can be followed
+     * up — that confirmation is what the adviser's flow puts first. A Resolved
+     * follow-up closes the flag; nothing about it touches enrolment.
+     *
+     * Written through the model — never a raw insert, because the casts are what
+     * keep the note and the staff name encrypted — and audited with the learner
+     * it concerns and the status it moved to. The free text is not put in the
+     * audit description: the entry says a follow-up happened, the encrypted row
+     * says what was in it.
      */
     public function storeFollowUp(Request $request): RedirectResponse
     {
@@ -184,10 +293,7 @@ class FeedingAtRiskController extends Controller
 
         // Keyed by record id, never by name: this posts from a dialog whose
         // learner can be chosen, and a name is neither unique nor safe in a URL.
-        $learner = StudentHealthRecord::query()
-            ->when($institutionId, fn ($query) => $query->where('institution_id', $institutionId))
-            ->whereKey((int) $request->input('record_id'))
-            ->first();
+        $learner = $this->scopedLearner($institutionId, (int) $request->input('record_id'));
 
         if (! $learner) {
             return redirect()
@@ -199,6 +305,17 @@ class FeedingAtRiskController extends Controller
             return redirect()
                 ->route('dashboard.feedingcor-at-risk')
                 ->with('error', 'A follow-up can only be recorded for an enrolled beneficiary.');
+        }
+
+        $standing = FeedingAttendanceFlag::forRecords(
+            collect([$learner]),
+            FeedingAtRiskRule::forInstitution($institutionId)
+        )[$learner->id];
+
+        if (! $standing['flagged']) {
+            return redirect()
+                ->route('dashboard.feedingcor-at-risk')
+                ->with('error', 'A follow-up is recorded once the attendance record has been confirmed and the learner is flagged.');
         }
 
         $validated = $request->validate([
@@ -227,6 +344,12 @@ class FeedingAtRiskController extends Controller
             'recorded_by_role' => 'feeding_coor',
         ]);
 
+        // Resolved is the one status that changes a flag: it closes it. The
+        // stored flag the clinic dashboards count follows at once.
+        if ($followUp->status === FeedingFollowUp::STATUS_RESOLVED) {
+            FeedingAttendanceFlag::refreshStoredFlags($institutionId);
+        }
+
         AuditTrail::record(
             'feeding_follow_up_recorded',
             'StudentHealthRecord',
@@ -247,7 +370,7 @@ class FeedingAtRiskController extends Controller
      *
      * Building it in one place is what keeps the cards and the list in
      * agreement: they are two views of the same rows, not two queries that might
-     * disagree about how many learners the threshold has flagged.
+     * disagree about how many learners are flagged.
      *
      * @return array<string, mixed>
      */
@@ -291,6 +414,7 @@ class FeedingAtRiskController extends Controller
         $dayNumbers = array_flip($sessionDates);
 
         $followUps = $this->followUpsFor($scoped);
+        $histories = FeedingAttendanceFlag::historiesFor($scoped->pluck('id'));
 
         $rows = $scoped
             ->map(fn (StudentHealthRecord $record): array => $this->buildRow(
@@ -298,26 +422,20 @@ class FeedingAtRiskController extends Controller
                 $byRecord->get($record->id, collect()),
                 $dayNumbers,
                 $followUps->get($record->id, collect()),
+                $histories[$record->id] ?? [],
                 $rule,
-                $cycle,
             ))
             ->values();
 
-        // The official figure, and the only one: at-risk means below the
-        // school's threshold. Watch learners are above it and are never counted.
+        // The official figure, and the only one: at risk means FLAGGED — the
+        // threshold reached and the record confirmed. A learner awaiting
+        // confirmation or under a notice is never counted.
         $atRiskCount = $rows->where('at_risk', true)->count();
         $total = $rows->count();
 
-        // The list is the learners who need attention — at risk or in the watch
-        // band. A learner comfortably above the threshold has nothing to follow
-        // up and is not printed as a row with no action; nor does a learner the
-        // rule has not started classifying, whose low rate is a short record
-        // rather than a finding and whose follow-up would be premature.
-        $listed = $rows->filter(fn (array $row): bool => ! in_array(
-            $row['severity'],
-            [FeedingRiskSeverity::STEADY, FeedingRiskSeverity::OBSERVING],
-            true
-        ));
+        // The list is the learners the coordinator has to look at: flagged,
+        // awaiting confirmation, or under an attendance notice.
+        $listed = $rows->filter(fn (array $row): bool => in_array($row['state'], FeedingAttendanceFlag::ATTENTION, true));
         $listed = $this->applyFilters($listed, $filters)->values();
 
         return [
@@ -333,27 +451,33 @@ class FeedingAtRiskController extends Controller
                 'beneficiaries' => $total,
                 // Null, not zero: with no beneficiaries there is no rate to report.
                 'at_risk_rate' => $total > 0 ? round(($atRiskCount / $total) * 100, 1) : null,
-                'threshold' => $rule->thresholdPercent(),
-                'threshold_label' => $this->percent($rule->thresholdPercent()),
-                'watch_label' => $this->percent(FeedingRiskSeverity::watchThresholdPercent($rule)),
+                'awaiting' => $rows->where('state', FeedingAttendanceFlag::AWAITING_CONFIRMATION)->count(),
+                'notices' => $rows->where('state', FeedingAttendanceFlag::NOTICE)->count(),
+                'notices_unverified' => $rows
+                    ->where('state', FeedingAttendanceFlag::NOTICE)
+                    ->where('notice_verified', false)
+                    ->count(),
+                'threshold_label' => $rule->thresholdLabel(),
+                'notice_label' => $rule->noticeLabel(),
                 'rule' => $rule->describe(),
-                'critical' => $rows->where('severity', FeedingRiskSeverity::CRITICAL)->count(),
-                'watch' => $rows->where('severity', FeedingRiskSeverity::WATCH)->count(),
-                // Learners the observation window has not started judging.
-                // Reported, never added to the at-risk figure — the whole point
-                // of the window is that they are unclassified, not flagged.
-                'observing' => $rows->where('severity', FeedingRiskSeverity::OBSERVING)->count(),
-                'minimum_observation_days' => $rule->minimumObservationDays(),
                 'needs_follow_up' => $listed
                     ->where('follow_up.status', FeedingFollowUp::STATUS_FOLLOW_UP_REQUIRED)
                     ->count(),
             ],
             'rows' => $listed,
+            'followUpRows' => $listed->where('at_risk', true)->values(),
             'listedCount' => $listed->count(),
             'filters' => $filters,
             'filterOptions' => $this->filterOptions($beneficiaries),
             'statusOptions' => FeedingFollowUp::STATUSES,
+            'standingOptions' => [
+                FeedingAttendanceFlag::FLAGGED => FeedingAttendanceFlag::label(FeedingAttendanceFlag::FLAGGED),
+                FeedingAttendanceFlag::AWAITING_CONFIRMATION => FeedingAttendanceFlag::label(FeedingAttendanceFlag::AWAITING_CONFIRMATION),
+                FeedingAttendanceFlag::NOTICE => FeedingAttendanceFlag::label(FeedingAttendanceFlag::NOTICE),
+            ],
             'followUpsAvailable' => SchemaCache::hasTable('feeding_follow_ups'),
+            'confirmationsAvailable' => SchemaCache::hasTable('feeding_attendance_confirmations'),
+            'excusedAvailable' => SchemaCache::hasColumn('feeding_attendances', 'is_excused'),
         ];
     }
 
@@ -363,6 +487,7 @@ class FeedingAtRiskController extends Controller
      * @param  Collection<int, array<string, mixed>>  $marks  this learner's marks, oldest first
      * @param  array<string, int>  $dayNumbers  session date => its place in the programme
      * @param  Collection<int, FeedingFollowUp>  $followUps  newest first
+     * @param  array<string, mixed>  $history  FeedingAttendanceFlag::historiesFor() for this learner
      * @return array<string, mixed>
      */
     private function buildRow(
@@ -370,8 +495,8 @@ class FeedingAtRiskController extends Controller
         Collection $marks,
         array $dayNumbers,
         Collection $followUps,
+        array $history,
         FeedingAtRiskRule $rule,
-        FeedingProgramCycle $cycle,
     ): array {
         [$grade, $section] = FeedingBeneficiarySummary::splitSection((string) $record->section);
 
@@ -379,16 +504,34 @@ class FeedingAtRiskController extends Controller
         // out of both the numerator and the denominator — an unread mark is
         // evidence of nothing, and an absence the school accepted is never held
         // against the learner.
-        $sequence = $marks->map(fn (array $mark) => match ($mark['status']) {
-            FeedingAttendanceMark::PRESENT => true,
-            FeedingAttendanceMark::ABSENT => false,
-            default => null,
-        })->values()->all();
+        $dated = $marks->map(fn (array $mark): array => [
+            'date' => $mark['date'],
+            'mark' => match ($mark['status']) {
+                FeedingAttendanceMark::PRESENT => true,
+                FeedingAttendanceMark::ABSENT => false,
+                default => null,
+            },
+        ])->values()->all();
+        $sequence = array_column($dated, 'mark');
 
+        $standing = FeedingAttendanceFlag::evaluate($dated, $rule, $history);
+
+        $confirmed = $rule->confirmedCount($sequence);
+        $present = $rule->presentCount($sequence);
         $excused = $marks->where('status', FeedingAttendanceMark::EXCUSED)->count();
+        $trend = FeedingAttendanceFlag::trend($sequence);
 
-        $standing = FeedingRiskSeverity::evaluate($sequence, $rule);
+        // The follow-ups that belong to the flag currently open — a resolved
+        // flag's history stays in the timeline, but it does not decide the
+        // status column of a new one.
+        $openedOn = $standing['flagged'] ? ($standing['confirmation']['confirmed_on'] ?? null) : null;
         $latest = $followUps->first();
+        $current = $standing['flagged'] ? $latest : null;
+        if ($current !== null && $openedOn !== null && $current->created_at?->toDateString() < $openedOn) {
+            $current = null;
+        }
+
+        $byDate = $marks->keyBy('date');
 
         return [
             'id' => $record->id,
@@ -396,34 +539,57 @@ class FeedingAtRiskController extends Controller
             'grade' => $grade,
             'grade_number' => preg_replace('/^grade\s*/i', '', $grade),
             'section' => $section,
-            'present' => $standing['present'],
-            'absent' => $standing['absent'],
-            'confirmed' => $standing['confirmed'],
+            'present' => $present,
+            'absent' => $confirmed - $present,
+            'confirmed' => $confirmed,
             // The two states the rule discounts are reported apart: an absence
             // the school accepted is a decision somebody made, and a scanned
             // mark nobody has read is not.
             'excused' => $excused,
-            'unconfirmed' => $standing['unconfirmed'] - $excused,
-            'rate' => $standing['rate'],
-            'at_risk' => $standing['at_risk'],
-            'severity' => $standing['severity'],
+            'unconfirmed' => count($sequence) - $confirmed - $excused,
+            'rate' => $rule->attendanceRate($sequence),
+            'at_risk' => $standing['flagged'],
+            'state' => $standing['state'],
+            'state_label' => $standing['label'],
+            'state_badge' => $standing['badge'],
             'priority' => $standing['priority'],
-            'trend' => $standing['trend'],
-            'reason' => $standing['reason'],
-            'threshold' => $rule->thresholdPercent(),
-            // The programme's own figure, printed per row so a coordinator can
-            // see how much of the cycle is left to recover the shortfall in.
-            'days_remaining' => $cycle->daysRemaining(),
+            'needs_action' => $standing['needs_action'],
+            'notice_verified' => $standing['notice_verified'],
+            'run' => $standing['run'],
+            'confirmation' => $standing['confirmation'],
+            // What the dialog's action button does for this learner, decided
+            // with the same reading the server re-checks on the post.
+            'confirm_stage' => match (true) {
+                $standing['state'] === FeedingAttendanceFlag::AWAITING_CONFIRMATION => FeedingAttendanceConfirmation::STAGE_FLAG,
+                $standing['state'] === FeedingAttendanceFlag::NOTICE && ! $standing['notice_verified'] => FeedingAttendanceConfirmation::STAGE_NOTICE,
+                default => '',
+            },
+            'trend' => $trend,
+            'reason' => $this->reason($standing, $rule),
             // The last few confirmed marks, oldest first: the shape of a
             // learner's recent attendance in one line.
-            'recent' => FeedingRiskSeverity::recentMarks($sequence, self::RECENT_MARK_COUNT),
-            'absences' => $this->recentAbsences($marks, $dayNumbers),
+            'recent' => FeedingAttendanceFlag::recentMarks($sequence, self::RECENT_MARK_COUNT),
+            // The absences being verified, newest first, each with who took the
+            // mark — a record cannot be checked without knowing whose it is.
+            // Once a learner is flagged, the dialog shows their recent absences.
+            'absences' => $this->absenceRows(
+                $standing['evidence'] !== []
+                    ? array_reverse($standing['evidence'])
+                    : $marks->where('status', FeedingAttendanceMark::ABSENT)->sortByDesc('date')->take(self::RECENT_ABSENCE_COUNT)->pluck('date')->all(),
+                $byDate,
+                $dayNumbers
+            ),
+            'can_correct' => $standing['needs_action'],
             'trend_points' => $this->trendPoints($marks, $dayNumbers),
+            'is_rate_rule' => $rule->isRateMode(),
+            'threshold' => $rule->thresholdPercent(),
             'follow_up' => [
-                'status' => $latest?->status,
-                'status_label' => $latest ? FeedingFollowUp::statusLabel($latest->status) : 'No follow-up',
-                'badge' => $latest ? FeedingFollowUp::statusBadge($latest->status) : 'badge-neutral',
-                'date_label' => $latest?->followed_up_on?->format('M j, Y'),
+                'status' => $current?->status,
+                'status_label' => $current
+                    ? FeedingFollowUp::statusLabel($current->status)
+                    : ($standing['flagged'] ? 'No follow-up' : '—'),
+                'badge' => $current ? FeedingFollowUp::statusBadge($current->status) : 'badge-neutral',
+                'date_label' => $current?->followed_up_on?->format('M j, Y'),
             ],
             'follow_up_history' => $followUps->map(fn (FeedingFollowUp $entry): array => [
                 'date_label' => $entry->followed_up_on?->format('F j, Y') ?? '—',
@@ -440,6 +606,47 @@ class FeedingAtRiskController extends Controller
     }
 
     /**
+     * Why this learner is on the list, in one factual line about attendance.
+     * It reports the run or the rate and the rule that reached it — never a
+     * reason for the absences or a conclusion about the child.
+     *
+     * @param  array<string, mixed>  $standing
+     */
+    private function reason(array $standing, FeedingAtRiskRule $rule): string
+    {
+        $run = (int) $standing['run'];
+        $runLabel = $run.' consecutive unexcused '.($run === 1 ? 'absence' : 'absences');
+
+        return match ($standing['state']) {
+            FeedingAttendanceFlag::FLAGGED => 'Confirmed for follow-up'
+                .(($standing['confirmation']['by'] ?? '') !== '' ? ' by '.$standing['confirmation']['by'] : '')
+                .' on '.($standing['confirmation']['date_label'] ?? '—').'.',
+            FeedingAttendanceFlag::AWAITING_CONFIRMATION => ucfirst($rule->describeThreshold()).' reached.',
+            FeedingAttendanceFlag::NOTICE => $runLabel.($standing['notice_verified']
+                ? ' · verified'.(($standing['confirmation']['by'] ?? '') !== '' ? ' by '.$standing['confirmation']['by'] : '').' on '.($standing['confirmation']['date_label'] ?? '—')
+                : '').'.',
+            default => '',
+        };
+    }
+
+    /**
+     * @param  list<string>  $dates  newest first
+     * @param  Collection<string, array<string, mixed>>  $byDate
+     * @param  array<string, int>  $dayNumbers
+     * @return list<array{date: string, label: string, day: int, remarks: string, recorded_by: string}>
+     */
+    private function absenceRows(array $dates, Collection $byDate, array $dayNumbers): array
+    {
+        return array_values(array_map(fn (string $date): array => [
+            'date' => $date,
+            'label' => Carbon::parse($date)->format('M j, Y'),
+            'day' => ($dayNumbers[$date] ?? 0) + 1,
+            'remarks' => (string) ($byDate->get($date)['remarks'] ?? ''),
+            'recorded_by' => (string) ($byDate->get($date)['recorded_by'] ?? ''),
+        ], $dates));
+    }
+
+    /**
      * Every mark these beneficiaries carry, flattened to plain rows.
      *
      * Fetched, never aggregated in SQL: a SUM(CASE WHEN is_present …) folds an
@@ -447,7 +654,7 @@ class FeedingAtRiskController extends Controller
      * never do.
      *
      * @param  Collection<int, StudentHealthRecord>  $beneficiaries
-     * @return Collection<int, array{record_id: int, date: string, status: string, remarks: string}>
+     * @return Collection<int, array{record_id: int, date: string, status: string, remarks: string, recorded_by: string}>
      */
     private function marksFor(Collection $beneficiaries): Collection
     {
@@ -456,14 +663,10 @@ class FeedingAtRiskController extends Controller
         }
 
         $columns = ['student_health_record_id', 'session_date', 'is_present'];
-        if (SchemaCache::hasColumn('feeding_attendances', 'needs_review')) {
-            $columns[] = 'needs_review';
-        }
-        if (SchemaCache::hasColumn('feeding_attendances', 'is_excused')) {
-            $columns[] = 'is_excused';
-        }
-        if (SchemaCache::hasColumn('feeding_attendances', 'remarks')) {
-            $columns[] = 'remarks';
+        foreach (['needs_review', 'is_excused', 'remarks', 'recorded_by_name', 'reviewed_by_name'] as $column) {
+            if (SchemaCache::hasColumn('feeding_attendances', $column)) {
+                $columns[] = $column;
+            }
         }
 
         return FeedingAttendance::query()
@@ -476,6 +679,9 @@ class FeedingAtRiskController extends Controller
                 'date' => optional($row->session_date)->toDateString(),
                 'status' => FeedingAttendanceMark::state($row),
                 'remarks' => trim((string) ($row->remarks ?? '')),
+                // Whoever last decided the mark, else whoever took it — never a
+                // guess at a person.
+                'recorded_by' => trim((string) ($row->reviewed_by_name ?? '')) ?: trim((string) ($row->recorded_by_name ?? '')),
             ])
             ->filter(fn (array $row): bool => $row['date'] !== null)
             ->values();
@@ -495,47 +701,16 @@ class FeedingAtRiskController extends Controller
 
         return FeedingFollowUp::query()
             ->whereIn('student_health_record_id', $beneficiaries->pluck('id'))
-            ->orderByDesc('followed_up_on')
+            ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get()
             ->groupBy('student_health_record_id');
     }
 
     /**
-     * The sessions this learner missed, most recent first, each named by the
-     * feeding day it fell on — which is what makes a follow-up conversation
-     * possible.
-     *
-     * @param  Collection<int, array<string, mixed>>  $marks
-     * @param  array<string, int>  $dayNumbers
-     * @return list<array{date: string, label: string, day: int, remarks: string}>
-     */
-    private function recentAbsences(Collection $marks, array $dayNumbers): array
-    {
-        return $marks
-            // Unexcused absences only: an absence the school accepted is not
-            // one of the sessions that put this learner on the list.
-            ->where('status', FeedingAttendanceMark::ABSENT)
-            ->sortByDesc('date')
-            ->take(self::RECENT_ABSENCE_COUNT)
-            ->map(fn (array $mark): array => [
-                'date' => $mark['date'],
-                'label' => Carbon::parse($mark['date'])->format('M j, Y'),
-                'day' => ($dayNumbers[$mark['date']] ?? 0) + 1,
-                'remarks' => $mark['remarks'],
-            ])
-            ->values()
-            ->all();
-    }
-
-    /**
      * The learner's cumulative attendance rate after each confirmed session —
-     * the line the trend chart draws.
-     *
-     * Cumulative rather than per-session, because a per-session line for a
-     * present/absent mark is only ever 0 or 100 and says nothing about
-     * direction. Unconfirmed marks are skipped, exactly as the rule skips them,
-     * so the line ends on the very figure the flag was decided by.
+     * the line the trend chart draws. Unconfirmed and excused marks are
+     * skipped, exactly as the rule skips them.
      *
      * @param  Collection<int, array<string, mixed>>  $marks
      * @param  array<string, int>  $dayNumbers
@@ -548,9 +723,6 @@ class FeedingAtRiskController extends Controller
         $confirmed = 0;
 
         foreach ($marks as $mark) {
-            // Only the two states the rule reads move the line. An excused
-            // absence left in here would draw the learner's rate falling on a
-            // session the rule never counted against them.
             if (! in_array($mark['status'], [FeedingAttendanceMark::PRESENT, FeedingAttendanceMark::ABSENT], true)) {
                 continue;
             }
@@ -570,18 +742,18 @@ class FeedingAtRiskController extends Controller
     }
 
     /**
-     * Six filters, in the two kinds the coordinator's other tabs already use.
+     * Seven filters, in the two kinds the coordinator's other tabs already use.
      *
-     * Grade and section are scope — they move the cards and the list together.
-     * Risk level, attendance band, days absent and follow-up status narrow the
-     * list alone, so the cards keep reporting the size of the programme rather
-     * than the size of the last select touched.
+     * Grade, section and gender are scope — they move the cards and the list
+     * together. Status, attendance band, days absent and follow-up status
+     * narrow the list alone, so the cards keep reporting the size of the
+     * programme rather than the size of the last select touched.
      *
      * Every one reads an encrypted or derived value, so every one is applied in
      * PHP after fetch — never as a WHERE.
      *
      * @param  Collection<int, StudentHealthRecord>  $beneficiaries
-     * @return array{grade: string, section: string, risk: string, attendance: string, absences: string, follow_up: string}
+     * @return array{grade: string, section: string, sex: string, status: string, attendance: string, absences: string, follow_up: string}
      */
     private function readFilters(Request $request, Collection $beneficiaries): array
     {
@@ -597,16 +769,14 @@ class FeedingAtRiskController extends Controller
             $section = '';
         }
 
-        // Scope, alongside grade and section: it moves the cards and the list
-        // together, so the At-Risk figure keeps describing the roll on screen.
         $sex = trim((string) $request->query('sex', ''));
         if (! in_array($sex, FeedingBeneficiarySummary::SEX_OPTIONS, true)) {
             $sex = '';
         }
 
-        $risk = trim((string) $request->query('risk', ''));
-        if (! in_array($risk, [FeedingRiskSeverity::CRITICAL, FeedingRiskSeverity::AT_RISK, FeedingRiskSeverity::WATCH], true)) {
-            $risk = '';
+        $status = trim((string) $request->query('status', ''));
+        if (! in_array($status, FeedingAttendanceFlag::ATTENTION, true)) {
+            $status = '';
         }
 
         $attendance = trim((string) $request->query('attendance', ''));
@@ -619,8 +789,8 @@ class FeedingAtRiskController extends Controller
             $absences = '';
         }
 
-        // "none" is a real answer here: a learner nobody has followed up yet is
-        // exactly who a coordinator opens this filter to find.
+        // "none" is a real answer here: a flagged learner nobody has followed
+        // up yet is exactly who a coordinator opens this filter to find.
         $followUp = trim((string) $request->query('follow_up', ''));
         if (! in_array($followUp, array_merge(['none'], array_keys(FeedingFollowUp::STATUSES)), true)) {
             $followUp = '';
@@ -630,7 +800,7 @@ class FeedingAtRiskController extends Controller
             'grade' => $grade,
             'section' => $section,
             'sex' => $sex,
-            'risk' => $risk,
+            'status' => $status,
             'attendance' => $attendance,
             'absences' => $absences,
             'follow_up' => $followUp,
@@ -645,24 +815,25 @@ class FeedingAtRiskController extends Controller
     private function applyFilters(Collection $rows, array $filters): Collection
     {
         return $rows
-            ->when($filters['risk'] !== '', fn (Collection $r) => $r->where('severity', $filters['risk']))
+            ->when($filters['status'] !== '', fn (Collection $r) => $r->where('state', $filters['status']))
             ->when($filters['attendance'] !== '', fn (Collection $r) => $r->filter(
                 fn (array $row): bool => $this->inAttendanceBand($row['rate'], $filters['attendance'])
             ))
             ->when($filters['absences'] !== '', fn (Collection $r) => $r->filter(
-                fn (array $row): bool => $this->inAbsenceBand($row['absent'], $filters['absences'])
+                fn (array $row): bool => $this->inAbsenceBand($row['run'], $filters['absences'])
             ))
             ->when($filters['follow_up'] !== '', fn (Collection $r) => $r->filter(
                 fn (array $row): bool => $filters['follow_up'] === 'none'
-                    ? $row['follow_up']['status'] === null
+                    ? $row['at_risk'] && $row['follow_up']['status'] === null
                     : $row['follow_up']['status'] === $filters['follow_up']
             ))
-            // Worst first: highest priority, then the lowest rate inside it, so
-            // the row a coordinator should open is the row at the top. A learner
-            // with no confirmed session sorts last rather than as 0%.
+            // The decision waiting on the coordinator first, then the flags they
+            // are following up, then the notices — and inside each the longest
+            // run, so the row a coordinator should open is the row at the top.
             ->sortBy(fn (array $row): array => [
-                FeedingRiskSeverity::priorityRank($row['priority']),
-                $row['rate'] ?? 101,
+                FeedingAttendanceFlag::priorityRank($row['priority']),
+                FeedingAttendanceFlag::stateRank($row['state']),
+                -$row['run'],
                 strtolower($row['name']),
             ])
             ->values();
@@ -683,12 +854,13 @@ class FeedingAtRiskController extends Controller
         };
     }
 
-    private function inAbsenceBand(int $absences, string $band): bool
+    /** Bands on the run of consecutive unexcused absences — the figure the flow reads. */
+    private function inAbsenceBand(int $run, string $band): bool
     {
         return match ($band) {
-            '1_2' => $absences >= 1 && $absences <= 2,
-            '3_5' => $absences >= 3 && $absences <= 5,
-            '6_plus' => $absences >= 6,
+            '1_2' => $run >= 1 && $run <= 2,
+            '3_6' => $run >= 3 && $run <= 6,
+            '7_plus' => $run >= 7,
             default => false,
         };
     }
@@ -709,16 +881,19 @@ class FeedingAtRiskController extends Controller
         ];
     }
 
+    private function scopedLearner(mixed $institutionId, int $recordId): ?StudentHealthRecord
+    {
+        return StudentHealthRecord::query()
+            ->when($institutionId, fn ($query) => $query->where('institution_id', $institutionId))
+            ->whereKey($recordId)
+            ->first();
+    }
+
     private function text(?string $value): ?string
     {
         $trimmed = trim((string) $value);
 
         return $trimmed !== '' ? $trimmed : null;
-    }
-
-    private function percent(float $value): string
-    {
-        return rtrim(rtrim(number_format($value, 1), '0'), '.');
     }
 
     private function isCoordinator(Request $request): bool

@@ -10,6 +10,7 @@ use App\Models\StudentPhoto;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ConfirmsFeedingFlags;
 use Tests\TestCase;
 
 /**
@@ -25,7 +26,7 @@ use Tests\TestCase;
  */
 class FeedingBeneficiaryProfileTest extends TestCase
 {
-    use RefreshDatabase;
+    use ConfirmsFeedingFlags, RefreshDatabase;
 
     private Institution $institution;
 
@@ -161,7 +162,18 @@ class FeedingBeneficiaryProfileTest extends TestCase
             $this->mark($record, now()->subDays($offset)->toDateString(), $offset <= 3);
         }
 
-        $this->openRecord($record)->assertOk()->assertSee('At Risk Beneficiary');
+        // Below the threshold is not a flag: the record says it is waiting on
+        // the coordinator, and points them at where it is confirmed.
+        $this->openRecord($record)->assertOk()
+            ->assertDontSee('At Risk Beneficiary')
+            ->assertSee('Awaiting Confirmation')
+            ->assertSee(route('dashboard.feedingcor-at-risk', ['status' => 'awaiting_confirmation']), false);
+
+        $this->confirmFlag($record);
+
+        $this->openRecord($record)->assertOk()
+            ->assertSee('At Risk Beneficiary')
+            ->assertSee('Flagged for Follow-Up');
     }
 
     #[Test]
@@ -470,8 +482,8 @@ class FeedingBeneficiaryProfileTest extends TestCase
         $this->mark($record, '2026-08-11', false);
         $this->mark($record, '2026-08-12', false);
 
-        // 33% — under the 80% default.
-        $this->openRecord($record)->assertOk()->assertSee('At Risk Beneficiary');
+        // 33% — under the 80% default, so the record awaits confirmation.
+        $this->openRecord($record)->assertOk()->assertSee('Awaiting Confirmation');
 
         $this->withSession($this->coordinatorSession())
             ->post('/dashboard/feedingcor-program/beneficiary/'.$record->id.'/attendance', [
@@ -484,9 +496,11 @@ class FeedingBeneficiaryProfileTest extends TestCase
                 'mark' => 'present',
             ]);
 
-        // The flag is computed from the marks, so correcting them clears it
+        // The standing is computed from the marks, so correcting them clears it
         // without anyone touching a stored flag.
-        $this->openRecord($record)->assertOk()->assertSee('Active Beneficiary');
+        $this->openRecord($record)->assertOk()
+            ->assertSee('Active Beneficiary')
+            ->assertDontSee('Awaiting Confirmation');
     }
 
     #[Test]

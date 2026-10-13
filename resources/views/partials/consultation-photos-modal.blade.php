@@ -51,7 +51,7 @@
             </div>
         </section>
 
-        <aside class="cphoto-side">
+        <div class="cphoto-side">
             <div class="cphoto-head">
                 <div class="cphoto-eyebrow">Consultation</div>
                 <h3 id="cphotoTitle">Injury Photos</h3>
@@ -131,6 +131,6 @@
                     <span>Photos stay in the clinic unless you share them. Share one only when the learner's class adviser needs to know about the injury.</span>
                 </div>
             </div>
-        </aside>
+        </div>
     </div>
 </div>

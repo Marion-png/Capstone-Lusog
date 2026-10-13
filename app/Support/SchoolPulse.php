@@ -50,6 +50,9 @@ final class SchoolPulse
      *   health_consent_forms    class adviser / parent (health services consent)
      *   health_assessments      school nurse (screening)
      *   feeding_attendances     feeding coordinator (marks)
+     *   feeding_attendance_confirmations  feeding coordinator (verified records)
+     *   feeding_follow_ups      feeding coordinator (follow-ups — a Resolved one
+     *                           closes a flag the nurse reads)
      *   attendance_imports      feeding coordinator (sheets)
      *   consultations           nurse / clinic staff / clinic teacher (visits)
      *   clinic_notes            school nurse (observations)
@@ -75,6 +78,8 @@ final class SchoolPulse
         'health_consent_forms',
         'health_assessments',
         'feeding_attendances',
+        'feeding_attendance_confirmations',
+        'feeding_follow_ups',
         'attendance_imports',
         'consultations',
         'clinic_notes',

@@ -80,6 +80,9 @@
                 <div class="kpi-hint">Logged at the clinic today</div>
             </div>
 
+            {{-- The School Nurse sees who the Feeding Coordinator has flagged;
+                 the Clinic Teacher, reading this same dashboard, does not. --}}
+            @if (! is_null($atRiskCount ?? null))
             <div class="card kpi accent-orange">
                 <div class="kpi-top">
                     <div class="kpi-label">At-Risk Learners</div>
@@ -90,6 +93,7 @@
                 <div class="kpi-value">{{ number_format($atRiskCount) }}</div>
                 <div class="kpi-hint">Flagged for follow-up</div>
             </div>
+            @endif
 
             <div class="card kpi accent-amber">
                 <div class="kpi-top">

@@ -34,20 +34,20 @@ class FeedingAtRiskRuleTest extends TestCase
     public function a_learner_below_the_rate_threshold_is_flagged(): void
     {
         // 2 of 4 = 50%, under 75.
-        $this->assertTrue($this->rate()->isAtRisk([true, false, true, false]));
+        $this->assertTrue($this->rate()->thresholdReached([true, false, true, false]));
     }
 
     #[Test]
     public function a_learner_at_the_threshold_is_not_flagged(): void
     {
         // 3 of 4 = exactly 75%; the rule is "below", not "at or below".
-        $this->assertFalse($this->rate()->isAtRisk([true, true, true, false]));
+        $this->assertFalse($this->rate()->thresholdReached([true, true, true, false]));
     }
 
     #[Test]
     public function perfect_attendance_is_never_flagged(): void
     {
-        $this->assertFalse($this->rate()->isAtRisk([true, true, true, true]));
+        $this->assertFalse($this->rate()->thresholdReached([true, true, true, true]));
     }
 
     #[Test]
@@ -55,14 +55,14 @@ class FeedingAtRiskRuleTest extends TestCase
     {
         // No attendance yet must never mean at-risk — otherwise every learner
         // is flagged the moment they are enrolled.
-        $this->assertFalse($this->rate()->isAtRisk([]));
+        $this->assertFalse($this->rate()->thresholdReached([]));
     }
 
     #[Test]
     public function unconfirmed_marks_alone_never_flag_a_learner(): void
     {
         // An entire sheet nobody could read is not evidence of absence.
-        $this->assertFalse($this->rate()->isAtRisk([null, null, null, null]));
+        $this->assertFalse($this->rate()->thresholdReached([null, null, null, null]));
     }
 
     #[Test]
@@ -70,7 +70,7 @@ class FeedingAtRiskRuleTest extends TestCase
     {
         // Confirmed: 3 present, 1 absent = 75% → not flagged.
         // If the two NULLs were counted as absences it would be 50% → flagged.
-        $this->assertFalse($this->rate()->isAtRisk([true, true, true, false, null, null]));
+        $this->assertFalse($this->rate()->thresholdReached([true, true, true, false, null, null]));
         $this->assertSame(75.0, $this->rate()->attendanceRate([true, true, true, false, null, null]));
     }
 
@@ -78,7 +78,7 @@ class FeedingAtRiskRuleTest extends TestCase
     public function unconfirmed_marks_cannot_rescue_a_learner_who_is_genuinely_below(): void
     {
         // Confirmed: 1 of 4 = 25%. Treating NULLs as attendance would hide it.
-        $this->assertTrue($this->rate()->isAtRisk([true, false, false, false, null, null]));
+        $this->assertTrue($this->rate()->thresholdReached([true, false, false, false, null, null]));
     }
 
     #[Test]
@@ -87,11 +87,11 @@ class FeedingAtRiskRuleTest extends TestCase
         $marks = [true, true, false, null];
 
         // Unresolved: 2 of 3 confirmed = 66.7% → already flagged.
-        $this->assertTrue($this->rate()->isAtRisk($marks));
+        $this->assertTrue($this->rate()->thresholdReached($marks));
 
         // Confirmed present: 3 of 4 = 75% → clears.
         $marks[3] = true;
-        $this->assertFalse($this->rate()->isAtRisk($marks));
+        $this->assertFalse($this->rate()->thresholdReached($marks));
     }
 
     #[Test]
@@ -99,9 +99,9 @@ class FeedingAtRiskRuleTest extends TestCase
     {
         $marks = [true, true, true, false]; // 75%
 
-        $this->assertFalse($this->rate(75)->isAtRisk($marks));
-        $this->assertTrue($this->rate(80)->isAtRisk($marks));
-        $this->assertFalse($this->rate(50)->isAtRisk($marks));
+        $this->assertFalse($this->rate(75)->thresholdReached($marks));
+        $this->assertTrue($this->rate(80)->thresholdReached($marks));
+        $this->assertFalse($this->rate(50)->thresholdReached($marks));
     }
 
     #[Test]
@@ -110,34 +110,34 @@ class FeedingAtRiskRuleTest extends TestCase
         // The spec's alternative default: 100% required means one miss flags.
         $rule = $this->rate(100);
 
-        $this->assertTrue($rule->isAtRisk([true, true, true, false]));
-        $this->assertFalse($rule->isAtRisk([true, true, true, true]));
+        $this->assertTrue($rule->thresholdReached([true, true, true, false]));
+        $this->assertFalse($rule->thresholdReached([true, true, true, true]));
     }
 
     #[Test]
     public function consecutive_mode_flags_a_run_of_absences(): void
     {
-        $this->assertTrue($this->consecutive(3)->isAtRisk([true, false, false, false, true]));
+        $this->assertTrue($this->consecutive(3)->thresholdReached([true, false, false, false, true]));
     }
 
     #[Test]
     public function consecutive_mode_ignores_scattered_absences(): void
     {
         // Same total absences, never three in a row.
-        $this->assertFalse($this->consecutive(3)->isAtRisk([false, true, false, true, false]));
+        $this->assertFalse($this->consecutive(3)->thresholdReached([false, true, false, true, false]));
     }
 
     #[Test]
     public function consecutive_mode_resets_the_run_on_attendance(): void
     {
-        $this->assertFalse($this->consecutive(3)->isAtRisk([false, false, true, false, false]));
+        $this->assertFalse($this->consecutive(3)->thresholdReached([false, false, true, false, false]));
     }
 
     #[Test]
     public function consecutive_mode_skips_unconfirmed_marks_without_breaking_a_run(): void
     {
         // An unreadable mark mid-streak must not mask a genuine run of three.
-        $this->assertTrue($this->consecutive(3)->isAtRisk([false, false, null, false]));
+        $this->assertTrue($this->consecutive(3)->thresholdReached([false, false, null, false]));
     }
 
     #[Test]
@@ -180,8 +180,8 @@ class FeedingAtRiskRuleTest extends TestCase
 
         // 1 of 4 = 25%, far under 80 — and still not a verdict, because four
         // recorded sessions is not ten.
-        $this->assertFalse($rule->isAtRisk([true, false, false, false]));
-        $this->assertSame(FeedingAtRiskRule::STATUS_EARLY_MONITORING, $rule->status([true, false, false, false]));
+        $this->assertFalse($rule->thresholdReached([true, false, false, false]));
+        $this->assertFalse($rule->hasEnoughObservation([true, false, false, false]));
     }
 
     #[Test]
@@ -200,14 +200,14 @@ class FeedingAtRiskRuleTest extends TestCase
         $marks = [true, false, false, false, false, false, false, false, false];
 
         // Nine confirmed sessions: one short, so still unclassified.
-        $this->assertFalse($rule->isAtRisk($marks));
+        $this->assertFalse($rule->thresholdReached($marks));
         $this->assertSame(1, $rule->sessionsUntilClassification($marks));
 
         // The tenth confirmed session is what turns the rate into a verdict.
         $marks[] = false;
-        $this->assertTrue($rule->isAtRisk($marks));
+        $this->assertTrue($rule->thresholdReached($marks));
         $this->assertSame(0, $rule->sessionsUntilClassification($marks));
-        $this->assertSame(FeedingAtRiskRule::STATUS_AT_RISK, $rule->status($marks));
+        $this->assertTrue($rule->hasEnoughObservation($marks));
     }
 
     #[Test]
@@ -216,8 +216,8 @@ class FeedingAtRiskRuleTest extends TestCase
         $rule = $this->rate(80, 10);
         $marks = array_fill(0, 10, true);
 
-        $this->assertFalse($rule->isAtRisk($marks));
-        $this->assertSame(FeedingAtRiskRule::STATUS_ON_TRACK, $rule->status($marks));
+        $this->assertFalse($rule->thresholdReached($marks));
+        $this->assertTrue($rule->hasEnoughObservation($marks));
     }
 
     #[Test]
@@ -231,8 +231,8 @@ class FeedingAtRiskRuleTest extends TestCase
         $marks = array_merge([true, false], array_fill(0, 8, null));
 
         $this->assertSame(2, $rule->confirmedCount($marks));
-        $this->assertFalse($rule->isAtRisk($marks));
-        $this->assertSame(FeedingAtRiskRule::STATUS_EARLY_MONITORING, $rule->status($marks));
+        $this->assertFalse($rule->thresholdReached($marks));
+        $this->assertFalse($rule->hasEnoughObservation($marks));
     }
 
     #[Test]
@@ -243,8 +243,8 @@ class FeedingAtRiskRuleTest extends TestCase
         foreach ([0, 1] as $window) {
             $rule = $this->rate(80, $window);
 
-            $this->assertTrue($rule->isAtRisk([false]), 'window of '.$window);
-            $this->assertSame(FeedingAtRiskRule::STATUS_AT_RISK, $rule->status([false]));
+            $this->assertTrue($rule->thresholdReached([false]), 'window of '.$window);
+            $this->assertTrue($rule->hasEnoughObservation([false]));
         }
     }
 
@@ -253,19 +253,46 @@ class FeedingAtRiskRuleTest extends TestCase
     {
         // Waiving the observation period lets the threshold apply sooner; it
         // can never turn "no evidence" into evidence.
-        $this->assertFalse($this->rate(80, 0)->isAtRisk([]));
-        $this->assertFalse($this->rate(80, 0)->isAtRisk([null, null]));
-        $this->assertSame(FeedingAtRiskRule::STATUS_EARLY_MONITORING, $this->rate(80, 0)->status([]));
+        $this->assertFalse($this->rate(80, 0)->thresholdReached([]));
+        $this->assertFalse($this->rate(80, 0)->thresholdReached([null, null]));
+        $this->assertFalse($this->rate(80, 0)->hasEnoughObservation([]));
     }
 
     #[Test]
-    public function the_window_holds_the_consecutive_absence_rule_too(): void
+    public function a_run_of_absences_does_not_wait_on_the_rate_window(): void
     {
-        // One rule, one window: a school must never see one learner classified
-        // on three sessions and another held back on four.
+        // A run is its own evidence: seven missed sessions in a row are seven
+        // confirmed sessions, and holding them back for a rate's ten-day window
+        // would tell the coordinator a week late.
         $rule = new FeedingAtRiskRule(FeedingAtRiskRule::MODE_CONSECUTIVE_ABSENCES, 75, 3, 10);
 
-        $this->assertFalse($rule->isAtRisk([false, false, false]));
-        $this->assertTrue($rule->isAtRisk(array_fill(0, 10, false)));
+        $this->assertTrue($rule->thresholdReached([false, false, false]));
+        $this->assertFalse($rule->thresholdReached([false, false, true]));
+    }
+
+    #[Test]
+    public function the_adviser_flow_reaches_the_notice_at_three_and_the_threshold_at_seven(): void
+    {
+        $rule = new FeedingAtRiskRule(FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS, 80, 3, 10, 7, 3);
+
+        $this->assertFalse($rule->reachesNotice([true, false, false]));
+        $this->assertTrue($rule->reachesNotice([true, false, false, false]));
+        $this->assertFalse($rule->thresholdReached(array_fill(0, 6, false)));
+        $this->assertTrue($rule->thresholdReached(array_fill(0, 7, false)));
+
+        // An excused absence (NULL) neither counts toward the run nor ends it.
+        $this->assertSame(3, $rule->currentAbsenceRun([false, null, false, false]));
+        $this->assertSame(0, $rule->currentAbsenceRun([false, false, true]));
+    }
+
+    #[Test]
+    public function the_thresholds_are_said_in_the_unit_they_are_set_in(): void
+    {
+        $unexcused = new FeedingAtRiskRule(FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS, 80, 3, 10, 7, 3);
+
+        $this->assertSame('7 days', $unexcused->thresholdLabel());
+        $this->assertSame('3 days', $unexcused->noticeLabel());
+        $this->assertSame('7 days of consecutive unexcused absence', $unexcused->describe());
+        $this->assertSame('80%', $this->rate(80)->thresholdLabel());
     }
 }

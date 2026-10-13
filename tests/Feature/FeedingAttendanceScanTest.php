@@ -11,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ConfirmsFeedingFlags;
 use Tests\TestCase;
 
 /**
@@ -24,7 +25,7 @@ use Tests\TestCase;
  */
 class FeedingAttendanceScanTest extends TestCase
 {
-    use RefreshDatabase;
+    use ConfirmsFeedingFlags, RefreshDatabase;
 
     private const DEFAULT_DATE = '2026-08-05';
 
@@ -318,7 +319,10 @@ class FeedingAttendanceScanTest extends TestCase
         $this->assertNotNull($resolved->reviewed_at);
         $this->assertSame(FeedingAttendance::SOURCE_MANUAL_REVIEW, $resolved->source);
 
-        // 1 of 4 = 25%, still under 75.
+        // 1 of 4 = 25%, still under the threshold — which waits for the
+        // coordinator to confirm the record before it flags anybody.
+        $this->assertFalse((bool) $alpha->fresh()->is_at_risk);
+        $this->confirmFlag($alpha);
         $this->assertTrue((bool) $alpha->fresh()->is_at_risk);
     }
 

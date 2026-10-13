@@ -3,7 +3,6 @@
 @php
     $attendanceBadge = match ($row['attendance']) {
         'at_risk' => 'badge-risk',
-        'early_monitoring' => 'badge-monitor',
         'on_track' => 'badge-normal',
         default => 'badge-neutral',
     };
@@ -103,10 +102,15 @@
             <div><dt>Not marked</dt><dd>{{ $row['not_marked'] }}</dd></div>
         </dl>
 
+        {{-- A follow-up flag is the coordinator's and the School Nurse's to
+             see; the School Head and the Clinic Teacher read the figures
+             above without it. --}}
+        @if ($showFlags ?? false)
         <div class="sh-attendance-standing">
             <span class="sh-record-label">Attendance standing</span>
             <span class="badge {{ $attendanceBadge }}">{{ $row['attendance_label'] }}</span>
         </div>
         <p class="sh-record-rule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span>{{ $rule }}.</span></p>
+        @endif
     </section>
 </div>

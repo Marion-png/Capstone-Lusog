@@ -259,7 +259,6 @@ class StudentHealthRecordController extends Controller
                 'has_assessment' => false,
                 'consent' => ConsentStanding::PENDING,
                 'consent_badge' => ConsentStanding::PENDING,
-                'at_risk' => false,
                 'programme_complete' => false,
                 'completion_outstanding' => '',
                 'consent_detail' => [],
@@ -277,7 +276,7 @@ class StudentHealthRecordController extends Controller
      * LRN. consent_choice is encrypted, so consent forms are fetched by the
      * plain student_lrn column and classified in PHP.
      *
-     * @return array<string, array{has_assessment: bool, consent: string, at_risk: bool}>
+     * @return array<string, array{has_assessment: bool, consent: string}>
      */
     /**
      * The school's feeding cycle, read once per request.
@@ -388,7 +387,9 @@ class StudentHealthRecordController extends Controller
                 // has just filed it must not be told it is still outstanding.
                 'consent' => ConsentStanding::for($consent, $upload),
                 'consent_badge' => ConsentStanding::badge($consent, $upload),
-                'at_risk' => (bool) ($shRecord?->is_at_risk),
+                // No feeding follow-up flag: it is the Feeding Coordinator's
+                // and the School Nurse's alone (FeedingAttendanceFlag::VISIBLE_TO),
+                // so the adviser's roster and profile never carry it.
                 // Read-only summaries for the Consent and Nutritional Health
                 // Status tabs of the student profile.
                 // Sheet 2's standing, read off the sheet the nurse actually
@@ -1190,7 +1191,6 @@ class StudentHealthRecordController extends Controller
                     'attended' => $attended,
                     'sessions' => $sessions,
                     'rate' => $rate,
-                    'at_risk' => (bool) $record->is_at_risk,
                     'assessment' => $assessment,
                 ];
             })
@@ -1211,7 +1211,6 @@ class StudentHealthRecordController extends Controller
                 'normal' => $students->where('status_key', 'normal')->count(),
                 'wasted' => $students->where('status_key', 'wasted')->count(),
                 'severely_wasted' => $students->where('status_key', 'severely-wasted')->count(),
-                'at_risk' => $students->where('at_risk', true)->count(),
                 'enrolled' => $students->where('eligible', true)->count(),
                 'ongoing' => $students->where('program', 'ongoing')->count(),
                 'completed' => $students->where('program', 'completed')->count(),

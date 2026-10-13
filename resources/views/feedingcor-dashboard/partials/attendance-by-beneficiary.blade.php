@@ -105,8 +105,8 @@
 								data-excused="{{ $row['excused'] }}"
 								data-not-marked="{{ $row['not_marked'] }}"
 								data-rate="{{ $row['rate'] !== null ? number_format($row['rate'], 0).'%' : '—' }}"
-								data-standing="{{ $row['at_risk'] ? 'At Risk' : ($row['status'] === \App\Support\FeedingAtRiskRule::STATUS_EARLY_MONITORING ? 'Early Monitoring' : 'Good') }}"
-								data-standing-badge="{{ $row['at_risk'] ? 'badge-risk' : ($row['status'] === \App\Support\FeedingAtRiskRule::STATUS_EARLY_MONITORING ? 'badge-monitor' : 'badge-normal') }}"
+								data-standing="{{ $row['status'] === \App\Support\FeedingAttendanceFlag::ON_TRACK ? 'Good' : $row['status_label'] }}"
+								data-standing-badge="{{ $row['status_badge'] }}"
 								data-record-url="{{ route('feedingcor-program.beneficiary', ['record' => $row['id']]) }}"
 								data-marks="{{ json_encode($row['marks']) }}">
 								<strong>{{ $row['name'] }}</strong>
@@ -143,13 +143,21 @@
 						     rate to report — an em dash, never 0%. --}}
 						<td class="num tnum">{{ $row['rate'] !== null ? number_format($row['rate'], 0).'%' : '—' }}</td>
 						<td>
+							{{-- One standing from the one reading the At-Risk
+							     Students tab works from: flagged only once the
+							     coordinator confirmed the record. --}}
 							@if ($row['at_risk'])
-								<span class="badge badge-risk has-glyph"><span class="fa-glyph">⚠</span>At Risk</span>
-							@elseif ($row['status'] === \App\Support\FeedingAtRiskRule::STATUS_EARLY_MONITORING)
-								{{-- Not "Good" and not "At Risk": there is not enough
+								<span class="badge {{ $row['status_badge'] }} has-glyph" title="{{ $row['status_label'] }}"><span class="fa-glyph">⚠</span>Flagged</span>
+							@elseif (in_array($row['status'], [\App\Support\FeedingAttendanceFlag::AWAITING_CONFIRMATION, \App\Support\FeedingAttendanceFlag::NOTICE], true))
+								<span class="badge {{ $row['status_badge'] }}">{{ $row['status_label'] }}</span>
+								<span class="fa-substatus">{{ $row['absence_run'] }} in a row</span>
+							@elseif ($row['status'] === \App\Support\FeedingAttendanceFlag::EARLY_MONITORING)
+								{{-- Not "Good" and not flagged: there is not enough
 								     recorded history yet for either to be true. --}}
-								<span class="badge badge-monitor">Early Monitoring</span>
-								<span class="fa-substatus">{{ $row['sessions_needed'] }} more {{ \Illuminate\Support\Str::plural('session', $row['sessions_needed']) }}</span>
+								<span class="badge {{ $row['status_badge'] }}">{{ $row['status_label'] }}</span>
+								@if ($row['sessions_needed'] > 0)
+									<span class="fa-substatus">{{ $row['sessions_needed'] }} more {{ \Illuminate\Support\Str::plural('session', $row['sessions_needed']) }}</span>
+								@endif
 							@else
 								<span class="badge badge-normal">Good</span>
 							@endif
@@ -162,7 +170,13 @@
 						@else
 						@switch(($filters['standing'] ?? '') !== '' ? $filters['standing'] : $mark)
 							@case('at_risk')
-								No beneficiary is below the threshold.
+								No beneficiary is flagged for follow-up.
+								@break
+							@case('awaiting_confirmation')
+								No attendance record is awaiting confirmation.
+								@break
+							@case('notice')
+								No beneficiary is under an attendance notice.
 								@break
 							@case('early_monitoring')
 								Every beneficiary has enough recorded attendance to be classified.

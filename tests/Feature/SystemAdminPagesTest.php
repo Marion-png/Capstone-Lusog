@@ -120,13 +120,13 @@ class SystemAdminPagesTest extends TestCase
             ->assertSee('Eva Flores')
             ->assertSee('Declined');
 
-        // The policy form still posts every setting under its original name.
+        // The policy form posts every setting, the adviser/x27s notice beside the flag.
         $response->assertSee(route('dashboard.system-admin.institutions.at-risk-threshold', $custom->id))
             ->assertSee('name="at_risk_mode"', false)
             ->assertSee('name="threshold"', false)
             ->assertSee('name="minimum_observation_days"', false)
+            ->assertSee('name="absence_notice_days"', false)
             ->assertSee('name="absence_flag_days"', false)
-            ->assertSee('name="absence_removal_days"', false)
             ->assertSee('name="cycle_days"', false)
             ->assertSee('value="85"', false);
 

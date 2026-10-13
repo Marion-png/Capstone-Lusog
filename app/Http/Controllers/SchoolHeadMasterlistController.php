@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
 use App\Support\AccountSettings;
-use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\MasterlistSheet;
 use App\Support\NutritionalHealthStatus;
@@ -42,13 +42,16 @@ class SchoolHeadMasterlistController extends Controller
     /** Beneficiary standings the list can be narrowed to. */
     private const STANDINGS = ['beneficiary', 'pending', 'not_eligible'];
 
-    /** Attendance standings, which are the at-risk rule's own three states plus "no session yet". */
-    private const ATTENDANCE_STANDINGS = [
-        FeedingAtRiskRule::STATUS_AT_RISK,
-        FeedingAtRiskRule::STATUS_EARLY_MONITORING,
-        FeedingAtRiskRule::STATUS_ON_TRACK,
-        'no_sessions',
-    ];
+    /**
+     * Attendance standings: flagged for follow-up (confirmed by the Feeding
+     * Coordinator), not flagged, or no session yet.
+     *
+     * Offered only to a reader who may see a flag (FeedingAttendanceFlag::
+     * VISIBLE_TO — on this screen, the School Nurse). The School Head and the
+     * Clinic Teacher read the same list with the attendance figures and
+     * without the flag, its filter or its column.
+     */
+    private const ATTENDANCE_STANDINGS = ['at_risk', 'on_track', 'no_sessions'];
 
     /** Statuses a filter may offer: what the app's classifier actually emits, plus the honest fourth answer. */
     private const STATUS_OPTIONS = ['Severely Wasted', 'Wasted', 'Normal', 'Overweight', 'Obese', 'not_measured'];
@@ -134,7 +137,8 @@ class SchoolHeadMasterlistController extends Controller
             'ENDLINE WEIGHT (KG)', 'ENDLINE HEIGHT (CM)', 'ENDLINE BMI',
             'BASELINE STATUS', 'LATEST STATUS', 'CHANGE',
             'BASELINE HEIGHT-FOR-AGE', 'ENDLINE HEIGHT-FOR-AGE',
-            'BENEFICIARY', 'ATTENDANCE', 'ATTENDANCE STANDING',
+            'BENEFICIARY', 'ATTENDANCE',
+            ...($data['showFlags'] ? ['ATTENDANCE STANDING'] : []),
         ]));
 
         $number = 0;
@@ -161,7 +165,7 @@ class SchoolHeadMasterlistController extends Controller
                 $row['standing_label'],
                 // An em dash, never 0%: no confirmed session is not a turnout of nothing.
                 $row['rate'] !== null ? $this->percent($row['rate']).'%' : '—',
-                $row['attendance_label'],
+                ...($data['showFlags'] ? [$row['attendance_label']] : []),
             ]));
         }
 
@@ -344,7 +348,8 @@ class SchoolHeadMasterlistController extends Controller
             match ($filters['attendance']) {
                 '' => '',
                 'no_sessions' => 'Attendance: No confirmed session',
-                default => 'Attendance: '.FeedingAtRiskRule::statusLabel($filters['attendance']),
+                'at_risk' => 'Attendance: Flagged for follow-up',
+                default => 'Attendance: Not flagged',
             },
         ])->filter()->implode(' · ');
     }
@@ -367,6 +372,8 @@ class SchoolHeadMasterlistController extends Controller
         $overview = SchoolHeadOverview::for($institutionId, $schoolYear);
         $options = $this->filterOptions($overview->records);
         $filters = $this->readFilters($request, $options, $schoolYear);
+        // Whether this reader may see who is flagged for follow-up.
+        $showFlags = FeedingAttendanceFlag::visibleTo((string) $request->session()->get('active_role', ''));
 
         // Scope first: it decides which learners the count on screen describes.
         $scoped = FeedingBeneficiarySummary::scopeToSection($overview->records, [
@@ -387,7 +394,7 @@ class SchoolHeadMasterlistController extends Controller
             : [];
 
         $rows = $scoped
-            ->map(fn (StudentHealthRecord $record): array => $this->buildRow($record, $standings, $overview, $nearing))
+            ->map(fn (StudentHealthRecord $record): array => $this->buildRow($record, $standings, $overview, $nearing, $showFlags))
             ->values();
 
         $total = $rows->count();
@@ -406,6 +413,7 @@ class SchoolHeadMasterlistController extends Controller
             'statusOptions' => self::STATUS_OPTIONS,
             'sexOptions' => FeedingBeneficiarySummary::SEX_OPTIONS,
             'rule' => $overview->rule->describe(),
+            'showFlags' => $showFlags,
         ];
     }
 
@@ -416,7 +424,7 @@ class SchoolHeadMasterlistController extends Controller
      * @param  array<string, array<string, mixed>>  $nearing  LRN => retention standing
      * @return array<string, mixed>
      */
-    private function buildRow(StudentHealthRecord $record, array $standings, SchoolHeadOverview $overview, array $nearing = []): array
+    private function buildRow(StudentHealthRecord $record, array $standings, SchoolHeadOverview $overview, array $nearing = [], bool $showFlags = false): array
     {
         $details = is_array($record->student_details) ? $record->student_details : [];
         $baseline = SchoolHeadOverview::phaseStatus($record, 'baseline');
@@ -426,13 +434,16 @@ class SchoolHeadMasterlistController extends Controller
         $isBeneficiary = FeedingBeneficiarySummary::isBeneficiary($record);
         $isPending = ! $isBeneficiary && FeedingBeneficiarySummary::isEligible($record);
 
-        // "no_sessions" is not one of the rule's three states — it is the
-        // absence of evidence the rule needs — so it is decided here rather
-        // than being read as a quieter kind of Early Monitoring.
+        // Flagged means confirmed by the Feeding Coordinator, and only a
+        // reader allowed to see a flag is told either way — for anybody else
+        // the standing is just whether a session has been recorded at all.
+        $flagged = $showFlags && (bool) ($standing['at_risk'] ?? false);
         $attendanceStanding = match (true) {
             $standing === null => '',
+            $flagged => 'at_risk',
             $standing['confirmed'] === 0 => 'no_sessions',
-            default => $standing['status'],
+            ! $showFlags => 'recorded',
+            default => 'on_track',
         };
 
         // Empty unless this reader may be told and the record is actually
@@ -499,9 +510,11 @@ class SchoolHeadMasterlistController extends Controller
             'attendance_label' => match ($attendanceStanding) {
                 '' => 'Not a beneficiary',
                 'no_sessions' => 'No confirmed session',
-                default => FeedingAtRiskRule::statusLabel($attendanceStanding),
+                'at_risk' => FeedingAttendanceFlag::label(FeedingAttendanceFlag::FLAGGED),
+                'recorded' => 'Recorded',
+                default => 'Not flagged',
             },
-            'at_risk' => (bool) ($standing['at_risk'] ?? false),
+            'at_risk' => $flagged,
             'history' => $this->buildHistory($record, $details),
             'sparkline' => $this->buildSparkline($record),
             'enrolled_on' => $record->feeding_enrolled_at?->format('j F Y'),
@@ -644,8 +657,12 @@ class SchoolHeadMasterlistController extends Controller
             $standing = '';
         }
 
+        // The filter exists only for a reader allowed to see a flag; anybody
+        // else's value off the wire is dropped rather than narrowing the list
+        // by something the page will not show them.
         $attendance = trim((string) $request->query('attendance', ''));
-        if (! in_array($attendance, self::ATTENDANCE_STANDINGS, true)) {
+        if (! in_array($attendance, self::ATTENDANCE_STANDINGS, true)
+            || ! FeedingAttendanceFlag::visibleTo((string) $request->session()->get('active_role', ''))) {
             $attendance = '';
         }
 

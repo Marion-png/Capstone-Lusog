@@ -297,17 +297,25 @@
 				</p>
 
 				@php $barWidth = $attendance['rate'] !== null ? max(0, min(100, (float) $attendance['rate'])) : 0; @endphp
+				@php $isRateRule = (bool) ($attendance['is_rate_rule'] ?? true); @endphp
 				<div class="bd-bar {{ $standing['at_risk'] ? 'is-risk' : '' }}"
 					role="img"
-					aria-label="Attendance {{ $rateLabel }}{{ $attendance['rate'] !== null ? ', threshold '.$thresholdLabel.'%' : '' }}">
+					aria-label="Attendance {{ $rateLabel }}{{ $attendance['rate'] !== null && $isRateRule ? ', threshold '.$thresholdLabel.'%' : '' }}">
 					<span class="bd-bar-fill" style="width: {{ $barWidth }}%"></span>
-					{{-- The threshold sits on the bar, so the gap between where
+					{{-- A rate threshold sits on the bar, so the gap between where
 					     the learner is and where the school expects them to be
-					     is the thing the eye reads first. --}}
-					<span class="bd-bar-mark" style="left: {{ max(0, min(100, (float) $attendance['threshold'])) }}%"></span>
+					     is the thing the eye reads first. A run of absences has
+					     no point on a percentage bar to mark. --}}
+					@if ($isRateRule)
+						<span class="bd-bar-mark" style="left: {{ max(0, min(100, (float) $attendance['threshold'])) }}%"></span>
+					@endif
 				</div>
 				<p class="bd-note">
-					At-risk threshold: <strong>{{ $thresholdLabel }}%</strong>
+					@if ($isRateRule)
+						At-risk threshold: <strong>{{ $thresholdLabel }}%</strong>
+					@else
+						Flag threshold: <strong>{{ $attendance['threshold_label'] ?? '' }}</strong> &middot; {{ $attendance['absence_run'] }} unexcused in a row
+					@endif
 					@if ($attendance['excused'] > 0)
 						&middot; {{ $attendance['excused'] }} excused absence(s), counted neither way
 					@endif
@@ -316,30 +324,35 @@
 					@endif
 				</p>
 
+				@php $flag = $attendance['flag'] ?? null; @endphp
 				@if ($standing['at_risk'])
+					{{-- Flagged means confirmed: the coordinator read the record
+					     and found it correct. The flag asks for a follow-up and
+					     changes nothing about the learner's enrolment. --}}
 					<div class="alert-bar is-critical bd-alert">
 						<div class="alert-body">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
 							<div>
-								<strong>At Risk</strong>
-								<span>{{ ucfirst($attendance['rule']) }}</span>
+								<strong>Flagged for Follow-Up</strong>
+								<span>{{ ucfirst($attendance['rule']) }}@if (($flag['confirmation']['date_label'] ?? null) !== null) &middot; confirmed {{ $flag['confirmation']['date_label'] }}@endif</span>
 							</div>
 						</div>
+						<a class="btn btn-secondary" href="{{ route('dashboard.feedingcor-at-risk') }}">Record Follow-Up</a>
 					</div>
-				@endif
-
-				@if ($standing['enrolled'] && ($attendance['needs_removal_review'] ?? false))
-					{{-- The school's second, later threshold. It opens a question for
-					     the class adviser — is this learner coming back? — and
-					     nothing more: no figure on this page removes anybody. --}}
+				@elseif ($standing['enrolled'] && ($flag['needs_action'] ?? false))
+					{{-- The notice the flow sends the coordinator: verify the
+					     record at a notice, confirm it at the threshold. Both
+					     happen on the At-Risk Students tab, with the absences
+					     in front of them. --}}
 					<div class="alert-bar bd-alert">
 						<div class="alert-body">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
 							<div>
-								<strong>Removal review due</strong>
-								<span>{{ $attendance['absence_run'] }} unexcused {{ \Illuminate\Support\Str::plural('absence', $attendance['absence_run']) }} in a row. Confirm with the class adviser before releasing the slot.</span>
+								<strong>{{ $flag['label'] }}</strong>
+								<span>{{ $flag['run'] }} unexcused {{ \Illuminate\Support\Str::plural('absence', $flag['run']) }} in a row</span>
 							</div>
 						</div>
+						<a class="btn btn-secondary" href="{{ route('dashboard.feedingcor-at-risk', ['status' => $flag['state']]) }}">{{ $flag['state'] === \App\Support\FeedingAttendanceFlag::AWAITING_CONFIRMATION ? 'Confirm Record' : 'Verify Attendance' }}</a>
 					</div>
 				@endif
 			</section>

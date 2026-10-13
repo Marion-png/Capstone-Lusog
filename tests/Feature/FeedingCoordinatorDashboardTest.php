@@ -8,6 +8,7 @@ use App\Models\StudentHealthRecord;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ConfirmsFeedingFlags;
 use Tests\TestCase;
 
 /**
@@ -21,7 +22,7 @@ use Tests\TestCase;
  */
 class FeedingCoordinatorDashboardTest extends TestCase
 {
-    use RefreshDatabase;
+    use ConfirmsFeedingFlags, RefreshDatabase;
 
     private Institution $institution;
 
@@ -681,16 +682,30 @@ class FeedingCoordinatorDashboardTest extends TestCase
             ->get('/dashboard/feedingcor-dashboard')
             ->assertOk()
             ->assertSee('Attendance At Risk')
-            ->assertSee('At-risk threshold:')
+            ->assertSee('Flag at <strong>80%</strong>', false)
+            ->assertSee('Awaiting Confirmation')
             ->assertSee('View At-Risk List')
             ->viewData('attendanceRisk');
 
-        $this->assertSame(80.0, $panel['threshold']);
-        $this->assertSame(1, $panel['count']);
+        $this->assertSame('80%', $panel['threshold_label']);
+        // Below the threshold is listed for the coordinator to confirm, and is
+        // not yet a flag.
+        $this->assertSame(0, $panel['count']);
+        $this->assertSame(1, $panel['awaiting']);
+        $this->assertCount(1, $panel['rows']);
         $this->assertSame($failing->student_name, $panel['rows'][0]['name']);
         $this->assertSame(75.0, $panel['rows'][0]['rate']);
         $this->assertSame(9, $panel['rows'][0]['present']);
         $this->assertSame(12, $panel['rows'][0]['sessions']);
+
+        $this->confirmFlag($failing);
+
+        $panel = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-dashboard')
+            ->assertSee('Flagged for Follow-Up')
+            ->viewData('attendanceRisk');
+        $this->assertSame(1, $panel['count']);
+        $this->assertSame(0, $panel['awaiting']);
     }
 
     /**
@@ -706,12 +721,13 @@ class FeedingCoordinatorDashboardTest extends TestCase
             $this->markAttendance($learner, now()->subDays(13 - $day)->toDateString(), $day <= 9);
         }
 
-        // At the 80% default the learner is flagged.
+        // At the 80% default the learner reaches the threshold and waits for
+        // the coordinator's confirmation.
         $this->assertSame(
             1,
             $this->withSession($this->coordinatorSession())
                 ->get('/dashboard/feedingcor-dashboard')
-                ->viewData('attendanceRisk')['count']
+                ->viewData('attendanceRisk')['awaiting']
         );
 
         $this->institution->update(['feeding_at_risk_threshold' => 70]);
@@ -719,8 +735,9 @@ class FeedingCoordinatorDashboardTest extends TestCase
         $response = $this->withSession($this->coordinatorSession())
             ->get('/dashboard/feedingcor-dashboard')
             ->assertOk()
-            ->assertSee('At-risk threshold: <strong>70%</strong>', false);
+            ->assertSee('Flag at <strong>70%</strong>', false);
 
+        $this->assertSame(0, $response->viewData('attendanceRisk')['awaiting']);
         $this->assertSame(0, $response->viewData('attendanceRisk')['count']);
         $this->assertSame(0, $response->viewData('dashboardStats')['at_risk'], 'The card must agree with the panel.');
     }

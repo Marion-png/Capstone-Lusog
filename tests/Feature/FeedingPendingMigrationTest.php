@@ -9,6 +9,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ConfirmsFeedingFlags;
 use Tests\TestCase;
 
 /**
@@ -22,7 +23,7 @@ use Tests\TestCase;
  */
 class FeedingPendingMigrationTest extends TestCase
 {
-    use RefreshDatabase;
+    use ConfirmsFeedingFlags, RefreshDatabase;
 
     private Institution $institution;
 
@@ -133,6 +134,12 @@ class FeedingPendingMigrationTest extends TestCase
                 'attendance_file' => UploadedFile::fake()->createWithContent('sheet.csv', $csv),
             ]);
 
+        // The recompute ran: the present session is counted, and the stored
+        // flag waits for the coordinator to confirm the record.
+        $this->assertSame(1, (int) $alpha->fresh()->attendance_sessions_count);
+        $this->assertFalse((bool) $alpha->fresh()->is_at_risk);
+
+        $this->confirmFlag($alpha);
         $this->assertTrue((bool) $alpha->fresh()->is_at_risk);
     }
 

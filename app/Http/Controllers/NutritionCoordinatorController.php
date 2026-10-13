@@ -204,10 +204,13 @@ class NutritionCoordinatorController extends Controller
     private function riskRow(StudentHealthRecord $record): array
     {
         $status = $this->statusKey((string) ($record->endline_nutritional_status ?: $record->baseline_nutritional_status ?: $record->nutritional_status));
+        // Nutritional risk only. Whether a learner is flagged for feeding
+        // follow-up is the Feeding Coordinator's and the School Nurse's to see
+        // (FeedingAttendanceFlag::VISIBLE_TO), so it never colours this label.
         $risk = match ($status) {
             'severely_wasted' => 'High',
             'wasted' => 'Medium',
-            default => $record->is_at_risk ? 'Medium' : 'Low',
+            default => 'Low',
         };
 
         return [

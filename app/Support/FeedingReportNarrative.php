@@ -145,8 +145,8 @@ final class FeedingReportNarrative
         $atRisk = (int) ($tally['at_risk'] ?? 0);
 
         return $sentence.' '.($atRisk === 0
-            ? 'No beneficiary currently meets the school\'s at-risk rule ('.$rule->describe().').'
-            : self::count($atRisk, 'beneficiary is', 'beneficiaries are', 'are').' currently flagged at risk under the school\'s rule ('
+            ? 'No beneficiary is currently flagged for follow-up under the school\'s rule ('.$rule->describe().').'
+            : self::count($atRisk, 'beneficiary is', 'beneficiaries are', 'are').' currently flagged for follow-up, confirmed by the Feeding Coordinator, under the school\'s rule ('
                 .$rule->describe().').');
     }
 

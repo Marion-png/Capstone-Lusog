@@ -272,6 +272,9 @@ final class SchoolHeadOverview
 
         $totalSessions = $this->daysCompleted();
         $standings = [];
+        // The other half of a flag: what the Feeding Coordinator confirmed.
+        // One read for the whole roll.
+        $histories = FeedingAttendanceFlag::historiesFor($this->beneficiaries->pluck('id'));
 
         foreach ($this->beneficiaries as $record) {
             $marks = $this->marksByRecord[$record->id] ?? [];
@@ -279,7 +282,18 @@ final class SchoolHeadOverview
 
             $confirmed = $this->rule->confirmedCount($sequence);
             $present = $this->rule->presentCount($sequence);
-            $status = $this->rule->status($sequence);
+            // Flagged only once the coordinator confirmed the record — the one
+            // reading every feeding screen counts from.
+            $flag = FeedingAttendanceFlag::evaluate(
+                array_map(
+                    static fn (array $mark, ?bool $value): array => ['date' => $mark['date'], 'mark' => $value],
+                    $marks,
+                    $sequence
+                ),
+                $this->rule,
+                $histories[$record->id] ?? []
+            );
+            $status = $flag['state'];
 
             $standings[$record->id] = [
                 'present' => $present,
@@ -290,16 +304,16 @@ final class SchoolHeadOverview
                 // an absence.
                 'not_marked' => max(0, $totalSessions - count($marks)),
                 'rate' => $this->rule->attendanceRate($sequence),
-                'at_risk' => $this->rule->isAtRisk($sequence),
+                'at_risk' => $flag['flagged'],
                 'status' => $status,
-                'status_label' => FeedingAtRiskRule::statusLabel($status),
+                'status_label' => $flag['label'],
             ];
         }
 
         return $this->standings = $standings;
     }
 
-    /** How many beneficiaries the school's own rule has flagged. */
+    /** How many beneficiaries are flagged for follow-up — confirmed by the coordinator. */
     public function atRiskCount(): int
     {
         return count(array_filter($this->standings(), static fn (array $s): bool => $s['at_risk']));
@@ -310,7 +324,7 @@ final class SchoolHeadOverview
     {
         return count(array_filter(
             $this->standings(),
-            static fn (array $s): bool => $s['status'] === FeedingAtRiskRule::STATUS_EARLY_MONITORING
+            static fn (array $s): bool => $s['status'] === FeedingAttendanceFlag::EARLY_MONITORING
         ));
     }
 

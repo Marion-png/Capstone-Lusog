@@ -31,8 +31,8 @@
 	$policyIsDefault = fn ($school): bool => $school->feeding_at_risk_threshold === null
 		&& ($school->feeding_min_observation_days ?? null) === null
 		&& ($school->feeding_at_risk_mode ?? null) === null
+		&& ($school->feeding_absence_notice_days ?? null) === null
 		&& ($school->feeding_absence_flag_days ?? null) === null
-		&& ($school->feeding_absence_removal_days ?? null) === null
 		&& ($school->feeding_cycle_days ?? null) === null;
 	$schoolSetPolicies = $institutionsCollection->reject($policyIsDefault)->count();
 
@@ -279,23 +279,23 @@
 								</div>
 
 								<div class="sa-field">
-									<label class="field-label" for="{{ $fid }}-flag">Flag after</label>
+									<label class="field-label" for="{{ $fid }}-notice">Notice after</label>
 									<div class="sa-unit">
-										<input type="number" id="{{ $fid }}-flag" name="absence_flag_days" min="1" max="60" step="1"
-											value="{{ $school->feeding_absence_flag_days ?? null }}"
-											placeholder="{{ (int) ($defaultAbsenceFlagDays ?? 4) }}"
-											aria-label="Unexcused absences before flagging for {{ $school->name }}">
+										<input type="number" id="{{ $fid }}-notice" name="absence_notice_days" min="1" max="60" step="1"
+											value="{{ $school->feeding_absence_notice_days ?? null }}"
+											placeholder="{{ (int) ($defaultAbsenceNoticeDays ?? 3) }}"
+											aria-label="Unexcused absences before the attendance notice for {{ $school->name }}">
 										<span>absences</span>
 									</div>
 								</div>
 
 								<div class="sa-field">
-									<label class="field-label" for="{{ $fid }}-removal">Removal review after</label>
+									<label class="field-label" for="{{ $fid }}-flag">Flag after</label>
 									<div class="sa-unit">
-										<input type="number" id="{{ $fid }}-removal" name="absence_removal_days" min="1" max="120" step="1"
-											value="{{ $school->feeding_absence_removal_days ?? null }}"
-											placeholder="{{ (int) ($defaultAbsenceRemovalDays ?? 8) }}"
-											aria-label="Unexcused absences before removal review for {{ $school->name }}">
+										<input type="number" id="{{ $fid }}-flag" name="absence_flag_days" min="1" max="60" step="1"
+											value="{{ $school->feeding_absence_flag_days ?? null }}"
+											placeholder="{{ (int) ($defaultAbsenceFlagDays ?? 7) }}"
+											aria-label="Unexcused absences before flagging for {{ $school->name }}">
 										<span>absences</span>
 									</div>
 								</div>

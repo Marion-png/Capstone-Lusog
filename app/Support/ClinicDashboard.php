@@ -38,13 +38,17 @@ class ClinicDashboard
      *
      * @return array<string, mixed>
      */
-    public static function read(?int $institutionId): array
+    public static function read(?int $institutionId, ?string $role = null): array
     {
         $recent = self::recentConsultations($institutionId);
 
         return [
             'totalRecords' => self::totalRecords($institutionId),
-            'atRiskCount' => self::atRiskCount($institutionId),
+            // A feeding follow-up flag is the coordinator's and the School
+            // Nurse's alone. The Clinic Teacher reads this same dashboard, and
+            // for them the figure is not read at all — null, not zero, so the
+            // card is not drawn rather than claiming nobody is flagged.
+            'atRiskCount' => FeedingAttendanceFlag::visibleTo($role) ? self::atRiskCount($institutionId) : null,
             'consultationsToday' => self::consultationsToday($institutionId),
             'recentConsultations' => $recent,
             'consultationFilters' => self::consultationFilters($institutionId, $recent),
@@ -73,7 +77,9 @@ class ClinicDashboard
         }
 
         // `is_at_risk` is deliberately a plain column, so this one is a count
-        // in SQL rather than a decryption of the whole school.
+        // in SQL rather than a decryption of the whole school. It stores the
+        // FLAG — threshold reached AND confirmed by the Feeding Coordinator —
+        // and is rewritten by FeedingAttendanceFlag::refreshStoredFlags().
         return StudentHealthRecord::query()
             ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
             ->forCurrentSchoolYear()

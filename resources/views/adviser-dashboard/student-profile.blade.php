@@ -213,7 +213,7 @@
                     <div class="student-profile-grid metrics" style="margin-top:14px;">
                         <div><span>Feeding attendance sessions:</span><b id="vpFeedSessions">-</b></div>
                     </div>
-                    <div class="sp-note">Measurements are entered on the enrolment form; at-risk is derived from feeding attendance and is maintained by the Feeding Coordinator.</div>
+                    <div class="sp-note">Measurements are entered on the enrolment form.</div>
                 </section>
             </div>
 
@@ -961,7 +961,11 @@ const STUDENT_PROFILE_LRN = @json($lrn);
         setText('vpNhsEndlineDate', (nutrition.endline || {}).recorded_at ? `(${nutrition.endline.recorded_at})` : '');
 
         const feeding = meta.feeding || {};
-        setText('vpFeedingTabBadge', meta.at_risk ? 'At risk' : 'Not flagged');
+        // The latest weighing's status. A feeding follow-up flag is the
+        // coordinator's and the nurse's alone, so this tab never says whether
+        // a learner is flagged.
+        const latestPhase = ((nutrition.endline || {}).bmi_status ? nutrition.endline : nutrition.baseline) || {};
+        setText('vpFeedingTabBadge', latestPhase.bmi_status || '–');
         setText('vpFeedSessions', feeding.sessions ? String(feeding.sessions) : '0');
 
         // The shared Medical Documents component renders the list the page was

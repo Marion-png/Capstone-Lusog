@@ -191,15 +191,15 @@ class FeedingEnrollmentController extends Controller
     /**
      * Takes one learner off the active list, with the reason a human gave.
      *
-     * The second half of the school's own rule: a week of unexcused absence
-     * flags a beneficiary, and if they still do not return and the class
-     * adviser confirms they are not going to — transferred, moved, withdrawn —
-     * the place is released so a learner on the waiting list can take it.
+     * When a learner has stopped coming and the class adviser confirms they are
+     * not going to — transferred, moved, withdrawn — the place is released so a
+     * learner on the waiting list can take it.
      *
-     * Nothing about that is automatic. The at-risk rule can say a removal is
-     * worth *reviewing* (FeedingAtRiskRule::needsRemovalReview) and nothing
-     * more: this endpoint is the only way a learner leaves the programme, it
-     * requires a reason, and it records who decided.
+     * Nothing about that is automatic. No attendance figure, notice or flag
+     * (FeedingAttendanceFlag) ever changes a learner's enrolment: a flag is a
+     * reason to follow a learner up, never to stop feeding them. This endpoint
+     * is the only way a learner leaves the programme, it requires a reason, and
+     * it records who decided.
      */
     public function remove(Request $request, int $record): RedirectResponse
     {

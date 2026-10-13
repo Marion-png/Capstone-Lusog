@@ -320,7 +320,35 @@
 .ar-field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
 .ar-textarea { resize: vertical; line-height: 1.5; padding-top: 9px; padding-bottom: 9px; }
 .ar-modal-note { font-size: .74rem; color: var(--lg-ink-soft); }
-.ar-modal-actions { display: flex; gap: 8px; margin-left: auto; }
+.ar-modal-actions { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+/* A button is inline-flex, which would otherwise beat the hidden attribute
+   the dialog uses to offer one action per standing. */
+.ar-modal-actions [hidden] { display: none !important; }
+
+/* ── Absences to verify ─────────────────────────────────────────────
+   One line per absence the confirmation is about: the date, the feeding
+   day and who took the mark, and — while the record is being verified — a
+   correction through the one audited correction path. ── */
+.ar-panel-wide { grid-column: 1 / -1; }
+.ar-verify { margin-top: 10px; list-style: none; display: grid; }
+.ar-verify-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px 14px;
+	flex-wrap: wrap;
+	padding: 9px 0;
+	border-bottom: 1px solid var(--lg-border);
+}
+.ar-verify-item:last-child { border-bottom: none; }
+.ar-verify-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ar-verify-main strong { font-size: .82rem; font-weight: 600; color: var(--lg-ink); }
+.ar-verify-meta, .ar-verify-note { font-size: .74rem; color: var(--lg-ink-soft); overflow-wrap: anywhere; }
+.ar-correct { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.ar-correct .select { width: auto; min-width: 108px; flex: 0 0 auto; }
+/* Out-ranks the theme's input[type="text"].input, which is full width. */
+.ar-correct input[type="text"].input { width: 170px; flex: 0 1 170px; min-width: 0; }
+.ar-correct .btn { padding: 8px 12px; flex: 0 0 auto; }
 
 @media (max-width: 900px) {
 	.ar-toolbar { gap: 12px; }
@@ -332,6 +360,8 @@
 	.sbfp-actions { width: 100%; margin-left: 0; }
 	.sbfp-actions .btn { flex: 1 1 auto; justify-content: center; }
 	.ar-detail { padding: 14px; }
+	.ar-correct { width: 100%; flex-wrap: wrap; }
+	.ar-correct input[type="text"].input { flex: 1 1 120px; width: auto; }
 }
 
 /* ── Print — the at-risk list on paper ─────────────────────────────

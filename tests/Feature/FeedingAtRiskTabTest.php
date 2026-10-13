@@ -3,23 +3,31 @@
 namespace Tests\Feature;
 
 use App\Models\FeedingAttendance;
+use App\Models\FeedingAttendanceConfirmation;
 use App\Models\FeedingFollowUp;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Support\FeedingAtRiskRule;
-use App\Support\FeedingRiskSeverity;
+use App\Support\SchemaCache;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Guards the Feeding Coordinator's At-Risk Students tab.
+ * Guards the Feeding Coordinator's At-Risk Students tab and the attendance flow
+ * the capstone adviser set:
  *
- * The tab answers who is below the school's threshold, why, and who needs
- * following up. These tests hold it to the three things it must never do:
- * count a Watch learner as at risk, treat an unconfirmed mark as an absence,
- * or offer a second way to change a learner's enrolment or attendance.
+ *   day 3 of unexcused absence in a row → an attendance notice to verify the
+ *                                          record; nobody is flagged
+ *   day 7                                → awaiting the coordinator's
+ *                                          confirmation; still nobody is flagged
+ *   the coordinator confirms the record  → flagged for follow-up
+ *   a Resolved follow-up                 → the flag closes
+ *
+ * and to the things it must never do: flag anybody without that confirmation,
+ * treat an unconfirmed mark as an absence, or change a learner's enrolment.
  */
 class FeedingAtRiskTabTest extends TestCase
 {
@@ -30,7 +38,13 @@ class FeedingAtRiskTabTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->institution = Institution::create(['name' => 'Test School', 'status' => 'active']);
+        // The deployment school's own rule: a run of unexcused absences, with
+        // the adviser's notice at 3 and flag threshold at 7.
+        $this->institution = Institution::create([
+            'name' => 'Test School',
+            'status' => 'active',
+            'feeding_at_risk_mode' => FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS,
+        ]);
     }
 
     private function coordinatorSession(): array
@@ -81,28 +95,24 @@ class FeedingAtRiskTabTest extends TestCase
         }
     }
 
-    /**
-     * A run at a given rate with the absences spread evenly through it.
-     *
-     * Evenly, deliberately: a block of absences at the end is a *declining*
-     * run, which the severity rule lifts to Critical on purpose. These fixtures
-     * are about the rate, so the sequence must carry no direction of its own.
-     *
-     * @return list<bool>
-     */
-    private function marksAtRate(int $present, int $absent): array
+    private function markOn(StudentHealthRecord $record, int $daysAgo, ?bool $mark): void
     {
-        $total = $present + $absent;
-        $marks = [];
-        $emitted = 0;
+        FeedingAttendance::create([
+            'student_health_record_id' => $record->id,
+            'session_date' => now()->subDays($daysAgo)->toDateString(),
+            'is_present' => $mark,
+            'needs_review' => $mark === null,
+            'source' => 'manual_entry',
+        ]);
+    }
 
-        for ($i = 1; $i <= $total; $i++) {
-            $due = (int) round($absent * $i / $total);
-            $marks[] = ! ($due > $emitted);
-            $emitted = max($emitted, $due);
-        }
+    /** A learner who attended, then missed `$absences` sessions in a row. */
+    private function absentInARow(string $name, int $absences, array $attributes = []): StudentHealthRecord
+    {
+        $record = $this->makeStudent(array_merge(['student_name' => $name], $attributes));
+        $this->markRun($record, array_merge([true, true], array_fill(0, $absences, false)));
 
-        return $marks;
+        return $record;
     }
 
     private function open(string $query = '')
@@ -110,11 +120,17 @@ class FeedingAtRiskTabTest extends TestCase
         return $this->withSession($this->coordinatorSession())->get('/dashboard/feedingcor-at-risk'.$query);
     }
 
-    #[Test]
-    public function the_header_carries_the_program_the_year_and_the_configured_threshold(): void
+    private function confirm(StudentHealthRecord $record, array $session = [])
     {
-        $record = $this->makeStudent();
-        $this->markRun($record, $this->marksAtRate(3, 7));
+        return $this->withSession($session ?: $this->coordinatorSession())
+            ->from('/dashboard/feedingcor-at-risk')
+            ->post('/dashboard/feedingcor-at-risk/confirm', ['record_id' => $record->id]);
+    }
+
+    #[Test]
+    public function the_header_carries_the_program_the_year_and_the_school_thresholds(): void
+    {
+        $this->absentInARow('Away Learner', 3);
 
         $response = $this->open()->assertOk();
 
@@ -128,158 +144,197 @@ class FeedingAtRiskTabTest extends TestCase
         $response->assertSee('Attendance Threshold');
         $response->assertSee('Export At-Risk List');
         $response->assertSee('Print At-Risk List');
+        // The adviser's two days, read from the rule — never typed.
+        $response->assertSee('7 days');
+        $response->assertSee('Notice at 3 days');
     }
 
     #[Test]
-    public function the_threshold_shown_is_the_schools_own_not_a_hardcoded_eighty(): void
+    public function two_absences_in_a_row_raise_nothing(): void
     {
-        // The System Admin has set this school to 90%.
-        DB::table('institutions')->where('id', $this->institution->id)->update(['feeding_at_risk_threshold' => 90]);
-
-        $record = $this->makeStudent();
-        // 85% — comfortably clear of the default 80, flagged by this school's 90.
-        $this->markRun($record, $this->marksAtRate(17, 3));
-
-        $response = $this->open()->assertOk();
-
-        $response->assertSee('90%');
-        $response->assertSee('at-risk threshold 90%');
-        $response->assertSee($record->student_name);
-        $response->assertSee('At Risk');
-    }
-
-    #[Test]
-    public function only_learners_below_the_threshold_are_counted_at_risk_while_watch_learners_are_listed(): void
-    {
-        $atRisk = $this->makeStudent(['student_name' => 'Below Threshold']);
-        $watch = $this->makeStudent(['student_name' => 'Inside Watch Band']);
-        $steady = $this->makeStudent(['student_name' => 'Well Above']);
-
-        $this->markRun($atRisk, $this->marksAtRate(7, 3));    // 70%
-        $this->markRun($watch, $this->marksAtRate(41, 9));    // 82%
-        $this->markRun($steady, $this->marksAtRate(19, 1));   // 95%
-
-        $response = $this->open()->assertOk();
-
-        // The card counts the business rule alone: one learner below 80%.
-        $response->assertSee('1 of 3 beneficiaries');
-        $response->assertSee('0 critical &middot; 1 on watch', false);
-
-        // The list is who needs attention — at risk and watch, never the
-        // learner comfortably above the threshold.
-        $response->assertSee('Below Threshold');
-        $response->assertSee('Inside Watch Band');
-        $response->assertDontSee('Well Above');
-    }
-
-    #[Test]
-    public function an_unconfirmed_mark_is_never_counted_as_an_absence(): void
-    {
-        $record = $this->makeStudent(['student_name' => 'Unread Sheet']);
-        // Four present and four unreadable: 100% of what was confirmed.
-        $this->markRun($record, [true, null, true, null, true, null, true, null]);
-
-        $response = $this->open()->assertOk();
-
-        // Nobody is at risk, and the learner is not on the follow-up list.
-        $response->assertSee('0 of 1 beneficiaries');
-        $response->assertDontSee('Unread Sheet');
-    }
-
-    #[Test]
-    public function a_learner_with_no_confirmed_session_is_never_flagged_or_listed(): void
-    {
-        $record = $this->makeStudent(['student_name' => 'Never Recorded']);
+        $this->absentInARow('Two Days Away', 2);
 
         $response = $this->open()->assertOk();
 
         $response->assertSee('0 of 1 beneficiaries');
-        $response->assertDontSee('Never Recorded');
+        $response->assertDontSee('Two Days Away');
     }
 
     #[Test]
-    public function a_row_explains_why_the_learner_is_at_risk(): void
+    public function day_three_raises_an_attendance_notice_and_flags_nobody(): void
     {
-        $record = $this->makeStudent(['student_name' => 'Needs Follow Up']);
-        $this->markRun($record, $this->marksAtRate(7, 5)); // 58.3% — critical
+        $record = $this->absentInARow('Three Days Away', 3);
 
         $response = $this->open()->assertOk();
 
-        $response->assertSee('Why this student is at risk');
-        $response->assertSee('Risk reason:');
-        $response->assertSee('far below the configured 80% threshold');
-        $response->assertSee('Attendance trend');
-        $response->assertSee('Recent absences');
-        $response->assertSee('Follow-up');
-        $response->assertSee('Critical');
+        // Listed so the coordinator can verify the record…
+        $response->assertSee('Three Days Away');
+        $response->assertSee('Attendance Notice');
+        $response->assertSee('1 attendance notice to verify');
+        // …and counted nowhere as at risk.
+        $response->assertSee('0 of 1 beneficiaries');
+        $this->assertSame(0, $response->viewData('cards')['at_risk']);
+        $this->assertSame(1, $response->viewData('cards')['notices']);
+        $this->assertFalse((bool) $record->fresh()->is_at_risk);
     }
 
     #[Test]
-    public function the_record_opens_in_a_dialog_rendered_with_its_own_row(): void
+    public function day_seven_awaits_confirmation_and_still_flags_nobody(): void
     {
-        $record = $this->makeStudent(['student_name' => 'Opens In Dialog']);
-        $this->markRun($record, $this->marksAtRate(6, 4));
+        $this->absentInARow('Seven Days Away', 7);
 
         $response = $this->open()->assertOk();
 
-        // The learner's name is the way in — the whole cell, as on the
-        // Beneficiaries tab — and the row carries the identity the dialog's
-        // head shows.
-        $response->assertSee('<td class="ar-name is-link">', false);
-        $response->assertSee('class="ar-namebtn" data-detail-open="'.$record->id.'"', false);
-        $response->assertSee('aria-haspopup="dialog"', false);
-        $response->assertSee('data-standing="Critical"', false);
-
-        // No action column: it was a tenth of the table's width spent on a
-        // control the name already is, and it pushed the list into a
-        // side-scroll.
-        $response->assertDontSee('ar-open-col');
-        $response->assertDontSee('>Details</span>', false);
-
-        // The record itself is a template belonging to that row — rendered with
-        // it, so the dialog can never show a figure the row has moved past.
-        $response->assertSee('<template class="ar-detail-source" data-detail-for="'.$record->id.'">', false);
-        $response->assertSee('id="detailBackdrop"', false);
-
-        // …and no longer an expanding row inside the table.
-        $response->assertDontSee('ar-detailrow');
+        $response->assertSee('Seven Days Away');
+        $response->assertSee('Awaiting Confirmation');
+        $response->assertSee('1 attendance record awaiting confirmation');
+        $response->assertSee('0 of 1 beneficiaries');
+        $this->assertSame(0, $response->viewData('cards')['at_risk']);
+        $this->assertSame(1, $response->viewData('cards')['awaiting']);
+        // The dialog offers the confirmation — and the follow-up only once
+        // there is a flag to follow up.
+        $response->assertSee('id="detailConfirmForm"', false);
+        $response->assertSee(route('feedingcor-at-risk.confirm'), false);
+        $response->assertSee('data-confirm-stage="flag"', false);
+        $response->assertSee('data-flagged="0"', false);
     }
 
     #[Test]
-    public function the_filters_narrow_the_list(): void
+    public function confirming_the_record_at_day_seven_flags_the_learner_for_follow_up(): void
     {
-        $critical = $this->makeStudent(['student_name' => 'Critical Learner']);
-        $watch = $this->makeStudent(['student_name' => 'Watch Learner', 'section' => 'Grade 8 / Maaasahan']);
+        $record = $this->absentInARow('Confirmed Absent', 7);
+        $enrolledAt = $record->feeding_enrolled_at->toDateString();
+        $auditBaseline = (int) DB::table('audit_logs')->max('id');
 
-        $this->markRun($critical, $this->marksAtRate(4, 6));  // 40%
-        $this->markRun($watch, $this->marksAtRate(41, 9));    // 82%
+        $this->confirm($record)->assertRedirect('/dashboard/feedingcor-at-risk')->assertSessionHas('success');
 
-        $this->open('?risk=critical')->assertOk()
-            ->assertSee('Critical Learner')
-            ->assertDontSee('Watch Learner');
+        $confirmation = FeedingAttendanceConfirmation::query()->sole();
+        $this->assertSame(FeedingAttendanceConfirmation::STAGE_FLAG, $confirmation->stage);
+        $this->assertSame(7, $confirmation->absences);
+        $this->assertSame($this->institution->id, (int) $confirmation->institution_id);
+        $this->assertSame('Test Coordinator', $confirmation->confirmed_by_name);
 
-        $this->open('?risk=watch')->assertOk()
-            ->assertSee('Watch Learner')
-            ->assertDontSee('Critical Learner');
+        // The staff name is personal information, never at rest in plaintext.
+        $raw = DB::table('feeding_attendance_confirmations')->where('id', $confirmation->id)->first();
+        $this->assertNotSame('Test Coordinator', $raw->confirmed_by_name);
 
-        $this->open('?grade=Grade+8')->assertOk()
-            ->assertSee('Watch Learner')
-            ->assertDontSee('Critical Learner');
+        $this->assertTrue(
+            DB::table('audit_logs')
+                ->where('id', '>', $auditBaseline)
+                ->where('action', 'feeding_attendance_confirmed')
+                ->where('subject_id', $record->id)
+                ->exists()
+        );
 
-        $this->open('?attendance=below_50')->assertOk()
-            ->assertSee('Critical Learner')
-            ->assertDontSee('Watch Learner');
+        // Flagged — on this tab, and on the stored flag the clinic counts.
+        $response = $this->open()->assertOk();
+        $response->assertSee('1 of 1 beneficiaries');
+        $response->assertSee('Flagged for Follow-Up');
+        $response->assertSee('data-flagged="1"', false);
+        $this->assertTrue((bool) $record->fresh()->is_at_risk);
 
-        $this->open('?follow_up=none')->assertOk()
-            ->assertSee('Critical Learner')
-            ->assertSee('Watch Learner');
+        // No automatic change in enrolment, ever.
+        $this->assertSame($enrolledAt, $record->fresh()->feeding_enrolled_at->toDateString());
+        $this->assertNull($record->fresh()->feeding_removed_at);
+    }
+
+    #[Test]
+    public function verifying_a_notice_acknowledges_it_and_flags_nobody(): void
+    {
+        $record = $this->absentInARow('Verified Notice', 3);
+
+        $this->confirm($record)->assertSessionHas('success');
+
+        $confirmation = FeedingAttendanceConfirmation::query()->sole();
+        $this->assertSame(FeedingAttendanceConfirmation::STAGE_NOTICE, $confirmation->stage);
+        $this->assertSame(3, $confirmation->absences);
+        $this->assertFalse((bool) $record->fresh()->is_at_risk);
+
+        $response = $this->open()->assertOk();
+        // Still on the list as a notice, no longer asking to be verified.
+        $response->assertSee('Verified Notice');
+        $response->assertDontSee('attendance notice to verify');
+        $this->assertSame(0, $response->viewData('cards')['at_risk']);
+        $this->assertSame(0, $response->viewData('cards')['notices_unverified']);
+
+        // A second post has nothing left to confirm.
+        $this->confirm($record)->assertSessionHas('error');
+        $this->assertSame(1, FeedingAttendanceConfirmation::query()->count());
+    }
+
+    #[Test]
+    public function a_verified_notice_still_needs_the_confirmation_at_day_seven(): void
+    {
+        $record = $this->makeStudent(['student_name' => 'Verified Then Gone']);
+        foreach ([12 => true, 11 => true, 10 => false, 9 => false, 8 => false] as $daysAgo => $mark) {
+            $this->markOn($record, $daysAgo, $mark);
+        }
+        $this->confirm($record)->assertSessionHas('success');
+
+        // Four more missed sessions after the verification: day 7 is reached,
+        // and the notice's verification does not stand in for the confirmation.
+        foreach ([7, 6, 5, 4] as $daysAgo) {
+            $this->markOn($record, $daysAgo, false);
+        }
+
+        $response = $this->open()->assertOk();
+
+        $this->assertSame(1, $response->viewData('cards')['awaiting']);
+        $this->assertSame(0, $response->viewData('cards')['at_risk']);
+        $this->assertFalse((bool) $record->fresh()->is_at_risk);
+    }
+
+    #[Test]
+    public function nothing_is_confirmed_for_a_learner_with_nothing_to_confirm(): void
+    {
+        $record = $this->makeStudent(['student_name' => 'Always Here']);
+        $this->markRun($record, [true, true, true, true]);
+
+        $this->confirm($record)->assertSessionHas('error');
+
+        $this->assertSame(0, FeedingAttendanceConfirmation::query()->count());
+        $this->assertFalse((bool) $record->fresh()->is_at_risk);
+    }
+
+    #[Test]
+    public function only_the_feeding_coordinator_can_confirm_and_only_for_their_school(): void
+    {
+        $record = $this->absentInARow('Not Yours To Confirm', 7);
+
+        foreach (['school_nurse', 'clinic_teacher', 'class_adviser'] as $role) {
+            $this->confirm($record, ['active_role' => $role, 'active_institution_id' => $this->institution->id])
+                ->assertRedirect(route('login'));
+        }
+
+        $other = Institution::create(['name' => 'Other School', 'status' => 'active']);
+        $stranger = $this->absentInARow('Someone Elses', 7, ['institution_id' => $other->id, 'school_name' => 'Other School']);
+        $this->confirm($stranger)->assertRedirect(route('dashboard.feedingcor-at-risk'));
+
+        $this->assertSame(0, FeedingAttendanceConfirmation::query()->count());
+    }
+
+    #[Test]
+    public function a_follow_up_waits_for_the_confirmation(): void
+    {
+        $record = $this->absentInARow('Not Yet Confirmed', 7);
+
+        $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-at-risk/follow-up', [
+                'record_id' => $record->id,
+                'followed_up_on' => now()->toDateString(),
+                'status' => FeedingFollowUp::STATUS_FOLLOW_UP_REQUIRED,
+            ])
+            ->assertRedirect(route('dashboard.feedingcor-at-risk'))
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, FeedingFollowUp::query()->count());
     }
 
     #[Test]
     public function a_follow_up_is_recorded_scoped_encrypted_and_audited(): void
     {
-        $record = $this->makeStudent(['student_name' => 'Followed Up']);
-        $this->markRun($record, $this->marksAtRate(5, 5));
+        $record = $this->absentInARow('Followed Up', 7);
+        $this->confirm($record);
 
         $response = $this->withSession($this->coordinatorSession())
             ->post('/dashboard/feedingcor-at-risk/follow-up', [
@@ -312,16 +367,19 @@ class FeedingAtRiskTabTest extends TestCase
             'subject_id' => $record->id,
         ]);
 
-        // The status the coordinator recorded is what the list reports.
+        // The status the coordinator recorded is what the list reports, and a
+        // follow-up that is not Resolved leaves the flag where it is.
         $this->open()->assertOk()->assertSee('Monitoring');
+        $this->assertTrue((bool) $record->fresh()->is_at_risk);
     }
 
     #[Test]
-    public function a_follow_up_never_touches_enrolment(): void
+    public function a_resolved_follow_up_closes_the_flag_and_never_touches_enrolment(): void
     {
-        $record = $this->makeStudent();
-        $this->markRun($record, $this->marksAtRate(5, 5));
-        $enrolledAt = $record->feeding_enrolled_at;
+        $record = $this->absentInARow('Resolved Learner', 7);
+        $enrolledAt = $record->feeding_enrolled_at->toDateString();
+        $this->confirm($record);
+        $this->assertTrue((bool) $record->fresh()->is_at_risk);
 
         $this->withSession($this->coordinatorSession())
             ->post('/dashboard/feedingcor-at-risk/follow-up', [
@@ -330,10 +388,16 @@ class FeedingAtRiskTabTest extends TestCase
                 'status' => FeedingFollowUp::STATUS_RESOLVED,
             ])->assertRedirect();
 
-        // "Resolved" means the attendance concern was addressed — the learner is
-        // still a beneficiary.
-        $this->assertNotNull($record->fresh()->feeding_enrolled_at);
-        $this->assertEquals($enrolledAt->toDateString(), $record->fresh()->feeding_enrolled_at->toDateString());
+        // The flag is closed — and the week it covered cannot flag them again.
+        $this->assertFalse((bool) $record->fresh()->is_at_risk);
+        $response = $this->open()->assertOk();
+        $this->assertSame(0, $response->viewData('cards')['at_risk']);
+        $this->assertSame(0, $response->viewData('cards')['awaiting']);
+
+        // "Resolved" means the attendance concern was addressed — the learner
+        // is still a beneficiary.
+        $this->assertSame($enrolledAt, $record->fresh()->feeding_enrolled_at->toDateString());
+        $this->assertNull($record->fresh()->feeding_removed_at);
     }
 
     #[Test]
@@ -354,40 +418,196 @@ class FeedingAtRiskTabTest extends TestCase
     }
 
     #[Test]
+    public function the_absences_under_verification_can_be_corrected_and_the_standing_follows(): void
+    {
+        $record = $this->absentInARow('Wrongly Marked', 7);
+
+        $response = $this->open()->assertOk();
+        // Each absence being verified carries the one audited correction path.
+        $response->assertSee(route('feedingcor-program.beneficiary.attendance.correct', $record->id), false);
+        $response->assertSee('Absences to verify');
+
+        // The coordinator finds the fourth absence was wrong: the learner was
+        // there. The run is broken, so day 7 was never reached.
+        $wrongDay = FeedingAttendance::query()
+            ->where('student_health_record_id', $record->id)
+            ->where('is_present', false)
+            ->orderBy('session_date')
+            ->skip(3)
+            ->first()
+            ->session_date
+            ->toDateString();
+
+        $this->withSession($this->coordinatorSession())
+            ->from('/dashboard/feedingcor-at-risk')
+            ->post(route('feedingcor-program.beneficiary.attendance.correct', $record->id), [
+                'session_date' => $wrongDay,
+                'mark' => 'present',
+            ])
+            ->assertRedirect('/dashboard/feedingcor-at-risk');
+
+        $response = $this->open()->assertOk();
+        $this->assertSame(0, $response->viewData('cards')['awaiting']);
+        $this->assertSame(1, $response->viewData('cards')['notices']);
+    }
+
+    #[Test]
+    public function a_flagged_learner_offers_no_correction_and_the_tab_no_enrolment_change(): void
+    {
+        $record = $this->absentInARow('Already Confirmed', 7);
+        $this->confirm($record);
+
+        $response = $this->open()->assertOk();
+
+        // Confirmed means confirmed: the absences are a reading now.
+        $response->assertDontSee(route('feedingcor-program.beneficiary.attendance.correct', $record->id), false);
+        // Attendance is recorded on the Attendance tab and nowhere else.
+        $response->assertDontSee(route('feedingcor-program.attendance.record.store'));
+        $response->assertDontSee('Mark All Present');
+        // A flag is never a reason to drop a beneficiary.
+        $response->assertDontSee(route('feedingcor-program.enrollment.store'));
+        $response->assertDontSee('Remove Beneficiary');
+    }
+
+    #[Test]
+    public function an_unconfirmed_mark_is_never_counted_as_an_absence(): void
+    {
+        $record = $this->makeStudent(['student_name' => 'Unread Sheet']);
+        // Present, then six sheets nobody could read: no run at all.
+        $this->markRun($record, [true, null, null, null, null, null, null]);
+
+        $response = $this->open()->assertOk();
+
+        $response->assertSee('0 of 1 beneficiaries');
+        $response->assertDontSee('Unread Sheet');
+    }
+
+    #[Test]
+    public function an_excused_absence_neither_extends_nor_breaks_a_run(): void
+    {
+        $record = $this->makeStudent(['student_name' => 'Ramadan Buffer']);
+        $this->markRun($record, [true, false, false, false, false, false, false]);
+        // Two of those days were excused after all: the run is four, not six.
+        FeedingAttendance::query()
+            ->where('student_health_record_id', $record->id)
+            ->where('is_present', false)
+            ->orderBy('session_date')
+            ->limit(2)
+            ->get()
+            ->each(fn (FeedingAttendance $row) => $row->update(['is_excused' => true]));
+
+        $response = $this->open()->assertOk();
+
+        $this->assertSame(0, $response->viewData('cards')['awaiting']);
+        $this->assertSame(1, $response->viewData('cards')['notices']);
+    }
+
+    #[Test]
+    public function a_learner_with_no_confirmed_session_is_never_flagged_or_listed(): void
+    {
+        $this->makeStudent(['student_name' => 'Never Recorded']);
+
+        $response = $this->open()->assertOk();
+
+        $response->assertSee('0 of 1 beneficiaries');
+        $response->assertDontSee('Never Recorded');
+    }
+
+    #[Test]
+    public function the_record_opens_in_a_dialog_rendered_with_its_own_row(): void
+    {
+        $record = $this->absentInARow('Opens In Dialog', 7);
+
+        $response = $this->open()->assertOk();
+
+        // The learner's name is the way in — the whole cell, as on the
+        // Beneficiaries tab — and the row carries the identity the dialog's
+        // head shows.
+        $response->assertSee('<td class="ar-name is-link">', false);
+        $response->assertSee('class="ar-namebtn" data-detail-open="'.$record->id.'"', false);
+        $response->assertSee('aria-haspopup="dialog"', false);
+        $response->assertSee('data-standing="Awaiting Confirmation"', false);
+
+        // No action column: the name is the control.
+        $response->assertDontSee('ar-open-col');
+        $response->assertDontSee('>Details</span>', false);
+
+        // The record itself is a template belonging to that row — rendered with
+        // it, so the dialog can never show a figure the row has moved past.
+        $response->assertSee('<template class="ar-detail-source" data-detail-for="'.$record->id.'">', false);
+        $response->assertSee('id="detailBackdrop"', false);
+        $response->assertSee('Attendance standing');
+        $response->assertSee('Attendance trend');
+        $response->assertSee('Follow-up');
+        $response->assertDontSee('ar-detailrow');
+    }
+
+    #[Test]
+    public function the_filters_narrow_the_list(): void
+    {
+        $this->absentInARow('Notice Learner', 3);
+        $this->absentInARow('Awaiting Learner', 8, ['section' => 'Grade 8 / Maaasahan']);
+
+        $this->open('?status=notice')->assertOk()
+            ->assertSee('Notice Learner')
+            ->assertDontSee('Awaiting Learner');
+
+        $this->open('?status=awaiting_confirmation')->assertOk()
+            ->assertSee('Awaiting Learner')
+            ->assertDontSee('Notice Learner');
+
+        $this->open('?grade=Grade+8')->assertOk()
+            ->assertSee('Awaiting Learner')
+            ->assertDontSee('Notice Learner');
+
+        $this->open('?absences=3_6')->assertOk()
+            ->assertSee('Notice Learner')
+            ->assertDontSee('Awaiting Learner');
+
+        $this->open('?absences=7_plus')->assertOk()
+            ->assertSee('Awaiting Learner')
+            ->assertDontSee('Notice Learner');
+
+        // An unknown value off the wire is dropped rather than emptying the list.
+        $this->open('?status=critical')->assertOk()
+            ->assertSee('Notice Learner')
+            ->assertSee('Awaiting Learner');
+    }
+
+    #[Test]
+    public function a_rate_school_also_waits_for_the_coordinator_to_confirm(): void
+    {
+        DB::table('institutions')->where('id', $this->institution->id)->update([
+            'feeding_at_risk_mode' => FeedingAtRiskRule::MODE_ATTENDANCE_RATE,
+            'feeding_at_risk_threshold' => 90,
+            'feeding_min_observation_days' => 0,
+        ]);
+
+        $record = $this->makeStudent(['student_name' => 'Below Ninety']);
+        // 85%, scattered — below this school's 90, never three in a row.
+        $this->markRun($record, [true, true, true, false, true, true, true, true, true, true, true, false, true, true, true, true, true, false, true, true]);
+
+        $response = $this->open()->assertOk();
+        $response->assertSee('90%');
+        $this->assertSame(1, $response->viewData('cards')['awaiting']);
+        $this->assertSame(0, $response->viewData('cards')['at_risk']);
+
+        $this->confirm($record);
+        $this->assertSame(1, $this->open()->viewData('cards')['at_risk']);
+    }
+
+    #[Test]
     public function another_schools_beneficiaries_never_appear_on_the_list(): void
     {
         $other = Institution::create(['name' => 'Other School', 'status' => 'active']);
-        $stranger = $this->makeStudent([
-            'institution_id' => $other->id,
-            'school_name' => 'Other School',
-            'student_name' => 'Someone Elses Learner',
-        ]);
-        $this->markRun($stranger, $this->marksAtRate(1, 9));
-
-        $mine = $this->makeStudent(['student_name' => 'Our Learner']);
-        $this->markRun($mine, $this->marksAtRate(6, 4));
+        $this->absentInARow('Someone Elses Learner', 9, ['institution_id' => $other->id, 'school_name' => 'Other School']);
+        $this->absentInARow('Our Learner', 3);
 
         $response = $this->open()->assertOk();
 
         $response->assertSee('Our Learner');
         $response->assertDontSee('Someone Elses Learner');
-        $response->assertSee('1 of 1 beneficiaries');
-    }
-
-    #[Test]
-    public function the_tab_offers_no_way_to_change_a_mark_or_an_enrolment(): void
-    {
-        $record = $this->makeStudent();
-        $this->markRun($record, $this->marksAtRate(5, 5));
-
-        $response = $this->open()->assertOk();
-
-        // Attendance is written on the Attendance tab and nowhere else.
-        $response->assertDontSee(route('feedingcor-program.attendance.record.store'));
-        $response->assertDontSee('Mark All Present');
-        // Being below the threshold is never a reason to drop a beneficiary.
-        $response->assertDontSee(route('feedingcor-program.enrollment.store'));
-        $response->assertDontSee('Remove Beneficiary');
+        $response->assertSee('0 of 1 beneficiaries');
     }
 
     #[Test]
@@ -401,8 +621,7 @@ class FeedingAtRiskTabTest extends TestCase
     #[Test]
     public function the_export_carries_the_list_as_it_stands(): void
     {
-        $record = $this->makeStudent();
-        $this->markRun($record, $this->marksAtRate(5, 5));
+        $this->absentInARow('Exported', 7);
 
         $this->withSession($this->coordinatorSession())
             ->get('/dashboard/feedingcor-at-risk/export')
@@ -410,88 +629,41 @@ class FeedingAtRiskTabTest extends TestCase
             ->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     }
 
+    /**
+     * Migrations never run on deploy, so the deployed database can be a step
+     * behind the code. Until the confirmations table exists nobody can be
+     * flagged — and nothing may break while that is true.
+     */
     #[Test]
-    public function the_severity_bands_sit_around_the_schools_own_threshold(): void
+    public function the_feeding_screens_still_work_before_the_confirmations_migration_has_run(): void
     {
-        $rule = FeedingAtRiskRule::forInstitution(null);
+        Schema::drop('feeding_attendance_confirmations');
+        SchemaCache::flush();
 
-        // 60% — far below 80, so Critical rather than merely At Risk.
-        $critical = FeedingRiskSeverity::evaluate($this->marksAtRate(6, 4), $rule);
-        $this->assertSame(FeedingRiskSeverity::CRITICAL, $critical['severity']);
-        $this->assertTrue($critical['at_risk']);
-
-        // 75% — below the threshold but not far below it.
-        $atRisk = FeedingRiskSeverity::evaluate($this->marksAtRate(15, 5), $rule);
-        $this->assertSame(FeedingRiskSeverity::AT_RISK, $atRisk['severity']);
-        $this->assertTrue($atRisk['at_risk']);
-
-        // 82% — above the threshold, inside the watch band. Watch is a
-        // monitoring aid and is never at risk.
-        $watch = FeedingRiskSeverity::evaluate($this->marksAtRate(41, 9), $rule);
-        $this->assertSame(FeedingRiskSeverity::WATCH, $watch['severity']);
-        $this->assertFalse($watch['at_risk']);
-
-        // 95% — nothing to follow up.
-        $steady = FeedingRiskSeverity::evaluate($this->marksAtRate(19, 1), $rule);
-        $this->assertSame(FeedingRiskSeverity::STEADY, $steady['severity']);
-        $this->assertFalse($steady['at_risk']);
-
-        // 25% over four sessions — under every threshold on arithmetic, and
-        // still not a standing: the observation window outranks the bands, so
-        // this is Observing rather than Critical or (absurdly) Watch.
-        $early = FeedingRiskSeverity::evaluate([true, false, false, false], $rule);
-        $this->assertSame(FeedingRiskSeverity::OBSERVING, $early['severity']);
-        $this->assertFalse($early['at_risk']);
-        $this->assertTrue($early['observing']);
-        $this->assertSame(25.0, $early['rate']);
-        $this->assertSame(FeedingRiskSeverity::PRIORITY_NONE, $early['priority']);
-
-        // No confirmed session is no evidence — never a standing.
-        $none = FeedingRiskSeverity::evaluate([null, null], $rule);
-        $this->assertSame(FeedingRiskSeverity::OBSERVING, $none['severity']);
-        $this->assertNull($none['rate']);
-    }
-
-    #[Test]
-    public function a_learner_inside_the_observation_window_is_never_listed_for_follow_up(): void
-    {
-        // Four sessions, one attended. On the arithmetic alone this learner is
-        // the worst in the school; a follow-up on four sheets is still
-        // premature, so the tab neither counts nor lists them.
-        $early = $this->makeStudent(['student_name' => 'Newly Enrolled']);
-        $this->markRun($early, [true, false, false, false]);
+        $record = $this->absentInARow('Not Yet Migrated', 7);
 
         $response = $this->open()->assertOk();
-
+        $response->assertSee('Awaiting Confirmation');
+        $response->assertDontSee('id="detailConfirmForm"', false);
         $this->assertSame(0, $response->viewData('cards')['at_risk']);
-        $this->assertSame(1, $response->viewData('cards')['observing']);
-        $this->assertCount(0, $response->viewData('rows'));
-        $response->assertDontSee('Newly Enrolled');
-        // The card still says how many the window is holding back, so nobody
-        // reads an empty list as "the programme has no problems".
-        $response->assertSee('in early monitoring');
-    }
 
-    #[Test]
-    public function a_declining_run_reads_as_declining_and_lifts_the_learner_to_critical(): void
-    {
-        $rule = FeedingAtRiskRule::forInstitution(null);
+        $this->confirm($record)->assertSessionHas('error');
+        $this->assertFalse((bool) $record->fresh()->is_at_risk);
 
-        // Started well, stopped coming: 75% overall, but the recent half is far
-        // worse than the first — a coordinator needs to see that now.
-        $marks = [true, true, true, true, true, true, true, true, true, false, false, false];
-        $standing = FeedingRiskSeverity::evaluate($marks, $rule);
-
-        $this->assertSame('declining', $standing['trend']);
-        $this->assertSame(FeedingRiskSeverity::CRITICAL, $standing['severity']);
-        $this->assertStringContainsString('fallen sharply', $standing['reason']);
+        $this->withSession($this->coordinatorSession())->get('/dashboard/feedingcor-dashboard')->assertOk();
+        $this->withSession($this->coordinatorSession())->get('/dashboard/feedingcor-attendance?view=beneficiary')->assertOk();
+        $this->withSession($this->coordinatorSession())->get('/dashboard/feedingcor-health-records')->assertOk();
+        $this->withSession($this->coordinatorSession())->get('/dashboard/feedingcor-program/beneficiary/'.$record->id)->assertOk();
+        $this->withSession(['active_role' => 'school_nurse'] + $this->coordinatorSession())
+            ->get('/dashboard/school-nurse/feeding-program')->assertOk();
+        $this->withSession(['active_role' => 'school_head'] + $this->coordinatorSession())
+            ->get('/dashboard/school-head')->assertOk();
     }
 
     #[Test]
     public function nothing_on_the_at_risk_tab_is_underlined(): void
     {
-        $record = $this->makeStudent();
-        $this->markRun($record, $this->marksAtRate(5, 5));
+        $this->absentInARow('Underline Check', 7);
 
         $response = $this->open()->assertOk();
 

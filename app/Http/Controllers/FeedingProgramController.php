@@ -12,6 +12,7 @@ use App\Support\AuditTrail;
 use App\Support\BmiClassifier;
 use App\Support\EncryptedFileStorage;
 use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
@@ -92,20 +93,27 @@ class FeedingProgramController extends Controller
 
         $programDay = $this->resolveProgramDay($institutionId);
 
-        // One rule, one reading. The at-risk flag, the rate beside a learner
-        // and the threshold printed on the alert all come from the school's own
-        // rule here — reading the stored is_at_risk column instead would leave
-        // this page disagreeing with the Dashboard until the next import, and a
-        // hardcoded percentage would disagree with it forever.
+        // One rule, one reading. The flag beside a learner is the one every
+        // feeding screen counts: the threshold reached AND the Feeding
+        // Coordinator's confirmation on record (FeedingAttendanceFlag) — read
+        // live, so this page and the coordinator's cannot disagree.
         $rule = FeedingAtRiskRule::forInstitution($institutionId);
         $marksByRecord = FeedingBeneficiarySummary::marksByRecord($students);
+        // Only the coordinator and the School Nurse see who is flagged. The
+        // Clinic Teacher reads this same page in their own rail, and for them
+        // the flag is not computed at all rather than computed and hidden.
+        $showFlags = FeedingAttendanceFlag::visibleTo($activeRole);
+        $flags = $showFlags ? FeedingAttendanceFlag::forRecords($students, $rule) : [];
 
-        // How many sessions a learner must have attended to clear the
-        // threshold, over the feeding days the school has actually held.
+        // How many sessions a learner must have attended to clear a rate
+        // threshold, over the feeding days the school has actually held. A run
+        // of absences has no such figure, so it is only offered for a rate.
         $sessionsHeld = $this->sessionsHeld($institutionId, StudentHealthRecord::currentSchoolYear());
-        $atRiskThresholdCount = (int) ceil($sessionsHeld * ($rule->thresholdPercent() / 100));
+        $atRiskThresholdCount = $rule->isRateMode()
+            ? (int) ceil($sessionsHeld * ($rule->thresholdPercent() / 100))
+            : null;
 
-        $studentRows = $students->map(function (StudentHealthRecord $record) use ($marksByRecord, $rule): array {
+        $studentRows = $students->map(function (StudentHealthRecord $record) use ($marksByRecord, $rule, $flags): array {
             $currentWeight = (float) $record->weight;
             // No invented baseline. A learner the adviser has not measured yet
             // has no baseline weight or BMI, and the roster prints an em dash —
@@ -164,7 +172,8 @@ class FeedingProgramController extends Controller
                 'attendance_percent' => $attendancePercent === null ? null : (int) round($attendancePercent),
                 'nutritional_status' => $resolvedStatus,
                 'is_attendance_eligible' => $isAttendanceEligible,
-                'is_at_risk' => $rule->isAtRisk($marks),
+                'is_at_risk' => (bool) ($flags[$record->id]['flagged'] ?? false),
+                'flagged_on' => $flags[$record->id]['confirmation']['date_label'] ?? null,
                 'trend_label' => $trendLabel,
                 'trend_class' => $trendClass,
             ];
@@ -197,14 +206,15 @@ class FeedingProgramController extends Controller
                 'at_risk_count' => $atRiskStudents->count(),
                 // The school's own threshold, never a constant: the System
                 // Admin sets it per school, and the flags beside it were
-                // decided by exactly this figure.
-                'at_risk_threshold' => rtrim(rtrim(number_format($rule->thresholdPercent(), 1), '0'), '.'),
+                // reached by exactly this figure.
+                'at_risk_threshold' => $rule->thresholdLabel(),
                 'at_risk_rule' => $rule->describe(),
                 'at_risk_threshold_count' => $atRiskThresholdCount,
                 'sessions_held' => $sessionsHeld,
             ],
             'students' => $studentRows,
             'atRiskStudents' => $atRiskStudents,
+            'showFlags' => $showFlags,
             'gradeOptions' => $gradeOptions,
             'selectedGrade' => $selectedGrade,
             'hasGradeFilter' => $gradeOptions->isNotEmpty(),
@@ -936,6 +946,7 @@ class FeedingProgramController extends Controller
 
         $rule = FeedingAtRiskRule::forInstitution($institutionId);
         [$grade, $section] = $this->splitGradeSection((string) $learner->section);
+        $standing = FeedingAttendanceFlag::forRecords(collect([$learner]), $rule)[$learner->id];
 
         return view('feedingcor-dashboard.learner-attendance', [
             'learner' => [
@@ -954,8 +965,10 @@ class FeedingProgramController extends Controller
                 'present' => $rule->presentCount($marks),
                 'confirmed' => count(array_filter($marks, static fn ($mark) => $mark !== null)),
                 'unconfirmed' => count(array_filter($marks, static fn ($mark) => $mark === null)),
-                'at_risk' => $rule->isAtRisk($marks),
+                'at_risk' => $standing['flagged'],
+                'standing' => $standing,
                 'threshold' => $rule->thresholdPercent(),
+                'threshold_label' => $rule->thresholdLabel(),
                 'rule' => $rule->describe(),
             ],
         ]);
@@ -1044,7 +1057,10 @@ class FeedingProgramController extends Controller
         $qualified = $this->isAttendanceEligible($learner->nutritional_status);
         $enrolled = FeedingBeneficiarySummary::isEnrolled($learner);
         $removedAt = FeedingBeneficiarySummary::removedAt($learner);
-        $atRisk = $enrolled && $qualified && $rule->isAtRisk($marks);
+        // The same reading the roster badges from: flagged only once the
+        // coordinator has confirmed the record, and never by a rule alone.
+        $flag = FeedingAttendanceFlag::forRecords(collect([$learner]), $rule)[$learner->id];
+        $atRisk = $enrolled && $qualified && $flag['flagged'];
 
         // A learner's height, weight and BMI live on the baseline columns once
         // the adviser has taken the measurement; before that the only reading
@@ -1115,11 +1131,14 @@ class FeedingProgramController extends Controller
                 // Null, not zero: no confirmed session is not a 0% turnout.
                 'rate' => $rule->attendanceRate($marks),
                 'threshold' => $rule->thresholdPercent(),
+                'threshold_label' => $rule->thresholdLabel(),
+                'is_rate_rule' => $rule->isRateMode(),
                 'rule' => $rule->describe(),
-                // The run the unexcused-absence rule reads, and whether it has
-                // reached the point at which the school reviews removal.
+                // The run of unexcused absences the flow reads, and where it
+                // has left the learner. Reported only: nothing here, or
+                // anywhere, changes the learner's enrolment because of it.
                 'absence_run' => $rule->currentAbsenceRun($marks),
-                'needs_removal_review' => $rule->needsRemovalReview($marks),
+                'flag' => $flag,
             ],
             // The school's feeding days, newest month first, with this
             // learner's mark on each — see sessionCalendar().
@@ -2101,77 +2120,13 @@ class FeedingProgramController extends Controller
     }
 
     /**
-     * At-risk is driven purely by feeding-session attendance — a learner is
-     * never auto-flagged just for being wasted/severely wasted. The rule itself
-     * (rate threshold vs consecutive absences) lives in FeedingAtRiskRule and is
-     * config-driven; this method only feeds it each learner's marks in date
-     * order and writes the verdict.
-     *
-     * Marks awaiting human review are passed through as NULL and the rule
-     * excludes them, so an unread scan can neither flag nor unflag anyone.
-     * Every change of flag is written to the audit log.
+     * Rewrites the stored `is_at_risk` flags after a write to the marks. The
+     * flag itself is FeedingAttendanceFlag's — threshold reached AND confirmed
+     * by the coordinator — so a learner awaiting confirmation is never stored
+     * as at risk, and no write here ever touches enrolment.
      */
     private function refreshAttendanceRiskFlags(?int $institutionId = null): void
     {
-        // This runs immediately after every write to feeding_attendances, which
-        // makes it the one moment the marks are known to have moved. Anything
-        // memoized from before the write is stale from here on.
-        FeedingBeneficiarySummary::forgetMarks();
-
-        // The school's own threshold decides its learners — never the platform
-        // default, or a school that set 90% would still be flagged at 80%.
-        $rule = FeedingAtRiskRule::forInstitution($institutionId);
-        $todayDate = now()->toDateString();
-
-        // Fetched, not aggregated in SQL: NULL marks must survive to the rule,
-        // and a SUM(CASE ...) would silently fold them into "absent".
-        $marksByRecord = FeedingAttendance::query()
-            ->when($institutionId, fn ($q) => $q->whereIn(
-                'student_health_record_id',
-                StudentHealthRecord::query()->where('institution_id', $institutionId)->select('id')
-            ))
-            ->whereDate('session_date', '<=', $todayDate)
-            ->orderBy('session_date')
-            ->get(array_merge(
-                ['student_health_record_id', 'session_date', 'is_present'],
-                $this->hasReviewColumns() ? ['needs_review'] : [],
-                $this->hasExcusedColumn() ? ['is_excused'] : []
-            ))
-            ->groupBy('student_health_record_id')
-            ->map(fn ($rows) => $rows
-                // Before the review migration every mark is confirmed by
-                // definition, so nothing is excluded.
-                ->map(fn ($row) => FeedingAttendanceMark::forRule($row))
-                ->values()
-                ->all());
-
-        $changed = 0;
-
-        StudentHealthRecord::query()
-            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-            ->forCurrentSchoolYear()
-            ->each(function (StudentHealthRecord $record) use ($marksByRecord, $rule, &$changed): void {
-                $marks = $marksByRecord->get($record->id, []);
-                $isAtRisk = $rule->isAtRisk($marks);
-                $presentCount = $rule->presentCount($marks);
-
-                if ((bool) $record->is_at_risk !== $isAtRisk) {
-                    $changed++;
-                }
-
-                $record->update([
-                    'attendance_sessions_count' => $presentCount,
-                    'is_at_risk' => $isAtRisk,
-                ]);
-            });
-
-        if ($changed > 0) {
-            AuditTrail::record(
-                'updated',
-                'StudentHealthRecord',
-                null,
-                "At-risk recomputed ({$rule->describe()}): {$changed} learner flag(s) changed"
-            );
-        }
+        FeedingAttendanceFlag::refreshStoredFlags($institutionId);
     }
 }

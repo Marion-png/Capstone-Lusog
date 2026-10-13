@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use OpenSpout\Reader\XLSX\Reader;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ConfirmsFeedingFlags;
 use Tests\TestCase;
 
 /**
@@ -21,7 +22,7 @@ use Tests\TestCase;
  */
 class FeedingAttendanceTabTest extends TestCase
 {
-    use RefreshDatabase;
+    use ConfirmsFeedingFlags, RefreshDatabase;
 
     private Institution $institution;
 
@@ -586,14 +587,26 @@ class FeedingAttendanceTabTest extends TestCase
 
         $response->assertSee('Reliable Learner');
         $response->assertSee('Missing Learner');
-        $response->assertSee('At Risk');
+        // Below the threshold is not a flag: it waits for the coordinator to
+        // confirm the record.
+        $response->assertSee('Awaiting Confirmation');
         $response->assertSee('Good');
         $response->assertSee('25%');
         // The threshold is the school's own, never written into the page.
-        $response->assertSee('below the 80% attendance threshold');
+        $response->assertSee('Attendance below 80%');
+        $this->assertSame(0, $response->viewData('atRisk')['count']);
+        $this->assertSame(1, $response->viewData('atRisk')['awaiting']);
 
         $this->institution->update(['feeding_at_risk_threshold' => 20]);
-        $this->open('?view=beneficiary')->assertOk()->assertDontSee('attendance threshold');
+        $this->open('?view=beneficiary')->assertOk()->assertDontSee('awaiting confirmation');
+
+        // Back at the school's 80%, the coordinator confirms the record — and
+        // only now is the learner flagged.
+        $this->institution->update(['feeding_at_risk_threshold' => 80]);
+        $this->confirmFlag($risky);
+        $response = $this->open('?view=beneficiary')->assertOk();
+        $response->assertSee('Flagged for Follow-Up');
+        $this->assertSame(1, $response->viewData('atRisk')['count']);
     }
 
     #[Test]
@@ -636,8 +649,16 @@ class FeedingAttendanceTabTest extends TestCase
 
         $response = $this->open('?view=beneficiary')->assertOk();
 
-        $response->assertSee('badge badge-risk', false);
+        // Classified from the third session — so the threshold is reached, and
+        // the learner waits for the coordinator's confirmation.
+        $response->assertSee('Awaiting Confirmation');
         $response->assertDontSee('currently under observation');
+        $this->assertSame(0, $response->viewData('atRisk')['count']);
+        $this->assertSame(1, $response->viewData('atRisk')['awaiting']);
+
+        $this->confirmFlag($learner);
+        $response = $this->open('?view=beneficiary')->assertOk();
+        $response->assertSee('badge badge-risk', false);
         $this->assertSame(1, $response->viewData('atRisk')['count']);
     }
 
@@ -687,10 +708,48 @@ class FeedingAttendanceTabTest extends TestCase
         $this->markRun($good, 12, 12);
         $this->markRun($risky, 12, 0);
 
+        // Before the coordinator confirms, nobody is flagged; the learner is
+        // awaiting confirmation, and that filter finds them.
+        $this->open('?view=beneficiary&standing=at_risk')->assertOk()
+            ->assertDontSee('Missing Learner')
+            ->assertDontSee('Reliable Learner');
+        $this->open('?view=beneficiary&standing=awaiting_confirmation')->assertOk()
+            ->assertSee('Missing Learner')
+            ->assertDontSee('Reliable Learner');
+
+        $this->confirmFlag($risky);
+
         $response = $this->open('?view=beneficiary&standing=at_risk')->assertOk();
 
         $response->assertSee('Missing Learner');
         $response->assertDontSee('Reliable Learner');
+    }
+
+    #[Test]
+    public function the_attendance_notices_point_the_coordinator_at_the_at_risk_tab(): void
+    {
+        // The deployment school's rule: a notice at day 3, the threshold at 7.
+        $this->institution->update(['feeding_at_risk_mode' => 'unexcused_absence_days']);
+
+        $notice = $this->makeStudent(['student_name' => 'Three Days Away']);
+        $awaiting = $this->makeStudent(['student_name' => 'Seven Days Away']);
+        $this->markRun($notice, 5, 0);
+        $this->markRun($awaiting, 9, 0);
+        // The first two sessions of the notice learner's run were attended.
+        FeedingAttendance::query()
+            ->where('student_health_record_id', $notice->id)
+            ->orderBy('session_date')
+            ->limit(2)
+            ->get()
+            ->each(fn (FeedingAttendance $row) => $row->update(['is_present' => true]));
+
+        $response = $this->open()->assertOk();
+
+        $response->assertSee('1 attendance notice to verify');
+        $response->assertSee('1 attendance record awaiting confirmation');
+        $response->assertSee(route('dashboard.feedingcor-at-risk', ['status' => 'notice']), false);
+        $response->assertSee(route('dashboard.feedingcor-at-risk', ['status' => 'awaiting_confirmation']), false);
+        $this->assertSame(0, $response->viewData('atRisk')['count']);
     }
 
     #[Test]

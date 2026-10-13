@@ -81,7 +81,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
                     School-Based Feeding Program
                 </h2>
-                <p class="pc-banner-sub">{{ $stats['at_risk'] }} at-risk &middot; {{ $stats['total'] }} learners in your class</p>
+                <p class="pc-banner-sub">{{ $stats['total'] }} learners in your class</p>
             </div>
             <div class="pc-banner-chips">
                 <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><b>{{ $stats['enrolled'] }}</b> Enrolled</span>
@@ -127,7 +127,6 @@
                         <option value="not-enrolled">Not Enrolled</option>
                         <option value="ongoing">Ongoing</option>
                         <option value="completed">Completed</option>
-                        <option value="at-risk">At-Risk</option>
                     </select>
                     <select id="feedingStatusFilter" class="ms-filter-select" aria-label="Filter by nutritional status">
                         <option value="all">All Statuses</option>
@@ -166,8 +165,7 @@
                                 data-lrn="{{ strtolower($student['lrn']) }}"
                                 data-status="{{ $statusKey }}"
                                 data-program="{{ $student['program'] }}"
-                                data-enrolled="{{ $student['eligible'] ? '1' : '0' }}"
-                                data-risk="{{ $student['at_risk'] ? '1' : '0' }}">
+                                data-enrolled="{{ $student['eligible'] ? '1' : '0' }}">
                                 <td><strong>{{ $student['lrn'] !== '' ? $student['lrn'] : '-' }}</strong></td>
                                 <td class="ms-student-name">{{ $student['name'] !== '' ? $student['name'] : '-' }}</td>
                                 <td>
@@ -180,9 +178,6 @@
                                 <td>
                                     <div class="fs-badge-stack">
                                         <span class="ms-badge {{ $programTones[$student['program']] }}">{{ $programLabels[$student['program']] }}</span>
-                                        @if ($student['at_risk'])
-                                            <span class="ms-badge fs-tone-bad">At-Risk</span>
-                                        @endif
                                     </div>
                                 </td>
                                 <td>
@@ -330,14 +325,11 @@
             const lrn = row.dataset.lrn || '';
             const keywordMatch = !keyword || name.includes(keyword) || lrn.includes(keyword);
 
-            // "Enrolled" spans both ongoing and completed learners, and
-            // "At-Risk" is an attendance flag rather than a program state, so
-            // neither can be a plain data-program comparison.
+            // "Enrolled" spans both ongoing and completed learners, so it
+            // cannot be a plain data-program comparison.
             let programMatch = true;
             if (program === 'enrolled') {
                 programMatch = row.dataset.enrolled === '1';
-            } else if (program === 'at-risk') {
-                programMatch = row.dataset.risk === '1';
             } else if (program !== 'all') {
                 programMatch = (row.dataset.program || '') === program;
             }

@@ -49,6 +49,7 @@ use App\Support\AccountSettings;
 use App\Support\AuditTrail;
 use App\Support\ClinicDashboard;
 use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchoolPulse;
 use App\Support\StudentRosterSync;
@@ -261,7 +262,7 @@ Route::get('/dashboard/school-nurse', function (Request $request) {
     // Four cards, this month's conditions, the stock monitor and the recent
     // visits — one reading, shared with the Clinic Teacher's dashboard, which
     // is this same screen in that role's rail.
-    return view('dashboard.school-nurse', ClinicDashboard::read($institutionId ? (int) $institutionId : null));
+    return view('dashboard.school-nurse', ClinicDashboard::read($institutionId ? (int) $institutionId : null, (string) $request->session()->get('active_role', '')));
 })->name('dashboard.school-nurse');
 
 Route::get('/dashboard/student-health-records', function () {
@@ -523,8 +524,11 @@ Route::get('/dashboard/clinic-staff', function (Request $request) {
 
     $institutionId = session('active_institution_id');
     $atRiskStudents = collect();
+    // The flag is the Feeding Coordinator's and the School Nurse's alone, so
+    // Clinic Staff on this page are never handed it.
+    $showFlags = FeedingAttendanceFlag::visibleTo($role);
 
-    if (Schema::hasTable('student_health_records')) {
+    if ($showFlags && Schema::hasTable('student_health_records')) {
         $q = StudentHealthRecord::query()->where('is_at_risk', true);
         if ($institutionId) {
             $q->where('institution_id', $institutionId);
@@ -576,6 +580,7 @@ Route::get('/dashboard/clinic-staff', function (Request $request) {
 
     return view('dashboard.clinic-staff', [
         'atRiskStudents' => $atRiskStudents,
+        'showFlags' => $showFlags,
         'consultations' => $consultations,
         'medicines' => $medicines,
         'stats' => [
@@ -777,9 +782,10 @@ Route::get('/dashboard/feedingcor-attendance/metrics', [FeedingAttendanceControl
 Route::get('/dashboard/feedingcor-attendance/export', [FeedingAttendanceController::class, 'export'])
     ->name('dashboard.feedingcor-attendance.export');
 
-// At-Risk Students: which beneficiaries are below the school's own attendance
-// threshold, why, and who needs following up. It reads the marks the Attendance
-// tab wrote and never writes one of its own.
+// At-Risk Students: the attendance flow the capstone adviser set — a notice to
+// verify the record at day 3 of unexcused absence in a row, the flag threshold
+// at day 7, and a flag for follow-up only once the coordinator has confirmed
+// the record. It never records a session of its own.
 Route::get('/dashboard/feedingcor-at-risk', [FeedingAtRiskController::class, 'index'])
     ->name('dashboard.feedingcor-at-risk');
 
@@ -796,6 +802,13 @@ Route::get('/dashboard/feedingcor-at-risk/export', [FeedingAtRiskController::cla
 // not turning up. Scoped, audited, encrypted — and never an enrolment change.
 Route::post('/dashboard/feedingcor-at-risk/follow-up', [FeedingAtRiskController::class, 'storeFollowUp'])
     ->name('feedingcor-at-risk.follow-up.store');
+
+// The coordinator's word that a learner's attendance record is correct — at the
+// notice (verified, flags nobody) or at the threshold (confirmed, flags the
+// learner for follow-up). The stage is decided server-side; enrolment is never
+// touched.
+Route::post('/dashboard/feedingcor-at-risk/confirm', [FeedingAtRiskController::class, 'confirmAttendance'])
+    ->name('feedingcor-at-risk.confirm');
 
 Route::get('/dashboard/feedingcor-sbfp-forms', [FeedingCoordinatorController::class, 'sbfpForms'])
     ->name('dashboard.feedingcor-sbfp-forms');
@@ -1108,7 +1121,7 @@ Route::get('/dashboard/clinic-teacher', function (Request $request) {
 
     $institutionId = $request->session()->get('active_institution_id');
 
-    return view('dashboard.school-nurse', ClinicDashboard::read($institutionId ? (int) $institutionId : null));
+    return view('dashboard.school-nurse', ClinicDashboard::read($institutionId ? (int) $institutionId : null, (string) $request->session()->get('active_role', '')));
 })->name('dashboard.clinic-teacher');
 
 Route::get('/dashboard/clinic-teacher/nutritional-status', [SchoolHeadMasterlistController::class, 'index'])
@@ -1227,8 +1240,8 @@ Route::get('/dashboard/system-admin', function () {
     $policyColumns = array_merge(['feeding_at_risk_threshold'], array_values(array_filter([
         'feeding_min_observation_days',
         'feeding_at_risk_mode',
+        'feeding_absence_notice_days',
         'feeding_absence_flag_days',
-        'feeding_absence_removal_days',
         'feeding_cycle_days',
     ], fn (string $column): bool => Schema::hasColumn('institutions', $column))));
 
@@ -1264,15 +1277,15 @@ Route::get('/dashboard/system-admin', function () {
         'defaultAtRiskThreshold' => FeedingAtRiskRule::fromConfig()->thresholdPercent(),
         'defaultMinObservationDays' => FeedingAtRiskRule::fromConfig()->minimumObservationDays(),
         'defaultAtRiskMode' => FeedingAtRiskRule::fromConfig()->mode(),
+        'defaultAbsenceNoticeDays' => FeedingAtRiskRule::fromConfig()->absenceNoticeDays(),
         'defaultAbsenceFlagDays' => FeedingAtRiskRule::fromConfig()->absenceFlagDays(),
-        'defaultAbsenceRemovalDays' => FeedingAtRiskRule::fromConfig()->absenceRemovalDays(),
         'defaultCycleDays' => FeedingProgramCycle::durationForInstitution(null),
         // Which rules a school may be set to, named the way the form should
         // read them. Read off the class, never re-typed, so a mode added there
         // cannot go missing here.
         'atRiskModes' => [
             FeedingAtRiskRule::MODE_ATTENDANCE_RATE => 'Cumulative attendance below the threshold',
-            FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS => 'A run of unexcused absences (one feeding week)',
+            FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS => 'A run of unexcused absences',
             FeedingAtRiskRule::MODE_CONSECUTIVE_ABSENCES => 'A run of absences of any kind',
         ],
     ]);
@@ -1281,18 +1294,18 @@ Route::get('/dashboard/system-admin', function () {
 /**
  * Sets one school's feeding policy.
  *
- * Five settings, and they are all local policy rather than platform constants:
+ * Six settings, and they are all local policy rather than platform constants:
  *
- *   mode                    WHICH rule the school runs. Sta. Ana does not run a
- *                           percentage at all — a beneficiary there is flagged
- *                           after one week of unexcused absence — so the kind of
- *                           rule has to be settable, not only the figure it is
- *                           set to.
+ *   mode                    WHICH rule reaches the flag threshold. Sta. Ana
+ *                           does not run a percentage at all — it runs a run of
+ *                           unexcused absences — so the kind of rule has to be
+ *                           settable, not only the figure it is set to.
  *   threshold               how much attendance is enough (rate mode)
- *   observation period      how much recorded history the rule needs first
- *   absence flag days       the run that flags (one feeding week)
- *   absence removal days    the run at which removal is worth reviewing with
- *                           the class adviser — never an automatic removal
+ *   observation period      how much recorded history a rate needs first
+ *   absence notice days     the run that raises the attendance notice — the
+ *                           coordinator verifies the record; nobody is flagged
+ *   absence flag days       the run that reaches the flag threshold — the
+ *                           learner is flagged once the coordinator confirms
  *   cycle days              the mandated cycle length: 120 in Division policy,
  *                           90 under discussion, and a school whose Division
  *                           settles on either must be able to say so
@@ -1315,14 +1328,31 @@ Route::post('/dashboard/system-admin/institutions/{institution}/at-risk-threshol
         // 0 is a real answer: classify from the very first confirmed session.
         'minimum_observation_days' => ['nullable', 'integer', 'min:0', 'max:120'],
         'at_risk_mode' => ['nullable', Rule::in(FeedingAtRiskRule::MODES)],
+        'absence_notice_days' => ['nullable', 'integer', 'min:1', 'max:60'],
         'absence_flag_days' => ['nullable', 'integer', 'min:1', 'max:60'],
-        'absence_removal_days' => ['nullable', 'integer', 'min:1', 'max:120'],
         'cycle_days' => ['nullable', 'integer', 'min:1', 'max:365'],
     ]);
 
     $school = Institution::query()->find($institution);
     if (! $school) {
         return back()->with('error', 'That school is no longer on file.');
+    }
+
+    // The notice exists to come before the flag. A notice set at or past the
+    // flag would never be seen — the learner would go straight to awaiting
+    // confirmation — so the pair is checked as the school would run it, with
+    // anything not posted read from what the school already has.
+    $effective = function (string $field, string $column, int $default) use ($request, $validated, $school): int {
+        $value = $request->has($field)
+            ? ($validated[$field] ?? null)
+            : (Schema::hasColumn('institutions', $column) ? $school->getAttribute($column) : null);
+
+        return ($value === null || $value === '') ? $default : (int) $value;
+    };
+    $noticeDays = $effective('absence_notice_days', 'feeding_absence_notice_days', FeedingAtRiskRule::fromConfig()->absenceNoticeDays());
+    $flagDays = $effective('absence_flag_days', 'feeding_absence_flag_days', FeedingAtRiskRule::fromConfig()->absenceFlagDays());
+    if ($noticeDays >= $flagDays) {
+        return back()->with('error', 'The attendance notice must come before the flag: set it to fewer absences than "Flag after".');
     }
 
     $changes = [];
@@ -1361,8 +1391,8 @@ Route::post('/dashboard/system-admin/institutions/{institution}/at-risk-threshol
     // replaced.
     $optional = [
         'at_risk_mode' => ['feeding_at_risk_mode', 'at-risk rule', null],
+        'absence_notice_days' => ['feeding_absence_notice_days', 'unexcused absences before the attendance notice', 'feeding sessions'],
         'absence_flag_days' => ['feeding_absence_flag_days', 'unexcused absences before flagging', 'feeding sessions'],
-        'absence_removal_days' => ['feeding_absence_removal_days', 'unexcused absences before removal review', 'feeding sessions'],
         'cycle_days' => ['feeding_cycle_days', 'cycle length', 'feeding days'],
     ];
 

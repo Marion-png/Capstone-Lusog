@@ -206,16 +206,19 @@
 					<option value="not_eligible" @selected($filters['standing'] === 'not_eligible')>Not a beneficiary</option>
 				</select>
 			</div>
+			{{-- Who is flagged for follow-up is the coordinator's and the
+			     School Nurse's to see; nobody else is offered the filter. --}}
+			@if ($showFlags)
 			<div class="sh-filter">
 				<label class="field-label" for="mlAttendance">Attendance</label>
 				<select class="select" name="attendance" id="mlAttendance">
 					<option value="">All</option>
-					<option value="at_risk" @selected($filters['attendance'] === 'at_risk')>At Risk</option>
-					<option value="early_monitoring" @selected($filters['attendance'] === 'early_monitoring')>Early monitoring</option>
-					<option value="on_track" @selected($filters['attendance'] === 'on_track')>On track</option>
+					<option value="at_risk" @selected($filters['attendance'] === 'at_risk')>Flagged for follow-up</option>
+					<option value="on_track" @selected($filters['attendance'] === 'on_track')>Not flagged</option>
 					<option value="no_sessions" @selected($filters['attendance'] === 'no_sessions')>No confirmed session</option>
 				</select>
 			</div>
+			@endif
 
 			{{-- No-JS fallback: without it the selects would be unreachable
 			     controls on a page that never reloads. --}}
@@ -454,9 +457,13 @@
 							{{-- Feeding days no sheet covered this learner. Named on
 							     its own, never counted as an absence. --}}
 							<div class="sh-fact"><dt>Not marked</dt><dd>{{ $row['not_marked'] }}</dd></div>
-							<div class="sh-fact"><dt>Standing</dt><dd>{{ $row['attendance_label'] }}</dd></div>
+							@if ($showFlags)
+								<div class="sh-fact"><dt>Standing</dt><dd>{{ $row['attendance_label'] }}</dd></div>
+							@endif
 						</dl>
-						<p class="sh-panel-note">{{ $rule }}.</p>
+						@if ($showFlags)
+							<p class="sh-panel-note">{{ $rule }}.</p>
+						@endif
 					</section>
 				</div>
 				@endif

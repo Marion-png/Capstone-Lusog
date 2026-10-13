@@ -50,7 +50,7 @@
 			<article class="card kpi {{ $summary['at_risk'] ? 'accent-orange' : 'accent-brand' }}">
 				<div class="kpi-top"><div class="kpi-label">Attendance</div></div>
 				<div class="kpi-value">{{ !is_null($summary['rate']) ? number_format((float) $summary['rate'], 0).'%' : '—' }}</div>
-				<div class="kpi-hint">{{ $summary['at_risk'] ? 'Below '.$thresholdLabel.'% threshold' : 'At or above '.$thresholdLabel.'%' }}</div>
+				<div class="kpi-hint">{{ $summary['standing']['label'] }}</div>
 			</article>
 			<article class="card kpi accent-info">
 				<div class="kpi-top"><div class="kpi-label">Days Present</div></div>

@@ -7,6 +7,7 @@ use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ConfirmsFeedingFlags;
 use Tests\TestCase;
 
 /**
@@ -27,7 +28,7 @@ use Tests\TestCase;
  */
 class FeedingProgramPageTest extends TestCase
 {
-    use RefreshDatabase;
+    use ConfirmsFeedingFlags, RefreshDatabase;
 
     private Institution $institution;
 
@@ -98,6 +99,7 @@ class FeedingProgramPageTest extends TestCase
         foreach (range(1, 12) as $offset) {
             $this->mark($record, now()->subDays($offset)->toDateString(), $offset <= 8);
         }
+        $this->confirmFlag($record);
 
         $response = $this->page()->assertOk();
 
@@ -117,7 +119,7 @@ class FeedingProgramPageTest extends TestCase
     }
 
     #[Test]
-    public function the_at_risk_list_follows_the_schools_threshold_without_an_import(): void
+    public function the_nurse_sees_a_flag_only_once_the_coordinator_confirms_it(): void
     {
         $record = $this->makeStudent(['student_name' => 'Halfway Learner']);
         // Ten sessions, five attended: 50%, and past the observation window.
@@ -125,17 +127,41 @@ class FeedingProgramPageTest extends TestCase
             $this->mark($record, now()->subDays($offset)->toDateString(), $offset <= 5);
         }
 
-        // 50% is under the 80% default, so the learner is flagged...
-        $this->page()->assertOk()->assertSee('1 at-risk beneficiaries detected');
+        // 50% is under the 80% default — but reaching the threshold is the
+        // coordinator's to confirm, and nothing is flagged before they do.
+        $this->page()->assertOk()
+            ->assertDontSee('1 beneficiary flagged for follow-up')
+            ->assertSee('No beneficiary is flagged for follow-up right now.');
 
-        // ...and lifting the school's threshold below their rate clears them at
-        // once, rather than waiting for the next import to rewrite is_at_risk.
-        $this->institution->update(['feeding_at_risk_threshold' => 40]);
+        $this->confirmFlag($record);
 
         $response = $this->page()->assertOk();
-        $response->assertDontSee('at-risk beneficiaries detected');
+        $response->assertSee('1 beneficiary flagged for follow-up');
+        $response->assertSee('At-Risk Beneficiaries');
+        $response->assertSee('Flagged On');
         // The page prints the school's rule, never a constant of its own.
         $response->assertDontSee('below 75%');
+    }
+
+    #[Test]
+    public function the_clinic_teacher_reads_the_page_without_the_flag(): void
+    {
+        $record = $this->makeStudent(['student_name' => 'Flagged Learner']);
+        foreach (range(1, 10) as $offset) {
+            $this->mark($record, now()->subDays($offset)->toDateString(), $offset <= 5);
+        }
+        $this->confirmFlag($record);
+
+        $response = $this->withSession(['active_role' => 'clinic_teacher'] + $this->coordinatorSession())
+            ->get('/dashboard/clinic-teacher/feeding-program')
+            ->assertOk();
+
+        // The roll is still there; who is flagged is not.
+        $response->assertSee('Flagged Learner');
+        $response->assertDontSee('flagged for follow-up');
+        $response->assertDontSee('At-Risk Beneficiaries');
+        $response->assertDontSee('id="atRiskSection"', false);
+        $this->assertCount(0, $response->viewData('atRiskStudents'));
     }
 
     #[Test]
@@ -147,6 +173,7 @@ class FeedingProgramPageTest extends TestCase
         foreach (range(1, 10) as $offset) {
             $this->mark($record, now()->subDays($offset)->toDateString(), $offset <= 5);
         }
+        $this->confirmFlag($record);
 
         $response = $this->page()->assertOk();
 

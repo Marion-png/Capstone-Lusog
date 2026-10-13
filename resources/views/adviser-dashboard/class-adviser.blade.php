@@ -439,7 +439,7 @@
                                     $middleInitial = $middle !== '' ? (' ' . strtoupper(substr($middle, 0, 1)) . '.') : '';
                                     $fullName = trim(($prototypeRecord['last_name'] ?? '') . ', ' . ($prototypeRecord['first_name'] ?? '') . $middleInitial);
                                     $rowLrn = (string) ($prototypeRecord['lrn'] ?? '');
-                                    $meta = $rosterMeta[$rowLrn] ?? ['has_assessment' => false, 'consent' => 'pending', 'at_risk' => false, 'programme_complete' => false, 'completion_outstanding' => ''];
+                                    $meta = $rosterMeta[$rowLrn] ?? ['has_assessment' => false, 'consent' => 'pending', 'programme_complete' => false, 'completion_outstanding' => ''];
                                     $isExamined = !empty($prototypeRecord['examination']);
                                     // Complete means the feeding programme closed this card out:
                                     // 120 days done, endline recorded, and — for a beneficiary —
@@ -1206,7 +1206,7 @@ window.switchAdviserTab = (targetId) => {
         saved: 'prototype-saved-panel',
         form: 'prototype-form-panel',
     };
-    // ?tab=form is reached from My Students, so the rail keeps that lit.
+    // The form tab is reached from My Students, so the rail keeps that lit.
     const RAIL_FOR = { '': 'dashboard', saved: 'students', form: 'students' };
     const isPanelKey = (key) => Object.prototype.hasOwnProperty.call(PANEL_FOR, key);
 

@@ -5,6 +5,9 @@ namespace Tests\Feature;
 use App\Models\FeedingAttendance;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
+use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingAttendanceFlag;
+use App\Support\RequestMemo;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use PHPUnit\Framework\Attributes\Test;
@@ -107,11 +110,16 @@ class FeedingAttendanceImportTest extends TestCase
         // 3 learners × 3 sessions.
         $this->assertSame(9, FeedingAttendance::count());
 
-        // At-risk is decided purely by attendance, against the school's
-        // threshold (the app default, 80%, for a school that has set none).
-        $this->assertTrue($bautista->fresh()->is_at_risk, '0/3 present should be at-risk');
-        $this->assertFalse($cruz->fresh()->is_at_risk, '3/3 present should not be at-risk');
-        $this->assertTrue($delos->fresh()->is_at_risk, '2/3 = 66% should be at-risk');
+        // The threshold is decided purely by attendance, against the school's
+        // own figure (the app default, 80%, for a school that has set none) —
+        // and reaching it waits for the coordinator's confirmation: an upload
+        // flags nobody.
+        $this->assertTrue($this->reachedThreshold($bautista), '0/3 present should reach the threshold');
+        $this->assertFalse($this->reachedThreshold($cruz), '3/3 present should not');
+        $this->assertTrue($this->reachedThreshold($delos), '2/3 = 66% should reach the threshold');
+        foreach ([$bautista, $cruz, $delos] as $learner) {
+            $this->assertFalse((bool) $learner->fresh()->is_at_risk, 'An upload never flags a learner on its own.');
+        }
     }
 
     #[Test]
@@ -170,8 +178,24 @@ class FeedingAttendanceImportTest extends TestCase
             'Present/Absent/Attendance do not add up to the uploaded sheet: '.$row
         );
 
-        // The at-risk flag still weighs only sessions that have happened.
-        $this->assertTrue($bautista->fresh()->is_at_risk);
+        // The threshold still weighs only sessions that have happened.
+        $this->assertTrue($this->reachedThreshold($bautista));
+    }
+
+    /**
+     * Whether the learner's marks have reached the school's flag threshold —
+     * awaiting the coordinator's confirmation, which is the most an upload can
+     * do. Read the way every screen reads it.
+     */
+    private function reachedThreshold(StudentHealthRecord $record): bool
+    {
+        RequestMemo::flush();
+        $record = $record->fresh();
+
+        return FeedingAttendanceFlag::forRecords(
+            collect([$record]),
+            FeedingAtRiskRule::forInstitution($this->institution->id)
+        )[$record->id]['threshold_reached'];
     }
 
     private function today(): string
@@ -313,7 +337,7 @@ class FeedingAttendanceImportTest extends TestCase
             ->assertRedirect();
 
         $this->assertSame(1, FeedingAttendance::where('student_health_record_id', $student->id)->count());
-        $this->assertTrue($student->fresh()->is_at_risk);
+        $this->assertTrue($this->reachedThreshold($student));
     }
 
     #[Test]
@@ -458,8 +482,8 @@ class FeedingAttendanceImportTest extends TestCase
             ->assertRedirect();
 
         $this->assertSame(6, FeedingAttendance::count()); // 2 learners × 3 sessions
-        $this->assertTrue($absent->fresh()->is_at_risk);
-        $this->assertFalse($present->fresh()->is_at_risk);
+        $this->assertTrue($this->reachedThreshold($absent));
+        $this->assertFalse($this->reachedThreshold($present));
     }
 
     #[Test]

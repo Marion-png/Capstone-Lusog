@@ -19,11 +19,13 @@
 		$t['rate'] < $atRisk['threshold'] => 'accent-orange',
 		default => 'accent-success',
 	};
-	// The at-risk card stays quiet while the observation window is still
-	// holding everyone back — nobody is flagged, so nothing is wrong yet.
+	// Flagged learners are the alarm; a record awaiting the coordinator's
+	// confirmation is the amber step before it. Nobody flagged and nothing
+	// waiting means nothing is wrong yet.
 	$riskAccent = match (true) {
 		$atRisk['count'] > 0 => 'accent-danger',
-		$atRisk['observing'] > 0 => 'accent-info',
+		$atRisk['awaiting'] > 0 => 'accent-amber',
+		$atRisk['observing'] > 0 || $atRisk['notices'] > 0 => 'accent-info',
 		default => 'accent-success',
 	};
 @endphp
@@ -73,14 +75,16 @@
 		<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div>
 	</div>
 	<div class="kpi-value">{{ $atRisk['count'] }}</div>
-	{{-- Learners the observation window is still holding back are named here
-	     rather than added to the figure above: they are unclassified, not
-	     flagged, and the two must never be summed. --}}
+	{{-- Flagged means confirmed. Learners awaiting that confirmation, and
+	     those a rate is still observing, are named here rather than added to
+	     the figure above — none of them has been flagged. --}}
 	<div class="kpi-hint">
-		@if ($atRisk['observing'] > 0)
+		@if ($atRisk['awaiting'] > 0)
+			{{ $atRisk['awaiting'] }} awaiting confirmation
+		@elseif ($atRisk['observing'] > 0)
 			{{ $atRisk['observing'] }} in early monitoring
 		@else
-			Below {{ $atRisk['thresholdLabel'] }}% attendance
+			Flag at {{ $atRisk['thresholdLabel'] }}
 		@endif
 	</div>
 </article>

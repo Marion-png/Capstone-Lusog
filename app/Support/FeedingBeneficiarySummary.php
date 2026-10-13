@@ -262,6 +262,29 @@ final class FeedingBeneficiarySummary
         // the roll itself, so a different set of learners is a different read.
         return RequestMemo::remember(
             'feeding:marks:'.md5($ids->implode(',')),
+            fn (): Collection => self::datedMarksByRecord($beneficiaries)
+                ->map(fn (array $marks): array => array_column($marks, 'mark')),
+        );
+    }
+
+    /**
+     * The same marks with the session date each was taken on — what the
+     * attendance flag needs to know which run a confirmation covered. It is
+     * the one read behind marksByRecord(), so asking for both costs one query.
+     *
+     * @param  Collection<int, StudentHealthRecord>  $beneficiaries
+     * @return Collection<int, list<array{date: string, mark: bool|null}>>
+     */
+    public static function datedMarksByRecord(Collection $beneficiaries): Collection
+    {
+        if ($beneficiaries->isEmpty() || ! SchemaCache::hasTable('feeding_attendances')) {
+            return collect();
+        }
+
+        $ids = $beneficiaries->pluck('id')->filter()->sort()->values();
+
+        return RequestMemo::remember(
+            'feeding:marks:dated:'.md5($ids->implode(',')),
             fn (): Collection => self::readMarksByRecord($ids),
         );
     }
@@ -278,7 +301,7 @@ final class FeedingBeneficiarySummary
 
     /**
      * @param  Collection<int, int>  $ids
-     * @return Collection<int, list<bool|null>>
+     * @return Collection<int, list<array{date: string, mark: bool|null}>>
      */
     private static function readMarksByRecord(Collection $ids): Collection
     {
@@ -297,15 +320,18 @@ final class FeedingBeneficiarySummary
             ->groupBy('student_health_record_id')
             // Before the review migration every mark is confirmed by definition,
             // and before the excused migration none of them is excused.
-            ->map(fn ($rows) => $rows->map(fn ($row) => FeedingAttendanceMark::forRule($row))->all());
+            ->map(fn ($rows) => $rows->map(fn ($row): array => [
+                'date' => (string) optional($row->session_date)->toDateString(),
+                'mark' => FeedingAttendanceMark::forRule($row),
+            ])->values()->all());
     }
 
     /**
      * The five headline figures for a roll of beneficiaries already chosen.
      *
-     * At-risk is computed live from the school's current threshold rather than
-     * read off the stored is_at_risk column, so changing the threshold shows at
-     * once instead of waiting for the next import to recompute the flags.
+     * At-risk is the learners FLAGGED for follow-up — the threshold reached AND
+     * the coordinator's confirmation on record (FeedingAttendanceFlag) — read
+     * live rather than off the stored is_at_risk column.
      *
      * @param  Collection<int, StudentHealthRecord>  $beneficiaries
      * @return array{beneficiaries: int, severely_wasted: int, wasted: int, at_risk: int, attendance_rate: ?int, attendance_sessions: int, at_risk_rule: string, at_risk_threshold_label: string, at_risk_threshold: float}
@@ -313,6 +339,9 @@ final class FeedingBeneficiarySummary
     public static function tally(Collection $beneficiaries, FeedingAtRiskRule $rule): array
     {
         $marksByRecord = self::marksByRecord($beneficiaries);
+        // Flagged, not "threshold reached": a learner is at risk only once the
+        // coordinator has confirmed their record (FeedingAttendanceFlag).
+        $flags = FeedingAttendanceFlag::forRecords($beneficiaries, $rule);
 
         $confirmedSessions = 0;
         $presentSessions = 0;
@@ -335,7 +364,7 @@ final class FeedingBeneficiarySummary
             $confirmedSessions += count(array_filter($marks, static fn ($mark) => $mark !== null));
             $presentSessions += $rule->presentCount($marks);
 
-            if ($rule->isAtRisk($marks)) {
+            if ($flags[$record->id]['flagged'] ?? false) {
                 $atRisk++;
             }
         }
@@ -445,15 +474,18 @@ final class FeedingBeneficiarySummary
     public static function attendanceStandings(Collection $beneficiaries, FeedingAtRiskRule $rule): array
     {
         $marksByRecord = self::marksByRecord($beneficiaries);
+        $flags = FeedingAttendanceFlag::forRecords($beneficiaries, $rule);
         $standings = [];
 
         foreach ($beneficiaries as $record) {
             $marks = $marksByRecord->get($record->id, []);
             $rate = $rule->attendanceRate($marks);
+            $flag = $flags[$record->id] ?? null;
 
             $standings[$record->id] = [
                 'rate' => $rate === null ? null : (int) round($rate),
-                'at_risk' => $rule->isAtRisk($marks),
+                'at_risk' => (bool) ($flag['flagged'] ?? false),
+                'state' => (string) ($flag['state'] ?? FeedingAttendanceFlag::ON_TRACK),
             ];
         }
 

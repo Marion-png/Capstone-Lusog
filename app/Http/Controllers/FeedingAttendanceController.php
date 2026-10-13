@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\FeedingAttendance;
 use App\Models\StudentHealthRecord;
 use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
@@ -95,7 +96,7 @@ class FeedingAttendanceController extends Controller
     private const MARK_FILTERS = FeedingAttendanceMark::RECORDABLE;
 
     /** What the Standing control can ask — a verdict across the programme. */
-    private const STANDING_FILTERS = ['at_risk', 'early_monitoring'];
+    private const STANDING_FILTERS = ['at_risk', 'awaiting_confirmation', 'notice', 'early_monitoring'];
 
     public function index(Request $request): View|RedirectResponse
     {
@@ -474,11 +475,20 @@ class FeedingAttendanceController extends Controller
             && ($window['start'] === null || $selectedDate >= $window['start']);
 
         $standings = $this->standings($beneficiaries, $byRecord, $rule, count($sessionDates));
+        // Flagged learners only: the threshold reached AND the record confirmed
+        // by the coordinator. Those awaiting confirmation and those under an
+        // attendance notice are reported as their own figures, never added.
         $atRiskCount = collect($standings)->where('at_risk', true)->count();
-        // Learners the threshold has not started classifying yet. They are
-        // deliberately not added to the at-risk count — that is the whole point
-        // of the observation window — and are reported as their own figure.
-        $observingCount = collect($standings)->where('status', FeedingAtRiskRule::STATUS_EARLY_MONITORING)->count();
+        $awaitingCount = collect($standings)->where('status', FeedingAttendanceFlag::AWAITING_CONFIRMATION)->count();
+        $noticeCount = collect($standings)
+            ->where('status', FeedingAttendanceFlag::NOTICE)
+            ->where('notice_verified', false)
+            ->count();
+        // Learners a rate has not started classifying yet. Only a rate waits on
+        // an observation window; a run of absences is its own evidence.
+        $observingCount = $rule->usesObservationWindow()
+            ? collect($standings)->where('status', FeedingAttendanceFlag::EARLY_MONITORING)->count()
+            : 0;
 
         $cumulative = $this->cumulative($marks);
         $todayTally = $this->tally($rows);
@@ -561,8 +571,11 @@ class FeedingAttendanceController extends Controller
             'lockedMarkCount' => $filteredRows->where('locked', true)->count(),
             'atRisk' => [
                 'count' => $atRiskCount,
+                'awaiting' => $awaitingCount,
+                'notices' => $noticeCount,
                 'threshold' => $rule->thresholdPercent(),
-                'thresholdLabel' => rtrim(rtrim(number_format($rule->thresholdPercent(), 1), '0'), '.'),
+                'thresholdLabel' => $rule->thresholdLabel(),
+                'noticeLabel' => $rule->noticeLabel(),
                 'rule' => $rule->describe(),
                 // The observation window: how many learners it is still holding
                 // back, and what it is set to for this school.
@@ -683,6 +696,9 @@ class FeedingAttendanceController extends Controller
     private function standings(Collection $beneficiaries, Collection $byRecord, FeedingAtRiskRule $rule, int $sessionCount): array
     {
         $standings = [];
+        // What the coordinator has already confirmed, for the whole roll in
+        // one read — the other half of the flag.
+        $histories = FeedingAttendanceFlag::historiesFor($beneficiaries->pluck('id'));
 
         foreach ($beneficiaries as $record) {
             $rows = $byRecord->get($record->id, collect());
@@ -700,6 +716,18 @@ class FeedingAttendanceController extends Controller
             $present = $rule->presentCount($marks);
             $confirmed = $rule->confirmedCount($marks);
             $excused = $rows->where('status', FeedingAttendanceMark::EXCUSED)->count();
+            $flag = FeedingAttendanceFlag::evaluate(
+                $rows->map(fn (array $row): array => [
+                    'date' => $row['date'],
+                    'mark' => match ($row['status']) {
+                        FeedingAttendanceMark::PRESENT => true,
+                        FeedingAttendanceMark::ABSENT => false,
+                        default => null,
+                    },
+                ])->values()->all(),
+                $rule,
+                $histories[$record->id] ?? []
+            );
 
             $standings[$record->id] = [
                 'present' => $present,
@@ -712,14 +740,16 @@ class FeedingAttendanceController extends Controller
                 'unconfirmed' => count($marks) - $confirmed - $excused,
                 'not_marked' => max(0, $sessionCount - count($marks)),
                 'rate' => $rule->attendanceRate($marks),
-                'at_risk' => $rule->isAtRisk($marks),
-                'status' => $rule->status($marks),
+                // Flagged only once the coordinator confirmed the record.
+                'at_risk' => $flag['flagged'],
+                'status' => $flag['state'],
+                'status_label' => $flag['label'],
+                'status_badge' => $flag['badge'],
+                'notice_verified' => $flag['notice_verified'],
                 'sessions_needed' => $rule->sessionsUntilClassification($marks),
-                // The run the unexcused-absence rule judges on, and whether it
-                // has reached the school's removal-review point. Reported here,
-                // never acted on.
-                'absence_run' => $rule->currentAbsenceRun($marks),
-                'needs_removal_review' => $rule->needsRemovalReview($marks),
+                // The run of unexcused absences the flow reads. Reported here,
+                // never acted on: nothing changes the learner's enrolment.
+                'absence_run' => $flag['run'],
             ];
         }
 
@@ -809,8 +839,10 @@ class FeedingAttendanceController extends Controller
     ): array {
         $blank = [
             'present' => 0, 'absent' => 0, 'confirmed' => 0, 'excused' => 0, 'unconfirmed' => 0, 'not_marked' => 0,
-            'rate' => null, 'at_risk' => false, 'status' => FeedingAtRiskRule::STATUS_EARLY_MONITORING,
-            'sessions_needed' => 0, 'absence_run' => 0, 'needs_removal_review' => false,
+            'rate' => null, 'at_risk' => false, 'status' => FeedingAttendanceFlag::EARLY_MONITORING,
+            'status_label' => FeedingAttendanceFlag::label(FeedingAttendanceFlag::EARLY_MONITORING),
+            'status_badge' => FeedingAttendanceFlag::badge(FeedingAttendanceFlag::EARLY_MONITORING),
+            'notice_verified' => false, 'sessions_needed' => 0, 'absence_run' => 0,
         ];
 
         return $beneficiaries
@@ -846,9 +878,10 @@ class FeedingAttendanceController extends Controller
                     'rate' => $standing['rate'],
                     'at_risk' => $standing['at_risk'],
                     'status' => $standing['status'],
+                    'status_label' => $standing['status_label'],
+                    'status_badge' => $standing['status_badge'],
                     'sessions_needed' => $standing['sessions_needed'],
                     'absence_run' => $standing['absence_run'],
-                    'needs_removal_review' => $standing['needs_removal_review'],
                     // Every mark this learner carries, keyed by session date —
                     // what the history dialog reads when the row is opened. It
                     // is the same reading the counts beside it came from, so
@@ -880,13 +913,14 @@ class FeedingAttendanceController extends Controller
                 $filters['status'] !== '',
                 fn (Collection $rows) => $rows->where('session_status', $filters['status'])
             )
-            // "View At-Risk Beneficiaries" lands here with the flag already on.
+            // "At risk" is the flag — confirmed learners only.
             ->when($filters['standing'] === 'at_risk', fn (Collection $rows) => $rows->where('at_risk', true))
-            // The learners the observation window is still holding back — who a
-            // coordinator asking "why is nobody flagged yet?" is looking for.
+            // The other standings narrow to exactly the learners in them: a
+            // record awaiting confirmation, an attendance notice, or a rate
+            // still inside its observation window.
             ->when(
-                $filters['standing'] === 'early_monitoring',
-                fn (Collection $rows) => $rows->where('status', FeedingAtRiskRule::STATUS_EARLY_MONITORING)
+                in_array($filters['standing'], ['awaiting_confirmation', 'notice', 'early_monitoring'], true),
+                fn (Collection $rows) => $rows->where('status', $filters['standing'])
             )
             ->values()
             ->all();

@@ -8,6 +8,7 @@ use App\Models\StudentHealthRecord;
 use App\Support\FeedingAtRiskRule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ConfirmsFeedingFlags;
 use Tests\TestCase;
 
 /**
@@ -21,7 +22,7 @@ use Tests\TestCase;
  */
 class FeedingBeneficiaryCardsTest extends TestCase
 {
-    use RefreshDatabase;
+    use ConfirmsFeedingFlags, RefreshDatabase;
 
     private Institution $institution;
 
@@ -156,7 +157,16 @@ class FeedingBeneficiaryCardsTest extends TestCase
         $this->assertSame(2, $summary['wasted'], 'Underweight is folded into Wasted.');
         $this->assertSame(24, $summary['attendance_sessions']);
         $this->assertSame(33, $summary['attendance_rate'], '8 present of 24 confirmed marks.');
-        $this->assertSame(2, $summary['at_risk'], 'Both fed learners are under the 80% threshold.');
+        $this->assertSame(0, $summary['at_risk'], 'Under the threshold is not a flag until the coordinator confirms the record.');
+
+        $this->confirmFlag($severe);
+        $this->confirmFlag($wasted);
+
+        $summary = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records')
+            ->viewData('beneficiarySummary');
+
+        $this->assertSame(2, $summary['at_risk'], 'Both fed learners are confirmed and flagged.');
     }
 
     /**
@@ -410,6 +420,7 @@ class FeedingBeneficiaryCardsTest extends TestCase
         foreach (range(1, 12) as $day) {
             $this->markAttendance($flagged, now()->subDays(13 - $day)->toDateString(), $day <= 3);
         }
+        $this->confirmFlag($flagged);
 
         // All Students is the whole roll — the Normal learner who will never be
         // a beneficiary included, because they are still the school's child.
@@ -556,6 +567,11 @@ class FeedingBeneficiaryCardsTest extends TestCase
         foreach (range(1, 12) as $day) {
             $this->markAttendance($learner, now()->subDays(13 - $day)->toDateString(), $day % 2 === 0);
         }
+
+        // Under the threshold waits for the coordinator; once the record is
+        // confirmed, the row carries the flag.
+        $this->assertStringNotContainsString('At Risk', $this->tableBody());
+        $this->confirmFlag($learner);
 
         $body = $this->tableBody();
 
@@ -867,11 +883,11 @@ class FeedingBeneficiaryCardsTest extends TestCase
             ->get('/dashboard/feedingcor-health-records')
             ->assertOk();
 
-        $response->assertSee('1 week of consecutive unexcused absences');
+        $response->assertSee('7 days of consecutive unexcused absence');
         $response->assertDontSee('80%');
 
         $this->assertSame(
-            '1 week of consecutive unexcused absences',
+            '7 days of consecutive unexcused absence',
             $response->viewData('beneficiarySummary')['at_risk_threshold_label']
         );
     }
@@ -893,9 +909,12 @@ class FeedingBeneficiaryCardsTest extends TestCase
             FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS,
             $school->feeding_at_risk_mode
         );
+        // The capstone adviser's flow: a notice at day 3, flagged at day 7
+        // once the coordinator confirms.
         $this->assertSame(
-            '1 week of consecutive unexcused absences',
+            '7 days of consecutive unexcused absence',
             FeedingAtRiskRule::forInstitution($school->id)->describeThreshold()
         );
+        $this->assertSame(3, FeedingAtRiskRule::forInstitution($school->id)->absenceNoticeDays());
     }
 }

@@ -7,8 +7,10 @@ use App\Models\FeedingAttendance;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingAttendanceFlag;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ConfirmsFeedingFlags;
 use Tests\TestCase;
 
 /**
@@ -25,7 +27,7 @@ use Tests\TestCase;
  */
 class FeedingAtRiskThresholdTest extends TestCase
 {
-    use RefreshDatabase;
+    use ConfirmsFeedingFlags, RefreshDatabase;
 
     private Institution $institution;
 
@@ -101,8 +103,8 @@ class FeedingAtRiskThresholdTest extends TestCase
         // 8 of 10 = 80%: past the observation window, so it is a verdict —
         // fine at the default threshold and flagged at this school's 90%.
         $marks = [true, true, true, true, true, true, true, true, false, false];
-        $this->assertTrue($rule->isAtRisk($marks));
-        $this->assertFalse(FeedingAtRiskRule::forInstitution(null)->isAtRisk($marks));
+        $this->assertTrue($rule->thresholdReached($marks));
+        $this->assertFalse(FeedingAtRiskRule::forInstitution(null)->thresholdReached($marks));
     }
 
     #[Test]
@@ -116,10 +118,10 @@ class FeedingAtRiskThresholdTest extends TestCase
         $marks = [true, false, false, false];   // 25% over four sessions
 
         $this->assertSame(4, $rule->minimumObservationDays());
-        $this->assertTrue($rule->isAtRisk($marks));
+        $this->assertTrue($rule->thresholdReached($marks));
         // The same learner at a school on the default ten-day window is not
         // flagged at all — same marks, same threshold, different local policy.
-        $this->assertFalse(FeedingAtRiskRule::forInstitution(null)->isAtRisk($marks));
+        $this->assertFalse(FeedingAtRiskRule::forInstitution(null)->thresholdReached($marks));
     }
 
     #[Test]
@@ -258,8 +260,17 @@ class FeedingAtRiskThresholdTest extends TestCase
         $this->assertSame(1, $summary['present']);
         $this->assertSame(1, $summary['unconfirmed']);
         $this->assertSame(50.0, $summary['rate']);
-        $this->assertTrue($summary['at_risk']);
+        // Below the threshold is not a flag: it waits for the coordinator to
+        // confirm the record.
+        $this->assertFalse($summary['at_risk']);
+        $this->assertSame(FeedingAttendanceFlag::AWAITING_CONFIRMATION, $summary['standing']['state']);
         $this->assertCount(3, $response->viewData('sessions'));
+
+        $this->confirmFlag($learner);
+        $summary = $this->withSession($this->coordinatorSession())
+            ->get("/dashboard/feedingcor-program/attendance/learner/{$learner->id}")
+            ->viewData('summary');
+        $this->assertTrue($summary['at_risk']);
     }
 
     #[Test]

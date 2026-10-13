@@ -1,8 +1,8 @@
-{{-- The prioritised intervention list: who needs attention, in the order they
-     need it.
+{{-- The coordinator's work list: who needs looking at, in the order they need
+     it — a record awaiting confirmation first, then the flags being followed
+     up, then the attendance notices.
 
-     Every figure here is derived from the marks the Attendance tab recorded —
-     there is no way to change a mark from this screen, and there should not be.
+     Every figure here is derived from the marks the Attendance tab recorded.
      A learner no confirmed session has covered shows an em dash, never 0%, and
      an unconfirmed mark votes neither way.
 
@@ -18,12 +18,6 @@
 		'low' => 'is-low',
 	];
 
-	$severityBadge = [
-		\App\Support\FeedingRiskSeverity::CRITICAL => 'badge-critical',
-		\App\Support\FeedingRiskSeverity::AT_RISK => 'badge-risk',
-		\App\Support\FeedingRiskSeverity::WATCH => 'badge-monitor',
-	];
-
 	$trendLabel = [
 		'improving' => 'Improving',
 		'declining' => 'Declining',
@@ -35,7 +29,7 @@
 	<div class="ar-listhead">
 		<div>
 			<p class="card-title">Priority Follow-Up List</p>
-			<p class="card-sub">{{ $listedCount }} {{ \Illuminate\Support\Str::plural('beneficiary', $listedCount) }} &middot; at-risk threshold {{ $cards['threshold_label'] }}%</p>
+			<p class="card-sub">{{ $listedCount }} {{ \Illuminate\Support\Str::plural('beneficiary', $listedCount) }} &middot; notice at {{ $cards['notice_label'] }} &middot; flag at {{ $cards['threshold_label'] }}</p>
 		</div>
 		<div class="lg-search ar-search">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -54,8 +48,8 @@
 					<th class="num">Present</th>
 					<th class="num">Absent</th>
 					<th class="num">Attendance</th>
-					<th class="num">Days Remaining</th>
-					<th>Risk</th>
+					<th class="num">In a Row</th>
+					<th>Status</th>
 					<th>Follow-Up</th>
 				</tr>
 			</thead>
@@ -65,12 +59,14 @@
 						data-name="{{ $row['name'] }}"
 						data-meta="{{ trim($row['grade'].($row['section'] !== '' ? ' — '.$row['section'] : '')) }}"
 						data-rate="{{ $row['rate'] !== null ? number_format($row['rate'], 0).'%' : '—' }}"
-						data-standing="{{ \App\Support\FeedingRiskSeverity::severityLabel($row['severity']) }}"
-						data-standing-badge="{{ $severityBadge[$row['severity']] ?? 'badge-neutral' }}"
+						data-standing="{{ $row['state_label'] }}"
+						data-standing-badge="{{ $row['state_badge'] }}"
+						data-confirm-stage="{{ $row['confirm_stage'] }}"
+						data-flagged="{{ $row['at_risk'] ? '1' : '0' }}"
 						data-search="{{ strtolower(trim($row['name'].' '.$row['grade'].' '.$row['section'])) }}">
 						<td>
 							<span class="ar-prio {{ $priorityTone[$row['priority']] ?? '' }}">
-								{{ \App\Support\FeedingRiskSeverity::priorityLabel($row['priority']) }}
+								{{ \App\Support\FeedingAttendanceFlag::priorityLabel($row['priority']) }}
 							</span>
 						</td>
 						{{-- The name opens the learner's record, and the whole cell
@@ -88,14 +84,18 @@
 						<td class="num tnum">{{ $row['present'] }}</td>
 						<td class="num tnum">{{ $row['absent'] }}</td>
 						<td class="num tnum">{{ $row['rate'] !== null ? number_format($row['rate'], 0).'%' : '—' }}</td>
-						<td class="num tnum">{{ $row['days_remaining'] }}</td>
+						<td class="num tnum">{{ $row['run'] }}</td>
 						<td>
-							<span class="badge {{ $severityBadge[$row['severity']] ?? 'badge-neutral' }}">
-								{{ \App\Support\FeedingRiskSeverity::severityLabel($row['severity']) }}
-							</span>
+							<span class="badge {{ $row['state_badge'] }}">{{ $row['state_label'] }}</span>
 						</td>
 						<td>
-							<span class="badge {{ $row['follow_up']['badge'] }}">{{ $row['follow_up']['status_label'] }}</span>
+							{{-- A follow-up belongs to a flag: before the confirmation there
+							     is nothing to follow up, so the cell is a dash, not a badge. --}}
+							@if ($row['at_risk'])
+								<span class="badge {{ $row['follow_up']['badge'] }}">{{ $row['follow_up']['status_label'] }}</span>
+							@else
+								&mdash;
+							@endif
 						</td>
 					</tr>
 				@empty
@@ -103,10 +103,10 @@
 						<td colspan="10" class="table-empty">
 							@if ($cards['beneficiaries'] === 0)
 								No beneficiaries are enrolled for this school year.
-							@elseif ($filters['risk'] !== '' || $filters['attendance'] !== '' || $filters['absences'] !== '' || $filters['follow_up'] !== '')
+							@elseif ($filters['status'] !== '' || $filters['attendance'] !== '' || $filters['absences'] !== '' || $filters['follow_up'] !== '')
 								No beneficiary matches these filters.
 							@else
-								No beneficiary is below or near the {{ $cards['threshold_label'] }}% threshold.
+								No beneficiary has {{ $cards['notice_label'] }} of consecutive unexcused absence.
 							@endif
 						</td>
 					</tr>
@@ -117,9 +117,8 @@
 	</div>
 </div>
 
-{{-- One learner's record, in the four readings a follow-up needs: the rule they
-     failed, the direction they are moving, the sessions they missed, and what
-     has already been done about it. --}}
+{{-- One learner's record: where they stand, the direction they are moving, the
+     absences being verified, and what has already been done about it. --}}
 @foreach ($rows as $row)
 	@php
 		$points = $row['trend_points'];
@@ -137,20 +136,17 @@
 		$line = collect($points)
 			->map(fn (array $point, int $i): string => $plotX($i).','.$plotY((float) $point['rate']))
 			->implode(' ');
+		$lineColour = $row['at_risk'] ? 'var(--series-risk)' : 'var(--series-healthy)';
 	@endphp
 
 	<template class="ar-detail-source" data-detail-for="{{ $row['id'] }}">
 		<div class="ar-detail">
 			<section class="ar-panel">
-				<p class="ar-panel-title">Why this student is at risk</p>
+				<p class="ar-panel-title">Attendance standing</p>
 				<dl class="ar-facts">
 					<div class="ar-fact">
 						<dt>Attendance</dt>
-						<dd class="{{ $row['at_risk'] ? 'is-risk' : '' }}">{{ $row['rate'] !== null ? number_format($row['rate'], 0).'%' : '—' }}</dd>
-					</div>
-					<div class="ar-fact">
-						<dt>Threshold</dt>
-						<dd>{{ $cards['threshold_label'] }}%</dd>
+						<dd>{{ $row['rate'] !== null ? number_format($row['rate'], 0).'%' : '—' }}</dd>
 					</div>
 					<div class="ar-fact">
 						<dt>Present</dt>
@@ -159,6 +155,10 @@
 					<div class="ar-fact">
 						<dt>Absent</dt>
 						<dd>{{ $row['absent'] }}</dd>
+					</div>
+					<div class="ar-fact">
+						<dt>Unexcused in a row</dt>
+						<dd class="{{ $row['run'] > 0 ? 'is-risk' : '' }}">{{ $row['run'] }}</dd>
 					</div>
 					@if (($row['excused'] ?? 0) > 0)
 						{{-- The buffer: an absence the school accepted. Shown, and
@@ -187,12 +187,14 @@
 					</p>
 				@endif
 
-				<p class="ar-reason"><strong>Risk reason:</strong> {{ $row['reason'] }}</p>
+				@if ($row['reason'] !== '')
+					<p class="ar-reason"><strong>{{ $row['state_label'] }}:</strong> {{ $row['reason'] }}</p>
+				@endif
 			</section>
 
 			{{-- The direction, not the decoration: a cumulative rate after each
-			     confirmed session, with the school's own threshold drawn
-			     across it. --}}
+			     confirmed session. A rate rule draws its threshold across it;
+			     a run of absences has no line to draw. --}}
 			<section class="ar-panel">
 				<p class="ar-panel-title">Attendance trend</p>
 				@if ($lastPoint !== null)
@@ -204,21 +206,24 @@
 					</p>
 					<svg class="ar-chart" viewBox="0 0 {{ $chartW }} {{ $chartH }}" width="{{ $chartW }}" height="{{ $chartH }}"
 						role="img"
-						aria-label="Cumulative attendance across {{ $pointCount }} confirmed {{ \Illuminate\Support\Str::plural('session', $pointCount) }}, ending at {{ number_format((float) $lastPoint['rate'], 0) }} percent, against a {{ $cards['threshold_label'] }} percent threshold">
-						{{-- The threshold, so the gap is what the eye reads. --}}
-						<line x1="0" y1="{{ $plotY((float) $row['threshold']) }}" x2="{{ $chartW }}" y2="{{ $plotY((float) $row['threshold']) }}"
-							stroke="var(--lg-ink-soft)" stroke-width="1" stroke-dasharray="4 4"/>
+						aria-label="Cumulative attendance across {{ $pointCount }} confirmed {{ \Illuminate\Support\Str::plural('session', $pointCount) }}, ending at {{ number_format((float) $lastPoint['rate'], 0) }} percent">
+						@if ($row['is_rate_rule'])
+							<line x1="0" y1="{{ $plotY((float) $row['threshold']) }}" x2="{{ $chartW }}" y2="{{ $plotY((float) $row['threshold']) }}"
+								stroke="var(--lg-ink-soft)" stroke-width="1" stroke-dasharray="4 4"/>
+						@endif
 						@if ($pointCount > 1)
 							<polyline points="{{ $line }}" fill="none"
-								stroke="{{ $row['at_risk'] ? 'var(--series-risk)' : 'var(--series-healthy)' }}"
+								stroke="{{ $lineColour }}"
 								stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
 						@endif
 						<circle cx="{{ $plotX($pointCount - 1) }}" cy="{{ $plotY((float) $lastPoint['rate']) }}" r="3"
-							fill="{{ $row['at_risk'] ? 'var(--series-risk)' : 'var(--series-healthy)' }}"/>
+							fill="{{ $lineColour }}"/>
 					</svg>
 					<p class="ar-axis">
 						<span>Day {{ $points[0]['day'] }}</span>
-						<span>Threshold {{ $cards['threshold_label'] }}%</span>
+						@if ($row['is_rate_rule'])
+							<span>Threshold {{ $cards['threshold_label'] }}</span>
+						@endif
 						<span>Day {{ $lastPoint['day'] }}</span>
 					</p>
 				@else
@@ -226,23 +231,41 @@
 				@endif
 			</section>
 
-			<section class="ar-panel">
-				<p class="ar-panel-title">Recent absences</p>
+			{{-- The absences a confirmation is about. While the record is being
+			     verified, each one can be put right through the one audited
+			     correction path; once it is confirmed, they are a reading. --}}
+			<section class="ar-panel {{ $row['can_correct'] ? 'ar-panel-wide' : '' }}">
+				<p class="ar-panel-title">{{ $row['can_correct'] ? 'Absences to verify' : 'Recent absences' }}</p>
 				@if ($row['absences'] !== [])
-					<table class="ar-mini">
-						<thead>
-							<tr><th>Date</th><th>Feeding Day</th><th>Remarks</th></tr>
-						</thead>
-						<tbody>
-							@foreach ($row['absences'] as $absence)
-								<tr>
-									<td>{{ $absence['label'] }}</td>
-									<td class="tnum">Day {{ $absence['day'] }}</td>
-									<td>{{ $absence['remarks'] !== '' ? $absence['remarks'] : '—' }}</td>
-								</tr>
-							@endforeach
-						</tbody>
-					</table>
+					<ul class="ar-verify">
+						@foreach ($row['absences'] as $absence)
+							<li class="ar-verify-item">
+								<div class="ar-verify-main">
+									<strong class="tnum">{{ $absence['label'] }}</strong>
+									<span class="ar-verify-meta">Day {{ $absence['day'] }}@if ($absence['recorded_by'] !== '') &middot; {{ $absence['recorded_by'] }}@endif</span>
+									@if ($absence['remarks'] !== '')
+										<span class="ar-verify-note">{{ $absence['remarks'] }}</span>
+									@endif
+								</div>
+								@if ($row['can_correct'])
+									<form method="POST" class="ar-correct"
+										action="{{ route('feedingcor-program.beneficiary.attendance.correct', $row['id']) }}">
+										@csrf
+										<input type="hidden" name="session_date" value="{{ $absence['date'] }}">
+										<select class="select" name="mark" aria-label="Correct the mark for {{ $absence['label'] }}">
+											<option value="present">Present</option>
+											@if ($excusedAvailable)
+												<option value="excused">Excused</option>
+											@endif
+										</select>
+										<input type="text" class="input" name="remarks" maxlength="255" placeholder="Reason"
+											aria-label="Reason for the correction on {{ $absence['label'] }}">
+										<button type="submit" class="btn btn-secondary">Correct</button>
+									</form>
+								@endif
+							</li>
+						@endforeach
+					</ul>
 				@else
 					<p class="ar-empty">No confirmed absence on record.</p>
 				@endif

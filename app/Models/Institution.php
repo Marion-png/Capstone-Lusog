@@ -40,6 +40,7 @@ class Institution extends Model
         'feeding_at_risk_threshold',
         'feeding_min_observation_days',
         'feeding_at_risk_mode',
+        'feeding_absence_notice_days',
         'feeding_absence_flag_days',
         'feeding_absence_removal_days',
         'feeding_cycle_days',
@@ -54,7 +55,11 @@ class Institution extends Model
         // WHICH rule the school runs, not only the figure it is set to: a
         // school flagging after a week of unexcused absence is not running a
         // percentage at all.
+        // The adviser's two days: the attendance notice (3) and the flag (7).
+        'feeding_absence_notice_days' => 'integer',
         'feeding_absence_flag_days' => 'integer',
+        // Retired with the removal review: nothing reads it, and no attendance
+        // figure suggests taking a learner off the feeding line any more.
         'feeding_absence_removal_days' => 'integer',
         // 120 in Division policy, 90 under discussion — see FeedingProgramCycle.
         'feeding_cycle_days' => 'integer',

@@ -245,7 +245,9 @@
 					<label class="field-label" for="faStanding">Status</label>
 					<select class="select" name="standing" id="faStanding">
 						<option value="">All</option>
-						<option value="at_risk" @selected($filters['standing'] === 'at_risk')>At risk</option>
+						<option value="at_risk" @selected($filters['standing'] === 'at_risk')>Flagged for follow-up</option>
+						<option value="awaiting_confirmation" @selected($filters['standing'] === 'awaiting_confirmation')>Awaiting confirmation</option>
+						<option value="notice" @selected($filters['standing'] === 'notice')>Attendance notice</option>
 						<option value="early_monitoring" @selected($filters['standing'] === 'early_monitoring')>Early monitoring</option>
 					</select>
 				</div>

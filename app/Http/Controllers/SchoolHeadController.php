@@ -390,15 +390,18 @@ class SchoolHeadController extends Controller
         $today = now()->toDateString();
         $sessionDates = $overview->sessionDates();
 
-        // 1. Learners the school's own rule has flagged. The rule is read from
-        //    the institution, never from a constant here.
+        // 1. Learners flagged for follow-up — the threshold reached AND the
+        //    record confirmed by the Feeding Coordinator. A count only: which
+        //    learners are flagged is the coordinator's and the School Nurse's
+        //    to see (FeedingAttendanceFlag::VISIBLE_TO), so the action opens
+        //    the programme rather than a list of names.
         $atRisk = $overview->atRiskCount();
         if ($atRisk > 0) {
             $items[] = [
                 'severity' => 'high',
-                'title' => $atRisk.' '.$this->plural('beneficiary', 'beneficiaries', $atRisk).' below the attendance threshold',
-                'detail' => 'Flagged by this school’s rule: '.$overview->rule->describe().'.',
-                'action' => ['label' => 'Review attendance', 'url' => route('dashboard.school-head.masterlist', ['attendance' => 'at_risk'])],
+                'title' => $atRisk.' '.$this->plural('beneficiary', 'beneficiaries', $atRisk).' flagged for follow-up',
+                'detail' => 'Confirmed by the Feeding Coordinator: '.$overview->rule->describe().'.',
+                'action' => ['label' => 'Open feeding program', 'url' => route('dashboard.school-head.program')],
             ];
         }
 

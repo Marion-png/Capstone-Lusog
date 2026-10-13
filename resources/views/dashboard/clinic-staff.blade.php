@@ -168,11 +168,14 @@
             </div>
         </div>
 
+        {{-- Who the Feeding Coordinator has flagged for follow-up is shown to
+             the School Nurse only; Clinic Staff open this page without it. --}}
+        @if ($showFlags ?? false)
         <div class="card clinic-panel" style="margin-top:20px">
             <div class="card-head">
                 <div>
                     <div class="card-title">Feeding Program At-Risk Alerts</div>
-                    <div class="card-sub">Derived from attendance only — never from nutritional status</div>
+                    <div class="card-sub">Flagged for follow-up by the Feeding Coordinator</div>
                 </div>
             </div>
 
@@ -203,6 +206,7 @@
                 <div class="empty-panel">No at-risk beneficiaries flagged at this time.</div>
             @endif
         </div>
+        @endif
     </div>
 </div>
 

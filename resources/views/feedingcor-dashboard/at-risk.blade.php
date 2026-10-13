@@ -61,11 +61,11 @@
 			</div>
 
 			{{-- The coordinator's own acts. Enrolment changes are deliberately
-			     absent: being below the attendance threshold is not a reason to
-			     drop a learner from the programme, and any such change follows
-			     the enrolment workflow on the Beneficiaries tab. --}}
+			     absent: a flag is a reason to follow a learner up, never to drop
+			     them from the programme, and any such change follows the
+			     enrolment workflow on the Beneficiaries tab. --}}
 			<div class="sbfp-actions">
-				@if ($followUpsAvailable && $rows->isNotEmpty())
+				@if ($followUpsAvailable && $followUpRows->isNotEmpty())
 					<button type="button" class="btn btn-primary" data-followup-open>
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M9 15h6"/><path d="M12 12v6"/></svg>
 						Record Follow-Up
@@ -87,22 +87,37 @@
 		<div class="print-masthead" aria-hidden="true">
 			<h2>At-Risk Feeding Beneficiaries</h2>
 			<p>{{ $schoolName }} &middot; S.Y. {{ $schoolYear }} &middot; Feeding Day {{ $programDay }} of {{ $programDuration }}</p>
-			<p>At-risk threshold: {{ $cards['threshold_label'] }}% &middot; Printed {{ now()->format('F j, Y') }}</p>
+			<p>Attendance notice: {{ $cards['notice_label'] }} &middot; Flag threshold: {{ $cards['threshold_label'] }} &middot; Printed {{ now()->format('F j, Y') }}</p>
 		</div>
 
 		<section class="kpi-grid live-pane" id="ar-cards">
 			@include('feedingcor-dashboard.partials.at-risk-cards')
 		</section>
 
-		@if ($cards['critical'] > 0)
-			<div class="alert-bar is-critical ar-alert">
+		{{-- The notices the flow sends the coordinator. Each opens the list
+		     already narrowed to the learners it counts. --}}
+		@if ($cards['awaiting'] > 0)
+			<div class="alert-bar ar-alert">
 				<div class="alert-body">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
 					<div>
-						<strong>{{ $cards['critical'] }} {{ \Illuminate\Support\Str::plural('beneficiary', $cards['critical']) }} in critical standing</strong>
-						<span>Flagged by the school&rsquo;s rule: {{ $cards['rule'] }}.</span>
+						<strong>{{ $cards['awaiting'] }} attendance {{ \Illuminate\Support\Str::plural('record', $cards['awaiting']) }} awaiting confirmation</strong>
+						<span>{{ ucfirst($cards['rule']) }}</span>
 					</div>
 				</div>
+				<a class="btn btn-secondary" href="{{ request()->fullUrlWithQuery(['status' => \App\Support\FeedingAttendanceFlag::AWAITING_CONFIRMATION]) }}">Review</a>
+			</div>
+		@endif
+		@if ($cards['notices_unverified'] > 0)
+			<div class="alert-bar is-info ar-alert">
+				<div class="alert-body">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+					<div>
+						<strong>{{ $cards['notices_unverified'] }} attendance {{ \Illuminate\Support\Str::plural('notice', $cards['notices_unverified']) }} to verify</strong>
+						<span>{{ $cards['notice_label'] }} of consecutive unexcused absence</span>
+					</div>
+				</div>
+				<a class="btn btn-secondary" href="{{ request()->fullUrlWithQuery(['status' => \App\Support\FeedingAttendanceFlag::NOTICE]) }}">Review</a>
 			</div>
 		@endif
 
@@ -142,12 +157,12 @@
 				</select>
 			</div>
 			<div class="ar-filter">
-				<label class="field-label" for="arRisk">Risk Level</label>
-				<select class="select" name="risk" id="arRisk">
+				<label class="field-label" for="arStatus">Status</label>
+				<select class="select" name="status" id="arStatus">
 					<option value="">All</option>
-					<option value="critical" @selected($filters['risk'] === 'critical')>Critical</option>
-					<option value="at_risk" @selected($filters['risk'] === 'at_risk')>At Risk</option>
-					<option value="watch" @selected($filters['risk'] === 'watch')>Watch</option>
+					@foreach ($standingOptions as $value => $label)
+						<option value="{{ $value }}" @selected($filters['status'] === $value)>{{ $label }}</option>
+					@endforeach
 				</select>
 			</div>
 			<div class="ar-filter">
@@ -162,12 +177,12 @@
 				</select>
 			</div>
 			<div class="ar-filter">
-				<label class="field-label" for="arAbsences">Days Absent</label>
+				<label class="field-label" for="arAbsences">Absent in a Row</label>
 				<select class="select" name="absences" id="arAbsences">
 					<option value="">All</option>
 					<option value="1_2" @selected($filters['absences'] === '1_2')>1 &ndash; 2</option>
-					<option value="3_5" @selected($filters['absences'] === '3_5')>3 &ndash; 5</option>
-					<option value="6_plus" @selected($filters['absences'] === '6_plus')>6 or more</option>
+					<option value="3_6" @selected($filters['absences'] === '3_6')>3 &ndash; 6</option>
+					<option value="7_plus" @selected($filters['absences'] === '7_plus')>7 or more</option>
 				</select>
 			</div>
 			<div class="ar-filter">
@@ -199,7 +214,7 @@
 	<div class="modal-panel ar-detail-modal">
 		<div class="modal-head">
 			<div class="ar-detail-ident">
-				<p class="ar-modal-eyebrow">At-Risk Beneficiary</p>
+				<p class="ar-modal-eyebrow">Beneficiary Attendance</p>
 				<p class="modal-title" id="detailTitle"></p>
 				<p class="ar-modal-meta" id="detailMeta"></p>
 			</div>
@@ -212,8 +227,21 @@
 			<span class="badge" id="detailStanding"></span>
 			<div class="ar-modal-actions">
 				<button type="button" class="btn btn-secondary" data-detail-close>Close</button>
+				{{-- The one act each standing asks for: verify the record at a
+				     notice, confirm it at the threshold (which is what flags the
+				     learner), or follow up a learner already flagged. The server
+				     decides the stage again on the post. --}}
+				@if ($confirmationsAvailable)
+					<form method="POST" action="{{ route('feedingcor-at-risk.confirm') }}" id="detailConfirmForm" class="ar-confirm-form" hidden>
+						@csrf
+						<input type="hidden" name="record_id" id="detailConfirmRecord" value="">
+						<button type="submit" class="btn btn-primary" id="detailConfirm"
+							data-label-notice="Mark as Verified"
+							data-label-flag="Confirm &amp; Flag for Follow-Up">Mark as Verified</button>
+					</form>
+				@endif
 				@if ($followUpsAvailable)
-					<button type="button" class="btn btn-primary" id="detailFollowUp">Record Follow-Up</button>
+					<button type="button" class="btn btn-primary" id="detailFollowUp" hidden>Record Follow-Up</button>
 				@endif
 			</div>
 		</div>
@@ -242,7 +270,7 @@
 					<div class="ar-field">
 						<label class="field-label" for="followUpRecord">Student</label>
 						<select class="select" name="record_id" id="followUpRecord" required>
-							@foreach ($rows as $row)
+							@foreach ($followUpRows as $row)
 								<option value="{{ $row['id'] }}">{{ $row['name'] }} — {{ $row['grade'] }} {{ $row['section'] }}</option>
 							@endforeach
 						</select>
@@ -355,6 +383,9 @@
 	const detailMeta = document.getElementById('detailMeta');
 	const detailStanding = document.getElementById('detailStanding');
 	const detailFollowUp = document.getElementById('detailFollowUp');
+	const detailConfirmForm = document.getElementById('detailConfirmForm');
+	const detailConfirmRecord = document.getElementById('detailConfirmRecord');
+	const detailConfirm = document.getElementById('detailConfirm');
 	let detailRecord = null;
 
 	const openDetail = (recordId) => {
@@ -373,6 +404,17 @@
 			detailStanding.className = 'badge ' + (row.dataset.standingBadge ?? 'badge-neutral');
 			detailStanding.textContent = row.dataset.standing ?? '';
 		}
+
+		// One action per standing, read off the row the server rendered.
+		const stage = row.dataset.confirmStage ?? '';
+		if (detailConfirmForm && detailConfirmRecord && detailConfirm) {
+			detailConfirmForm.hidden = stage === '';
+			detailConfirmRecord.value = stage === '' ? '' : String(recordId);
+			detailConfirm.textContent = stage === 'flag'
+				? detailConfirm.dataset.labelFlag
+				: detailConfirm.dataset.labelNotice;
+		}
+		if (detailFollowUp) detailFollowUp.hidden = row.dataset.flagged !== '1';
 
 		detailBody.replaceChildren(source.content.cloneNode(true));
 		detailBody.scrollTop = 0;

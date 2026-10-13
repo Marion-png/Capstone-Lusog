@@ -5,39 +5,42 @@ namespace App\Support;
 use App\Models\Institution;
 
 /**
- * Decides whether a learner is an at-risk feeding beneficiary.
+ * Decides when a learner's feeding attendance has reached the school's
+ * thresholds. It does NOT decide who is flagged: that takes the Feeding
+ * Coordinator's confirmation, and is FeedingAttendanceFlag's job.
  *
- * Two invariants this class exists to protect:
+ * The flow it serves is the one the capstone adviser set:
  *
- * 1. At-risk is derived from feeding-session attendance and NOTHING else. A
- *    learner is never flagged for being wasted, underweight, or any other
- *    nutritional status — those describe the problem the programme is treating,
- *    not a failure to show up.
+ *   day 3 of unexcused absence in a row  → an attendance notice asks the
+ *                                          coordinator to verify the record
+ *                                          (`reachesNotice()`); nobody is flagged
+ *   day 7                                → the flag threshold is reached
+ *                                          (`thresholdReached()`), and the learner
+ *                                          waits for the coordinator to confirm
+ *                                          the record before being flagged for
+ *                                          follow-up
+ *
+ * Invariants this class exists to protect:
+ *
+ * 1. Everything here is derived from feeding-session attendance and NOTHING
+ *    else. A learner is never flagged for being wasted, underweight, or any
+ *    other nutritional status — those describe the problem the programme is
+ *    treating, not a failure to show up.
  *
  * 2. An unconfirmed mark is not an absence. A photographed sheet that came back
  *    unreadable for one learner yields NULL, and NULL is excluded from both the
- *    numerator and the denominator. Counting it as an absence would push a
- *    learner toward the flag on evidence no human has read; counting it as
- *    attendance would hide a real gap. Neither is honest, so it does not vote.
+ *    numerator and the denominator. An excused absence reaches this class as
+ *    NULL for the same reason (see FeedingAttendanceMark).
  *
- * 3. A rate is not a classification until there is enough history behind it.
- *    One of four recorded sessions is 25%, and 25% is under every threshold a
- *    school might set — but four sessions is not a programme problem, it is a
- *    sample too small to judge a child on, and flagging it would put a learner
- *    on a follow-up list on the strength of a single missed morning. So the
- *    threshold is applied only after `minimumObservationDays` confirmed
- *    sessions; before that the learner is EARLY MONITORING. The rate is still
- *    computed and still shown — it simply does not classify yet.
+ * 3. A RATE is not a classification until there is enough history behind it.
+ *    One of four recorded sessions is 25%, which is a sample, not a finding, so
+ *    the rate test applies only after `minimumObservationDays` confirmed
+ *    sessions. A run of absences carries its own evidence — seven missed
+ *    sessions in a row are seven confirmed sessions — so the run-based modes
+ *    only need one confirmed session before they can say "on track".
  *
- *    The window is counted in the learner's own **confirmed** sessions, not in
- *    programme days elapsed, because that is the denominator the rate is taken
- *    over. A school on feeding day 20 that only recorded four sheets has four
- *    days of evidence about that learner, not twenty; the sixteen days nobody
- *    marked are missing records, never absences (see invariant 2).
- *
- * The rule is config-driven (config/feeding.php) because schools tune it. It is
- * deliberately pure — given marks in, a verdict out — so the consequences are
- * testable without a database.
+ * It is deliberately pure — given marks in, an answer out — so every
+ * consequence is testable without a database.
  */
 class FeedingAtRiskRule
 {
@@ -46,57 +49,35 @@ class FeedingAtRiskRule
     public const MODE_CONSECUTIVE_ABSENCES = 'consecutive_absences';
 
     /**
-     * The rule Sta. Ana actually runs: a beneficiary is flagged once they have
-     * missed a week of feeding without an excuse.
+     * The rule Sta. Ana runs, and the adviser's: a learner is due to be flagged
+     * once they have missed `absenceFlagDays` feeding sessions in a row without
+     * an excuse.
      *
      * It is not a percentage of the cycle at all. A learner who has attended
-     * every session for two months and then vanishes for a week is 90-something
-     * per cent attended and needs following up today; a rate threshold would
-     * not notice them until weeks later. The unit is the *feeding week*, so the
-     * default is four sessions (Monday-Thursday, the days the budget covers).
-     *
-     * Only unexcused absences count — an excused one is the coordinator's
-     * "buffer" and reaches this class as NULL (see FeedingAttendanceMark).
+     * every session for two months and then vanishes is 90-something per cent
+     * attended and needs following up today; a rate threshold would not notice
+     * them until weeks later.
      */
     public const MODE_UNEXCUSED_ABSENCE_DAYS = 'unexcused_absence_days';
 
-    /** The modes a school may be set to; anything else falls back to the rate. */
+    /** The modes a school may be set to; anything else falls back to the default. */
     public const MODES = [
         self::MODE_ATTENDANCE_RATE,
         self::MODE_CONSECUTIVE_ABSENCES,
         self::MODE_UNEXCUSED_ABSENCE_DAYS,
     ];
 
-    /** Too little attendance history to classify on — see invariant 3. */
-    public const STATUS_EARLY_MONITORING = 'early_monitoring';
-
-    /** Enough history, and below the school's threshold. */
-    public const STATUS_AT_RISK = 'at_risk';
-
-    /** Enough history, and at or above the school's threshold. */
-    public const STATUS_ON_TRACK = 'on_track';
-
     /** The approved programme default, used by any school that has not set its own. */
     public const DEFAULT_THRESHOLD_PERCENT = 80.0;
 
-    /** The approved observation window, in confirmed feeding days. */
+    /** The history a rate needs, in confirmed feeding days. */
     public const DEFAULT_MINIMUM_OBSERVATION_DAYS = 10;
 
-    /**
-     * One feeding week, in sessions.
-     *
-     * Monday to Thursday is what the budget covers, so a feeding week is four
-     * days and not five. It is a constant rather than a figure typed into each
-     * sentence because the rule is *stated* in weeks — "a week of unexcused
-     * absence" — and only counted in days.
-     */
-    public const FEEDING_DAYS_PER_WEEK = 4;
+    /** Day 3: the early attendance notice. */
+    public const DEFAULT_ABSENCE_NOTICE_DAYS = 3;
 
-    /** One feeding week: Monday to Thursday, the days the budget covers. */
-    public const DEFAULT_ABSENCE_FLAG_DAYS = self::FEEDING_DAYS_PER_WEEK;
-
-    /** Two feeding weeks — the point at which removal is worth reviewing. */
-    public const DEFAULT_ABSENCE_REMOVAL_DAYS = self::FEEDING_DAYS_PER_WEEK * 2;
+    /** Day 7: the flag threshold. */
+    public const DEFAULT_ABSENCE_FLAG_DAYS = 7;
 
     public function __construct(
         private readonly string $mode,
@@ -104,7 +85,7 @@ class FeedingAtRiskRule
         private readonly int $consecutiveAbsences,
         private readonly int $minimumObservationDays,
         private readonly int $absenceFlagDays = self::DEFAULT_ABSENCE_FLAG_DAYS,
-        private readonly int $absenceRemovalDays = self::DEFAULT_ABSENCE_REMOVAL_DAYS,
+        private readonly int $absenceNoticeDays = self::DEFAULT_ABSENCE_NOTICE_DAYS,
     ) {}
 
     public static function fromConfig(): self
@@ -114,24 +95,11 @@ class FeedingAtRiskRule
             (float) config('feeding.at_risk.threshold_percent', self::DEFAULT_THRESHOLD_PERCENT),
             (int) config('feeding.at_risk.consecutive_absences', 3),
             (int) config('feeding.at_risk.minimum_observation_days', self::DEFAULT_MINIMUM_OBSERVATION_DAYS),
-            (int) config('feeding.at_risk.absence_flag_days', self::DEFAULT_ABSENCE_FLAG_DAYS),
-            (int) config('feeding.at_risk.absence_removal_days', self::DEFAULT_ABSENCE_REMOVAL_DAYS),
+            max(1, (int) config('feeding.at_risk.absence_flag_days', self::DEFAULT_ABSENCE_FLAG_DAYS)),
+            max(1, (int) config('feeding.at_risk.absence_notice_days', self::DEFAULT_ABSENCE_NOTICE_DAYS)),
         );
     }
 
-    /**
-     * The rule as one school has set it.
-     *
-     * Both figures are school-configurable (`institutions.feeding_at_risk_threshold`
-     * and `feeding_min_observation_days`, set by the System Admin) because a
-     * programme's attendance expectation and the history it wants before acting
-     * on one are local policy, not platform constants. A school that has set
-     * nothing keeps the app default, so the figures move with the programme
-     * rather than being frozen at whatever they were when the columns shipped.
-     *
-     * Everything that computes, displays, or explains at-risk must go through
-     * here, or two screens will disagree about who is flagged.
-     */
     /**
      * Forget the memoized per-school rule settings. The System Admin's
      * threshold form changes them, and must not then be answered from the copy
@@ -142,6 +110,18 @@ class FeedingAtRiskRule
         RequestMemo::forgetPrefix('at-risk:settings:');
     }
 
+    /**
+     * The rule as one school has set it.
+     *
+     * Every figure is school-configurable (the `institutions.feeding_*`
+     * columns, set by the System Admin) because a programme's thresholds are
+     * local policy, not platform constants. A school that has set nothing keeps
+     * the app default, so its figures move with the programme rather than being
+     * frozen at whatever they were when the columns shipped.
+     *
+     * Everything that computes, displays, or explains the thresholds must go
+     * through here, or two screens will disagree about who is due a notice.
+     */
     public static function forInstitution(?int $institutionId): self
     {
         $rule = self::fromConfig();
@@ -157,7 +137,7 @@ class FeedingAtRiskRule
                 'feeding_min_observation_days',
                 'feeding_at_risk_mode',
                 'feeding_absence_flag_days',
-                'feeding_absence_removal_days',
+                'feeding_absence_notice_days',
             ]
         )));
 
@@ -166,11 +146,7 @@ class FeedingAtRiskRule
         }
 
         // One read for every setting: this runs on every page of the feeding
-        // module, and they are all halves of one policy. Read off the raw
-        // attributes, since a column the migration has not added yet is simply
-        // not in the select list.
-        // Every feeding screen builds this rule, several of them more than once
-        // (a card, a list and an export can each ask). The school's policy row
+        // module, and they are all halves of one policy. The school's policy row
         // cannot change while one request is being served, so it is read once.
         $settings = RequestMemo::remember(
             'at-risk:settings:'.$institutionId.':'.implode(',', $columns),
@@ -186,7 +162,7 @@ class FeedingAtRiskRule
         // else's policy, and an unrecognised value is treated as unset.
         $mode = (string) ($settings['feeding_at_risk_mode'] ?? '');
         $flagDays = $settings['feeding_absence_flag_days'] ?? null;
-        $removalDays = $settings['feeding_absence_removal_days'] ?? null;
+        $noticeDays = $settings['feeding_absence_notice_days'] ?? null;
 
         return new self(
             in_array($mode, self::MODES, true) ? $mode : $rule->mode,
@@ -194,29 +170,31 @@ class FeedingAtRiskRule
             $rule->consecutiveAbsences,
             $minimum === null ? $rule->minimumObservationDays : max(0, (int) $minimum),
             ($flagDays === null || (int) $flagDays < 1) ? $rule->absenceFlagDays : (int) $flagDays,
-            ($removalDays === null || (int) $removalDays < 1) ? $rule->absenceRemovalDays : (int) $removalDays,
+            ($noticeDays === null || (int) $noticeDays < 1) ? $rule->absenceNoticeDays : (int) $noticeDays,
         );
     }
 
     /**
-     * Whether the school's rule has flagged this learner.
+     * Whether the school's flag threshold has been reached on these marks.
      *
-     * Returns false while the learner is still inside the observation window:
-     * a verdict on too little history is not a verdict, and everything that
-     * counts, lists or exports at-risk learners reads this method, so the
-     * window cannot be honoured on one screen and skipped on another.
+     * This is NOT a flag. Reaching the threshold makes a learner AWAITING
+     * CONFIRMATION; only the Feeding Coordinator's confirmation that the record
+     * is correct flags them (FeedingAttendanceFlag). Anything that counts,
+     * lists or shows flagged learners must read FeedingAttendanceFlag, never
+     * this method.
      *
-     * @param  list<bool|null>  $marks  session marks in date order; NULL = unconfirmed
+     * Returns false while a rate is still inside its observation window: a
+     * verdict on too little history is not a verdict.
+     *
+     * @param  list<bool|null>  $marks  session marks in date order; NULL = unconfirmed or excused
      */
-    public function isAtRisk(array $marks): bool
+    public function thresholdReached(array $marks): bool
     {
-        $confirmed = array_values(array_filter($marks, static fn ($m) => $m !== null));
-
-        // No confirmed sessions means no evidence either way — never flag.
-        // Too few of them means not enough evidence yet — also never flag.
         if (! $this->hasEnoughObservation($marks)) {
             return false;
         }
+
+        $confirmed = array_values(array_filter($marks, static fn ($m) => $m !== null));
 
         return match ($this->mode) {
             self::MODE_CONSECUTIVE_ABSENCES => $this->hasAbsenceRun($confirmed, $this->consecutiveAbsences),
@@ -226,27 +204,23 @@ class FeedingAtRiskRule
     }
 
     /**
-     * Whether this learner's absence has run long enough that the school's own
-     * removal review opens — the second, later threshold the coordinator
-     * described: roughly a fortnight of unexcused absence, at which point the
-     * adviser confirms whether the learner is coming back and, if not, the slot
-     * goes to somebody on the waiting list.
-     *
-     * It is deliberately NOT a removal. Nothing in this application takes a
-     * child off the feeding line on the strength of an attendance count; this
-     * only says the question is now worth asking of a human, who records the
-     * answer with a reason (FeedingEnrollmentController::remove).
+     * Whether the learner's CURRENT run of unexcused absences has reached the
+     * early notice — day 3 of the adviser's flow. A notice asks the coordinator
+     * to verify the record; it flags nobody.
      *
      * @param  list<bool|null>  $marks
      */
-    public function needsRemovalReview(array $marks): bool
+    public function reachesNotice(array $marks): bool
     {
-        $confirmed = array_values(array_filter($marks, static fn ($m) => $m !== null));
-
-        return $this->hasAbsenceRun($confirmed, $this->absenceRemovalDays);
+        return $this->currentAbsenceRun($marks) >= $this->absenceNoticeDays;
     }
 
-    /** The learner's current run of unexcused absences, most recent first. */
+    /**
+     * The learner's current run of unexcused absences, counted back from the
+     * most recent confirmed session.
+     *
+     * @param  list<bool|null>  $marks
+     */
     public function currentAbsenceRun(array $marks): int
     {
         $run = 0;
@@ -267,34 +241,8 @@ class FeedingAtRiskRule
     }
 
     /**
-     * Where this learner stands: Early Monitoring, At Risk, or On Track.
-     *
-     * The three states are exhaustive and mutually exclusive, so a screen can
-     * render one badge from one call and never show a learner as both.
-     *
-     * @param  list<bool|null>  $marks
-     */
-    public function status(array $marks): string
-    {
-        if (! $this->hasEnoughObservation($marks)) {
-            return self::STATUS_EARLY_MONITORING;
-        }
-
-        return $this->isAtRisk($marks) ? self::STATUS_AT_RISK : self::STATUS_ON_TRACK;
-    }
-
-    public static function statusLabel(string $status): string
-    {
-        return match ($status) {
-            self::STATUS_AT_RISK => 'At Risk',
-            self::STATUS_ON_TRACK => 'On Track',
-            default => 'Early Monitoring',
-        };
-    }
-
-    /**
-     * Whether this learner has enough confirmed history for the threshold to
-     * mean anything.
+     * Whether this learner has enough confirmed history for the rule to say
+     * anything about them.
      *
      * A learner with no confirmed session never has enough, whatever the window
      * is set to: the observation period can be waived, but "no evidence" cannot
@@ -307,7 +255,7 @@ class FeedingAtRiskRule
         return $this->confirmedCount($marks) >= $this->observationDays();
     }
 
-    /** How many more confirmed sessions before the threshold starts classifying. */
+    /** How many more confirmed sessions before the rule starts classifying. */
     public function sessionsUntilClassification(array $marks): int
     {
         return max(0, $this->observationDays() - $this->confirmedCount($marks));
@@ -316,21 +264,23 @@ class FeedingAtRiskRule
     /**
      * The window this mode actually needs, in confirmed sessions.
      *
-     * For a rate the window is the school's own setting: a percentage over four
-     * sessions is a sample, not a finding. The unexcused-absence rule carries
-     * its own evidence requirement instead — a full week of missed feeding IS
-     * the finding, and holding it back for another six sessions would mean the
-     * coordinator learning about it a fortnight after the child stopped coming,
-     * which is the delay the rule exists to remove. So it needs whichever is
-     * smaller: the school's window, or the run that triggers it.
+     * For a rate it is the school's own setting: a percentage over four
+     * sessions is a sample, not a finding. A run of absences IS the finding —
+     * holding seven missed sessions back for another three would mean the
+     * coordinator hearing about it a week late — so the run-based modes need
+     * only one confirmed session.
      */
     private function observationDays(): int
     {
-        $window = max(1, $this->minimumObservationDays);
+        return $this->mode === self::MODE_ATTENDANCE_RATE
+            ? max(1, $this->minimumObservationDays)
+            : 1;
+    }
 
-        return $this->mode === self::MODE_UNEXCUSED_ABSENCE_DAYS
-            ? min($window, max(1, $this->absenceFlagDays))
-            : $window;
+    /** Whether this mode waits on an observation window at all. */
+    public function usesObservationWindow(): bool
+    {
+        return $this->mode === self::MODE_ATTENDANCE_RATE && $this->minimumObservationDays > 1;
     }
 
     /** Sessions a human has decided — the denominator every rate here is taken over. */
@@ -364,6 +314,12 @@ class FeedingAtRiskRule
         return $this->mode;
     }
 
+    /** Whether the flag threshold is a percentage rather than a run of days. */
+    public function isRateMode(): bool
+    {
+        return $this->mode === self::MODE_ATTENDANCE_RATE;
+    }
+
     public function thresholdPercent(): float
     {
         return $this->thresholdPercent;
@@ -374,32 +330,51 @@ class FeedingAtRiskRule
         return $this->consecutiveAbsences;
     }
 
-    /** The confirmed feeding days a learner needs before the threshold applies. */
+    /** The confirmed feeding days a rate needs before it classifies. */
     public function minimumObservationDays(): int
     {
         return $this->minimumObservationDays;
     }
 
-    /** Unexcused absences in a row that flag a learner — one feeding week. */
+    /** Unexcused absences in a row that reach the flag threshold — day 7. */
     public function absenceFlagDays(): int
     {
         return $this->absenceFlagDays;
     }
 
-    /** Unexcused absences in a row that open a removal review — two feeding weeks. */
-    public function absenceRemovalDays(): int
+    /** Unexcused absences in a row that raise the attendance notice — day 3. */
+    public function absenceNoticeDays(): int
     {
-        return $this->absenceRemovalDays;
+        return $this->absenceNoticeDays;
     }
 
-    /** A short line the UI can show so staff know what the flag currently means. */
+    /**
+     * The flag threshold in the unit it is set in: "7 days", "3 days" or
+     * "80%" — what a KPI card has room for.
+     */
+    public function thresholdLabel(): string
+    {
+        return match ($this->mode) {
+            self::MODE_CONSECUTIVE_ABSENCES => self::days($this->consecutiveAbsences),
+            self::MODE_UNEXCUSED_ABSENCE_DAYS => self::days($this->absenceFlagDays),
+            default => self::percent($this->thresholdPercent).'%',
+        };
+    }
+
+    /** The notice in the same unit: "3 days". */
+    public function noticeLabel(): string
+    {
+        return self::days($this->absenceNoticeDays);
+    }
+
+    /** A short line the UI can show so staff know what the threshold currently means. */
     public function describe(): string
     {
         $test = $this->describeThreshold();
 
-        // A window of 0 or 1 is no window at all, so it is not worth a clause
-        // that would only make the sentence longer.
-        return $this->minimumObservationDays > 1
+        // Only a rate waits on an observation window, and a window of 0 or 1 is
+        // no window at all, so neither is worth a clause.
+        return $this->usesObservationWindow()
             ? $test.', after at least '.$this->minimumObservationDays.' recorded feeding days'
             : $test;
     }
@@ -415,32 +390,15 @@ class FeedingAtRiskRule
     {
         return match ($this->mode) {
             self::MODE_CONSECUTIVE_ABSENCES => $this->consecutiveAbsences.' or more absences in a row',
-            // Said in weeks, because that is the unit the rule was written in
-            // and the one a coordinator checks against a calendar; the days
-            // only mean anything against the sessions the school actually
-            // feeds.
-            self::MODE_UNEXCUSED_ABSENCE_DAYS => $this->runLabel($this->absenceFlagDays).' of consecutive unexcused absences',
-            default => 'attendance below '.rtrim(rtrim(number_format($this->thresholdPercent, 1), '0'), '.').'%',
+            self::MODE_UNEXCUSED_ABSENCE_DAYS => self::days($this->absenceFlagDays).' of consecutive unexcused absence',
+            default => 'attendance below '.self::percent($this->thresholdPercent).'%',
         };
     }
 
-    /**
-     * A run of feeding days, said the way the coordinator says it.
-     *
-     * A whole number of feeding weeks is stated in weeks — a run of four is
-     * "1 week", not "4 days" — because that is how the rule is written and
-     * checked. Anything that is not a whole number of weeks is stated in days,
-     * since rounding it to one would misstate the rule.
-     */
-    private function runLabel(int $days): string
+    /** The early notice as a sentence fragment. */
+    public function describeNotice(): string
     {
-        if ($days >= self::FEEDING_DAYS_PER_WEEK && $days % self::FEEDING_DAYS_PER_WEEK === 0) {
-            $weeks = intdiv($days, self::FEEDING_DAYS_PER_WEEK);
-
-            return $weeks.' '.($weeks === 1 ? 'week' : 'weeks');
-        }
-
-        return $days.' '.($days === 1 ? 'day' : 'days');
+        return self::days($this->absenceNoticeDays).' of consecutive unexcused absence';
     }
 
     /** The observation window on its own, for a screen that names it separately. */
@@ -451,9 +409,23 @@ class FeedingAtRiskRule
             : 'the first recorded feeding day';
     }
 
+    private static function days(int $days): string
+    {
+        return $days.' '.($days === 1 ? 'day' : 'days');
+    }
+
+    private static function percent(float $value): string
+    {
+        return rtrim(rtrim(number_format($value, 1), '0'), '.');
+    }
+
     /** @param  list<bool>  $confirmed */
     private function isBelowRate(array $confirmed): bool
     {
+        if ($confirmed === []) {
+            return false;
+        }
+
         $present = count(array_filter($confirmed, static fn ($m) => $m === true));
 
         return (($present / count($confirmed)) * 100) < $this->thresholdPercent;

@@ -1,19 +1,20 @@
 {{-- The four figures the tab opens on.
 
-     "At-Risk Students" counts the school's own business rule and nothing else:
-     a learner below the configured threshold. Watch learners are ABOVE the
-     threshold and are named on the hint line rather than added to the count —
+     "At-Risk Students" counts FLAGGED learners and nothing else: the threshold
+     reached AND the coordinator's confirmation on record. Learners awaiting
+     that confirmation, and those under an attendance notice, are named on the
+     hint line rather than added to the count — neither has been flagged, and
      folding them in would make this tab report a bigger programme problem than
-     the Dashboard and the Beneficiaries tab, which read the same rule.
+     the Dashboard and the Beneficiaries tab, which count the same reading.
 
-     The threshold card prints the school's configured value, never a constant:
-     a System Admin moving it moves this card. --}}
+     The threshold card prints the school's configured values, never a
+     constant: a System Admin moving them moves this card. --}}
 @php
 	$c = $cards;
 	$rateLabel = $c['at_risk_rate'] !== null ? number_format($c['at_risk_rate'], 0).'%' : '—';
 	$riskAccent = match (true) {
-		$c['critical'] > 0 => 'accent-danger',
 		$c['at_risk'] > 0 => 'accent-orange',
+		$c['awaiting'] > 0 || $c['notices'] > 0 => 'accent-amber',
 		default => 'accent-success',
 	};
 @endphp
@@ -24,15 +25,7 @@
 		<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div>
 	</div>
 	<div class="kpi-value">{{ $c['at_risk'] }}</div>
-	{{-- Learners still inside the observation window are named here, never
-	     added to the figure above: the rule has not classified them, so
-	     counting them would report a programme problem nobody has established. --}}
-	<div class="kpi-hint">
-		{{ $c['critical'] }} critical &middot; {{ $c['watch'] }} on watch
-		@if ($c['observing'] > 0)
-			&middot; {{ $c['observing'] }} in early monitoring
-		@endif
-	</div>
+	<div class="kpi-hint">{{ $c['awaiting'] }} awaiting confirmation &middot; {{ $c['notices'] }} {{ \Illuminate\Support\Str::plural('notice', $c['notices']) }}</div>
 </article>
 
 <article class="card kpi accent-brand">
@@ -58,13 +51,6 @@
 		<div class="kpi-label">Attendance Threshold</div>
 		<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22h16"/><path d="M12 2v10"/><path d="m8 6 4-4 4 4"/><path d="M4 12h16v4a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4Z"/></svg></div>
 	</div>
-	<div class="kpi-value">{{ $c['threshold_label'] }}%</div>
-	{{-- The threshold and the history it needs are one policy, so the card
-	     that prints the school's percentage prints its window too. --}}
-	<div class="kpi-hint">
-		Watch band from {{ $c['watch_label'] }}%
-		@if ($c['minimum_observation_days'] > 1)
-			&middot; after {{ $c['minimum_observation_days'] }} feeding days
-		@endif
-	</div>
+	<div class="kpi-value">{{ $c['threshold_label'] }}</div>
+	<div class="kpi-hint">Notice at {{ $c['notice_label'] }}</div>
 </article>

@@ -107,16 +107,19 @@
 			<p>Printed {{ now()->format('F j, Y') }}{{ ($programStats['sessions_held'] ?? 0) > 0 ? ' · '.$programStats['sessions_held'].' feeding sessions recorded' : '' }}</p>
 		</div>
 
-		@if (($programStats['at_risk_count'] ?? 0) > 0)
+		{{-- Flagged means confirmed: the threshold was reached AND the Feeding
+		     Coordinator confirmed the record. Only the coordinator and the
+		     School Nurse see it; the Clinic Teacher reads this page without it. --}}
+		@if (($showFlags ?? false) && ($programStats['at_risk_count'] ?? 0) > 0)
 			<div class="alert-bar">
 				<div class="alert-body">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
 					<div>
-						<strong>{{ $programStats['at_risk_count'] }} at-risk beneficiaries detected</strong>
+						<strong>{{ $programStats['at_risk_count'] }} {{ \Illuminate\Support\Str::plural('beneficiary', $programStats['at_risk_count']) }} flagged for follow-up</strong>
 						{{-- The school's own rule, printed as it stands: two
 						     schools read different lines here, and the figure
-						     named is the one that decided the flags. --}}
-						<span>{{ ucfirst($programStats['at_risk_rule'] ?? '') }} &middot; {{ $programStats['at_risk_threshold_count'] ?? 0 }} of {{ $programStats['sessions_held'] ?? 0 }} sessions needed to clear it.</span>
+						     named is the one that was reached. --}}
+						<span>{{ ucfirst($programStats['at_risk_rule'] ?? '') }}@if (($programStats['at_risk_threshold_count'] ?? null) !== null) &middot; {{ $programStats['at_risk_threshold_count'] }} of {{ $programStats['sessions_held'] ?? 0 }} sessions needed to clear it @endif</span>
 					</div>
 				</div>
 				<button type="button" class="btn btn-secondary" id="focusAtRiskBtn">Review List</button>
@@ -180,6 +183,7 @@
 			<div class="prog-labels"><span>Baseline (Day 1)</span><span>Endline (Day 120)</span></div>
 		</section>
 
+		@if ($showFlags ?? false)
 		<section class="risk-section" id="atRiskSection">
 			@php
 				$atRiskGradeOptions = ($atRiskStudents ?? collect())
@@ -224,6 +228,7 @@
 							<th>Student</th>
 							<th>Section</th>
 							<th>Attendance</th>
+							<th>Flagged On</th>
 							<th>Nutritional Status</th>
 						</tr>
 					</thead>
@@ -248,19 +253,21 @@
 								     A learner no confirmed session has covered
 								     has no rate to print. --}}
 								<td class="tnum">{{ $student['attendance'] }}{{ $student['attendance_percent'] !== null ? ' ('.$student['attendance_percent'].'%)' : '' }}</td>
+								<td class="tnum">{{ $student['flagged_on'] ?? '—' }}</td>
 								<td><span class="badge {{ $statusBadge }}">{{ $student['nutritional_status'] ?: 'Not set' }}</span></td>
 							</tr>
 						@empty
-							<tr><td colspan="4" class="table-empty">No at-risk beneficiaries right now.</td></tr>
+							<tr><td colspan="5" class="table-empty">No beneficiary is flagged for follow-up right now.</td></tr>
 						@endforelse
 						@if (($atRiskStudents ?? collect())->isNotEmpty())
-							<tr id="riskNoMatchRow" style="display:none;"><td colspan="4" class="table-empty">No beneficiaries match these filters.</td></tr>
+							<tr id="riskNoMatchRow" style="display:none;"><td colspan="5" class="table-empty">No beneficiaries match these filters.</td></tr>
 						@endif
 					</tbody>
 				</table>
 				</div>
 			</div>
 		</section>
+		@endif
 
 		@php
 			$attendanceRosterRows = ($attendanceRoster ?? collect());

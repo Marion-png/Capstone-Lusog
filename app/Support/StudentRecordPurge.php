@@ -92,6 +92,7 @@ final class StudentRecordPurge
         'health_assessments' => [],
         'feeding_attendances' => [],
         'feeding_follow_ups' => [],
+        'feeding_attendance_confirmations' => [],
         'parental_consent_forms' => ['file_path', 'med_cert_path'],
     ];
 

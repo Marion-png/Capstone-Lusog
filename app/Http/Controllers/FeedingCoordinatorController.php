@@ -8,6 +8,7 @@ use App\Support\BmiAssessmentReport;
 use App\Support\ChangeStamp;
 use App\Support\ClassMasterlistTemplate;
 use App\Support\FeedingAtRiskRule;
+use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingNutritionProgress;
@@ -1011,7 +1012,9 @@ class FeedingCoordinatorController extends Controller
         // cost one needless refetch - never a missed change, and nothing of
         // theirs is ever read. Both counts come back in one round trip.
         return ChangeStamp::forTables(
-            ['student_health_records', 'feeding_attendances'],
+            // A confirmation or a resolved follow-up moves a flag without
+            // touching a mark, so both are watched too.
+            ['student_health_records', 'feeding_attendances', 'feeding_attendance_confirmations', 'feeding_follow_ups'],
             $institutionId,
             [now()->toDateString()],
         );
@@ -1038,6 +1041,9 @@ class FeedingCoordinatorController extends Controller
     private function buildBeneficiaryStats(Collection $beneficiaries, FeedingAtRiskRule $rule): array
     {
         $marksByRecord = $this->marksByRecord($beneficiaries);
+        // Flagged, never "threshold reached": a learner counts at risk only
+        // once the coordinator has confirmed their record.
+        $flags = FeedingAttendanceFlag::forRecords($beneficiaries, $rule);
 
         $confirmedSessions = 0;
         $presentSessions = 0;
@@ -1052,11 +1058,9 @@ class FeedingCoordinatorController extends Controller
             $confirmedSessions += count($confirmed);
             $presentSessions += $rule->presentCount($marks);
 
-            // Flagged live from the school's current threshold rather than read
-            // off the stored is_at_risk column, so raising or lowering the
-            // threshold shows on the dashboard at once instead of waiting for
-            // the next import to recompute the flags.
-            if ($rule->isAtRisk($marks)) {
+            // Read live rather than off the stored is_at_risk column, so a
+            // confirmation shows on the dashboard at once.
+            if ($flags[$record->id]['flagged'] ?? false) {
                 $atRisk++;
             }
         }
@@ -1094,12 +1098,14 @@ class FeedingCoordinatorController extends Controller
     }
 
     /**
-     * The learners the school's attendance threshold has flagged, worst first.
+     * The learners the attendance flow wants the coordinator to look at —
+     * flagged for follow-up, awaiting confirmation, or under an attendance
+     * notice — the decision waiting on them first.
      *
-     * Days present is counted over **confirmed** sessions only — the same
-     * denominator the rule itself uses — so the fraction on screen is exactly
-     * the one that decided the flag, and a learner can never read as "34/47"
-     * while being judged on some other 47.
+     * Every standing comes from FeedingAttendanceFlag, the reading the
+     * At-Risk Students tab works from, so the two never list different
+     * learners. Days present is counted over **confirmed** sessions only — the
+     * same denominator the rule uses.
      *
      * @param  Collection<int, StudentHealthRecord>  $beneficiaries
      * @return array<string, mixed>
@@ -1107,15 +1113,17 @@ class FeedingCoordinatorController extends Controller
     private function buildAttendanceRisk(Collection $beneficiaries, FeedingAtRiskRule $rule): array
     {
         $marksByRecord = $this->marksByRecord($beneficiaries);
+        $flags = FeedingAttendanceFlag::forRecords($beneficiaries, $rule);
 
         $rows = $beneficiaries
-            ->map(function (StudentHealthRecord $record) use ($marksByRecord, $rule): ?array {
-                $marks = $marksByRecord->get($record->id, []);
+            ->map(function (StudentHealthRecord $record) use ($marksByRecord, $flags, $rule): ?array {
+                $flag = $flags[$record->id] ?? null;
 
-                if (! $rule->isAtRisk($marks)) {
+                if ($flag === null || ! in_array($flag['state'], FeedingAttendanceFlag::ATTENTION, true)) {
                     return null;
                 }
 
+                $marks = $marksByRecord->get($record->id, []);
                 [$grade, $section] = $this->splitSection((string) $record->section);
                 $confirmed = count(array_filter($marks, static fn ($mark) => $mark !== null));
 
@@ -1127,34 +1135,33 @@ class FeedingCoordinatorController extends Controller
                     'rate' => $rule->attendanceRate($marks),
                     'present' => $rule->presentCount($marks),
                     'sessions' => $confirmed,
+                    'run' => $flag['run'],
+                    'state' => $flag['state'],
+                    'state_label' => $flag['label'],
+                    'state_badge' => $flag['badge'],
+                    'priority' => $flag['priority'],
                 ];
             })
             ->filter()
-            // Lowest attendance first: the learner in most trouble is the one
-            // the coordinator should reach today.
-            ->sortBy([
-                fn (array $a, array $b) => ($a['rate'] ?? 0) <=> ($b['rate'] ?? 0),
-                fn (array $a, array $b) => strtolower($a['name']) <=> strtolower($b['name']),
+            ->sortBy(fn (array $row): array => [
+                FeedingAttendanceFlag::priorityRank($row['priority']),
+                FeedingAttendanceFlag::stateRank($row['state']),
+                -$row['run'],
+                strtolower($row['name']),
             ])
             ->values()
             ->all();
 
-        // Learners the rule has not started classifying. Reported separately so
-        // an empty list on feeding day 8 reads as "too early to say" rather
-        // than "the programme has no attendance problem".
-        $observing = $beneficiaries
-            ->reject(fn (StudentHealthRecord $record): bool => $rule->hasEnoughObservation(
-                $marksByRecord->get($record->id, [])
-            ))
-            ->count();
+        $count = fn (string $state): int => count(array_filter($rows, static fn (array $row): bool => $row['state'] === $state));
 
         return [
-            'threshold' => $rule->thresholdPercent(),
+            'threshold_label' => $rule->thresholdLabel(),
+            'notice_label' => $rule->noticeLabel(),
             'rule' => $rule->describe(),
             'mode' => $rule->mode(),
-            'count' => count($rows),
-            'observing' => $observing,
-            'minimum_observation_days' => $rule->minimumObservationDays(),
+            'count' => $count(FeedingAttendanceFlag::FLAGGED),
+            'awaiting' => $count(FeedingAttendanceFlag::AWAITING_CONFIRMATION),
+            'notices' => $count(FeedingAttendanceFlag::NOTICE),
             'rows' => $rows,
         ];
     }

@@ -8,51 +8,52 @@ return [
     |--------------------------------------------------------------------------
     |
     | At-risk is COMPUTED from feeding-session attendance and nothing else — a
-    | learner is never flagged for their nutritional status. Two modes:
+    | learner is never flagged for their nutritional status. The flow is the
+    | one the capstone adviser set (see App\Support\FeedingAttendanceFlag):
     |
-    |   attendance_rate        flag when attended% < `threshold_percent`
-    |   consecutive_absences   flag on a run of >= `consecutive_absences` misses
-    |   unexcused_absence_days flag on a run of >= `absence_flag_days` UNEXCUSED
-    |                          misses — one feeding week. This is the rule Sta.
-    |                          Ana actually runs, and it is not a percentage of
-    |                          the cycle at all: a learner who attended every
-    |                          session for two months and then vanished for a
-    |                          week is still above 90% and needs following up
-    |                          today. `absence_removal_days` (two feeding weeks)
-    |                          is the later point at which removal from the
-    |                          active list becomes worth reviewing with the
-    |                          adviser — never an automatic removal.
+    |   1. `absence_notice_days` (3) unexcused absences in a row raise an
+    |      ATTENDANCE NOTICE: the Feeding Coordinator is asked to verify the
+    |      record. Nobody is flagged.
+    |   2. Reaching the mode's threshold below — `absence_flag_days` (7) in a
+    |      row under the unexcused-absence rule — makes the learner AWAITING
+    |      CONFIRMATION. Still nobody is flagged.
+    |   3. The coordinator confirms the record is correct, and only then is the
+    |      learner FLAGGED FOR FOLLOW-UP — visible to the coordinator and the
+    |      School Nurse. A Resolved follow-up closes the flag.
+    |
+    | Enrolment is never touched by any of it.
+    |
+    | Which test reaches step 2 is the school's mode:
+    |
+    |   attendance_rate        attended% < `threshold_percent`
+    |   consecutive_absences   a run of >= `consecutive_absences` misses
+    |   unexcused_absence_days a run of >= `absence_flag_days` UNEXCUSED
+    |                          misses. This is the rule Sta. Ana runs, and it
+    |                          is not a percentage of the cycle at all: a
+    |                          learner who attended every session for two
+    |                          months and then vanished is still above 90%
+    |                          and needs following up today.
     |
     | An EXCUSED absence — the coordinator's "buffer": fasting during Ramadan,
     | illness, a family emergency — is recorded on the sheet and deliberately
     | excluded from every one of these rules, exactly as an unconfirmed mark is
     | (see App\Support\FeedingAttendanceMark).
     |
-    | The mode itself is school-configurable (`institutions.feeding_at_risk_mode`),
-    | because which KIND of rule a school runs is local policy just as much as
-    | the figure it is set to.
-    |
-    | The approved default is 80% cumulative attendance, but the threshold is
-    | school-configurable: `institutions.feeding_at_risk_threshold` overrides
-    | this per school (System Admin sets it), and this value is what a school
-    | that has set nothing is judged on. Read it through
+    | The mode and every figure are school-configurable (the `institutions.
+    | feeding_*` columns, set by the System Admin); these values are what a
+    | school that has set nothing runs. Read them through
     | FeedingAtRiskRule::forInstitution(), never straight from config, or two
-    | screens will disagree about who is flagged. Changing either figure
-    | mid-year silently re-flags learners.
+    | screens will disagree about who is flagged.
     |
     | Sessions a human has not yet confirmed (an unresolved "?" from a photo
     | scan) are excluded from both the numerator and the denominator — an unread
     | mark is not evidence of attendance or of absence.
     |
-    | `minimum_observation_days` is the observation window the threshold is only
-    | applied AFTER. A learner one of four sessions has covered is at 25%, but
-    | four sessions is not a programme problem — it is too little history to
-    | classify anyone on, and flagging them would put a child on a follow-up
-    | list on the strength of a single missed morning. Until the window is met
-    | the learner reads Early Monitoring; the rate is still computed and shown,
-    | it simply does not classify. Also school-configurable
-    | (`institutions.feeding_min_observation_days`); 0 or 1 means the threshold
-    | applies from the first confirmed session.
+    | `minimum_observation_days` is the history a RATE needs before it means
+    | anything: a learner one of four sessions has covered is at 25%, which is
+    | a sample, not a finding. Until it is met the learner reads Early
+    | Monitoring. A run of absences carries its own evidence, so the
+    | run-based modes never wait on it.
     |
     */
 
@@ -60,28 +61,11 @@ return [
         'mode' => env('FEEDING_AT_RISK_MODE', 'attendance_rate'),
         'threshold_percent' => (float) env('FEEDING_AT_RISK_THRESHOLD_PERCENT', 80),
         'consecutive_absences' => (int) env('FEEDING_AT_RISK_CONSECUTIVE_ABSENCES', 3),
-        // One feeding week and two, in sessions. Monday-Thursday is what the
-        // budget currently covers, so a week is four days, not five.
-        'absence_flag_days' => (int) env('FEEDING_ABSENCE_FLAG_DAYS', 4),
-        'absence_removal_days' => (int) env('FEEDING_ABSENCE_REMOVAL_DAYS', 8),
+        // The adviser's two days: the notice at day 3, the flag at day 7, both
+        // counted in recorded feeding sessions of unexcused absence in a row.
+        'absence_notice_days' => (int) env('FEEDING_ABSENCE_NOTICE_DAYS', 3),
+        'absence_flag_days' => (int) env('FEEDING_ABSENCE_FLAG_DAYS', 7),
         'minimum_observation_days' => (int) env('FEEDING_MINIMUM_OBSERVATION_DAYS', 10),
-
-        /*
-        | The two monitoring bands the At-Risk Students tab draws around the
-        | official threshold. They are an operational aid and NOTHING else: the
-        | threshold above is still the only thing that decides who is at risk,
-        | and only at-risk learners are counted by the at-risk figure.
-        |
-        |   watch_margin_percent     how far ABOVE the threshold still warrants
-        |                            a look — "Watch"
-        |   critical_margin_percent  how far BELOW the threshold stops being
-        |                            "At Risk" and becomes "Critical"
-        |
-        | Read both through App\Support\FeedingRiskSeverity, never from config
-        | directly, so the bands move with the school's own threshold.
-        */
-        'watch_margin_percent' => (float) env('FEEDING_WATCH_MARGIN_PERCENT', 5),
-        'critical_margin_percent' => (float) env('FEEDING_CRITICAL_MARGIN_PERCENT', 10),
     ],
 
     /*
