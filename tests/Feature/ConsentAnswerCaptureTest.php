@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\AuditLog;
 use App\Models\HealthConsentForm;
 use App\Models\Institution;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
+use App\Support\ConsentFormScanner;
 use App\Support\ConsentStanding;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -261,5 +263,96 @@ class ConsentAnswerCaptureTest extends TestCase
             ->assertSessionHasErrors('consent_type');
 
         $this->assertSame(0, ParentalConsentForm::count(), 'A refused upload was stored anyway.');
+    }
+
+    // ── The answer read off the photo ──────────────────────────────────
+
+    /** The reader is offered only where one is configured. */
+    #[Test]
+    public function the_dialog_offers_to_read_the_answer_only_where_a_reader_is_set_up(): void
+    {
+        $html = $this->withSession($this->adviserSession())
+            ->get(route('consent-forms.index'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringNotContainsString('id="pcReadAnswer"', $html);
+        $this->assertStringNotContainsString('name="answer_confirmed"', $html);
+
+        $this->swap(ConsentFormScanner::class, new class extends ConsentFormScanner
+        {
+            public function isAvailable(): bool
+            {
+                return true;
+            }
+        });
+
+        $html = $this->withSession($this->adviserSession())
+            ->get(route('consent-forms.index'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('Read the answer from the photo', $html);
+        $this->assertStringContainsString('name="answer_from_scan"', $html);
+        $this->assertStringContainsString('name="answer_confirmed"', $html);
+    }
+
+    /**
+     * The reader proposes; the adviser records. An answer the reader put in
+     * the select is refused until the adviser says it matches the paper, and
+     * once they do, the trail says who decided it.
+     */
+    #[Test]
+    public function an_answer_read_off_the_photo_is_filed_only_once_the_adviser_confirms_it(): void
+    {
+        $payload = fn (array $extra = []) => array_merge([
+            'lrn' => '123456789012',
+            'consent' => UploadedFile::fake()->create('signed.jpg', 120, 'image/jpeg'),
+            'consent_type' => 'full',
+            'answer_from_scan' => '1',
+        ], $extra);
+
+        $this->withSession($this->adviserSession())
+            ->from(route('consent-forms.index'))
+            ->post(route('parental-consent.store'), $payload())
+            ->assertRedirect(route('consent-forms.index'))
+            ->assertSessionHasErrors('answer_confirmed');
+
+        $this->assertSame(0, ParentalConsentForm::count(), 'An unconfirmed reading was filed.');
+
+        $before = (int) AuditLog::max('id');
+
+        $this->withSession($this->adviserSession())
+            ->from(route('consent-forms.index'))
+            ->post(route('parental-consent.store'), $payload(['answer_confirmed' => '1']))
+            ->assertSessionHasNoErrors();
+
+        $upload = ParentalConsentForm::latest('id')->firstOrFail();
+        $this->assertSame('full', $upload->consent_type);
+        $this->assertSame(ConsentStanding::APPROVED, ConsentStanding::for(null, $upload));
+
+        $this->assertTrue(
+            AuditLog::where('id', '>', $before)
+                ->where('action', 'confirmed')
+                ->where('subject_type', 'ParentalConsentForm')
+                ->where('subject_id', $upload->id)
+                ->exists(),
+            'The adviser\'s confirmation of the reading is not on the trail.'
+        );
+    }
+
+    /** An answer the adviser chose by hand is theirs, as it always was. */
+    #[Test]
+    public function an_answer_chosen_by_hand_needs_no_confirmation(): void
+    {
+        $before = (int) AuditLog::max('id');
+
+        $form = $this->upload('partial');
+
+        $this->assertSame('partial', $form->consent_type);
+        $this->assertFalse(
+            AuditLog::where('id', '>', $before)->where('action', 'confirmed')->exists(),
+            'A hand-chosen answer was recorded as a confirmed reading.'
+        );
     }
 }

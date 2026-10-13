@@ -254,9 +254,11 @@ class AdviserConsentPageTest extends TestCase
         $this->assertStringNotContainsString('id="pcRefusedField"', $html);
 
         $this->assertTrue($student < $year, 'Select Student comes first.');
-        $this->assertTrue($year < $answer, 'School Year precedes the guardian answer.');
-        $this->assertTrue($answer < $signedForm, 'The guardian answer precedes the signed form upload.');
-        $this->assertTrue($signedForm < $medCert, 'Medical Certificate follows the signed form.');
+        $this->assertTrue($year < $signedForm, 'School Year precedes the signed form upload.');
+        // The answer is read off the photo — by the adviser, or by the consent
+        // reader where one is set up — so the photo is attached first.
+        $this->assertTrue($signedForm < $answer, 'The signed form precedes the guardian answer.');
+        $this->assertTrue($answer < $medCert, 'Medical Certificate follows the guardian answer.');
         $this->assertTrue($medCert < $notes, 'Additional Notes come last.');
 
         $this->assertStringContainsString('Click to upload Medical Certificate', $html);

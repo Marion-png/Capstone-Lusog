@@ -79,6 +79,10 @@ class HealthConsentFormController extends Controller
             'schoolYear' => $schoolYear,
             'unreadCount' => $unreadCount,
             'rows' => $rows,
+            // The upload dialog offers to read the parent's answer off the
+            // photo only where a reader is configured; otherwise the adviser
+            // chooses it from the paper exactly as before.
+            'scannerReady' => app(ConsentFormScanner::class)->isAvailable(),
             'stats' => [
                 'approved' => $counts['approved'] ?? 0,
                 'partial' => $counts['partial'] ?? 0,

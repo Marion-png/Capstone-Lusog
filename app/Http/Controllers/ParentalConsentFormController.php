@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use App\Support\AdviserClassScope;
+use App\Support\AuditTrail;
 use App\Support\EncryptedFileStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -35,6 +36,14 @@ class ParentalConsentFormController extends Controller
             // answer, or an attested paper record, ahead of this one, so the
             // two can never contradict each other.
             'consent_type' => ['nullable', 'string', 'in:full,partial,refused'],
+            // The answer may have been read off the photo by the consent
+            // reader. A model reading a photograph is a typing aid, never the
+            // authorisation, so that reading is filed only once the adviser has
+            // said it matches the paper — the same attestation Record Signed
+            // Paper Form asks for. An answer the adviser chose themselves needs
+            // none, exactly as before.
+            'answer_from_scan' => ['nullable', 'boolean'],
+            'answer_confirmed' => ['accepted_if:answer_from_scan,1'],
             'partial_exception' => ['nullable', 'string', 'max:500'],
             'refused_reason' => ['nullable', 'string', 'max:500'],
             'allergy_food' => ['nullable', 'boolean'],
@@ -49,6 +58,8 @@ class ParentalConsentFormController extends Controller
             'notes' => ['nullable', 'string', 'max:1000'],
             'consent' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
             'medical_certificate' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+        ], [
+            'answer_confirmed.accepted_if' => 'Confirm that the answer read from the photo matches the signed form.',
         ]);
 
         $advisedGrade = (string) $request->session()->get('assigned_grade_level', '');
@@ -89,7 +100,7 @@ class ParentalConsentFormController extends Controller
             $medCertPath = EncryptedFileStorage::store($medCert, 'parental-consents/'.$record->id.'/med-cert');
         }
 
-        ParentalConsentForm::create([
+        $upload = ParentalConsentForm::create([
             'student_health_record_id' => $record->id,
             'program_type' => 'Deworming',
             'school_year' => $schoolYear,
@@ -114,6 +125,18 @@ class ParentalConsentFormController extends Controller
             'file_original_name' => $originalName,
             'uploaded_by_name' => (string) $request->session()->get('active_name', 'Class Adviser'),
         ]);
+
+        // Who decided the answer is part of the evidence: a nurse asking how a
+        // "full consent" got onto this record can find that the reader
+        // proposed it and the adviser confirmed it against the paper.
+        if (! empty($validated['answer_from_scan']) && ($validated['consent_type'] ?? null) !== null) {
+            AuditTrail::record(
+                'confirmed',
+                'ParentalConsentForm',
+                $upload->id,
+                'Consent answer read from the photographed form and confirmed by the class adviser',
+            );
+        }
 
         $typeLabel = match ($validated['consent_type'] ?? null) {
             'full' => 'Full consent',

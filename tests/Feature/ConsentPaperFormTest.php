@@ -288,4 +288,110 @@ class ConsentPaperFormTest extends TestCase
             ->get(route('consent-forms.paper.image', $this->form()))
             ->assertNotFound();
     }
+
+    // ── The desks that act on it see the paper ───────────────────────
+
+    private function readerSession(string $role, ?Institution $school = null): array
+    {
+        return [
+            'active_role' => $role,
+            'active_name' => 'Ana Reyes',
+            'active_username' => 'reader1',
+            'active_school_name' => 'Sta. Ana NHS',
+            'active_institution_id' => ($school ?? $this->school)->id,
+        ];
+    }
+
+    private function recordedOnPaper(): HealthConsentForm
+    {
+        $form = $this->form();
+
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.paper.store', $form), $this->answers())
+            ->assertRedirect();
+
+        return $form->refresh();
+    }
+
+    /**
+     * The answers on a paper consent were typed by the adviser, so the clinic
+     * that acts on them must be able to check them against the parent's own
+     * marks — the photograph is the only signature such a consent has.
+     */
+    #[Test]
+    public function the_clinic_can_open_the_photograph_a_paper_consent_was_recorded_from(): void
+    {
+        $form = $this->recordedOnPaper();
+
+        foreach (['school_nurse', 'clinic_staff', 'clinic_teacher'] as $role) {
+            $html = $this->withSession($this->readerSession($role))
+                ->get(route('consent-forms.nurse-show', $form))
+                ->assertOk()
+                ->getContent();
+
+            $this->assertStringContainsString('View Signed Paper Form', $html, $role.' is not offered the photograph.');
+            $this->assertStringContainsString(route('consent-forms.paper.image', $form), $html);
+            $this->assertStringContainsString('entered by the class adviser', $html);
+
+            $this->withSession($this->readerSession($role))
+                ->get(route('consent-forms.paper.image', $form))
+                ->assertOk();
+        }
+
+        // Still scoped to the school the form belongs to.
+        $other = Institution::create(['name' => 'Other School', 'status' => 'active']);
+        $this->withSession($this->readerSession('school_nurse', $other))
+            ->get(route('consent-forms.paper.image', $form))
+            ->assertNotFound();
+    }
+
+    /**
+     * EnsureActiveSession re-seeds a demo session for whichever role a URL
+     * belongs to, so a photograph served from an adviser URL would turn the
+     * nurse who opened it into the adviser.
+     */
+    #[Test]
+    public function opening_the_photograph_does_not_change_a_demo_nurses_role(): void
+    {
+        $form = $this->recordedOnPaper();
+
+        $this->assertStringNotContainsString('/class-adviser/', route('consent-forms.paper.image', $form));
+
+        $this->withSession(array_merge($this->readerSession('school_nurse'), ['active_username' => 'prototype']))
+            ->get(route('consent-forms.paper.image', $form))
+            ->assertOk()
+            ->assertSessionHas('active_role', 'school_nurse');
+    }
+
+    #[Test]
+    public function the_school_head_reads_the_photograph_under_their_own_path(): void
+    {
+        $form = $this->recordedOnPaper();
+
+        $html = $this->withSession($this->readerSession('school_head'))
+            ->get(route('consent-forms.head-show', $form))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString(route('consent-forms.head-paper-image', $form), $html);
+
+        $this->withSession($this->readerSession('school_head'))
+            ->get(route('consent-forms.head-paper-image', $form))
+            ->assertOk();
+    }
+
+    /** A consent the parent signed on screen has no photograph to offer. */
+    #[Test]
+    public function a_consent_signed_on_screen_offers_no_photograph(): void
+    {
+        $form = $this->form(HealthConsentForm::STATUS_SIGNED);
+
+        $html = $this->withSession($this->readerSession('school_nurse'))
+            ->get(route('consent-forms.nurse-show', $form))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringNotContainsString('View Signed Paper Form', $html);
+        $this->assertStringNotContainsString('entered by the class adviser', $html);
+    }
 }

@@ -366,6 +366,15 @@ tbody tr:hover td{background:#f7fbf8}
 .pc-input textarea{resize:vertical;min-height:56px;padding-top:11px}
 .pc-input input[readonly]{color:var(--muted)}
 
+/* Reading the guardian's answer off the photo, and confirming it */
+.pc-read{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-bottom:8px}
+.pc-read .btn{font-size:.76rem;padding:7px 11px}
+.pc-read .btn:disabled{opacity:.55;cursor:not-allowed}
+.pc-read-state{font-size:.72rem;color:var(--muted);line-height:1.4}
+.pc-confirm{display:flex;align-items:flex-start;gap:8px;margin-top:4px;padding:9px 11px;font-size:.76rem;font-weight:600;color:var(--text);background:var(--g100);border:1.5px solid var(--g300);border-radius:10px;cursor:pointer}
+.pc-confirm[hidden]{display:none}
+.pc-confirm input{accent-color:var(--g700);margin-top:2px;flex-shrink:0}
+
 .pc-choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
 .pc-choice{display:flex;align-items:flex-start;gap:8px;padding:11px 12px;background:#f7faf8;border:2px solid var(--border);border-radius:10px;cursor:pointer;transition:border-color .18s ease,background .18s ease}
 .pc-choice:hover{border-color:var(--g300)}

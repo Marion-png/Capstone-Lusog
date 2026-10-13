@@ -258,7 +258,21 @@
                     </div>
                 </div>
 
-                {{-- What the guardian answered.
+                <div class="pc-field">
+                    <label>Upload Signed Sulat-Pahibalo Form <span class="pc-req">*</span></label>
+                    <div class="pc-drop" id="pcDrop" role="button" tabindex="0">
+                        <div id="pcDropBody">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/><polyline points="12 16 12 11"/><polyline points="9.5 13 12 10.5 14.5 13"/></svg>
+                            <p>Click to upload or drag and drop</p>
+                            <p class="pc-drop-hint">PNG, JPG, or PDF (Max 5MB)</p>
+                        </div>
+                    </div>
+                    <input type="file" id="pc_file" name="consent" accept=".png,.jpg,.jpeg,.pdf" hidden>
+                </div>
+
+                {{-- What the guardian answered. It sits under the file because
+                     the photo is what the answer is read off — by the adviser,
+                     or by the consent reader where one is set up.
 
                      This was once left out, on the reasoning that two screens
                      asking the same question is how they come to disagree. The
@@ -281,6 +295,12 @@
                      nothing. --}}
                 <div class="pc-field">
                     <label for="pc_consent_type">What did the guardian answer? <span class="pc-optional">(Optional)</span></label>
+                    @if ($scannerReady)
+                        <div class="pc-read">
+                            <button type="button" class="btn btn-secondary" id="pcReadAnswer" disabled>Read the answer from the photo</button>
+                            <span class="pc-read-state" id="pcReadState" aria-live="polite">Attach a photo of the signed form first.</span>
+                        </div>
+                    @endif
                     <div class="pc-input">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                         <select id="pc_consent_type" name="consent_type">
@@ -295,18 +315,17 @@
                         filing the document now and will read it later &mdash; the form still counts as returned,
                         but no service may be given until an answer is on file.
                     </p>
-                </div>
-
-                <div class="pc-field">
-                    <label>Upload Signed Sulat-Pahibalo Form <span class="pc-req">*</span></label>
-                    <div class="pc-drop" id="pcDrop" role="button" tabindex="0">
-                        <div id="pcDropBody">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/><polyline points="12 16 12 11"/><polyline points="9.5 13 12 10.5 14.5 13"/></svg>
-                            <p>Click to upload or drag and drop</p>
-                            <p class="pc-drop-hint">PNG, JPG, or PDF (Max 5MB)</p>
-                        </div>
-                    </div>
-                    <input type="file" id="pc_file" name="consent" accept=".png,.jpg,.jpeg,.pdf" hidden>
+                    @if ($scannerReady)
+                        {{-- The reader's answer goes into the select above and is
+                             filed only once the adviser ticks this — the server
+                             refuses it otherwise. Choosing an answer by hand
+                             makes it the adviser's own and hides the box again. --}}
+                        <input type="hidden" name="answer_from_scan" id="pcAnswerFromScan" value="0">
+                        <label class="pc-confirm" id="pcAnswerConfirm" hidden>
+                            <input type="checkbox" name="answer_confirmed" value="1" id="pcAnswerConfirmed">
+                            <span>I checked this answer against the signed form.</span>
+                        </label>
+                    @endif
                 </div>
 
                 <div class="pc-field">
@@ -556,7 +575,9 @@
                 const files = event.dataTransfer?.files;
                 if (files && files.length) {
                     input.files = files;
-                    showFile(files[0]);
+                    // Setting .files fires nothing, and everything listening
+                    // for a new file (the name, the reader) listens on change.
+                    input.dispatchEvent(new Event('change'));
                 }
             });
             input.addEventListener('change', () => {
@@ -590,10 +611,113 @@
             consentDrop?.scrollIntoView({ block: 'center', behavior: 'smooth' });
         });
 
+        // ── Reading the answer off the photo ─────────────────────────
+        // The consent reader proposes; the adviser records. Its answer lands
+        // in the same select an adviser would set by hand, and is filed only
+        // once they tick the confirmation — the server refuses it otherwise.
+        // Only rendered where a reader is configured.
+        const readButton = document.getElementById('pcReadAnswer');
+        const readState = document.getElementById('pcReadState');
+        const answerSelect = document.getElementById('pc_consent_type');
+        const answerFromScan = document.getElementById('pcAnswerFromScan');
+        const answerConfirm = document.getElementById('pcAnswerConfirm');
+        const answerConfirmed = document.getElementById('pcAnswerConfirmed');
+
+        const setReaderAnswer = (fromScan) => {
+            if (!answerFromScan || !answerConfirm || !answerConfirmed) return;
+            answerFromScan.value = fromScan ? '1' : '0';
+            answerConfirm.hidden = !fromScan;
+            answerConfirmed.required = fromScan;
+            answerConfirmed.checked = false;
+        };
+
+        // The upload takes a PDF too, but the reader reads photographs only.
+        const readable = (file) => Boolean(file) && ['image/jpeg', 'image/png'].includes(file.type);
+
+        const syncReader = () => {
+            if (!readButton || !readState) return;
+            const file = consentFile?.files && consentFile.files[0];
+            readButton.disabled = !readable(file);
+            readState.textContent = !file
+                ? 'Attach a photo of the signed form first.'
+                : (readable(file) ? '' : 'Only a JPG or PNG photo can be read. Choose the answer from the paper.');
+        };
+
+        if (readButton && answerSelect) {
+            consentFile?.addEventListener('change', () => {
+                // A reading belongs to the photo it was taken from.
+                if (answerFromScan?.value === '1') {
+                    answerSelect.value = '';
+                    setReaderAnswer(false);
+                }
+                syncReader();
+            });
+
+            // Choosing by hand makes the answer the adviser's own.
+            answerSelect.addEventListener('change', () => setReaderAnswer(false));
+
+            const choiceToAnswer = { all: 'full', specific: 'partial', deny: 'refused' };
+
+            readButton.addEventListener('click', async () => {
+                const file = consentFile?.files && consentFile.files[0];
+                if (!readable(file)) return;
+
+                readButton.disabled = true;
+                readState.textContent = 'Reading the form…';
+
+                const body = new FormData();
+                body.append('photo', file);
+
+                try {
+                    const response = await fetch(@json(route('consent-forms.scan')), {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                            Accept: 'application/json',
+                        },
+                        body,
+                    });
+                    const data = await response.json().catch(() => ({}));
+
+                    // The adviser swapped the photo while it was being read.
+                    if (!consentFile.files || consentFile.files[0] !== file) return;
+
+                    if (!response.ok) {
+                        readState.textContent = data.message || 'The form could not be read. Choose the answer from the paper.';
+                        return;
+                    }
+
+                    const draft = data.draft || {};
+                    const answer = choiceToAnswer[draft.consent_choice] || '';
+
+                    // Unclear is never a guess either way: the select goes back
+                    // to "Not recorded yet" and the reason is said instead.
+                    answerSelect.value = answer;
+                    setReaderAnswer(answer !== '');
+
+                    if (draft.unreadable) {
+                        readState.textContent = 'The photo could not be read. Choose the answer from the paper.';
+                    } else if (answer === '') {
+                        readState.textContent = draft.consent_reason || 'The answer could not be made out. Choose it from the paper.';
+                    } else {
+                        const label = answerSelect.options[answerSelect.selectedIndex]?.text || answer;
+                        readState.textContent = 'Read as "' + label + '". Check it against the paper before uploading.'
+                            + (draft.signature_present ? '' : ' No parent\'s signature was found on the photo.');
+                    }
+                } catch (_err) {
+                    readState.textContent = 'The form could not be read. Choose the answer from the paper.';
+                } finally {
+                    readButton.disabled = !readable(consentFile?.files && consentFile.files[0]);
+                }
+            });
+        }
+
         const openUpload = (lrn) => {
             document.getElementById('uploadConsentForm')?.reset();
             resetConsentDrop();
             resetMedCertDrop();
+            setReaderAnswer(false);
+            syncReader();
             if (studentSelect && lrn) studentSelect.value = lrn;
             open(uploadModal);
         };

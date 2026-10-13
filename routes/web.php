@@ -961,8 +961,14 @@ Route::get('/dashboard/class-adviser/consent-forms/{form}/paper', [HealthConsent
     ->whereNumber('form')->name('consent-forms.paper');
 Route::post('/dashboard/class-adviser/consent-forms/{form}/paper', [HealthConsentFormController::class, 'recordPaperForm'])
     ->whereNumber('form')->name('consent-forms.paper.store');
-Route::get('/dashboard/class-adviser/consent-forms/{form}/paper-image', [HealthConsentFormController::class, 'paperFormImage'])
+// The photograph a paper consent was recorded from. Read by the adviser and by
+// the clinic, so it lives under the shared consent-forms path rather than the
+// adviser's: EnsureActiveSession re-seeds a demo nurse as the adviser on an
+// adviser URL. The head reads it under their own path for the same reason.
+Route::get('/dashboard/consent-forms/{form}/paper-image', [HealthConsentFormController::class, 'paperFormImage'])
     ->whereNumber('form')->name('consent-forms.paper.image');
+Route::get('/dashboard/school-head/consent-forms/{form}/paper-image', [HealthConsentFormController::class, 'paperFormImage'])
+    ->whereNumber('form')->name('consent-forms.head-paper-image');
 Route::get('/dashboard/school-nurse/consent-forms', [HealthConsentFormController::class, 'nurseIndex'])
     ->name('consent-forms.nurse-index');
 Route::get('/dashboard/school-nurse/consent-forms/{form}', [HealthConsentFormController::class, 'nurseShow'])

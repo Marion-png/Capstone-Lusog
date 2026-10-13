@@ -33,9 +33,24 @@
         </div>
         <div class="cf-card-body">
             <div class="cf-actions">
+                @if ($form->paper_form_path)
+                    {{-- A paper consent has no drawn signature: the photograph is
+                         the evidence, so whoever acts on the answers below can
+                         check them against what the parent actually ticked. --}}
+                    <a href="{{ session('active_role') === 'school_head'
+                            ? route('consent-forms.head-paper-image', $form)
+                            : route('consent-forms.paper.image', $form) }}"
+                       target="_blank" rel="noopener" class="cf-btn cf-btn-outline">View Signed Paper Form</a>
+                @endif
                 <a href="{{ route('consent-forms.print', $form) }}" target="_blank" class="cf-btn cf-btn-ghost">Print / Export PDF</a>
                 <span style="font-size:.76rem; color:var(--muted);">Consent information is read-only for the School Nurse.</span>
             </div>
+            @if ($form->paper_form_path)
+                <p style="font-size:.78rem; color:var(--muted); margin-top:10px;">
+                    This consent came back on paper. The answers below were entered by the class adviser
+                    from the signed form &mdash; open the photograph to see the parent's own marks and signature.
+                </p>
+            @endif
         </div>
     </div>
 
