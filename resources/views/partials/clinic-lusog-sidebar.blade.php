@@ -22,7 +22,7 @@
 <aside class="sidebar">
     <div class="sb-grid"></div>
     <div class="sb-logo">
-        <img src="{{ asset('images/lusog-logo.png') }}" alt="LUSOG" class="sb-logo-full">
+        <img src="{{ asset('images/sigla-logo.png') }}" alt="SIGLA" class="sb-logo-full">
     </div>
 
     <nav class="sb-nav">

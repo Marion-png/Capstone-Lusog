@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#126B3A">
-    <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}?v=2">
-    <link rel="shortcut icon" href="{{ asset('images/lusog-logo.png') }}?v=2">
+    <link rel="icon" type="image/png" href="{{ asset('images/sigla-mark.png') }}">
+    <link rel="shortcut icon" href="{{ asset('images/sigla-mark.png') }}">
     <title>SIGLA : School-Based Information Governance for Life Care Administration</title>
     {{-- The product's two faces: DM Serif Display for the title, Inter for
          everything else. This page used Nunito, so the first screen a user
@@ -162,23 +162,6 @@
             letter-spacing: .02em;
             font-size: 3rem;
             line-height: 1.05;
-        }
-
-        /* A hairline instead of a gap: it reads as a considered lockup rather
-           than two things that happen to sit near each other. */
-        .brand-rule {
-            width: 52px;
-            height: 1px;
-            margin: 22px auto 18px;
-            background: rgba(255, 255, 255, .32);
-        }
-
-        .brand-tag {
-            color: rgba(236, 251, 243, .9);
-            font-size: .875rem;
-            font-weight: 400;
-            line-height: 1.6;
-            letter-spacing: .012em;
         }
 
         /* ── Form panel ── */
@@ -551,10 +534,6 @@
 
             .brand-logo { max-width: 200px; }
 
-            .brand-rule { margin: 16px auto 13px; }
-
-            .brand-tag { font-size: .82rem; }
-
             .panel { padding: 34px 24px 30px; }
 
             .top h1 { font-size: 1.95rem; }
@@ -575,16 +554,14 @@
         <div class="rings" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
         <div class="brand-wrap">
             <img
-                src="{{ asset('images/lusog-logo.png') }}"
+                src="{{ asset('images/sigla-logo.png') }}"
                 alt="SIGLA Logo"
                 class="brand-logo"
                 onerror="this.style.display='none';document.getElementById('logoFallback').style.display='block';"
             >
+            {{-- The lockup spells out what the acronym stands for itself, so
+                 the panel carries no second copy of the tagline. --}}
             <div class="brand-fallback" id="logoFallback">SIGLA</div>
-            <div class="brand-rule" aria-hidden="true"></div>
-            {{-- What the acronym stands for. Sits under the mark so the first
-                 thing a new user reads is what the system actually is. --}}
-            <p class="brand-tag">School-Based Information Governance<br>for Life Care Administration</p>
         </div>
     </section>
 

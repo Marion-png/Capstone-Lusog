@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#126B3A">
-    <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/sigla-mark.png') }}">
     <title>System Admin Access - SIGLA</title>
     {{-- The product's two faces: DM Serif Display for the title, Inter for
          everything else — the same pair the sign-in page and every
@@ -212,7 +212,7 @@
 <body>
     <main class="card">
         <div class="brand">
-            <img src="{{ asset('images/lusog-logo.png') }}" alt="LUSOG">
+            <img src="{{ asset('images/sigla-logo.png') }}" alt="SIGLA">
         </div>
 
         <div class="panel">

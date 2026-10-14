@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/sigla-mark.png') }}">
     @php
         $details = is_array($record->student_details) ? $record->student_details : [];
         $learnerName = trim((string) $record->student_name) ?: (string) $record->student_id;

@@ -52,7 +52,7 @@ class ClinicStaffWorkspaceTest extends TestCase
             ->getContent();
 
         $this->assertStringContainsString('--lg-emerald', $html, 'Clinic Staff must use the LUSOG theme.');
-        $this->assertStringContainsString('sb-logo-full', $html, 'The rail must show the LUSOG logo lockup.');
+        $this->assertStringContainsString('sb-logo-full', $html, 'The rail must show the SIGLA logo lockup.');
         $this->assertStringNotContainsString('page-ready', $html, 'The Clinic Staff dashboard must not wait on a page-enter animation.');
     }
 

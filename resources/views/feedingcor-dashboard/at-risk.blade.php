@@ -7,7 +7,7 @@
 	<title>At-Risk Students - Feeding Coordinator - SIGLA</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-	<link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
+	<link rel="icon" type="image/png" href="{{ asset('images/sigla-mark.png') }}">
 	<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
 	<script>document.documentElement.classList.add('js');</script>
 	<style>{!! file_get_contents(resource_path('css/lusog-theme.css')) !!}</style>

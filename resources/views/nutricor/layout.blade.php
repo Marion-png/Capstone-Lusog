@@ -7,7 +7,7 @@
     <title>@yield('title', 'Nutritional Coordinator') - SIGLA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/sigla-mark.png') }}">
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -338,7 +338,7 @@
 <aside class="sidebar">
     <div class="sb-grid"></div>
     <div class="sb-logo">
-        <img src="{{ asset('images/lusog-logo.png') }}" alt="SIGLA Logo">
+        <img src="{{ asset('images/sigla-logo.png') }}" alt="SIGLA Logo">
     </div>
     <nav class="sb-nav">
         <div class="sb-section-label">Main</div>

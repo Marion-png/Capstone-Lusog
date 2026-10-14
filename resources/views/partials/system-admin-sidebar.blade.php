@@ -27,7 +27,7 @@
 @endphp
 <aside class="asb-sidebar">
     <div class="asb-logo">
-        <img src="{{ asset('images/lusog-logo.png') }}" alt="LUSOG" class="asb-logo-full">
+        <img src="{{ asset('images/sigla-logo.png') }}" alt="SIGLA" class="asb-logo-full">
     </div>
 
     <nav class="asb-nav">

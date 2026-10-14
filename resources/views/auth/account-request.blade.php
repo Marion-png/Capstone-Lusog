@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#126B3A">
-    <link rel="icon" type="image/png" href="{{ asset('images/lusog-logo.png') }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/sigla-mark.png') }}">
     <title>Create Account Request - SIGLA</title>
     {{-- The same two faces the sign-in page and every dashboard use: DM Serif
          Display for the title, Inter for everything else. This page was on
@@ -338,7 +338,7 @@
         <header class="head">
             <span class="head-ring" aria-hidden="true"></span>
             <span class="head-ring is-inner" aria-hidden="true"></span>
-            <img src="{{ asset('images/lusog-logo.png') }}" alt="" class="head-logo" aria-hidden="true">
+            <img src="{{ asset('images/sigla-logo.png') }}" alt="" class="head-logo" aria-hidden="true">
             <div class="head-text">
                 <h1>Create Account Request</h1>
                 <p>Fill out this form. Your request will be reviewed by the System Admin.</p>

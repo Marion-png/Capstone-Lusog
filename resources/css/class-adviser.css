@@ -686,7 +686,7 @@ tbody tr:hover td{background:#f3fbf6}
 /* Native scrollbar hidden, as on every other rail — see role-sidebar.css. */
 .asb-sidebar{--g900:#126B3A;--g700:#1F8A4C;--g300:#A9DCBE;--g100:#E7F5EC;position:fixed;left:0;top:0;bottom:0;width:var(--asb-w);background:var(--g900);display:flex;flex-direction:column;overflow-y:auto;z-index:40;scrollbar-width:none;-ms-overflow-style:none}
 .asb-sidebar::-webkit-scrollbar{width:0;height:0}
-/* The rail shows the full LUSOG mark. .asb-logo-full MUST carry a width:
+/* The rail shows the full SIGLA mark. .asb-logo-full MUST carry a width:
    the adviser pages do not load role-sidebar.css (this sheet has its own
    copy of the rail), so without it here the image renders at its natural
    size and overflows the panel. Keep in step with role-sidebar.css. */

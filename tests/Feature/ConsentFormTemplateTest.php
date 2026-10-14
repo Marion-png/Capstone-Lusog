@@ -215,11 +215,13 @@ class ConsentFormTemplateTest extends TestCase
         $this->assertStringContainsString('doc-seal-right', $html);
 
         $document = $this->documentOnly($html);
-        $this->assertStringNotContainsString(
-            'lusog-logo',
-            $document,
-            'The app logo must never appear on a government form facsimile.'
-        );
+        foreach (['sigla-logo', 'sigla-mark'] as $appLogo) {
+            $this->assertStringNotContainsString(
+                $appLogo,
+                $document,
+                'The app logo must never appear on a government form facsimile.'
+            );
+        }
     }
 
     /**

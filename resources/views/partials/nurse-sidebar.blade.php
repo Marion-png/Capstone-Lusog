@@ -25,16 +25,8 @@
     .nsb::-webkit-scrollbar-track { background: transparent; }
     .nsb::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 4px; }
 
-    .nsb-brand { display: flex; align-items: center; gap: 12px; padding: 24px 20px 20px; border-bottom: 1px solid rgba(255,255,255,.07); }
-    .nsb-brand-icon {
-        width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px;
-        background: linear-gradient(135deg, #2A6044, #3D7A57);
-        display: grid; place-items: center; color: #fff;
-        box-shadow: 0 2px 8px rgba(0,0,0,.3);
-    }
-    .nsb-brand-icon svg { width: 18px; height: 18px; }
-    .nsb-brand-name { font-size: 17px; font-weight: 800; color: #fff; letter-spacing: 1.5px; line-height: 1.15; }
-    .nsb-brand-sub { display: block; font-size: 10px; color: rgba(255,255,255,.4); letter-spacing: .3px; margin-top: 1px; }
+    .nsb-brand { display: flex; justify-content: center; padding: 18px 20px; border-bottom: 1px solid rgba(255,255,255,.07); }
+    .nsb-logo { width: 168px; max-width: 100%; height: auto; display: block; }
 
     .nsb-nav { flex: 1; padding: 20px 12px 0; }
     .nsb-label { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,.28); padding: 0 8px; margin: 20px 0 6px; }
@@ -87,13 +79,7 @@
 
 <aside class="nsb">
     <div class="nsb-brand">
-        <div class="nsb-brand-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-        </div>
-        <div>
-            <div class="nsb-brand-name">LUSOG</div>
-            <span class="nsb-brand-sub">DepEd Clinic System</span>
-        </div>
+        <img src="{{ asset('images/sigla-logo.png') }}" alt="SIGLA" class="nsb-logo">
     </div>
 
     <nav class="nsb-nav">
