@@ -43,7 +43,7 @@
             </p>
 
             <label class="pf-drop" for="paperFile">
-                <input type="file" id="paperFile" accept="image/jpeg,image/png,image/webp,image/heic" hidden>
+                <input type="file" id="paperFile" accept="image/jpeg,image/png,image/webp" hidden>
                 <span class="pf-drop-label" id="paperFileLabel">Choose a photograph of the signed form</span>
                 <span class="pf-drop-hint">JPG, PNG or WebP &middot; up to 8&nbsp;MB</span>
             </label>
@@ -68,7 +68,7 @@
          against a document you cannot see is not checking it. --}}
     <form method="POST" action="{{ route('consent-forms.paper.store', $form) }}" enctype="multipart/form-data" id="paperForm" class="cf-card" style="margin-top:16px;">
         @csrf
-        <input type="file" name="paper_form" id="paperFormFile" accept="image/jpeg,image/png,image/webp,image/heic" hidden required>
+        <input type="file" name="paper_form" id="paperFormFile" accept="image/jpeg,image/png,image/webp" hidden required>
 
         <div class="cf-card-head"><h2>2 &middot; The parent's answers</h2></div>
         <div class="cf-card-body">
@@ -185,13 +185,24 @@
     const apply = (draft) => {
         flags.textContent = '';
         flags.hidden = true;
+        form.querySelectorAll('[data-flag-for]').forEach((el) => setFlag(el.dataset.flagFor, ''));
 
+        const fieldNotes = draft.field_notes || {};
         const notes = [];
-        if (draft.unreadable) notes.push('The photograph could not be read. Fill the answers in from the paper.');
-        if (!draft.signature_present) notes.push('No signature was found in the signature area — check the paper before saving.');
+        // Another child's sheet fills nothing in: its answers are not this
+        // learner's, however clearly they were read.
+        if (draft.learner_mismatch) notes.push(draft.consent_reason);
+        else if (draft.unreadable) notes.push('The photograph could not be read. Fill the answers in from the paper.');
+        if (!draft.learner_mismatch && !draft.signature_present) notes.push('No signature was found in the signature area — check the paper before saving.');
+        (draft.warnings || []).forEach((warning) => notes.push(warning));
         if (draft.note) notes.push(draft.note);
 
-        if (!draft.unreadable) {
+        if (draft.unreadable || draft.learner_mismatch) {
+            // A guess left over from an earlier reading must not survive a
+            // reading that proposes nothing.
+            form.querySelectorAll('input[name="consent_choice"]').forEach((radio) => { radio.checked = false; });
+            syncConditionals();
+        } else {
             if (draft.consent_choice && draft.consent_choice !== 'unclear') {
                 const radio = form.querySelector('input[name="consent_choice"][value="' + draft.consent_choice + '"]');
                 if (radio) { radio.checked = true; radio.dispatchEvent(new Event('change', { bubbles: true })); }
@@ -216,6 +227,10 @@
 
                 if (entry.readable === false) {
                     setFlag(field, 'Something is written here and it could not be read — type it from the paper.');
+                } else if (fieldNotes[field]) {
+                    // The box beside the line and the line itself disagree, or
+                    // the ticked choice's line is empty: the question to ask.
+                    setFlag(field, fieldNotes[field]);
                 } else if (entry.text && !entry.confident) {
                     setFlag(field, 'Handwriting was hard to read — check this against the paper.');
                 } else {
@@ -224,6 +239,7 @@
             });
 
             if (draft.parent_guardian_name) setValue('parent_guardian_name', draft.parent_guardian_name);
+            setFlag('parent_guardian_name', fieldNotes.parent_guardian_name || '');
         }
 
         if (notes.length) {
@@ -247,6 +263,8 @@
 
             const body = new FormData();
             body.append('photo', file);
+            // Whose form this is, so a classmate's sheet is caught.
+            body.append('lrn', @json((string) $form->student_lrn));
 
             try {
                 const response = await fetch(@json(route('consent-forms.scan')), {
@@ -265,10 +283,13 @@
                     return;
                 }
 
-                apply(data.draft || {});
-                scanState.textContent = data.draft && data.draft.needs_review
-                    ? 'Filled in — some answers need checking, see the notes.'
-                    : 'Filled in. Check every answer against the paper before saving.';
+                const draft = data.draft || {};
+                apply(draft);
+                scanState.textContent = draft.unreadable || draft.learner_mismatch
+                    ? 'Nothing was filled in — see the notes.'
+                    : (draft.needs_review
+                        ? 'Filled in — some answers need checking, see the notes.'
+                        : 'Filled in. Check every answer against the paper before saving.');
             } catch (_e) {
                 scanState.textContent = 'The form could not be read. Fill it in from the paper.';
             }

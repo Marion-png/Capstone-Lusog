@@ -47,9 +47,11 @@ return [
 
     /*
      * Gemini vision, used to read a photographed or scanned CLASS MASTERLIST
-     * on the class adviser's Enroll Student panel. The key is never committed —
-     * set GEMINI_API_KEY in .env. With no key the scan route is disabled and
-     * the CSV/XLSX import is unaffected.
+     * on the class adviser's Enroll Student panel, and a photographed, signed
+     * Sulat-Pahibalo (App\Support\ConsentFormScanner). The key is never
+     * committed — set GEMINI_API_KEY in .env. With no key both readers are
+     * disabled; the CSV/XLSX import and the hand-filled consent form are
+     * unaffected.
      *
      * The model id is configuration rather than a constant because it is the
      * one thing here that changes without the code changing: a school on a
@@ -58,7 +60,7 @@ return [
      */
     'gemini' => [
         'key' => env('GEMINI_API_KEY'),
-        'model' => env('GEMINI_MODEL', 'gemini-3.8-flash'),
+        'model' => env('GEMINI_MODEL', 'gemini-3.5-flash'),
         'endpoint' => env('GEMINI_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta'),
         'timeout' => (int) env('GEMINI_TIMEOUT', 120),
         'max_upload_kb' => (int) env('GEMINI_MAX_UPLOAD_KB', 10240),

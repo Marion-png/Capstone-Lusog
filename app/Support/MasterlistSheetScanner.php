@@ -116,7 +116,7 @@ class MasterlistSheetScanner
     private function ask(UploadedFile $sheet): array
     {
         $endpoint = rtrim((string) config('services.gemini.endpoint', 'https://generativelanguage.googleapis.com/v1beta'), '/');
-        $model = (string) config('services.gemini.model', 'gemini-3.8-flash');
+        $model = (string) config('services.gemini.model', 'gemini-3.5-flash');
 
         $contents = @file_get_contents((string) $sheet->getRealPath());
 

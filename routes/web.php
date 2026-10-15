@@ -923,7 +923,7 @@ Route::delete('/health-records/consultation-photos/{photo}', [ConsultationPhotoC
 // filled-in DRAFT of the consent form. It records nothing: a parent's consent
 // authorises medical procedures on a child, so the adviser checks the draft
 // against the paper and saves it through the normal write path. Needs
-// ANTHROPIC_API_KEY; without one the endpoint reports itself unavailable and
+// GEMINI_API_KEY; without one the endpoint reports itself unavailable and
 // the form is filled in by hand exactly as before.
 Route::post('/health-records/consent-forms/scan', [ConsentFormScanController::class, 'scan'])
     ->name('consent-forms.scan');

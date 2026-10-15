@@ -5,9 +5,15 @@ namespace Tests\Feature;
 use App\Models\AuditLog;
 use App\Models\HealthConsentForm;
 use App\Models\Institution;
+use App\Models\StudentHealthRecord;
 use App\Support\ConsentFormScanner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
 use Tests\TestCase;
@@ -36,7 +42,9 @@ class ConsentFormScanTest extends TestCase
     {
         parent::setUp();
         $this->school = Institution::create(['name' => 'Sta. Ana NHS', 'status' => 'active']);
-        config()->set('services.anthropic.key', 'test-key');
+        config()->set('services.gemini.key', 'test-key');
+        config()->set('services.gemini.model', 'gemini-3.8-flash');
+        config()->set('services.gemini.endpoint', 'https://generativelanguage.googleapis.com/v1beta');
     }
 
     private function adviserSession(): array
@@ -62,22 +70,11 @@ class ConsentFormScanTest extends TestCase
     {
         $this->swap(ConsentFormScanner::class, new class($draft) extends ConsentFormScanner
         {
-            public function __construct(private readonly array $draft)
-            {
-                parent::__construct();
-            }
+            public function __construct(private readonly array $draft) {}
 
             public function scan(UploadedFile $photo): array
             {
                 return $this->draft;
-            }
-
-            // The fake IS the reader, so it reports itself available: the
-            // real check also requires the Anthropic SDK in vendor, which a
-            // machine whose PHP is too old for the lock file does not have.
-            public function isAvailable(): bool
-            {
-                return true;
             }
         });
     }
@@ -86,24 +83,55 @@ class ConsentFormScanTest extends TestCase
     {
         $this->swap(ConsentFormScanner::class, new class($message) extends ConsentFormScanner
         {
-            public function __construct(private readonly string $message)
-            {
-                parent::__construct();
-            }
+            public function __construct(private readonly string $message) {}
 
             public function scan(UploadedFile $photo): array
             {
                 throw new RuntimeException($this->message);
             }
-
-            // The fake IS the reader, so it reports itself available: the
-            // real check also requires the Anthropic SDK in vendor, which a
-            // machine whose PHP is too old for the lock file does not have.
-            public function isAvailable(): bool
-            {
-                return true;
-            }
         });
+    }
+
+    /** One Gemini response, shaped as the structured-output schema pins it. */
+    private function fakeGemini(array $payload): void
+    {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'finishReason' => 'STOP',
+                    'content' => ['parts' => [['text' => json_encode($payload)]]],
+                ]],
+            ], 200),
+        ]);
+    }
+
+    /**
+     * A stand-in for the photograph that carries real bytes — the scanner
+     * refuses an empty upload — with a JPEG's opening so the type is detected.
+     */
+    private function jpeg(): UploadedFile
+    {
+        return UploadedFile::fake()->createWithContent('consent.jpg', "\xFF\xD8\xFF\xE0\x00\x10JFIF\x00".str_repeat('x', 512));
+    }
+
+    private function learner(string $lrn, string $first, string $last, string $section = 'Dalton'): StudentHealthRecord
+    {
+        return StudentHealthRecord::create([
+            'institution_id' => $this->school->id,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'student_name' => $last.', '.$first,
+            'student_id' => $lrn,
+            'school_name' => 'Sta. Ana NHS',
+            'section' => 'Grade 10 / '.$section,
+            'student_details' => [
+                'last_name' => $last,
+                'first_name' => $first,
+                'middle_name' => 'P.',
+                'grade_level' => 'Grade 10',
+                'section' => $section,
+                'gender' => 'Male',
+            ],
+        ]);
     }
 
     /** @param  array<string, string>  $services */
@@ -129,7 +157,26 @@ class ConsentFormScanTest extends TestCase
             $draft['consent_boxes'] = $this->boxes((string) $draft['consent_choice']);
         }
 
+        // No allergy or illness box ticked unless a test says otherwise.
+        if (! array_key_exists('allergy_boxes', $overrides)) {
+            $draft['allergy_boxes'] = $this->allergyBoxes();
+        }
+
         return $draft;
+    }
+
+    /**
+     * The allergy and illness boxes, every one empty unless overridden.
+     *
+     * @param  array<string, string>  $overrides
+     * @return array<string, string>
+     */
+    private function allergyBoxes(array $overrides = []): array
+    {
+        return array_merge(
+            array_fill_keys(array_keys(ConsentFormScanner::ALLERGY_BOXES), ConsentFormScanner::NOT_TICKED),
+            $overrides,
+        );
     }
 
     /**
@@ -371,7 +418,7 @@ class ConsentFormScanTest extends TestCase
     public function the_reader_is_asked_about_each_consent_box(): void
     {
         $schema = (new \ReflectionMethod(ConsentFormScanner::class, 'responseSchema'))
-            ->invoke(new ConsentFormScanner)['schema'];
+            ->invoke(new ConsentFormScanner);
 
         $this->assertContains('consent_boxes', $schema['required']);
         $this->assertSame(
@@ -390,9 +437,12 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function the_endpoint_reports_itself_unavailable_without_an_api_key(): void
     {
-        config()->set('services.anthropic.key', null);
+        config()->set('services.gemini.key', null);
+        Http::fake();
 
         $this->scanRequest()->assertStatus(503);
+
+        Http::assertNothingSent();
     }
 
     /** The provider's error text never reaches a teacher's screen. */
@@ -588,5 +638,632 @@ class ConsentFormScanTest extends TestCase
         // adviser fills the form in from the paper, and the screen says so.
         $this->assertSame('', $draft['written']['allergy_food']['text']);
         $this->assertTrue($draft['unreadable']);
+    }
+
+    // ── Gemini ───────────────────────────────────────────────────────
+
+    /**
+     * The photograph goes to the configured Gemini model inline, with the
+     * answer shape pinned and the whole printed form — Cebuano and all — in
+     * the instructions.
+     */
+    #[Test]
+    public function the_photo_is_sent_to_the_configured_gemini_model(): void
+    {
+        $this->fakeGemini($this->draft());
+
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        Http::assertSent(function (ClientRequest $request): bool {
+            $body = $request->data();
+            $image = $body['contents'][0]['parts'][0]['inline_data'] ?? [];
+            // Line-wrapping in the prompt is layout, not wording.
+            $system = (string) preg_replace('/\s+/', ' ', (string) ($body['system_instruction']['parts'][0]['text'] ?? ''));
+
+            return str_contains($request->url(), 'models/gemini-3.8-flash:generateContent')
+                && $request->hasHeader('x-goog-api-key', 'test-key')
+                // The key never travels in the URL, which is the part that gets logged.
+                && ! str_contains($request->url(), 'test-key')
+                && ($image['mime_type'] ?? null) === 'image/jpeg'
+                && base64_decode((string) ($image['data'] ?? ''), true) !== false
+                && ($body['generationConfig']['responseMimeType'] ?? null) === 'application/json'
+                && isset($body['generationConfig']['responseSchema']['properties']['consent_boxes'])
+                && isset($body['generationConfig']['responseSchema']['properties']['allergy_boxes'])
+                && str_contains($system, 'Cebuano')
+                && str_contains($system, 'TIMAAN SA PAGDAWAT')
+                && str_contains($system, 'gawas lamang niini');
+        });
+    }
+
+    /** What Gemini read comes back as the draft, through every rule interpret() applies. */
+    #[Test]
+    public function a_gemini_reading_becomes_the_draft(): void
+    {
+        $this->fakeGemini($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_DENY,
+            'written' => [
+                'refusal_reason' => ['text' => 'Mahadlok sa tusok', 'readable' => true, 'confident' => true],
+                'allergy_food' => ['text' => 'Kinhason', 'readable' => true, 'confident' => true],
+            ],
+            'allergy_boxes' => $this->allergyBoxes(['allergy' => 'yes', 'allergy_food' => 'yes']),
+            'student_name' => ['text' => 'DELA CRUZ, JUAN P.', 'readable' => true, 'confident' => true],
+            'parent_guardian_name' => ['text' => 'Josefina Dela Cruz', 'readable' => true, 'confident' => true],
+        ]));
+
+        $draft = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->json('draft');
+
+        $this->assertSame(HealthConsentForm::CONSENT_DENY, $draft['consent_choice']);
+        $this->assertSame('Mahadlok sa tusok', $draft['written']['refusal_reason']['text']);
+        $this->assertSame('Kinhason', $draft['written']['allergy_food']['text']);
+        $this->assertSame(ConsentFormScanner::TICKED, $draft['written']['allergy_food']['box']);
+        $this->assertSame('DELA CRUZ, JUAN P.', $draft['student_name']);
+        $this->assertSame('Josefina Dela Cruz', $draft['parent_guardian_name']);
+        $this->assertSame([], $draft['warnings']);
+        $this->assertEmpty($draft['field_notes']);
+        $this->assertFalse($draft['needs_review']);
+        $this->assertSame(0, HealthConsentForm::count());
+    }
+
+    /** A thought summary is the model's working, not its answer. */
+    #[Test]
+    public function the_models_working_is_not_read_as_its_answer(): void
+    {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'finishReason' => 'STOP',
+                    'content' => ['parts' => [
+                        ['text' => 'Looking at the three boxes first…', 'thought' => true],
+                        ['text' => json_encode($this->draft([], ['consent_choice' => HealthConsentForm::CONSENT_ALL]))],
+                    ]],
+                ]],
+            ], 200),
+        ]);
+
+        $draft = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->json('draft');
+
+        $this->assertFalse($draft['unreadable']);
+        $this->assertSame(HealthConsentForm::CONSENT_ALL, $draft['consent_choice']);
+    }
+
+    /** An answer cut off half-way answers nothing, rather than half a form. */
+    #[Test]
+    public function an_answer_that_does_not_parse_answers_nothing(): void
+    {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'finishReason' => 'MAX_TOKENS',
+                    'content' => ['parts' => [['text' => '{"consent_boxes": {"all": "ye']]],
+                ]],
+            ], 200),
+        ]);
+
+        $draft = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->json('draft');
+
+        $this->assertTrue($draft['unreadable']);
+        $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['consent_choice']);
+        $this->assertTrue($draft['needs_review']);
+    }
+
+    /**
+     * A busy reader is retried, then said in terms an adviser can act on —
+     * never as a status code.
+     */
+    #[Test]
+    public function a_busy_reader_is_retried_then_said_in_plain_words(): void
+    {
+        Sleep::fake();
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'error' => ['message' => 'This model is currently experiencing high demand.'],
+            ], 503),
+        ]);
+
+        $message = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertStatus(503)
+            ->json('message');
+
+        $this->assertStringContainsString('busy', $message);
+        $this->assertStringNotContainsString('503', $message);
+        Http::assertSentCount(3);
+    }
+
+    /**
+     * Gemini's 429, naming the quota it hit and how long to wait, as its own
+     * error details do. A null delay leaves the RetryInfo out.
+     */
+    private function quotaRefusal(string $quotaId, ?string $retryDelay): array
+    {
+        $details = [
+            ['@type' => 'type.googleapis.com/google.rpc.QuotaFailure', 'violations' => [['quotaId' => $quotaId, 'quotaValue' => '20']]],
+        ];
+
+        if ($retryDelay !== null) {
+            $details[] = ['@type' => 'type.googleapis.com/google.rpc.RetryInfo', 'retryDelay' => $retryDelay];
+        }
+
+        return [
+            'error' => [
+                'code' => 429,
+                'message' => 'You exceeded your current quota, please check your plan and billing details.',
+                'details' => $details,
+            ],
+        ];
+    }
+
+    /**
+     * A spent daily allowance does not come back in a few minutes: it is not
+     * retried, and the adviser is told it is gone for the day rather than to
+     * try again shortly.
+     */
+    /** @return array<string, array{0: string, 1: string|null}> */
+    public static function spentForTheDay(): array
+    {
+        return [
+            'Google says to wait eight hours' => ['GenerateRequestsPerDayPerProjectPerModel-FreeTier', '29108s'],
+            'no wait given, a per-day quota named' => ['GenerateRequestsPerDayPerProjectPerModel-FreeTier', null],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('spentForTheDay')]
+    public function a_spent_daily_allowance_is_said_plainly_and_not_retried(string $quota, ?string $delay): void
+    {
+        Sleep::fake();
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response($this->quotaRefusal($quota, $delay), 429),
+        ]);
+
+        $message = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertStatus(503)
+            ->json('message');
+
+        $this->assertStringContainsString('today', $message);
+        $this->assertStringNotContainsString('quota', $message);
+        Http::assertSentCount(1);
+    }
+
+    /** @return array<string, array{0: string, 1: string|null}> */
+    public static function clearsShortly(): array
+    {
+        return [
+            'a per-minute limit' => ['GenerateRequestsPerMinutePerProjectPerModel-FreeTier', '12s'],
+            'a per-day name with a short wait' => ['GenerateRequestsPerDayPerProjectPerModel-FreeTier', '20s'],
+            'a per-minute limit with no wait given' => ['GenerateRequestsPerMinutePerProjectPerModel-FreeTier', null],
+        ];
+    }
+
+    /**
+     * A limit Google says will clear shortly is retried and called busy —
+     * including one naming a per-day quota, which has been seen to clear a
+     * minute later. The wait Google gives decides, not the quota's name.
+     */
+    #[Test]
+    #[DataProvider('clearsShortly')]
+    public function a_limit_that_clears_shortly_is_retried_and_called_busy(string $quota, ?string $delay): void
+    {
+        Sleep::fake();
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response($this->quotaRefusal($quota, $delay), 429),
+        ]);
+
+        $message = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertStatus(503)
+            ->json('message');
+
+        $this->assertStringContainsString('busy', $message);
+        Http::assertSentCount(3);
+    }
+
+    /**
+     * A permanent failure is not retried, and the provider's words — which
+     * can name the project, the key's scope or the model — stay in the log.
+     */
+    #[Test]
+    public function a_permanent_failure_never_shows_the_providers_words(): void
+    {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'error' => ['message' => 'models/gemini-9-flash is not found for project 123456'],
+            ], 404),
+        ]);
+
+        $message = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertStatus(503)
+            ->json('message');
+
+        $this->assertStringContainsString('could not be read', $message);
+        $this->assertStringNotContainsString('123456', $message);
+        Http::assertSentCount(1);
+    }
+
+    #[Test]
+    public function an_unreachable_reader_does_not_show_the_transport_error(): void
+    {
+        Sleep::fake();
+        Http::fake(function () {
+            throw new ConnectionException(
+                'cURL error 28: Operation timed out for https://generativelanguage.googleapis.com/v1beta/models/x:generateContent'
+            );
+        });
+
+        $message = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertStatus(503)
+            ->json('message');
+
+        $this->assertStringContainsString('could not be sent for reading', $message);
+        $this->assertStringNotContainsString('googleapis', $message);
+        $this->assertStringNotContainsString('cURL', $message);
+    }
+
+    /** A refusal that arrives as HTTP 200 is not read as a sheet with nothing on it. */
+    #[Test]
+    public function a_blocked_read_is_not_mistaken_for_an_empty_sheet(): void
+    {
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'promptFeedback' => ['blockReason' => 'OTHER'],
+            ], 200),
+        ]);
+
+        $message = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertStatus(503)
+            ->json('message');
+
+        $this->assertStringContainsString('clearer photo', $message);
+    }
+
+    // ── Reading what a parent writes in Cebuano ──────────────────────
+
+    /**
+     * "Wala" is how a parent says there is nothing to write, and they write it
+     * on every line that does not apply to them. It is not a refusal reason
+     * under an "Oo", and must not make a clear answer unclear — while the
+     * parent's own word is still kept exactly as written.
+     */
+    #[Test]
+    public function a_wala_on_another_boxs_line_says_nothing(): void
+    {
+        $all = HealthConsentForm::CONSENT_ALL;
+        $specific = HealthConsentForm::CONSENT_SPECIFIC;
+        $deny = HealthConsentForm::CONSENT_DENY;
+
+        foreach ([
+            [$all, 'refusal_reason', 'Wala'],
+            [$all, 'refusal_reason', "Wala'y"],
+            [$all, 'consent_exceptions', 'N/A'],
+            [$all, 'consent_exceptions', 'wala po'],
+            [$specific, 'refusal_reason', 'None'],
+            [$deny, 'consent_exceptions', '-'],
+        ] as [$choice, $field, $text]) {
+            $written = [$field => ['text' => $text, 'confident' => true, 'readable' => true]];
+
+            // The ticked box's own line carries its answer.
+            if ($choice === $specific) {
+                $written['consent_exceptions'] = ['text' => 'Bakuna', 'confident' => true, 'readable' => true];
+            }
+            if ($choice === $deny) {
+                $written['refusal_reason'] = ['text' => 'Relihiyon', 'confident' => true, 'readable' => true];
+            }
+
+            $draft = ConsentFormScanner::interpret($this->draft([], ['consent_choice' => $choice, 'written' => $written]));
+
+            $this->assertSame($choice, $draft['consent_choice'], '"'.$text.'" on the '.$field.' line says nothing');
+            $this->assertSame($text, $draft['written'][$field]['text'], 'The parent\'s own word is kept');
+        }
+    }
+
+    /** A line that starts like "wala" but says something still refuses. */
+    #[Test]
+    public function a_reason_that_begins_with_wala_is_still_a_reason(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'written' => ['refusal_reason' => ['text' => 'Wala koy tiwala sa bakuna', 'confident' => true, 'readable' => true]],
+        ]));
+
+        $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['consent_choice']);
+    }
+
+    /**
+     * "Oo … gawas lamang niini" with nothing excepted is a consent the nurse
+     * cannot act on. The ticked box stays the ticked box; the adviser is told
+     * what to ask.
+     */
+    #[Test]
+    public function an_except_with_nothing_excepted_is_put_to_the_adviser(): void
+    {
+        foreach (['', 'Wala'] as $text) {
+            $draft = ConsentFormScanner::interpret($this->draft([], [
+                'consent_choice' => HealthConsentForm::CONSENT_SPECIFIC,
+                'written' => ['consent_exceptions' => ['text' => $text, 'confident' => true, 'readable' => true]],
+            ]));
+
+            $this->assertSame(HealthConsentForm::CONSENT_SPECIFIC, $draft['consent_choice']);
+            $this->assertArrayHasKey('consent_exceptions', $draft['field_notes']);
+            $this->assertContains(ConsentFormScanner::WRITTEN_FIELDS['consent_exceptions'], $draft['unclear']);
+            $this->assertTrue($draft['needs_review']);
+        }
+    }
+
+    #[Test]
+    public function a_refusal_with_no_reason_is_put_to_the_adviser(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_DENY,
+            'written' => [],
+        ]));
+
+        $this->assertSame(HealthConsentForm::CONSENT_DENY, $draft['consent_choice']);
+        $this->assertArrayHasKey('refusal_reason', $draft['field_notes']);
+        $this->assertTrue($draft['needs_review']);
+    }
+
+    // ── The allergy and illness boxes ────────────────────────────────
+
+    /**
+     * A ticked "Tambal/Medicines" over an empty line says the child reacts to
+     * some medicine. Read from the line alone it would be saved as no medicine
+     * allergy — the opposite — so it is put in front of the adviser instead.
+     */
+    #[Test]
+    public function a_ticked_allergy_box_over_an_empty_line_is_never_read_as_no_allergy(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'allergy_boxes' => $this->allergyBoxes(['allergy' => 'yes', 'allergy_medicine' => 'yes']),
+            'written' => ['allergy_medicine' => ['text' => '', 'confident' => false, 'readable' => true]],
+        ]));
+
+        $this->assertSame(ConsentFormScanner::TICKED, $draft['written']['allergy_medicine']['box']);
+        $this->assertArrayHasKey('allergy_medicine', $draft['field_notes']);
+        $this->assertContains(ConsentFormScanner::WRITTEN_FIELDS['allergy_medicine'], $draft['unclear']);
+        $this->assertTrue($draft['needs_review']);
+
+        // The ticked kind names it, so the heading box needs no warning of its own.
+        $this->assertSame([], $draft['warnings']);
+    }
+
+    #[Test]
+    public function a_ticked_box_over_a_wala_is_put_to_the_adviser(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'allergy_boxes' => $this->allergyBoxes(['allergy' => 'yes', 'allergy_food' => 'yes']),
+            'written' => ['allergy_food' => ['text' => 'Wala', 'confident' => true, 'readable' => true]],
+        ]));
+
+        $this->assertStringContainsString('Wala', $draft['field_notes']['allergy_food'] ?? '');
+        $this->assertSame('Wala', $draft['written']['allergy_food']['text']);
+        $this->assertTrue($draft['needs_review']);
+    }
+
+    /** Parents often write without ticking: the writing is the answer. */
+    #[Test]
+    public function writing_without_a_tick_is_an_answer(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'written' => ['other_illness' => ['text' => 'Hubak', 'confident' => true, 'readable' => true]],
+        ]));
+
+        $this->assertSame('Hubak', $draft['written']['other_illness']['text']);
+        $this->assertArrayNotHasKey('other_illness', $draft['field_notes']);
+        $this->assertFalse($draft['needs_review']);
+    }
+
+    #[Test]
+    public function an_allergy_box_nobody_could_make_out_over_an_empty_line_is_flagged(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'allergy_boxes' => $this->allergyBoxes(['prev_immunization' => ConsentFormScanner::UNCLEAR]),
+        ]));
+
+        $this->assertArrayHasKey('prev_immunization', $draft['field_notes']);
+        $this->assertTrue($draft['needs_review']);
+    }
+
+    /** The heading box ticked with no allergy named anywhere under it. */
+    #[Test]
+    public function an_allergy_heading_with_nothing_named_is_a_warning(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'allergy_boxes' => $this->allergyBoxes(['allergy' => 'yes']),
+        ]));
+
+        $this->assertCount(1, $draft['warnings']);
+        $this->assertTrue($draft['needs_review']);
+
+        $named = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'allergy_boxes' => $this->allergyBoxes(['allergy' => 'yes']),
+            'written' => ['allergy_food' => ['text' => 'Itlog', 'confident' => true, 'readable' => true]],
+        ]));
+
+        $this->assertSame([], $named['warnings']);
+    }
+
+    /** A box the reader left out is unclear, never "no" — the same rule as everywhere. */
+    #[Test]
+    public function an_omitted_allergy_box_is_unclear_not_no(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'allergy_boxes' => [],
+            'written' => ['allergy_food' => ['text' => 'Mani', 'confident' => true, 'readable' => true]],
+        ]));
+
+        $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['written']['allergy_medicine']['box']);
+        $this->assertArrayHasKey('allergy_medicine', $draft['field_notes']);
+        // A line with writing on it is an answer whatever its box says.
+        $this->assertArrayNotHasKey('allergy_food', $draft['field_notes']);
+    }
+
+    // ── The document and the learner ─────────────────────────────────
+
+    /** The model's verdict that this is another document can only refuse. */
+    #[Test]
+    public function a_document_that_is_not_the_sulat_pahibalo_answers_nothing(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft(['checkup' => ConsentFormScanner::TICKED], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'is_sulat_pahibalo' => false,
+        ]));
+
+        $this->assertTrue($draft['unreadable']);
+        $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['consent_choice']);
+        $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['services']['checkup']);
+        $this->assertNotSame('', $draft['note']);
+    }
+
+    /** A parent's name the reader could not make out is said, not left blank. */
+    #[Test]
+    public function an_unsure_parents_name_is_flagged(): void
+    {
+        $unreadable = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'parent_guardian_name' => ['text' => '', 'readable' => false, 'confident' => false],
+        ]));
+        $this->assertSame('', $unreadable['parent_guardian_name']);
+        $this->assertArrayHasKey('parent_guardian_name', $unreadable['field_notes']);
+        $this->assertTrue($unreadable['needs_review']);
+
+        $unsure = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'parent_guardian_name' => ['text' => 'Josefina Dela Crus', 'readable' => true, 'confident' => false],
+        ]));
+        $this->assertSame('Josefina Dela Crus', $unsure['parent_guardian_name']);
+        $this->assertArrayHasKey('parent_guardian_name', $unsure['field_notes']);
+    }
+
+    /** "true" and "false" as strings are read as what they say, never cast. */
+    #[Test]
+    public function a_signature_reported_as_the_string_false_is_not_a_signature(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'signature_present' => 'false',
+        ]));
+
+        $this->assertFalse($draft['signature_present']);
+        $this->assertTrue($draft['needs_review']);
+    }
+
+    #[Test]
+    public function the_name_on_the_sheet_is_matched_however_it_is_written(): void
+    {
+        foreach ([
+            'DELA CRUZ, JUAN P.',
+            'Juan P. Dela Cruz',
+            'juan pablo delacruz',
+            'De la Cruz, Juan',
+            'DELA CRUS, JUAN',
+            'Dela Cruz, Juan Pablo Jr.',
+        ] as $read) {
+            $this->assertTrue(ConsentFormScanner::namesAgree($read, 'Juan Pablo', 'Dela Cruz'), $read.' names Juan Pablo Dela Cruz');
+        }
+    }
+
+    /** A sibling's sheet carries the same surname; a classmate's, perhaps the same first name. */
+    #[Test]
+    public function a_siblings_or_classmates_sheet_does_not_match(): void
+    {
+        $this->assertFalse(ConsentFormScanner::namesAgree('DELA CRUZ, MARIA', 'Juan', 'Dela Cruz'));
+        $this->assertFalse(ConsentFormScanner::namesAgree('SANTOS, JUAN', 'Juan', 'Dela Cruz'));
+
+        // Nothing to compare decides nothing.
+        $this->assertNull(ConsentFormScanner::namesAgree('', 'Juan', 'Dela Cruz'));
+        $this->assertNull(ConsentFormScanner::namesAgree('Juan Dela Cruz', '', ''));
+    }
+
+    /**
+     * Another child's sheet proposes no consent: its answers would authorise,
+     * or withhold, a procedure on a child whose parent never gave them.
+     */
+    #[Test]
+    public function another_learners_sheet_proposes_no_consent(): void
+    {
+        $read = fn (array $name) => ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'student_name' => $name,
+        ]));
+
+        $other = ConsentFormScanner::checkLearner(
+            $read(['text' => 'SANTOS, PEDRO', 'readable' => true, 'confident' => true]),
+            'Juan', 'Dela Cruz', 'Juan Dela Cruz',
+        );
+        $this->assertTrue($other['learner_mismatch']);
+        $this->assertFalse($other['learner']['matches']);
+        $this->assertSame(ConsentFormScanner::UNCLEAR, $other['consent_choice']);
+        $this->assertStringContainsString('SANTOS, PEDRO', $other['consent_reason']);
+        $this->assertTrue($other['needs_review']);
+
+        $own = ConsentFormScanner::checkLearner(
+            $read(['text' => 'DELA CRUZ, JUAN', 'readable' => true, 'confident' => true]),
+            'Juan', 'Dela Cruz', 'Juan Dela Cruz',
+        );
+        $this->assertTrue($own['learner']['matches']);
+        $this->assertFalse($own['learner_mismatch']);
+        $this->assertSame(HealthConsentForm::CONSENT_ALL, $own['consent_choice']);
+
+        // A name nobody could read decides nothing either way.
+        $blank = ConsentFormScanner::checkLearner(
+            $read(['text' => '', 'readable' => false, 'confident' => false]),
+            'Juan', 'Dela Cruz', 'Juan Dela Cruz',
+        );
+        $this->assertNull($blank['learner']['matches']);
+        $this->assertSame(HealthConsentForm::CONSENT_ALL, $blank['consent_choice']);
+    }
+
+    /**
+     * The endpoint checks the sheet against the learner the adviser is
+     * recording for — and only a learner of their own class.
+     */
+    #[Test]
+    public function the_endpoint_checks_the_sheet_against_the_learner_being_recorded(): void
+    {
+        $this->learner('130000000001', 'Juan', 'Dela Cruz');
+        $this->learner('130000000002', 'Maria', 'Santos', 'Newton');
+
+        $this->fakeGemini($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'student_name' => ['text' => 'SANTOS, PEDRO', 'readable' => true, 'confident' => true],
+        ]));
+
+        $scan = fn (string $lrn) => $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg(), 'lrn' => $lrn], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->json('draft');
+
+        $mine = $scan('130000000001');
+        $this->assertTrue($mine['learner_mismatch']);
+        $this->assertSame(ConsentFormScanner::UNCLEAR, $mine['consent_choice']);
+        $this->assertStringContainsString('Juan Dela Cruz', $mine['consent_reason']);
+
+        // Another class's learner is never compared against, so the answer
+        // says nothing about them.
+        $theirs = $scan('130000000002');
+        $this->assertNull($theirs['learner']['matches']);
+        $this->assertSame(HealthConsentForm::CONSENT_ALL, $theirs['consent_choice']);
     }
 }

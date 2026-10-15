@@ -676,24 +676,34 @@
         // The upload takes a PDF too, but the reader reads photographs only.
         const readable = (file) => Boolean(file) && ['image/jpeg', 'image/png'].includes(file.type);
 
+        // The reader checks the name on the sheet against the learner the
+        // answer will be filed for, so it reads once one is chosen.
+        const chosenLearner = () => studentSelect?.value || '';
+
         const syncReader = () => {
             if (!readButton || !readState) return;
             const file = consentFile?.files && consentFile.files[0];
-            readButton.disabled = !readable(file);
+            readButton.disabled = !readable(file) || chosenLearner() === '';
             readState.textContent = !file
                 ? 'Attach a photo of the signed form first.'
-                : (readable(file) ? '' : 'Only a JPG or PNG photo can be read. Choose the answer from the paper.');
+                : (!readable(file)
+                    ? 'Only a JPG or PNG photo can be read. Choose the answer from the paper.'
+                    : (chosenLearner() === '' ? 'Select the student first.' : ''));
         };
 
         if (readButton && answerSelect) {
-            consentFile?.addEventListener('change', () => {
-                // A reading belongs to the photo it was taken from.
+            // A reading belongs to the photo it was taken from, and to the
+            // learner it was checked against.
+            const dropReading = () => {
                 if (answerFromScan?.value === '1') {
                     answerSelect.value = '';
                     setReaderAnswer(false);
                 }
                 syncReader();
-            });
+            };
+
+            consentFile?.addEventListener('change', dropReading);
+            studentSelect?.addEventListener('change', dropReading);
 
             // Choosing by hand makes the answer the adviser's own.
             answerSelect.addEventListener('change', () => setReaderAnswer(false));
@@ -702,13 +712,15 @@
 
             readButton.addEventListener('click', async () => {
                 const file = consentFile?.files && consentFile.files[0];
-                if (!readable(file)) return;
+                const lrn = chosenLearner();
+                if (!readable(file) || lrn === '') return;
 
                 readButton.disabled = true;
                 readState.textContent = 'Reading the form…';
 
                 const body = new FormData();
                 body.append('photo', file);
+                body.append('lrn', lrn);
 
                 try {
                     const response = await fetch(@json(route('consent-forms.scan')), {
@@ -721,8 +733,9 @@
                     });
                     const data = await response.json().catch(() => ({}));
 
-                    // The adviser swapped the photo while it was being read.
-                    if (!consentFile.files || consentFile.files[0] !== file) return;
+                    // The adviser swapped the photo, or the learner, while it
+                    // was being read.
+                    if (!consentFile.files || consentFile.files[0] !== file || chosenLearner() !== lrn) return;
 
                     if (!response.ok) {
                         readState.textContent = data.message || 'The form could not be read. Choose the answer from the paper.';
@@ -749,7 +762,7 @@
                 } catch (_err) {
                     readState.textContent = 'The form could not be read. Choose the answer from the paper.';
                 } finally {
-                    readButton.disabled = !readable(consentFile?.files && consentFile.files[0]);
+                    readButton.disabled = !readable(consentFile?.files && consentFile.files[0]) || chosenLearner() === '';
                 }
             });
         }
@@ -759,8 +772,8 @@
             resetConsentDrop();
             resetMedCertDrop();
             setReaderAnswer(false);
-            syncReader();
             if (studentSelect && lrn) studentSelect.value = lrn;
+            syncReader();
             open(uploadModal);
         };
 

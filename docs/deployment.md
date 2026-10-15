@@ -39,7 +39,7 @@ Every value lives in Railway → `lusog-web` → **Variables**, never in the rep
 | `QUEUE_CONNECTION` | `sync` | No queue worker runs, and nothing is queued today. |
 | `LOG_CHANNEL` | `stderr` | Logs appear under `railway logs --service lusog-web`. |
 | `RAILPACK_PHP_EXTENSIONS` | `pdo_pgsql,zip` | Postgres, and OpenSpout's XLSX writer. |
-| `GEMINI_API_KEY` | the team key | Masterlist photo reading. Leave it empty to disable. |
+| `GEMINI_API_KEY` | the team key | Masterlist and consent-form photo reading. Leave it empty to disable. |
 
 **Uploaded documents** (medical certificates, consent scans, attendance
 photos) live on the volume `lusog-web-volume`, mounted at `/app/storage/app`.

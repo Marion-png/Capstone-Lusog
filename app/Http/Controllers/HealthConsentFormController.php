@@ -492,7 +492,7 @@ class HealthConsentFormController extends Controller
             'prev_immunization' => ['nullable', 'string', 'max:1000'],
             'other_illness' => ['nullable', 'string', 'max:1000'],
             'parent_guardian_name' => ['required', 'string', 'max:255'],
-            'paper_form' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp,heic', 'max:8192'],
+            'paper_form' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
             // Not a checkbox that styles a warning: the adviser is attesting
             // that they read the paper and that these are its answers.
             'confirmed' => ['accepted'],

@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\HealthConsentForm;
+use App\Support\AdviserClassScope;
 use App\Support\AuditTrail;
 use App\Support\ConsentFormScanner;
+use App\Support\StudentRosterSync;
+use App\Support\UploadReadFailure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Throwable;
@@ -43,14 +46,28 @@ class ConsentFormScanController extends Controller
         }
 
         $validated = $request->validate([
-            'photo' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp,heic', 'max:'.self::MAX_KILOBYTES],
+            // HEIC is not listed: the `image` rule refuses it whatever `mimes`
+            // says, and a phone hands over a JPEG when the page does not ask
+            // for HEIC.
+            'photo' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.self::MAX_KILOBYTES],
+            // The learner the form is being recorded for, so the name on the
+            // sheet can be checked against them. Optional: without it the
+            // draft is returned unchecked.
+            'lrn' => ['nullable', 'string', 'max:32'],
         ]);
 
         try {
             $draft = $scanner->scan($validated['photo']);
+        } catch (UploadReadFailure $e) {
+            // Written for the adviser — busy, unreachable, a photo the reader
+            // would not process — so it is shown as it is. The cause underneath
+            // still goes to the log.
+            report($e);
+
+            return response()->json(['message' => $e->getMessage()], 503);
         } catch (Throwable $e) {
-            // One message for every failure, and never the exception's own.
-            // A provider error carries rate-limit details, account ids and
+            // One message for every other failure, and never the exception's
+            // own. A provider error carries rate-limit details, account ids and
             // endpoint URLs; none of that belongs on a teacher's screen, and
             // none of it tells them anything they can act on. The detail goes
             // to the log, where somebody who can act on it will look.
@@ -61,6 +78,12 @@ class ConsentFormScanController extends Controller
             ], 503);
         }
 
+        $learner = $this->learner($request, trim((string) ($validated['lrn'] ?? '')));
+
+        if ($learner !== null) {
+            $draft = ConsentFormScanner::checkLearner($draft, $learner['first_name'], $learner['last_name'], $learner['name']);
+        }
+
         // The photograph carried a named child's health decisions past a
         // third-party model, so the read is recorded even though nothing was
         // written. The draft itself is not logged — it is not a record yet.
@@ -69,7 +92,8 @@ class ConsentFormScanController extends Controller
             'HealthConsentForm',
             null,
             'Scanned a photographed consent form to pre-fill the consent form'
-                .($draft['unreadable'] ? ' (unreadable)' : ''),
+                .($draft['unreadable'] ? ' (unreadable)' : '')
+                .(($draft['learner_mismatch'] ?? false) ? ' (the name on the sheet is another learner\'s)' : ''),
         );
 
         return response()->json([
@@ -85,5 +109,38 @@ class ConsentFormScanController extends Controller
             'saved' => false,
             'review_required' => true,
         ]);
+    }
+
+    /**
+     * The learner the adviser is recording for, if they are in this adviser's
+     * own class — read from the roster the rest of the module reads, so a
+     * learner of another class (or school) is never compared against, and the
+     * answer never says anything about them.
+     *
+     * @return array{first_name: string, last_name: string, name: string}|null
+     */
+    private function learner(Request $request, string $lrn): ?array
+    {
+        if ($lrn === '') {
+            return null;
+        }
+
+        StudentRosterSync::syncToSession($request);
+
+        $row = AdviserClassScope::rosterRows($request)
+            ->first(fn (array $row): bool => (string) ($row['lrn'] ?? '') === $lrn);
+
+        if ($row === null) {
+            return null;
+        }
+
+        $first = trim((string) ($row['first_name'] ?? ''));
+        $last = trim((string) ($row['last_name'] ?? ''));
+
+        return [
+            'first_name' => $first,
+            'last_name' => $last,
+            'name' => trim($first.' '.$last),
+        ];
     }
 }
