@@ -101,6 +101,12 @@ class MlatExportController extends Controller
      * is written from. The profile loads it into a hidden frame and prints the
      * frame, so the nurse never leaves the learner; opened on its own, it
      * prints itself.
+     *
+     * `?view=1` opens it to read instead: no print dialog, a bar to move
+     * between the two sheets and to print on demand. It is how an archived
+     * learner's record is opened from the Archived Students tab — the same
+     * form, read-only by construction, for whichever school year
+     * `?school_year=` names.
      */
     public function printSheet(Request $request, string $lrn): View
     {
@@ -113,23 +119,46 @@ class MlatExportController extends Controller
             abort(404);
         }
 
+        $viewing = $request->boolean('view');
         $workbook = MlatWorkbook::build($record, (string) $request->session()->get('active_school_name', ''));
         $model = $workbook['sheets'][$sheet - 1];
 
         AuditTrail::record(
-            'printed',
+            $viewing ? 'viewed' : 'printed',
             'StudentHealthRecord',
             (int) $record->id,
-            'Printed '.MlatWorkbook::SHEETS[$sheet].' of the Mandatory Learner\'s Health Assessment Tool for LRN '.$lrn
+            ($viewing ? 'Viewed ' : 'Printed ').MlatWorkbook::SHEETS[$sheet]
+                .' of the Mandatory Learner\'s Health Assessment Tool for LRN '.$lrn
+                .' (S.Y. '.$record->school_year.')'
         );
 
         $total = array_sum($model['widths']) ?: 1;
+
+        // The other sheet of the same learner and year, for the view bar.
+        $sheetLinks = [];
+        if ($viewing) {
+            foreach (MlatWorkbook::SHEETS as $number => $label) {
+                $sheetLinks[$number] = [
+                    'label' => $label,
+                    'url' => route('student-mlat.print', array_filter([
+                        'lrn' => $lrn,
+                        'sheet' => $number,
+                        'view' => 1,
+                        'school_year' => $request->query('school_year'),
+                    ])),
+                ];
+            }
+        }
 
         return view('dashboard.mlat-print', [
             'sheet' => $model,
             'learner' => $workbook['learner'],
             'widths' => array_map(fn ($width): float => round($width / $total * 100, 3), $model['widths']),
             'rows' => self::printRows($model),
+            'viewing' => $viewing,
+            'currentSheet' => $sheet,
+            'sheetLinks' => $sheetLinks,
+            'schoolYear' => (string) $record->school_year,
         ]);
     }
 
@@ -208,6 +237,11 @@ class MlatExportController extends Controller
     /**
      * The learner's record, once the reader has passed the guard: a clinic
      * role or the learner's own adviser, inside the reader's own school.
+     *
+     * The current school year's row unless `?school_year=` names another —
+     * an archived learner has no row this year, and their record is still
+     * theirs to read. An adviser is then tested against that year's row, the
+     * same per-section rule the consent history applies.
      */
     private function recordFor(Request $request, string $lrn): StudentHealthRecord
     {
@@ -218,7 +252,7 @@ class MlatExportController extends Controller
             abort(403);
         }
 
-        $record = StudentHealthRecord::currentForStudent($lrn, (int) $institutionId);
+        $record = StudentHealthRecord::currentForStudent($lrn, (int) $institutionId, $this->schoolYear($request));
 
         if ($record === null) {
             abort(404);
@@ -231,6 +265,25 @@ class MlatExportController extends Controller
         }
 
         return $record;
+    }
+
+    /**
+     * `?school_year=` as a "2025-2026" string, null when absent (the current
+     * year); anything that is not two consecutive years is a 404.
+     */
+    private function schoolYear(Request $request): ?string
+    {
+        $year = $request->query('school_year');
+
+        if ($year === null || $year === '') {
+            return null;
+        }
+
+        if (! is_string($year) || preg_match('/^(\d{4})-(\d{4})$/', $year, $m) !== 1 || (int) $m[2] !== (int) $m[1] + 1) {
+            abort(404);
+        }
+
+        return $year;
     }
 
     /** `?sheet=` as one of MlatWorkbook::SHEETS, null when absent; anything else is a 404. */

@@ -49,6 +49,9 @@ class StudentHealthRecord extends Model
         'feeding_removed_at',
         'feeding_removed_by',
         'feeding_removal_reason',
+        'archived_at',
+        'archived_by',
+        'archive_reason',
     ];
 
     /**
@@ -85,6 +88,12 @@ class StudentHealthRecord extends Model
         'feeding_removed_at' => 'datetime',
         'feeding_removed_by' => EncryptedString::class,
         'feeding_removal_reason' => EncryptedString::class,
+        // Archived by the class adviser (App\Support\LearnerArchive): a stamp
+        // on this school year's row, never a deletion. When is plain (lists
+        // filter on it); who and why are personal data.
+        'archived_at' => 'datetime',
+        'archived_by' => EncryptedString::class,
+        'archive_reason' => EncryptedString::class,
         'examination' => EncryptedArray::class,
         'attendance_by_month' => EncryptedArray::class,
         'student_details' => EncryptedArray::class,
