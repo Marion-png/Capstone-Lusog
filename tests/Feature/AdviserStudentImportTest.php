@@ -251,7 +251,7 @@ class AdviserStudentImportTest extends TestCase
             ['school' => 'Test School', 'address' => 'D. Suazo St., Davao City'],
             ClassMasterlistTemplate::classLabel('Grade 7', 'Sampaguita'),
             '2026-2027',
-            'Beberly Real Panerio'
+            'Josefa Ramos Villareal'
         );
 
         $cells = array_map(fn (array $row): array => $row['cells'], $template['rows']);
@@ -277,7 +277,7 @@ class AdviserStudentImportTest extends TestCase
 
         // Blank numbered lines under each band, then the adviser's signature.
         $this->assertSame(['FEMALE', '', '', '', '', ''], $cells[9 + ClassMasterlistTemplate::BAND_ROWS]);
-        $this->assertSame(['BEBERLY REAL PANERIO', '', '', '', '', ''], $cells[count($cells) - 2]);
+        $this->assertSame(['JOSEFA RAMOS VILLAREAL', '', '', '', '', ''], $cells[count($cells) - 2]);
         $this->assertSame(['ADVISER', '', '', '', '', ''], $cells[count($cells) - 1]);
 
         // The merges the form's heading needs: every banner line across the
@@ -367,14 +367,14 @@ class AdviserStudentImportTest extends TestCase
             // A merged cell hands its value to its top-left position only.
             ['NO', $caption, '', '', 'LRN', 'REMARKS'],
             ['MALE', '', '', '', '', ''],
-            ['1', 'ACALA', 'ZAIREL', 'G.', '129708190295', ''],
-            ['2', 'BASTATAS', 'KAILE', 'F.', '129643190096', ''],
+            ['1', 'ABAD', 'MIGUEL', 'G.', '100000000004', ''],
+            ['2', 'BAUTISTA', 'PAOLO', 'F.', '100000000002', ''],
             ['FEMALE', '', '', '', '', ''],
-            ['1', 'ALFORNON', 'MARIA RAINGIELYN', 'A.', '129697190076', ''],
+            ['1', 'AQUINO', 'ANA LOUISE', 'A.', '100000000003', ''],
             // A learner with no middle initial on file.
-            ['2', 'DABUAN', 'DESIREE', '', '129513190082', ''],
+            ['2', 'DIAZ', 'CLARA', '', '100000000001', ''],
             ['', '', '', '', '', ''],
-            ['BEBERLY REAL PANERIO', '', '', '', '', ''],
+            ['JOSEFA RAMOS VILLAREAL', '', '', '', '', ''],
             ['ADVISER', '', '', '', '', ''],
         ];
 
@@ -402,11 +402,11 @@ class AdviserStudentImportTest extends TestCase
             ['NO', 'MALE', '', '', 'LRN', 'REMARKS'],
             ['', ClassMasterlistTemplate::NAME_CAPTION, '', '', '', ''],
             ['MALE', '', '', '', '', ''],
-            ['1', 'ACALA', 'ZAIREL', 'G.', '129708190295', ''],
+            ['1', 'ABAD', 'MIGUEL', 'G.', '100000000004', ''],
             ['FEMALE', '', '', '', '', ''],
-            ['1', 'ALFORNON', 'MARIA RAINGIELYN', 'A.', '129697190076', ''],
+            ['1', 'AQUINO', 'ANA LOUISE', 'A.', '100000000003', ''],
             ['', '', '', '', '', ''],
-            ['BEBERLY REAL PANERIO', '', '', '', '', ''],
+            ['JOSEFA RAMOS VILLAREAL', '', '', '', '', ''],
             ['ADVISER', '', '', '', '', ''],
         ]);
     }
@@ -449,7 +449,7 @@ class AdviserStudentImportTest extends TestCase
         // signature are not learners.
         $this->assertNull(
             StudentHealthRecord::query()->get()->first(
-                fn (StudentHealthRecord $r): bool => str_contains((string) $r->student_name, 'PANERIO')
+                fn (StudentHealthRecord $r): bool => str_contains((string) $r->student_name, 'VILLAREAL')
             )
         );
     }
@@ -474,12 +474,12 @@ class AdviserStudentImportTest extends TestCase
 
         $this->assertSame(2, StudentHealthRecord::count());
 
-        $zairel = StudentHealthRecord::where('student_id', '129708190295')->firstOrFail();
-        $this->assertSame('ACALA, ZAIREL G.', $zairel->student_name);
-        $this->assertSame('Male', $zairel->student_details['gender']);
+        $miguel = StudentHealthRecord::where('student_id', '100000000004')->firstOrFail();
+        $this->assertSame('ABAD, MIGUEL G.', $miguel->student_name);
+        $this->assertSame('Male', $miguel->student_details['gender']);
 
-        $maria = StudentHealthRecord::where('student_id', '129697190076')->firstOrFail();
-        $this->assertSame('Female', $maria->student_details['gender']);
+        $ana = StudentHealthRecord::where('student_id', '100000000003')->firstOrFail();
+        $this->assertSame('Female', $ana->student_details['gender']);
     }
 
     /**
@@ -497,10 +497,10 @@ class AdviserStudentImportTest extends TestCase
             ]
         );
 
-        $this->assertSame('Male', $sexes['129708190295']);
-        $this->assertSame('Male', $sexes['129643190096']);
-        $this->assertSame('Female', $sexes['129697190076']);
-        $this->assertSame('Female', $sexes['129513190082']);
+        $this->assertSame('Male', $sexes['100000000004']);
+        $this->assertSame('Male', $sexes['100000000002']);
+        $this->assertSame('Female', $sexes['100000000003']);
+        $this->assertSame('Female', $sexes['100000000001']);
     }
 
     /**
@@ -516,7 +516,7 @@ class AdviserStudentImportTest extends TestCase
     {
         $this->import($this->masterlist(), ['assigned_section' => 'MATATAG']);
 
-        $learner = StudentHealthRecord::query()->where('student_id', '129708190295')->firstOrFail();
+        $learner = StudentHealthRecord::query()->where('student_id', '100000000004')->firstOrFail();
 
         $this->assertNull($learner->weight);
         $this->assertNull($learner->bmi_value);
@@ -554,7 +554,7 @@ class AdviserStudentImportTest extends TestCase
         $file = $this->sheet([
             ['NO', "Student's Name (Last Name, First Name Middle Initial)", '', '', 'LRN', 'REMARKS'],
             ['MALE', '', '', '', '', ''],
-            ['1', 'ACALA', 'ZAIREL', 'G.', '129708190295', ''],
+            ['1', 'ABAD', 'MIGUEL', 'G.', '100000000004', ''],
             ['2', 'NOLRN', 'MISSING', 'X.', '', ''],
         ]);
 
@@ -594,12 +594,12 @@ class AdviserStudentImportTest extends TestCase
 
             $this->assertSame(3, StudentHealthRecord::count());
 
-            $acala = StudentHealthRecord::query()->where('student_id', '129708190295')->firstOrFail();
-            $this->assertSame('ACALA, ZAIREL G.', $acala->student_name);
-            $this->assertSame('Male', $acala->student_details['gender']);
+            $abad = StudentHealthRecord::query()->where('student_id', '100000000004')->firstOrFail();
+            $this->assertSame('ABAD, MIGUEL G.', $abad->student_name);
+            $this->assertSame('Male', $abad->student_details['gender']);
 
-            $alfornon = StudentHealthRecord::query()->where('student_id', '129697190076')->firstOrFail();
-            $this->assertSame('Female', $alfornon->student_details['gender']);
+            $aquino = StudentHealthRecord::query()->where('student_id', '100000000003')->firstOrFail();
+            $this->assertSame('Female', $aquino->student_details['gender']);
         } finally {
             @unlink($path);
         }
@@ -620,11 +620,11 @@ class AdviserStudentImportTest extends TestCase
             6 => ['A' => 'School Year: 2026 - 2027'],
             7 => ['A' => 'NO', 'B' => "Student's Name (Last Name, First Name Middle Initial)", 'E' => 'LRN', 'F' => 'REMARKS'],
             8 => ['A' => 'MALE'],
-            9 => ['A' => '1', 'B' => 'ACALA', 'C' => 'ZAIREL', 'D' => 'G.', 'E' => '129708190295'],
-            10 => ['A' => '2', 'B' => 'BASTATAS', 'C' => 'KAILE', 'D' => 'F.', 'E' => '129643190096'],
+            9 => ['A' => '1', 'B' => 'ABAD', 'C' => 'MIGUEL', 'D' => 'G.', 'E' => '100000000004'],
+            10 => ['A' => '2', 'B' => 'BAUTISTA', 'C' => 'PAOLO', 'D' => 'F.', 'E' => '100000000002'],
             11 => ['A' => 'FEMALE'],
-            12 => ['A' => '1', 'B' => 'ALFORNON', 'C' => 'MARIA RAINGIELYN', 'D' => 'A.', 'E' => '129697190076'],
-            13 => ['A' => 'BEBERLY REAL PANERIO'],
+            12 => ['A' => '1', 'B' => 'AQUINO', 'C' => 'ANA LOUISE', 'D' => 'A.', 'E' => '100000000003'],
+            13 => ['A' => 'JOSEFA RAMOS VILLAREAL'],
         ];
 
         $sheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'

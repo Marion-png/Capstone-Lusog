@@ -124,8 +124,8 @@ class AdviserMasterlistScanTest extends TestCase
             'document' => $this->document(),
             'is_class_masterlist' => true,
             'learners' => [
-                ['last_name' => 'ACALA', 'first_name' => 'ZAIREL', 'middle_name' => 'G.', 'lrn' => '129708190295', 'sex' => 'MALE'],
-                ['last_name' => 'ALFORNON', 'first_name' => 'MARIA RAINGIELYN', 'middle_name' => 'A.', 'lrn' => '129697190076', 'sex' => 'FEMALE'],
+                ['last_name' => 'ABAD', 'first_name' => 'MIGUEL', 'middle_name' => 'G.', 'lrn' => '100000000004', 'sex' => 'MALE'],
+                ['last_name' => 'AQUINO', 'first_name' => 'ANA LOUISE', 'middle_name' => 'A.', 'lrn' => '100000000003', 'sex' => 'FEMALE'],
             ],
             'note' => '',
         ]);
@@ -136,18 +136,18 @@ class AdviserMasterlistScanTest extends TestCase
 
         $this->assertSame(2, StudentHealthRecord::count());
 
-        $zairel = StudentHealthRecord::where('student_id', '129708190295')->firstOrFail();
-        $this->assertSame('ACALA, ZAIREL G.', $zairel->student_name);
-        $this->assertSame('Male', $zairel->student_details['gender']);
-        $this->assertSame('Grade 7 / Sampaguita', $zairel->section, "Scoped to the adviser's own class.");
-        $this->assertSame($this->institution->id, $zairel->institution_id);
+        $miguel = StudentHealthRecord::where('student_id', '100000000004')->firstOrFail();
+        $this->assertSame('ABAD, MIGUEL G.', $miguel->student_name);
+        $this->assertSame('Male', $miguel->student_details['gender']);
+        $this->assertSame('Grade 7 / Sampaguita', $miguel->section, "Scoped to the adviser's own class.");
+        $this->assertSame($this->institution->id, $miguel->institution_id);
 
-        $maria = StudentHealthRecord::where('student_id', '129697190076')->firstOrFail();
-        $this->assertSame('Female', $maria->student_details['gender']);
+        $ana = StudentHealthRecord::where('student_id', '100000000003')->firstOrFail();
+        $this->assertSame('Female', $ana->student_details['gender']);
 
         // The roster in the session carries both, so My Students lists them.
         $this->assertSame(
-            ['129697190076', '129708190295'],
+            ['100000000003', '100000000004'],
             collect(session('school_health_card_records'))->pluck('lrn')->sort()->values()->all()
         );
 
@@ -171,14 +171,14 @@ class AdviserMasterlistScanTest extends TestCase
             'document' => $this->document(),
             'is_class_masterlist' => true,
             'learners' => [
-                ['last_name' => 'ACALA', 'first_name' => 'ZAIREL', 'middle_name' => '', 'lrn' => '129708190295', 'sex' => 'MALE'],
+                ['last_name' => 'ABAD', 'first_name' => 'MIGUEL', 'middle_name' => '', 'lrn' => '100000000004', 'sex' => 'MALE'],
             ],
             'note' => '',
         ]);
 
         $this->scan()->assertSessionHas('import_report');
 
-        $record = StudentHealthRecord::where('student_id', '129708190295')->firstOrFail();
+        $record = StudentHealthRecord::where('student_id', '100000000004')->firstOrFail();
         $this->assertNull($record->baseline_weight_kg);
         $this->assertNull($record->baseline_bmi);
         $this->assertNull($record->baseline_nutritional_status);
@@ -232,7 +232,7 @@ class AdviserMasterlistScanTest extends TestCase
             // Even claiming to be one changes nothing: the headings decide.
             'is_class_masterlist' => true,
             'learners' => [
-                ['last_name' => 'ACALA', 'first_name' => 'ZAIREL', 'middle_name' => '', 'lrn' => '129708190295', 'sex' => 'MALE'],
+                ['last_name' => 'ABAD', 'first_name' => 'MIGUEL', 'middle_name' => '', 'lrn' => '100000000004', 'sex' => 'MALE'],
             ],
             'note' => '',
         ]);
@@ -264,7 +264,7 @@ class AdviserMasterlistScanTest extends TestCase
             'document' => $this->document(),
             'is_class_masterlist' => false,
             'learners' => [
-                ['last_name' => 'ACALA', 'first_name' => 'ZAIREL', 'middle_name' => '', 'lrn' => '129708190295', 'sex' => 'MALE'],
+                ['last_name' => 'ABAD', 'first_name' => 'MIGUEL', 'middle_name' => '', 'lrn' => '100000000004', 'sex' => 'MALE'],
             ],
             'note' => '',
         ]);
@@ -316,11 +316,11 @@ class AdviserMasterlistScanTest extends TestCase
             'document' => $this->document(),
             'is_class_masterlist' => true,
             'learners' => [
-                ['last_name' => 'ACALA', 'first_name' => 'ZAIREL', 'middle_name' => 'G.', 'lrn' => '129708190295', 'sex' => 'MALE'],
+                ['last_name' => 'ABAD', 'first_name' => 'MIGUEL', 'middle_name' => 'G.', 'lrn' => '100000000004', 'sex' => 'MALE'],
                 // The LRN was smudged: left blank rather than completed.
-                ['last_name' => 'BASTATAS', 'first_name' => 'KAILE', 'middle_name' => 'F.', 'lrn' => '', 'sex' => 'MALE'],
+                ['last_name' => 'BAUTISTA', 'first_name' => 'PAOLO', 'middle_name' => 'F.', 'lrn' => '', 'sex' => 'MALE'],
                 // A digit read as a letter is not an identifier.
-                ['last_name' => 'DABUAN', 'first_name' => 'DESIREE', 'middle_name' => '', 'lrn' => '12970819O295', 'sex' => 'FEMALE'],
+                ['last_name' => 'DIAZ', 'first_name' => 'CLARA', 'middle_name' => '', 'lrn' => '10000000O004', 'sex' => 'FEMALE'],
                 // A blank numbered line on the form is not a learner at all.
                 ['last_name' => '', 'first_name' => '', 'middle_name' => '', 'lrn' => '', 'sex' => 'FEMALE'],
             ],
@@ -334,11 +334,11 @@ class AdviserMasterlistScanTest extends TestCase
                 && $r['total'] === 3);
 
         $this->assertSame(1, StudentHealthRecord::count());
-        $this->assertTrue(StudentHealthRecord::where('student_id', '129708190295')->exists());
+        $this->assertTrue(StudentHealthRecord::where('student_id', '100000000004')->exists());
 
         $messages = collect(session('import_report')['errors'])->pluck('message')->implode(' ');
-        $this->assertStringContainsString('BASTATAS, KAILE', $messages);
-        $this->assertStringContainsString('DABUAN, DESIREE', $messages);
+        $this->assertStringContainsString('BAUTISTA, PAOLO', $messages);
+        $this->assertStringContainsString('DIAZ, CLARA', $messages);
     }
 
     /** A sheet with nobody readable on it enrols nobody and says so. */
