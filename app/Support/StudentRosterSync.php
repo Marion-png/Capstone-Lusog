@@ -39,12 +39,23 @@ class StudentRosterSync
 
         $records = $existing;
         $seen = [];
+        $left = [];
         foreach (StudentHealthRecord::currentYearForInstitution($institutionId) as $record) {
             $lrn = (string) $record->student_id;
             if ($lrn === '' || isset($seen[$lrn])) {
                 continue;
             }
             $seen[$lrn] = true;
+
+            // A learner who has left their section this school year — closed
+            // out as promoted or retained, or archived — is in no section's
+            // roster any more. Their record stays exactly where it is; the
+            // Archived lists are how it is reached now.
+            if (! LearnerPlacement::isOpen($record)) {
+                $left[$lrn] = true;
+
+                continue;
+            }
 
             $row = self::buildSessionRow($record, $lrn);
 
@@ -56,6 +67,16 @@ class StudentRosterSync
                 $records[$indexByLrn[$lrn]] = $row;
             } else {
                 $records[] = $row;
+            }
+        }
+
+        // Removed by key, never re-indexed: the nurse's Fill Medical Record
+        // links are keyed by a row's index and must keep opening their learner.
+        if ($left !== []) {
+            foreach ($records as $index => $row) {
+                if (is_array($row) && isset($left[(string) ($row['lrn'] ?? '')])) {
+                    unset($records[$index]);
+                }
             }
         }
 

@@ -18,6 +18,11 @@ use Tests\TestCase;
  * next grade used to silently overwrite their student_health_records row,
  * clobbering the prior year's baseline/endline nutrition data with no year
  * boundary at all.
+ *
+ * Promotion now runs through the school-year handover: the outgoing adviser
+ * closes the year with the learner marked Promoted, and the next grade's
+ * adviser adds them by LRN. The learner's record carries over to a new row
+ * for the new year; last year's row is never touched.
  */
 class StudentPromotionSchoolYearTest extends TestCase
 {
@@ -55,6 +60,7 @@ class StudentPromotionSchoolYearTest extends TestCase
 
     private function submitStudent(string $grade, string $section, float $weightKg): void
     {
+        $this->flushSession();
         $this->withSession($this->adviserSession($grade, $section))->post(route('adviser.store'), [
             'last_name' => 'Dela Cruz',
             'first_name' => 'Juan',
@@ -79,11 +85,39 @@ class StudentPromotionSchoolYearTest extends TestCase
 
     private function uploadCondition(string $grade, string $section, string $conditionName): void
     {
+        $this->flushSession();
         $this->withSession($this->adviserSession($grade, $section))->post(route('medical-certificate.store'), [
             'lrn' => self::LRN,
             'condition_name' => $conditionName,
             'certificate' => UploadedFile::fake()->create('cert.pdf', 100, 'application/pdf'),
         ]);
+    }
+
+    /**
+     * Grade 7 in 2025-2026, closed out as Promoted before the year ends, then
+     * added to Grade 8 by LRN once 2026-2027 has begun.
+     */
+    private function promote(): void
+    {
+        Carbon::setTestNow('2025-09-01'); // SY 2025-2026
+        $this->submitStudent('Grade 7/SPED', 'SPED-A', 32.0);
+
+        Carbon::setTestNow('2026-03-16'); // still SY 2025-2026: the adviser closes it
+        $this->flushSession();
+        $this->withSession($this->adviserSession('Grade 7/SPED', 'SPED-A'))
+            ->post(route('class-adviser.close-year.store'), [
+                'school_year' => '2025-2026',
+                'statuses' => [self::LRN => 'promoted'],
+            ])
+            ->assertRedirect(route('dashboard.class-adviser.close-year'))
+            ->assertSessionHas('success');
+
+        Carbon::setTestNow('2026-09-01'); // SY 2026-2027 — the Grade 8 adviser adds the learner
+        $this->flushSession();
+        $this->withSession($this->adviserSession('Grade 8/SPED', 'SPED-B'))
+            ->post(route('adviser.add-to-section'), ['add_lrn' => self::LRN])
+            ->assertRedirect(route('dashboard.class-adviser', ['tab' => 'saved']))
+            ->assertSessionHas('success');
     }
 
     #[Test]
@@ -100,11 +134,19 @@ class StudentPromotionSchoolYearTest extends TestCase
 
         $this->uploadCondition('Grade 7/SPED', 'SPED-A', 'Asthma');
 
-        Carbon::setTestNow('2026-09-01'); // SY 2026-2027 — student promoted
+        $this->promote();
+
+        // The new year's row is opened from last year's record: nothing was
+        // typed again, and the learner is waiting no longer.
+        $carried = StudentHealthRecord::where('student_id', self::LRN)->where('school_year', '2026-2027')->firstOrFail();
+        $this->assertSame('Grade 8/SPED / SPED-B', $carried->section);
+        $this->assertSame('Pedro Dela Cruz', $carried->student_details['parent_guardian']);
+        $this->assertSame('carried_over', $carried->joined_as);
+        $this->assertNull($carried->baseline_weight_kg, 'This year\'s weighing is this year\'s to take.');
+
+        // The Grade 8 adviser records this year's measurements on their own row.
         $this->submitStudent('Grade 8/SPED', 'SPED-B', 36.5);
 
-        // The bug: this used to overwrite the single existing row instead of
-        // creating a new one for the new school year.
         $records = StudentHealthRecord::where('student_id', self::LRN)->orderBy('school_year')->get();
         $this->assertCount(2, $records, 'Promotion must create a second row, not overwrite the first.');
 
@@ -114,9 +156,11 @@ class StudentPromotionSchoolYearTest extends TestCase
         $this->assertNotNull($lastYearRecord);
         $this->assertNotNull($thisYearRecord);
 
-        // Last year's data must be untouched.
+        // Last year's data must be untouched — and it records how it ended.
         $this->assertSame('Grade 7/SPED / SPED-A', $lastYearRecord->section);
         $this->assertSame(32.0, (float) $lastYearRecord->baseline_weight_kg);
+        $this->assertSame('promoted', $lastYearRecord->end_status);
+        $this->assertSame('Grade 8/SPED', $lastYearRecord->wait_grade);
 
         // This year's row reflects the promotion.
         $this->assertSame('Grade 8/SPED / SPED-B', $thisYearRecord->section);
@@ -127,6 +171,23 @@ class StudentPromotionSchoolYearTest extends TestCase
         $this->assertSame($thisYearRecord->id, $current->id);
     }
 
+    /**
+     * Re-typing a learner the school already holds is refused rather than
+     * silently opening a second record: the record moves with the learner.
+     */
+    #[Test]
+    public function a_learner_from_last_year_cannot_be_re_encoded_through_the_form(): void
+    {
+        Carbon::setTestNow('2025-09-01');
+        $this->submitStudent('Grade 7/SPED', 'SPED-A', 32.0);
+
+        Carbon::setTestNow('2026-09-01');
+        $this->submitStudent('Grade 8/SPED', 'SPED-B', 36.5);
+
+        $this->assertSame(1, StudentHealthRecord::where('student_id', self::LRN)->count());
+        $this->assertStringContainsString('has not closed the school year', (string) session('error'));
+    }
+
     #[Test]
     public function health_conditions_carry_forward_across_promotion(): void
     {
@@ -134,8 +195,18 @@ class StudentPromotionSchoolYearTest extends TestCase
         $this->submitStudent('Grade 7/SPED', 'SPED-A', 32.0);
         $this->uploadCondition('Grade 7/SPED', 'SPED-A', 'Asthma');
 
+        Carbon::setTestNow('2026-03-16');
+        $this->flushSession();
+        $this->withSession($this->adviserSession('Grade 7/SPED', 'SPED-A'))
+            ->post(route('class-adviser.close-year.store'), [
+                'school_year' => '2025-2026',
+                'statuses' => [self::LRN => 'promoted'],
+            ]);
+
         Carbon::setTestNow('2026-09-01');
-        $this->submitStudent('Grade 8/SPED', 'SPED-B', 36.5);
+        $this->flushSession();
+        $this->withSession($this->adviserSession('Grade 8/SPED', 'SPED-B'))
+            ->post(route('adviser.add-to-section'), ['add_lrn' => self::LRN]);
 
         // The condition was recorded against last year but must still be
         // visible for the student now, without being re-entered.
@@ -147,11 +218,7 @@ class StudentPromotionSchoolYearTest extends TestCase
     #[Test]
     public function roster_sync_produces_one_entry_even_with_two_years_of_rows(): void
     {
-        Carbon::setTestNow('2025-09-01');
-        $this->submitStudent('Grade 7/SPED', 'SPED-A', 32.0);
-
-        Carbon::setTestNow('2026-09-01');
-        $this->submitStudent('Grade 8/SPED', 'SPED-B', 36.5);
+        $this->promote();
 
         $this->assertSame(2, StudentHealthRecord::where('student_id', self::LRN)->count());
 
@@ -169,12 +236,9 @@ class StudentPromotionSchoolYearTest extends TestCase
     #[Test]
     public function health_history_endpoint_lists_every_school_year_on_file(): void
     {
-        Carbon::setTestNow('2025-09-01');
-        $this->submitStudent('Grade 7/SPED', 'SPED-A', 32.0);
+        $this->promote();
 
-        Carbon::setTestNow('2026-09-01');
-        $this->submitStudent('Grade 8/SPED', 'SPED-B', 36.5);
-
+        $this->flushSession();
         $response = $this->withSession($this->adviserSession('Grade 8/SPED', 'SPED-B'))
             ->getJson('/api/student-health-history?lrn='.self::LRN);
 

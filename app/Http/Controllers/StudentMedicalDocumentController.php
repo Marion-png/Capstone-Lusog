@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MedicalCertificate;
 use App\Models\StudentHealthRecord;
+use App\Support\AdviserClassScope;
 use App\Support\EncryptedFileStorage;
 use App\Support\SchemaCache;
 use App\Support\StudentMedicalDocuments;
@@ -57,7 +58,9 @@ class StudentMedicalDocumentController extends Controller
 
         // A learner this school does not hold gets the same stamp as one with
         // no documents, so polling a foreign LRN reveals nothing.
-        if (StudentHealthRecord::currentForStudent($lrn, $institutionId) === null) {
+        $record = StudentHealthRecord::currentForStudent($lrn, $institutionId);
+
+        if ($record === null || ! AdviserClassScope::coversRecord($request, $record)) {
             return response()->json(['stamp' => self::documentStamp(null)]);
         }
 
@@ -154,6 +157,15 @@ class StudentMedicalDocumentController extends Controller
         $document = $this->authorizeDocument($request, $id, requireFile: false);
 
         $lrn = (string) $document->student_lrn;
+
+        // Removing a document is a write: an adviser may read a learner
+        // archived from their section, but only change one still in it.
+        abort_unless(
+            AdviserClassScope::learnerAccess($request, $lrn) === AdviserClassScope::ACCESS_CURRENT,
+            404,
+            'Document not found.'
+        );
+
         $path = $document->file_path;
 
         // The row goes first so the deletion is audited even if the file was
@@ -179,6 +191,10 @@ class StudentMedicalDocumentController extends Controller
 
         abort_if($record === null, 404, 'Student not found in your school.');
 
+        // A class adviser manages the documents of the learners in their
+        // section now — not a learner who has left it or another class's.
+        abort_unless(AdviserClassScope::coversRecord($request, $record), 404, 'Student not found in your assigned class.');
+
         return $record;
     }
 
@@ -201,6 +217,11 @@ class StudentMedicalDocumentController extends Controller
         abort_if($document === null, 404, 'Document not found.');
         abort_unless(
             $institutionId !== null && (int) $document->institution_id === $institutionId,
+            404,
+            'Document not found.'
+        );
+        abort_unless(
+            AdviserClassScope::mayReadLearner($request, (string) $document->student_lrn),
             404,
             'Document not found.'
         );

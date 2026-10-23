@@ -9,6 +9,7 @@ use App\Support\AdviserClassScope;
 use App\Support\ConsentFormScanner;
 use App\Support\ConsentStanding;
 use App\Support\EncryptedFileStorage;
+use App\Support\LearnerPlacement;
 use App\Support\SchemaCache;
 use App\Support\SchoolHeadOverview;
 use App\Support\StudentRosterSync;
@@ -142,16 +143,31 @@ class HealthConsentFormController extends Controller
     }
 
     /**
-     * The adviser's class as it stood in an earlier school year.
+     * The adviser's learners, as they stood in an earlier school year.
      *
-     * The session roster holds the current year only, so an earlier year is
-     * read from that year's own rows — narrowed by AdviserClassScope exactly as
-     * the current year is, on the grade and section each record carried then.
-     * Same shape as `assignedStudents()`, so the page renders either alike.
+     * Access follows the learner (the school-year handover, rule 4): the
+     * learners are the ones in this adviser's section now — their latest
+     * placement open and in it — and the year chooses which of their forms is
+     * read, whichever section they were in then. Last year's form moves with a
+     * promoted learner to their new adviser, and is gone from the adviser they
+     * left. The session roster holds the current year only, so the year's own
+     * rows are read. Same shape as `assignedStudents()`, so the page renders
+     * either alike.
      */
     private function classInYear(Request $request, string $schoolYear): Collection
     {
-        return AdviserClassScope::records($request, $schoolYear)
+        $institutionId = $request->session()->get('active_institution_id');
+        $latest = LearnerPlacement::latestRows($institutionId ? (int) $institutionId : null);
+        $assigned = AdviserClassScope::assignedClass($request) ?? ['', ''];
+
+        return StudentHealthRecord::rosterFor($institutionId, $schoolYear)
+            ->filter(function (StudentHealthRecord $record) use ($latest, $assigned): bool {
+                $now = $latest[(string) $record->student_id] ?? null;
+
+                return $now !== null
+                    && LearnerPlacement::isOpen($now)
+                    && LearnerPlacement::inSection($now, $assigned[0], $assigned[1]);
+            })
             ->unique(fn (StudentHealthRecord $record): string => (string) $record->student_id)
             ->map(function (StudentHealthRecord $record): array {
                 $details = is_array($record->student_details) ? $record->student_details : [];
@@ -286,6 +302,7 @@ class HealthConsentFormController extends Controller
         }
 
         $this->assertSameInstitution($request, $form);
+        $this->assertAdviserReaches($request, $form, write: false);
 
         if ($form->adviser_unread) {
             $form->adviser_unread = false;
@@ -303,6 +320,7 @@ class HealthConsentFormController extends Controller
         }
 
         $this->assertSameInstitution($request, $form);
+        $this->assertAdviserReaches($request, $form, write: true);
 
         if ($form->isLockedForAdviser()) {
             return redirect()->route('consent-forms.show', $form)
@@ -324,6 +342,7 @@ class HealthConsentFormController extends Controller
         }
 
         $this->assertSameInstitution($request, $form);
+        $this->assertAdviserReaches($request, $form, write: true);
 
         if ($form->isLockedForAdviser()) {
             return redirect()->route('consent-forms.show', $form)
@@ -409,6 +428,7 @@ class HealthConsentFormController extends Controller
         }
 
         $this->assertSameInstitution($request, $form);
+        $this->assertAdviserReaches($request, $form, write: true);
 
         if ($form->status !== HealthConsentForm::STATUS_SIGNED) {
             return redirect()->route('consent-forms.show', $form)
@@ -448,6 +468,7 @@ class HealthConsentFormController extends Controller
         }
 
         $this->assertSameInstitution($request, $form);
+        $this->assertAdviserReaches($request, $form, write: true);
 
         if ($this->paperFormIsClosed($form)) {
             return redirect()->route('consent-forms.show', $form)
@@ -477,6 +498,7 @@ class HealthConsentFormController extends Controller
         }
 
         $this->assertSameInstitution($request, $form);
+        $this->assertAdviserReaches($request, $form, write: true);
 
         if ($this->paperFormIsClosed($form)) {
             return redirect()->route('consent-forms.show', $form)
@@ -548,6 +570,7 @@ class HealthConsentFormController extends Controller
         }
 
         $this->assertSameInstitution($request, $form);
+        $this->assertAdviserReaches($request, $form, write: false);
 
         abort_unless((string) $form->paper_form_path !== '', 404);
 
@@ -900,6 +923,7 @@ class HealthConsentFormController extends Controller
         }
 
         $this->assertSameInstitution($request, $form);
+        $this->assertAdviserReaches($request, $form, write: false);
 
         return view('consent-forms.print', ['form' => $form]);
     }
@@ -945,6 +969,41 @@ class HealthConsentFormController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * A class adviser reaches a form only through the learner it is for, and
+     * only while that learner is theirs (the school-year handover, rule 4):
+     * in their section now to read or change it, or archived from their
+     * section to read it. The adviser a learner has left is told the record is
+     * no longer theirs. Other roles are unaffected.
+     */
+    private function assertAdviserReaches(Request $request, HealthConsentForm $form, bool $write): void
+    {
+        if ((string) $request->session()->get('active_role') !== 'class_adviser') {
+            return;
+        }
+
+        $lrn = (string) $form->student_lrn;
+
+        // On the adviser's own roster now — the same list the form was opened
+        // from. The roster already drops anybody whose placement has closed.
+        if (AdviserClassScope::rosterRows($request)->contains(fn (array $row): bool => (string) ($row['lrn'] ?? '') === $lrn)) {
+            return;
+        }
+
+        $access = AdviserClassScope::learnerAccess($request, $lrn);
+
+        if ($access === AdviserClassScope::ACCESS_CURRENT) {
+            return;
+        }
+
+        if (! $write && $access === AdviserClassScope::ACCESS_ARCHIVED) {
+            return;
+        }
+
+        abort_if($access === AdviserClassScope::ACCESS_PREVIOUS, 403, AdviserClassScope::NO_LONGER_MESSAGE);
+        abort(404);
     }
 
     /** Forms are never visible across schools, even via a direct URL. */

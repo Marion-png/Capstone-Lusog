@@ -240,8 +240,8 @@ class MlatExportController extends Controller
      *
      * The current school year's row unless `?school_year=` names another —
      * an archived learner has no row this year, and their record is still
-     * theirs to read. An adviser is then tested against that year's row, the
-     * same per-section rule the consent history applies.
+     * theirs to read. An adviser is tested against where the learner stands
+     * now (AdviserClassScope::learnerAccess), not against that year's row.
      */
     private function recordFor(Request $request, string $lrn): StudentHealthRecord
     {
@@ -259,9 +259,20 @@ class MlatExportController extends Controller
         }
 
         // An adviser reaches only their own class; the nurse and clinic staff
-        // serve the whole school.
-        if ($role === 'class_adviser' && ! AdviserClassScope::coversRecord($request, $record)) {
-            abort(403);
+        // serve the whole school. The class is the learner's now, so any of
+        // their years opens for the adviser they are with — the history moves
+        // with them — and none does for the adviser they left. A learner
+        // archived from the adviser's own section stays readable, read-only.
+        if ($role === 'class_adviser') {
+            $access = AdviserClassScope::learnerAccess($request, $lrn);
+
+            if ($access === AdviserClassScope::ACCESS_PREVIOUS) {
+                abort(403, AdviserClassScope::NO_LONGER_MESSAGE);
+            }
+
+            if (! in_array($access, [AdviserClassScope::ACCESS_CURRENT, AdviserClassScope::ACCESS_ARCHIVED], true)) {
+                abort(403);
+            }
         }
 
         return $record;

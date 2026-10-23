@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
+use App\Support\AdviserClassScope;
 use App\Support\StudentVitalSigns;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -96,6 +97,14 @@ class StudentVitalSignsController extends Controller
             return null;
         }
 
-        return StudentHealthRecord::currentForStudent($lrn, $institutionId);
+        $record = StudentHealthRecord::currentForStudent($lrn, $institutionId);
+
+        // An adviser reads their own section's learners, and only while the
+        // learner is still in it.
+        if ($record !== null && ! AdviserClassScope::coversRecord($request, $record)) {
+            return null;
+        }
+
+        return $record;
     }
 }

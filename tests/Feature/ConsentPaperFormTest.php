@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\HealthConsentForm;
 use App\Models\Institution;
+use App\Models\StudentHealthRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -51,6 +52,18 @@ class ConsentPaperFormTest extends TestCase
 
     private function form(string $status = HealthConsentForm::STATUS_SENT, ?Institution $school = null, string $lrn = '130000000001'): HealthConsentForm
     {
+        // A form is opened for a learner in the adviser's own section; the
+        // adviser reaches it through that learner (rule 4 of the handover).
+        StudentHealthRecord::query()->firstOrCreate([
+            'student_id' => $lrn,
+            'institution_id' => ($school ?? $this->school)->id,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+        ], [
+            'student_name' => 'Cruz, Juan',
+            'school_name' => 'Sta. Ana NHS',
+            'section' => 'Grade 10 / Dalton',
+        ]);
+
         return HealthConsentForm::create([
             'token' => str()->uuid()->toString(),
             'school_year' => '2026-2027',

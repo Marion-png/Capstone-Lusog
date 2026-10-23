@@ -161,12 +161,20 @@
                         @forelse ($rows as $row)
                             @php
                                 $form = $row['form'];
+                                // Every learner starts the school year at No form
+                                // yet: nothing has been sent or uploaded for them
+                                // this year (the school-year handover). Still the
+                                // pending state underneath, so filters and counts
+                                // are unchanged.
+                                $rowStatusLabel = ($row['status'] === 'pending' && $form === null && $row['upload'] === null)
+                                    ? 'No form yet'
+                                    : $statusLabels[$row['status']];
                                 $detail = [
                                     'name' => $row['name'],
                                     'lrn' => $row['lrn'],
                                     'guardian' => $row['parent_guardian'] ?: null,
                                     'status' => $row['status'],
-                                    'status_label' => $statusLabels[$row['status']],
+                                    'status_label' => $rowStatusLabel,
                                     'school_year' => $schoolYear,
                                     'dated_at' => $row['dated_at'],
                                     'notes' => $row['notes'],
@@ -187,7 +195,7 @@
                                 <td class="ms-student-name">{{ $row['name'] }}</td>
                                 <td>{{ $row['parent_guardian'] !== '' ? $row['parent_guardian'] : '-' }}</td>
                                 <td>
-                                    <span class="ms-badge ms-consent-{{ $row['status'] }}">{{ $statusLabels[$row['status']] }}</span>
+                                    <span class="ms-badge ms-consent-{{ $row['status'] }}">{{ $rowStatusLabel }}</span>
                                     @if ($form && $form->adviser_unread)<span class="ms-badge ms-consent-declined" style="margin-left:5px;">New</span>@endif
                                 </td>
                                 <td>{{ $row['dated_at'] ?? '-' }}</td>

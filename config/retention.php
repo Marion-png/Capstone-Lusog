@@ -4,12 +4,14 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | How long a learner's record is kept after they stop appearing
+    | How long an archived learner's record is kept
     |--------------------------------------------------------------------------
     |
-    | The countdown starts at the end of the last school year the learner was
-    | enrolled in, and a learner enrolled in the current school year is never
-    | counted at all. See App\Support\StudentRetention.
+    | The countdown starts the day a learner is archived (transferred out,
+    | dropped out, completed Grade 10): `delete_after` is set to that day plus
+    | this many years, and restoring the learner clears it. A learner in a
+    | section, or waiting for one, is never counted at all. See
+    | App\Support\StudentRetention.
     |
     | It is configuration rather than a constant for the same reason
     | `institutions.feeding_cycle_days` is: the figure belongs to DepEd's

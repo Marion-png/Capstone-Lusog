@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\AdviserController;
 use App\Models\AuditLog;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
@@ -61,10 +62,23 @@ class AdviserStudentImportTest extends TestCase
         return UploadedFile::fake()->createWithContent('class-list.csv', $content);
     }
 
-    private function import(UploadedFile $file, array $session = [])
+    /**
+     * Upload, then confirm the preview — the school-year handover shows what
+     * every row will do before anything is written. A refusal comes back
+     * before any preview, and is returned as it is.
+     */
+    private function import(UploadedFile $file, array $session = [], array $rename = [])
     {
-        return $this->withSession($this->adviserSession($session))
+        $upload = $this->withSession($this->adviserSession($session))
             ->post(route('adviser.import'), ['students_file' => $file]);
+
+        $preview = session(AdviserController::PREVIEW_KEY);
+
+        if (! is_array($preview)) {
+            return $upload;
+        }
+
+        return $this->post(route('adviser.import.confirm'), ['token' => $preview['token'], 'rename' => $rename]);
     }
 
     /** One file, a class enrolled — classified, scoped and persisted like the form. */
@@ -147,9 +161,13 @@ class AdviserStudentImportTest extends TestCase
         $this->assertSame(2, StudentHealthRecord::count());
     }
 
-    /** A learner already on the roll is updated, and one in another class is refused. */
+    /**
+     * A learner already in the section is left as they are, and one in
+     * another class is not added (the school-year handover: "Already added —
+     * nothing", and an LRN active elsewhere needs checking).
+     */
     #[Test]
-    public function an_existing_learner_is_updated_and_a_colleagues_learner_is_refused(): void
+    public function an_existing_learner_is_left_as_is_and_a_colleagues_learner_is_not_added(): void
     {
         $mine = StudentHealthRecord::create([
             'institution_id' => $this->institution->id,
@@ -185,13 +203,14 @@ class AdviserStudentImportTest extends TestCase
 
         $report = session('import_report');
         $this->assertSame(0, $report['created']);
-        $this->assertSame(1, $report['updated']);
+        $this->assertSame(0, $report['updated']);
+        $this->assertSame(1, $report['unchanged']);
         $this->assertCount(1, $report['errors']);
         $this->assertStringContainsString('another class', $report['errors'][0]['message']);
 
         $mine->refresh();
-        $this->assertSame('New Address', $mine->student_details['address']);
-        // What the sheet does not carry is kept, not blanked.
+        // Nothing is re-encoded: the record on file is the record.
+        $this->assertArrayNotHasKey('address', $mine->student_details);
         $this->assertTrue($mine->student_details['health_history']['med_asthma']);
         $this->assertSame(['deworming' => 'V'], $mine->examination, 'The nurse\'s examination is untouched.');
 

@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
 use App\Models\StudentPhoto;
+use App\Support\AdviserClassScope;
 use App\Support\EncryptedFileStorage;
+use App\Support\LearnerPlacement;
 use App\Support\SchemaCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -194,6 +196,12 @@ class StudentPhotoController extends Controller
             return false;
         }
 
+        // A class adviser reads the learners in their section now, and the
+        // ones archived from it — not a learner who has moved on to another.
+        if ((string) $request->session()->get('active_role') === 'class_adviser') {
+            return AdviserClassScope::mayReadLearner($request, $lrn);
+        }
+
         return StudentHealthRecord::query()
             ->where('student_id', $lrn)
             ->where('institution_id', $institutionId)
@@ -229,6 +237,7 @@ class StudentPhotoController extends Controller
             return true;
         }
 
-        return strcasecmp(trim((string) $record->section), trim($grade.' / '.$section)) === 0;
+        return strcasecmp(trim((string) $record->section), trim($grade.' / '.$section)) === 0
+            && LearnerPlacement::isOpen($record);
     }
 }

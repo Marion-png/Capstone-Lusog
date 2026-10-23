@@ -9,15 +9,14 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 /*
- * The retention purge (docs/open-decisions.md entry 2, now settled at
- * config('retention.years')).
+ * The retention purge (SIGLA School Year Transition spec, "Archive and
+ * scheduled deletion"; the window is config('retention.years')).
  *
- * Monthly rather than daily, on purpose. A record becomes due on a date five
- * years out, so checking tonight rather than in three weeks changes nothing
- * about the outcome — and this is the only destructive job in the application,
- * so it should run as seldom as the policy allows and leave a wide window in
- * which somebody noticing the "will be deleted on …" warning can re-enrol the
- * learner first.
+ * Daily: every archived learner whose `delete_after` date has passed is
+ * permanently deleted with every file they uploaded. Only archived learners
+ * are candidates, and restoring a learner clears the date, so nothing in a
+ * section — or waiting for one — is ever touched. The Archived tabs show each
+ * learner's deletion date so staff can act before it.
  *
  * `withoutOverlapping()` because a long purge must not have a second copy
  * start behind it, and `onOneServer()` so a multi-instance deployment runs it
@@ -31,6 +30,6 @@ Artisan::command('inspire', function () {
  * (`--dry-run` first).
  */
 Schedule::command('students:purge-expired')
-    ->monthlyOn(1, '02:30')
+    ->dailyAt('02:30')
     ->withoutOverlapping()
     ->onOneServer();

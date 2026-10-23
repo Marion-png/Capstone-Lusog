@@ -6,6 +6,7 @@ use App\Models\MedicalCertificate;
 use App\Models\StudentHealthCondition;
 use App\Models\StudentHealthRecord;
 use App\Support\EncryptedFileStorage;
+use App\Support\LearnerPlacement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -47,6 +48,18 @@ class MedicalCertificateController extends Controller
 
         $record = StudentHealthRecord::currentForStudent($validated['lrn'], $request->session()->get('active_institution_id'));
 
+        // A learner the school already holds — waiting for a section,
+        // archived, or in another class — is placed by the school-year
+        // handover, never by a document upload creating a row for them.
+        abort_if(
+            $record === null && LearnerPlacement::rowsForLearner(
+                (int) $request->session()->get('active_institution_id'),
+                (string) $validated['lrn']
+            ) !== [],
+            403,
+            'You may only upload certificates for students in your assigned class.'
+        );
+
         if ($record === null) {
             $record = StudentHealthRecord::create([
                 'institution_id' => $request->session()->get('active_institution_id'),
@@ -60,7 +73,7 @@ class MedicalCertificateController extends Controller
             ]);
         } else {
             abort_unless(
-                $record->section === $expectedSection,
+                $record->section === $expectedSection && LearnerPlacement::isOpen($record),
                 403,
                 'You may only upload certificates for students in your assigned class.'
             );
@@ -165,7 +178,7 @@ class MedicalCertificateController extends Controller
             $grade = (string) $request->session()->get('assigned_grade_level', '');
             $section = (string) $request->session()->get('assigned_section', '');
             $expected = trim("{$grade} / {$section}");
-            if ($grade === '' || $section === '' || $record->section !== $expected) {
+            if ($grade === '' || $section === '' || $record->section !== $expected || ! LearnerPlacement::isOpen($record)) {
                 return response()->json(['conditions' => []]);
             }
         }

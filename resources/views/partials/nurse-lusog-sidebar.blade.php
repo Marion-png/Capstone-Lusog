@@ -4,7 +4,7 @@
     Pass $active to highlight the current item: 'dashboard' | 'records' |
     'queue' | 'consultations' | 'feeding' | 'deworming' | 'consent' |
     'assessments' | 'inventory' | 'dispensing' | 'visualization' | 'forms' |
-    'exchange' | 'reports'.
+    'exchange' | 'reports' | 'archived'.
 
     Markup only — the .sb-* rules live in css/nurse-sidebar.css, which the
     page must inline after css/lusog-theme.css. This replaces the older
@@ -67,6 +67,12 @@
         <a href="{{ route('dashboard.school-nurse.nutritional-status') }}" class="sb-link {{ $active === 'nutritional-status' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 16l4-5 3 3 5-7"/></svg>
             Nutritional Health Status
+        </a>
+        {{-- Every archived learner and every learner waiting for a section,
+             read only (the school-year handover). --}}
+        <a href="{{ route('dashboard.school-nurse.archived') }}" class="sb-link {{ $active === 'archived' ? 'active' : '' }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+            Archived Students
         </a>
 
         {{-- "Nutritional Status Report" used to sit here, under Health

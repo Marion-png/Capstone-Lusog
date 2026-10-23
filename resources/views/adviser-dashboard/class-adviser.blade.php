@@ -14,6 +14,7 @@
     @if (file_exists($classAdviserCssPath))
         <style>{!! file_get_contents($classAdviserCssPath) !!}</style>
     @endif
+    <style>{!! file_get_contents(resource_path('css/adviser-transition.css')) !!}</style>
     {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
          last so it overrides this page's own :root colours. --}}
     <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
@@ -341,6 +342,12 @@
                 // column that says Pending beside a profile that says Returned is
                 // two screens disagreeing about one child.
                 $consentBadges = \App\Support\ConsentStanding::LABELS;
+
+                // How each learner came into the section this school year —
+                // the handover's tag (App\Support\LearnerPlacement).
+                $joinedTags = collect($records ?? [])
+                    ->mapWithKeys(fn ($record) => [(string) $record->student_id => (string) ($record->joined_as ?? '')])
+                    ->all();
             @endphp
 
             <div class="ms-page-header">
@@ -349,6 +356,7 @@
                     <p class="ms-page-sub">{{ $ov['grade_section'] }} &middot; Manage your students' health profiles and track their well-being.</p>
                 </div>
                 <div class="ms-header-actions">
+                    <a href="{{ route('dashboard.class-adviser.close-year') }}" class="btn btn-secondary" id="closeSchoolYearLink">Close School Year</a>
                     <button type="button" class="btn" id="openAddStudentBtn">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         Enroll Student
@@ -477,7 +485,8 @@
                                     data-lrn="{{ strtolower($rowLrn) }}"
                                     data-status="{{ $profileKey }}">
                                     <td><strong>{{ $rowLrn !== '' ? $rowLrn : '-' }}</strong></td>
-                                    <td class="ms-student-name">{{ $fullName }}</td>
+                                    @php $joinedTag = \App\Support\LearnerPlacement::joinedLabel($joinedTags[$rowLrn] ?? ''); @endphp
+                                    <td class="ms-student-name">{{ $fullName }}@if ($joinedTag !== '')<span class="yt-tag yt-tag-{{ $joinedTags[$rowLrn] }}">{{ $joinedTag }}</span>@endif</td>
                                     <td>{{ $prototypeRecord['gender'] ?? '-' }}</td>
                                     <td>{{ $prototypeRecord['age'] ?? '-' }}</td>
                                     @foreach (['baseline', 'endline'] as $phaseKey)
@@ -607,12 +616,82 @@
                     @error('students_file') <div class="import-error">{{ $message }}</div> @enderror
                 </form>
 
+                {{-- The preview: what confirming will do to every LRN on the
+                     list, before anything is written (the school-year
+                     handover). Needs checking and refused rows stay out. --}}
+                @php
+                    $masterlistPreview = session(\App\Http\Controllers\AdviserController::PREVIEW_KEY);
+                    $previewRows = is_array($masterlistPreview) ? collect($masterlistPreview['rows'] ?? []) : collect();
+                    $previewCounts = $previewRows->countBy('outcome');
+                @endphp
+                @if ($previewRows->isNotEmpty())
+                    <div class="yt-preview" id="masterlistPreview">
+                        <div class="yt-preview-head">
+                            <strong>Preview</strong>
+                            <span class="import-report-total">{{ $masterlistPreview['total'] ?? $previewRows->count() }} {{ \Illuminate\Support\Str::plural('row', (int) ($masterlistPreview['total'] ?? $previewRows->count())) }}</span>
+                            @foreach (\App\Support\LearnerPlacement::OUTCOME_LABELS as $outcomeKey => $outcomeLabel)
+                                @if (($previewCounts[$outcomeKey] ?? 0) > 0)
+                                    <span class="yt-out yt-out-{{ $outcomeKey }}">{{ $outcomeLabel }} &middot; {{ $previewCounts[$outcomeKey] }}</span>
+                                @endif
+                            @endforeach
+                        </div>
+                        <form method="POST" action="{{ route('adviser.import.confirm') }}" id="masterlistConfirmForm">
+                            @csrf
+                            <input type="hidden" name="token" value="{{ $masterlistPreview['token'] ?? '' }}">
+                            <div class="ms-table-scroll">
+                                <table class="ms-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Line</th>
+                                            <th>LRN</th>
+                                            <th>Name</th>
+                                            <th>Result</th>
+                                            <th>What Happens</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($previewRows as $previewRow)
+                                            <tr data-outcome="{{ $previewRow['outcome'] }}">
+                                                <td>{{ $previewRow['line'] ?: '—' }}</td>
+                                                <td><strong>{{ $previewRow['lrn'] !== '' ? $previewRow['lrn'] : '—' }}</strong></td>
+                                                <td>
+                                                    {{ $previewRow['list_name'] !== '' ? $previewRow['list_name'] : '—' }}
+                                                    @if (($previewRow['name_differs'] ?? false) && ($previewRow['sigla_name'] ?? null))
+                                                        <span class="yt-name-alt">In SIGLA: {{ $previewRow['sigla_name'] }}</span>
+                                                        <label class="yt-rename">
+                                                            <input type="checkbox" name="rename[]" value="{{ $previewRow['lrn'] }}">
+                                                            Use the list's name
+                                                        </label>
+                                                    @endif
+                                                </td>
+                                                <td><span class="yt-out yt-out-{{ $previewRow['outcome'] }}">{{ $previewRow['label'] }}</span></td>
+                                                <td class="yt-outcome">{{ $previewRow['message'] }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="yt-actions">
+                                <button type="submit" form="masterlistCancelForm" class="btn btn-secondary" id="masterlistCancel">Cancel</button>
+                                <button type="submit" class="btn" id="masterlistConfirm">Confirm and add to my section</button>
+                            </div>
+                        </form>
+                        <form method="POST" action="{{ route('adviser.import.cancel') }}" id="masterlistCancelForm">
+                            @csrf
+                        </form>
+                    </div>
+                @endif
+
                 @if (is_array($importReport))
                     <div class="import-report {{ ($importReport['errors'] ?? []) === [] ? 'is-ok' : 'is-partial' }}">
                         <div class="import-report-head">
-                            <strong>{{ $importReport['created'] }}</strong> enrolled &middot;
-                            <strong>{{ $importReport['updated'] }}</strong> updated &middot;
-                            <strong>{{ count($importReport['errors'] ?? []) }}</strong> skipped
+                            <strong>{{ $importReport['created'] }}</strong> added
+                            @if (($importReport['created'] ?? 0) > 0)
+                                ({{ (int) ($importReport['carried_over'] ?? 0) }} carried over, {{ (int) ($importReport['new_enrollee'] ?? 0) }} new, {{ (int) ($importReport['restored'] ?? 0) }} restored)
+                            @endif
+                            &middot;
+                            <strong>{{ $importReport['updated'] }}</strong> renamed &middot;
+                            <strong>{{ count($importReport['errors'] ?? []) }}</strong> not added
                             <span class="import-report-total">of {{ $importReport['total'] }} {{ \Illuminate\Support\Str::plural('row', $importReport['total']) }}</span>
                         </div>
                         @if (($importReport['errors'] ?? []) !== [])
@@ -621,10 +700,35 @@
                                     <li><b>Line {{ $rowError['line'] }}:</b> {{ $rowError['message'] }}</li>
                                 @endforeach
                             </ul>
-                            <p class="import-report-note">Fix those rows in the file and upload it again — the learners already enrolled are simply updated.</p>
+                            <p class="import-report-note">Fix those rows in the file and upload it again — learners already in your section are left as they are.</p>
                         @endif
                     </div>
                 @endif
+
+                {{-- A learner missing from the list joins by LRN, through the
+                     same checks a list row goes through. A new enrollee needs
+                     a name; everyone else keeps the one on file. --}}
+                <form method="POST" action="{{ route('adviser.add-to-section') }}" class="yt-add" id="addToSectionForm">
+                    @csrf
+                    <div class="yt-add-title">Add to my section by LRN</div>
+                    <div class="yt-add-grid">
+                        <label>LRN
+                            <input type="text" name="add_lrn" value="{{ old('add_lrn') }}" inputmode="numeric" maxlength="12" autocomplete="off" required>
+                        </label>
+                        <label>Last Name
+                            <input type="text" name="add_last_name" value="{{ old('add_last_name') }}" autocomplete="off">
+                        </label>
+                        <label>First Name
+                            <input type="text" name="add_first_name" value="{{ old('add_first_name') }}" autocomplete="off">
+                        </label>
+                        <label>Middle Name
+                            <input type="text" name="add_middle_name" value="{{ old('add_middle_name') }}" autocomplete="off">
+                        </label>
+                        <button type="submit" class="btn" id="addToSectionSubmit">Add to my section</button>
+                    </div>
+                    @error('add_lrn') <div class="yt-add-error">{{ $message }}</div> @enderror
+                    @error('add_last_name') <div class="yt-add-error">{{ $message }}</div> @enderror
+                </form>
             </div>
 
             <div class="import-divider" id="studentImportDivider"><span>Or enroll one student manually</span></div>
@@ -1108,6 +1212,35 @@
                     h.addEventListener('input', recalc);
                     w.addEventListener('input', recalc);
                     recalc();
+                })();
+                </script>
+
+                {{-- Mark as left school (mid-year): the learner is archived and
+                     kept five years, and leaves this section's roster. Not for
+                     a move to another section of the same school. --}}
+                @php
+                    $leftName = \App\Support\LearnerPlacement::displayName(\App\Support\LearnerPlacement::nameOnFile($editRecord));
+                @endphp
+                <section class="student-section yt-left" id="leftSchoolSection">
+                    <h4>Mark as Left School</h4>
+                    <form method="POST" action="{{ route('class-adviser.student.left', $editRecord->student_id) }}" class="yt-inline" id="leftSchoolForm"
+                          data-confirm="Mark {{ $leftName }} as left school? The record is archived and leaves your section.">
+                        @csrf
+                        <select name="reason" class="yt-select" aria-label="Reason the learner left" required>
+                            <option value="">Reason</option>
+                            @foreach (\App\Support\LearnerPlacement::LEFT_SCHOOL_REASONS as $leftReason)
+                                <option value="{{ $leftReason }}">{{ \App\Support\LearnerPlacement::endStatusLabel($leftReason) }}</option>
+                            @endforeach
+                        </select>
+                        <button type="submit" class="btn btn-secondary yt-btn-sm">Mark as Left School</button>
+                    </form>
+                </section>
+                <script>
+                (() => {
+                    const form = document.getElementById('leftSchoolForm');
+                    form?.addEventListener('submit', (event) => {
+                        if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+                    });
                 })();
                 </script>
             @endif

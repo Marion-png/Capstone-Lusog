@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\HealthAssessment;
 use App\Models\StudentHealthRecord;
 use App\Support\AdviserClassScope;
+use App\Support\LearnerPlacement;
 use App\Support\SchemaCache;
 use App\Support\StudentRosterSync;
 use Illuminate\Http\JsonResponse;
@@ -96,7 +97,7 @@ class HealthAssessmentController extends Controller
         $record = StudentHealthRecord::currentForStudent($validated['lrn'], $request->session()->get('active_institution_id'));
 
         abort_if(
-            $record === null || $record->section !== $expectedSection,
+            $record === null || $record->section !== $expectedSection || ! LearnerPlacement::isOpen($record),
             403,
             'You may only submit assessments for students in your assigned class.'
         );
@@ -191,7 +192,7 @@ class HealthAssessmentController extends Controller
             $grade = (string) $request->session()->get('assigned_grade_level', '');
             $section = (string) $request->session()->get('assigned_section', '');
             $expected = trim("{$grade} / {$section}");
-            if ($grade === '' || $section === '' || $record->section !== $expected) {
+            if ($grade === '' || $section === '' || $record->section !== $expected || ! LearnerPlacement::isOpen($record)) {
                 return response()->json(['has_assessment' => false]);
             }
         }

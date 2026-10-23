@@ -7,6 +7,7 @@ use App\Models\StudentHealthRecord;
 use App\Support\AdviserClassScope;
 use App\Support\AuditTrail;
 use App\Support\EncryptedFileStorage;
+use App\Support\LearnerPlacement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -76,7 +77,7 @@ class ParentalConsentFormController extends Controller
         $record = StudentHealthRecord::currentForStudent($validated['lrn'], $request->session()->get('active_institution_id'));
 
         abort_if(
-            $record === null || $record->section !== $expectedSection,
+            $record === null || $record->section !== $expectedSection || ! LearnerPlacement::isOpen($record),
             403,
             'You may only upload consent forms for students in your assigned class.'
         );
@@ -175,7 +176,7 @@ class ParentalConsentFormController extends Controller
             $grade = (string) $request->session()->get('assigned_grade_level', '');
             $section = (string) $request->session()->get('assigned_section', '');
             $expected = trim("{$grade} / {$section}");
-            if ($grade === '' || $section === '' || $record->section !== $expected) {
+            if ($grade === '' || $section === '' || $record->section !== $expected || ! LearnerPlacement::isOpen($record)) {
                 return response()->json(['has_consent' => false, 'school_year' => ParentalConsentForm::currentSchoolYear()]);
             }
         }
@@ -253,10 +254,16 @@ class ParentalConsentFormController extends Controller
 
         // An adviser is scoped twice — to their school, and within it to one
         // class. Fails closed: no record to test against is not a pass.
+        //
+        // The class is the learner's now, not the one the scan was filed
+        // under: last year's form moves with the learner to their new adviser
+        // and is gone from the adviser they left (rule 4 of the school-year
+        // handover). An adviser still reads a learner archived from their own
+        // section.
         if ($role === 'class_adviser') {
             $record = $form->studentHealthRecord;
             abort_if(
-                $record === null || ! AdviserClassScope::coversRecord($request, $record),
+                $record === null || ! AdviserClassScope::mayReadLearner($request, (string) $record->student_id),
                 404,
                 'Consent form not found.'
             );

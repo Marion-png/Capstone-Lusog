@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
 use App\Models\StudentIncidentReport;
+use App\Support\LearnerPlacement;
 use App\Support\SchemaCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -223,7 +224,10 @@ class StudentIncidentReportController extends Controller
             return true;
         }
 
-        return strcasecmp(trim((string) $record->section), trim($grade.' / '.$section)) === 0;
+        // Only while the learner is still in the section: an adviser the
+        // learner has left no longer reads their record.
+        return strcasecmp(trim((string) $record->section), trim($grade.' / '.$section)) === 0
+            && LearnerPlacement::isOpen($record);
     }
 
     /**

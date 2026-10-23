@@ -7,6 +7,7 @@ use App\Models\ConsultationPhoto;
 use App\Models\StudentHealthRecord;
 use App\Support\ConsultationVisibility;
 use App\Support\EncryptedFileStorage;
+use App\Support\LearnerPlacement;
 use App\Support\SchemaCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -265,6 +266,7 @@ class ConsultationPhotoController extends Controller
                 // Section is plain, the learner's name is not — so the section
                 // narrows in SQL terms and the name is compared here.
                 return strcasecmp(trim((string) $record->section), trim($grade.' / '.$section)) === 0
+                    && LearnerPlacement::isOpen($record)
                     && $this->nameKey((string) $record->student_name) === $name;
             });
     }

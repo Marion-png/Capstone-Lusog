@@ -642,6 +642,14 @@ class FhirInteroperabilityTest extends TestCase
         $this->withSession($this->nurse())->post(route('dashboard.school-nurse.data-exchange.transmit', $record->student_id));
         $this->assertSame(1, FhirTransmission::count());
 
+        // Only an archived learner past their deletion date is purged.
+        $record->forceFill([
+            'left_at' => now()->subYears(6),
+            'end_status' => 'transferred_out',
+            'archived_at' => now()->subYears(6),
+            'delete_after' => now()->subDay()->toDateString(),
+        ])->save();
+
         StudentRecordPurge::purge($this->school->id, ['109876543201'], 'test');
 
         $this->assertSame(0, FhirTransmission::count());

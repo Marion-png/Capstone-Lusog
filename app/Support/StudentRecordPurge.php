@@ -2,54 +2,64 @@
 
 namespace App\Support;
 
+use App\Models\Consultation;
 use App\Models\StudentHealthRecord;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
- * Deletes one school's expired learner records, and everything attached to
- * them.
+ * Permanently deletes one school's archived learners whose `delete_after`
+ * has passed, together with everything attached to them and every file they
+ * uploaded (SIGLA School Year Transition spec, "Archive and scheduled
+ * deletion").
  *
- * This is irreversible and there is no undo, so four things hold:
+ * This is irreversible and there is no undo, so these hold:
  *
- *  - **Who to delete is never decided here.** `StudentRetention::dueAt()`
- *    decides, and it refuses to consider a learner enrolled in the current
- *    school year at all. This class is handed a list of LRNs and deletes
- *    exactly those.
+ *  - **Who to delete is never decided here.** `StudentRetention` decides, and
+ *    it is asked again for each learner immediately before anything of theirs
+ *    is touched — a learner restored since the list was drawn up has no
+ *    `delete_after` any more and is skipped.
  *  - **One institution at a time, and the scope is required.** Every statement
  *    carries `institution_id`, and with no institution the purge reads and
  *    deletes nothing rather than falling through to every school's children.
- *  - **Rows go in one transaction; files go after it commits.** A file delete
- *    cannot be rolled back, so destroying files inside the transaction would
- *    mean a later failure left rows pointing at files that no longer exist —
- *    the one outcome worse than either half failing cleanly. Paths are
- *    collected before the rows are gone and the files are removed only once
- *    the database has committed.
- *  - **Deletion is by query, not by model.** `Auditable` logs
- *    `['snapshot' => $model->attributesToArray()]` on every Eloquent delete,
- *    and `audit_logs` is append-only evidence that is never purged — so
- *    deleting a learner through the model would copy their name, address,
- *    guardian and every health reading into the one table this policy cannot
- *    reach. A mass delete fires no model events, so no snapshot is written;
- *    and because that bypasses Eloquent, this class records the audit entry
- *    itself, carrying only the LRN, the last school year, the date and what
- *    triggered it.
+ *  - **Files first, then rows, and the whole learner is retried on failure.**
+ *    A learner's files are removed before the rows that point at them, so a
+ *    file is never left on disk with no row pointing to it; the rows then go
+ *    in one transaction. If anything fails the learner is attempted again,
+ *    and a file already gone is simply not there to remove the second time.
+ *  - **Deletion is by query, not by model.** `Auditable` logs a snapshot of
+ *    `attributesToArray()` on every Eloquent delete, and `audit_logs` is
+ *    append-only evidence that is never purged — deleting a learner through
+ *    the model would copy their name, address, guardian and every health
+ *    reading into the one table this policy cannot reach. This class writes
+ *    the audit entry itself: **one entry per deletion, with the date and a
+ *    count of what was removed, and no name, LRN or health data.**
  *
- * Two kinds of data are deliberately left behind, and neither is an oversight:
+ * What goes: every `student_health_records` row of the learner (their profile
+ * and every placement), the rows keyed to those records or to the LRN —
+ * assessments, attendance, follow-ups, Sheet 1 conditions, clinic notes,
+ * incident reports, both kinds of consent form with their exclusions,
+ * medical certificates, photos, stored FHIR bundles — and the learner's
+ * consultation logs with their photographs.
  *
- *  - **`medicine_dispenses`.** A dispense is a movement of the school's stock,
- *    not a fact about one child; deleting it would retroactively change the
- *    inventory's history and every `MedicineUsage` consumption figure read off
- *    it. The learner's name on the row is encrypted and is not the record's
- *    purpose.
- *  - **`consultations`.** They carry no LRN at all — only an encrypted
- *    `student_name` — so they cannot be matched in SQL, and the app's own name
- *    matcher is documented as best-effort and never a key anything is written
- *    against. Deleting clinic visits on a fuzzy name match could remove
- *    another learner's.
+ * A consultation carries no LRN, only the name the clinic typed, so it is
+ * matched the way the learner's own profile matches it — by surname and
+ * given name — and deleted **only when no other learner at the school could
+ * also be the one named**. A visit two learners could share is left rather
+ * than guessed at: deleting another child's clinic history would be the one
+ * outcome worse than keeping a record a little longer.
+ *
+ * `medicine_dispenses` is deliberately left behind. A dispense is a movement
+ * of the school's stock, not a fact about one child, and deleting it would
+ * retroactively change the inventory's history and every MedicineUsage
+ * figure read off it.
  */
 final class StudentRecordPurge
 {
+    /** How many times one learner is attempted before the job moves on. */
+    private const ATTEMPTS = 3;
+
     /**
      * Child tables keyed by the learner's LRN + institution.
      *
@@ -78,11 +88,11 @@ final class StudentRecordPurge
     /**
      * Child tables keyed by `student_health_record_id`.
      *
-     * Three of these do carry a cascading foreign key, but they are deleted
-     * explicitly all the same: `feeding_follow_ups` has only an index and
-     * would survive, and relying on the database to cascade makes the
-     * behaviour depend on whether foreign keys are enforced by the engine the
-     * code happens to be running against.
+     * Some do carry a cascading foreign key, but they are deleted explicitly
+     * all the same: `feeding_follow_ups` has only an index and would survive,
+     * and relying on the database to cascade makes the behaviour depend on
+     * whether foreign keys are enforced by the engine the code happens to be
+     * running against.
      *
      * table => list of columns holding a file path on the local disk
      *
@@ -97,7 +107,8 @@ final class StudentRecordPurge
     ];
 
     /**
-     * Delete the given learners at one school.
+     * Delete the given learners at one school — each one only if it is still
+     * due when its turn comes.
      *
      * @param  list<string>  $lrns
      * @return array{learners: int, rows: int, children: int, files: int, deleted: list<array{lrn: string, last_school_year: string, rows: int}>}
@@ -108,57 +119,126 @@ final class StudentRecordPurge
         string $trigger = 'scheduled retention purge',
         ?CarbonImmutable $asOf = null,
     ): array {
-        $empty = ['learners' => 0, 'rows' => 0, 'children' => 0, 'files' => 0, 'deleted' => []];
+        $summary = ['learners' => 0, 'rows' => 0, 'children' => 0, 'files' => 0, 'deleted' => []];
 
-        $lrns = array_values(array_unique(array_filter(array_map('strval', $lrns), fn (string $l) => trim($l) !== '')));
+        $lrns = array_values(array_unique(array_filter(array_map(fn ($l) => trim((string) $l), $lrns), fn (string $l) => $l !== '')));
 
         if (! $institutionId || $lrns === [] || ! SchemaCache::hasTable('student_health_records')) {
-            return $empty;
+            return $summary;
         }
 
         $asOf = $asOf ?? CarbonImmutable::now();
 
-        /** @var list<string> $files */
-        $files = [];
-        $summary = $empty;
+        foreach ($lrns as $lrn) {
+            $filesRemoved = 0;
 
-        DB::transaction(function () use ($institutionId, $lrns, $trigger, $asOf, &$files, &$summary): void {
-            // The rows being removed, read before anything is deleted.
-            $rows = DB::table('student_health_records')
-                ->where('institution_id', $institutionId)
-                ->whereIn('student_id', $lrns)
-                ->get(['id', 'student_id', 'school_year']);
+            try {
+                // A closure, not an arrow function: the count of files removed
+                // has to survive every attempt, so it is held by reference.
+                $result = retry(
+                    self::ATTEMPTS,
+                    function () use ($institutionId, $lrn, $trigger, $asOf, &$filesRemoved) {
+                        return self::purgeLearner($institutionId, $lrn, $trigger, $asOf, $filesRemoved);
+                    },
+                    200
+                );
+            } catch (Throwable $e) {
+                // Logged, never shown: the message may carry a path. The next
+                // run attempts this learner again; the rest go ahead now.
+                report($e);
 
-            if ($rows->isEmpty()) {
-                return;
+                continue;
             }
 
-            $recordIds = $rows->pluck('id')->map(fn ($id) => (int) $id)->all();
+            if ($result === null) {
+                continue;
+            }
 
-            // Paths first: once the rows are gone there is nothing left to
-            // read them from.
-            $files = array_merge(
-                self::collectPaths(self::LRN_KEYED, 'student_lrn', $lrns, $institutionId),
-                self::collectPaths(self::RECORD_KEYED, 'student_health_record_id', $recordIds, null),
-            );
+            $summary['learners']++;
+            $summary['rows'] += $result['rows'];
+            $summary['children'] += $result['children'];
+            $summary['files'] += $filesRemoved;
+            $summary['deleted'][] = ['lrn' => $lrn, 'last_school_year' => $result['last_school_year'], 'rows' => $result['rows']];
+        }
 
+        LearnerPlacement::forget();
+
+        return $summary;
+    }
+
+    /**
+     * One learner: files, then rows, then the audit entry — or nothing, when
+     * the learner is no longer due.
+     *
+     * @return array{rows: int, children: int, last_school_year: string}|null
+     */
+    private static function purgeLearner(int $institutionId, string $lrn, string $trigger, CarbonImmutable $asOf, int &$filesRemoved): ?array
+    {
+        if (! StudentRetention::isDue($institutionId, $lrn, $asOf)) {
+            return null;
+        }
+
+        $rows = DB::table('student_health_records')
+            ->where('institution_id', $institutionId)
+            ->where('student_id', $lrn)
+            ->get(['id', 'school_year']);
+
+        if ($rows->isEmpty()) {
+            return null;
+        }
+
+        $recordIds = $rows->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $years = $rows->pluck('school_year')->map(fn ($y) => (string) $y)->filter()->values()->all();
+        rsort($years);
+
+        $consultationIds = self::consultationsOf($institutionId, $lrn);
+
+        // Files first: once they are gone, no file can outlive the row that
+        // named it. A retry finds them already removed and moves on.
+        $paths = array_values(array_unique(array_merge(
+            self::collectPaths(self::LRN_KEYED, 'student_lrn', [$lrn], $institutionId),
+            self::collectPaths(self::RECORD_KEYED, 'student_health_record_id', $recordIds, null),
+            self::consultationPhotoPaths($consultationIds, $institutionId),
+        )));
+
+        foreach ($paths as $path) {
+            if (EncryptedFileStorage::delete($path)) {
+                $filesRemoved++;
+            }
+        }
+
+        return DB::transaction(function () use ($institutionId, $lrn, $recordIds, $years, $consultationIds, $trigger, $asOf, $filesRemoved): array {
             $children = 0;
 
             foreach (array_keys(self::RECORD_KEYED) as $table) {
-                if (! SchemaCache::hasTable($table)) {
-                    continue;
+                if (SchemaCache::hasTable($table)) {
+                    $children += DB::table($table)->whereIn('student_health_record_id', $recordIds)->delete();
                 }
-                $children += DB::table($table)->whereIn('student_health_record_id', $recordIds)->delete();
             }
 
             foreach (array_keys(self::LRN_KEYED) as $table) {
-                if (! SchemaCache::hasTable($table)) {
-                    continue;
+                if (SchemaCache::hasTable($table)) {
+                    $children += DB::table($table)
+                        ->where('institution_id', $institutionId)
+                        ->where('student_lrn', $lrn)
+                        ->delete();
                 }
-                $children += DB::table($table)
+            }
+
+            $consultations = 0;
+            if ($consultationIds !== []) {
+                if (SchemaCache::hasTable('consultation_photos')) {
+                    $children += DB::table('consultation_photos')
+                        ->where('institution_id', $institutionId)
+                        ->whereIn('consultation_id', $consultationIds)
+                        ->delete();
+                }
+
+                $consultations = DB::table('consultations')
                     ->where('institution_id', $institutionId)
-                    ->whereIn('student_lrn', $lrns)
+                    ->whereIn('id', $consultationIds)
                     ->delete();
+                $children += $consultations;
             }
 
             $deletedRows = DB::table('student_health_records')
@@ -166,64 +246,151 @@ final class StudentRecordPurge
                 ->whereIn('id', $recordIds)
                 ->delete();
 
-            // One entry per learner, carrying what the policy has to be able
-            // to answer for — which learner, how long their record had been
-            // dormant, when it went and what took it — and none of their
-            // personal or health details. The LRN is the school's own
-            // identifier for the child, not a fact about them, and without it
-            // the trail could not show that this particular deletion happened.
-            $perLearner = [];
-
-            foreach ($rows->groupBy(fn ($row) => (string) $row->student_id) as $lrn => $learnerRows) {
-                $years = $learnerRows->pluck('school_year')->map(fn ($y) => (string) $y)->filter()->values()->all();
-                rsort($years);
-                $last = $years[0] ?? '';
-
-                AuditTrail::record(
-                    'deleted',
-                    'StudentHealthRecord',
-                    null,
-                    'Deleted learner record under the '.StudentRetention::years().'-year retention policy',
-                    [
-                        'student_lrn' => (string) $lrn,
-                        'last_school_year' => $last,
-                        'school_years_removed' => $years,
-                        'rows_removed' => $learnerRows->count(),
-                        'institution_id' => $institutionId,
-                        'retention_years' => StudentRetention::years(),
-                        'deleted_on' => $asOf->toDateString(),
-                        'triggered_by' => $trigger,
+            // The date and the counts — never the learner's name, LRN or any
+            // of their health data. The trail records that a deletion
+            // happened under the policy, not who it was about.
+            AuditTrail::record(
+                'deleted',
+                'StudentHealthRecord',
+                null,
+                'Deleted an archived learner record under the '.StudentRetention::years().'-year retention policy',
+                [
+                    'deleted_on' => $asOf->toDateString(),
+                    'items_removed' => [
+                        'learner_records' => (int) $deletedRows,
+                        'attached_rows' => $children - $consultations,
+                        'consultations' => $consultations,
+                        'files' => $filesRemoved,
                     ],
-                );
+                    'institution_id' => $institutionId,
+                    'retention_years' => StudentRetention::years(),
+                    'triggered_by' => $trigger,
+                ],
+            );
 
-                $perLearner[] = [
-                    'lrn' => (string) $lrn,
-                    'last_school_year' => $last,
-                    'rows' => $learnerRows->count(),
-                ];
+            return ['rows' => (int) $deletedRows, 'children' => $children, 'last_school_year' => $years[0] ?? ''];
+        });
+    }
+
+    /**
+     * The consultation logs that belong to this learner and to no one else.
+     *
+     * Matched as the learner's profile matches them — the clinic's typed name
+     * containing the learner's surname and given name — and kept back when
+     * any other learner at the school would match the same visit.
+     *
+     * @return list<int>
+     */
+    private static function consultationsOf(int $institutionId, string $lrn): array
+    {
+        if (! SchemaCache::hasTable('consultations')) {
+            return [];
+        }
+
+        $names = self::namesOf(
+            StudentHealthRecord::query()
+                ->where('institution_id', $institutionId)
+                ->where('student_id', $lrn)
+                ->get(['id', 'student_id', 'student_name', 'student_details'])
+        );
+
+        if ($names === []) {
+            return [];
+        }
+
+        $matches = Consultation::query()
+            ->where('institution_id', $institutionId)
+            ->get(['id', 'student_name'])
+            ->filter(fn (Consultation $visit): bool => self::names($visit->student_name, $names))
+            ->values();
+
+        if ($matches->isEmpty()) {
+            return [];
+        }
+
+        $others = self::namesOf(
+            StudentHealthRecord::query()
+                ->where('institution_id', $institutionId)
+                ->where('student_id', '!=', $lrn)
+                ->get(['id', 'student_id', 'student_name'])
+        );
+
+        return $matches
+            ->reject(fn (Consultation $visit): bool => self::names($visit->student_name, $others))
+            ->map(fn (Consultation $visit): int => (int) $visit->id)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Every (surname, given name) pair the rows spell the learner by.
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private static function namesOf($records): array
+    {
+        $names = [];
+
+        foreach ($records as $record) {
+            $details = is_array($record->student_details ?? null) ? $record->student_details : [];
+            $last = trim((string) ($details['last_name'] ?? ''));
+            $first = trim((string) ($details['first_name'] ?? ''));
+
+            if ($last === '' || $first === '') {
+                [$last, $first] = StudentRosterSync::splitStudentName((string) $record->student_name);
             }
 
-            $summary = [
-                'learners' => count($perLearner),
-                'rows' => (int) $deletedRows,
-                'children' => $children,
-                'files' => 0,
-                'deleted' => $perLearner,
-            ];
-        });
+            $last = self::normalise($last);
+            $first = self::normalise($first);
 
-        // Committed, so the rows are certainly gone and the files they pointed
-        // at are certainly unreferenced.
-        $removed = 0;
-        foreach (array_values(array_unique($files)) as $path) {
-            if (EncryptedFileStorage::delete($path)) {
-                $removed++;
+            if ($last !== '' && $first !== '') {
+                $names[$last.'|'.$first] = [$last, $first];
             }
         }
 
-        $summary['files'] = $removed;
+        return array_values($names);
+    }
 
-        return $summary;
+    /** @param  list<array{0: string, 1: string}>  $names */
+    private static function names(?string $typed, array $names): bool
+    {
+        $typed = self::normalise((string) $typed);
+
+        if ($typed === '') {
+            return false;
+        }
+
+        foreach ($names as [$last, $first]) {
+            if (str_contains($typed, $last) && str_contains($typed, $first)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function normalise(string $name): string
+    {
+        $name = preg_replace('/[^\p{L}\p{N}]+/u', ' ', mb_strtolower(trim($name))) ?? '';
+
+        return trim(preg_replace('/\s+/', ' ', $name) ?? '');
+    }
+
+    /** @param  list<int>  $consultationIds */
+    private static function consultationPhotoPaths(array $consultationIds, int $institutionId): array
+    {
+        if ($consultationIds === [] || ! SchemaCache::hasTable('consultation_photos')) {
+            return [];
+        }
+
+        return DB::table('consultation_photos')
+            ->where('institution_id', $institutionId)
+            ->whereIn('consultation_id', $consultationIds)
+            ->pluck('file_path')
+            ->map(fn ($path) => trim((string) $path))
+            ->filter(fn (string $path) => $path !== '')
+            ->values()
+            ->all();
     }
 
     /**
@@ -286,7 +453,7 @@ final class StudentRecordPurge
             return $blank;
         }
 
-        $lrns = array_keys($due);
+        $lrns = array_map('strval', array_keys($due));
 
         $rows = DB::table('student_health_records')
             ->where('institution_id', $institutionId)
@@ -310,9 +477,16 @@ final class StudentRecordPurge
             }
         }
 
+        $consultationIds = [];
+        foreach ($lrns as $lrn) {
+            $consultationIds = array_merge($consultationIds, self::consultationsOf($institutionId, $lrn));
+        }
+        $children += count(array_unique($consultationIds));
+
         $files = array_merge(
             self::collectPaths(self::LRN_KEYED, 'student_lrn', $lrns, $institutionId),
             self::collectPaths(self::RECORD_KEYED, 'student_health_record_id', $recordIds, null),
+            self::consultationPhotoPaths(array_values(array_unique($consultationIds)), $institutionId),
         );
 
         $candidates = [];
@@ -321,7 +495,7 @@ final class StudentRecordPurge
                 'lrn' => (string) $lrn,
                 'last_school_year' => $standing['last_school_year'],
                 'deletion_date' => $standing['deletion_date']?->toDateString(),
-                'rows' => $rows->where('student_id', $lrn)->count(),
+                'rows' => $rows->where('student_id', (string) $lrn)->count(),
             ];
         }
 
@@ -335,38 +509,13 @@ final class StudentRecordPurge
     }
 
     /**
-     * Learners at one school whose records are nearing deletion, as
+     * Archived learners at one school whose records are nearing deletion, as
      * LRN => standing — what the student list warns about.
      *
      * @return array<string, array<string, mixed>>
      */
     public static function nearingAt(?int $institutionId, ?CarbonImmutable $asOf = null): array
     {
-        if (! $institutionId || ! SchemaCache::hasTable('student_health_records')) {
-            return [];
-        }
-
-        $asOf = $asOf ?? CarbonImmutable::now();
-        $currentSchoolYear = StudentHealthRecord::currentSchoolYear();
-
-        $rows = StudentHealthRecord::query()
-            ->where('institution_id', $institutionId)
-            ->get(['id', 'student_id', 'school_year', 'institution_id']);
-
-        $nearing = [];
-
-        foreach ($rows->groupBy(fn (StudentHealthRecord $row) => (string) $row->student_id) as $lrn => $learnerRows) {
-            if ((string) $lrn === '') {
-                continue;
-            }
-
-            $standing = StudentRetention::standingFor($learnerRows, $asOf, $currentSchoolYear);
-
-            if ($standing['is_nearing'] || $standing['is_due']) {
-                $nearing[(string) $lrn] = $standing;
-            }
-        }
-
-        return $nearing;
+        return StudentRetention::nearingAt($institutionId, $asOf);
     }
 }

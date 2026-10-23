@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\AdviserController;
 use App\Models\AuditLog;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
@@ -105,10 +106,23 @@ class AdviserMasterlistScanTest extends TestCase
         return UploadedFile::fake()->createWithContent($name, "\xFF\xD8\xFF\xE0".str_repeat('x', 512));
     }
 
+    /**
+     * Upload, then confirm the preview — the school-year handover shows what
+     * every row will do before anything is written. A refusal comes back
+     * before any preview, and is returned as it is.
+     */
     private function scan(?UploadedFile $file = null, array $session = [])
     {
-        return $this->withSession($this->adviserSession($session))
+        $upload = $this->withSession($this->adviserSession($session))
             ->post(route('adviser.import'), ['students_file' => $file ?? $this->photo()]);
+
+        $preview = session(AdviserController::PREVIEW_KEY);
+
+        if (! is_array($preview)) {
+            return $upload;
+        }
+
+        return $this->post(route('adviser.import.confirm'), ['token' => $preview['token']]);
     }
 
     // ── The right document ────────────────────────────────────────────
@@ -559,10 +573,7 @@ class AdviserMasterlistScanTest extends TestCase
 
         $csv = "LRN,Last Name,First Name\r\n100000000001,Dela Cruz,Juan\r\n";
 
-        $this->withSession($this->adviserSession())
-            ->post(route('adviser.import'), [
-                'students_file' => UploadedFile::fake()->createWithContent('class-list.csv', $csv),
-            ])
+        $this->scan(UploadedFile::fake()->createWithContent('class-list.csv', $csv))
             ->assertSessionHas('import_report', fn (array $r) => $r['created'] === 1);
 
         Http::assertNothingSent();

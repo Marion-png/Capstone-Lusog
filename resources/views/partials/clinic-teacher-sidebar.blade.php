@@ -3,7 +3,7 @@
 
     Pass $active to highlight the current item: 'dashboard' | 'records' |
     'queue' | 'consultations' | 'nutritional-status' | 'consent' |
-    'inventory' | 'visualization' | 'reports'.
+    'inventory' | 'visualization' | 'reports' | 'archived'.
 
     Same .sb-* markup and css/nurse-sidebar.css as the School Nurse and
     Clinic Staff rails — a teacher covering the clinic works the same screens
@@ -68,6 +68,10 @@
         <a href="{{ route('dashboard.clinic-teacher.nutritional-status') }}" class="sb-link {{ $active === 'nutritional-status' ? 'active' : '' }}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 16l4-5 3 3 5-7"/></svg>
             Nutritional Health Status
+        </a>
+        <a href="{{ route('dashboard.clinic-teacher.archived') }}" class="sb-link {{ $active === 'archived' ? 'active' : '' }}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+            Archived Students
         </a>
 
         <div class="sb-section-label">Health Programs</div>

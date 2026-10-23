@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AuditLog;
+use App\Models\Consultation;
 use App\Models\HealthAssessment;
 use App\Models\HealthConsentForm;
 use App\Models\Institution;
@@ -13,6 +14,7 @@ use App\Models\StudentHealthRecord;
 use App\Support\StudentRecordPurge;
 use App\Support\StudentRetention;
 use Carbon\CarbonImmutable;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -20,15 +22,17 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * The 5-year retention policy — docs/open-decisions.md entry 2, settled.
+ * Archive and scheduled deletion (SIGLA School Year Transition spec, rule 5).
  *
- * Until now nothing in this application ever deleted a `StudentHealthRecord`,
- * so every test here guards a brand-new destructive path. The two that matter
- * most are the ones about what must **not** happen:
- * `a_learner_on_this_years_roll_is_never_touched` (an enrolled child's history
- * is not deletable by this rule at any age) and
- * `the_audit_entry_keeps_no_personal_details` — because `Auditable` snapshots
- * a whole model on delete into a table that is append-only, so the obvious
+ * A learner who leaves is archived and kept five years from the day they were
+ * archived, then permanently deleted with every uploaded file. Nobody else is
+ * ever deleted — a learner in a section, or waiting for one, is never a
+ * candidate at any age — and restoring a learner cancels the deletion.
+ *
+ * The two tests that matter most are about what must **not** happen:
+ * `a_learner_who_is_not_archived_is_never_touched` and
+ * `the_audit_entry_keeps_no_personal_details` — `Auditable` snapshots a whole
+ * model on delete into a table that is append-only, so the obvious
  * implementation would have relocated the data rather than deleted it.
  */
 class StudentRetentionTest extends TestCase
@@ -49,7 +53,39 @@ class StudentRetentionTest extends TestCase
         config(['retention.years' => 5]);
     }
 
-    /** A learner enrolled in the given school years, one row each. */
+    /**
+     * A learner with one row per school year; the last is archived on the
+     * given day, with the deletion date the archive sets.
+     */
+    private function archivedLearner(string $lrn, array $schoolYears, string $archivedOn = '2025-11-03', ?Institution $school = null, string $name = 'Cruz, Juan'): StudentHealthRecord
+    {
+        $school ??= $this->school;
+        $last = null;
+
+        foreach ($schoolYears as $year) {
+            $last = StudentHealthRecord::create([
+                'student_id' => $lrn,
+                'institution_id' => $school->id,
+                'school_year' => $year,
+                'section' => 'Grade 9 / Dalton',
+                'school_name' => $school->name,
+                'student_name' => $name,
+            ]);
+        }
+
+        $on = CarbonImmutable::parse($archivedOn);
+        $last->forceFill([
+            'left_at' => $on,
+            'end_status' => 'transferred_out',
+            'archived_at' => $on,
+            'archive_reason' => 'Transferred out',
+            'delete_after' => StudentRetention::deletionDateFrom($on)->toDateString(),
+        ])->save();
+
+        return $last;
+    }
+
+    /** A learner with one row per school year, none of them archived. */
     private function learner(string $lrn, array $schoolYears, ?Institution $school = null): StudentHealthRecord
     {
         $school ??= $this->school;
@@ -60,7 +96,7 @@ class StudentRetentionTest extends TestCase
                 'student_id' => $lrn,
                 'institution_id' => $school->id,
                 'school_year' => $year,
-                'section' => 'Grade 10 - Dalton',
+                'section' => 'Grade 9 / Dalton',
                 'school_name' => $school->name,
                 'student_name' => 'Cruz, Juan',
             ]);
@@ -76,15 +112,15 @@ class StudentRetentionTest extends TestCase
             ->count();
     }
 
-    /** "2026-2027" closes 31 May 2027, so +5 years is 31 May 2032. */
-    private function justAfter(string $schoolYear): CarbonImmutable
+    /** Archived 3 Nov 2025, so deleted from 3 Nov 2030. */
+    private function justAfter(string $archivedOn = '2025-11-03'): CarbonImmutable
     {
-        return StudentRetention::deletionDateFor($schoolYear)->addDay();
+        return StudentRetention::deletionDateFrom(CarbonImmutable::parse($archivedOn));
     }
 
-    private function justBefore(string $schoolYear): CarbonImmutable
+    private function justBefore(string $archivedOn = '2025-11-03'): CarbonImmutable
     {
-        return StudentRetention::deletionDateFor($schoolYear)->subDay();
+        return StudentRetention::deletionDateFrom(CarbonImmutable::parse($archivedOn))->subDay();
     }
 
     private function purgeAt(CarbonImmutable $asOf, ?Institution $school = null): array
@@ -97,108 +133,101 @@ class StudentRetentionTest extends TestCase
 
     // ── The window ──────────────────────────────────────────────────────
 
-    /** The countdown runs from the end of the last enrolled year, not its start. */
+    /** Five years from the day the learner was archived — and that is configuration. */
     #[Test]
-    public function the_deletion_date_is_five_years_after_the_school_year_closes(): void
+    public function the_deletion_date_is_five_years_after_archiving(): void
     {
-        $this->assertSame('2032-05-31', StudentRetention::deletionDateFor('2026-2027')->toDateString());
-        $this->assertSame('2030-05-31', StudentRetention::deletionDateFor('2024-2025')->toDateString());
+        $this->assertSame('2030-11-03', StudentRetention::deletionDateFrom(CarbonImmutable::parse('2025-11-03 14:20'))->toDateString());
 
-        // The window is configuration, not a constant in the code.
         config(['retention.years' => 3]);
-        $this->assertSame('2030-05-31', StudentRetention::deletionDateFor('2026-2027')->toDateString());
+        $this->assertSame('2028-11-03', StudentRetention::deletionDateFrom(CarbonImmutable::parse('2025-11-03'))->toDateString());
     }
 
-    /** Inside the window, the record stays. */
+    /** Inside the window, the archived record stays. */
     #[Test]
-    public function a_learner_not_enrolled_but_within_five_years_is_kept(): void
+    public function an_archived_learner_within_five_years_is_kept(): void
     {
-        $this->learner('100000000001', ['2024-2025']);
+        $this->archivedLearner('100000000001', ['2024-2025', '2025-2026']);
 
-        $result = $this->purgeAt($this->justBefore('2024-2025'));
+        $result = $this->purgeAt($this->justBefore());
 
         $this->assertSame(0, $result['learners']);
-        $this->assertSame(1, $this->recordCount('100000000001'));
+        $this->assertSame(2, $this->recordCount('100000000001'));
     }
 
-    /** Past the window, with no enrolment since, it goes. */
+    /** On the deletion date, every one of the learner's rows goes. */
     #[Test]
-    public function a_learner_not_enrolled_past_five_years_is_deleted(): void
+    public function an_archived_learner_past_the_deletion_date_is_deleted(): void
     {
-        $this->learner('100000000002', ['2023-2024', '2024-2025']);
+        $this->archivedLearner('100000000002', ['2024-2025', '2025-2026']);
 
-        $result = $this->purgeAt($this->justAfter('2024-2025'));
+        $result = $this->purgeAt($this->justAfter());
 
         $this->assertSame(1, $result['learners']);
         $this->assertSame(2, $result['rows'], 'Both of the learner\'s years go, not just the last.');
         $this->assertSame(0, $this->recordCount('100000000002'));
     }
 
-    /**
-     * Re-enrolment clears the countdown — and does so by construction, since
-     * the new row raises the MAX(school_year) the date is derived from. There
-     * is no flag to forget to clear.
-     */
+    /** Restoring a learner clears the deletion date, so the job skips them. */
     #[Test]
-    public function a_learner_re_enrolled_before_the_deadline_is_kept(): void
+    public function a_restored_learner_is_kept(): void
     {
-        $this->learner('100000000003', ['2024-2025']);
+        $archived = $this->archivedLearner('100000000003', ['2025-2026']);
 
-        // Still inside the window, so nothing happens yet.
-        $this->assertSame(0, $this->purgeAt($this->justBefore('2024-2025'))['learners']);
+        // They come back the next year: a new placement, the deletion cancelled.
+        $archived->forceFill(['archived_at' => null, 'archived_by' => null, 'delete_after' => null])->save();
+        $this->learner('100000000003', ['2026-2027']);
 
-        // They come back.
-        $this->learner('100000000003', ['2028-2029']);
-
-        // The date that would have ended the 2024-2025 record passes, and the
-        // learner is untouched: their window now runs from 2028-2029.
-        $result = $this->purgeAt($this->justAfter('2024-2025'));
+        $result = $this->purgeAt($this->justAfter()->addYears(10));
 
         $this->assertSame(0, $result['learners']);
         $this->assertSame(2, $this->recordCount('100000000003'), 'The old year survives with the new one.');
-
-        $standing = StudentRetention::standingFor(
-            StudentHealthRecord::where('student_id', '100000000003')->get(),
-            $this->justAfter('2024-2025')
-        );
-        $this->assertSame('2028-2029', $standing['last_school_year']);
-        $this->assertFalse($standing['is_due']);
     }
 
     /**
-     * A learner on this year's roll is never a candidate, however old their
-     * earliest row is. This is the invariant the whole feature is built
-     * around: promotion keeps history, and nothing here may undo that.
+     * A learner who is not archived is never a candidate, however old their
+     * rows are — in a section this year, waiting for one, or left over from
+     * before the handover existed.
      */
     #[Test]
-    public function a_learner_on_this_years_roll_is_never_touched(): void
+    public function a_learner_who_is_not_archived_is_never_touched(): void
     {
         $current = StudentHealthRecord::currentSchoolYear();
         $this->learner('100000000004', ['2015-2016', $current]);
 
-        // Judged a decade past the first year's deadline.
+        $waiting = $this->learner('100000000014', ['2016-2017']);
+        $waiting->forceFill(['left_at' => '2017-03-20', 'end_status' => 'promoted', 'wait_grade' => 'Grade 10'])->save();
+
+        $this->learner('100000000024', ['2012-2013']);
+
         $result = $this->purgeAt(CarbonImmutable::parse('2099-01-01'));
 
         $this->assertSame(0, $result['learners']);
         $this->assertSame(2, $this->recordCount('100000000004'));
+        $this->assertSame(1, $this->recordCount('100000000014'));
+        $this->assertSame(1, $this->recordCount('100000000024'));
 
         $standing = StudentRetention::standingFor(
             StudentHealthRecord::where('student_id', '100000000004')->get(),
             CarbonImmutable::parse('2099-01-01')
         );
         $this->assertSame(StudentRetention::ENROLLED, $standing['standing']);
-        $this->assertNull($standing['deletion_date'], 'An enrolled learner has no deletion date at all.');
+        $this->assertNull($standing['deletion_date'], 'A learner who is not archived has no deletion date at all.');
     }
 
     // ── What goes with the record ───────────────────────────────────────
 
-    /** Everything attached to the learner goes, including the files on disk. */
+    /**
+     * Everything attached to the learner goes — consent forms with their
+     * exclusions, documents, incidents, assessments, the consultation logs
+     * that are theirs — and every file on disk.
+     */
     #[Test]
     public function the_related_records_and_files_are_removed(): void
     {
         Storage::fake('local');
 
-        $record = $this->learner('100000000005', ['2024-2025']);
+        $record = $this->archivedLearner('100000000005', ['2024-2025'], name: 'Magbanua, Esperanza');
         $lrn = '100000000005';
 
         HealthAssessment::create([
@@ -236,8 +265,27 @@ class StudentRetentionTest extends TestCase
             'division' => 'Davao City',
             'school_name' => $this->school->name,
             'school_address' => 'Sta. Ana, Davao City',
-            'student_name' => 'Cruz, Juan',
+            'student_name' => 'Magbanua, Esperanza',
+            'consent_exceptions' => 'Dili ang bakuna',
             'paper_form_path' => 'consents/paper.jpg',
+        ]);
+
+        // Her clinic visit goes; a visit that names somebody else stays.
+        $hers = Consultation::create([
+            'institution_id' => $this->school->id,
+            'consulted_at' => now()->subYears(2),
+            'student_name' => 'Esperanza Magbanua',
+            'grade_section' => 'Grade 9 / Dalton',
+            'condition' => 'Headache',
+            'status' => 'treated',
+        ]);
+        $theirs = Consultation::create([
+            'institution_id' => $this->school->id,
+            'consulted_at' => now()->subYears(2),
+            'student_name' => 'Reyes, Ana',
+            'grade_section' => 'Grade 9 / Dalton',
+            'condition' => 'Cough',
+            'status' => 'treated',
         ]);
 
         $files = ['consents/cert.pdf', 'consents/signed.png', 'documents/medcert.pdf', 'consents/paper.jpg'];
@@ -246,7 +294,7 @@ class StudentRetentionTest extends TestCase
             Storage::disk('local')->put($path, 'encrypted-bytes');
         }
 
-        $result = $this->purgeAt($this->justAfter('2024-2025'));
+        $result = $this->purgeAt($this->justAfter());
 
         $this->assertSame(1, $result['learners']);
 
@@ -255,8 +303,11 @@ class StudentRetentionTest extends TestCase
         $this->assertSame(0, DB::table('parental_consent_forms')->count(), 'Consent forms remain.');
         $this->assertSame(0, DB::table('student_health_conditions')->count(), 'Declared conditions remain.');
         $this->assertSame(0, DB::table('medical_certificates')->count(), 'Medical documents remain.');
-        $this->assertSame(0, DB::table('health_consent_forms')->count(), 'Health consent forms remain.');
+        $this->assertSame(0, DB::table('health_consent_forms')->count(), 'Health consent forms and their exclusions remain.');
         $this->assertSame(0, $this->recordCount($lrn));
+
+        $this->assertNull(Consultation::find($hers->id), 'The learner\'s consultation log remains.');
+        $this->assertNotNull(Consultation::find($theirs->id), 'Another learner\'s consultation was deleted.');
 
         // And the actual files, not just the rows that pointed at them.
         $this->assertSame(count($files), $result['files']);
@@ -265,30 +316,79 @@ class StudentRetentionTest extends TestCase
         }
     }
 
+    /** A clinic visit two learners could share is kept rather than guessed at. */
+    #[Test]
+    public function a_consultation_that_could_name_another_learner_is_kept(): void
+    {
+        $this->archivedLearner('100000000015', ['2024-2025'], name: 'Santos, Juan');
+        // Another learner at the school with the same surname and given name.
+        StudentHealthRecord::create([
+            'student_id' => '100000000016',
+            'institution_id' => $this->school->id,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'section' => 'Grade 8 / Rizal',
+            'school_name' => $this->school->name,
+            'student_name' => 'Santos, Juan',
+        ]);
+
+        $visit = Consultation::create([
+            'institution_id' => $this->school->id,
+            'consulted_at' => now()->subYears(2),
+            'student_name' => 'Juan Santos',
+            'grade_section' => 'Grade 9',
+            'condition' => 'Fever',
+            'status' => 'treated',
+        ]);
+
+        $this->assertSame(1, $this->purgeAt($this->justAfter())['learners']);
+        $this->assertNotNull(Consultation::find($visit->id));
+    }
+
+    /** A file already gone — a retry after a failure, say — does not stop the rest. */
+    #[Test]
+    public function a_learner_whose_files_are_already_gone_is_still_deleted(): void
+    {
+        Storage::fake('local');
+
+        $this->archivedLearner('100000000017', ['2024-2025']);
+        MedicalCertificate::create([
+            'student_lrn' => '100000000017',
+            'institution_id' => $this->school->id,
+            'file_path' => 'documents/missing.pdf',
+            'file_original_name' => 'missing.pdf',
+            'uploaded_by_name' => 'Nurse Cruz',
+        ]);
+
+        $result = $this->purgeAt($this->justAfter());
+
+        $this->assertSame(1, $result['learners']);
+        $this->assertSame(0, $result['files']);
+        $this->assertSame(0, $this->recordCount('100000000017'));
+        $this->assertSame(0, MedicalCertificate::count());
+    }
+
     /**
-     * The trail records that a deletion happened, and nothing about the child.
-     *
-     * `Auditable` snapshots `attributesToArray()` on every Eloquent delete and
-     * `audit_logs` is never purged, so the obvious implementation would have
-     * copied the learner's name and health data into the one table this policy
-     * cannot reach.
+     * The trail records that a deletion happened — the date and a count of
+     * what was removed — and nothing about the child: no name, no LRN, no
+     * health data.
      */
     #[Test]
     public function the_audit_entry_keeps_no_personal_details(): void
     {
-        $record = $this->learner('100000000006', ['2024-2025']);
-        $record->update(['student_name' => 'Magbanua, Esperanza']);
+        $record = $this->archivedLearner('100000000006', ['2024-2025'], name: 'Magbanua, Esperanza');
+        $record->update(['nutritional_status' => 'Severely Wasted']);
 
         $before = DB::table('audit_logs')->max('id') ?? 0;
 
-        $this->purgeAt($this->justAfter('2024-2025'));
+        $asOf = $this->justAfter();
+        $this->purgeAt($asOf);
 
         $entries = DB::table('audit_logs')->where('id', '>', $before)->get();
         $this->assertTrue($entries->isNotEmpty(), 'The deletion was not audited at all.');
 
-        $deletion = $entries->firstWhere('action', 'deleted');
-        $this->assertNotNull($deletion, 'No deletion entry was recorded.');
-        $this->assertSame('StudentHealthRecord', $deletion->subject_type);
+        $deletions = $entries->where('action', 'deleted')->values();
+        $this->assertCount(1, $deletions, 'One audit entry per deletion.');
+        $this->assertSame('StudentHealthRecord', $deletions[0]->subject_type);
 
         // `details` is cast EncryptedArray, so the raw column is ciphertext.
         // Asserting the name is absent from *that* would pass whatever it held,
@@ -301,12 +401,15 @@ class StudentRetentionTest extends TestCase
         $this->assertNotSame('', $plaintext, 'Nothing could be read back from the trail.');
         $this->assertStringNotContainsString('Magbanua', $plaintext, "The learner's name is in the audit trail.");
         $this->assertStringNotContainsString('Esperanza', $plaintext);
+        $this->assertStringNotContainsString('100000000006', $plaintext, "The learner's LRN is in the audit trail.");
+        $this->assertStringNotContainsString('Severely Wasted', $plaintext, 'Health data is in the audit trail.');
         $this->assertStringNotContainsString('snapshot', $plaintext, 'A full model snapshot was written.');
 
-        // And it still says which learner, when, and what took it.
-        $this->assertStringContainsString('100000000006', $plaintext);
-        $this->assertStringContainsString('2024-2025', $plaintext);
-        $this->assertStringContainsString('retention', $plaintext);
+        // And it still says when, and how much was removed.
+        $details = AuditLog::find($deletions[0]->id)->details;
+        $this->assertSame($asOf->toDateString(), $details['deleted_on']);
+        $this->assertSame(1, $details['items_removed']['learner_records']);
+        $this->assertArrayHasKey('files', $details['items_removed']);
     }
 
     // ── Safety ──────────────────────────────────────────────────────────
@@ -315,8 +418,8 @@ class StudentRetentionTest extends TestCase
     #[Test]
     public function the_dry_run_deletes_nothing(): void
     {
-        $this->learner('100000000007', ['2024-2025']);
-        $asOf = $this->justAfter('2024-2025');
+        $this->archivedLearner('100000000007', ['2024-2025']);
+        $asOf = $this->justAfter();
 
         $preview = StudentRecordPurge::preview($this->school->id, $asOf);
 
@@ -335,8 +438,8 @@ class StudentRetentionTest extends TestCase
     #[Test]
     public function the_command_deletes_when_not_a_dry_run(): void
     {
-        $this->learner('100000000008', ['2024-2025']);
-        $asOf = $this->justAfter('2024-2025');
+        $this->archivedLearner('100000000008', ['2024-2025']);
+        $asOf = $this->justAfter();
 
         $this->artisan('students:purge-expired', ['--as-of' => $asOf->toDateString()])
             ->assertExitCode(0);
@@ -344,14 +447,25 @@ class StudentRetentionTest extends TestCase
         $this->assertSame(0, $this->recordCount('100000000008'));
     }
 
+    /** The deletion job is scheduled daily. */
+    #[Test]
+    public function the_deletion_job_runs_daily(): void
+    {
+        $event = collect(app(Schedule::class)->events())
+            ->first(fn ($event) => str_contains((string) $event->command, 'students:purge-expired'));
+
+        $this->assertNotNull($event, 'The deletion job is not scheduled.');
+        $this->assertSame('30 2 * * *', $event->expression);
+    }
+
     /** One school's purge never reaches another's learners. */
     #[Test]
     public function the_purge_is_scoped_to_one_institution(): void
     {
-        $this->learner('100000000009', ['2024-2025']);
-        $this->learner('100000000009', ['2024-2025'], $this->otherSchool);
+        $this->archivedLearner('100000000009', ['2024-2025']);
+        $this->archivedLearner('100000000009', ['2024-2025'], school: $this->otherSchool);
 
-        $asOf = $this->justAfter('2024-2025');
+        $asOf = $this->justAfter();
 
         $result = $this->purgeAt($asOf, $this->school);
 
@@ -372,12 +486,26 @@ class StudentRetentionTest extends TestCase
     #[Test]
     public function an_unscoped_call_reads_and_deletes_nothing(): void
     {
-        $this->learner('100000000010', ['2024-2025']);
-        $asOf = $this->justAfter('2024-2025');
+        $this->archivedLearner('100000000010', ['2024-2025']);
+        $asOf = $this->justAfter();
 
         $this->assertSame([], StudentRetention::dueAt(null, $asOf));
         $this->assertSame(0, StudentRecordPurge::purge(null, ['100000000010'], 'test', $asOf)['learners']);
         $this->assertSame(1, $this->recordCount('100000000010'));
+    }
+
+    /** A learner named to the purge who is not due is not deleted. */
+    #[Test]
+    public function the_purge_deletes_nobody_who_is_not_due(): void
+    {
+        $this->archivedLearner('100000000018', ['2024-2025']);
+        $this->learner('100000000019', [StudentHealthRecord::currentSchoolYear()]);
+
+        $result = StudentRecordPurge::purge($this->school->id, ['100000000018', '100000000019'], 'test', $this->justBefore());
+
+        $this->assertSame(0, $result['learners']);
+        $this->assertSame(1, $this->recordCount('100000000018'));
+        $this->assertSame(1, $this->recordCount('100000000019'));
     }
 
     /** A misconfigured window of zero is refused rather than obeyed. */
@@ -385,7 +513,7 @@ class StudentRetentionTest extends TestCase
     public function a_zero_year_window_refuses_to_run(): void
     {
         config(['retention.years' => 0]);
-        $this->learner('100000000011', ['2024-2025']);
+        $this->archivedLearner('100000000011', ['2024-2025']);
 
         $this->artisan('students:purge-expired')->assertExitCode(1);
 
@@ -398,19 +526,21 @@ class StudentRetentionTest extends TestCase
     #[Test]
     public function a_record_nearing_deletion_is_flagged_to_authorised_roles(): void
     {
-        $this->learner('100000000012', ['2024-2025']);
+        $this->archivedLearner('100000000012', ['2024-2025']);
 
         $standing = StudentRetention::standingFor(
             StudentHealthRecord::where('student_id', '100000000012')->get(),
-            StudentRetention::deletionDateFor('2024-2025')->subDays(30)
+            $this->justAfter()->subDays(30)
         );
 
         $this->assertTrue($standing['is_nearing']);
         $this->assertFalse($standing['is_due']);
-        $this->assertStringContainsString('31 May 2030', StudentRetention::warningFor($standing));
+        $this->assertStringContainsString('3 November 2030', StudentRetention::warningFor($standing));
         $this->assertStringContainsString('if the learner is not enrolled again', StudentRetention::warningFor($standing));
 
-        // An enrolled learner is never warned about.
+        $this->assertArrayHasKey('100000000012', StudentRecordPurge::nearingAt($this->school->id, $this->justAfter()->subDays(30)));
+
+        // A learner who is not archived is never warned about.
         $this->learner('100000000013', [StudentHealthRecord::currentSchoolYear()]);
         $enrolled = StudentRetention::standingFor(
             StudentHealthRecord::where('student_id', '100000000013')->get()

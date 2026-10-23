@@ -1,0 +1,50 @@
+/* School-year handover — Close School Year, Archived, and the master-list
+   preview on Enroll Student. Loaded after class-adviser.css and before
+   lusog-palette.css; only what is unique to these screens lives here. */
+
+.yt-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.yt-chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:.72rem;font-weight:700;background:#e6efe9;color:#3f6350;white-space:nowrap}
+.yt-chip.is-closed{background:#FDF4E2;color:#b45309}
+
+.yt-select{font:inherit;font-size:.8rem;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--text);min-width:170px;max-width:100%}
+.yt-select:focus{outline:2px solid var(--g300);outline-offset:1px}
+.yt-outcome{font-size:.8rem;color:var(--muted)}
+.yt-actions{display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:14px 16px;border-top:1px solid var(--border);flex-wrap:wrap}
+.yt-inline{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0}
+.yt-btn-sm{font-size:.74rem;padding:6px 10px}
+.yt-link{color:var(--g700);font-weight:700;text-decoration:none}
+.yt-link:hover{color:var(--g900)}
+
+/* What a master-list row is: the spec's labels, on the app's status scale —
+   green carried over, teal new, blue restored, amber to check, grey nothing
+   to do, coral refused. */
+.yt-out{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:.7rem;font-weight:700;white-space:nowrap}
+.yt-out-matched{background:#E7F5EC;color:#1F8A4C}
+.yt-out-no_match{background:#E2F2F4;color:#1F6F7A}
+.yt-out-found_in_archived{background:#E4EDF8;color:#1E4E8C}
+.yt-out-needs_checking{background:#FDF4E2;color:#b45309}
+.yt-out-already_added{background:#e6efe9;color:#3f6350}
+.yt-out-rejected{background:#FCECEC;color:#b91c1c}
+
+.yt-preview{margin-top:12px;border:1px solid var(--border);border-radius:10px;background:#fff;overflow:hidden}
+.yt-preview-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);font-size:.8rem;color:var(--text)}
+.yt-preview .ms-table th,.yt-preview .ms-table td{padding:9px 12px}
+.yt-preview .ms-table-scroll{max-height:420px;overflow:auto}
+.yt-name-alt{display:block;font-size:.74rem;color:var(--muted);margin-top:3px}
+.yt-rename{display:inline-flex;align-items:center;gap:6px;margin-top:4px;font-size:.74rem;color:var(--text)}
+
+.yt-add{margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg)}
+.yt-add-title{font-size:.84rem;font-weight:700;color:var(--text);margin-bottom:8px}
+.yt-add-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:8px;align-items:end}
+.yt-add-grid label{display:grid;gap:4px;font-size:.72rem;font-weight:700;color:var(--muted)}
+.yt-add-grid input{font:inherit;font-size:.82rem;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--text);min-width:0}
+.yt-add-error{margin-top:8px;font-size:.76rem;color:#b91c1c}
+@media (max-width:760px){.yt-add-grid{grid-template-columns:1fr}}
+
+.yt-tag{display:inline-flex;margin-left:6px;padding:1px 8px;border-radius:999px;font-size:.64rem;font-weight:700;vertical-align:middle;white-space:nowrap}
+.yt-tag-carried_over{background:#E7F5EC;color:#1F8A4C}
+.yt-tag-new_enrollee{background:#E2F2F4;color:#1F6F7A}
+.yt-tag-restored{background:#E4EDF8;color:#1E4E8C}
+
+.yt-left{margin-top:14px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:#fff}
+.yt-left-title{font-size:.84rem;font-weight:700;color:var(--text);margin-bottom:8px}

@@ -19,6 +19,7 @@ use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
+use App\Support\LearnerPlacement;
 use App\Support\NutritionalHealthStatus;
 use App\Support\PriorityHealthRule;
 use App\Support\ProfileCompletionRule;
@@ -232,8 +233,22 @@ class StudentHealthRecordController extends Controller
             ->first(fn ($row) => (string) ($row['lrn'] ?? '') === $lrn);
 
         if ($record === null) {
+            // Checked against the learner's own rows on this request. A
+            // previous adviser is told only that the record is no longer
+            // theirs — not the record, and not the section the learner is in
+            // now. A learner archived from this section is read from the
+            // Archived tab, read-only.
+            $access = AdviserClassScope::learnerAccess($request, $lrn);
+
+            if ($access === AdviserClassScope::ACCESS_ARCHIVED) {
+                return redirect()->route('dashboard.class-adviser.archived')
+                    ->with('error', 'This learner is archived. Their record opens read-only from the Archived tab.');
+            }
+
             return redirect()->route('dashboard.class-adviser', ['tab' => 'saved'])
-                ->with('error', 'Student not found in your assigned class.');
+                ->with('error', $access === AdviserClassScope::ACCESS_PREVIOUS
+                    ? AdviserClassScope::NO_LONGER_MESSAGE
+                    : 'Student not found in your assigned class.');
         }
 
         $institutionId = $request->session()->get('active_institution_id');
@@ -1322,7 +1337,7 @@ class StudentHealthRecordController extends Controller
             $section = (string) $request->session()->get('assigned_section', '');
             $expected = trim("{$grade} / {$section}");
             $current = $records->firstWhere('school_year', StudentHealthRecord::currentSchoolYear());
-            if ($grade === '' || $section === '' || $current === null || $current->section !== $expected) {
+            if ($grade === '' || $section === '' || $current === null || $current->section !== $expected || ! LearnerPlacement::isOpen($current)) {
                 return response()->json(['years' => []]);
             }
         }
@@ -1373,6 +1388,24 @@ class StudentHealthRecordController extends Controller
 
         $institutionId = $request->session()->get('active_institution_id');
 
+        // A class adviser measures the learners in their own section. A
+        // learner the school already holds under another class, waiting for a
+        // section or archived, is placed by the school-year handover — this
+        // form never creates a row for them.
+        if ((string) $request->session()->get('active_role') === 'class_adviser') {
+            $existing = StudentHealthRecord::currentForStudent((string) $validated['student_id'], $institutionId ? (int) $institutionId : null);
+            $assigned = AdviserClassScope::assignedClass($request);
+
+            if ($existing !== null
+                ? ! AdviserClassScope::coversRecord($request, $existing)
+                : (LearnerPlacement::rowsForLearner($institutionId ? (int) $institutionId : null, (string) $validated['student_id']) !== []
+                    || $assigned === null || $assigned[0] === '' || $assigned[1] === '')) {
+                return back()->with('error', 'That learner is not in your assigned class.');
+            }
+
+            $validated['section'] = LearnerPlacement::sectionLabel($assigned[0], $assigned[1]);
+        }
+
         StudentHealthRecord::query()->updateOrCreate(
             [
                 'student_id' => $validated['student_id'],
@@ -1409,6 +1442,12 @@ class StudentHealthRecordController extends Controller
         // write one belonging to another institution.
         $institutionId = $request->session()->get('active_institution_id');
         if ($institutionId && (int) $record->institution_id !== (int) $institutionId) {
+            abort(403);
+        }
+
+        // A class adviser records the endline of a learner still in their own
+        // section, never of one who has left it.
+        if (! AdviserClassScope::coversRecord($request, $record)) {
             abort(403);
         }
 

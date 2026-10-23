@@ -10,17 +10,17 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 
 /**
- * Deletes learner records that have passed the retention window.
+ * Deletes archived learners whose `delete_after` date has passed.
  *
  * `php artisan students:purge-expired --dry-run` first, always. This is the
- * only destructive command in the application and there is no undo: a learner
- * off the roll for the retention period loses their Sheet 1 and 2, both
- * weighings, their consent forms and every uploaded document, including the
- * files on disk.
+ * only destructive command in the application and there is no undo: an
+ * archived learner past their deletion date loses their Sheet 1 and 2, every
+ * weighing, their consent forms, their clinic and incident history and every
+ * uploaded document, including the files on disk.
  *
- * It runs **per institution**, never across them, and a learner enrolled in
- * the current school year is never a candidate — `StudentRetention` decides
- * that, not this command.
+ * It runs **per institution**, never across them, and only an archived
+ * learner is ever a candidate — a learner in a section or waiting for one is
+ * not — `StudentRetention` decides that, not this command.
  */
 class PurgeExpiredStudentRecords extends Command
 {
@@ -29,7 +29,7 @@ class PurgeExpiredStudentRecords extends Command
         {--institution= : Limit to one institution id}
         {--as-of= : Judge the retention window against this date (YYYY-MM-DD) instead of today}';
 
-    protected $description = 'Delete learner records past the configured retention period, with everything attached to them';
+    protected $description = 'Delete archived learners past their deletion date, with everything attached to them and every uploaded file';
 
     public function handle(): int
     {
@@ -48,7 +48,7 @@ class PurgeExpiredStudentRecords extends Command
             // 0 would mean "delete a learner the moment their school year
             // ends", which is not a retention policy and is far more likely to
             // be a misconfigured environment variable than an intention.
-            $this->error('retention.years is '.$years.'. Refusing to run: that would delete records as soon as a school year closes.');
+            $this->error('retention.years is '.$years.'. Refusing to run: that would delete records the day a learner is archived.');
 
             return self::FAILURE;
         }
@@ -85,17 +85,19 @@ class PurgeExpiredStudentRecords extends Command
             $this->newLine();
             $this->line(sprintf('  %s — %d learner(s) past retention', $institution->name, $preview['learners']));
 
-            $this->table(
-                ['LRN', 'Last enrolled', 'Due since', 'Record rows'],
-                array_map(fn (array $row) => [
-                    $row['lrn'],
-                    $row['last_school_year'],
-                    $row['deletion_date'] ?? '—',
-                    $row['rows'],
-                ], $preview['candidates'])
-            );
-
             if ($dryRun) {
+                // Named on a dry run only, for the person deciding. A real
+                // run reports counts, as its audit entries do.
+                $this->table(
+                    ['LRN', 'Last school year', 'Due since', 'Record rows'],
+                    array_map(fn (array $row) => [
+                        $row['lrn'],
+                        $row['last_school_year'],
+                        $row['deletion_date'] ?? '—',
+                        $row['rows'],
+                    ], $preview['candidates'])
+                );
+
                 $this->line(sprintf(
                     '    would delete: %d record row(s), %d attached row(s), %d file(s)',
                     $preview['rows'],

@@ -32,6 +32,7 @@ use App\Http\Controllers\SchoolHeadInventoryController;
 use App\Http\Controllers\SchoolHeadMasterlistController;
 use App\Http\Controllers\SchoolHeadProgramController;
 use App\Http\Controllers\SchoolHeadReportsController;
+use App\Http\Controllers\SchoolYearTransitionController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StudentHealthRecordController;
 use App\Http\Controllers\StudentIncidentReportController;
@@ -227,6 +228,19 @@ Route::post('/adviser/import', [AdviserController::class, 'import'])
 
 Route::get('/adviser/import/template', [AdviserController::class, 'importTemplate'])
     ->name('adviser.import.template');
+
+// The school-year handover (SIGLA School Year Transition spec). An upload is
+// a preview until the adviser confirms it: every LRN is matched against the
+// learners the school already holds and nothing is written before Confirm.
+// Add to my section takes one LRN through the same checks.
+Route::post('/adviser/import/confirm', [AdviserController::class, 'confirmImport'])
+    ->name('adviser.import.confirm');
+
+Route::post('/adviser/import/cancel', [AdviserController::class, 'cancelImport'])
+    ->name('adviser.import.cancel');
+
+Route::post('/adviser/add-to-section', [AdviserController::class, 'addToSection'])
+    ->name('adviser.add-to-section');
 
 Route::get('/adviser/success', [AdviserController::class, 'success'])
     ->name('adviser.success');
@@ -600,6 +614,28 @@ Route::get('/dashboard/class-adviser/students/{lrn}', [StudentHealthRecordContro
 
 Route::get('/dashboard/class-adviser/feeding-status', [StudentHealthRecordController::class, 'feedingStatus'])
     ->name('dashboard.class-adviser.feeding-status');
+
+// Close school year: one end-of-year status per learner, one transaction, and
+// the section is read-only afterwards. A status can be corrected until the
+// learner is placed in a new section.
+Route::get('/dashboard/class-adviser/close-year', [SchoolYearTransitionController::class, 'closeYearForm'])
+    ->name('dashboard.class-adviser.close-year');
+
+Route::post('/dashboard/class-adviser/close-year', [SchoolYearTransitionController::class, 'closeYear'])
+    ->name('class-adviser.close-year.store');
+
+Route::post('/dashboard/class-adviser/close-year/{record}/correct', [SchoolYearTransitionController::class, 'correctStatus'])
+    ->name('class-adviser.close-year.correct');
+
+// Mark as left school (mid-year), the adviser's Archived tab, and Restore.
+Route::post('/dashboard/class-adviser/students/{lrn}/left', [SchoolYearTransitionController::class, 'markLeft'])
+    ->name('class-adviser.student.left');
+
+Route::get('/dashboard/class-adviser/archived', [SchoolYearTransitionController::class, 'archived'])
+    ->name('dashboard.class-adviser.archived');
+
+Route::post('/dashboard/class-adviser/archived/{lrn}/restore', [AdviserController::class, 'restoreArchived'])
+    ->name('class-adviser.archived.restore');
 
 Route::get('/dashboard/class-adviser/activity', [StudentHealthRecordController::class, 'activityFeed'])
     ->name('dashboard.class-adviser.activity');
@@ -1135,6 +1171,14 @@ Route::get('/dashboard/clinic-teacher/nutritional-status/print', [SchoolHeadMast
 
 Route::get('/dashboard/clinic-teacher/feeding-program', [FeedingProgramController::class, 'index'])
     ->name('dashboard.clinic-teacher.feeding-program');
+
+// Every archived learner and every learner waiting for a section, read only —
+// the School Nurse's list under their path, the Clinic Teacher's under theirs.
+Route::get('/dashboard/clinic-teacher/archived-students', [SchoolYearTransitionController::class, 'clinicArchived'])
+    ->name('dashboard.clinic-teacher.archived');
+
+Route::get('/dashboard/school-nurse/archived-students', [SchoolYearTransitionController::class, 'clinicArchived'])
+    ->name('dashboard.school-nurse.archived');
 
 Route::post('/dashboard/feedingcor-program/attendance/import', [FeedingProgramController::class, 'importAttendance'])
     ->name('feedingcor-program.attendance.import');

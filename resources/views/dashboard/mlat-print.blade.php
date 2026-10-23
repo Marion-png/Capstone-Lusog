@@ -8,10 +8,15 @@
     the same ruled table. Nothing here decides what a cell says.
 
     The student profile loads this into a hidden frame and prints the frame;
-    opened on its own, it prints itself.
+    opened on its own, it prints itself — unless it was opened to read
+    (`?view=1`, MlatExportController::printSheet), which is how an archived or
+    waiting learner's record is opened from an Archived list: no print dialog,
+    a bar to move between the two sheets and to print on demand.
 --}}
 @php
     $landscape = $sheet['orientation'] !== 'portrait';
+    $viewing = (bool) ($viewing ?? false);
+    $sheetLinks = $sheetLinks ?? [];
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -56,6 +61,13 @@
 
         tr { break-inside: avoid; }
 
+        /* Opened to read: the sheet's own name, the other sheet, Print. */
+        .mlat-viewbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; font-family: "Segoe UI", Arial, sans-serif; font-size: 10pt; }
+        .mlat-viewbar-year { font-weight: 700; margin-right: auto; }
+        .mlat-viewbar a, .mlat-viewbar button { font: inherit; padding: 5px 12px; border-radius: 999px; border: 1px solid #c7d8cf; background: #fff; color: #0F6E62; text-decoration: none; cursor: pointer; }
+        .mlat-viewbar a.is-current { background: #0F6E62; border-color: #0F6E62; color: #fff; }
+        @media print { .mlat-viewbar { display: none; } }
+
         /* Opened on its own rather than in the print frame: the sheet on a
            page, at the width it will print at. */
         @media screen {
@@ -71,6 +83,15 @@
     </style>
 </head>
 <body data-mlat-sheet="{{ $sheet['label'] }}">
+    @if ($viewing)
+        <nav class="mlat-viewbar" aria-label="Sheets">
+            <span class="mlat-viewbar-year">{{ $learner }} &middot; S.Y. {{ $schoolYear ?? '' }}</span>
+            @foreach ($sheetLinks as $number => $link)
+                <a href="{{ $link['url'] }}" @class(['is-current' => $number === ($currentSheet ?? null)])>{{ $link['label'] }}</a>
+            @endforeach
+            <button type="button" id="mlatViewPrint">Print</button>
+        </nav>
+    @endif
     <table class="mlat-sheet">
         <colgroup>
             @foreach ($widths as $width)
@@ -91,9 +112,11 @@
     <script>
         // In the profile's print frame the profile calls print; opened on its
         // own, the page does.
-        if (window.self === window.top) {
+        const viewing = @json($viewing);
+        if (window.self === window.top && !viewing) {
             window.addEventListener('load', () => window.print());
         }
+        document.getElementById('mlatViewPrint')?.addEventListener('click', () => window.print());
     </script>
 </body>
 </html>

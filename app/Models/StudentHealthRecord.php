@@ -52,6 +52,12 @@ class StudentHealthRecord extends Model
         'archived_at',
         'archived_by',
         'archive_reason',
+        'left_at',
+        'end_status',
+        'wait_grade',
+        'delete_after',
+        'joined_at',
+        'joined_as',
     ];
 
     /**
@@ -88,12 +94,19 @@ class StudentHealthRecord extends Model
         'feeding_removed_at' => 'datetime',
         'feeding_removed_by' => EncryptedString::class,
         'feeding_removal_reason' => EncryptedString::class,
-        // Archived by the class adviser (App\Support\LearnerArchive): a stamp
-        // on this school year's row, never a deletion. When is plain (lists
-        // filter on it); who and why are personal data.
+        // Archived by the class adviser (App\Support\SchoolYearTransition): a
+        // stamp on this school year's row, never a deletion. When is plain
+        // (lists filter on it); who and why are personal data.
         'archived_at' => 'datetime',
         'archived_by' => EncryptedString::class,
         'archive_reason' => EncryptedString::class,
+        // The placement this row is (App\Support\LearnerPlacement): when the
+        // learner joined and left the section and why, the grade a promoted
+        // learner waits for, and the date an archived learner is deleted.
+        // Workflow states and dates, never text about a child — plain.
+        'left_at' => 'datetime',
+        'delete_after' => 'date',
+        'joined_at' => 'datetime',
         'examination' => EncryptedArray::class,
         'attendance_by_month' => EncryptedArray::class,
         'student_details' => EncryptedArray::class,

@@ -2,58 +2,49 @@
 
 namespace App\Support;
 
-use App\Models\StudentHealthRecord;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
- * How long a learner's record is kept once they stop appearing.
+ * How long an archived learner's record is kept — and nobody else's.
  *
- * This settles `docs/open-decisions.md` entry 2. Until now nothing deleted a
- * `StudentHealthRecord` ever, so the behaviour was "retain forever" by
- * omission — which is the first thing a data-privacy reviewer asks about when
- * the data is children's health records.
+ * The SIGLA School Year Transition spec (rule 5): a learner who leaves is
+ * archived, kept five years in case they return (through ALS, say), then
+ * permanently deleted with every uploaded file. The deletion date is set the
+ * day the learner is archived — `delete_after` = that day + the retention
+ * window (SchoolYearTransition) — and restoring the learner clears it.
  *
- * **The countdown is derived, never stored.** There is no `left_at` column, no
- * `is_inactive` flag and no archive state, deliberately: enrolment in this
- * application *is* a `student_health_records` row (one per learner per school
- * year, keyed `student_id` + `institution_id` + `school_year`), so the last
- * year a learner was enrolled is already recorded — it is the highest
- * `school_year` on their rows. A second flag saying the same thing is a second
- * thing to keep in step, and the one that drifts is the one that deletes a
- * child's health history early.
+ * Who is due is therefore one plain question: **is the learner's latest row
+ * archived, with a `delete_after` on or before today?** Nothing else is ever
+ * a candidate:
  *
- * `school_year` is plain (never encrypted), which is what makes that `MAX`
- * answerable in SQL at all.
+ *  - **A learner who is not archived is never counted** — active in a section
+ *    or waiting for one, at any age of their earliest row. `standingFor()`
+ *    returns `ENROLLED` and no deletion date at all, so nothing downstream can
+ *    compute one for them.
+ *  - **Restoring cancels the deletion by construction.** A restored learner
+ *    has `delete_after` cleared and a new open placement, so their latest row
+ *    is no longer archived.
+ *  - **No date on file is not "expired".** An archived row with no
+ *    `delete_after` cannot be judged, and the safe answer for something
+ *    irreversible is to leave it alone.
  *
- * Three rules, and the first is the one that matters:
- *
- *  - **A learner enrolled in the current school year is never counted.** Not
- *    "usually not" — `standingFor()` returns `ENROLLED` and no deletion date
- *    at all, so nothing downstream can compute one for them.
- *  - **Re-enrolment clears the countdown by construction.** Enrolling a
- *    learner writes a row for the new school year, which raises the `MAX` and
- *    moves the deletion date forward; coming back inside the window needs no
- *    flag cleared and no job cancelled, because there was never any state to
- *    undo. Their Sheet 1/2, baseline, endline, consents and documents are
- *    untouched throughout — nothing here writes to them.
- *  - **The year ends when the school year ends.** The window runs from the end
- *    of the last enrolled year, read through
- *    `SchoolHeadHealthOverview::periodFor()` so "when does 2026-2027 finish"
- *    has one answer (31 May 2027) rather than one here and another there.
+ * `archived_at` and `delete_after` are plain columns, so the question is asked
+ * without decrypting anybody.
  */
 final class StudentRetention
 {
-    /** A learner on this year's roll. Never a candidate for deletion. */
+    /** Not archived: on a section's roster or waiting for one. Never a candidate for deletion. */
     public const ENROLLED = 'enrolled';
 
-    /** Not on this year's roll, still inside the retention window. */
+    /** Archived, still inside the retention window. */
     public const RETAINED = 'retained';
 
-    /** Past the window: due for deletion the next time the purge runs. */
+    /** Archived and past `delete_after`: deleted the next time the job runs. */
     public const DUE = 'due';
 
-    /** How many years a record is kept. Configuration, never a constant here. */
+    /** How many years an archived record is kept. Configuration, never a constant here. */
     public static function years(): int
     {
         return max(0, (int) config('retention.years', 5));
@@ -65,57 +56,34 @@ final class StudentRetention
         return max(0, (int) config('retention.warn_within_days', 180));
     }
 
-    /**
-     * The date a learner's record is deleted, given the last school year they
-     * were enrolled in.
-     *
-     * End of that school year + the retention window. Reusing `periodFor()`
-     * means a school year's closing date is defined once in the app.
-     */
-    public static function deletionDateFor(string $lastSchoolYear): CarbonImmutable
+    /** The date a learner archived on this day is permanently deleted. */
+    public static function deletionDateFrom(CarbonImmutable $archivedOn): CarbonImmutable
     {
-        [, $closes] = SchoolHeadHealthOverview::periodFor($lastSchoolYear);
-
-        return CarbonImmutable::parse($closes)->addYears(self::years());
+        return $archivedOn->startOfDay()->addYears(self::years());
     }
 
     /**
      * One learner's standing, from every row they have at one school.
      *
-     * @param  Collection<int, StudentHealthRecord>|iterable<StudentHealthRecord>  $rows
+     * @param  iterable<object>  $rows
      * @return array{standing: string, last_school_year: string, deletion_date: ?CarbonImmutable, days_remaining: ?int, is_due: bool, is_nearing: bool}
      */
-    public static function standingFor(iterable $rows, ?CarbonImmutable $asOf = null, ?string $currentSchoolYear = null): array
+    public static function standingFor(iterable $rows, ?CarbonImmutable $asOf = null): array
     {
         $asOf = $asOf ?? CarbonImmutable::now();
-        $currentSchoolYear = $currentSchoolYear ?? StudentHealthRecord::currentSchoolYear();
+        $latest = LearnerPlacement::latest($rows);
 
-        $years = [];
-        foreach ($rows as $row) {
-            $year = trim((string) ($row->school_year ?? ''));
-            if ($year !== '') {
-                $years[] = $year;
-            }
-        }
-
-        // No year on file is not "expired" — it is a record this rule cannot
-        // judge, and the safe answer for something irreversible is to leave it
-        // alone rather than to guess it is old.
-        if ($years === []) {
+        if ($latest === null) {
             return self::answer(self::RETAINED, '', null, $asOf);
         }
 
-        // String comparison is the right one here: "2026-2027" sorts after
-        // "2025-2026" because the opening year leads and is zero-padded by
-        // being four digits.
-        rsort($years);
-        $last = $years[0];
+        $last = (string) LearnerPlacement::value($latest, 'school_year');
 
-        if (in_array($currentSchoolYear, $years, true)) {
+        if (! LearnerPlacement::isArchived($latest)) {
             return self::answer(self::ENROLLED, $last, null, $asOf);
         }
 
-        return self::answer(self::RETAINED, $last, self::deletionDateFor($last), $asOf);
+        return self::answer(self::RETAINED, $last, LearnerPlacement::dateOf($latest, 'delete_after'), $asOf);
     }
 
     /**
@@ -123,8 +91,9 @@ final class StudentRetention
      */
     private static function answer(string $standing, string $last, ?CarbonImmutable $deletionDate, CarbonImmutable $asOf): array
     {
-        $isDue = $deletionDate !== null && $standing !== self::ENROLLED && $asOf->greaterThanOrEqualTo($deletionDate);
-        $daysRemaining = $deletionDate === null ? null : $asOf->startOfDay()->diffInDays($deletionDate->startOfDay(), false);
+        $deletionDate = $deletionDate?->startOfDay();
+        $isDue = $deletionDate !== null && $standing !== self::ENROLLED && $asOf->startOfDay()->greaterThanOrEqualTo($deletionDate);
+        $daysRemaining = $deletionDate === null ? null : $asOf->startOfDay()->diffInDays($deletionDate, false);
 
         return [
             'standing' => $isDue ? self::DUE : $standing,
@@ -141,54 +110,91 @@ final class StudentRetention
     }
 
     /**
-     * Every learner at one school whose record is past its retention date,
-     * as LRN => standing.
+     * Every learner at one school whose record is past its deletion date, as
+     * LRN => standing.
      *
      * Scoped to one institution and **required** to be: without an id it reads
-     * nothing rather than falling through to every school's children, the same
-     * lock `SchoolHeadOverview` and `FeedingEnrollmentController` keep. A purge
-     * that fell through would delete another school's learners.
-     *
-     * The grouping is by LRN rather than by row, because a learner's years are
-     * one history: a 2019 row does not expire while its owner is on this
-     * year's roll.
+     * nothing rather than falling through to every school's children. Read
+     * fresh on every call — never from a memo — because the job asks again
+     * after it has deleted.
      *
      * @return array<string, array{standing: string, last_school_year: string, deletion_date: ?CarbonImmutable, days_remaining: ?int, is_due: bool, is_nearing: bool}>
      */
     public static function dueAt(?int $institutionId, ?CarbonImmutable $asOf = null): array
     {
-        if (! $institutionId) {
-            return [];
-        }
-
-        if (! SchemaCache::hasTable('student_health_records')) {
-            return [];
-        }
-
         $asOf = $asOf ?? CarbonImmutable::now();
-        $currentSchoolYear = StudentHealthRecord::currentSchoolYear();
 
-        // Only the three plain columns this rule reads. A purge must not
-        // decrypt the whole school to decide who is old.
-        $rows = StudentHealthRecord::query()
-            ->where('institution_id', $institutionId)
-            ->get(['id', 'student_id', 'school_year', 'institution_id']);
+        return self::standings($institutionId, $asOf)
+            ->filter(fn (array $standing): bool => $standing['is_due'])
+            ->all();
+    }
 
-        $due = [];
+    /**
+     * Archived learners at one school whose deletion date is near or past,
+     * as LRN => standing — what the student list warns about.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function nearingAt(?int $institutionId, ?CarbonImmutable $asOf = null): array
+    {
+        $asOf = $asOf ?? CarbonImmutable::now();
 
-        foreach ($rows->groupBy(fn (StudentHealthRecord $row) => (string) $row->student_id) as $lrn => $learnerRows) {
-            if ((string) $lrn === '') {
-                continue;
-            }
+        return self::standings($institutionId, $asOf)
+            ->filter(fn (array $standing): bool => $standing['is_nearing'] || $standing['is_due'])
+            ->all();
+    }
 
-            $standing = self::standingFor($learnerRows, $asOf, $currentSchoolYear);
-
-            if ($standing['is_due']) {
-                $due[(string) $lrn] = $standing;
-            }
+    /**
+     * Whether one learner is due for deletion now — asked again by the job
+     * immediately before it deletes, so a learner restored in between is
+     * never deleted on an old answer.
+     */
+    public static function isDue(?int $institutionId, string $lrn, ?CarbonImmutable $asOf = null): bool
+    {
+        if (! $institutionId || trim($lrn) === '' || ! self::readable()) {
+            return false;
         }
 
-        return $due;
+        return self::standingFor(LearnerPlacement::rowsForLearner($institutionId, $lrn), $asOf)['is_due'];
+    }
+
+    /**
+     * @return Collection<string, array<string, mixed>>
+     */
+    private static function standings(?int $institutionId, CarbonImmutable $asOf): Collection
+    {
+        if (! $institutionId || ! self::readable()) {
+            return collect();
+        }
+
+        // Only the archived learners can be anything but ENROLLED, so only
+        // their LRNs are read in full. Plain columns only: deciding who is due
+        // never decrypts the school.
+        $archived = DB::table('student_health_records')
+            ->where('institution_id', $institutionId)
+            ->whereNotNull('archived_at')
+            ->distinct()
+            ->pluck('student_id')
+            ->map(fn ($lrn) => (string) $lrn)
+            ->filter(fn (string $lrn) => $lrn !== '')
+            ->values()
+            ->all();
+
+        $standings = [];
+
+        foreach (LearnerPlacement::rowsFor($institutionId, $archived) as $lrn => $rows) {
+            $standings[(string) $lrn] = self::standingFor($rows, $asOf);
+        }
+
+        return collect($standings);
+    }
+
+    /** The columns the rule reads exist. Until the migration runs, nobody is due. */
+    private static function readable(): bool
+    {
+        return SchemaCache::hasTable('student_health_records')
+            && SchemaCache::hasColumn('student_health_records', 'archived_at')
+            && SchemaCache::hasColumn('student_health_records', 'delete_after');
     }
 
     /**
@@ -208,7 +214,7 @@ final class StudentRetention
         }
 
         if ($standing['is_due'] ?? false) {
-            return 'This record is past its '.self::years().'-year retention period and will be deleted on the next scheduled purge. Re-enrol the learner to keep it.';
+            return 'This archived record is past its '.self::years().'-year retention period and will be deleted on the next scheduled run. Restore the learner to keep it.';
         }
 
         return 'Record will be deleted on '.$date->format('j F Y').' if the learner is not enrolled again.';

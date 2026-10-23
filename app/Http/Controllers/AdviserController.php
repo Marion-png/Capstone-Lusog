@@ -8,9 +8,11 @@ use App\Support\AuditTrail;
 use App\Support\BmiClassifier;
 use App\Support\ClassMasterlistTemplate;
 use App\Support\ClassMasterlistWorkbook;
+use App\Support\LearnerPlacement;
 use App\Support\MasterlistSheetScanner;
 use App\Support\PostureGait;
 use App\Support\SchemaCache;
+use App\Support\SchoolYearTransition;
 use App\Support\StudentImportSheet;
 use App\Support\StudentRosterSync;
 use App\Support\StudentVitalSigns;
@@ -19,6 +21,7 @@ use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -61,6 +64,14 @@ class AdviserController extends Controller
         'posture', 'posture_detail', 'hygiene',
     ];
 
+    /** Where a previewed class list came from, which decides how its report reads. */
+    private const SOURCE_SPREADSHEET = 'spreadsheet';
+
+    private const SOURCE_SCAN = 'scan';
+
+    /** The session key a master-list preview waits under until it is confirmed. */
+    public const PREVIEW_KEY = 'masterlist_preview';
+
     /** Free-text and date answers on Sheet 2. */
     private const SYSTEMS_REVIEW_TEXT = [
         'right_eye', 'left_eye', 'immun_date',
@@ -98,9 +109,42 @@ class AdviserController extends Controller
         // path here and never did — that needs a transfer the two advisers and
         // the record can be held accountable for, not a silent overwrite.
         if ($existingRecord !== null && ! AdviserClassScope::coversRecord($request, $existingRecord)) {
+            // A learner who was in this section and has left it this school
+            // year — closed out at year end, or archived — is no longer the
+            // adviser's to edit.
+            if (LearnerPlacement::inSection($existingRecord, (string) $validated['grade_level'], (string) $validated['section'])
+                && ! LearnerPlacement::isOpen($existingRecord)) {
+                return back()
+                    ->withInput()
+                    ->with('error', LearnerPlacement::isArchived($existingRecord)
+                        ? 'LRN '.$validated['lrn'].' is archived. Restore the learner from the Archived tab to change their record.'
+                        : 'LRN '.$validated['lrn'].' has left this section for this school year.');
+            }
+
             return back()
                 ->withInput()
                 ->with('error', 'LRN '.$validated['lrn'].' is already enrolled in another class at this school. Ask the School Head or System Admin to transfer the learner.');
+        }
+
+        // A learner new to this section this school year joins it by the same
+        // LRN checks every other way in does: the record of a learner the
+        // school already holds moves to the section, it is never typed again.
+        if ($existingRecord === null && SchemaCache::hasTable('student_health_records')) {
+            if ($refusal = $this->sectionClosedRefusal($request)) {
+                return back()->withInput()->with('error', $refusal);
+            }
+
+            $placement = LearnerPlacement::classify(
+                LearnerPlacement::rowsForLearner((int) $request->session()->get('active_institution_id'), (string) $validated['lrn']),
+                (string) $validated['grade_level'],
+                (string) $validated['section']
+            );
+
+            if ($placement['outcome'] !== LearnerPlacement::NO_MATCH) {
+                return back()->withInput()->with('error', in_array($placement['outcome'], [LearnerPlacement::MATCHED, LearnerPlacement::FOUND_IN_ARCHIVED], true)
+                    ? 'LRN '.$validated['lrn'].' already has a record at this school. Use Add to my section so the record carries over.'
+                    : 'LRN '.$validated['lrn'].': '.$placement['message']);
+            }
         }
 
         $records = $request->session()->get('school_health_card_records', []);
@@ -112,7 +156,8 @@ class AdviserController extends Controller
             $validated,
             (array) $request->input('health_history', []),
             $existingRecord,
-            $records
+            $records,
+            $existingRecord === null ? LearnerPlacement::NEW_ENROLLEE : null,
         );
 
         $request->session()->put('school_health_card_records', $records);
@@ -132,6 +177,12 @@ class AdviserController extends Controller
      * same classification, same persistence. A row that fails is reported by
      * its line number and skipped; the rows that pass are enrolled, so one bad
      * phone number does not hold up the other thirty-nine.
+     *
+     * Nothing is written on upload (the school-year handover): every LRN is
+     * matched against the learners the school already holds and the adviser
+     * is shown what each row will do — carry a record over, create a new
+     * enrollee, restore an archived learner, or stay out because it needs
+     * checking — before confirmImport() writes any of it.
      *
      * The existing rows for every LRN on the sheet are fetched in one query
      * rather than one per row: against a hosted database a class-sized import
@@ -161,7 +212,7 @@ class AdviserController extends Controller
         $file = $request->file('students_file');
 
         // A picture is read by the scanner; everything else is a spreadsheet.
-        // Both end at the same enrolRows() write, so this decides how the class
+        // Both end at the same placeRows() write, so this decides how the class
         // list is *read* and nothing about how a learner is written.
         if ($canScan && MasterlistSheetScanner::handles($file)) {
             return $this->importFromPicture($request, $scanner, $file);
@@ -189,19 +240,363 @@ class AdviserController extends Controller
                 ->with('error', 'A single import is limited to '.StudentImportSheet::MAX_ROWS.' learners.');
         }
 
-        $result = $this->enrolRows($request, $sheet['rows'], 'Imported a class list');
+        return $this->showPreview($request, $sheet['rows'], [], (int) $sheet['total'], self::SOURCE_SPREADSHEET);
+    }
+
+    /**
+     * Read a class list into a preview and show it — nothing is written yet.
+     *
+     * Every LRN is classified against the learners the school already holds
+     * (LearnerPlacement::classify) and the adviser sees, row by row, what
+     * confirming will do: carry a waiting learner's record over, create a new
+     * enrollee, restore an archived learner, or leave a row out because it
+     * needs checking. The preview waits in the session until it is confirmed
+     * or cancelled.
+     *
+     * @param  list<array{line: int, data: array<string, mixed>}>  $rows
+     * @param  list<array{line: int, message: string}>  $unreadable
+     */
+    private function showPreview(Request $request, array $rows, array $unreadable, int $total, string $source): RedirectResponse
+    {
+        if ($refusal = $this->sectionClosedRefusal($request)) {
+            return redirect()->route('dashboard.class-adviser', ['tab' => 'form'])->with('error', $refusal);
+        }
+
+        $request->session()->put(self::PREVIEW_KEY, $this->buildPreview($request, $rows, $unreadable, $total, $source));
+
+        return redirect()->route('dashboard.class-adviser', ['tab' => 'form']);
+    }
+
+    /**
+     * The preview of one class list: every row, what it is, and what
+     * confirming it will do.
+     *
+     * Rows are refused here for what is wrong with the row itself — an LRN
+     * missing or not 12 digits, a value that cannot be read, an LRN given
+     * twice — and named by their line. The rest are classified with one read
+     * of the school's rows for every LRN on the list.
+     *
+     * @param  list<array{line: int, data: array<string, mixed>}>  $rows
+     * @param  list<array{line: int, message: string}>  $unreadable
+     * @return array<string, mixed>
+     */
+    private function buildPreview(Request $request, array $rows, array $unreadable, int $total, string $source): array
+    {
+        $grade = (string) $request->session()->get('assigned_grade_level', '');
+        $section = (string) $request->session()->get('assigned_section', '');
+        $institutionId = (int) $request->session()->get('active_institution_id');
+
+        $entries = [];
+        $pending = [];
+        $seen = [];
+
+        foreach ($unreadable as $error) {
+            $entries[] = $this->previewEntry((int) $error['line'], '', [], LearnerPlacement::REJECTED, (string) $error['message']);
+        }
+
+        foreach ($rows as $row) {
+            $line = (int) $row['line'];
+            $input = $this->normaliseEnrolmentInput($row['data']);
+            $lrn = trim((string) ($input['lrn'] ?? ''));
+            $listName = [
+                'last_name' => trim((string) ($input['last_name'] ?? '')),
+                'first_name' => trim((string) ($input['first_name'] ?? '')),
+                'middle_name' => trim((string) ($input['middle_name'] ?? '')),
+            ];
+
+            if ($lrn === '') {
+                $entries[] = $this->previewEntry($line, '', $listName, LearnerPlacement::REJECTED, 'The LRN is missing.');
+
+                continue;
+            }
+
+            if (! LearnerPlacement::isValidLrn($lrn)) {
+                $entries[] = $this->previewEntry($line, $lrn, $listName, LearnerPlacement::REJECTED, 'LRN '.$lrn.' is not 12 digits.');
+
+                continue;
+            }
+
+            $validator = Validator::make($input, $this->importRules());
+            if ($validator->fails()) {
+                $entries[] = $this->previewEntry($line, $lrn, $listName, LearnerPlacement::REJECTED, $validator->errors()->first());
+
+                continue;
+            }
+
+            if (isset($seen[$lrn])) {
+                $entries[] = $this->previewEntry($line, $lrn, $listName, LearnerPlacement::REJECTED, 'LRN '.$lrn.' appears more than once on the sheet; the first row was used.');
+
+                continue;
+            }
+            $seen[$lrn] = true;
+
+            $validated = $validator->validated();
+            $this->applyAssignedClass($request, $validated);
+
+            $pending[] = ['line' => $line, 'lrn' => $lrn, 'name' => $listName, 'data' => $validated];
+        }
+
+        $placement = LearnerPlacement::rowsFor($institutionId, array_column($pending, 'lrn'));
+        $classified = [];
+        $latestIds = [];
+
+        foreach ($pending as $item) {
+            $answer = LearnerPlacement::classify($placement[$item['lrn']] ?? [], $grade, $section);
+            $classified[] = [$item, $answer];
+
+            if ($answer['latest'] !== null) {
+                $latestIds[] = (int) $answer['latest']->id;
+            }
+        }
+
+        // The names on file, to show beside the list's spelling. Decrypted
+        // only for the learners the school already holds, in one read.
+        $onFile = $latestIds === []
+            ? collect()
+            : StudentHealthRecord::query()->whereIn('id', array_values(array_unique($latestIds)))->get()->keyBy('id');
+
+        foreach ($classified as [$item, $answer]) {
+            $record = $answer['latest'] !== null ? $onFile->get((int) $answer['latest']->id) : null;
+            $entry = $this->previewEntry($item['line'], $item['lrn'], $item['name'], $answer['outcome'], $answer['message']);
+            $entry['data'] = $item['data'];
+
+            if ($record !== null) {
+                $siglaName = LearnerPlacement::nameOnFile($record);
+                $entry['sigla_name'] = LearnerPlacement::displayName($siglaName);
+                $entry['name_differs'] = in_array($answer['outcome'], [LearnerPlacement::MATCHED, LearnerPlacement::FOUND_IN_ARCHIVED, LearnerPlacement::ALREADY_ADDED], true)
+                    && ! LearnerPlacement::sameName($siglaName, $item['name']);
+            }
+
+            $entries[] = $entry;
+        }
+
+        usort($entries, fn (array $a, array $b): int => $a['line'] <=> $b['line']);
+
+        return [
+            'token' => Str::random(40),
+            'source' => $source,
+            'total' => $total,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'grade_level' => $grade,
+            'section' => $section,
+            'rows' => $entries,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function previewEntry(int $line, string $lrn, array $name, string $outcome, string $message): array
+    {
+        return [
+            'line' => $line,
+            'lrn' => $lrn,
+            'list_name' => $name === [] ? '' : LearnerPlacement::displayName($name),
+            'name' => $name,
+            'sigla_name' => null,
+            'name_differs' => false,
+            'outcome' => $outcome,
+            'label' => LearnerPlacement::OUTCOME_LABELS[$outcome],
+            'message' => $message,
+            'data' => null,
+        ];
+    }
+
+    /**
+     * Confirm and add to my section: write the preview the adviser saw.
+     *
+     * Every row is classified again against the school's rows as they stand
+     * now, and a row whose answer has moved since the preview is left out and
+     * reported rather than placed on the strength of the old one. Rows marked
+     * Needs checking stay out. The writes share one transaction.
+     */
+    public function confirmImport(Request $request): RedirectResponse
+    {
+        $preview = $request->session()->get(self::PREVIEW_KEY);
+
+        if (! is_array($preview)
+            || ! is_string($request->input('token'))
+            || ! hash_equals((string) ($preview['token'] ?? ''), (string) $request->input('token'))
+            || ($preview['school_year'] ?? '') !== StudentHealthRecord::currentSchoolYear()
+            || strcasecmp((string) ($preview['grade_level'] ?? ''), (string) $request->session()->get('assigned_grade_level', '')) !== 0
+            || strcasecmp((string) ($preview['section'] ?? ''), (string) $request->session()->get('assigned_section', '')) !== 0) {
+            $request->session()->forget(self::PREVIEW_KEY);
+
+            return redirect()->route('dashboard.class-adviser', ['tab' => 'form'])
+                ->with('error', 'That preview is no longer current. Upload the masterlist again.');
+        }
+
+        if ($refusal = $this->sectionClosedRefusal($request)) {
+            return redirect()->route('dashboard.class-adviser', ['tab' => 'form'])->with('error', $refusal);
+        }
+
+        $renames = array_flip(array_map('strval', array_filter((array) $request->input('rename', []), 'is_scalar')));
+
+        $result = $this->placeRows(
+            $request,
+            (array) ($preview['rows'] ?? []),
+            $renames,
+            ($preview['source'] ?? '') === self::SOURCE_SCAN ? 'Enrolled a class from a scanned masterlist' : 'Imported a class list'
+        );
+
+        $request->session()->forget(self::PREVIEW_KEY);
+
+        $from = ($preview['source'] ?? '') === self::SOURCE_SCAN ? 'the scanned masterlist' : 'the spreadsheet';
 
         return redirect()
             ->route('dashboard.class-adviser', ['tab' => $result['errors'] === [] ? 'saved' : 'form'])
-            ->with('import_report', [
-                'created' => $result['created'],
-                'updated' => $result['updated'],
-                'errors' => $result['errors'],
-                'total' => $sheet['total'],
-            ])
+            ->with('import_report', $result + ['total' => (int) ($preview['total'] ?? 0)])
             ->with('success', $result['created'] + $result['updated'] > 0
-                ? $result['created'].' '.Str::plural('learner', $result['created']).' enrolled'.($result['updated'] > 0 ? ', '.$result['updated'].' updated' : '').' from the spreadsheet.'
+                ? $result['created'].' '.Str::plural('learner', $result['created']).' added'.($result['updated'] > 0 ? ', '.$result['updated'].' renamed' : '').' from '.$from.'.'
                 : null);
+    }
+
+    /** Cancel a preview: nothing was written, so nothing is undone. */
+    public function cancelImport(Request $request): RedirectResponse
+    {
+        $request->session()->forget(self::PREVIEW_KEY);
+
+        return redirect()->route('dashboard.class-adviser', ['tab' => 'form']);
+    }
+
+    /**
+     * Add to my section by LRN: one learner missing from the list, through
+     * the same checks a master-list row goes through. If nobody has the LRN,
+     * the adviser must also type the name to create a new enrollee.
+     */
+    public function addToSection(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'add_lrn' => ['required', 'string', 'max:50'],
+            'add_last_name' => ['nullable', 'string', 'max:255'],
+            'add_first_name' => ['nullable', 'string', 'max:255'],
+            'add_middle_name' => ['nullable', 'string', 'max:255'],
+        ], [], ['add_lrn' => 'LRN']);
+
+        $lrn = trim($validated['add_lrn']);
+        $back = fn () => redirect()->route('dashboard.class-adviser', ['tab' => 'form'])->withInput();
+
+        if (! LearnerPlacement::isValidLrn($lrn)) {
+            return $back()->withErrors(['add_lrn' => 'An LRN is 12 digits.']);
+        }
+
+        $grade = (string) $request->session()->get('assigned_grade_level', '');
+        $section = (string) $request->session()->get('assigned_section', '');
+
+        if ($grade === '' || $section === '' || ! SchemaCache::hasTable('student_health_records')) {
+            return $back()->with('error', 'Your account has no assigned class.');
+        }
+
+        if ($refusal = $this->sectionClosedRefusal($request)) {
+            return $back()->with('error', $refusal);
+        }
+
+        $name = [
+            'last_name' => trim((string) ($validated['add_last_name'] ?? '')),
+            'first_name' => trim((string) ($validated['add_first_name'] ?? '')),
+            'middle_name' => trim((string) ($validated['add_middle_name'] ?? '')),
+        ];
+
+        $answer = LearnerPlacement::classify(
+            LearnerPlacement::rowsForLearner((int) $request->session()->get('active_institution_id'), $lrn),
+            $grade,
+            $section
+        );
+
+        if ($answer['outcome'] === LearnerPlacement::NO_MATCH && ($name['last_name'] === '' || $name['first_name'] === '')) {
+            return $back()->withErrors(['add_last_name' => 'No learner has LRN '.$lrn.'. Type the learner\'s last and first name to create a new enrollee.']);
+        }
+
+        if ($answer['outcome'] === LearnerPlacement::ALREADY_ADDED) {
+            return redirect()->route('dashboard.class-adviser', ['tab' => 'saved'])
+                ->with('success', 'LRN '.$lrn.' is already in your section.');
+        }
+
+        if ($answer['outcome'] === LearnerPlacement::NEEDS_CHECKING) {
+            return $back()->with('error', 'LRN '.$lrn.' needs checking: '.$answer['message']);
+        }
+
+        $row = $this->previewEntry(0, $lrn, $name, $answer['outcome'], $answer['message']);
+        $row['data'] = [
+            'lrn' => $lrn,
+            'last_name' => $name['last_name'],
+            'first_name' => $name['first_name'],
+            'middle_name' => $name['middle_name'] !== '' ? $name['middle_name'] : null,
+            'grade_level' => $grade,
+            'section' => $section,
+        ];
+
+        $result = $this->placeRows($request, [$row], [], 'Added a learner to the section by LRN');
+
+        if ($result['created'] === 0) {
+            return $back()->with('error', $result['errors'][0]['message'] ?? 'The learner could not be added.');
+        }
+
+        return redirect()->route('dashboard.class-adviser', ['tab' => 'saved'])
+            ->with('success', 'LRN '.$lrn.' added to your section ('.LearnerPlacement::OUTCOME_LABELS[$answer['outcome']].').');
+    }
+
+    /**
+     * Restore an archived learner to this adviser's section, from the
+     * Archived tab: the record comes back to the section and its deletion is
+     * cancelled. The learner must have been archived from this section.
+     */
+    public function restoreArchived(Request $request, string $lrn): RedirectResponse
+    {
+        if ((string) $request->session()->get('active_role') !== 'class_adviser') {
+            abort(403);
+        }
+
+        $back = redirect()->route('dashboard.class-adviser.archived');
+
+        if (AdviserClassScope::learnerAccess($request, $lrn) !== AdviserClassScope::ACCESS_ARCHIVED) {
+            return $back->with('error', 'That learner is not archived from your section.');
+        }
+
+        if ($refusal = $this->sectionClosedRefusal($request)) {
+            return $back->with('error', $refusal);
+        }
+
+        $grade = (string) $request->session()->get('assigned_grade_level', '');
+        $section = (string) $request->session()->get('assigned_section', '');
+        $answer = LearnerPlacement::classify(
+            LearnerPlacement::rowsForLearner((int) $request->session()->get('active_institution_id'), $lrn),
+            $grade,
+            $section
+        );
+
+        if ($answer['outcome'] !== LearnerPlacement::FOUND_IN_ARCHIVED) {
+            return $back->with('error', 'That learner is not archived from your section.');
+        }
+
+        $row = $this->previewEntry(0, $lrn, [], $answer['outcome'], $answer['message']);
+        $result = $this->placeRows($request, [$row], [], 'Restored an archived learner to the section');
+
+        if ($result['created'] === 0) {
+            return $back->with('error', $result['errors'][0]['message'] ?? 'The learner could not be restored.');
+        }
+
+        return redirect()->route('dashboard.class-adviser', ['tab' => 'saved'])
+            ->with('success', 'LRN '.$lrn.' restored to your section. The scheduled deletion is cancelled.');
+    }
+
+    /**
+     * The refusal for writing into a section whose school year is closed, or
+     * null when it is open. A closed section is read-only.
+     */
+    private function sectionClosedRefusal(Request $request): ?string
+    {
+        $grade = (string) $request->session()->get('assigned_grade_level', '');
+        $section = (string) $request->session()->get('assigned_section', '');
+        $institutionId = (int) $request->session()->get('active_institution_id');
+
+        if ($grade === '' || $section === '' || ! $institutionId) {
+            return null;
+        }
+
+        $year = StudentHealthRecord::currentSchoolYear();
+
+        return SchoolYearTransition::isClosed($institutionId, $year, $grade, $section)
+            ? 'This section\'s school year (S.Y. '.$year.') has been closed, so nobody can be added to it.'
+            : null;
     }
 
     /**
@@ -211,7 +606,7 @@ class AdviserController extends Controller
      * form already on the adviser's desk, photographed or scanned, rather than
      * a workbook somebody has to build first. App\Support\MasterlistSheetScanner
      * sends it to Gemini and hands back rows shaped exactly like
-     * StudentImportSheet's, so they go through enrolRows() — the same rules, the
+     * StudentImportSheet's, so they go through placeRows() — the same rules, the
      * same class scoping, the same enrolLearner() write. A camera is a second
      * way to read a class list, never a second way to write a learner.
      *
@@ -264,117 +659,251 @@ class AdviserController extends Controller
                 .($scan['note'] !== '' ? ' '.$scan['note'] : ''));
         }
 
-        $result = $this->enrolRows($request, $scan['rows'], 'Enrolled a class from a scanned masterlist');
-
-        // A learner the scan could not read is reported beside the rows that
-        // failed validation: both are lines the adviser has to look at, and one
-        // list of them is easier to work through than two.
-        $errors = array_merge($scan['errors'], $result['errors']);
-        usort($errors, fn (array $a, array $b): int => $a['line'] <=> $b['line']);
-
-        return redirect()
-            ->route('dashboard.class-adviser', ['tab' => $errors === [] ? 'saved' : 'form'])
-            ->with('import_report', [
-                'created' => $result['created'],
-                'updated' => $result['updated'],
-                'errors' => $errors,
-                'total' => $scan['total'],
-            ])
-            ->with('success', $result['created'] + $result['updated'] > 0
-                ? $result['created'].' '.Str::plural('learner', $result['created']).' enrolled'.($result['updated'] > 0 ? ', '.$result['updated'].' updated' : '').' from the scanned masterlist.'
-                : null);
+        // A learner the scan could not read is listed in the preview beside
+        // the rows that failed a check: both are lines the adviser has to look
+        // at, and one list of them is easier to work through than two.
+        return $this->showPreview($request, $scan['rows'], $scan['errors'], (int) $scan['total'], self::SOURCE_SCAN);
     }
 
     /**
-     * The one place a read class list becomes enrolled learners.
+     * The one place a confirmed class list becomes learners in a section.
      *
-     * Shared by the spreadsheet import and the scanned masterlist, so the two
-     * cannot drift: same rules, same class scoping, same refusal of an LRN
-     * belonging to another class, same enrolLearner() write, same audit entry.
-     * Adding a third way to read a class list means calling this, never copying
-     * it.
+     * Shared by the spreadsheet import, the scanned masterlist, Add to my
+     * section and Restore, so they cannot drift: every row is classified again
+     * against the school's rows as they stand now (LearnerPlacement::classify)
+     * and every learner goes into the section through the same enrolLearner()
+     * write the form uses. A row whose answer has moved since the adviser saw
+     * it is left out and reported, never placed on the old answer.
      *
-     * The existing rows for every LRN on the sheet are fetched in one query
-     * rather than one per row: against a hosted database a class-sized import
-     * would otherwise spend most of its time waiting on round trips.
+     *  - **No match**: a new enrollee, written from the row's own data.
+     *  - **Matched**: the waiting learner's record carries over — their
+     *    profile and Sheet 1 history are read from their last row, never
+     *    re-typed, and a new row is opened for this school year.
+     *  - **Found in Archived**: the same, and the deletion is cancelled; a
+     *    learner archived this school year is reopened on their own row.
+     *  - **Already added**: nothing, unless the adviser confirmed the list's
+     *    spelling of their name.
+     *  - **Needs checking** and refused rows stay out.
      *
-     * @param  list<array{line: int, data: array<string, mixed>}>  $rows
-     * @return array{created: int, updated: int, errors: list<array{line: int, message: string}>}
+     * The school's rows for every LRN are read once, and every write shares
+     * one transaction, so a failure leaves the section exactly as it was.
+     *
+     * @param  list<array<string, mixed>>  $rows  preview entries
+     * @param  array<string, int>  $renames  LRNs whose name on the list was confirmed
+     * @return array{created: int, updated: int, unchanged: int, carried_over: int, new_enrollee: int, restored: int, errors: list<array{line: int, message: string}>}
      */
-    private function enrolRows(Request $request, array $rows, string $auditSummary): array
+    private function placeRows(Request $request, array $rows, array $renames, string $auditSummary): array
     {
-        $existingByLrn = collect();
-        if (SchemaCache::hasTable('student_health_records')) {
-            $lrns = collect($rows)
-                ->map(fn (array $row): string => trim((string) ($row['data']['lrn'] ?? '')))
-                ->filter()
-                ->unique()
-                ->values();
+        $result = [
+            'created' => 0,
+            'updated' => 0,
+            'unchanged' => 0,
+            LearnerPlacement::CARRIED_OVER => 0,
+            LearnerPlacement::NEW_ENROLLEE => 0,
+            LearnerPlacement::RESTORED => 0,
+            'errors' => [],
+        ];
 
-            $existingByLrn = StudentHealthRecord::query()
-                ->where('institution_id', $request->session()->get('active_institution_id'))
-                ->where('school_year', StudentHealthRecord::currentSchoolYear())
-                ->whereIn('student_id', $lrns->all())
-                ->get()
-                ->keyBy(fn (StudentHealthRecord $record): string => (string) $record->student_id);
+        $institutionId = (int) $request->session()->get('active_institution_id');
+        $grade = (string) $request->session()->get('assigned_grade_level', '');
+        $section = (string) $request->session()->get('assigned_section', '');
+
+        $lrns = [];
+        foreach ($rows as $row) {
+            if (in_array($row['outcome'] ?? '', [...LearnerPlacement::PLACING_OUTCOMES, LearnerPlacement::ALREADY_ADDED], true)) {
+                $lrns[] = (string) $row['lrn'];
+            }
         }
 
         $records = $request->session()->get('school_health_card_records', []);
-        $created = 0;
-        $updated = 0;
-        $errors = [];
-        $seen = [];
+        $records = is_array($records) ? $records : [];
 
-        foreach ($rows as $row) {
-            $line = $row['line'];
-            $input = $this->normaliseEnrolmentInput($row['data']);
-
-            $validator = Validator::make($input, $this->importRules());
-            if ($validator->fails()) {
-                $errors[] = ['line' => $line, 'message' => $validator->errors()->first()];
-
-                continue;
+        DB::transaction(function () use ($request, $rows, $renames, $lrns, $grade, $section, $institutionId, &$records, &$result): void {
+            $latestIds = [];
+            foreach (LearnerPlacement::rowsFor($institutionId, $lrns) as $learnerRows) {
+                $latest = LearnerPlacement::latest($learnerRows);
+                if ($latest !== null) {
+                    $latestIds[] = (int) $latest->id;
+                }
             }
 
-            $validated = $validator->validated();
-            $this->applyAssignedClass($request, $validated);
-            $lrn = (string) $validated['lrn'];
+            $onFile = $latestIds === []
+                ? collect()
+                : StudentHealthRecord::query()->whereIn('id', $latestIds)->lockForUpdate()->get()->keyBy('id');
 
-            if (isset($seen[$lrn])) {
-                $errors[] = ['line' => $line, 'message' => 'LRN '.$lrn.' appears more than once on the sheet; the first row was used.'];
+            // Read again once those rows are held, so the answer every row is
+            // judged by is the one standing when it is written.
+            $placement = LearnerPlacement::rowsFor($institutionId, $lrns);
 
-                continue;
+            foreach ($rows as $row) {
+                $line = (int) ($row['line'] ?? 0);
+                $lrn = (string) ($row['lrn'] ?? '');
+                $outcome = (string) ($row['outcome'] ?? '');
+
+                if (! in_array($outcome, [...LearnerPlacement::PLACING_OUTCOMES, LearnerPlacement::ALREADY_ADDED], true)) {
+                    // A refused row's message already says what was wrong with
+                    // it; a row that needs checking is named by its LRN.
+                    $result['errors'][] = ['line' => $line, 'message' => ($outcome === LearnerPlacement::NEEDS_CHECKING && $lrn !== '' ? 'LRN '.$lrn.' needs checking: ' : '').(string) ($row['message'] ?? '')];
+
+                    continue;
+                }
+
+                $answer = LearnerPlacement::classify($placement[$lrn] ?? [], $grade, $section);
+
+                if ($answer['outcome'] !== $outcome) {
+                    $result['errors'][] = ['line' => $line, 'message' => 'LRN '.$lrn.' changed since the preview and was not added: '.$answer['message']];
+
+                    continue;
+                }
+
+                $from = $answer['latest'] !== null ? $onFile->get((int) $answer['latest']->id) : null;
+                $name = isset($renames[$lrn]) && ($row['name_differs'] ?? false) && is_array($row['name'] ?? null)
+                    ? $this->nameParts($row['name'])
+                    : null;
+
+                switch ($outcome) {
+                    case LearnerPlacement::NO_MATCH:
+                        $this->enrolLearner($request, (array) $row['data'], [], null, $records, LearnerPlacement::NEW_ENROLLEE);
+                        $result[LearnerPlacement::NEW_ENROLLEE]++;
+                        $result['created']++;
+                        break;
+
+                    case LearnerPlacement::MATCHED:
+                        if ($from === null) {
+                            $result['errors'][] = ['line' => $line, 'message' => 'LRN '.$lrn.' could not be read and was not added.'];
+                            break;
+                        }
+                        $this->carryOver($request, $from, $name, $records, LearnerPlacement::CARRIED_OVER);
+                        $result[LearnerPlacement::CARRIED_OVER]++;
+                        $result['created']++;
+                        break;
+
+                    case LearnerPlacement::FOUND_IN_ARCHIVED:
+                        if ($from === null) {
+                            $result['errors'][] = ['line' => $line, 'message' => 'LRN '.$lrn.' could not be read and was not added.'];
+                            break;
+                        }
+                        if ($answer['in_place']) {
+                            SchoolYearTransition::restoreInPlace($from, $grade, $section, $name);
+                        } else {
+                            $this->carryOver($request, $from, $name, $records, LearnerPlacement::RESTORED);
+                            SchoolYearTransition::clearArchive($institutionId, $lrn);
+                        }
+                        $result[LearnerPlacement::RESTORED]++;
+                        $result['created']++;
+                        break;
+
+                    case LearnerPlacement::ALREADY_ADDED:
+                        if ($name !== null && $from !== null) {
+                            $this->renameLearner($from, $name);
+                            $result['updated']++;
+                        } else {
+                            $result['unchanged']++;
+                        }
+                        break;
+                }
             }
-            $seen[$lrn] = true;
+        });
 
-            $existingRecord = $existingByLrn->get($lrn);
-
-            if ($existingRecord !== null && ! AdviserClassScope::coversRecord($request, $existingRecord)) {
-                $errors[] = ['line' => $line, 'message' => 'LRN '.$lrn.' is already enrolled in another class at this school.'];
-
-                continue;
-            }
-
-            $this->enrolLearner($request, $validated, [], $existingRecord, $records);
-
-            if ($existingRecord !== null) {
-                $updated++;
-            } else {
-                $created++;
-            }
-        }
-
+        LearnerPlacement::forget();
         $request->session()->put('school_health_card_records', $records);
 
         AuditTrail::record(
             'imported',
             'StudentHealthRecord',
             null,
-            $auditSummary.': '.$created.' enrolled, '.$updated.' updated, '.count($errors).' skipped',
-            ['created' => $created, 'updated' => $updated, 'skipped' => count($errors)]
+            $auditSummary.': '.$result['created'].' added ('
+                .$result[LearnerPlacement::CARRIED_OVER].' carried over, '
+                .$result[LearnerPlacement::NEW_ENROLLEE].' new, '
+                .$result[LearnerPlacement::RESTORED].' restored), '
+                .$result['updated'].' renamed, '.count($result['errors']).' not added',
+            [
+                'created' => $result['created'],
+                'carried_over' => $result[LearnerPlacement::CARRIED_OVER],
+                'new_enrollee' => $result[LearnerPlacement::NEW_ENROLLEE],
+                'restored' => $result[LearnerPlacement::RESTORED],
+                'updated' => $result['updated'],
+                'skipped' => count($result['errors']),
+            ]
         );
 
-        return ['created' => $created, 'updated' => $updated, 'errors' => $errors];
+        return $result;
+    }
+
+    /**
+     * Carry a learner's record into this adviser's section for this school
+     * year, through enrolLearner(): a new row whose profile — name, birth
+     * date, birthplace, guardian, address, contact, sex, and the Sheet 1
+     * history with its allergies — is read from the learner's last row, so
+     * nothing is typed again. The year's own readings (height, weight, vital
+     * signs, the nurse's examination, feeding) start empty, because they are
+     * this year's to take. Documents, consents, incidents and clinic visits
+     * are filed under the LRN and need no carrying at all.
+     *
+     * @param  array{last_name: string, first_name: string, middle_name: string}|null  $name  the list's spelling, when the adviser confirmed it
+     * @param  array<int, array<string, mixed>>  $records
+     */
+    private function carryOver(Request $request, StudentHealthRecord $from, ?array $name, array &$records, string $joinedAs): ?StudentHealthRecord
+    {
+        $details = is_array($from->student_details) ? $from->student_details : [];
+        $name ??= LearnerPlacement::nameOnFile($from);
+
+        $validated = [
+            'last_name' => $name['last_name'],
+            'first_name' => $name['first_name'],
+            'middle_name' => $name['middle_name'] !== '' ? $name['middle_name'] : null,
+            'lrn' => (string) $from->student_id,
+            'birth_month' => $details['birth_month'] ?? null,
+            'birth_day' => $details['birth_day'] ?? null,
+            'birth_year' => $details['birth_year'] ?? null,
+            'birthplace' => $details['birthplace'] ?? null,
+            'parent_guardian' => $details['parent_guardian'] ?? null,
+            'address' => $details['address'] ?? null,
+            'region' => $details['region'] ?? null,
+            'division' => $details['division'] ?? null,
+            'telephone_no' => $details['telephone_no'] ?? null,
+            'gender' => $details['gender'] ?? null,
+            'height_cm' => null,
+            'weight_kg' => null,
+            'grade_level' => '',
+            'section' => '',
+        ];
+        $this->applyAssignedClass($request, $validated);
+
+        $history = is_array($details['health_history'] ?? null) ? $details['health_history'] : [];
+
+        return $this->enrolLearner($request, $validated, $history, null, $records, $joinedAs);
+    }
+
+    /**
+     * The list's spelling of a learner's name, confirmed by the adviser. The
+     * record keeps the name SIGLA holds until that confirmation; afterwards
+     * this school year's row carries the new one. Earlier years keep theirs.
+     *
+     * @param  array{last_name: string, first_name: string, middle_name: string}  $name
+     */
+    private function renameLearner(StudentHealthRecord $record, array $name): void
+    {
+        $details = is_array($record->student_details) ? $record->student_details : [];
+        $details['last_name'] = $name['last_name'];
+        $details['first_name'] = $name['first_name'];
+        $details['middle_name'] = $name['middle_name'] !== '' ? $name['middle_name'] : null;
+
+        $record->student_details = $details;
+        $record->student_name = $this->buildStudentName($name['last_name'], $name['first_name'], $name['middle_name']);
+        $record->save();
+    }
+
+    /**
+     * @return array{last_name: string, first_name: string, middle_name: string}
+     */
+    private function nameParts(array $name): array
+    {
+        return [
+            'last_name' => trim((string) ($name['last_name'] ?? '')),
+            'first_name' => trim((string) ($name['first_name'] ?? '')),
+            'middle_name' => trim((string) ($name['middle_name'] ?? '')),
+        ];
     }
 
     /** "a, b and c" — a refusal reads as a sentence, not as a list. */
@@ -620,6 +1149,7 @@ class AdviserController extends Controller
      * @param  array<string, mixed>  $validated
      * @param  array<mixed>  $healthHistoryInput
      * @param  array<int, array<string, mixed>>  $records
+     * @param  string|null  $joinedAs  how a learner new to the section came into it (LearnerPlacement::JOINED_LABELS)
      */
     private function enrolLearner(
         Request $request,
@@ -627,7 +1157,8 @@ class AdviserController extends Controller
         array $healthHistoryInput,
         ?StudentHealthRecord $existingRecord,
         array &$records,
-    ): void {
+        ?string $joinedAs = null,
+    ): ?StudentHealthRecord {
         // A masterlist carries no birth date, and the import's rules no longer
         // demand one — so these keys can be absent from validated() entirely
         // rather than merely empty. resolveAge() already reads a zero as "no
@@ -762,7 +1293,7 @@ class AdviserController extends Controller
         }
 
         if (! SchemaCache::hasTable('student_health_records')) {
-            return;
+            return null;
         }
 
         $studentName = $this->buildStudentName(
@@ -805,6 +1336,11 @@ class AdviserController extends Controller
             $payload['school_name'] = $schoolName !== '' ? $schoolName : null;
         }
 
+        if ($joinedAs !== null && $existingRecord === null) {
+            $payload['joined_at'] = now();
+            $payload['joined_as'] = $joinedAs;
+        }
+
         // Keep compatibility with databases that have not run newer migrations yet.
         $existingColumns = array_flip(SchemaCache::columns('student_health_records'));
         $payload = array_intersect_key($payload, $existingColumns);
@@ -813,13 +1349,15 @@ class AdviserController extends Controller
         // a wasted round trip, and a slow one against a hosted database.
         if ($existingRecord !== null) {
             $existingRecord->fill($payload)->save();
-        } else {
-            StudentHealthRecord::query()->create($payload + [
-                'student_id' => (string) $validated['lrn'],
-                'institution_id' => $request->session()->get('active_institution_id'),
-                'school_year' => StudentHealthRecord::currentSchoolYear(),
-            ]);
+
+            return $existingRecord;
         }
+
+        return StudentHealthRecord::query()->create($payload + [
+            'student_id' => (string) $validated['lrn'],
+            'institution_id' => $request->session()->get('active_institution_id'),
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+        ]);
     }
 
     public function success(): View
