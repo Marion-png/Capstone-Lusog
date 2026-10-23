@@ -96,7 +96,8 @@ class BrandLogoTest extends TestCase
 
     /**
      * The consent and assessment topbars box their icon at 34x34. The stacked
-     * lockup would be squeezed there, so they carry the square shield.
+     * lockup would be squeezed there, so they carry the square shield. The
+     * nurse's consent pages lead with their Back link, so one may sit before it.
      */
     public function test_the_square_topbar_icon_is_the_shield(): void
     {
@@ -107,7 +108,7 @@ class BrandLogoTest extends TestCase
             $html = $this->withSession($this->sessionFor($role))->get($uri)->assertOk()->getContent();
 
             $this->assertMatchesRegularExpression(
-                '#<header class="cf-topbar">\s*<img src="[^"]*'.preg_quote(self::MARK, '#').'"#',
+                '#<header class="cf-topbar">\s*(?:<a [^>]*class="cf-back[^"]*"[^>]*>[^<]*</a>\s*)?<img src="[^"]*'.preg_quote(self::MARK, '#').'"#',
                 $html,
                 "{$uri} does not head its topbar with the SIGLA shield."
             );

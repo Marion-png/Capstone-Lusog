@@ -19,13 +19,13 @@
 @php use App\Models\HealthConsentForm; @endphp
 
 <header class="cf-topbar">
+    <a href="{{ route('dashboard.school-nurse') }}" class="cf-back cf-back-start">&larr; Back to Dashboard</a>
     <img src="{{ asset('images/sigla-mark.png') }}" alt="SIGLA">
     <div>
         <div class="cf-topbar-title">Health Services Consent Forms</div>
         <div class="cf-topbar-sub">School Nurse &middot; read-only access</div>
     </div>
     @include('partials.nurse-learner-search')
-    <a href="{{ route('dashboard.school-nurse') }}" class="cf-back">&larr; Back to Dashboard</a>
 </header>
 
 <div class="cf-wrap">

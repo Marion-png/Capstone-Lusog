@@ -431,6 +431,74 @@ class ConsentFormScanTest extends TestCase
         );
     }
 
+    /** It describes each box before it answers for it, so it looks before it decides. */
+    #[Test]
+    public function the_reader_describes_each_consent_box_before_answering(): void
+    {
+        $schema = (new \ReflectionMethod(ConsentFormScanner::class, 'responseSchema'))
+            ->invoke(new ConsentFormScanner);
+
+        $this->assertContains('consent_evidence', $schema['required']);
+        $this->assertSame(
+            array_keys(ConsentFormScanner::CONSENT_BOXES),
+            $schema['properties']['consent_evidence']['required'],
+        );
+
+        $order = $schema['propertyOrdering'];
+        $this->assertLessThan(
+            array_search('consent_boxes', $order, true),
+            array_search('consent_evidence', $order, true),
+        );
+    }
+
+    /**
+     * What the reader saw is said to the adviser beside an unclear answer,
+     * and never decides one.
+     */
+    #[Test]
+    public function what_the_reader_saw_is_said_but_never_decides(): void
+    {
+        $all = HealthConsentForm::CONSENT_ALL;
+        $deny = HealthConsentForm::CONSENT_DENY;
+
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => $all,
+            'consent_boxes' => $this->boxes($all, [$deny => ConsentFormScanner::UNCLEAR]),
+            'consent_evidence' => [$all => 'dark shaded square', $deny => 'glare covers it'],
+        ]));
+
+        $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['consent_choice']);
+        $this->assertStringContainsString('"Dili" box: glare covers it', $draft['consent_reason']);
+        $this->assertStringNotContainsString('dark shaded square', $draft['consent_reason']);
+
+        // Two marks: both descriptions, so the adviser knows which to ask about.
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => $all,
+            'consent_boxes' => $this->boxes($all, [$deny => ConsentFormScanner::TICKED]),
+            'consent_evidence' => [$all => 'dark shaded square', $deny => 'light pencil shading'],
+        ]));
+
+        $this->assertStringContainsString('"Oo" box: dark shaded square', $draft['consent_reason']);
+        $this->assertStringContainsString('"Dili" box: light pencil shading', $draft['consent_reason']);
+
+        // A description at odds with its own box changes nothing: the boxes rule.
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => $deny,
+            'consent_evidence' => [$deny => 'empty outline'],
+        ]));
+
+        $this->assertSame($deny, $draft['consent_choice']);
+        $this->assertSame('', $draft['consent_reason']);
+
+        // A reading with no descriptions at all still says why it is unclear.
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => $all,
+            'consent_boxes' => $this->boxes($all, [$deny => ConsentFormScanner::UNCLEAR]),
+        ]));
+
+        $this->assertSame('A consent box could not be made out — check which one the parent ticked.', $draft['consent_reason']);
+    }
+
     // ── Availability and failure ─────────────────────────────────────
 
     /** Without a key the feature is simply absent; the manual path is untouched. */

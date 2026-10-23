@@ -25,12 +25,12 @@
 @endphp
 
 <header class="cf-topbar">
+    <a href="{{ $backUrl }}" class="cf-back cf-back-start">&larr; All Consent Forms</a>
     <img src="{{ asset('images/sigla-mark.png') }}" alt="SIGLA">
     <div>
         <div class="cf-topbar-title">Consent Form &mdash; {{ $form->student_name }}</div>
         <div class="cf-topbar-sub">Read-only &middot; SY {{ $form->school_year }}</div>
     </div>
-    <a href="{{ $backUrl }}" class="cf-back">&larr; All Consent Forms</a>
 </header>
 
 <div class="cf-wrap">
