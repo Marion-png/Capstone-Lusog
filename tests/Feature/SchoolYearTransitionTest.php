@@ -10,6 +10,7 @@ use App\Models\MedicalCertificate;
 use App\Models\SectionClosure;
 use App\Models\StudentHealthRecord;
 use App\Support\AdviserClassScope;
+use App\Support\ClassMasterlistTemplate;
 use App\Support\LearnerPlacement;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -156,9 +157,10 @@ class SchoolYearTransitionTest extends TestCase
         ]);
     }
 
-    private function masterlist(array $rows): UploadedFile
+    /** A master list headed with the class it is for, as the form heads it. */
+    private function masterlist(array $rows, string $classLine): UploadedFile
     {
-        $lines = ['LRN,Last Name,First Name,Middle Name'];
+        $lines = [$classLine, 'LRN,Last Name,First Name,Middle Name'];
         foreach ($rows as $row) {
             $lines[] = implode(',', $row);
         }
@@ -166,10 +168,15 @@ class SchoolYearTransitionTest extends TestCase
         return UploadedFile::fake()->createWithContent('masterlist.csv', implode("\r\n", $lines)."\r\n");
     }
 
-    /** Upload a master list and return the preview it produced — nothing is written yet. */
+    /**
+     * Upload a master list headed with the uploader's own section and return
+     * the preview it produced — nothing is written yet.
+     */
     private function upload(array $session, array $rows): array
     {
-        $this->as($session)->post(route('adviser.import'), ['students_file' => $this->masterlist($rows)])
+        $classLine = ClassMasterlistTemplate::classLabel($session['assigned_grade_level'], $session['assigned_section']);
+
+        $this->as($session)->post(route('adviser.import'), ['students_file' => $this->masterlist($rows, $classLine)])
             ->assertRedirect(route('dashboard.class-adviser', ['tab' => 'form']));
 
         $preview = session(AdviserController::PREVIEW_KEY);
@@ -732,17 +739,18 @@ class SchoolYearTransitionTest extends TestCase
             ['', 'No', 'Lrn', ''],
         ]);
 
+        // Line 1 is the class line, line 2 the header.
         $rows = collect($preview['rows'])->keyBy('line');
-        $this->assertSame(LearnerPlacement::NO_MATCH, $rows[2]['outcome']);
-        $this->assertSame(LearnerPlacement::REJECTED, $rows[3]['outcome']);
-        $this->assertStringContainsString('100000000031 appears more than once', $rows[3]['message']);
+        $this->assertSame(LearnerPlacement::NO_MATCH, $rows[3]['outcome']);
         $this->assertSame(LearnerPlacement::REJECTED, $rows[4]['outcome']);
-        $this->assertStringContainsString('12345 is not 12 digits', $rows[4]['message']);
+        $this->assertStringContainsString('100000000031 appears more than once', $rows[4]['message']);
         $this->assertSame(LearnerPlacement::REJECTED, $rows[5]['outcome']);
-        $this->assertStringContainsString('LRN is missing', $rows[5]['message']);
+        $this->assertStringContainsString('12345 is not 12 digits', $rows[5]['message']);
+        $this->assertSame(LearnerPlacement::REJECTED, $rows[6]['outcome']);
+        $this->assertStringContainsString('LRN is missing', $rows[6]['message']);
 
         $this->confirm($preview)->assertSessionHas('import_report', fn (array $r) => $r['created'] === 1
-            && array_column($r['errors'], 'line') === [3, 4, 5]);
+            && array_column($r['errors'], 'line') === [4, 5, 6]);
 
         $this->assertSame(1, StudentHealthRecord::count());
     }
@@ -817,6 +825,36 @@ class SchoolYearTransitionTest extends TestCase
         $this->post(route('adviser.import.cancel'))->assertRedirect();
         $this->confirm($preview)->assertSessionHas('error');
         $this->assertSame(0, StudentHealthRecord::count());
+    }
+
+    /**
+     * A master list is taken only by the adviser of the section it names.
+     *
+     * A promoted learner waits for a grade, not for a section — so without
+     * this the adviser of one Grade 8 section uploading another's list would
+     * carry every learner on it into the wrong class.
+     */
+    #[Test]
+    public function another_sections_masterlist_is_refused_and_nobody_is_carried_over(): void
+    {
+        $this->learner('100000000001', 'Grade 7 / MATIYAGA');
+        $this->closeYear($this->grade7(), ['100000000001' => LearnerPlacement::PROMOTED]);
+
+        $this->duringNewYear();
+        $makisig = $this->adviser('Grade 8', 'MAKISIG', 'Lea Cruz');
+
+        $this->as($makisig)->post(route('adviser.import'), [
+            'students_file' => $this->masterlist([['100000000001', 'Dela Cruz', 'Juan', 'R']], 'GRADE 8 - MASIPAG'),
+        ])->assertRedirect(route('dashboard.class-adviser', ['tab' => 'form']))
+            ->assertSessionHas('error', fn (string $message): bool => str_contains($message, 'This masterlist is for GRADE 8 - MASIPAG')
+                && str_contains($message, 'GRADE 8 - MAKISIG'));
+
+        $this->assertNull(session(AdviserController::PREVIEW_KEY), 'A refused master list was previewed.');
+        $this->assertNull($this->rowFor('100000000001', self::NEW_YEAR), 'The learner was carried into the wrong section.');
+
+        // The section the list names takes it.
+        $this->confirm($this->upload($this->grade8(), [['100000000001', 'Dela Cruz', 'Juan', 'R']]));
+        $this->assertSame('Grade 8 / MASIPAG', $this->rowFor('100000000001', self::NEW_YEAR)?->section);
     }
 
     /** A learner already in another section this year is not moved: that transfer is not defined yet. */

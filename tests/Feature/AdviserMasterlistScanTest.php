@@ -355,6 +355,57 @@ class AdviserMasterlistScanTest extends TestCase
         $this->assertStringContainsString('DIAZ, CLARA', $messages);
     }
 
+    /**
+     * A photographed masterlist of another section is refused before anything
+     * is previewed, by the same rule a spreadsheet is.
+     */
+    #[Test]
+    public function a_scanned_masterlist_for_another_section_enrols_nobody(): void
+    {
+        $this->fakeScan([
+            'document' => $this->document(['headings' => [
+                'Sta. Ana National High School',
+                ClassMasterlistTemplate::TITLE,
+                'GRADE 7 - ROSAL',
+                'MASTERLIST',
+            ]]),
+            'is_class_masterlist' => true,
+            'learners' => [
+                ['last_name' => 'ABAD', 'first_name' => 'MIGUEL', 'middle_name' => 'G.', 'lrn' => '100000000004', 'sex' => 'MALE'],
+            ],
+            'note' => '',
+        ]);
+
+        $this->scan()
+            ->assertSessionHas('error', fn (string $message): bool => str_contains($message, 'This masterlist is for GRADE 7 - ROSAL')
+                && str_contains($message, 'GRADE 7 - SAMPAGUITA'));
+
+        $this->assertNull(session(AdviserController::PREVIEW_KEY));
+        $this->assertSame(0, StudentHealthRecord::count());
+    }
+
+    /** A photo whose class line could not be read cannot be shown to be this section's. */
+    #[Test]
+    public function a_scanned_masterlist_naming_no_section_enrols_nobody(): void
+    {
+        $this->fakeScan([
+            'document' => $this->document(['headings' => [
+                'Sta. Ana National High School',
+                ClassMasterlistTemplate::TITLE,
+                'MASTERLIST',
+            ]]),
+            'is_class_masterlist' => true,
+            'learners' => [
+                ['last_name' => 'ABAD', 'first_name' => 'MIGUEL', 'middle_name' => 'G.', 'lrn' => '100000000004', 'sex' => 'MALE'],
+            ],
+            'note' => '',
+        ]);
+
+        $this->scan()->assertSessionHas('error', fn (string $message): bool => str_contains($message, 'does not say which section it is for'));
+
+        $this->assertSame(0, StudentHealthRecord::count());
+    }
+
     /** A sheet with nobody readable on it enrols nobody and says so. */
     #[Test]
     public function an_empty_masterlist_enrols_nobody(): void
@@ -571,7 +622,7 @@ class AdviserMasterlistScanTest extends TestCase
     {
         Http::fake();
 
-        $csv = "LRN,Last Name,First Name\r\n100000000001,Dela Cruz,Juan\r\n";
+        $csv = "GRADE 7 - SAMPAGUITA\r\nLRN,Last Name,First Name\r\n100000000001,Dela Cruz,Juan\r\n";
 
         $this->scan(UploadedFile::fake()->createWithContent('class-list.csv', $csv))
             ->assertSessionHas('import_report', fn (array $r) => $r['created'] === 1);

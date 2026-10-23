@@ -54,10 +54,16 @@ class AdviserStudentImportTest extends TestCase
         ], $overrides);
     }
 
-    private function csv(array $rows, ?string $header = null): UploadedFile
+    /**
+     * A flat class list. Each row names its class in a Grade & Section column
+     * — the adviser's own by default — because a list that does not say which
+     * section it is for is refused.
+     */
+    private function csv(array $rows, ?string $header = null, string $class = '7 - Sampaguita'): UploadedFile
     {
         $header ??= 'LRN,Last Name,First Name,Middle Name,Birth Date (YYYY-MM-DD),Birthplace,Gender,Parent/Guardian,Address,Contact No.,Height (cm),Weight (kg)';
-        $content = $header."\r\n".implode("\r\n", $rows)."\r\n";
+        $content = $header.',Grade & Section'."\r\n"
+            .implode("\r\n", array_map(fn (string $row): string => $row.','.$class, $rows))."\r\n";
 
         return UploadedFile::fake()->createWithContent('class-list.csv', $content);
     }
@@ -356,6 +362,10 @@ class AdviserStudentImportTest extends TestCase
 
             $this->assertSame([], $sheet['missing'], 'The reader finds the LRN and the merged name caption.');
             $this->assertSame([], $sheet['rows'], 'A blank form carries no learners — not the band rows, not the caption, not the signature.');
+
+            // Headed with the adviser's own section, so it passes the check.
+            $this->assertSame('SAMPAGUITA', $sheet['classes'][0]['section'] ?? null);
+            $this->assertNull(ClassMasterlistTemplate::sectionRefusal('Grade 7', 'Sampaguita', $sheet['classes']));
         } finally {
             @unlink($path);
         }
@@ -548,19 +558,98 @@ class AdviserStudentImportTest extends TestCase
         $this->assertFalse(FeedingBeneficiarySummary::isEligible($learner));
     }
 
-    /** The sheet's own title row decides nothing; the adviser's class does. */
+    /**
+     * A masterlist is taken only by the adviser of the section it is for.
+     *
+     * The sheet is headed GRADE 7 - MATATAG: an adviser of another section —
+     * of the same grade or of another — is refused, nothing is previewed and
+     * nobody is enrolled.
+     */
     #[Test]
-    public function the_sheets_grade_title_never_overrides_the_advisers_own_class(): void
+    public function a_masterlist_for_another_section_is_refused_and_nothing_is_enrolled(): void
     {
-        // The sheet is headed GRADE 7 - MATATAG; this adviser teaches another.
-        $this->import($this->masterlist(), [
-            'assigned_grade_level' => 'Grade 8',
-            'assigned_section' => 'Sampaguita',
-        ])->assertSessionHas('success');
+        foreach ([
+            ['Grade 7', 'Sampaguita'],
+            ['Grade 8', 'MATATAG'],
+        ] as [$grade, $section]) {
+            $this->flushSession();
 
-        $sections = StudentHealthRecord::query()->get()->pluck('section')->unique()->values();
+            $this->withSession($this->adviserSession(['assigned_grade_level' => $grade, 'assigned_section' => $section]))
+                ->post(route('adviser.import'), ['students_file' => $this->masterlist()])
+                ->assertRedirect(route('dashboard.class-adviser', ['tab' => 'form']))
+                ->assertSessionHas('error', fn (string $message): bool => str_contains($message, 'This masterlist is for GRADE 7 - MATATAG')
+                    && str_contains($message, ClassMasterlistTemplate::classLabel($grade, $section))
+                    && str_contains($message, 'Nothing was uploaded'));
 
-        $this->assertSame(['Grade 8 / Sampaguita'], $sections->all());
+            $this->assertNull(session(AdviserController::PREVIEW_KEY), 'A refused masterlist was previewed.');
+        }
+
+        $this->assertSame(0, StudentHealthRecord::count());
+    }
+
+    /** The adviser's own section is matched without regard to case or spacing. */
+    #[Test]
+    public function the_advisers_own_section_is_matched_whatever_its_case(): void
+    {
+        $this->import($this->masterlist(), ['assigned_grade_level' => 'grade 7', 'assigned_section' => ' Matatag '])
+            ->assertSessionHas('import_report', fn (array $r) => $r['created'] === 4);
+
+        $this->assertSame(4, StudentHealthRecord::count());
+    }
+
+    /** A list that does not say which section it is for cannot be shown to be this one. */
+    #[Test]
+    public function a_list_that_names_no_section_is_refused(): void
+    {
+        $file = $this->sheet([
+            ['NO', "Student's Name (Last Name, First Name Middle Initial)", '', '', 'LRN', 'REMARKS'],
+            ['MALE', '', '', '', '', ''],
+            ['1', 'ABAD', 'MIGUEL', 'G.', '100000000004', ''],
+        ]);
+
+        $this->withSession($this->adviserSession(['assigned_section' => 'MATATAG']))
+            ->post(route('adviser.import'), ['students_file' => $file])
+            ->assertSessionHas('error', fn (string $message): bool => str_contains($message, 'does not say which section it is for'));
+
+        $this->assertNull(session(AdviserController::PREVIEW_KEY));
+        $this->assertSame(0, StudentHealthRecord::count());
+    }
+
+    /** A row naming another section in its own column fails the whole upload, by line. */
+    #[Test]
+    public function a_row_naming_another_section_fails_the_upload(): void
+    {
+        $content = "LRN,Last Name,First Name,Grade Level,Section\r\n"
+            ."100000000001,Dela Cruz,Juan,Grade 7,Sampaguita\r\n"
+            ."100000000002,Reyes,Ana,Grade 7,Rosal\r\n";
+
+        $this->withSession($this->adviserSession())
+            ->post(route('adviser.import'), ['students_file' => UploadedFile::fake()->createWithContent('list.csv', $content)])
+            ->assertSessionHas('error', fn (string $message): bool => str_contains($message, 'GRADE 7 - ROSAL (line 3)'));
+
+        $this->assertSame(0, StudentHealthRecord::count());
+
+        // The same list with only the adviser's own section goes through.
+        $content = "LRN,Last Name,First Name,Grade Level,Section\r\n"
+            ."100000000001,Dela Cruz,Juan,Grade 7,Sampaguita\r\n";
+
+        $this->import(UploadedFile::fake()->createWithContent('list.csv', $content))
+            ->assertSessionHas('import_report', fn (array $r) => $r['created'] === 1);
+    }
+
+    /** A refused upload leaves no older preview on screen to be confirmed. */
+    #[Test]
+    public function a_refused_upload_discards_the_previous_preview(): void
+    {
+        $this->withSession($this->adviserSession(['assigned_section' => 'MATATAG']))
+            ->post(route('adviser.import'), ['students_file' => $this->masterlist()]);
+        $this->assertIsArray(session(AdviserController::PREVIEW_KEY));
+
+        $this->post(route('adviser.import'), ['students_file' => $this->csv(['100000000009,Lim,Grace,,,,,,,,,'], null, '7 - Rosal')])
+            ->assertSessionHas('error');
+
+        $this->assertNull(session(AdviserController::PREVIEW_KEY));
+        $this->assertSame(0, StudentHealthRecord::count());
     }
 
     /**
@@ -571,6 +660,7 @@ class AdviserStudentImportTest extends TestCase
     public function a_masterlist_row_with_no_lrn_is_still_refused(): void
     {
         $file = $this->sheet([
+            ['GRADE 7 - MATATAG', '', '', '', '', ''],
             ['NO', "Student's Name (Last Name, First Name Middle Initial)", '', '', 'LRN', 'REMARKS'],
             ['MALE', '', '', '', '', ''],
             ['1', 'ABAD', 'MIGUEL', 'G.', '100000000004', ''],
@@ -583,7 +673,7 @@ class AdviserStudentImportTest extends TestCase
 
         $this->assertSame(1, $report['created']);
         $this->assertCount(1, $report['errors']);
-        $this->assertSame(4, $report['errors'][0]['line']);
+        $this->assertSame(5, $report['errors'][0]['line']);
     }
 
     /**
@@ -688,6 +778,7 @@ class AdviserStudentImportTest extends TestCase
     {
         $file = $this->workbook([
             'MALE' => [
+                ['GRADE 7 - MATATAG'],
                 ['NO', 'LAST NAME', 'FIRST NAME', 'LRN'],
                 ['1', 'Dela Cruz', 'Juan', '200000000001'],
                 ['2', 'Santos', 'Pedro', '200000000002'],
@@ -731,8 +822,10 @@ class AdviserStudentImportTest extends TestCase
     public function a_cover_tab_is_skipped_and_the_list_tab_is_read(): void
     {
         $file = $this->workbook([
+            // The cover tab is where this workbook names its class.
             'Summary' => [
                 ['CLASS MASTERLIST'],
+                ['GRADE 7 - MATATAG'],
                 ['Total enrolment', '2'],
             ],
             'Class List' => [

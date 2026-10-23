@@ -95,7 +95,7 @@ class MasterlistSheetScanner
     }
 
     /**
-     * @return array{matches_template: bool, mismatches: list<string>, document_seen: string, rows: list<array{line: int, data: array<string, string>}>, errors: list<array{line: int, message: string}>, total: int, note: string}
+     * @return array{matches_template: bool, mismatches: list<string>, document_seen: string, headings: list<string>, rows: list<array{line: int, data: array<string, string>}>, errors: list<array{line: int, message: string}>, total: int, note: string}
      */
     public function scan(UploadedFile $sheet): array
     {
@@ -328,8 +328,12 @@ class MasterlistSheetScanner
     }
 
     /**
+     * `headings` are the heading lines as the model copied them, so the class
+     * the sheet is for can be checked against the uploader's own section
+     * (ClassMasterlistTemplate::classIn / sectionRefusal).
+     *
      * @param  array<string, mixed>  $body
-     * @return array{matches_template: bool, mismatches: list<string>, document_seen: string, rows: list<array{line: int, data: array<string, string>}>, errors: list<array{line: int, message: string}>, total: int, note: string}
+     * @return array{matches_template: bool, mismatches: list<string>, document_seen: string, headings: list<string>, rows: list<array{line: int, data: array<string, string>}>, errors: list<array{line: int, message: string}>, total: int, note: string}
      */
     private function parse(array $body): array
     {
@@ -337,6 +341,10 @@ class MasterlistSheetScanner
 
         $document = is_array($payload['document'] ?? null) ? $payload['document'] : [];
         $seen = trim((string) ($document['seen'] ?? ''));
+        $headings = array_values(array_map(
+            fn ($line): string => $this->text($line),
+            array_filter((array) ($document['headings'] ?? []), 'is_scalar')
+        ));
         $mismatches = ClassMasterlistTemplate::mismatches($document);
 
         // The model's own verdict can only ever refuse. It is a second lock on
@@ -354,6 +362,7 @@ class MasterlistSheetScanner
                 'matches_template' => false,
                 'mismatches' => $mismatches,
                 'document_seen' => $seen,
+                'headings' => $headings,
                 'rows' => [],
                 'errors' => [],
                 'total' => 0,
@@ -416,6 +425,7 @@ class MasterlistSheetScanner
             'matches_template' => true,
             'mismatches' => [],
             'document_seen' => $seen,
+            'headings' => $headings,
             'rows' => $rows,
             'errors' => $errors,
             'total' => count($rows) + count($errors),

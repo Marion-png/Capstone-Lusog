@@ -211,6 +211,11 @@ class AdviserController extends Controller
 
         $file = $request->file('students_file');
 
+        // A new upload replaces the last preview, whether or not it is
+        // accepted: a refused file must never leave an older list on screen
+        // waiting to be confirmed.
+        $request->session()->forget(self::PREVIEW_KEY);
+
         // A picture is read by the scanner; everything else is a spreadsheet.
         // Both end at the same placeRows() write, so this decides how the class
         // list is *read* and nothing about how a learner is written.
@@ -232,6 +237,10 @@ class AdviserController extends Controller
             return redirect()
                 ->route('dashboard.class-adviser', ['tab' => 'form'])
                 ->with('error', 'The spreadsheet has no learner rows under its heading.');
+        }
+
+        if ($refusal = $this->masterlistSectionRefusal($request, $sheet['classes'])) {
+            return redirect()->route('dashboard.class-adviser', ['tab' => 'form'])->with('error', $refusal);
         }
 
         if (count($sheet['rows']) > StudentImportSheet::MAX_ROWS) {
@@ -579,6 +588,27 @@ class AdviserController extends Controller
     }
 
     /**
+     * Why an uploaded class masterlist is not this adviser's to upload, or
+     * null when it is.
+     *
+     * A masterlist is one section's list: it must name the section it is for
+     * — its class line ("GRADE 7 - MATATAG"), or a Grade / Section column —
+     * and that section must be the uploader's own, or the upload fails before
+     * anything is previewed or written. The rule is
+     * ClassMasterlistTemplate::sectionRefusal(), the one place it is decided.
+     *
+     * @param  list<array{grade: ?int, section: string, text: string}>  $classes
+     */
+    private function masterlistSectionRefusal(Request $request, array $classes): ?string
+    {
+        return ClassMasterlistTemplate::sectionRefusal(
+            (string) $request->session()->get('assigned_grade_level', ''),
+            (string) $request->session()->get('assigned_section', ''),
+            $classes
+        );
+    }
+
+    /**
      * The refusal for writing into a section whose school year is closed, or
      * null when it is open. A closed section is read-only.
      */
@@ -652,6 +682,14 @@ class AdviserController extends Controller
                 .' It is missing '.$this->readableList($scan['mismatches']).'.'
                 .' Download the masterlist above and upload that form.'
             ));
+        }
+
+        // The class line the model copied off the heading, judged by the same
+        // rule as a spreadsheet's.
+        $class = ClassMasterlistTemplate::classIn($scan['headings'] ?? []);
+
+        if ($refusal = $this->masterlistSectionRefusal($request, $class !== null ? [$class] : [])) {
+            return back()->with('error', $refusal);
         }
 
         if ($scan['rows'] === [] && $scan['errors'] === []) {
@@ -1011,8 +1049,9 @@ class AdviserController extends Controller
      * What is relaxed is **completeness, and only completeness**. Everything
      * that makes the import safe is untouched and shared with the form: the
      * row is still written by enrolLearner(), still scoped by
-     * applyAssignedClass() to this adviser's own class whatever the sheet's
-     * title row says, still refused when its LRN belongs to another class at
+     * applyAssignedClass() to this adviser's own class — and the whole file is
+     * refused unless the section it names is that class
+     * (masterlistSectionRefusal()) — still refused when its LRN belongs to another class at
      * the school, and every value still has to pass the same type and length
      * rules. A spreadsheet is still not a way around the rules — it is a way
      * to start a learner's record before the measuring has happened.

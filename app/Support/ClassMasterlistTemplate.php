@@ -363,6 +363,134 @@ final class ClassMasterlistTemplate
         return (string) preg_replace('/[^a-z0-9]/', '', mb_strtolower($value));
     }
 
+    // ── Which section a masterlist is for ───────────────────────────────
+
+    /**
+     * The class a masterlist's heading names, read off its heading lines.
+     *
+     * The form sets it as one line — "GRADE 7 - MATATAG" (classLabel()) — and
+     * a school's own sheet may label the two instead ("Grade Level: 7",
+     * "Section: MATATAG", on one line or two). Null when no line names a
+     * section: a grade on its own says which grade, not which class.
+     *
+     * @param  list<string>  $lines  the heading lines, top to bottom
+     * @return array{grade: ?int, section: string, text: string}|null
+     */
+    public static function classIn(array $lines): ?array
+    {
+        $grade = null;
+        $gradeText = '';
+
+        foreach ($lines as $line) {
+            $text = trim((string) preg_replace('/\s+/u', ' ', (string) $line));
+
+            if ($text === '') {
+                continue;
+            }
+
+            // "Section: MATATAG", alone or after "Grade Level: 7".
+            if (preg_match('/\bsection\b\s*[:\-–—]?\s*(.+)$/iu', $text, $m) === 1) {
+                $section = self::trimLabelledField($m[1]);
+
+                // "Grade & Section: 7 - MATATAG"
+                if (preg_match('/^(\d{1,2})\s*[-–—\/]\s*(.+)$/u', $section, $split) === 1) {
+                    return ['grade' => (int) $split[1], 'section' => trim($split[2]), 'text' => $text];
+                }
+
+                if (preg_match('/\bgrade(?:\s*level)?\b\s*[:\-–—]?\s*(\d{1,2})\b/iu', $text, $g) === 1) {
+                    $grade = (int) $g[1];
+                }
+
+                if (self::compare($section) !== '') {
+                    return ['grade' => $grade, 'section' => $section, 'text' => trim($gradeText.' '.$text)];
+                }
+
+                continue;
+            }
+
+            if (preg_match('/^grade(?:\s*level)?\s*[:\-–—]?\s*(\d{1,2})\b(.*)$/iu', $text, $m) !== 1) {
+                continue;
+            }
+
+            $rest = trim($m[2]);
+            // A qualifier glued to the grade ("GRADE 7/SPED - SPED-A") is part
+            // of the grade, not of the section.
+            $section = preg_match('/^\S*?\s*[-–—:]\s*(.+)$/u', $rest, $r) === 1
+                ? trim($r[1])
+                : trim((string) preg_replace('/^\/\S*\s*/u', '', $rest));
+
+            if (self::compare($section) !== '') {
+                return ['grade' => (int) $m[1], 'section' => $section, 'text' => $text];
+            }
+
+            // "Grade Level: 7" on a line of its own; the section may follow.
+            $grade = (int) $m[1];
+            $gradeText = $text;
+        }
+
+        return null;
+    }
+
+    /** "MATATAG School Year: 2026 - 2027" → "MATATAG": stop at the next labelled field. */
+    private static function trimLabelledField(string $value): string
+    {
+        return trim((string) preg_replace(
+            '/\s+\b(school\s*year|s\.?\s*y\.?|adviser|grade(?:\s*level)?|track|strand|region|division|district)\b.*$/iu',
+            '',
+            trim($value)
+        ));
+    }
+
+    /**
+     * Whether a stated class is this one: the same section — compared without
+     * regard to case, spacing or punctuation — and the same grade where the
+     * masterlist names one.
+     *
+     * @param  array{grade: ?int, section: string, text: string}  $stated
+     */
+    public static function namesClass(array $stated, string $gradeLevel, string $section): bool
+    {
+        if (self::compare($stated['section']) === '' || self::compare($stated['section']) !== self::compare($section)) {
+            return false;
+        }
+
+        return $stated['grade'] === null || $stated['grade'] === LearnerPlacement::gradeNumber($gradeLevel);
+    }
+
+    /**
+     * Why a masterlist may not be uploaded into this adviser's section, or
+     * null when it may.
+     *
+     * A class masterlist is one section's list, so it is taken only by the
+     * adviser of that section: it has to name the section it is for, and that
+     * has to be the uploader's own. Without this a masterlist for another
+     * section of the same grade would carry every one of its learners into the
+     * wrong class, because a promoted learner waits for a grade, not for a
+     * section. Nothing is read further, previewed or written when it fails.
+     *
+     * @param  list<array{grade: ?int, section: string, text: string}>  $stated  every class the file names
+     */
+    public static function sectionRefusal(string $gradeLevel, string $section, array $stated): ?string
+    {
+        $own = self::classLabel($gradeLevel, $section);
+
+        if (trim($gradeLevel) === '' || trim($section) === '') {
+            return 'Your account has no assigned section, so the masterlist cannot be checked against it. Nothing was uploaded.';
+        }
+
+        if ($stated === []) {
+            return 'The masterlist does not say which section it is for. Upload the '.self::TITLE.' of your section ('.$own.'). Nothing was uploaded.';
+        }
+
+        foreach ($stated as $class) {
+            if (! self::namesClass($class, $gradeLevel, $section)) {
+                return 'This masterlist is for '.$class['text'].', not your section ('.$own.'). Nothing was uploaded.';
+            }
+        }
+
+        return null;
+    }
+
     /**
      * "GRADE 7 - MATATAG", as the form sets the class line.
      *

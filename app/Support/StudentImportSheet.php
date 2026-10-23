@@ -66,6 +66,16 @@ class StudentImportSheet
         'height' => 'height_cm',
         'weightkg' => 'weight_kg',
         'weight' => 'weight_kg',
+        // The class a row says it belongs to. Read so a list naming another
+        // section can be refused (ClassMasterlistTemplate::sectionRefusal);
+        // the learner is always written into the uploader's own section.
+        'gradelevel' => 'grade_level',
+        'grade' => 'grade_level',
+        'section' => 'section',
+        'gradesection' => 'grade_section',
+        'gradeandsection' => 'grade_section',
+        'gradelevelsection' => 'grade_section',
+        'gradelevelandsection' => 'grade_section',
     ];
 
     /** The fields a row must carry for the reader to hand it on at all. */
@@ -88,13 +98,18 @@ class StudentImportSheet
     ];
 
     /**
-     * @return array{rows: list<array{line: int, data: array<string, string>}>, missing: list<string>, total: int}
+     * `classes` is every class the file names — the class line in a tab's
+     * heading ("GRADE 7 - MATATAG"), and a Grade / Section column on its rows
+     * — so the upload can be refused when it is not the uploader's section.
+     *
+     * @return array{rows: list<array{line: int, data: array<string, string>}>, missing: list<string>, total: int, classes: list<array{grade: ?int, section: string, text: string}>}
      */
     public static function read(UploadedFile $file): array
     {
         $rows = [];
         $missing = [];
         $read = false;
+        $classes = [];
 
         // **Every worksheet, not just the first.** A school that keeps its
         // class masterlist with one tab per sex — a MALE sheet and a FEMALE
@@ -104,6 +119,13 @@ class StudentImportSheet
         // found again per tab rather than once for the file.
         foreach (self::readSheets($file) as $sheet) {
             $result = self::readSheet($sheet['rows'], $sheet['name'], count($rows));
+
+            // A cover tab with no list still names its class. One entry per
+            // distinct class, so a forty-row Section column is one statement.
+            foreach ($result['classes'] as $class) {
+                $key = mb_strtolower((string) preg_replace('/[^\p{L}\p{N}]/u', '', ($class['grade'] ?? '').'|'.$class['section']));
+                $classes[$key] ??= $class;
+            }
 
             if ($result['missing'] !== []) {
                 // Remember why the first unreadable tab failed, in case no tab
@@ -119,10 +141,10 @@ class StudentImportSheet
         }
 
         if (! $read) {
-            return ['rows' => [], 'missing' => $missing !== [] ? $missing : self::REQUIRED_HEADERS, 'total' => 0];
+            return ['rows' => [], 'missing' => $missing !== [] ? $missing : self::REQUIRED_HEADERS, 'total' => 0, 'classes' => array_values($classes)];
         }
 
-        return ['rows' => $rows, 'missing' => [], 'total' => count($rows)];
+        return ['rows' => $rows, 'missing' => [], 'total' => count($rows), 'classes' => array_values($classes)];
     }
 
     /**
@@ -133,7 +155,7 @@ class StudentImportSheet
      *                             split by sex is where that sex is recorded
      * @param  int  $lineOffset  rows already read from earlier tabs, so a
      *                           reported line is unique across the workbook
-     * @return array{rows: list<array{line: int, data: array<string, string>}>, missing: list<string>}
+     * @return array{rows: list<array{line: int, data: array<string, string>}>, missing: list<string>, classes: list<array{grade: ?int, section: string, text: string}>}
      */
     private static function readSheet(array $matrix, string $sheetName, int $lineOffset): array
     {
@@ -149,8 +171,19 @@ class StudentImportSheet
             }
         }
 
+        // The class the heading names: the lines above the table, or the
+        // whole tab when it holds no table at all (a cover page).
+        $headingClass = ClassMasterlistTemplate::classIn(array_map(
+            fn (array $cells): string => implode(' ', array_filter(
+                array_map(fn ($cell): string => trim((string) $cell), $cells),
+                fn (string $cell): bool => $cell !== ''
+            )),
+            array_slice($matrix, 0, $headerIndex ?? count($matrix))
+        ));
+        $classes = $headingClass !== null ? [$headingClass] : [];
+
         if ($headerIndex === null) {
-            return ['rows' => [], 'missing' => self::REQUIRED_HEADERS];
+            return ['rows' => [], 'missing' => self::REQUIRED_HEADERS, 'classes' => $classes];
         }
 
         // A masterlist names the three columns once, in a merged caption —
@@ -159,7 +192,7 @@ class StudentImportSheet
 
         $missing = array_values(array_diff(self::REQUIRED_HEADERS, $columns));
         if ($missing !== []) {
-            return ['rows' => [], 'missing' => $missing];
+            return ['rows' => [], 'missing' => $missing, 'classes' => $classes];
         }
 
         $rows = [];
@@ -205,10 +238,50 @@ class StudentImportSheet
                 $data['gender'] = $band;
             }
 
-            $rows[] = ['line' => $lineOffset + $index + 1, 'data' => $data];
+            $line = $lineOffset + $index + 1;
+
+            // A row that names its own class is read as a statement too.
+            $rowClass = self::classOfRow($data, $line);
+            if ($rowClass !== null) {
+                $classes[] = $rowClass;
+            }
+
+            $rows[] = ['line' => $line, 'data' => $data];
         }
 
-        return ['rows' => $rows, 'missing' => []];
+        return ['rows' => $rows, 'missing' => [], 'classes' => $classes];
+    }
+
+    /**
+     * The class a learner row names in its own Grade / Section columns, or
+     * null where it names no section.
+     *
+     * @param  array<string, string>  $data
+     * @return array{grade: ?int, section: string, text: string}|null
+     */
+    private static function classOfRow(array $data, int $line): ?array
+    {
+        $combined = trim((string) ($data['grade_section'] ?? ''));
+        $section = trim((string) ($data['section'] ?? ''));
+        $grade = trim((string) ($data['grade_level'] ?? ''));
+
+        if ($combined !== '') {
+            $class = ClassMasterlistTemplate::classIn([preg_match('/^\d/', $combined) === 1 ? 'Grade '.$combined : $combined]);
+
+            if ($class !== null) {
+                return ['grade' => $class['grade'], 'section' => $class['section'], 'text' => $combined.' (line '.$line.')'];
+            }
+        }
+
+        if ($section === '') {
+            return null;
+        }
+
+        return [
+            'grade' => LearnerPlacement::gradeNumber($grade),
+            'section' => $section,
+            'text' => ClassMasterlistTemplate::classLabel($grade, $section).' (line '.$line.')',
+        ];
     }
 
     /**
