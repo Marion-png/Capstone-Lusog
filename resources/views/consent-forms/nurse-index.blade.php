@@ -52,13 +52,26 @@
          "consented to all" would hide the very learners whose letter has to be
          read before a service is given.
 
-         The school year sits first and in the same form, so changing either
-         control keeps the other's choice. --}}
+         The school year sits first and in the same form, so changing any
+         control keeps the others' choices. The program comes before the
+         answer: it decides which letters are on the list, and the answer
+         narrows those. --}}
+    @php
+        $programName = $programFilter !== '' ? HealthConsentForm::serviceName($programFilter) : '';
+        $heading = $consentFilter !== '' ? $consentFilters[$consentFilter] : 'All Consents on File';
+    @endphp
     <form method="GET" class="cf-filter" id="nurseConsentFilter">
         <label for="consentYear">School year</label>
         <select name="school_year" id="consentYear" onchange="this.form.submit()">
             @foreach ($schoolYears as $year)
                 <option value="{{ $year }}" @selected($schoolYear === $year)>S.Y. {{ $year }}{{ $year === $currentSchoolYear ? ' (current)' : '' }}</option>
+            @endforeach
+        </select>
+        <label for="consentProgram">Program</label>
+        <select name="program" id="consentProgram" onchange="this.form.submit()">
+            <option value="">All programs</option>
+            @foreach ($programCounts as $key => $count)
+                <option value="{{ $key }}" @selected($programFilter === $key)>{{ HealthConsentForm::serviceName($key) }} ({{ $count }})</option>
             @endforeach
         </select>
         <label for="consentFilter">Parent's answer</label>
@@ -69,7 +82,7 @@
             @endforeach
         </select>
         <noscript><button type="submit" class="cf-btn cf-btn-outline">Apply</button></noscript>
-        @if ($consentFilter !== '')
+        @if ($consentFilter !== '' || $programFilter !== '')
             <a href="{{ route('consent-forms.nurse-index', $yearQuery) }}" class="cf-filter-clear">Clear</a>
         @endif
     </form>
@@ -77,7 +90,7 @@
     <div class="cf-card">
         <div class="cf-card-head">
             <h2>
-                {{ $consentFilter !== '' ? $consentFilters[$consentFilter] : 'All Consents on File' }}
+                {{ $programName !== '' ? $programName.' · '.$heading : $heading }}
                 <span class="cf-count">{{ $rows->count() }}</span>
             </h2>
             <span class="cf-muted">S.Y. {{ $schoolYear }}</span>
@@ -87,9 +100,15 @@
                  says which question it answered — never a blank box reading as
                  "no consent forms exist". --}}
             <div class="cf-empty">
-                @if ($consentFilter !== '')
-                    No learner's form reads &ldquo;{{ $consentFilters[$consentFilter] }}&rdquo;.
-                    <a href="{{ route('consent-forms.nurse-index', $yearQuery) }}">Show all {{ $totalForms }}</a>.
+                @if ($consentFilter !== '' || $programFilter !== '')
+                    @php
+                        $asked = array_filter([
+                            $programFilter !== '' ? 'asks about '.$programName : '',
+                            $consentFilter !== '' ? 'reads “'.$consentFilters[$consentFilter].'”' : '',
+                        ]);
+                    @endphp
+                    No learner's form {{ implode(' and ', $asked) }}.
+                    <a href="{{ route('consent-forms.nurse-index', $yearQuery) }}">Show every form</a>.
                 @elseif ($isCurrentYear)
                     No consent forms on file yet.
                 @else
@@ -102,7 +121,8 @@
                     <tr>
                         <th>Learner</th>
                         <th>Grade / Section</th>
-                        <th>Consent</th>
+                        <th>{{ $programName !== '' ? 'Consent to '.$programName : 'Consent' }}</th>
+                        <th>Programs consented</th>
                         <th>Signed</th>
                         <th>Status</th>
                         <th></th>
@@ -122,15 +142,51 @@
                             'awaiting' => ['Awaiting response', '#8A5A06', '#FDF4E2'],
                             'unrecorded' => ['Answer not recorded', '#475569', '#f1f5f9'],
                         ];
+
+                        // With one program chosen, the badge answers for that
+                        // program. "Yes, except" cannot be settled here: what
+                        // the parent left out is handwritten, so the nurse is
+                        // told to read it rather than handed a guess.
+                        if ($programName !== '') {
+                            $answerLabels[HealthConsentForm::CONSENT_ALL][0] = 'Consented';
+                            $answerLabels[HealthConsentForm::CONSENT_SPECIFIC][0] = 'Check the exceptions';
+                        }
                     @endphp
                     @foreach ($rows as $row)
                         @php
                             [$cLabel, $cFg, $cBg] = $answerLabels[$row['answer']] ?? ['—', '#475569', '#f1f5f9'];
+                            $programNames = HealthConsentForm::serviceNames($row['programs']);
                         @endphp
                         <tr>
                             <td><b>{{ $row['name'] }}</b><br><span style="color:var(--muted); font-size:.74rem;">LRN {{ $row['lrn'] }}</span></td>
                             <td>{{ $row['grade_section'] !== '' ? $row['grade_section'] : '—' }}</td>
                             <td><span class="cf-badge" style="background: {{ $cBg }}; color: {{ $cFg }};">{{ $cLabel }}</span></td>
+                            <td class="cf-programs">
+                                @switch($row['answer'])
+                                    @case(HealthConsentForm::CONSENT_ALL)
+                                        @if ($programNames !== [])
+                                            {{ implode(' · ', $programNames) }}
+                                        @else
+                                            <span class="cf-muted">No program listed on the letter</span>
+                                        @endif
+                                        @break
+                                    @case(HealthConsentForm::CONSENT_SPECIFIC)
+                                        {{ implode(' · ', $programNames) }}
+                                        <div class="cf-except">
+                                            @if ($row['exceptions'] !== '')
+                                                Except, as written: &ldquo;{{ $row['exceptions'] }}&rdquo;
+                                            @else
+                                                Except: nothing written &mdash; open the form
+                                            @endif
+                                        </div>
+                                        @break
+                                    @case(HealthConsentForm::CONSENT_DENY)
+                                        None
+                                        @break
+                                    @default
+                                        <span class="cf-muted">No answer yet</span>
+                                @endswitch
+                            </td>
                             <td>
                                 @if ($row['answer'] === 'awaiting')
                                     <span class="cf-muted">{{ $row['dated_label'] }}</span>

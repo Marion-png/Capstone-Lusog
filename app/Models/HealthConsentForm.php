@@ -91,6 +91,28 @@ class HealthConsentForm extends Model
         ],
     ];
 
+    /**
+     * A short name for each service, for lists and filters where the printed
+     * label — written for a parent reading the letter — will not fit. Keyed
+     * exactly as SERVICES is; a sub-item's name reads under its parent's
+     * ("Deworming — worms"), so it is written without it.
+     *
+     * @var array<string, string>
+     */
+    public const SERVICE_NAMES = [
+        'checkup' => 'Check-up',
+        'dental' => 'Dental check-up',
+        'deworming' => 'Deworming',
+        'deworming_worms' => 'worms',
+        'deworming_schistosomiasis' => 'schistosomiasis',
+        'deworming_filariasis' => 'filariasis',
+        'tas' => 'TAS (filariasis survey)',
+        'iron' => 'Iron supplementation',
+        'vitamin_a' => 'Vitamin A',
+        'immunization' => 'Immunization',
+        'immunization_grade7' => 'Grade 7 MR, Td',
+    ];
+
     protected $fillable = [
         'token', 'school_year', 'institution_id',
         'division', 'school_name', 'school_address',
@@ -164,6 +186,81 @@ class HealthConsentForm extends Model
     public function hasService(string $key): bool
     {
         return in_array($key, $this->services ?? [], true);
+    }
+
+    /** The service a sub-item sits under, or null for a top-level one. */
+    public static function parentService(string $key): ?string
+    {
+        foreach (self::SERVICES as $parent => $service) {
+            if (array_key_exists($key, $service['children'])) {
+                return $parent;
+            }
+        }
+
+        return null;
+    }
+
+    /** "Deworming", or "Deworming — worms" for a sub-item. */
+    public static function serviceName(string $key): string
+    {
+        $name = self::SERVICE_NAMES[$key] ?? (self::serviceLabels()[$key] ?? $key);
+        $parent = self::parentService($key);
+
+        return $parent !== null ? self::SERVICE_NAMES[$parent].' — '.$name : $name;
+    }
+
+    /**
+     * Whether a list of service keys covers one service.
+     *
+     * The printed form ticks a heading ("Pag Purga") and the sub-items under
+     * it separately, and either says the letter is about that service: a
+     * heading covers its sub-items, and a sub-item says its heading is on the
+     * letter.
+     *
+     * @param  list<string>  $keys
+     */
+    public static function coversService(array $keys, string $service): bool
+    {
+        if (in_array($service, $keys, true)) {
+            return true;
+        }
+
+        $parent = self::parentService($service);
+
+        if ($parent !== null) {
+            return in_array($parent, $keys, true);
+        }
+
+        return array_intersect(array_keys(self::SERVICES[$service]['children'] ?? []), $keys) !== [];
+    }
+
+    /**
+     * The services in a list, named in the letter's own order, with any
+     * sub-items under their heading: "Deworming (worms, filariasis)".
+     *
+     * @param  list<string>  $keys
+     * @return list<string>
+     */
+    public static function serviceNames(array $keys): array
+    {
+        $names = [];
+
+        foreach (self::SERVICES as $parent => $service) {
+            $children = array_values(array_filter(
+                array_keys($service['children']),
+                fn (string $child): bool => in_array($child, $keys, true),
+            ));
+
+            if (! in_array($parent, $keys, true) && $children === []) {
+                continue;
+            }
+
+            $names[] = self::SERVICE_NAMES[$parent].($children !== []
+                ? ' ('.implode(', ', array_map(fn (string $child): string => self::SERVICE_NAMES[$child], $children)).')'
+                : '');
+        }
+
+        return $names;
     }
 
     /** Display label + badge color per status, used across all role views. */

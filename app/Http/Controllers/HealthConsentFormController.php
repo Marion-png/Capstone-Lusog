@@ -661,6 +661,28 @@ class HealthConsentFormController extends Controller
 
         $rows = $this->nurseConsentRows($request, $schoolYear);
 
+        // The program the nurse is planning, as a scope: only the learners
+        // whose parent was asked about it, so "who may I deworm tomorrow" is
+        // one choice. Counted before narrowing, so every option says how many
+        // letters it would list.
+        $programCounts = [];
+        foreach (HealthConsentForm::serviceKeys() as $key) {
+            $programCounts[$key] = $rows->filter(
+                fn (array $row): bool => HealthConsentForm::coversService($row['programs'], $key)
+            )->count();
+        }
+
+        $program = trim((string) $request->query('program', ''));
+        if (! array_key_exists($program, $programCounts)) {
+            $program = '';
+        }
+
+        if ($program !== '') {
+            $rows = $rows->filter(
+                fn (array $row): bool => HealthConsentForm::coversService($row['programs'], $program)
+            )->values();
+        }
+
         // Every answer on a row is decrypted at rest, so the filter runs in
         // PHP after the fetch — never as a WHERE. A value off the query string
         // that is not one of the answers narrows nothing, rather than emptying
@@ -684,6 +706,8 @@ class HealthConsentFormController extends Controller
             'rows' => $rows,
             'consentFilter' => $choice,
             'consentFilters' => self::NURSE_CONSENT_FILTERS,
+            'programFilter' => $program,
+            'programCounts' => $programCounts,
             'totalForms' => $total,
             'schoolYear' => $schoolYear,
             'schoolYears' => $schoolYears,
@@ -815,6 +839,14 @@ class HealthConsentFormController extends Controller
             'status_bg' => $badge['bg'],
             'status_fg' => $badge['fg'],
             'source' => 'letter',
+            // The programs the letter asked about, as the school ticked them,
+            // and — for "yes, except" — the parent's own words for what they
+            // left out. Those are handwritten, so they are shown as written
+            // rather than matched to a program here.
+            'programs' => array_values(array_filter((array) ($form->services ?? []), 'is_string')),
+            'exceptions' => $form->consent_choice === HealthConsentForm::CONSENT_SPECIFIC
+                ? trim((string) $form->consent_exceptions)
+                : '',
             'has_scan' => $form->paper_form_path !== null,
             'view_url' => route('consent-forms.nurse-show', $form),
             'view_label' => 'View',
@@ -839,6 +871,14 @@ class HealthConsentFormController extends Controller
 
         $hasFile = $upload->file_path !== null;
 
+        // An upload is filed against one program (`program_type`), named the
+        // way the catalogue names it.
+        $program = array_search(
+            strtolower(trim((string) $upload->program_type)),
+            array_map('strtolower', HealthConsentForm::SERVICE_NAMES),
+            true,
+        );
+
         return [
             'lrn' => (string) $lrn,
             'name' => (string) ($record?->student_name ?? 'Unknown'),
@@ -850,6 +890,10 @@ class HealthConsentFormController extends Controller
             'status_bg' => '#f1f5f9',
             'status_fg' => '#475569',
             'source' => 'upload',
+            'programs' => $program !== false ? [$program] : [],
+            'exceptions' => $answer === HealthConsentForm::CONSENT_SPECIFIC
+                ? trim((string) $upload->partial_exception)
+                : '',
             'has_scan' => $hasFile,
             // The scan itself is the whole record here, so View opens it —
             // and only when there is one. `parental-consent.download` is
