@@ -70,6 +70,61 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
 .cf-programs { font-size: .8rem; line-height: 1.45; min-width: 180px; }
 .cf-except { margin-top: 3px; color: #8A5A06; font-weight: 600; }
 
+/* The clinic's consent list: the name search, the line naming the scope, and
+   the four figures over the learners the chosen service applies to. */
+.cf-search {
+    font-family: inherit; font-size: .82rem; color: var(--text);
+    border: 1px solid var(--border); border-radius: 9px; padding: 8px 12px;
+    background: #fff; min-width: 180px;
+}
+.cf-search:focus { outline: none; border-color: var(--g500); }
+.cf-context { font-size: .8rem; color: var(--muted); margin: -4px 0 14px; }
+.cf-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.cf-stat { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; }
+.cf-stat-label { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.cf-stat-value { font-size: 1.6rem; font-weight: 700; margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
+.cf-stat-hint { font-size: .74rem; color: var(--muted); line-height: 1.4; }
+.cf-stat.is-primary { background: var(--g700); border-color: var(--g700); color: #fff; }
+.cf-stat.is-primary .cf-stat-label,
+.cf-stat.is-primary .cf-stat-hint { color: rgba(255,255,255,.85); }
+.cf-table-wrap { overflow-x: auto; }
+.cf-tag { display: inline-block; margin-left: 6px; font-size: .66rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--g100); color: #14653C; border: 1px solid var(--g300); vertical-align: middle; }
+.cf-lrn { color: var(--muted); font-size: .74rem; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.cf-dated { margin-top: 4px; font-size: .72rem; }
+
+/* One standing per learner, worded by ConsentStanding. The word carries the
+   meaning; the colour only repeats it. */
+.cf-badge.is-consented { background: #E7F5EC; color: #14653C; }
+.cf-badge.is-consented_with_exceptions,
+.cf-badge.is-check_exceptions { background: #FDF4E2; color: #8A5A06; }
+.cf-badge.is-declined { background: #FCECEC; color: #A32B2B; }
+.cf-badge.is-no_form { background: #f1f5f9; color: #475569; }
+.cf-badge.is-not_on_form,
+.cf-badge.is-not_applicable,
+.cf-badge.is-not_enrolled { background: #fff; color: var(--muted); border: 1px dashed var(--border); }
+
+/* One learner's form, as the clinic reads it. */
+.cf-close { margin-left: auto; }
+.cf-empty-note { font-size: .88rem; margin-bottom: 6px; }
+.cf-photo { position: relative; margin: 0 0 12px; max-width: 520px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #f7f9f8; }
+.cf-photo img { display: block; width: 100%; height: auto; }
+.cf-photo-mark {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 1.15rem; font-weight: 700; letter-spacing: .12em; color: rgba(163,43,43,.55);
+    transform: rotate(-24deg); pointer-events: none; text-align: center;
+}
+.cf-dialog { border: none; border-radius: var(--radius); padding: 16px; max-width: min(96vw, 1100px); max-height: 94vh; overflow: auto; box-shadow: var(--shadow); }
+.cf-dialog::backdrop { background: rgba(15, 30, 22, .6); }
+.cf-photo-full { max-width: none; }
+.cf-kv { display: grid; grid-template-columns: minmax(130px, 200px) 1fr; gap: 8px 16px; font-size: .84rem; margin-top: 12px; }
+.cf-kv dt { font-weight: 700; color: #3E5348; }
+.cf-kv dd { margin: 0; }
+.cf-footnote { font-size: .78rem; color: var(--muted); margin-top: 4px; }
+@media (max-width: 560px) {
+    .cf-kv { grid-template-columns: 1fr; gap: 2px; }
+    .cf-kv dd { margin-bottom: 8px; }
+}
+
 /* ── Buttons ─────────────────────────────────────────────────── */
 .cf-btn { display: inline-flex; align-items: center; gap: 7px; border: none; cursor: pointer; font-family: inherit; font-size: .8rem; font-weight: 600; padding: 9px 16px; border-radius: 9px; text-decoration: none; transition: background .15s, color .15s, transform .1s; }
 .cf-btn:active { transform: translateY(1px); }

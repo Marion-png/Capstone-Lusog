@@ -61,6 +61,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Simulated Data
+    |--------------------------------------------------------------------------
+    |
+    | Turn on only in a copy of the app whose every learner and consent form
+    | is made up. The clinic's consent pages then say so in a banner and
+    | watermark every form photo. Off by default, and never on a deployment
+    | holding real learners — there the banner would be untrue.
+    |
+    */
+
+    'simulated_data' => (bool) env('SIMULATED_DATA', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | System Admin Credentials
     |--------------------------------------------------------------------------
     |

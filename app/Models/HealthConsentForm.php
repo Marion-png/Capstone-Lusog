@@ -113,6 +113,26 @@ class HealthConsentForm extends Model
         'immunization_grade7' => 'Grade 7 MR, Td',
     ];
 
+    /**
+     * The services a nurse plans a round of — one per thing given to a child,
+     * so a heading that only groups sub-items ("Pag Purga") is not one of
+     * them. A letter that ticked a heading covers its sub-items
+     * (coversService()).
+     *
+     * @var array<string, string>
+     */
+    public const PLANNED_SERVICES = [
+        'checkup' => 'Check-up (Nurse or Doctor)',
+        'dental' => 'Dental check-up',
+        'deworming_worms' => 'Deworming – Worms (Bitok)',
+        'deworming_schistosomiasis' => 'Deworming – Schistosomiasis',
+        'deworming_filariasis' => 'Deworming – Filariasis',
+        'tas' => 'TAS – Lymphatic Filariasis survey',
+        'iron' => 'Iron supplementation',
+        'vitamin_a' => 'Vitamin A supplementation',
+        'immunization_grade7' => 'Immunization – MR, Td (Grade 7 only)',
+    ];
+
     protected $fillable = [
         'token', 'school_year', 'institution_id',
         'division', 'school_name', 'school_address',

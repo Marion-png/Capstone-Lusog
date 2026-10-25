@@ -251,23 +251,31 @@ class ConsentHistoryTest extends TestCase
             ->assertDontSee('222222222222')
             ->assertSee('<option value="'.$last.'"', false);
 
-        $html = $this->flushSession()->withSession($this->nurseSession())
+        // Last year's list carries both, by masked LRN — the full one never
+        // reaches the page.
+        $this->flushSession()->withSession($this->nurseSession())
             ->get(route('consent-forms.nurse-index', ['school_year' => $last]))
             ->assertOk()
             ->assertSee('id="pastYearNotice"', false)
-            ->assertSee('111111111111')
-            ->assertSee('Consented to all services')
-            ->assertSee('222222222222')
-            ->assertSee('Did not consent')
-            ->getContent();
+            ->assertSee('•••••••11111')
+            ->assertSee('>Consented</span>', false)
+            ->assertSee('•••••••22222')
+            ->assertSee('>Declined</span>', false)
+            ->assertDontSee('111111111111')
+            ->assertDontSee('222222222222');
 
-        $this->assertStringContainsString(route('parental-consent.download', $upload->id), $html);
-
-        // Clearing the answer filter keeps the year on screen.
+        // The scan opens from the learner's own page, in that year.
         $this->flushSession()->withSession($this->nurseSession())
-            ->get(route('consent-forms.nurse-index', ['school_year' => $last, 'consent' => 'agreed']))
+            ->get(route('consent-forms.nurse-learner', $scanned))
             ->assertOk()
+            ->assertSee(e(route('parental-consent.download', $upload->id)), false)
             ->assertSee(e(route('consent-forms.nurse-index', ['school_year' => $last])), false);
+
+        // Clear filters goes back to every default, the current year included.
+        $this->flushSession()->withSession($this->nurseSession())
+            ->get(route('consent-forms.nurse-index', ['school_year' => $last, 'status' => 'consented']))
+            ->assertOk()
+            ->assertSee('href="'.e(route('consent-forms.nurse-index')).'" class="cf-filter-clear"', false);
 
         // The letter opens, and leads back to the year it belongs to.
         $form = HealthConsentForm::where('student_lrn', '111111111111')->firstOrFail();
@@ -305,13 +313,13 @@ class ConsentHistoryTest extends TestCase
         $this->withSession($this->nurseSession())
             ->get(route('consent-forms.nurse-index'))
             ->assertOk()
-            ->assertSee('Consented to all services')
-            ->assertDontSee('Did not consent');
+            ->assertSee('>Consented</span>', false)
+            ->assertDontSee('>Declined</span>', false);
 
         $this->flushSession()->withSession($this->nurseSession())
             ->get(route('consent-forms.nurse-index', ['school_year' => $last]))
             ->assertOk()
-            ->assertSee('Did not consent')
-            ->assertDontSee('Consented to all services');
+            ->assertSee('>Declined</span>', false)
+            ->assertDontSee('>Consented</span>', false);
     }
 }

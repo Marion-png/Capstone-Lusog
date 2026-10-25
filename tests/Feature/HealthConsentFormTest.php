@@ -6,6 +6,7 @@ use App\Models\HealthConsentForm;
 use App\Models\Institution;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
+use App\Support\ConsentStanding;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -282,7 +283,45 @@ class HealthConsentFormTest extends TestCase
     }
 
     /**
-     * The nurse narrows the list by what the parent answered.
+     * Another learner on the roll at the school these sessions are scoped to.
+     * The clinic's list is the year's roll, so a learner with no record there
+     * is not on it — whatever forms carry their LRN.
+     */
+    private function learnerRecord(string $lrn, string $name): StudentHealthRecord
+    {
+        $institution = Institution::find(1)
+            ?? Institution::create(['name' => 'Sta. Ana National High School', 'status' => 'active']);
+
+        return StudentHealthRecord::create([
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'institution_id' => $institution->id,
+            'student_id' => $lrn,
+            'student_name' => $name,
+            'school_name' => 'Sta. Ana National High School',
+            'section' => 'Grade 7/SPED / SPED-A',
+        ]);
+    }
+
+    /**
+     * A learner is on the list exactly when their own row link is. A name is
+     * not a safe marker: the nurse topbar's learner search embeds the whole
+     * roster, so every name is in the page whatever the table holds.
+     */
+    private function rowLink(StudentHealthRecord $record): string
+    {
+        return e(route('consent-forms.nurse-learner', $record));
+    }
+
+    private function nurseList(array $query = []): string
+    {
+        return $this->withSession($this->nurseSession())
+            ->get(route('consent-forms.nurse-index', $query))
+            ->assertOk()
+            ->getContent();
+    }
+
+    /**
+     * The nurse narrows the list by the parent's answer.
      *
      * `consent_choice` is encrypted at rest, so the filter runs in PHP after
      * the fetch — never as a WHERE, which would match nothing against
@@ -291,9 +330,11 @@ class HealthConsentFormTest extends TestCase
     #[Test]
     public function the_nurse_can_filter_the_list_by_the_parents_answer(): void
     {
-        $agreed = $this->signAsParent($this->sendToParent($this->createDraft()));
+        $juan = $this->makeRecord();
+        $this->signAsParent($this->sendToParent($this->createDraft()));
 
         // A second learner on the same roll, whose parent refused.
+        $rosa = $this->learnerRecord('123456789013', 'Refuser, Rosa');
         $session = $this->adviserSession();
         $session['school_health_card_records'][] = [
             'last_name' => 'Refuser',
@@ -318,76 +359,60 @@ class HealthConsentFormTest extends TestCase
             'signature' => self::SIGNATURE,
         ]);
 
-        $agreedRow = route('consent-forms.nurse-show', $agreed);
-        $refusedRow = route('consent-forms.nurse-show', $refused);
+        $all = $this->nurseList();
+        $this->assertStringContainsString($this->rowLink($juan), $all);
+        $this->assertStringContainsString($this->rowLink($rosa), $all);
 
-        // A row is on the list exactly when its own View link is. A learner's
-        // name is not a safe marker here: the nurse topbar's learner search
-        // embeds the whole roster, so every name is in the page whatever the
-        // table holds.
-        $all = $this->withSession($this->nurseSession())
-            ->get(route('consent-forms.nurse-index'))->assertOk()->getContent();
-        $this->assertStringContainsString($agreedRow, $all);
-        $this->assertStringContainsString($refusedRow, $all);
+        $consented = $this->nurseList(['status' => ConsentStanding::SERVICE_CONSENTED]);
+        $this->assertStringContainsString($this->rowLink($juan), $consented);
+        $this->assertStringNotContainsString($this->rowLink($rosa), $consented);
 
-        $consented = $this->withSession($this->nurseSession())
-            ->get(route('consent-forms.nurse-index', ['consent' => HealthConsentForm::CONSENT_ALL]))
-            ->assertOk()->getContent();
-        $this->assertStringContainsString($agreedRow, $consented);
-        $this->assertStringNotContainsString($refusedRow, $consented);
-
-        $denied = $this->withSession($this->nurseSession())
-            ->get(route('consent-forms.nurse-index', ['consent' => HealthConsentForm::CONSENT_DENY]))
-            ->assertOk()->getContent();
-        $this->assertStringContainsString($refusedRow, $denied);
-        $this->assertStringNotContainsString($agreedRow, $denied);
+        $declined = $this->nurseList(['status' => ConsentStanding::SERVICE_DECLINED]);
+        $this->assertStringContainsString($this->rowLink($rosa), $declined);
+        $this->assertStringNotContainsString($this->rowLink($juan), $declined);
     }
 
     /**
-     * A value off the query string that is not one of the three answers
-     * narrows nothing, rather than emptying the page and reading as "no
-     * learner consented".
+     * A value off the query string that is not one of the statuses narrows
+     * nothing, rather than emptying the page and reading as "no learner
+     * consented".
      */
     #[Test]
     public function an_unrecognised_consent_filter_is_dropped(): void
     {
-        $form = $this->signAsParent($this->sendToParent($this->createDraft()));
+        $juan = $this->makeRecord();
+        $this->signAsParent($this->sendToParent($this->createDraft()));
 
-        $html = $this->withSession($this->nurseSession())
-            ->get(route('consent-forms.nurse-index', ['consent' => 'maybe']))
-            ->assertOk()
-            ->getContent();
-
-        $this->assertStringContainsString(route('consent-forms.nurse-show', $form), $html);
+        $this->assertStringContainsString($this->rowLink($juan), $this->nurseList(['status' => 'maybe']));
     }
 
-    /** An empty filtered list says which question it answered. */
+    /** An empty filtered list says so, and offers the way back. */
     #[Test]
-    public function an_empty_filtered_list_names_the_answer_it_looked_for(): void
+    public function an_empty_filtered_list_offers_to_clear_the_filters(): void
     {
-        $form = $this->signAsParent($this->sendToParent($this->createDraft()));
+        $juan = $this->makeRecord();
+        $this->signAsParent($this->sendToParent($this->createDraft()));
 
-        $html = $this->withSession($this->nurseSession())
-            ->get(route('consent-forms.nurse-index', ['consent' => HealthConsentForm::CONSENT_DENY]))
-            ->assertOk()
-            ->getContent();
+        $html = $this->nurseList(['status' => ConsentStanding::SERVICE_DECLINED]);
 
-        $this->assertStringContainsString("No learner's form reads", $html);
-        $this->assertStringContainsString('Did not agree', $html);
-        $this->assertStringNotContainsString(route('consent-forms.nurse-show', $form), $html);
+        $this->assertStringContainsString('No learners match these filters.', $html);
+        $this->assertStringContainsString('Clear filters', $html);
+        $this->assertStringNotContainsString($this->rowLink($juan), $html);
     }
 
     /**
-     * "Agreed" is one answer to the nurse's usual question, and it covers the
-     * parent who agreed *except* for certain services — they did consent. The
-     * precise answers stay on the list below it, because the next question
-     * about an exception is always which services it covered.
+     * With every service, "Consented" covers the parent who agreed *except*
+     * for certain services — they did consent — and the row still says which
+     * kind it was, because the next question about an exception is always
+     * which services it covered.
      */
     #[Test]
     public function the_agreed_filter_covers_both_kinds_of_agreement(): void
     {
-        $all = $this->signAsParent($this->sendToParent($this->createDraft()));
+        $juan = $this->makeRecord();
+        $this->signAsParent($this->sendToParent($this->createDraft()));
 
+        $pia = $this->learnerRecord('123456789014', 'Partial, Pia');
         $session = $this->adviserSession();
         $session['school_health_card_records'][] = [
             'last_name' => 'Partial', 'first_name' => 'Pia', 'lrn' => '123456789014',
@@ -404,144 +429,99 @@ class HealthConsentFormTest extends TestCase
             'signature' => self::SIGNATURE,
         ]);
 
-        $html = $this->withSession($this->nurseSession())
-            ->get(route('consent-forms.nurse-index', ['consent' => 'agreed']))
-            ->assertOk()
-            ->getContent();
+        $html = $this->nurseList(['status' => ConsentStanding::SERVICE_CONSENTED]);
 
-        // Both forms of agreement are on the list.
-        $this->assertStringContainsString(route('consent-forms.nurse-show', $all), $html);
-        $this->assertStringContainsString(route('consent-forms.nurse-show', $partial), $html);
-
-        // And the dropdown offers the plain two-way split first.
-        $this->assertStringContainsString('Agreed to the consent', $html);
-        $this->assertStringContainsString('Did not agree', $html);
+        $this->assertStringContainsString($this->rowLink($juan), $html);
+        $this->assertStringContainsString($this->rowLink($pia), $html);
+        $this->assertStringContainsString('>Consented with exceptions</span>', $html);
+        $this->assertStringContainsString('1 with exceptions', $html);
     }
 
     /**
-     * A letter that is out but unanswered reaches the nurse too.
+     * A letter that is out but unanswered is a learner with no form yet.
      *
      * The nurse plans a deworming round off this list, and "nobody has replied
      * for this learner yet" is exactly what decides whether a child can be
-     * given a service — an absence the old list could not show, because it
-     * carried only forms a parent had already answered. A draft is still not
-     * on it: nothing has been sent, so there is nothing to wait for.
+     * given a service. The learner's own page says the letter went out, so the
+     * nurse knows the follow-up is a reminder rather than a first request.
      */
     #[Test]
     public function a_sent_but_unanswered_form_is_on_the_nurses_list(): void
     {
-        $sent = $this->sendToParent($this->createDraft());
+        $juan = $this->makeRecord();
+        $this->sendToParent($this->createDraft());
 
-        $html = $this->withSession($this->nurseSession())
-            ->get(route('consent-forms.nurse-index'))
-            ->assertOk()
-            ->getContent();
+        $html = $this->nurseList();
+        $this->assertStringContainsString($this->rowLink($juan), $html);
+        $this->assertStringContainsString('>No form yet</span>', $html);
 
-        $this->assertStringContainsString(route('consent-forms.nurse-show', $sent), $html);
-
-        // It says the parent has not answered — never an em dash, which would
-        // read as "they answered something we cannot show".
-        $this->assertStringContainsString('Awaiting response', $html);
-
-        // And the filter can be used on exactly that state.
-        $awaiting = $this->withSession($this->nurseSession())
-            ->get(route('consent-forms.nurse-index', ['consent' => 'awaiting']))
-            ->assertOk()
-            ->getContent();
-        $this->assertStringContainsString(route('consent-forms.nurse-show', $sent), $awaiting);
+        $this->assertStringContainsString($this->rowLink($juan), $this->nurseList(['status' => ConsentStanding::SERVICE_NO_FORM]));
 
         // It is not an answer, so no answer filter claims it.
-        foreach (['agreed', HealthConsentForm::CONSENT_ALL, HealthConsentForm::CONSENT_DENY] as $choice) {
-            $html = $this->withSession($this->nurseSession())
-                ->get(route('consent-forms.nurse-index', ['consent' => $choice]))
-                ->assertOk()
-                ->getContent();
-
+        foreach ([ConsentStanding::SERVICE_CONSENTED, ConsentStanding::SERVICE_DECLINED] as $status) {
             $this->assertStringNotContainsString(
-                route('consent-forms.nurse-show', $sent),
-                $html,
-                'An unanswered letter must not be listed under "'.$choice.'".'
+                $this->rowLink($juan),
+                $this->nurseList(['status' => $status]),
+                'An unanswered letter must not be listed under "'.$status.'".'
             );
         }
+
+        $this->withSession($this->nurseSession())
+            ->get(route('consent-forms.nurse-learner', $juan))
+            ->assertOk()
+            ->assertSee('No form yet.')
+            ->assertSee('A letter was sent to the parent on');
     }
 
-    /** Once the parent answers, the same form moves to its answer. */
+    /** Once the parent answers, the learner moves to their answer. */
     #[Test]
-    public function an_answered_form_leaves_the_awaiting_list(): void
+    public function an_answered_form_leaves_no_form_yet(): void
     {
-        $form = $this->signAsParent($this->sendToParent($this->createDraft()));
+        $juan = $this->makeRecord();
+        $this->signAsParent($this->sendToParent($this->createDraft()));
 
-        $awaiting = $this->withSession($this->nurseSession())
-            ->get(route('consent-forms.nurse-index', ['consent' => 'awaiting']))
-            ->assertOk()
-            ->getContent();
-        $this->assertStringNotContainsString(route('consent-forms.nurse-show', $form), $awaiting);
-
-        $agreed = $this->withSession($this->nurseSession())
-            ->get(route('consent-forms.nurse-index', ['consent' => 'agreed']))
-            ->assertOk()
-            ->getContent();
-        $this->assertStringContainsString(route('consent-forms.nurse-show', $form), $agreed);
+        $this->assertStringNotContainsString($this->rowLink($juan), $this->nurseList(['status' => ConsentStanding::SERVICE_NO_FORM]));
+        $this->assertStringContainsString($this->rowLink($juan), $this->nurseList(['status' => ConsentStanding::SERVICE_CONSENTED]));
     }
 
     /**
      * A consent that arrived as a scan is on the nurse's list too.
      *
-     * A consent reaches this school two ways — the digital Sulat-Pahibalo the
-     * adviser sends, and the signed form the adviser scans and uploads — and
-     * the nurse's question is the same either way: may this child be given the
-     * service? The upload used to appear on no nurse screen at all, so a
-     * consent could be on file at the school and invisible to the person who
-     * acts on it.
+     * The upload dialog no longer asks what the parent answered, so a scan
+     * usually carries none: the learner reads "No form yet" — never consented
+     * — and their page shows the scan and says its answer is unrecorded.
      */
     #[Test]
     public function a_scanned_consent_is_on_the_nurses_list(): void
     {
-        $this->makeRecord();
+        $juan = $this->makeRecord();
         $upload = $this->uploadScan();
 
-        $html = $this->withSession($this->nurseSession())
-            ->get(route('consent-forms.nurse-index'))
-            ->assertOk()
-            ->assertSee('Dela Cruz, Juan')
-            ->assertSee('Signed form on file')
-            ->getContent();
+        $html = $this->nurseList();
+        $this->assertStringContainsString($this->rowLink($juan), $html);
+        $this->assertStringContainsString('>No form yet</span>', $html);
 
-        // The upload dialog no longer asks what the parent answered, so the
-        // row says the answer is not recorded — never that consent was given.
-        $this->assertStringContainsString('Answer not recorded', $html);
-        $this->assertStringContainsString(
-            e(route('parental-consent.download', $upload->id)),
-            $html,
-            'The scan itself is the record here, so the action opens it.'
-        );
+        $this->withSession($this->nurseSession())
+            ->get(route('consent-forms.nurse-learner', $juan))
+            ->assertOk()
+            ->assertSee(e(route('parental-consent.download', $upload->id)), false)
+            ->assertSee('has not been recorded');
     }
 
-    /** And the filter reaches it, under the answer it is actually carrying. */
+    /** And the filter reaches it, under the standing it actually has. */
     #[Test]
     public function a_scanned_consent_is_reachable_from_the_filter(): void
     {
-        $this->makeRecord();
-        $upload = $this->uploadScan();
-        $link = e(route('parental-consent.download', $upload->id));
+        $juan = $this->makeRecord();
+        $this->uploadScan();
 
-        $unrecorded = $this->withSession($this->nurseSession())
-            ->get(route('consent-forms.nurse-index', ['consent' => 'unrecorded']))
-            ->assertOk()
-            ->getContent();
-        $this->assertStringContainsString($link, $unrecorded);
+        $this->assertStringContainsString($this->rowLink($juan), $this->nurseList(['status' => ConsentStanding::SERVICE_NO_FORM]));
 
-        // It is not an answer, so no answer filter claims it.
-        foreach (['agreed', HealthConsentForm::CONSENT_DENY, 'awaiting'] as $choice) {
-            $html = $this->withSession($this->nurseSession())
-                ->get(route('consent-forms.nurse-index', ['consent' => $choice]))
-                ->assertOk()
-                ->getContent();
-
+        foreach ([ConsentStanding::SERVICE_CONSENTED, ConsentStanding::SERVICE_DECLINED] as $status) {
             $this->assertStringNotContainsString(
-                $link,
-                $html,
-                'A scan with no answer keyed in must not be listed under "'.$choice.'".'
+                $this->rowLink($juan),
+                $this->nurseList(['status' => $status]),
+                'A scan with no answer keyed in must not be listed under "'.$status.'".'
             );
         }
     }
@@ -550,45 +530,39 @@ class HealthConsentFormTest extends TestCase
     #[Test]
     public function a_scanned_consent_carrying_an_answer_reports_it(): void
     {
-        $this->makeRecord();
-        $upload = $this->uploadScan(['consent_type' => 'full']);
-        $link = e(route('parental-consent.download', $upload->id));
+        $juan = $this->makeRecord();
+        $this->uploadScan(['consent_type' => 'full']);
 
-        $html = $this->withSession($this->nurseSession())
-            ->get(route('consent-forms.nurse-index', ['consent' => 'agreed']))
-            ->assertOk()
-            ->getContent();
+        $html = $this->nurseList(['status' => ConsentStanding::SERVICE_CONSENTED]);
 
-        $this->assertStringContainsString($link, $html);
-        $this->assertStringContainsString('Consented to all services', $html);
+        $this->assertStringContainsString($this->rowLink($juan), $html);
+        $this->assertStringContainsString('>Consented</span>', $html);
     }
 
     /**
      * One learner, one row: the row is the record that answers the question.
      *
      * A letter still out yields to a scan that has come back — the parent has
-     * replied, and a row reading "Awaiting response" over a signed form on file
+     * replied, and a row reading "No form yet" over a signed form on file
      * would send a nurse looking for a consent the school already holds.
      */
     #[Test]
     public function a_scan_answers_for_a_learner_whose_letter_is_still_out(): void
     {
-        $this->makeRecord();
+        $juan = $this->makeRecord();
         $this->sendToParent($this->createDraft());
         $upload = $this->uploadScan(['consent_type' => 'full']);
 
-        $html = $this->withSession($this->nurseSession())
-            ->get(route('consent-forms.nurse-index'))
+        $html = $this->nurseList();
+
+        $this->assertSame(1, substr_count($html, $this->rowLink($juan)), 'One learner, one row.');
+        $this->assertStringContainsString('>Consented</span>', $html);
+        $this->assertStringNotContainsString('>No form yet</span>', $html);
+
+        $this->withSession($this->nurseSession())
+            ->get(route('consent-forms.nurse-learner', $juan))
             ->assertOk()
-            ->getContent();
-
-        $this->assertSame(1, substr_count($html, 'LRN 123456789012'), 'One learner, one row.');
-        $this->assertStringContainsString(e(route('parental-consent.download', $upload->id)), $html);
-        $this->assertStringContainsString('Consented to all services', $html);
-
-        // "Awaiting response" is still an option in the filter above the table;
-        // what must be gone is the row that reads it.
-        $this->assertStringNotContainsString('>Awaiting response</span>', $html);
+            ->assertSee(e(route('parental-consent.download', $upload->id)), false);
     }
 
     /**
@@ -598,17 +572,16 @@ class HealthConsentFormTest extends TestCase
     #[Test]
     public function an_answered_letter_outranks_a_scan_for_the_same_learner(): void
     {
-        $this->makeRecord();
+        $juan = $this->makeRecord();
         $form = $this->signAsParent($this->sendToParent($this->createDraft()));
         $upload = $this->uploadScan();
 
-        $html = $this->withSession($this->nurseSession())
-            ->get(route('consent-forms.nurse-index'))
-            ->assertOk()
-            ->getContent();
+        $this->assertSame(1, substr_count($this->nurseList(), $this->rowLink($juan)), 'One learner, one row.');
 
-        $this->assertSame(1, substr_count($html, 'LRN 123456789012'), 'One learner, one row.');
-        $this->assertStringContainsString(e(route('consent-forms.nurse-show', $form)), $html);
-        $this->assertStringNotContainsString(e(route('parental-consent.download', $upload->id)), $html);
+        $this->withSession($this->nurseSession())
+            ->get(route('consent-forms.nurse-learner', $juan))
+            ->assertOk()
+            ->assertSee(e(route('consent-forms.nurse-show', $form)), false)
+            ->assertDontSee(e(route('parental-consent.download', $upload->id)), false);
     }
 }

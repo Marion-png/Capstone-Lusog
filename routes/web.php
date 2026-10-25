@@ -1020,6 +1020,10 @@ Route::get('/dashboard/school-head/consent-forms/{form}/paper-image', [HealthCon
     ->whereNumber('form')->name('consent-forms.head-paper-image');
 Route::get('/dashboard/school-nurse/consent-forms', [HealthConsentFormController::class, 'nurseIndex'])
     ->name('consent-forms.nurse-index');
+// One learner's consent for the clinic, keyed by record id so no LRN is ever
+// in a URL — and it opens for a learner with no form at all.
+Route::get('/dashboard/school-nurse/consent-forms/learner/{record}', [HealthConsentFormController::class, 'nurseLearner'])
+    ->whereNumber('record')->name('consent-forms.nurse-learner');
 Route::get('/dashboard/school-nurse/consent-forms/{form}', [HealthConsentFormController::class, 'nurseShow'])
     ->whereNumber('form')->name('consent-forms.nurse-show');
 // The School Head reads one signed letter: a click with a reason behind it,
