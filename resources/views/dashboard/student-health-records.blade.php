@@ -552,7 +552,11 @@
                      opening Sheet 2 reads it before the systems review rather than
                      after scrolling past it. Filled by loadHealthAssessment(). --}}
                 <div id="phaWarning" hidden></div>
-                <div class="student-profile-section">
+                {{-- Drawn only once there is an assessment to review — the
+                     nurse's own Sheet 2 or the adviser's MLHAT. Under the "no
+                     health assessment" banner it would be an empty heading
+                     contradicting the line above it (loadHealthAssessment). --}}
+                <div class="student-profile-section" id="pdSystemsSection">
                     <h4>Systems Review</h4>
                     <div id="pdSystemsReview"></div>
                 </div>
@@ -648,6 +652,10 @@
     const fillLink = document.getElementById('profileFillLink');
     const consultLink = document.getElementById('profileConsultLink');
     const openLrn = new URLSearchParams(window.location.search).get('open') || '';
+
+    // The learner on screen, so a reply for one the nurse has moved off, or a
+    // live re-read, can tell whose panel it is filling.
+    let profileLrn = '';
 
     if (!backdrop) {
         return;
@@ -1071,6 +1079,7 @@
         renderSystemsReview(record.systems_review, record.examination);
 
         const lrn = record.lrn || '';
+        profileLrn = lrn;
 
         StudentDocuments.load(lrn);
         // The dialog serves whichever row was clicked, so the incident panel is
@@ -1248,14 +1257,21 @@
         const warning = document.getElementById('phaWarning');
         const section = document.getElementById('phaSection');
         const adviserNote = document.getElementById('pdAdviserMlhat');
+        // Systems Review shows once there is an assessment to review. The
+        // nurse's own sheet is known now; the adviser's MLHAT only once the
+        // reply arrives, so until then it shows only for the nurse's sheet.
+        // An answer that cannot be had leaves it showing, as it always did.
+        const systems = document.getElementById('pdSystemsSection');
+        const showSystems = (show) => { if (systems) systems.hidden = !show; };
+        showSystems(nurseSheetFilled);
         if (warning) { warning.hidden = true; warning.innerHTML = ''; }
         if (section) section.hidden = false;
         if (adviserNote) { adviserNote.hidden = true; adviserNote.innerHTML = ''; }
-        if (!lrn) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">No LRN available.</div></div>'; return; }
+        if (!lrn) { showSystems(true); el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">No LRN available.</div></div>'; return; }
         el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Loading&hellip;</div></div>';
         try {
             const resp = await fetch('/api/student-health-assessment?lrn=' + encodeURIComponent(lrn), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-            if (!resp.ok) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load assessment.</div></div>'; return; }
+            if (!resp.ok) { showSystems(true); el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load assessment.</div></div>'; return; }
             const d = await resp.json();
             if (!d.has_assessment) {
                 // Two different absences, and they belong on two different
@@ -1282,6 +1298,8 @@
                     </div>`;
 
                 if (!nurseSheetFilled) {
+                    // Nothing on file to review: the banner is the whole tab,
+                    // and Systems Review stays hidden beneath it.
                     if (warning) { warning.innerHTML = missingBanner; warning.hidden = false; }
                     if (section) section.hidden = true;
                     el.innerHTML = missingBanner;
@@ -1293,9 +1311,16 @@
                 return;
             }
 
+            // The adviser's MLHAT is on file, so there is a review to show.
+            showSystems(true);
+
             const bool = (v, yes = 'Yes', no = 'No') => v ? `<span style="color:#1F8A4C;font-weight:600;">${yes}</span>` : no;
             const row = (k, v) => v ? `<div class="kv"><div class="k">${k}:</div><div class="v">${v}</div></div>` : '';
-            const section = (title, html) => `<div style="margin-bottom:12px;padding:10px 12px;background:#f7faf8;border-radius:8px;border:1px solid #d1dbd5;">
+            // Named apart from the `section` element above: a second `section`
+            // declared in this block put the first in its temporal dead zone, so
+            // the no-assessment branch threw before it returned and the tab read
+            // "Could not load assessment." under its own banner.
+            const group = (title, html) => `<div style="margin-bottom:12px;padding:10px 12px;background:#f7faf8;border-radius:8px;border:1px solid #d1dbd5;">
                 <div style="font-size:.68rem;font-weight:700;color:#334a3f;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">${title}</div>${html}</div>`;
 
             // Medical history
@@ -1356,21 +1381,22 @@
                 ${row('Date of Assessment', d.date_of_assessment)}
                 ${row('Assessed By', d.assessed_by)}
                 ${row('Submitted By', d.submitted_by + (d.submitted_at ? ' on ' + d.submitted_at : ''))}
-                ${section('B. Medical History', medHistHtml)}
-                ${section('C. Family History', famHistHtml)}
-                ${vitals ? section('E. Vital Signs', vitals) : ''}
-                ${systemRows ? section('F. Body Systems', systemRows) : ''}
-                ${(d.vision_right_eye || d.vision_left_eye || d.vision_result || d.hearing_result) ? section('G. Vision & Hearing',
+                ${group('B. Medical History', medHistHtml)}
+                ${group('C. Family History', famHistHtml)}
+                ${vitals ? group('E. Vital Signs', vitals) : ''}
+                ${systemRows ? group('F. Body Systems', systemRows) : ''}
+                ${(d.vision_right_eye || d.vision_left_eye || d.vision_result || d.hearing_result) ? group('G. Vision & Hearing',
                     row('Vision', [d.vision_right_eye && ('R: ' + d.vision_right_eye), d.vision_left_eye && ('L: ' + d.vision_left_eye), d.vision_result].filter(Boolean).join(' | ')) +
                     row('Hearing', d.hearing_result)) : ''}
-                ${teethStr || d.last_dental_visit || d.dental_referral ? section('H. Oral Health',
+                ${teethStr || d.last_dental_visit || d.dental_referral ? group('H. Oral Health',
                     row('Teeth Condition', teethStr) + row('Last Dental Visit', d.last_dental_visit) +
                     (d.dental_referral ? '<div class="kv"><div class="k">Referral:</div><div class="v" style="color:#dc2626;font-weight:600;">Referral to Dentist Recommended</div></div>' : '')) : ''}
-                ${d.immunization_status || d.missing_needed_vaccines ? section('I. Immunization Status',
+                ${d.immunization_status || d.missing_needed_vaccines ? group('I. Immunization Status',
                     row('Status', d.immunization_status) + row('Missing/Needed Vaccines', d.missing_needed_vaccines) + row('Date Reviewed', d.immunization_date_reviewed)) : ''}
-                ${d.summary_of_findings || d.recommendations ? section('J. Summary & Recommendations',
+                ${d.summary_of_findings || d.recommendations ? group('J. Summary & Recommendations',
                     row('Summary of Findings', d.summary_of_findings) + row('Recommendations', d.recommendations) + row('Examiner Signature', d.examiner_signature)) : ''}`;
         } catch (_err) {
+            showSystems(true);
             el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load assessment.</div></div>';
         }
     };
@@ -1430,27 +1456,50 @@
     };
 
     // ── Consultation log for this learner ──────────────────────────
-    const loadConsultations = async (lrn) => {
+    //
+    // `quiet` is the live re-read (see workspace:changed below): the list the
+    // nurse is reading stays on screen while it is fetched again instead of
+    // blinking to "Loading…" with its badge at 0, a failed re-read keeps it,
+    // and an unchanged reply redraws nothing.
+    let consultSignature = '';
+
+    const loadConsultations = async (lrn, { quiet = false } = {}) => {
         const el = document.getElementById('pConsultList');
         if (!el) return;
 
-        setBadge('pConsultBadge', 0);
+        if (!quiet) {
+            setBadge('pConsultBadge', 0);
+            consultSignature = '';
+        }
 
         if (!lrn) {
             el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">No LRN available.</div></div>';
             return;
         }
 
-        el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Loading&hellip;</div></div>';
+        if (!quiet) {
+            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Loading&hellip;</div></div>';
+        }
 
         try {
             const resp = await fetch('/api/student-consultations?lrn=' + encodeURIComponent(lrn), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            // The profile is reused for every learner: a reply for one the
+            // nurse has since moved off is not this panel's to fill.
+            if (lrn !== profileLrn) return;
             if (!resp.ok) {
-                el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load consultations.</div></div>';
+                if (!quiet) {
+                    el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load consultations.</div></div>';
+                }
                 return;
             }
 
             const rows = (await resp.json()).consultations || [];
+            if (lrn !== profileLrn) return;
+
+            const signature = JSON.stringify(rows);
+            if (quiet && signature === consultSignature) return;
+            consultSignature = signature;
+
             setBadge('pConsultBadge', rows.length);
 
             if (!rows.length) {
@@ -1518,7 +1567,9 @@
                 el.appendChild(card);
             });
         } catch (_err) {
-            el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load consultations.</div></div>';
+            if (!quiet && lrn === profileLrn) {
+                el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load consultations.</div></div>';
+            }
         }
     };
 
@@ -1635,9 +1686,33 @@
         // Arrived from the dashboard's learner search (?open=<lrn>): open
         // that learner's profile straight away, so the search is one step
         // rather than "search, land on a list, find the row again".
+        //
+        // Once the rest of the page has run, not now: the vital signs panel
+        // and the learner photo are wired by scripts further down, and opening
+        // before they existed left Sheet 1's temperature, pulse and blood
+        // pressure on their placeholder dashes. Fill Medical Record and New
+        // Consultation both return here this way, so that was every save.
         if (openLrn !== '' && String(row.getAttribute('data-lrn') || '') === openLrn) {
-            open();
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', open, { once: true });
+            } else {
+                open();
+            }
         }
+    });
+
+    // ── The open profile keeps up with the other desks ───────────────
+    // The profile is a dialog, so partials/workspace-live will not reload the
+    // page under it — that would close the learner the nurse is reading. Its
+    // Consultation Log and Medical Documents therefore held whatever they had
+    // when it opened, and a visit logged or a document filed at another desk
+    // stayed out of sight until the page was refreshed by hand. When the
+    // school's stamp moves, both re-read the learner on screen, in place.
+    window.addEventListener('workspace:changed', () => {
+        if (!backdrop.classList.contains('open') || profileLrn === '') return;
+
+        loadConsultations(profileLrn, { quiet: true });
+        StudentDocuments.refresh();
     });
 
     if (closeBtn) {

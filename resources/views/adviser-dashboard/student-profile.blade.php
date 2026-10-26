@@ -987,6 +987,13 @@ const STUDENT_PROFILE_LRN = @json($lrn);
     };
 
     // ── Profile tabs ───────────────────────────────────────────────
+    // The open tab rides in the URL's hash. partials/workspace-live reloads
+    // this page when another desk writes, and without it the reload dropped
+    // the adviser back on Sheet 1 — off the Consultation Log or Medical
+    // Documents tab the new entry had just reached. `#tab=` names no element,
+    // so the browser does not scroll to the panel on load.
+    const TAB_HASH = '#tab=';
+
     const showProfileTab = (panelId) => {
         document.querySelectorAll('.sp-panel').forEach((panel) => {
             panel.classList.toggle('active', panel.id === panelId);
@@ -1003,6 +1010,12 @@ const STUDENT_PROFILE_LRN = @json($lrn);
         if (panelId === 'vpTabDocuments') {
             StudentDocuments.load(STUDENT_PROFILE_LRN);
         }
+
+        try {
+            history.replaceState(history.state, '', TAB_HASH + panelId);
+        } catch (_) {
+            // A browser that refuses simply reopens on Sheet 1.
+        }
     };
 
     document.querySelectorAll('.sp-tab').forEach((tab) => {
@@ -1013,6 +1026,13 @@ const STUDENT_PROFILE_LRN = @json($lrn);
         onCount: (count) => setText('vpDocumentsTabBadge', String(count)),
     });
     renderProfile(STUDENT_PROFILE_RECORD, STUDENT_PROFILE_META);
+
+    const reopenTab = window.location.hash.startsWith(TAB_HASH)
+        ? decodeURIComponent(window.location.hash.slice(TAB_HASH.length))
+        : '';
+    if (reopenTab !== '' && document.getElementById(reopenTab)?.classList.contains('sp-panel')) {
+        showProfileTab(reopenTab);
+    }
 })();
 </script>
 @include('partials.sidebar-hover-pin')

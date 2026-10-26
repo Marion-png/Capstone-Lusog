@@ -122,6 +122,22 @@
         return el.matches('input:not([type="hidden"]), textarea, select, [contenteditable="true"]');
     };
 
+    // The option a select opens on. With none marked `selected` the browser
+    // shows the first one it can, and that is still what the server rendered:
+    // comparing each option's `selected` to its `defaultSelected` counted every
+    // such select as an edit, so a page carrying one (the consultation dialog,
+    // the incident form) held its reload back forever and the reader had to
+    // refresh by hand.
+    const defaultIndex = (select) => {
+        const options = Array.from(select.options);
+        let index = -1;
+        options.forEach((option, i) => { if (option.defaultSelected) index = i; });
+        if (index === -1 && select.size <= 1) {
+            index = options.findIndex((option) => !option.disabled);
+        }
+        return index;
+    };
+
     // Compared against each control's own default, which is what the server
     // rendered — so this is "changed since the page loaded", and a file input
     // with a chosen file counts (its value is set, its default never is).
@@ -130,7 +146,9 @@
             if (el.disabled || el.type === 'hidden' || el.type === 'submit' || el.type === 'button') return false;
             if (el.type === 'checkbox' || el.type === 'radio') return el.checked !== el.defaultChecked;
             if (el.tagName === 'SELECT') {
-                return Array.from(el.options).some((o) => o.selected !== o.defaultSelected);
+                return el.multiple
+                    ? Array.from(el.options).some((o) => o.selected !== o.defaultSelected)
+                    : el.selectedIndex !== defaultIndex(el);
             }
             return typeof el.defaultValue === 'string' && el.value !== el.defaultValue;
         })
@@ -155,6 +173,11 @@
 
             // Take the new stamp either way, so one change is acted on once.
             stamp = payload.stamp;
+
+            // Said before anything else happens. A dialog the reload below
+            // must not close — the nurse's student profile — listens for this
+            // and re-reads what it shows in place.
+            window.dispatchEvent(new CustomEvent('workspace:changed', { detail: { stamp } }));
 
             if (hasWorkInProgress()) {
                 showNotice();

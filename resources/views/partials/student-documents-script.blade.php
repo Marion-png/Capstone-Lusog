@@ -4,6 +4,8 @@
       StudentDocuments.init({ onCount })  wire the drop zone once, on page load
       StudentDocuments.load(lrn)          fetch and render that learner's list
       StudentDocuments.render(list, lrn)  render a list the page already has
+      StudentDocuments.refresh()          re-read the list if it changed, even
+                                          while the panel is behind another tab
 
     The same endpoints serve the class adviser, the school nurse, and clinic
     staff, so both profiles behave identically and each sees what the other
@@ -48,6 +50,7 @@ window.StudentDocuments = (() => {
 
     let currentLrn = '';
     let currentStamp = null;
+    let reading = false;
     let onCount = () => {};
 
     const el = (id) => document.getElementById(id);
@@ -251,18 +254,33 @@ window.StudentDocuments = (() => {
             return;
         }
 
+        // On the nurse's profile the panel switches learners in place, so a
+        // reply that lands after it has moved on is dropped rather than drawn
+        // under the next learner's name.
+        const asked = currentLrn;
+        reading = true;
+
         try {
-            const payload = await readJson(await fetch(urlFor('index', currentLrn), {
+            const payload = await readJson(await fetch(urlFor('index', asked), {
                 headers: { Accept: 'application/json' },
                 credentials: 'same-origin',
             }));
-            render(payload.documents, currentLrn, payload.stamp ?? null);
+            if (asked !== currentLrn) {
+                return;
+            }
+            render(payload.documents, asked, payload.stamp ?? null);
         } catch (error) {
-            // Rendering empty rather than keeping what was on screen: on the
-            // nurse's profile the panel switches learners in place, and showing
+            if (asked !== currentLrn) {
+                return;
+            }
+            // Rendering empty rather than keeping what was on screen: showing
             // one learner's documents under another's name is the worse failure.
-            render([], currentLrn);
+            render([], asked);
             feedback(error.message, true);
+        } finally {
+            if (asked === currentLrn) {
+                reading = false;
+            }
         }
     };
 
@@ -335,14 +353,20 @@ window.StudentDocuments = (() => {
     /**
      * Ask whether anything changed for this learner — a document the nurse or
      * the adviser filed from their own screen — and re-read the list if so.
+     *
+     * Only while the panel is on screen, unless `evenIfHidden`: the nurse's
+     * profile asks for that when another desk has written, so the tab badge
+     * is right before the nurse opens the tab.
      */
-    const pulse = async () => {
-        if (document.hidden || currentLrn === '' || !panelVisible()) {
+    const pulse = async ({ evenIfHidden = false } = {}) => {
+        if (document.hidden || currentLrn === '' || reading || (!evenIfHidden && !panelVisible())) {
             return;
         }
 
+        const asked = currentLrn;
+
         try {
-            const response = await fetch(urlFor('pulse', currentLrn), {
+            const response = await fetch(urlFor('pulse', asked), {
                 headers: { Accept: 'application/json' },
                 credentials: 'same-origin',
             });
@@ -351,23 +375,24 @@ window.StudentDocuments = (() => {
             }
 
             const { stamp } = await response.json();
-            if (!stamp) {
+            if (!stamp || asked !== currentLrn) {
                 return;
             }
 
-            if (currentStamp === null) {
-                currentStamp = stamp;
-
-                return;
-            }
-
-            if (stamp !== currentStamp) {
-                await load(currentLrn);
+            // No stamp yet means nothing on screen is known to match one: the
+            // list came with the page, or the last read failed. Adopting the
+            // stamp as it stands skipped whatever changed in between — the
+            // first document filed for a learner whose list was empty never
+            // appeared — so the list is read instead.
+            if (currentStamp === null || stamp !== currentStamp) {
+                await load(asked);
             }
         } catch (error) {
             // Ignored — the next pulse retries.
         }
     };
+
+    const refresh = () => pulse({ evenIfHidden: true });
 
     const init = (options = {}) => {
         onCount = typeof options.onCount === 'function' ? options.onCount : () => {};
@@ -419,7 +444,7 @@ window.StudentDocuments = (() => {
         drop.addEventListener('drop', (event) => upload(event.dataTransfer?.files?.[0]));
 
         // Keeps an open panel current with what the other desks file.
-        setInterval(pulse, PULSE_MS);
+        setInterval(() => pulse(), PULSE_MS);
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
                 pulse();
@@ -427,6 +452,6 @@ window.StudentDocuments = (() => {
         });
     };
 
-    return { init, load, render, pulse };
+    return { init, load, render, pulse, refresh };
 })();
 </script>

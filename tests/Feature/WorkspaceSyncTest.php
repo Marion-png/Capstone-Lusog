@@ -278,6 +278,44 @@ class WorkspaceSyncTest extends TestCase
         $this->assertStringContainsString('wl-notice', $html);
     }
 
+    /**
+     * An untouched select is not an edit. One with no option marked
+     * `selected` opens on its first option, which is what the server
+     * rendered — but comparing each option's `selected` to its
+     * `defaultSelected` counted it as changed, so every page carrying one
+     * (the consultation dialog, the incident form) held its reload back for
+     * good and the reader had to refresh by hand.
+     */
+    #[Test]
+    public function an_untouched_select_does_not_hold_the_reload_back(): void
+    {
+        $html = $this->pageOf('school_nurse', '/dashboard/consultation-log');
+
+        $this->assertStringContainsString('el.selectedIndex !== defaultIndex(el)', $html);
+        $this->assertStringContainsString('index = options.findIndex((option) => !option.disabled);', $html);
+    }
+
+    /**
+     * A change is announced before the reload is decided, so a dialog the
+     * reload must not close can redraw what it shows in place — and the
+     * adviser's profile, which is reloaded, reopens on the tab it was on.
+     */
+    #[Test]
+    public function a_change_is_announced_and_a_reload_keeps_the_profile_tab(): void
+    {
+        $html = $this->pageOf('school_nurse', '/dashboard/consultation-log');
+
+        $announce = strpos($html, "window.dispatchEvent(new CustomEvent('workspace:changed'");
+        $decide = strpos($html, 'if (hasWorkInProgress()) {');
+        $this->assertNotFalse($announce);
+        $this->assertNotFalse($decide);
+        $this->assertLessThan($decide, $announce);
+
+        $profile = file_get_contents(resource_path('views/adviser-dashboard/student-profile.blade.php'));
+        $this->assertStringContainsString("const TAB_HASH = '#tab=';", $profile);
+        $this->assertStringContainsString('history.replaceState(history.state, \'\', TAB_HASH + panelId);', $profile);
+    }
+
     /** A page whose whole job is a form has nothing to refresh and everything to lose. */
     #[Test]
     public function a_form_page_does_not_poll(): void

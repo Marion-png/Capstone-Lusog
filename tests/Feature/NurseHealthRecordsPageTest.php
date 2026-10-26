@@ -1057,6 +1057,75 @@ class NurseHealthRecordsPageTest extends TestCase
         $this->assertStringNotContainsString('0 kg', $row);
     }
 
+    /**
+     * A profile opened from a link (?open=<lrn>) — every return from Fill
+     * Medical Record and New Consultation — opens once the whole page has
+     * run. It used to open while its own script was still running, before
+     * the vital signs panel further down existed, so Sheet 1 read "No vital
+     * signs recorded yet." over a temperature the nurse had just taken.
+     */
+    #[Test]
+    public function a_profile_opened_from_a_link_waits_for_the_vital_signs_panel(): void
+    {
+        $html = $this->withSession($this->nurseSession([$this->learner()]))
+            ->get('/dashboard/student-health-records?open=100000000001')
+            ->assertOk()
+            ->getContent();
+
+        $autoOpen = strpos($html, "document.addEventListener('DOMContentLoaded', open, { once: true });");
+        $vitals = strpos($html, 'window.renderVitals = (record) =>');
+
+        $this->assertNotFalse($autoOpen, 'The auto-open must wait for the rest of the page.');
+        $this->assertNotFalse($vitals);
+        // The reason it has to wait: the panel is wired after the profile script.
+        $this->assertGreaterThan($autoOpen, $vitals);
+    }
+
+    /**
+     * With no assessment on file, Sheet 2 is the "no health assessment"
+     * banner alone: Systems Review is hidden beneath it rather than drawn as
+     * an empty heading contradicting the line above.
+     */
+    #[Test]
+    public function sheet_two_hides_systems_review_until_there_is_an_assessment(): void
+    {
+        $html = $this->withSession($this->nurseSession([$this->learner()]))
+            ->get('/dashboard/student-health-records')
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('<div class="student-profile-section" id="pdSystemsSection">', $html);
+        // Shown at once for the nurse's own sheet, and for the adviser's MLHAT
+        // once the reply says one is on file.
+        $this->assertStringContainsString('showSystems(nurseSheetFilled);', $html);
+        $this->assertStringContainsString('No health assessment (MLHAT) on file', $html);
+
+        // The banner branch used to throw: a second `section` declared later
+        // in the same block put the element in its temporal dead zone, and
+        // the tab read "Could not load assessment." under its own banner.
+        $this->assertStringNotContainsString('const section = (title, html) =>', $html);
+    }
+
+    /**
+     * The profile is a dialog, so the page-wide live refresh will not reload
+     * under it. Its Consultation Log and Medical Documents re-read the
+     * learner on screen themselves when another desk writes.
+     */
+    #[Test]
+    public function the_open_profile_rereads_its_consultations_and_documents(): void
+    {
+        $html = $this->withSession($this->nurseSession([$this->learner()]))
+            ->get('/dashboard/student-health-records')
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString("window.addEventListener('workspace:changed', () => {", $html);
+        $this->assertStringContainsString('loadConsultations(profileLrn, { quiet: true });', $html);
+        $this->assertStringContainsString('StudentDocuments.refresh();', $html);
+        // And the event is the page-wide partial's, raised on every change.
+        $this->assertStringContainsString("window.dispatchEvent(new CustomEvent('workspace:changed'", $html);
+    }
+
     /** One learner's row out of the roster table. */
     private function rosterRow(string $html, string $lrn): string
     {

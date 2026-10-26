@@ -363,6 +363,24 @@ class StudentMedicalDocumentTest extends TestCase
         );
     }
 
+    /**
+     * A panel that does not yet know which stamp its list matches — the list
+     * came with the page, or the last read failed — reads the list on the
+     * next pulse instead of adopting the stamp. Adopting it skipped whatever
+     * changed in between, so the first document filed for a learner whose
+     * list was empty never appeared until the page was refreshed.
+     */
+    #[Test]
+    public function a_panel_with_no_stamp_yet_reads_the_list_rather_than_adopting_one(): void
+    {
+        $script = file_get_contents(resource_path('views/partials/student-documents-script.blade.php'));
+
+        $this->assertStringContainsString('if (currentStamp === null || stamp !== currentStamp) {', $script);
+        $this->assertDoesNotMatchRegularExpression('/if \(currentStamp === null\) \{\s*currentStamp = stamp;/', $script);
+        // The nurse's profile asks for this while the tab is behind another.
+        $this->assertStringContainsString('const refresh = () => pulse({ evenIfHidden: true });', $script);
+    }
+
     #[Test]
     public function the_pulse_carries_no_personal_data_and_is_not_audited(): void
     {
