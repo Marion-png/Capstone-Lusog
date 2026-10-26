@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Medicine;
 use App\Models\MedicineReceipt;
+use App\Support\MedicineBatches;
 use App\Support\MedicineCatalogue;
 use App\Support\MedicineUsage;
 use App\Support\SchemaCache;
@@ -40,12 +41,23 @@ class MedicineInventoryController extends Controller
             ->filter(fn (Medicine $medicine) => $medicine->stock_quantity < $medicine->minimum_threshold)
             ->count();
 
-        // Expiry, judged per item off the earliest date on hand. An item with
-        // no stock is not counted — an empty shelf cannot expire — and an item
-        // with no date on file is unknown, not fine, so it is neither.
-        $stocked = $medicines->filter(fn (Medicine $medicine) => $medicine->stock_quantity > 0);
-        $expiredCount = $stocked->filter(fn (Medicine $m) => $m->expiryStatus() === Medicine::EXPIRY_EXPIRED)->count();
-        $expiringCount = $stocked->filter(fn (Medicine $m) => $m->expiryStatus() === Medicine::EXPIRY_SOON)->count();
+        // Each item's lots — which one is dispensed next and how much of the
+        // stock is past its date — read for the whole page in one query
+        // (App\Support\MedicineBatches).
+        $today = now()->startOfDay();
+        $shelves = collect(MedicineBatches::shelves($medicines))
+            ->map(fn (array $lots) => MedicineBatches::summary($lots, $today));
+
+        // Expiry, judged off the lots on hand. An item with no stock is not
+        // counted — an empty shelf cannot expire. Expired counts every item
+        // holding stock past its date, even beside good stock, because that
+        // stock has to come off the shelf; expiring counts the items whose next
+        // lot to be dispensed is inside the warning window.
+        $warnBy = $today->copy()->addDays(Medicine::EXPIRY_WARNING_DAYS);
+        $expiredCount = $shelves->filter(fn (array $shelf) => $shelf['expired'] > 0)->count();
+        $expiringCount = $shelves->filter(fn (array $shelf) => $shelf['next'] !== null
+            && $shelf['next']['expiry'] !== null
+            && $shelf['next']['expiry']->lte($warnBy))->count();
 
         $forecastMedicine = $this->resolveForecastMedicine($medicines);
         $forecastUnit = $forecastMedicine?->unit ?? 'doses';
@@ -94,6 +106,8 @@ class MedicineInventoryController extends Controller
             ],
             'expiry_warning_days' => Medicine::EXPIRY_WARNING_DAYS,
             'supports_expiry' => Medicine::supportsExpiry(),
+            'shelves' => $shelves,
+            'supports_batches' => MedicineBatches::supported(),
             'supports_receipts' => SchemaCache::hasTable('medicine_receipts'),
             // Reading the shelf and changing it are two rights; the page
             // draws the write controls only for the second one.
@@ -176,11 +190,20 @@ class MedicineInventoryController extends Controller
             unset($validated['expiry_date']);
         }
 
-        Medicine::create([
-            ...$validated,
-            'off_catalogue' => $resolved['off_catalogue'],
-            'institution_id' => $request->session()->get('active_institution_id'),
-        ]);
+        // The stock an item is created with is its first lot, at the date
+        // typed for it, so the shelf can say which box goes first from the
+        // first dispense on.
+        DB::transaction(function () use ($validated, $resolved, $request): void {
+            $medicine = Medicine::create([
+                ...$validated,
+                'off_catalogue' => $resolved['off_catalogue'],
+                'institution_id' => $request->session()->get('active_institution_id'),
+            ]);
+
+            if (MedicineBatches::supported()) {
+                MedicineBatches::open($medicine, $validated['expiry_date'] ?? null);
+            }
+        });
 
         return redirect()
             ->route('dashboard.medicine-inventory')
@@ -242,6 +265,8 @@ class MedicineInventoryController extends Controller
 
             // Nothing on the shelf, or a date already past: the delivery's
             // date is the shelf's date. Otherwise the earlier of the two.
+            // (A database without lots only; with them the date is read off
+            // the lots below.)
             $shelfEmpty = (int) $locked->stock_quantity === 0
                 || ($current !== null && $current->lte(now()->startOfDay()));
 
@@ -251,7 +276,7 @@ class MedicineInventoryController extends Controller
                 default => $newExpiry->lt($current) ? $newExpiry : $current,
             };
 
-            MedicineReceipt::create([
+            $receipt = MedicineReceipt::create([
                 'institution_id' => $institutionId,
                 'medicine_id' => $locked->id,
                 'quantity' => (int) $validated['quantity'],
@@ -266,15 +291,84 @@ class MedicineInventoryController extends Controller
                 'received_by_role' => (string) $request->session()->get('active_role', ''),
             ]);
 
-            $locked->forceFill([
-                'stock_quantity' => (int) $locked->stock_quantity + (int) $validated['quantity'],
-                'expiry_date' => $expiry?->toDateString(),
-            ])->save();
+            // The delivery is a lot of its own, added to the shelf as it stood
+            // before the stock is raised.
+            if (MedicineBatches::supported()) {
+                MedicineBatches::receive($locked, $receipt);
+            }
+
+            $locked->stock_quantity = (int) $locked->stock_quantity + (int) $validated['quantity'];
+
+            if (MedicineBatches::supported()) {
+                MedicineBatches::refreshExpiry($locked);
+            } else {
+                $locked->expiry_date = $expiry?->toDateString();
+            }
+
+            $locked->save();
         });
 
         return redirect()
             ->route('dashboard.medicine-inventory')
             ->with('success', 'Received '.(int) $validated['quantity'].' '.$medicine->unit.' of '.$medicine->name.'.');
+    }
+
+    /**
+     * Expired stock off the shelf.
+     *
+     * Dispensing never takes a lot past its date (App\Support\MedicineBatches),
+     * so expired stock is still counted — it is physically there — until
+     * somebody takes it away. This is that step: every expired lot of the item
+     * goes to zero, what was removed is kept on the lot with who removed it and
+     * when, and the stock falls by the same amount, in one transaction with the
+     * medicine row locked. Nothing usable is touched.
+     */
+    public function disposeExpired(Request $request, Medicine $medicine): RedirectResponse
+    {
+        if ($redirect = $this->requireStockWriter($request)) {
+            return $redirect;
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+
+        // Re-scoped to the school: an id off the wire decides nothing.
+        if ($institutionId && (int) $medicine->institution_id !== (int) $institutionId) {
+            abort(404);
+        }
+
+        if (! MedicineBatches::supported()) {
+            return redirect()
+                ->route('dashboard.medicine-inventory')
+                ->with('error', 'Removing expired stock is not available until the database has been updated.');
+        }
+
+        $removed = DB::transaction(function () use ($request, $medicine): int {
+            $locked = Medicine::query()->lockForUpdate()->findOrFail($medicine->id);
+
+            $removed = MedicineBatches::disposeExpired(
+                $locked,
+                (string) $request->session()->get('active_name', ''),
+                (string) $request->session()->get('active_role', ''),
+            );
+
+            if ($removed > 0) {
+                $locked->stock_quantity = max(0, (int) $locked->stock_quantity - $removed);
+                MedicineBatches::refreshExpiry($locked);
+                $locked->save();
+            }
+
+            return $removed;
+        });
+
+        if ($removed === 0) {
+            return redirect()
+                ->route('dashboard.medicine-inventory')
+                ->with('error', 'No '.$medicine->name.' on the shelf is past its expiry date.');
+        }
+
+        return redirect()
+            ->route('dashboard.medicine-inventory')
+            ->with('success', 'Removed '.$removed.' expired '.$medicine->unit.' of '.$medicine->name.' from stock.');
     }
 
     /**

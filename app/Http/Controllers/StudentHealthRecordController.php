@@ -426,6 +426,10 @@ class StudentHealthRecordController extends Controller
                         : ConsentStanding::uploadAnswerLabel($upload),
                     'signed_at' => $consent?->signed_at?->toDateString(),
                     'reviewed_at' => $consent?->reviewed_at?->toDateString(),
+                    // The learner's own Sulat-Pahibalo, opened from their
+                    // profile; none yet means the Consent Forms page, where
+                    // one is started.
+                    'form_url' => $consent ? route('consent-forms.show', $consent) : null,
                     // The guardian's own filled-in paper form, as the adviser
                     // filed it. The profile knew nothing about it before, so an
                     // adviser who had just uploaded a signed consent was still

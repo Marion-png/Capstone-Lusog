@@ -7,11 +7,14 @@ use App\Models\Consultation;
 use App\Models\ConsultationPhoto;
 use App\Models\Medicine;
 use App\Models\MedicineDispense;
+use App\Models\MedicineDispenseBatch;
 use App\Models\StudentHealthRecord;
 use App\Support\AccountSettings;
+use App\Support\ConsultationMedicines;
 use App\Support\DispensingRights;
 use App\Support\EncryptedFileStorage;
 use App\Support\LearnerSearchIndex;
+use App\Support\MedicineBatches;
 use App\Support\SchemaCache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -108,6 +111,9 @@ class ConsultationController extends Controller
         return view('dashboard.consultation-log', [
             'consultations' => $consultations,
             'photoCounts' => $photoCounts,
+            // What was handed over at each visit on this page, read for the
+            // page at once rather than per row.
+            'consultationMedicines' => ConsultationMedicines::forConsultations($consultations),
             'stats' => [
                 'total' => (int) $totals->total,
                 'month' => (int) $totals->month,
@@ -239,10 +245,9 @@ class ConsultationController extends Controller
 
         // This is the only path into the dispensing log, so the rule about who
         // may use it is applied here rather than only on the form that draws
-        // it. Clinic staff log consultations and are deliberately not admitted;
-        // the School Nurse has the whole shelf; a Clinic Teacher has
-        // paracetamol and nothing else, which is checked against the medicine
-        // itself inside the transaction below.
+        // it. The School Nurse has the whole shelf; Clinic Staff and a Clinic
+        // Teacher have paracetamol and nothing else, which is checked against
+        // the medicine itself inside the transaction below.
         $activeRole = (string) $request->session()->get('active_role', '');
         $mayDispense = DispensingRights::mayDispense($activeRole);
         $medicineId = $mayDispense ? ($validated['medicine_id'] ?? null) : null;
@@ -341,7 +346,22 @@ class ConsultationController extends Controller
                 ])->errorBag('consultation');
             }
 
-            MedicineDispense::create([
+            // Which lot it comes out of: the one that expires first, and
+            // never one already past its date (App\Support\MedicineBatches).
+            $batched = MedicineBatches::supported();
+            $drawn = $batched ? MedicineBatches::draw($medicine, $quantity) : [];
+
+            if ($drawn === null) {
+                $usable = MedicineBatches::summary(MedicineBatches::lots($medicine, MedicineBatches::reconcile($medicine)))['usable'];
+
+                throw ValidationException::withMessages([
+                    'medicine_quantity' => $usable > 0
+                        ? "Only {$usable} {$medicine->unit} of {$medicine->name} are within their expiry date. The rest have expired and cannot be dispensed."
+                        : "The {$medicine->name} in stock has expired and cannot be dispensed.",
+                ])->errorBag('consultation');
+            }
+
+            $dispense = MedicineDispense::create([
                 'institution_id' => $institutionId,
                 'medicine_id' => $medicine->id,
                 'student_lrn' => null,
@@ -354,11 +374,32 @@ class ConsultationController extends Controller
                 'dispensed_by_name' => (string) $request->session()->get('active_name', AccountSettings::roleLabel($activeRole)),
                 'dispensed_by_role' => $activeRole,
                 'dispensed_at' => now(),
-            ]);
+            ] + (SchemaCache::hasColumn('medicine_dispenses', 'consultation_id')
+                ? ['consultation_id' => $consultation->id]
+                : []));
 
-            $medicine->decrement('stock_quantity', $quantity);
+            foreach ($drawn as $step) {
+                MedicineDispenseBatch::create([
+                    'medicine_dispense_id' => $dispense->id,
+                    'medicine_batch_id' => $step['batch']->id,
+                    'quantity' => $step['quantity'],
+                    'expiry_date' => $step['batch']->expiry_date?->toDateString(),
+                ]);
+            }
 
-            $dispensed = $quantity.' '.$medicine->unit.' of '.$medicine->name;
+            $medicine->stock_quantity = (int) $medicine->stock_quantity - $quantity;
+            if ($batched) {
+                MedicineBatches::refreshExpiry($medicine);
+            }
+            $medicine->save();
+
+            $expiries = collect($drawn)
+                ->map(fn (array $step) => $step['batch']->expiry_date ? 'exp '.$step['batch']->expiry_date->format('d M Y') : null)
+                ->filter()
+                ->unique()
+                ->implode(', ');
+
+            $dispensed = $quantity.' '.$medicine->unit.' of '.$medicine->name.($expiries !== '' ? ' ('.$expiries.')' : '');
         });
 
         $message = $dispensed === null

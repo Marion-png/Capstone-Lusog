@@ -71,6 +71,15 @@
                     {{-- Print and Download, one MLAT sheet at a time, in the
                          clinic's own form (App\Support\MlatWorkbook). --}}
                     @include('partials.mlat-menus', ['mlatId' => 'vpMlatMenus', 'mlatLrn' => $lrn])
+                    {{-- The learner's Sulat-Pahibalo, now that the roster row
+                         opens this page instead of carrying the action. A link,
+                         not a form: this page writes nothing. With no form on
+                         file yet it leads to the Consent Forms page, where one
+                         is started. --}}
+                    <a href="{{ ($meta['consent_detail']['form_url'] ?? null) ?: route('consent-forms.index') }}" class="btn btn-secondary" id="vpOpenConsent">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M14.5 18.5c1-1.5 2-1.5 3 0s2 1.5 3 0"/><path d="M12 16c1.5-3.5 3-5 4-3.5s-1 3.5-2 5"/></svg>
+                        Parent's Consent
+                    </a>
                     <a href="{{ route('dashboard.class-adviser', ['tab' => 'saved', 'edit' => $lrn]) }}" class="btn" id="vpEditProfile">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
                         Edit Profile

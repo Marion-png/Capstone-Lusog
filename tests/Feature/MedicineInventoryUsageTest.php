@@ -141,28 +141,49 @@ class MedicineInventoryUsageTest extends TestCase
     }
 
     /**
-     * Clinic staff log consultations but are deliberately not admitted to the
-     * dispensing path, and this must not become a way around that.
+     * Clinic staff may hand over paracetamol and nothing else, and the
+     * consultation is not a way around that: a medicine the role may not give
+     * is refused and takes the visit down with it.
      */
     #[Test]
-    public function clinic_staff_cannot_dispense_through_a_consultation(): void
+    public function clinic_staff_dispense_paracetamol_only_through_a_consultation(): void
     {
+        $amoxicillin = Medicine::create([
+            'institution_id' => $this->school->id,
+            'name' => 'Amoxicillin 250mg capsule',
+            'stock_quantity' => 30,
+            'minimum_threshold' => 5,
+            'unit' => 'capsules',
+        ]);
+
         $this->withSession($this->sessionFor('clinic_staff'))
             ->post(route('consultations.store'), $this->consultationPayload([
                 'medicine_id' => $this->paracetamol->id,
                 'medicine_quantity' => 4,
             ]))
-            ->assertRedirect();
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
 
-        // The consultation saves; the stock is untouched.
         $this->assertDatabaseCount('consultations', 1);
-        $this->assertSame(100, $this->paracetamol->fresh()->stock_quantity);
-        $this->assertSame(0, MedicineDispense::count());
+        $this->assertSame(96, $this->paracetamol->fresh()->stock_quantity);
+        $this->assertSame('clinic_staff', MedicineDispense::firstOrFail()->dispensed_by_role);
+
+        $this->withSession($this->sessionFor('clinic_staff'))
+            ->post(route('consultations.store'), $this->consultationPayload([
+                'medicine_id' => $amoxicillin->id,
+                'medicine_quantity' => 1,
+            ]))
+            ->assertSessionHasErrors('medicine_id', null, 'consultation');
+
+        // Refused, and the visit went with it.
+        $this->assertDatabaseCount('consultations', 1);
+        $this->assertSame(30, $amoxicillin->fresh()->stock_quantity);
+        $this->assertSame(1, MedicineDispense::count());
     }
 
-    /** The nurse's dialog offers the field; clinic staff's does not. */
+    /** Every dispensing desk is offered the field; clinic staff see the rest of the shelf greyed out. */
     #[Test]
-    public function only_the_nurse_is_offered_the_medicine_field(): void
+    public function every_dispensing_desk_is_offered_the_medicine_field(): void
     {
         Condition::create(['name' => 'Headache', 'category' => 'General']);
 
@@ -174,7 +195,10 @@ class MedicineInventoryUsageTest extends TestCase
 
         $this->assertStringContainsString('id="cm_medicine_id"', $nurse);
         $this->assertStringContainsString('Deducted from inventory when this consultation is saved.', $nurse);
-        $this->assertStringNotContainsString('id="cm_medicine_id"', $clinic);
+        $this->assertStringNotContainsString('may dispense Paracetamol only', $nurse);
+
+        $this->assertStringContainsString('id="cm_medicine_id"', $clinic);
+        $this->assertStringContainsString('may dispense Paracetamol only', $clinic);
     }
 
     // ── 3. Monthly usage per medicine ────────────────────────────────

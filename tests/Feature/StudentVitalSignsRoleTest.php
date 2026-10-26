@@ -203,6 +203,71 @@ class StudentVitalSignsRoleTest extends TestCase
             ->assertJsonValidationErrors('pulse_bpm');
     }
 
+    /**
+     * A blood pressure is systolic/diastolic in mmHg. The field used to take
+     * any text, so "normal" or "110" was saved as a reading and printed on the
+     * MLAT; now anything that is not a plausible pair is refused and nothing
+     * is written.
+     */
+    #[Test]
+    public function a_blood_pressure_that_is_not_a_reading_is_refused(): void
+    {
+        $record = $this->learner();
+
+        foreach ([
+            'normal' => 'Enter the blood pressure as systolic/diastolic',
+            '110' => 'Enter the blood pressure as systolic/diastolic',
+            '110/70/60' => 'Enter the blood pressure as systolic/diastolic',
+            '11O/70' => 'Enter the blood pressure as systolic/diastolic',
+            '120-80' => 'Enter the blood pressure as systolic/diastolic',
+            '1100/70' => 'Enter the blood pressure as systolic/diastolic',
+            '400/80' => 'The systolic (first) figure must be between 50 and 250',
+            '120/10' => 'The diastolic (second) figure must be between 30 and 150',
+            '70/110' => 'The systolic (first) figure must be higher than the diastolic',
+            '80/80' => 'The systolic (first) figure must be higher than the diastolic',
+        ] as $value => $message) {
+            // (string): PHP turns the key '110' into an integer, and the form
+            // always posts text.
+            $value = (string) $value;
+            $response = $this->recordVitals(['blood_pressure' => $value])->assertStatus(422);
+            $this->assertStringStartsWith($message, $response->json('errors.blood_pressure.0'), "'{$value}' must be refused.");
+        }
+
+        $this->assertNull(StudentVitalSigns::read($record->fresh())['blood_pressure'], 'A refused reading writes nothing.');
+    }
+
+    /** A valid reading is kept the standard way, spaces around the slash dropped. */
+    #[Test]
+    public function a_blood_pressure_is_stored_as_systolic_over_diastolic(): void
+    {
+        $record = $this->learner();
+
+        $this->recordVitals(['blood_pressure' => ' 118 / 76 '])->assertOk()
+            ->assertJsonPath('vitals.blood_pressure', '118/76');
+        $this->assertSame('118/76', StudentVitalSigns::read($record->fresh())['blood_pressure']);
+
+        // The edges of the range are readings too.
+        $this->recordVitals(['blood_pressure' => '250/150'])->assertOk();
+        $this->recordVitals(['blood_pressure' => '50/30'])->assertOk();
+
+        // And blank still clears it.
+        $this->recordVitals(['blood_pressure' => ''])->assertOk();
+        $this->assertNull(StudentVitalSigns::read($record->fresh())['blood_pressure']);
+    }
+
+    /** The form says what it takes, and filters what it is given. */
+    #[Test]
+    public function the_nurses_blood_pressure_field_takes_a_reading(): void
+    {
+        $html = $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('dashboard.student-health-records'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertMatchesRegularExpression('/id="vfBloodPressure"[^>]*inputmode="numeric"[^>]*pattern="[^"]+"/s', $html);
+        $this->assertStringContainsString('const bloodPressureProblem = ', $html);
+    }
+
     /** A nurse correcting a mistyped reading to "none taken" must be able to. */
     #[Test]
     public function a_blank_field_clears_the_reading(): void

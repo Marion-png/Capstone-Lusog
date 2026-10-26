@@ -163,6 +163,26 @@ class NurseHealthRecordsPageTest extends TestCase
         $this->assertSame(['Passed Both', 'Failed Right', 'Failed Left', 'Refer'], Sheet2Review::HEARING_RESULTS);
         $this->assertSame(['No referral required', 'Referred for dental care'], Sheet2Review::DENTAL_REFERRALS);
 
+        // H. The teeth conditions the MLAT Sheet 2 template lists, all six.
+        $this->assertSame(
+            ['Good', 'Fair', 'Poor', 'Dental Caries', 'Gum Inflammation', 'Missing/Broken Teeth'],
+            Sheet2Review::TEETH
+        );
+
+        // F. Each system offers the template's own findings — not one
+        // Normal / Abnormal pair for every system.
+        $this->assertSame(array_keys(Sheet2Review::SYSTEMS), array_keys(Sheet2Review::FINDINGS));
+        $this->assertSame(['Clear Breath Sounds', 'Cough', 'Wheezing'], Sheet2Review::findingsFor('respiratory'));
+        $this->assertSame(['Clear', 'Redness', 'Discharge'], Sheet2Review::findingsFor('heent_eyes'));
+        foreach (array_keys(Sheet2Review::SYSTEMS) as $system) {
+            $this->assertMatchesRegularExpression(
+                '/name="systems\['.$system.'\]\[finding\]"[^>]*>(?:(?!<\/select>).)*?<option value="'
+                .preg_quote(Sheet2Review::findingsFor($system)[1], '/').'"/s',
+                $html,
+                $system.' must offer its own findings.'
+            );
+        }
+
         // Supplementation & Programs went too — no deworming, iron, SBFP/4Ps,
         // menarche, immunization, others or Examined By controls, and no
         // consent banner for a control that is not there.
@@ -177,8 +197,10 @@ class NurseHealthRecordsPageTest extends TestCase
                 'date_of_examination' => '2026-08-02',
                 'systems' => [
                     'integumentary' => ['finding' => 'Normal', 'notes' => ''],
-                    'respiratory' => ['finding' => 'Abnormal', 'notes' => 'Wheeze on exertion'],
+                    'respiratory' => ['finding' => 'Wheezing', 'notes' => 'Wheeze on exertion'],
                     'neurological' => ['finding' => 'not-an-option', 'notes' => ''],
+                    // Another system's finding is not this one's.
+                    'heent_eyes' => ['finding' => 'Wheezing', 'notes' => ''],
                 ],
                 'vision_right' => '20/20', 'vision_left' => '20/25', 'vision_result' => 'Pass',
                 'hearing_result' => 'Failed Left',
@@ -195,8 +217,9 @@ class NurseHealthRecordsPageTest extends TestCase
         // signed by whoever is signed in on the date of examination.
         $sheet = $exam[Sheet2Review::KEY];
         $this->assertSame(['finding' => 'Normal', 'notes' => ''], $sheet['systems']['integumentary']);
-        $this->assertSame(['finding' => 'Abnormal', 'notes' => 'Wheeze on exertion'], $sheet['systems']['respiratory']);
+        $this->assertSame(['finding' => 'Wheezing', 'notes' => 'Wheeze on exertion'], $sheet['systems']['respiratory']);
         $this->assertSame('', $sheet['systems']['neurological']['finding'], 'A value off the list is dropped.');
+        $this->assertSame('', $sheet['systems']['heent_eyes']['finding'], 'A finding off the system\'s own list is dropped.');
         $this->assertArrayHasKey('genitourinary', $sheet['systems']);
         $this->assertSame(['right' => '20/20', 'left' => '20/25', 'result' => 'Pass'], $sheet['vision']);
         $this->assertSame('Failed Left', $sheet['hearing']['result']);
@@ -239,8 +262,8 @@ class NurseHealthRecordsPageTest extends TestCase
 
         // Derived from the adviser's checklist, and said so.
         $this->assertStringContainsString("Filled in from the class adviser's Sheet 2", $html);
-        $this->assertMatchesRegularExpression('/name="systems\[integumentary\]\[finding\]"[^>]*>.*?<option value="Abnormal" selected/s', $html);
-        $this->assertMatchesRegularExpression('/name="systems\[heent_eyes\]\[finding\]"[^>]*>.*?<option value="Normal" selected/s', $html);
+        $this->assertMatchesRegularExpression('/name="systems\[integumentary\]\[finding\]"[^>]*>.*?<option value="Lesions\/Rashes" selected/s', $html);
+        $this->assertMatchesRegularExpression('/name="systems\[heent_eyes\]\[finding\]"[^>]*>.*?<option value="Clear" selected/s', $html);
         $this->assertStringContainsString('name="systems[gastrointestinal][notes]" value="Soft"', $html);
         $this->assertStringContainsString('name="vision_left" value="20/40"', $html);
         $this->assertMatchesRegularExpression('/name="vision_result">.*?<option value="Pass" selected/s', $html);
@@ -394,8 +417,14 @@ class NurseHealthRecordsPageTest extends TestCase
             ->assertSee('Gomez, Jose C.')
             ->assertSee('100000000001')
             ->assertSee('Wasted')
-            ->assertSee('Pending')
-            ->assertSee('View Profile');
+            ->assertSee('Pending');
+
+        // No Action column: the whole row opens the profile, by mouse or
+        // keyboard, so it carries no View Profile button of its own.
+        $response->assertDontSee('<th>Action</th>', false)
+            ->assertDontSee('js-view-profile', false)
+            ->assertSee('tabindex="0"', false)
+            ->assertSee('aria-label="Open the profile of Gomez, Jose C."', false);
 
         // Profile: actions and every tab still present.
         $response->assertSee('Fill Medical Record')->assertSee('Print');
@@ -700,6 +729,43 @@ class NurseHealthRecordsPageTest extends TestCase
             ->assertOk()
             ->assertSee('<td class="shr-name">Dela Cruz, Maria Clara S.</td>', false)
             ->assertDontSee('Maria C.');
+    }
+
+    /**
+     * A sheet saved when every system was answered Normal or Abnormal still
+     * reads. Normal is the system's own normal finding; Abnormal stays a
+     * finding where the system lists the word, and elsewhere moves into the
+     * notes so nothing the nurse recorded is lost.
+     */
+    #[Test]
+    public function a_sheet_saved_under_normal_and_abnormal_reads_onto_the_templates_findings(): void
+    {
+        $sheet = Sheet2Review::read([Sheet2Review::KEY => [
+            'systems' => [
+                'heent_eyes' => ['finding' => 'Normal', 'notes' => ''],
+                'respiratory' => ['finding' => 'Abnormal', 'notes' => 'Wheeze on exertion'],
+                'cardiovascular' => ['finding' => 'Abnormal', 'notes' => ''],
+                'heent_head' => ['finding' => 'Abnormal', 'notes' => 'Lice'],
+                'integumentary' => ['finding' => 'Normal', 'notes' => ''],
+            ],
+            'oral' => ['teeth' => 'Fair'],
+        ]]);
+
+        $this->assertSame('nurse', $sheet['source']);
+        $this->assertSame(['Clear', ''], [$sheet['systems']['heent_eyes']['finding'], $sheet['systems']['heent_eyes']['notes']]);
+        $this->assertSame(['', 'Abnormal — Wheeze on exertion'], [$sheet['systems']['respiratory']['finding'], $sheet['systems']['respiratory']['notes']]);
+        $this->assertSame(['', 'Abnormal'], [$sheet['systems']['cardiovascular']['finding'], $sheet['systems']['cardiovascular']['notes']]);
+        $this->assertSame(['Abnormal', 'Lice'], [$sheet['systems']['heent_head']['finding'], $sheet['systems']['heent_head']['notes']]);
+        $this->assertSame('Normal', $sheet['systems']['integumentary']['finding']);
+        $this->assertSame('Fair', $sheet['oral']['teeth']);
+
+        // The teeth findings the template names are kept as chosen.
+        $this->assertSame('Missing/Broken Teeth', Sheet2Review::fromInput(['teeth_condition' => 'missing/broken teeth'])['oral']['teeth']);
+
+        // The abnormal reading is each system's own.
+        $this->assertTrue(Sheet2Review::isAbnormal('respiratory', 'Cough'));
+        $this->assertFalse(Sheet2Review::isAbnormal('respiratory', 'Clear Breath Sounds'));
+        $this->assertFalse(Sheet2Review::isAbnormal('respiratory', ''));
     }
 
     /**

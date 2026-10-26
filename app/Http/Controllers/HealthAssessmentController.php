@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\HealthAssessment;
 use App\Models\StudentHealthRecord;
+use App\Rules\BloodPressure;
 use App\Support\AdviserClassScope;
 use App\Support\LearnerPlacement;
 use App\Support\SchemaCache;
 use App\Support\StudentRosterSync;
+use App\Support\StudentVitalSigns;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -70,7 +72,7 @@ class HealthAssessmentController extends Controller
             'vital_bmi' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'vital_temperature_c' => ['nullable', 'numeric', 'min:30', 'max:45'],
             'vital_pulse_rate' => ['nullable', 'integer', 'min:0', 'max:300'],
-            'vital_blood_pressure' => ['nullable', 'string', 'max:20'],
+            'vital_blood_pressure' => ['nullable', 'string', 'max:20', new BloodPressure],
             // Body systems
             'body_systems' => ['nullable', 'array'],
             'body_systems.*' => ['nullable', 'array'],
@@ -142,7 +144,7 @@ class HealthAssessmentController extends Controller
             'vital_bmi' => $validated['vital_bmi'] ?? null,
             'vital_temperature_c' => $validated['vital_temperature_c'] ?? null,
             'vital_pulse_rate' => $validated['vital_pulse_rate'] ?? null,
-            'vital_blood_pressure' => $validated['vital_blood_pressure'] ?? null,
+            'vital_blood_pressure' => StudentVitalSigns::normalizeBloodPressure($validated['vital_blood_pressure'] ?? null),
             'body_systems' => $validated['body_systems'] ?? null,
             'vision_right_eye' => $validated['vision_right_eye'] ?? null,
             'vision_left_eye' => $validated['vision_left_eye'] ?? null,

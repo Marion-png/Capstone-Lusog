@@ -51,6 +51,8 @@ class ClinicDashboard
             'atRiskCount' => FeedingAttendanceFlag::visibleTo($role) ? self::atRiskCount($institutionId) : null,
             'consultationsToday' => self::consultationsToday($institutionId),
             'recentConsultations' => $recent,
+            // The medicine given at each of those visits, read for the panel at once.
+            'consultationMedicines' => ConsultationMedicines::forConsultations($recent),
             'consultationFilters' => self::consultationFilters($institutionId, $recent),
             'topConditions' => self::topConditions($institutionId),
             'lowStockCount' => self::lowStockCount($institutionId),

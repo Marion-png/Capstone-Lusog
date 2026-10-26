@@ -139,7 +139,9 @@ class NurseLearnerSearchTest extends TestCase
         // It opens the consultation dialog over the profile rather than
         // navigating away, with the learner already filled in.
         $this->assertStringContainsString('id="consultModal"', $html);
-        $this->assertStringContainsString('window.openConsultationFor(name, section)', $html);
+        // The LRN rides along so the dialog shows the learner's recorded
+        // allergies before anything is handed over.
+        $this->assertStringContainsString('window.openConsultationFor(name, section, lrn)', $html);
     }
 
     /** Arriving with ?open=<lrn> opens that learner straight away. */

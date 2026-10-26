@@ -19,6 +19,10 @@
 <script>
 window.Sheet2Render = (() => {
     const SHEET2_SYSTEMS = @json(\App\Support\Sheet2Review::SYSTEMS);
+    // Each system's normal finding (the template lists it first); any other
+    // finding is marked. "Normal" is kept for a sheet saved before the
+    // template's own findings were offered.
+    const SHEET2_NORMAL = @json(collect(\App\Support\Sheet2Review::SYSTEMS)->keys()->mapWithKeys(fn ($key) => [$key => \App\Support\Sheet2Review::normalFinding($key)]));
 
     const renderSheet2 = (host, sheet) => {
         host.textContent = '';
@@ -68,7 +72,10 @@ window.Sheet2Render = (() => {
             th.textContent = label;
             const finding = document.createElement('td');
             finding.textContent = dash(row.finding);
-            if (text(row.finding) === 'Abnormal') finding.className = 'is-abnormal';
+            const found = text(row.finding).trim().toLowerCase();
+            if (found !== '' && found !== 'normal' && found !== text(SHEET2_NORMAL[key]).toLowerCase()) {
+                finding.className = 'is-abnormal';
+            }
             const notes = document.createElement('td');
             notes.textContent = text(row.notes);
             tr.append(th, finding, notes);

@@ -230,7 +230,7 @@
                                 <th colspan="5"></th>
                                 <th colspan="4" class="shr-group">Baseline</th>
                                 <th colspan="4" class="shr-group">Endline</th>
-                                <th colspan="3"></th>
+                                <th colspan="2"></th>
                             </tr>
                             <tr>
                                 <th>LRN</th>
@@ -248,7 +248,6 @@
                                 <th>Status</th>
                                 <th>Health Status</th>
                                 <th>Profile</th>
-                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody id="shrTableBody">
@@ -290,7 +289,9 @@
                                     data-grade="{{ $rowGrade }}"
                                     data-section="{{ strtolower($rowSection) }}"
                                     data-sex="{{ strtolower($rowSex) }}"
-                                    data-status="{{ $rowHealth }}">
+                                    data-status="{{ $rowHealth }}"
+                                    tabindex="0"
+                                    aria-label="Open the profile of {{ $fullName !== '' ? $fullName : $rowLrn }}">
                                     <td><strong>{{ $rowLrn !== '' ? $rowLrn : '-' }}</strong></td>
                                     <td class="shr-name">{{ $fullName !== '' ? $fullName : '-' }}</td>
                                     <td>{{ $rowSex !== '' ? $rowSex : '-' }}</td>
@@ -307,16 +308,10 @@
                                     <td>
                                         <span class="shr-status {{ $examined ? 'is-done' : 'is-pending' }}">{{ $examined ? 'Examined' : 'Pending' }}</span>
                                     </td>
-                                    <td>
-                                        <button type="button" class="shr-action js-view-profile">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                            View Profile
-                                        </button>
-                                    </td>
                                 </tr>
                             @empty
                                 <tr class="js-records-empty">
-                                    <td colspan="16">
+                                    <td colspan="15">
                                         <div class="shr-empty">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
                                             <h4>No Adviser Submissions Yet</h4>
@@ -326,7 +321,7 @@
                                 </tr>
                             @endforelse
                             <tr class="js-records-nomatch" hidden>
-                                <td colspan="16">
+                                <td colspan="15">
                                     <div class="shr-empty">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                                         <h4>No Students Found</h4>
@@ -468,7 +463,9 @@
                             </div>
                             <div class="field">
                                 <label for="vfBloodPressure">Blood pressure (mmHg)</label>
-                                <input type="text" id="vfBloodPressure" maxlength="20" placeholder="e.g. 110/70" autocomplete="off">
+                                <input type="text" id="vfBloodPressure" placeholder="e.g. 110/70" autocomplete="off"
+                                       inputmode="numeric" pattern="\s*\d{2,3}\s*/\s*\d{2,3}\s*"
+                                       title="{{ \App\Support\StudentVitalSigns::BLOOD_PRESSURE_FORMAT }}">
                             </div>
                         </div>
                         <div class="vitals-form-error" id="vitalsError" hidden></div>
@@ -1536,7 +1533,7 @@
 
                 const grid = document.createElement('div');
                 grid.className = 'student-profile-grid';
-                [['Condition', row.condition], ['Treatment', row.treatment], ['Grade / Section', row.grade_section]]
+                [['Condition', row.condition], ['Medicine Given', row.medicine], ['Recommendations', row.treatment], ['Grade / Section', row.grade_section]]
                     .filter(([, value]) => value && String(value).trim() !== '')
                     .forEach(([label, value]) => {
                         const cell = document.createElement('div');
@@ -1674,14 +1671,16 @@
             openProfile(record, row.getAttribute('data-route') || '#');
         };
 
-        const button = row.querySelector('.js-view-profile');
-        if (button) {
-            button.addEventListener('click', (event) => {
-                event.stopPropagation();
-                open();
-            });
-        }
+        // The whole row opens the profile — by click, or by Enter / Space
+        // once it has focus — so it carries no button of its own.
         row.addEventListener('click', open);
+        row.addEventListener('keydown', (event) => {
+            if (event.target !== row) return;
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                open();
+            }
+        });
 
         // Arrived from the dashboard's learner search (?open=<lrn>): open
         // that learner's profile straight away, so the search is one step
@@ -1760,7 +1759,7 @@
             setStacked(true);
 
             if (typeof window.openConsultationFor === 'function') {
-                window.openConsultationFor(name, section);
+                window.openConsultationFor(name, section, lrn);
             }
         });
     }
@@ -1959,9 +1958,56 @@
     editBtn?.addEventListener('click', () => { showError(''); setOpen(true); });
     cancelBtn?.addEventListener('click', () => { showError(''); setOpen(false); });
 
+    // A blood pressure is systolic/diastolic in mmHg, and the field takes
+    // nothing else: a keystroke that cannot be part of one never lands. The
+    // limits are the server's (App\Support\StudentVitalSigns), which checks
+    // the same again before anything is saved.
+    const bp = document.getElementById('vfBloodPressure');
+    const BP = {{ \Illuminate\Support\Js::from([
+        'systolic' => [\App\Support\StudentVitalSigns::SYSTOLIC_MIN, \App\Support\StudentVitalSigns::SYSTOLIC_MAX],
+        'diastolic' => [\App\Support\StudentVitalSigns::DIASTOLIC_MIN, \App\Support\StudentVitalSigns::DIASTOLIC_MAX],
+        'format' => \App\Support\StudentVitalSigns::BLOOD_PRESSURE_FORMAT,
+    ]) }};
+
+    bp?.addEventListener('input', () => {
+        // Cleaned first and only then cut to length, so a pasted "BP: 120/80"
+        // keeps all its figures.
+        const cleaned = bp.value.replace(/[^\d/\s]/g, '').replace(/\/+/g, '/').replace(/^\s+/, '').slice(0, 9);
+        if (cleaned !== bp.value) bp.value = cleaned;
+    });
+
+    const bloodPressureProblem = (value) => {
+        const raw = String(value || '').trim();
+        if (raw === '') return '';
+
+        const match = raw.match(/^(\d{2,3})\s*\/\s*(\d{2,3})$/);
+        if (!match) return BP.format;
+
+        const systolic = Number(match[1]);
+        const diastolic = Number(match[2]);
+        if (systolic < BP.systolic[0] || systolic > BP.systolic[1]) {
+            return 'The systolic (first) figure must be between ' + BP.systolic[0] + ' and ' + BP.systolic[1] + ' mmHg.';
+        }
+        if (diastolic < BP.diastolic[0] || diastolic > BP.diastolic[1]) {
+            return 'The diastolic (second) figure must be between ' + BP.diastolic[0] + ' and ' + BP.diastolic[1] + ' mmHg.';
+        }
+        if (systolic <= diastolic) {
+            return 'The systolic (first) figure must be higher than the diastolic (second).';
+        }
+        return '';
+    };
+
     saveBtn?.addEventListener('click', async () => {
         if (lrn === '') return;
         showError('');
+
+        const bpProblem = bloodPressureProblem(bp?.value);
+        if (bpProblem !== '') {
+            showError(bpProblem);
+            bp?.focus();
+            return;
+        }
+
         saveBtn.disabled = true;
 
         const body = new FormData();

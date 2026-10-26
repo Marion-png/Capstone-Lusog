@@ -158,18 +158,24 @@ class MlatExportTest extends TestCase
         // A. Learner information — labels and values where the form puts them.
         $this->assertSame(['Name of Learner:', 'Pedro Penduko', '', 'Learner ID / Grade & Section:', '109876543201 / Grade 8 - Sampaguita'], $this->rowStarting($sheet, 'Name of Learner'));
         $this->assertSame(['Date of Birth:', '2011-08-20', 'Age: 14', 'School:', 'San Antonio National High School'], $this->rowStarting($sheet, 'Date of Birth'));
-        $this->assertSame(['Sex:', '[ ✓ ] Male   [   ] Female   [   ] Other', '', 'Date of Assessment:', '2026-08-02'], $this->rowStarting($sheet, 'Sex:'));
+        // Every tick box has a column of its own, so none of them depends on
+        // the cell beside it being empty to be seen.
+        $this->assertSame(['Sex:', '☑ Male', '☐ Female', 'Date of Assessment:', '2026-08-02'], $this->rowStarting($sheet, 'Sex:'));
         $this->assertSame(['Assessed by (Name/Title):', 'Nurse Joy / School Nurse'], $this->rowStarting($sheet, 'Assessed by'));
 
         // B. Medical history — ticked where the record says so, detail beside it.
-        $this->assertSame('[ ✓ ] Asthma', $this->rowStarting($sheet, '[ ✓ ] Asthma')[0]);
-        $this->assertSame('Allergies: Peanuts', $this->rowStarting($sheet, '[ ✓ ] Asthma')[3]);
-        $this->assertSame('[   ] Diabetes', $this->rowStarting($sheet, '[   ] Diabetes')[0]);
-        $this->assertSame('Hospitalization/Surgery: None', $this->rowStarting($sheet, '[   ] Frequent Infections')[3]);
+        $this->assertSame('☑ Asthma', $this->rowStarting($sheet, '☑ Asthma')[0]);
+        $this->assertSame('☑ Allergies: Peanuts', $this->rowStarting($sheet, '☑ Asthma')[3]);
+        $this->assertSame('☐ Diabetes', $this->rowStarting($sheet, '☐ Diabetes')[0]);
+        $this->assertSame('☐ Heart Condition', $this->rowStarting($sheet, '☐ Diabetes')[3]);
+        $this->assertSame('☐ Hospitalization/Surgery', $this->rowStarting($sheet, '☐ Frequent Infections')[3]);
         $this->assertSame(['Current Medications: Salbutamol', '', '', 'Other Conditions: None'], $this->rowStarting($sheet, 'Current Medications'));
 
-        // C. Family history on one line, as the form has it.
-        $this->assertSame('[   ] Hypertension   [ ✓ ] Diabetes   [   ] Heart Disease   [   ] Cancer   [   ] Mental Health', $this->rowStarting($sheet, '[   ] Hypertension')[0]);
+        // C. Family history on one line, as the form has it — a box to a column.
+        $this->assertSame(
+            ['☐ Hypertension', '☑ Diabetes', '☐ Heart Disease', '☐ Cancer', '☐ Mental Health Conditions'],
+            $this->rowStarting($sheet, '☐ Hypertension')
+        );
         $this->assertSame('Genetic/Hereditary Disorders: None', $this->rowStarting($sheet, 'Genetic')[0]);
 
         // D. General appearance.
@@ -243,7 +249,7 @@ class MlatExportTest extends TestCase
         $record = $this->learner();
         $exam = $record->examination;
         $exam[Sheet2Review::KEY] = Sheet2Review::fromInput([
-            'systems' => ['respiratory' => ['finding' => 'Abnormal', 'notes' => 'Wheeze on exertion']],
+            'systems' => ['respiratory' => ['finding' => 'Wheezing', 'notes' => 'Wheeze on exertion']],
             'vision_right' => '20/30', 'vision_left' => '20/30', 'vision_result' => 'Refer',
             'hearing_result' => 'Passed Both',
             'teeth_condition' => 'Fair', 'last_dental_visit' => '2026-03', 'dental_referral' => 'Referred for dental care',
@@ -255,7 +261,7 @@ class MlatExportTest extends TestCase
 
         $sheet = MlatWorkbook::build($record->fresh())['sheets'][1];
 
-        $this->assertSame(['Respiratory', 'Abnormal', 'Wheeze on exertion'], $this->rowStarting($sheet, 'Respiratory'));
+        $this->assertSame(['Respiratory', 'Wheezing', 'Wheeze on exertion'], $this->rowStarting($sheet, 'Respiratory'));
         $this->assertSame(['Integumentary', '', ''], $this->rowStarting($sheet, 'Integumentary'), 'Not back-filled from the adviser once the nurse\'s sheet exists.');
         $this->assertSame(['Vision:', 'Right Eye: 20/30   Left Eye: 20/30', '', 'Result: Refer'], $this->rowStarting($sheet, 'Vision:'));
         $this->assertSame(['Teeth Condition: Fair', '', '', 'Last Dental Visit: 2026-03'], $this->rowStarting($sheet, 'Teeth Condition'));
@@ -273,7 +279,7 @@ class MlatExportTest extends TestCase
 
         $this->assertSame('Penduko, Pedro', $this->rowStarting($sheet, 'Name of Learner')[1]);
         $this->assertSame('', $this->rowStarting($sheet, 'Date of Birth')[1]);
-        $this->assertSame('[   ] Male   [   ] Female   [   ] Other', $this->rowStarting($sheet, 'Sex:')[1]);
+        $this->assertSame(['☐ Male', '☐ Female'], array_slice($this->rowStarting($sheet, 'Sex:'), 1, 2));
         $this->assertSame(['Endline Input', '', '', '', '', '', '', ''], $this->rowStarting($sheet, 'Endline Input'));
         $this->assertSame('Current Medications: None', $this->rowStarting($sheet, 'Current Medications')[0]);
     }

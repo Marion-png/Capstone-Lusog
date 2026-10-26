@@ -8,8 +8,9 @@
     product opens, blurs and closes the same way.
 
     Anything marked data-bmodal-open="consultModal" opens it. To open it for
-    a specific learner, also set data-consult-name / data-consult-section on
-    the trigger, or call window.openConsultationFor(name, section).
+    a specific learner, also set data-consult-name / data-consult-section
+    (and data-consult-lrn, so their recorded allergies are shown) on the
+    trigger, or call window.openConsultationFor(name, section, lrn).
 
     The standalone page (dashboard.consultation-create) is still there and
     still works — this does not replace it, so an existing bookmark or a
@@ -31,27 +32,20 @@
     //
     // Who may dispense, and which medicines, is App\Support\DispensingRights'
     // answer — the same one ConsultationController asks again before it
-    // writes. Clinic staff log consultations and are not admitted at all; a
-    // Clinic Teacher is admitted to paracetamol only. What this page draws
-    // is never the enforcement: a disabled option is a hint, and the write
-    // is where the rule holds.
+    // writes. The School Nurse has the whole shelf; Clinic Staff and a
+    // Clinic Teacher are admitted to paracetamol only, and see the rest of
+    // the shelf greyed out. What this page draws is never the enforcement: a
+    // disabled option is a hint, and the write is where the rule holds.
     $consultRole = (string) session('active_role', '');
     $consultMayDispense = \App\Support\DispensingRights::mayDispense($consultRole);
     $consultDispenseNotice = \App\Support\DispensingRights::restrictionNotice($consultRole);
 
     // The school's learners, for the name picker: opened cold, the nurse
-    // types a name and chooses the learner, and the grade and section come
-    // off the record rather than being typed against it. Names are encrypted
-    // at rest, so the index is embedded and searched in the browser.
+    // types a name or an LRN and chooses the learner, and the grade and
+    // section come off the record rather than being typed against it. Names
+    // are encrypted at rest, so the index is embedded and searched in the
+    // browser.
     $consultLearnerIndex = \App\Support\LearnerSearchIndex::fromSession(request());
-
-    $consultMedicines = ($consultMayDispense && \App\Support\SchemaCache::hasTable('medicines'))
-        ? \App\Models\Medicine::query()
-            ->when(session('active_institution_id'), fn ($q, $id) => $q->where('institution_id', $id))
-            ->where('stock_quantity', '>', 0)
-            ->orderBy('name')
-            ->get()
-        : collect();
 
 @endphp
 
@@ -149,6 +143,18 @@
                     @endif
                 </div>
 
+                {{-- The learner's recorded allergies, read when the learner is
+                     chosen (App\Support\LearnerAllergies) — before anything is
+                     handed over, not after. Hidden until there is a learner to
+                     read them for. --}}
+                <div class="bmodal-field cm-allergies" id="cm_allergies" hidden aria-live="polite">
+                    <div class="cm-allergies-head">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <span>Recorded allergies</span>
+                    </div>
+                    <ul class="cm-allergy-list" id="cm_allergy_list"></ul>
+                </div>
+
                 <div class="bmodal-field">
                     <label for="cm_condition_id">Condition</label>
                     @if ($consultConditions->isEmpty())
@@ -230,10 +236,48 @@
                     @endif
                 </div>
 
-                <div class="bmodal-field">
-                    <label for="cm_treatment_given">Treatment given</label>
-                    <textarea id="cm_treatment_given" name="treatment_given"
-                              placeholder="Medicine given, recommendations, referral note...">{{ old('treatment_given') }}</textarea>
+                @if ($consultMayDispense)
+                    {{-- Optional. Choosing one deducts it from stock when the
+                         consultation saves — one action, one transaction, so a
+                         medicine handed over cannot go unrecorded. Paracetamol
+                         is listed first; a role restricted to it sees the rest
+                         of the shelf greyed out. --}}
+                    <div class="bmodal-grid cm-medicine-grid">
+                        <div class="bmodal-field">
+                            <label for="cm_medicine_id">Medicine given <span class="bmodal-optional">(optional)</span></label>
+                            <select id="cm_medicine_id" name="medicine_id">
+                                @include('partials.consultation-medicine-options', ['role' => $consultRole])
+                            </select>
+                            @if ($errors->consultation->has('medicine_id'))
+                                <div class="bmodal-error">{{ $errors->consultation->first('medicine_id') }}</div>
+                            @endif
+                        </div>
+                        <div class="bmodal-field">
+                            <label for="cm_medicine_quantity">Quantity</label>
+                            <input id="cm_medicine_quantity" type="number" name="medicine_quantity" min="1" step="1"
+                                   value="{{ old('medicine_quantity') }}" placeholder="e.g. 1" autocomplete="off">
+                            @if ($errors->consultation->has('medicine_quantity'))
+                                <div class="bmodal-error">{{ $errors->consultation->first('medicine_quantity') }}</div>
+                            @endif
+                        </div>
+                    </div>
+                    {{-- Which lot the draw comes out of: the soonest expiry on
+                         the shelf, then the next once that one runs out. --}}
+                    <div class="cm-batch" id="cm_medicine_batch" hidden>
+                        <span class="cm-batch-label">Batch</span>
+                        <span class="cm-batch-value" id="cm_medicine_batch_value"></span>
+                    </div>
+                    <div class="bmodal-error" id="cm_allergy_match" hidden></div>
+                    @if ($consultDispenseNotice !== '')
+                        <div class="bmodal-hint cm-dispense-limit">{{ $consultDispenseNotice }}</div>
+                    @endif
+                    <div class="bmodal-hint cm-dispense-hint">Deducted from inventory when this consultation is saved.</div>
+                @endif
+
+                <div class="bmodal-field cm-recommendations">
+                    <label for="cm_treatment_given">Recommendations <span class="bmodal-optional">(optional)</span></label>
+                    <textarea id="cm_treatment_given" name="treatment_given" maxlength="1000"
+                              placeholder="Advice, follow-up, or referral note">{{ old('treatment_given') }}</textarea>
                     @if ($errors->consultation->has('treatment_given'))
                         <div class="bmodal-error">{{ $errors->consultation->first('treatment_given') }}</div>
                     @endif
@@ -265,43 +309,6 @@
                             <div class="bmodal-hint">Notes stay in the clinic unless shared.</div>
                         </div>
                     @endif
-                @endif
-
-                @if ($consultMayDispense && $consultMedicines->isNotEmpty())
-                    {{-- Optional. Choosing one deducts it from stock when the
-                         consultation saves — one action, one transaction, so a
-                         medicine handed over cannot go unrecorded. --}}
-                    <div class="bmodal-grid">
-                        <div class="bmodal-field">
-                            <label for="cm_medicine_id">Medicine dispensed <span class="bmodal-optional">(optional)</span></label>
-                            <select id="cm_medicine_id" name="medicine_id">
-                                <option value="">None</option>
-                                @foreach ($consultMedicines as $medicine)
-                                    @php $cmAllowed = \App\Support\DispensingRights::allows($consultRole, $medicine->name); @endphp
-                                    <option value="{{ $medicine->id }}"
-                                            @selected($cmAllowed && (string) old('medicine_id') === (string) $medicine->id)
-                                            @disabled(! $cmAllowed)>
-                                        {{ $medicine->name }} ({{ $medicine->stock_quantity }} {{ $medicine->unit }} left)@unless ($cmAllowed) &mdash; School Nurse only @endunless
-                                    </option>
-                                @endforeach
-                            </select>
-                            @if ($errors->consultation->has('medicine_id'))
-                                <div class="bmodal-error">{{ $errors->consultation->first('medicine_id') }}</div>
-                            @endif
-                        </div>
-                        <div class="bmodal-field">
-                            <label for="cm_medicine_quantity">Quantity</label>
-                            <input id="cm_medicine_quantity" type="number" name="medicine_quantity" min="1" step="1"
-                                   value="{{ old('medicine_quantity') }}" placeholder="e.g. 1" autocomplete="off">
-                            @if ($errors->consultation->has('medicine_quantity'))
-                                <div class="bmodal-error">{{ $errors->consultation->first('medicine_quantity') }}</div>
-                            @endif
-                        </div>
-                    </div>
-                    @if ($consultDispenseNotice !== '')
-                        <div class="bmodal-hint cm-dispense-limit">{{ $consultDispenseNotice }}</div>
-                    @endif
-                    <div class="bmodal-hint">Deducted from inventory when this consultation is saved.</div>
                 @endif
 
                 {{-- Photographs of the injury, attached while the visit is
@@ -388,6 +395,56 @@
         color: var(--lg-amber-ink, #7A5A16);
     }
     #consultModal select option:disabled { color: #8A9A91; }
+
+    /* The medicine field sits in the shared grid, which has no bottom margin
+       of its own; the lines under it close the group before Recommendations. */
+    #consultModal .cm-medicine-grid { margin-bottom: 0; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr); }
+    @media (max-width: 560px) {
+        #consultModal .cm-medicine-grid { grid-template-columns: 1fr; }
+    }
+    #consultModal .cm-medicine-grid .bmodal-field { margin-bottom: 6px; }
+    #consultModal .cm-dispense-hint { margin: 4px 0 13px; font-size: .72rem; color: #6B7C72; }
+    #consultModal #cm_allergy_match { margin: 0 0 6px; }
+
+    /* Which lot a draw comes out of — a fact about the box in hand, set as a
+       quiet line under the field rather than a second control. */
+    #consultModal .cm-batch {
+        display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px;
+        margin: 0 0 6px; padding: 6px 9px;
+        border: 1px solid #DCE8E0; border-radius: 8px; background: #F6F9F7;
+        font-size: .76rem; color: #1d3c31;
+    }
+    #consultModal .cm-batch[hidden] { display: none; }
+    #consultModal .cm-batch-label {
+        font-size: .64rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #6B7C72;
+    }
+    #consultModal .cm-batch-value { font-variant-numeric: tabular-nums lining-nums; }
+
+    /* Recorded allergies. Coral when there is one — it is the thing to read
+       before anything is handed over; neutral when none is recorded. */
+    #consultModal .cm-allergies {
+        padding: 9px 11px; border-radius: 10px;
+        border: 1px solid #DCE8E0; background: #F6F9F7;
+    }
+    #consultModal .cm-allergies[hidden] { display: none; }
+    #consultModal .cm-allergies.has-allergy { border-color: #F1C4BC; background: #FDF1EE; }
+    #consultModal .cm-allergies-head {
+        display: flex; align-items: center; gap: 6px;
+        font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #6B7C72;
+    }
+    #consultModal .cm-allergies.has-allergy .cm-allergies-head { color: #A63A2B; }
+    #consultModal .cm-allergies-head svg { width: 13px; height: 13px; flex: 0 0 auto; }
+    #consultModal .cm-allergy-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+    #consultModal .cm-allergy-list li { font-size: .8rem; color: #1d3c31; line-height: 1.35; }
+    #consultModal .cm-allergy-kind { font-weight: 700; }
+    #consultModal .cm-allergy-source { display: block; font-size: .68rem; color: #6B7C72; }
+    #consultModal .cm-allergy-none { color: #3E5348; }
+
+    /* The learner's LRN beside their name in the search results, so a learner
+       found by LRN is recognisably the one that was typed. */
+    #consultModal .cmcombo-lrn {
+        font-size: .7rem; color: #3E5348; font-variant-numeric: tabular-nums lining-nums;
+    }
     #consultModal .cm-photo-drop {
         display: flex; align-items: center; gap: 9px;
         padding: 10px 12px; margin-top: 4px;
@@ -462,6 +519,194 @@
     });
 })();
 
+// Recorded allergies for the learner on the form, read from the server when
+// the learner is chosen (student-allergies.show). Built from DOM nodes, never
+// innerHTML: what a parent wrote on a form is not markup. A reply for a learner
+// who is no longer on the form is dropped, so a quick change of learner can
+// never leave the first child's allergies under the second child's name.
+(() => {
+    const box = document.getElementById('cm_allergies');
+    const list = document.getElementById('cm_allergy_list');
+    const base = @json(url('health-records/students'));
+    let token = 0;
+    let current = [];
+
+    const announce = () => document.dispatchEvent(new CustomEvent('consult:allergies'));
+
+    const line = (className, text) => Object.assign(document.createElement('li'), { className, textContent: text });
+
+    const clear = () => {
+        token += 1;
+        current = [];
+        if (list) list.textContent = '';
+        if (box) {
+            box.hidden = true;
+            box.classList.remove('has-allergy');
+        }
+        announce();
+    };
+
+    const render = (allergies) => {
+        current = Array.isArray(allergies) ? allergies : [];
+        list.textContent = '';
+
+        if (current.length === 0) {
+            list.appendChild(line('cm-allergy-none', 'None recorded'));
+        }
+
+        current.forEach((allergy) => {
+            const item = document.createElement('li');
+            item.appendChild(Object.assign(document.createElement('span'), {
+                className: 'cm-allergy-kind',
+                textContent: (allergy.kind || 'Allergy') + ': ',
+            }));
+            item.appendChild(document.createTextNode(String(allergy.text || '')));
+
+            const sources = Array.isArray(allergy.sources) ? allergy.sources.join(' · ') : '';
+            if (sources !== '') {
+                item.appendChild(Object.assign(document.createElement('span'), {
+                    className: 'cm-allergy-source',
+                    textContent: sources,
+                }));
+            }
+            list.appendChild(item);
+        });
+
+        box.classList.toggle('has-allergy', current.length > 0);
+        box.hidden = false;
+        announce();
+    };
+
+    const show = (lrn) => {
+        const id = String(lrn || '').trim();
+        clear();
+        if (id === '' || !box || !list) return;
+
+        const mine = token;
+        fetch(base + '/' + encodeURIComponent(id) + '/allergies', {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then((response) => {
+                if (response.status === 403) return null;
+                if (!response.ok) throw new Error('allergies');
+                return response.json();
+            })
+            .then((data) => {
+                if (mine !== token || !data) return;
+                render(data.allergies);
+            })
+            .catch(() => {
+                if (mine !== token) return;
+                list.textContent = '';
+                list.appendChild(line('cm-allergy-none', 'Could not be loaded'));
+                box.hidden = false;
+            });
+    };
+
+    window.consultAllergies = { show, clear, current: () => current.slice() };
+})();
+
+// The medicine field: which lot the draw comes out of, how many may be given,
+// and whether the medicine matches an allergy on file. The lots are the
+// server's (App\Support\MedicineBatches) — soonest expiry first, expired stock
+// left out — so the dialog only reads them in order.
+(() => {
+    const select = document.getElementById('cm_medicine_id');
+    const quantity = document.getElementById('cm_medicine_quantity');
+    const batch = document.getElementById('cm_medicine_batch');
+    const batchValue = document.getElementById('cm_medicine_batch_value');
+    const match = document.getElementById('cm_allergy_match');
+    if (!select || !quantity || !batch || !batchValue) return;
+
+    // Words a medicine's name shares with every other one say nothing about
+    // which medicine it is, so they never make a match on their own.
+    const generic = new Set(['tablet', 'tablets', 'capsule', 'capsules', 'syrup', 'suspension', 'drops',
+        'cream', 'ointment', 'solution', 'generic', 'oral', 'sachet', 'sachets', 'bottle', 'medicine']);
+    const words = (text) => String(text || '').toLowerCase().split(/[^a-z]+/)
+        .filter((word) => word.length >= 4 && !generic.has(word));
+
+    const chosen = () => {
+        const option = select.options[select.selectedIndex] || null;
+        return option && option.value !== '' ? option : null;
+    };
+
+    const lotsOf = (option) => {
+        try {
+            const lots = JSON.parse(option.dataset.lots || '[]');
+            return Array.isArray(lots) ? lots : [];
+        } catch (_) {
+            return [];
+        }
+    };
+
+    // The same walk the server makes: take from the first lot until it runs
+    // out, then the next.
+    const plan = (lots, wanted) => {
+        let left = wanted;
+        const steps = [];
+        for (const lot of lots) {
+            if (left <= 0) break;
+            const take = Math.min(left, Number(lot.remaining) || 0);
+            if (take > 0) {
+                steps.push({ expiry: String(lot.expiry || ''), quantity: take });
+                left -= take;
+            }
+        }
+        return left > 0 ? null : steps;
+    };
+
+    const syncBatch = () => {
+        const option = chosen();
+        if (!option) {
+            batch.hidden = true;
+            batchValue.textContent = '';
+            quantity.removeAttribute('max');
+            quantity.setCustomValidity('');
+            return;
+        }
+
+        const usable = Number(option.dataset.usable) || 0;
+        const unit = option.dataset.unit || '';
+        const wanted = Math.max(1, parseInt(quantity.value, 10) || 1);
+        const lots = lotsOf(option);
+        const steps = plan(lots, Math.min(wanted, usable));
+
+        quantity.max = String(usable);
+        quantity.setCustomValidity(wanted > usable
+            ? 'Only ' + usable + ' ' + unit + ' of ' + (option.dataset.name || 'this medicine') + ' are within their expiry date.'
+            : '');
+
+        batchValue.textContent = (steps || [])
+            .map((step) => step.expiry + ' · ' + step.quantity + ' ' + unit)
+            .join('  +  ');
+        batch.hidden = batchValue.textContent === '';
+    };
+
+    const syncAllergy = () => {
+        if (!match) return;
+
+        const option = chosen();
+        const allergies = (window.consultAllergies ? window.consultAllergies.current() : [])
+            .filter((allergy) => allergy.kind !== 'Food');
+
+        const medicineWords = new Set(option ? words(option.dataset.name) : []);
+        const hits = allergies.filter((allergy) => words(allergy.text).some((word) => medicineWords.has(word)));
+
+        match.textContent = hits.length > 0
+            ? 'Recorded allergy: ' + hits.map((allergy) => allergy.text).join(', ')
+            : '';
+        match.hidden = hits.length === 0;
+    };
+
+    select.addEventListener('change', () => { syncBatch(); syncAllergy(); });
+    quantity.addEventListener('input', syncBatch);
+    document.addEventListener('consult:allergies', syncAllergy);
+
+    syncBatch();
+    syncAllergy();
+})();
+
 // Open the dialog with a learner already filled in.
 (() => {
     const nameField = document.getElementById('cm_student_name');
@@ -488,12 +733,28 @@
         setLock(sectionField, sectionWrap, String(section || '').trim() !== '');
     };
 
+    // The learner the form is for, once one was chosen off the roll or handed
+    // in by a profile — the name as the record spells it and the LRN their
+    // allergies are read by. A name typed and never chosen has neither.
+    let pickedName = '';
+    let pickedLrn = '';
+
+    const allergies = window.consultAllergies || { show() {}, clear() {} };
+
+    const forLearner = (name, lrn) => {
+        pickedName = String(name || '').trim();
+        pickedLrn = String(lrn || '').trim();
+        if (pickedLrn !== '') allergies.show(pickedLrn);
+        else allergies.clear();
+    };
+
     // Called by the profile's "New Consultation" button.
-    window.openConsultationFor = (name, section) => {
+    window.openConsultationFor = (name, section, lrn) => {
         if (nameField) nameField.value = name || '';
         if (sectionField) sectionField.value = section || '';
 
         lockLearner(name, section);
+        forLearner(name, lrn);
 
         // The Consultation Log's own trigger carries no learner, and this
         // borrows it to open the dialog. Flag the open so the delegated
@@ -722,7 +983,15 @@
     const learners = @json($consultLearnerIndex ?? []);
 
     if (studentCombo && studentList && nameField) {
-        let pickedName = '';
+        // An LRN is twelve digits and is often read off a card with spaces or
+        // dashes in it, so those are ignored; three digits are enough to start
+        // narrowing, and the digits may be any part of the LRN.
+        const lrnTerm = (raw) => {
+            const digits = raw.replace(/[\s-]+/g, '');
+            return /^\d{3,}$/.test(digits) ? digits : '';
+        };
+
+        let matched = [];
 
         const closeStudents = () => {
             studentList.classList.remove('show');
@@ -730,10 +999,11 @@
         };
 
         const chooseLearner = (learner) => {
-            pickedName = learner.name;
             nameField.value = learner.name;
+            nameField.setCustomValidity('');
             if (sectionField) sectionField.value = learner.section || '';
             setLock(sectionField, sectionWrap, String(learner.section || '').trim() !== '');
+            forLearner(learner.name, learner.lrn);
             closeStudents();
             if (sectionField && !sectionField.readOnly) sectionField.focus();
         };
@@ -744,6 +1014,7 @@
             row.className = 'cmcombo-row';
             row.setAttribute('role', 'option');
             row.appendChild(Object.assign(document.createElement('span'), { className: 'cmcombo-name', textContent: learner.name }));
+            row.appendChild(Object.assign(document.createElement('span'), { className: 'cmcombo-lrn', textContent: 'LRN ' + learner.lrn }));
             row.appendChild(Object.assign(document.createElement('span'), { className: 'cmcombo-cat', textContent: learner.section || 'No section on file' }));
             row.addEventListener('click', () => chooseLearner(learner));
             return row;
@@ -753,16 +1024,21 @@
             // Filled in from a profile: the name is the record's, not a search.
             if (nameField.readOnly) { closeStudents(); return; }
 
+            nameField.setCustomValidity('');
+
             const raw = nameField.value.trim();
             const term = raw.toLowerCase();
+            const digits = lrnTerm(raw);
 
-            // Typed over a pick: the section was that learner's, not this name's.
+            // Typed over a pick: the section and the allergies were that
+            // learner's, not this name's.
             if (pickedName !== '' && raw !== pickedName) {
-                pickedName = '';
+                forLearner('', '');
                 if (sectionField) sectionField.value = '';
                 setLock(sectionField, sectionWrap, false);
             }
 
+            matched = [];
             if (term === '' || learners.length === 0) { studentList.textContent = ''; closeStudents(); return; }
 
             const startsWith = (value) => String(value || '').toLowerCase().startsWith(term);
@@ -771,20 +1047,33 @@
 
             const tiers = [[], [], []];
             learners.forEach((learner) => {
-                if (startsWith(learner.name) || startsWith(learner.lrn)) tiers[0].push(learner);
+                const lrn = String(learner.lrn || '');
+
+                // Digits are an LRN: the exact one first, then those it
+                // starts, then those it appears in.
+                if (digits !== '') {
+                    if (lrn === digits) tiers[0].push(learner);
+                    else if (lrn.startsWith(digits)) tiers[1].push(learner);
+                    else if (lrn.includes(digits)) tiers[2].push(learner);
+                    return;
+                }
+
+                if (startsWith(learner.name) || startsWith(lrn)) tiers[0].push(learner);
                 else if (wordStartsWith(learner.name)) tiers[1].push(learner);
                 else if (String(learner.name).toLowerCase().includes(term)) tiers[2].push(learner);
             });
-            const matches = tiers[0].concat(tiers[1], tiers[2]);
+            matched = tiers[0].concat(tiers[1], tiers[2]);
 
             studentList.textContent = '';
-            if (matches.length === 0) {
+            if (matched.length === 0) {
                 studentList.appendChild(Object.assign(document.createElement('div'), {
                     className: 'cmcombo-empty',
-                    textContent: 'No learner on the roll matches "' + raw + '". The name will be recorded as typed.',
+                    textContent: digits !== ''
+                        ? 'No learner on the roll has an LRN matching "' + raw + '".'
+                        : 'No learner on the roll matches "' + raw + '". The name will be recorded as typed.',
                 }));
             }
-            matches.slice(0, 8).forEach((learner) => studentList.appendChild(learnerRow(learner)));
+            matched.slice(0, 8).forEach((learner) => studentList.appendChild(learnerRow(learner)));
 
             studentList.classList.add('show');
             nameField.setAttribute('aria-expanded', 'true');
@@ -794,12 +1083,33 @@
         nameField.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') { closeStudents(); return; }
             if (event.key === 'Enter' && studentList.classList.contains('show')) {
-                const rows = studentList.querySelectorAll('.cmcombo-row');
-                if (rows.length === 1) { event.preventDefault(); rows[0].click(); }
+                // The only match, or the learner whose LRN was typed in full.
+                const digits = lrnTerm(nameField.value.trim());
+                const exact = digits !== '' ? matched.find((learner) => String(learner.lrn) === digits) : null;
+
+                if (matched.length === 1 || exact) {
+                    event.preventDefault();
+                    chooseLearner(exact || matched[0]);
+                }
             }
         });
         document.addEventListener('click', (event) => {
             if (!studentCombo.contains(event.target)) closeStudents();
+        });
+
+        // An LRN typed and never chosen is not a name: filing a visit under
+        // "136572190011" would leave a consultation nobody can find by the
+        // learner it was for. A name typed and never chosen is still accepted
+        // — a visitor not on the roll is still a visit.
+        nameField.closest('form')?.addEventListener('submit', (event) => {
+            if (nameField.readOnly || pickedName !== '' || lrnTerm(nameField.value.trim()) === '') return;
+
+            event.preventDefault();
+            // The matches first — applyStudents() clears any earlier message
+            // — then the reason, so it is the one left on the field.
+            applyStudents();
+            nameField.setCustomValidity('Choose the learner this LRN belongs to from the list.');
+            nameField.reportValidity();
         });
     }
 
@@ -819,6 +1129,7 @@
             if (trigger.dataset.consultSection !== undefined && sectionField) sectionField.value = section;
 
             lockLearner(name, section);
+            forLearner(name, trigger.dataset.consultLrn ?? '');
         } else if (!window.__consultPrefilled) {
             // Opened cold — the Consultation Log's own button. One dialog
             // serves both, so a lock left over from a previous open has to

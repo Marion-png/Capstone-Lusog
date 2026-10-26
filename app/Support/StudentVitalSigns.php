@@ -39,6 +39,75 @@ class StudentVitalSigns
     public const RECORDED_AT = 'vitals_recorded_at';
 
     /**
+     * The figures a blood pressure is accepted within, in mmHg: wide enough
+     * for any reading a school clinic takes on a learner, narrow enough that
+     * a slip of the keyboard ("1100/70") or the two figures swapped is caught.
+     */
+    public const SYSTOLIC_MIN = 50;
+
+    public const SYSTOLIC_MAX = 250;
+
+    public const DIASTOLIC_MIN = 30;
+
+    public const DIASTOLIC_MAX = 150;
+
+    /** What a blood pressure has to look like. */
+    public const BLOOD_PRESSURE_FORMAT = 'Enter the blood pressure as systolic/diastolic in mmHg, for example 110/70.';
+
+    /**
+     * A blood pressure as [systolic, diastolic], or null when the value is not
+     * one: two whole numbers either side of a slash, spaces around it allowed.
+     *
+     * @return array{0: int, 1: int}|null
+     */
+    public static function parseBloodPressure(mixed $value): ?array
+    {
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        if (preg_match('/^\s*(\d{2,3})\s*\/\s*(\d{2,3})\s*$/', (string) $value, $match) !== 1) {
+            return null;
+        }
+
+        return [(int) $match[1], (int) $match[2]];
+    }
+
+    /** Why this value is not a blood pressure, or null when it is one. */
+    public static function bloodPressureProblem(mixed $value): ?string
+    {
+        $reading = self::parseBloodPressure($value);
+
+        if ($reading === null) {
+            return self::BLOOD_PRESSURE_FORMAT;
+        }
+
+        [$systolic, $diastolic] = $reading;
+
+        if ($systolic < self::SYSTOLIC_MIN || $systolic > self::SYSTOLIC_MAX) {
+            return 'The systolic (first) figure must be between '.self::SYSTOLIC_MIN.' and '.self::SYSTOLIC_MAX.' mmHg.';
+        }
+
+        if ($diastolic < self::DIASTOLIC_MIN || $diastolic > self::DIASTOLIC_MAX) {
+            return 'The diastolic (second) figure must be between '.self::DIASTOLIC_MIN.' and '.self::DIASTOLIC_MAX.' mmHg.';
+        }
+
+        if ($systolic <= $diastolic) {
+            return 'The systolic (first) figure must be higher than the diastolic (second).';
+        }
+
+        return null;
+    }
+
+    /** "110 / 70" as "110/70"; null for a blank or for anything that is not a reading. */
+    public static function normalizeBloodPressure(mixed $value): ?string
+    {
+        $reading = self::parseBloodPressure($value);
+
+        return $reading === null ? null : $reading[0].'/'.$reading[1];
+    }
+
+    /**
      * What is on file for this learner.
      *
      * @return array{temperature_c: ?string, pulse_bpm: ?string, blood_pressure: ?string, recorded_by: ?string, recorded_at: ?string, has_any: bool}

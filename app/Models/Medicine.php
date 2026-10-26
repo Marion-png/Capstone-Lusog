@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Support\SchemaCache;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -53,6 +54,12 @@ class Medicine extends Model
         return $this->hasMany(MedicineReceipt::class);
     }
 
+    /** The lots on the shelf and every lot before them (App\Support\MedicineBatches). */
+    public function batches(): HasMany
+    {
+        return $this->hasMany(MedicineBatch::class);
+    }
+
     /**
      * Where the stock on hand stands against its expiry date.
      *
@@ -67,8 +74,31 @@ class Medicine extends Model
             return null;
         }
 
+        return self::statusOfDate($this->expiry_date, $today);
+    }
+
+    /** Whole days until expiry; negative once past, NULL with no date on file. */
+    public function daysToExpiry(?Carbon $today = null): ?int
+    {
+        if (! self::supportsExpiry() || ! $this->expiry_date) {
+            return null;
+        }
+
+        return self::daysUntil($this->expiry_date, $today);
+    }
+
+    /**
+     * The same reading for any date — an item's, or one lot's on the shelf —
+     * so a lot and the item it belongs to are judged by one rule.
+     */
+    public static function statusOfDate(?CarbonInterface $expiry, ?CarbonInterface $today = null): ?string
+    {
+        if ($expiry === null) {
+            return null;
+        }
+
         $today = ($today ?? now())->copy()->startOfDay();
-        $expiry = $this->expiry_date->copy()->startOfDay();
+        $expiry = $expiry->copy()->startOfDay();
 
         if ($expiry->lte($today)) {
             return self::EXPIRY_EXPIRED;
@@ -81,13 +111,9 @@ class Medicine extends Model
         return self::EXPIRY_OK;
     }
 
-    /** Whole days until expiry; negative once past, NULL with no date on file. */
-    public function daysToExpiry(?Carbon $today = null): ?int
+    /** Whole days from today to this date; negative once past. */
+    public static function daysUntil(CarbonInterface $expiry, ?CarbonInterface $today = null): int
     {
-        if (! self::supportsExpiry() || ! $this->expiry_date) {
-            return null;
-        }
-
-        return (int) ($today ?? now())->copy()->startOfDay()->diffInDays($this->expiry_date->copy()->startOfDay(), false);
+        return (int) ($today ?? now())->copy()->startOfDay()->diffInDays($expiry->copy()->startOfDay(), false);
     }
 }

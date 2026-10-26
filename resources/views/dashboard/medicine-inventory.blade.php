@@ -34,6 +34,14 @@
             // has the table — so the two questions never fold into one.
             $invMayWriteStock = $may_write_stock ?? true;
             $invMayReceive = $supports_receipts && $invMayWriteStock;
+            // Which lot goes next is shown wherever lots exist; taking
+            // expired stock off the shelf is a stock writer's.
+            $invBatches = $supports_batches ?? false;
+            $invMayDispose = $invBatches && $invMayWriteStock;
+            // Removing expired stock sits beside the expired count, so the
+            // actions column holds Receive alone.
+            $invHasActions = $invMayReceive;
+            $invShelves = $shelves ?? collect();
         @endphp
         <div class="topbar-bc"><span>{{ \App\Support\AccountSettings::roleLabel(session('active_role')) }}</span><span class="bc-sep">&rsaquo;</span><span>Medicine Inventory</span></div>
 
@@ -257,9 +265,14 @@
                             @if ($supports_expiry)
                                 <th>Expiry</th>
                             @endif
+                            {{-- Which box is handed over next: the lot that expires
+                                 first, never one past its date. --}}
+                            @if ($invBatches)
+                                <th>Dispense Next</th>
+                            @endif
                             <th>Status</th>
                             <th>Updated</th>
-                            @if ($invMayReceive)
+                            @if ($invHasActions)
                                 <th></th>
                             @endif
                         </tr>
@@ -269,10 +282,18 @@
                         @php
                             $isCritical = $medicine->stock_quantity === 0;
                             $isLow = $medicine->stock_quantity > 0 && $medicine->stock_quantity < $medicine->minimum_threshold;
+                            // The item's lots, as App\Support\MedicineBatches reads
+                            // them: the date the item is judged by, the lot that is
+                            // dispensed next, and how much is past its date.
+                            $shelf = $invShelves->get($medicine->id);
+                            $itemExpiry = $shelf !== null ? $shelf['item_expiry'] : $medicine->expiry_date;
                             // Expiry only matters for stock that exists; an empty
                             // shelf has nothing to go off.
-                            $expiryStatus = $medicine->stock_quantity > 0 ? $medicine->expiryStatus() : null;
-                            $daysToExpiry = $medicine->daysToExpiry();
+                            $expiryStatus = $medicine->stock_quantity > 0 ? \App\Models\Medicine::statusOfDate($itemExpiry) : null;
+                            $daysToExpiry = $itemExpiry !== null ? \App\Models\Medicine::daysUntil($itemExpiry) : null;
+                            $nextLot = $shelf['next'] ?? null;
+                            $expiredUnits = (int) ($shelf['expired'] ?? 0);
+                            $shelfLots = $shelf['lots'] ?? [];
                         @endphp
                         <tr>
                             <td><strong>{{ $medicine->name }}</strong></td>
@@ -293,8 +314,8 @@
                                 {{-- The date, and how it stands. An item with no date on
                                      file reads as unknown — an em dash — never as fine. --}}
                                 <td class="tnum inv-expiry">
-                                    @if ($medicine->expiry_date)
-                                        <span class="inv-expiry-date">{{ $medicine->expiry_date->format('d M Y') }}</span>
+                                    @if ($itemExpiry)
+                                        <span class="inv-expiry-date">{{ $itemExpiry->format('d M Y') }}</span>
                                         @if ($expiryStatus === \App\Models\Medicine::EXPIRY_EXPIRED)
                                             <span class="badge badge-critical">Expired</span>
                                         @elseif ($expiryStatus === \App\Models\Medicine::EXPIRY_SOON)
@@ -302,6 +323,56 @@
                                         @endif
                                     @else
                                         —
+                                    @endif
+                                </td>
+                            @endif
+                            @if ($invBatches)
+                                <td class="inv-next">
+                                    @if ($nextLot)
+                                        <span class="inv-next-date tnum">{{ \App\Support\MedicineBatches::expiryLabel($nextLot['expiry']) }}</span>
+                                        <span class="inv-next-qty tnum">{{ $nextLot['remaining'] }} of {{ $medicine->stock_quantity }} {{ $medicine->unit }}</span>
+                                    @elseif ($medicine->stock_quantity > 0)
+                                        <span class="inv-next-none">Nothing usable</span>
+                                    @else
+                                        —
+                                    @endif
+                                    @if ($expiredUnits > 0)
+                                        <span class="badge badge-critical">{{ $expiredUnits }} expired</span>
+                                        @if ($invMayDispose)
+                                            {{-- Expired stock is never dispensed, so it stays
+                                                 counted until it is taken off the shelf here. --}}
+                                            <form method="POST" action="{{ route('medicine-inventory.dispose-expired', $medicine) }}" class="inv-dispose-form"
+                                                  data-dispose-confirm="Remove {{ $expiredUnits }} expired {{ $medicine->unit }} of {{ $medicine->name }} from stock?">
+                                                @csrf
+                                                <button type="submit" class="btn btn-secondary btn-sm inv-dispose-btn">
+                                                    Remove expired
+                                                </button>
+                                            </form>
+                                        @endif
+                                    @endif
+                                    {{-- Every lot on the shelf, in the order it is
+                                         dispensed. --}}
+                                    @if (count($shelfLots) > 1 || $expiredUnits > 0)
+                                        <details class="inv-lots">
+                                            <summary>{{ count($shelfLots) }} {{ \Illuminate\Support\Str::plural('batch', count($shelfLots)) }}</summary>
+                                            <ol class="inv-lot-list">
+                                                @foreach ($shelfLots as $lot)
+                                                    @php $lotStatus = \App\Models\Medicine::statusOfDate($lot['expiry']); @endphp
+                                                    <li class="{{ $lotStatus === \App\Models\Medicine::EXPIRY_EXPIRED ? 'is-expired' : '' }}">
+                                                        <span class="tnum">{{ \App\Support\MedicineBatches::expiryLabel($lot['expiry']) }}</span>
+                                                        <span class="tnum">{{ $lot['remaining'] }} {{ $medicine->unit }}</span>
+                                                        @if ($lot['received_at'])
+                                                            <span class="inv-lot-meta tnum">Received {{ $lot['received_at']->format('d M Y') }}</span>
+                                                        @elseif ($lot['source'] !== '')
+                                                            <span class="inv-lot-meta">{{ $lot['source'] }}</span>
+                                                        @endif
+                                                        @if ($lotStatus === \App\Models\Medicine::EXPIRY_EXPIRED)
+                                                            <span class="badge badge-critical">Expired</span>
+                                                        @endif
+                                                    </li>
+                                                @endforeach
+                                            </ol>
+                                        </details>
                                     @endif
                                 </td>
                             @endif
@@ -315,23 +386,25 @@
                                 @endif
                             </td>
                             <td class="tnum">{{ $medicine->updated_at?->format('Y-m-d') ?? '—' }}</td>
-                            @if ($invMayReceive)
+                            @if ($invHasActions)
                                 <td class="inv-actions">
-                                    <button type="button" class="btn btn-secondary btn-sm" data-receive-open
-                                            data-medicine-id="{{ $medicine->id }}"
-                                            data-medicine-name="{{ $medicine->name }}"
-                                            data-medicine-unit="{{ $medicine->unit }}"
-                                            data-medicine-stock="{{ $medicine->stock_quantity }}"
-                                            data-receive-url="{{ route('medicine-inventory.receive', $medicine) }}">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                        Receive
-                                    </button>
+                                    @if ($invMayReceive)
+                                        <button type="button" class="btn btn-secondary btn-sm" data-receive-open
+                                                data-medicine-id="{{ $medicine->id }}"
+                                                data-medicine-name="{{ $medicine->name }}"
+                                                data-medicine-unit="{{ $medicine->unit }}"
+                                                data-medicine-stock="{{ $medicine->stock_quantity }}"
+                                                data-receive-url="{{ route('medicine-inventory.receive', $medicine) }}">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                            Receive
+                                        </button>
+                                    @endif
                                 </td>
                             @endif
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ 8 + (int) $supports_expiry + (int) $invMayReceive }}" class="table-empty">No medicine records yet. Use Add Medicine to create your first item.</td>
+                            <td colspan="{{ 8 + (int) $supports_expiry + (int) $invBatches + (int) $invHasActions }}" class="table-empty">No medicine records yet. Use Add Medicine to create your first item.</td>
                         </tr>
                     @endforelse
                     </tbody>
@@ -492,6 +565,20 @@
         open(); // reopened after a refused save
     @endif
 })();
+</script>
+@endif
+
+@if ($invMayDispose)
+<script>
+// Taking stock off the shelf cannot be undone from this page, so it is asked
+// once before it is sent.
+document.querySelectorAll('form[data-dispose-confirm]').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+        if (!window.confirm(form.dataset.disposeConfirm || 'Remove the expired stock?')) {
+            event.preventDefault();
+        }
+    });
+});
 </script>
 @endif
 

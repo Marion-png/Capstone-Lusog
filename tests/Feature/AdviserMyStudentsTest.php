@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\HealthConsentForm;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Support\BmiAssessmentReport;
@@ -273,8 +274,14 @@ class AdviserMyStudentsTest extends TestCase
         $this->assertSame('20/25', $row['systems_review']['left_eye']);
     }
 
-    /** @test */
-    public function every_row_offers_view_edit_and_parent_consent(): void
+    /**
+     * The roster carries no Actions column: the whole row opens the learner's
+     * profile, and the profile is where their details are edited and their
+     * parent's consent is opened.
+     *
+     * @test
+     */
+    public function every_row_opens_the_learners_profile_where_edit_and_consent_live(): void
     {
         $this->enrol();
 
@@ -283,14 +290,60 @@ class AdviserMyStudentsTest extends TestCase
             ->get(route('dashboard.class-adviser', ['tab' => 'saved']));
 
         $response->assertOk();
-        $response->assertSee('title="View Profile"', false);
-        $response->assertSee('title="Edit Profile"', false);
-        $response->assertSee('title="Parent\'s Consent"', false);
+        $profileUrl = route('dashboard.class-adviser.student-profile', '123456789012');
+        $html = $response->getContent();
 
-        // Parent's Consent posts this learner's LRN so the adviser lands on
-        // their own consent form, not the index.
-        $response->assertSee('action="'.route('consent-forms.open').'"', false);
-        $response->assertSee('name="lrn" value="123456789012"', false);
+        $this->assertMatchesRegularExpression(
+            '/<tr class="js-student-row"[^>]*data-href="'.preg_quote($profileUrl, '/').'"[^>]*tabindex="0"/s',
+            $html,
+            'The row itself opens the profile, by mouse or keyboard.'
+        );
+        $response->assertDontSee('<th>Actions</th>', false);
+        $response->assertDontSee('title="View Profile"', false);
+        $response->assertDontSee('title="Edit Profile"', false);
+        $response->assertDontSee('title="Parent\'s Consent"', false);
+
+        // The record still rides on the row, so the profile's Edit Profile
+        // (?edit=LRN) can hand back here and open the form for this learner.
+        $this->assertMatchesRegularExpression('/<tr class="js-student-row[^>]*data-record=\'\{/s', $html);
+
+        // The profile offers both: edit, and the learner's parent's consent.
+        // With no form on file yet, the consent leads to the Consent Forms
+        // page where one is started.
+        $profile = $this->withSession($this->adviserSession())->get($profileUrl)->assertOk();
+        $profile->assertSee('id="vpEditProfile"', false);
+        $profile->assertSee(route('dashboard.class-adviser', ['tab' => 'saved', 'edit' => '123456789012']));
+        $profile->assertSee('<a href="'.route('consent-forms.index').'" class="btn btn-secondary" id="vpOpenConsent">', false);
+
+        // Once the learner has a form, it opens that form itself.
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.open'), ['lrn' => '123456789012'])
+            ->assertRedirect();
+        $form = HealthConsentForm::where('student_lrn', '123456789012')->firstOrFail();
+
+        $this->withSession($this->adviserSession())->get($profileUrl)->assertOk()
+            ->assertSee('<a href="'.route('consent-forms.show', $form).'" class="btn btn-secondary" id="vpOpenConsent">', false);
+    }
+
+    /**
+     * Height-for-age is read for each weighing, so both groups of the roster
+     * carry it beside the BMI status.
+     *
+     * @test
+     */
+    public function the_roster_shows_height_for_age_for_baseline_and_endline(): void
+    {
+        $this->enrol();
+
+        $html = $this->flushSession()
+            ->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser', ['tab' => 'saved']))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertSame(2, substr_count($html, '<th>Height-for-Age</th>'), 'One column under Baseline, one under Endline.');
+        $this->assertStringContainsString('<th colspan="5" class="ms-group">Baseline</th>', $html);
+        $this->assertStringContainsString('<th colspan="5" class="ms-group">Endline</th>', $html);
     }
 
     /** @test */

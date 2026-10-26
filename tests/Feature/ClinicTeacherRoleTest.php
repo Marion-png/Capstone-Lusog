@@ -90,28 +90,53 @@ class ClinicTeacherRoleTest extends TestCase
     {
         $this->assertTrue(DispensingRights::mayDispense('clinic_teacher'));
         $this->assertTrue(DispensingRights::mayDispense('school_nurse'));
-        // Clinic Staff log consultations and are not admitted at all.
-        $this->assertFalse(DispensingRights::mayDispense('clinic_staff'));
+        // Clinic Staff are admitted on the Clinic Teacher's terms.
+        $this->assertTrue(DispensingRights::mayDispense('clinic_staff'));
         $this->assertFalse(DispensingRights::mayDispense('class_adviser'));
 
         // Matched on the name, so every spelling the catalogue carries counts.
         foreach (['Paracetamol 500mg tablet', 'Paracetamol 250mg/5ml suspension', 'paracetamol (generic)'] as $name) {
-            $this->assertTrue(
-                DispensingRights::allows('clinic_teacher', $name),
-                $name.' is paracetamol and should be allowed.'
-            );
+            foreach (['clinic_teacher', 'clinic_staff'] as $role) {
+                $this->assertTrue(
+                    DispensingRights::allows($role, $name),
+                    $name.' is paracetamol and should be allowed for '.$role.'.'
+                );
+            }
         }
 
         foreach (['Amoxicillin 250mg capsule', 'Antihistamine', 'Vitamin C', 'Mefenamic acid'] as $name) {
             $this->assertFalse(DispensingRights::allows('clinic_teacher', $name));
+            $this->assertFalse(DispensingRights::allows('clinic_staff', $name));
             $this->assertTrue(DispensingRights::allows('school_nurse', $name), 'The nurse has the whole shelf.');
         }
 
         // "Restricted" means admitted but not to everything, so a role with
         // no access at all is not a narrower case of it.
         $this->assertTrue(DispensingRights::isRestricted('clinic_teacher'));
+        $this->assertTrue(DispensingRights::isRestricted('clinic_staff'));
         $this->assertFalse(DispensingRights::isRestricted('school_nurse'));
-        $this->assertFalse(DispensingRights::isRestricted('clinic_staff'));
+        $this->assertFalse(DispensingRights::isRestricted('class_adviser'));
+    }
+
+    /** The field lists paracetamol first for every role, then the rest by name. */
+    #[Test]
+    public function paracetamol_is_listed_first(): void
+    {
+        $ordered = DispensingRights::ordered(Medicine::query()->get())->pluck('name')->all();
+
+        $this->assertSame('Paracetamol 500mg tablet', $ordered[0]);
+        $this->assertSame('Amoxicillin 250mg capsule', $ordered[1]);
+
+        $html = $this->withSession($this->sessionFor('clinic_staff'))
+            ->get(route('dashboard.consultation-log'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertLessThan(
+            strpos($html, '<option value="'.$this->amoxicillin->id.'"'),
+            strpos($html, '<option value="'.$this->paracetamol->id.'"'),
+            'Paracetamol must come before the rest of the shelf.'
+        );
     }
 
     // ── Dispensing ──────────────────────────────────────────────────────
@@ -189,9 +214,9 @@ class ClinicTeacherRoleTest extends TestCase
         $this->assertSame(48, $this->amoxicillin->fresh()->stock_quantity);
     }
 
-    /** Clinic Staff were never admitted, and still are not. */
+    /** Clinic Staff dispense paracetamol, and a crafted request for anything else is refused. */
     #[Test]
-    public function clinic_staff_still_dispense_nothing(): void
+    public function clinic_staff_dispense_paracetamol_and_nothing_else(): void
     {
         $this->withSession($this->sessionFor('clinic_staff'))
             ->from(route('dashboard.consultation-log'))
@@ -199,12 +224,37 @@ class ClinicTeacherRoleTest extends TestCase
                 'medicine_id' => $this->paracetamol->id,
                 'medicine_quantity' => 1,
             ]))
-            ->assertRedirect();
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
 
-        // The visit is logged — that is their job — but no stock moved.
         $this->assertSame(1, Consultation::count());
-        $this->assertSame(0, MedicineDispense::count());
-        $this->assertSame(100, $this->paracetamol->fresh()->stock_quantity);
+        $this->assertSame(99, $this->paracetamol->fresh()->stock_quantity);
+        $this->assertSame('clinic_staff', MedicineDispense::firstOrFail()->dispensed_by_role);
+
+        $this->withSession($this->sessionFor('clinic_staff'))
+            ->from(route('dashboard.consultation-log'))
+            ->post(route('consultations.store'), $this->consultation([
+                'medicine_id' => $this->amoxicillin->id,
+                'medicine_quantity' => 1,
+            ]))
+            ->assertSessionHasErrors('medicine_id', null, 'consultation');
+
+        $this->assertSame(1, Consultation::count(), 'The refused visit rolled back with its dispense.');
+        $this->assertSame(50, $this->amoxicillin->fresh()->stock_quantity);
+    }
+
+    /** Clinic Staff see the whole shelf, with everything but paracetamol disabled. */
+    #[Test]
+    public function the_clinic_staff_dialog_disables_everything_but_paracetamol(): void
+    {
+        $html = $this->withSession($this->sessionFor('clinic_staff'))
+            ->get(route('dashboard.consultation-log'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertMatchesRegularExpression('/<option value="'.$this->amoxicillin->id.'"[^>]*\sdisabled/s', $html);
+        $this->assertDoesNotMatchRegularExpression('/<option value="'.$this->paracetamol->id.'"[^>]*\sdisabled/s', $html);
+        $this->assertStringContainsString('may dispense Paracetamol only', $html);
     }
 
     /** CT-16-13, CT-16-14: the shelf is visible, the rest is disabled and says why. */

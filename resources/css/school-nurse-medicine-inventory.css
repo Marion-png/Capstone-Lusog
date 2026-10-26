@@ -89,6 +89,24 @@
 .inv-expiry { white-space: nowrap; }
 .inv-expiry-date { display: block; margin-bottom: 3px; }
 .inv-actions { text-align: right; white-space: nowrap; }
+/* Removing expired stock sits under the expired count it clears. */
+.inv-next .inv-dispose-form { display: block; margin: 6px 0 2px; }
+.inv-next .inv-dispose-btn { color: var(--lg-danger-ink); white-space: nowrap; }
+
+/* Dispense Next: the lot that goes out first — its date, then how much of
+   the item it holds — and, folded under it, every lot in dispensing order. */
+.inv-next { min-width: 140px; max-width: 200px; }
+.inv-next .badge { white-space: nowrap; }
+.inv-next-date { display: block; font-weight: 600; color: var(--lg-ink); }
+.inv-next-qty { display: block; font-size: .76rem; color: var(--lg-ink-soft); margin-bottom: 3px; }
+.inv-next-none { display: block; color: var(--lg-danger-ink); font-weight: 600; margin-bottom: 3px; }
+.inv-lots { margin-top: 4px; font-size: .76rem; }
+.inv-lots > summary { cursor: pointer; color: var(--lg-ink-soft); font-weight: 600; }
+.inv-lot-list { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.inv-lot-list li { white-space: normal; }
+.inv-lot-list li span + span { margin-left: 6px; }
+.inv-lot-list li.is-expired { color: var(--lg-danger-ink); }
+.inv-lot-meta { color: var(--lg-ink-soft); }
 .btn.btn-sm { padding: 6px 11px; font-size: .78rem; }
 .btn.btn-sm svg { width: 14px; height: 14px; }
 

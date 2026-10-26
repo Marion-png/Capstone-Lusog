@@ -111,6 +111,7 @@
                                 <th>Time</th>
                                 <th>Name</th>
                                 <th>Complaint</th>
+                                <th>Medicine Given</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
@@ -120,6 +121,8 @@
                                     <td class="tnum">{{ $consultation->consulted_at?->format('H:i') ?? '—' }}</td>
                                     <td><strong>{{ $consultation->student_name ?: '—' }}</strong></td>
                                     <td>{{ $consultation->condition ?: '—' }}</td>
+                                    @php $medicineGiven = \App\Support\ConsultationMedicines::line($consultationMedicines ?? [], (int) $consultation->id); @endphp
+                                    <td>{{ $medicineGiven !== '' ? $medicineGiven : '—' }}</td>
                                     <td>
                                         @if ($consultation->status === 'referred')
                                             <span class="badge badge-monitor">Referred</span>
@@ -130,7 +133,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="4" class="table-empty">No consultations recorded yet.</td>
+                                    <td colspan="5" class="table-empty">No consultations recorded yet.</td>
                                 </tr>
                             @endforelse
                         </tbody>

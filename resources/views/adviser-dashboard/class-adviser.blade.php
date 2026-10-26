@@ -414,12 +414,16 @@
                              values this learner's Nutritional Health Status tab
                              prints, so a row and a profile cannot disagree, and
                              nothing is recomputed here. --}}
+                        {{-- Height-for-age sits in each group beside the BMI
+                             status: a learner can be a normal weight for their
+                             height and still short for their age, and the two
+                             weighings each have their own reading of it. --}}
                         <thead>
                             <tr class="ms-group-row">
                                 <th colspan="4"></th>
-                                <th colspan="4" class="ms-group">Baseline</th>
-                                <th colspan="4" class="ms-group">Endline</th>
-                                <th colspan="4"></th>
+                                <th colspan="5" class="ms-group">Baseline</th>
+                                <th colspan="5" class="ms-group">Endline</th>
+                                <th colspan="3"></th>
                             </tr>
                             <tr>
                                 <th>LRN</th>
@@ -430,14 +434,15 @@
                                 <th>Height</th>
                                 <th>BMI</th>
                                 <th>Status</th>
+                                <th>Height-for-Age</th>
                                 <th>Weight</th>
                                 <th>Height</th>
                                 <th>BMI</th>
                                 <th>Status</th>
+                                <th>Height-for-Age</th>
                                 <th>Health Status</th>
                                 <th>Profile Status</th>
                                 <th>Consent</th>
-                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="studentsTableBody">
@@ -480,13 +485,23 @@
                                         return $value === '' ? '—' : ($unit === '' ? $value : $value.' '.$unit);
                                     };
                                 @endphp
+                                {{-- The whole row is the way into the learner's
+                                     profile, where their details are edited and
+                                     their parent's consent is opened. The record
+                                     rides on the row so the profile's Edit Profile
+                                     can hand back here (?edit=LRN) and open the
+                                     form for this learner. --}}
                                 <tr class="js-student-row"
                                     data-name="{{ strtolower($fullName) }}"
                                     data-lrn="{{ strtolower($rowLrn) }}"
-                                    data-status="{{ $profileKey }}">
+                                    data-status="{{ $profileKey }}"
+                                    data-href="{{ route('dashboard.class-adviser.student-profile', $rowLrn) }}"
+                                    data-record='@json($prototypeRecord, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP)'
+                                    tabindex="0"
+                                    aria-label="Open the profile of {{ $fullName }}">
                                     <td><strong>{{ $rowLrn !== '' ? $rowLrn : '-' }}</strong></td>
                                     @php $joinedTag = \App\Support\LearnerPlacement::joinedLabel($joinedTags[$rowLrn] ?? ''); @endphp
-                                    <td class="ms-student-name">{{ $fullName }}@if ($joinedTag !== '')<span class="yt-tag yt-tag-{{ $joinedTags[$rowLrn] }}">{{ $joinedTag }}</span>@endif</td>
+                                    <td class="ms-student-name"><a class="ms-row-anchor" href="{{ route('dashboard.class-adviser.student-profile', $rowLrn) }}" tabindex="-1">{{ $fullName }}</a>@if ($joinedTag !== '')<span class="yt-tag yt-tag-{{ $joinedTags[$rowLrn] }}">{{ $joinedTag }}</span>@endif</td>
                                     <td>{{ $prototypeRecord['gender'] ?? '-' }}</td>
                                     <td>{{ $prototypeRecord['age'] ?? '-' }}</td>
                                     @foreach (['baseline', 'endline'] as $phaseKey)
@@ -495,31 +510,15 @@
                                         <td class="ms-num">{{ $cell($phase, 'height_cm', 'cm') }}</td>
                                         <td class="ms-num">{{ $cell($phase, 'bmi', 'kg/m²') }}</td>
                                         <td>{{ $cell($phase, 'bmi_status') }}</td>
+                                        <td>{{ $cell($phase, 'hfa_status') }}</td>
                                     @endforeach
                                     <td>{{ $healthStatus !== '' ? $healthStatus : 'Not assessed' }}</td>
                                     <td><span class="ms-badge ms-profile-{{ $profileKey }}"@if ($profileKey !== 'complete' && $profileWhy !== '') title="{{ $profileWhy }}"@endif>{{ $profileBadges[$profileKey] }}</span></td>
                                     <td><span class="ms-badge ms-consent-{{ $consentKey }}">{{ $consentBadges[$consentKey] }}</span></td>
-                                    <td>
-                                        <div class="ms-actions">
-                                            <a href="{{ route('dashboard.class-adviser.student-profile', $rowLrn) }}" class="ms-act ms-act-view" title="View Profile" aria-label="View Profile">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                                            </a>
-                                            <button type="button" class="ms-act ms-act-edit js-student-edit" title="Edit Profile" aria-label="Edit Profile" data-record='@json($prototypeRecord)' data-lrn="{{ $rowLrn }}">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
-                                            </button>
-                                            <form method="POST" action="{{ route('consent-forms.open') }}" class="ms-act-form">
-                                                @csrf
-                                                <input type="hidden" name="lrn" value="{{ $rowLrn }}">
-                                                <button type="submit" class="ms-act ms-act-consent" title="Parent's Consent" aria-label="Parent's Consent">
-                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M14.5 18.5c1-1.5 2-1.5 3 0s2 1.5 3 0"/><path d="M12 16c1.5-3.5 3-5 4-3.5s-1 3.5-2 5"/></svg>
-                                                </button>
-                                            </form>
-                                        </div>
-                                    </td>
                                 </tr>
                             @empty
                                 <tr class="js-students-empty">
-                                    <td colspan="16">
+                                    <td colspan="17">
                                         <div class="ms-empty-state">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
                                             <h4>No Students Yet</h4>
@@ -530,7 +529,7 @@
                                 </tr>
                             @endforelse
                             <tr class="js-students-nomatch" hidden>
-                                <td colspan="16">
+                                <td colspan="17">
                                     <div class="ms-empty-state">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                                         <h4>No Students Found</h4>
@@ -2313,23 +2312,47 @@ window.showAdviserSheet = (panelId) => {
         window.switchAdviserTab?.('prototype-saved-panel');
     });
 
-    document.querySelectorAll('.js-student-edit').forEach((button) => {
-        button.addEventListener('click', () => {
-            let record;
-            try {
-                record = JSON.parse(button.getAttribute('data-record') || '{}');
-            } catch (_err) {
-                record = {};
+    // ── A learner's row opens their profile ──────────────────────────
+    // The whole row, by click or by Enter / Space once it has focus. The
+    // profile is where the learner's details are edited and their parent's
+    // consent is opened, so the row needs no buttons of its own. A click on
+    // the name's own link, or with a modifier key held, is left to the
+    // browser so a new tab still opens the way it always does.
+    document.querySelectorAll('.js-student-row[data-href]').forEach((row) => {
+        const open = () => { window.location.href = row.dataset.href; };
+
+        row.addEventListener('click', (event) => {
+            if (event.target.closest('a, button, input, select, textarea, label')) return;
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+            open();
+        });
+
+        row.addEventListener('keydown', (event) => {
+            if (event.target !== row) return;
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                open();
             }
-            window.openEditForm(record);
         });
     });
 
     // The student profile page's Edit Profile button links back here with
     // ?tab=saved&edit=LRN, since editing itself only happens on this page.
-    const editLrn = new URLSearchParams(window.location.search).get('edit');
+    // The learner's record rides on their row.
+    const editLrn = String(new URLSearchParams(window.location.search).get('edit') || '').trim().toLowerCase();
     if (editLrn) {
-        document.querySelector(`.js-student-edit[data-lrn="${CSS.escape(editLrn)}"]`)?.click();
+        const row = Array.from(document.querySelectorAll('.js-student-row'))
+            .find((candidate) => (candidate.dataset.lrn || '') === editLrn);
+
+        if (row && typeof window.openEditForm === 'function') {
+            let record;
+            try {
+                record = JSON.parse(row.getAttribute('data-record') || '{}');
+            } catch (_err) {
+                record = {};
+            }
+            window.openEditForm(record);
+        }
     }
 })();
 

@@ -159,7 +159,7 @@
                 <label class="field-label" for="searchInput">Search</label>
                 <div class="lg-search">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    <input type="text" id="searchInput" placeholder="Search by student name, condition, or grade..." autocomplete="off">
+                    <input type="text" id="searchInput" placeholder="Search by student name, condition, medicine, or grade..." autocomplete="off">
                 </div>
             </div>
             <div class="spacer"></div>
@@ -175,7 +175,8 @@
                             <th>Student Name</th>
                             <th>Grade &amp; Section</th>
                             <th>Condition</th>
-                            <th>Treatment Given</th>
+                            <th>Medicine Given</th>
+                            <th>Recommendations</th>
                             <th>Status</th>
                             <th>Photos</th>
                         </tr>
@@ -187,12 +188,16 @@
                                 $rowGrade = trim((string) $consultation->grade_section);
                                 $rowCondition = trim((string) $consultation->condition);
                                 $rowTreatment = trim((string) $consultation->treatment_given);
+                                // What was handed over, read off the dispense recorded on
+                                // this visit (App\Support\ConsultationMedicines).
+                                $rowMedicine = \App\Support\ConsultationMedicines::line($consultationMedicines ?? [], (int) $consultation->id);
                             @endphp
-                            <tr class="js-log-row" data-search="{{ strtolower($rowName.' '.$rowGrade.' '.$rowCondition) }}">
+                            <tr class="js-log-row" data-search="{{ strtolower(implode(' ', array_filter([$rowName, $rowGrade, $rowCondition, $rowMedicine], fn ($part) => $part !== ''))) }}">
                                 <td class="tnum">{{ optional($consultation->consulted_at)->format('Y-m-d H:i') ?? '—' }}</td>
                                 <td><strong>{{ $rowName !== '' ? $rowName : '—' }}</strong></td>
                                 <td>{{ $rowGrade !== '' ? $rowGrade : '—' }}</td>
                                 <td>{{ $rowCondition !== '' ? $rowCondition : '—' }}</td>
+                                <td>{{ $rowMedicine !== '' ? $rowMedicine : '—' }}</td>
                                 <td>{{ $rowTreatment !== '' ? $rowTreatment : 'N/A' }}</td>
                                 <td>
                                     @if($consultation->status === 'referred')
@@ -227,11 +232,11 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="table-empty">No consultations yet. Use New Consultation to add the first entry.</td>
+                                <td colspan="8" class="table-empty">No consultations yet. Use New Consultation to add the first entry.</td>
                             </tr>
                         @endforelse
                         <tr id="logNoMatch" hidden>
-                            <td colspan="7" class="table-empty">No consultations match your search.</td>
+                            <td colspan="8" class="table-empty">No consultations match your search.</td>
                         </tr>
                     </tbody>
                 </table>

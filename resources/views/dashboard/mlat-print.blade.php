@@ -43,8 +43,8 @@
         }
 
         .mlat-sheet { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        /* pre-wrap keeps the spacing the form types between tick boxes
-           ("[ ✓ ] Male   [   ] Female") and still wraps a long value. */
+        /* pre-wrap keeps the spacing the form types and still wraps a long
+           value. Each tick box ("☑ Male") sits in its own column. */
         .mlat-sheet td { padding: 2.5pt 5pt; vertical-align: bottom; white-space: pre-wrap; overflow-wrap: break-word; }
         /* A date moves down a line whole; the browser would otherwise break
            it at a hyphen ("2026-" / "08-05"). */

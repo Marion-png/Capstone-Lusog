@@ -1226,7 +1226,7 @@ class ConsentFormScanner
      * Whether a transcribed line says anything — not empty, and not one of the
      * ways a parent writes "nothing to write here".
      */
-    private static function saysSomething(string $text): bool
+    public static function saysSomething(string $text): bool
     {
         $plain = trim((string) preg_replace('/[^a-z]+/', ' ', strtolower(Str::ascii($text))));
 

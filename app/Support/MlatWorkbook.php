@@ -130,11 +130,6 @@ class MlatWorkbook
         $dob = self::birthDate($details);
         $age = self::text($details['age'] ?? $record->baseline_age);
         $sex = strtolower(trim((string) ($details['gender'] ?? '')));
-        $sexLine = implode('   ', [
-            self::box(str_starts_with($sex, 'm')).' Male',
-            self::box(str_starts_with($sex, 'f')).' Female',
-            self::box($sex !== '' && ! str_starts_with($sex, 'm') && ! str_starts_with($sex, 'f')).' Other',
-        ]);
 
         $assessedBy = trim((string) ($exam['examined_by'] ?? ''));
         if ($assessedBy === '') {
@@ -153,29 +148,36 @@ class MlatWorkbook
         $rows[] = self::row(['A. LEARNER INFORMATION'], self::R_BAND, true);
         $rows[] = self::row(['Name of Learner:', $name, '', 'Learner ID / Grade & Section:', trim($lrn.' / '.$gradeSection, ' /')]);
         $rows[] = self::row(['Date of Birth:', $dob, $age !== '' ? 'Age: '.$age : '', 'School:', $schoolName !== '' ? $schoolName : (string) $record->school_name]);
-        $rows[] = self::row(['Sex:', $sexLine, '', 'Date of Assessment:', $assessedOn]);
+        // Every tick box has a cell of its own, so a box is never a run of
+        // text that only shows while the cell beside it happens to be empty.
+        $rows[] = self::row(['Sex:', self::checked(str_starts_with($sex, 'm'), 'Male'), self::checked(str_starts_with($sex, 'f'), 'Female'), 'Date of Assessment:', $assessedOn]);
         $rows[] = self::row(['Assessed by (Name/Title):', $assessedBy]);
         $rows[] = self::blank();
 
         // ── B. Medical history ──
+        // Allergies and Hospitalization/Surgery are boxes on the form too,
+        // with what the adviser wrote beside a ticked one.
         $flag = fn (string $key): bool => (bool) ($history[$key] ?? false);
+        $detailed = fn (string $key, string $label, string $detail): string => self::checked($flag($key), $label)
+            .($flag($key) && self::text($history[$detail] ?? '') !== '' ? ': '.self::text($history[$detail]) : '');
         $rows[] = self::row(['B. MEDICAL HISTORY (Check all that apply)'], self::R_BAND, true);
-        $rows[] = self::row([self::box($flag('med_asthma')).' Asthma', '', '', 'Allergies: '.self::noneOr($flag('med_allergies') ? ($history['allergies_detail'] ?? 'Yes') : '')]);
-        $rows[] = self::row([self::box($flag('med_diabetes')).' Diabetes', '', '', self::box($flag('med_heart')).' Heart Condition']);
-        $rows[] = self::row([self::box($flag('med_seizure')).' Seizure Disorder', '', '', self::box($flag('med_tuberculosis')).' Tuberculosis']);
-        $rows[] = self::row([self::box($flag('med_infections')).' Frequent Infections', '', '', 'Hospitalization/Surgery: '.self::noneOr($flag('med_hospitalization') ? ($history['hospitalization_detail'] ?? 'Yes') : '')]);
+        $rows[] = self::row([self::checked($flag('med_asthma'), 'Asthma'), '', '', $detailed('med_allergies', 'Allergies', 'allergies_detail')]);
+        $rows[] = self::row([self::checked($flag('med_diabetes'), 'Diabetes'), '', '', self::checked($flag('med_heart'), 'Heart Condition')]);
+        $rows[] = self::row([self::checked($flag('med_seizure'), 'Seizure Disorder'), '', '', self::checked($flag('med_tuberculosis'), 'Tuberculosis')]);
+        $rows[] = self::row([self::checked($flag('med_infections'), 'Frequent Infections'), '', '', $detailed('med_hospitalization', 'Hospitalization/Surgery', 'hospitalization_detail')]);
         $rows[] = self::row(['Current Medications: '.self::noneOr($history['current_medications'] ?? ''), '', '', 'Other Conditions: '.self::noneOr($history['other_conditions'] ?? '')]);
         $rows[] = self::blank();
 
         // ── C. Family history ──
+        // One line, as the form has it — one box to a column.
         $rows[] = self::row(['C. FAMILY HISTORY'], self::R_BAND, true);
-        $rows[] = self::row([implode('   ', [
-            self::box($flag('fam_hypertension')).' Hypertension',
-            self::box($flag('fam_diabetes')).' Diabetes',
-            self::box($flag('fam_heart')).' Heart Disease',
-            self::box($flag('fam_cancer')).' Cancer',
-            self::box($flag('fam_mental')).' Mental Health',
-        ])]);
+        $rows[] = self::row([
+            self::checked($flag('fam_hypertension'), 'Hypertension'),
+            self::checked($flag('fam_diabetes'), 'Diabetes'),
+            self::checked($flag('fam_heart'), 'Heart Disease'),
+            self::checked($flag('fam_cancer'), 'Cancer'),
+            self::checked($flag('fam_mental'), 'Mental Health Conditions'),
+        ]);
         $rows[] = self::row(['Genetic/Hereditary Disorders: '.self::noneOr($history['genetic_disorders'] ?? '')]);
         $rows[] = self::blank();
 
@@ -368,10 +370,20 @@ class MlatWorkbook
         return self::row(['']);
     }
 
-    /** The form's tick box, as the clinic types it. */
+    /** The form's tick box: a ballot box, ticked or empty. */
+    public const BOX_ON = '☑';
+
+    public const BOX_OFF = '☐';
+
     public static function box(bool $on): string
     {
-        return $on ? '[ ✓ ]' : '[   ]';
+        return $on ? self::BOX_ON : self::BOX_OFF;
+    }
+
+    /** One option of the form with its box: "☑ Asthma". */
+    public static function checked(bool $on, string $label): string
+    {
+        return self::box($on).' '.$label;
     }
 
     private static function text(mixed $value): string

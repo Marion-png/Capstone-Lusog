@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * One issue of medicine from the clinic stock to a learner.
@@ -25,6 +26,9 @@ class MedicineDispense extends Model
     protected $fillable = [
         'institution_id',
         'medicine_id',
+        // The visit it was handed over at; null for a draw recorded before
+        // dispenses were linked to their consultation.
+        'consultation_id',
         'student_lrn',
         'student_name',
         'reason',
@@ -60,6 +64,17 @@ class MedicineDispense extends Model
     public function medicine(): BelongsTo
     {
         return $this->belongsTo(Medicine::class);
+    }
+
+    public function consultation(): BelongsTo
+    {
+        return $this->belongsTo(Consultation::class);
+    }
+
+    /** The lots this draw came out of, soonest expiry first. */
+    public function batches(): HasMany
+    {
+        return $this->hasMany(MedicineDispenseBatch::class);
     }
 
     /** Restrict to the school the session is scoped to. */

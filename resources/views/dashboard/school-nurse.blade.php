@@ -186,7 +186,8 @@
                             <th>Grade / Section</th>
                             <th>Date</th>
                             <th>Condition</th>
-                            <th>Treatment</th>
+                            <th>Medicine Given</th>
+                            <th>Recommendations</th>
                             <th>Status</th>
                         </tr>
                     </thead>
@@ -197,6 +198,9 @@
                             $gradeSection = trim((string) $c->grade_section);
                             $condition = trim((string) $c->condition);
                             $treatment = trim((string) $c->treatment_given);
+                            // The medicine handed over at this visit and how much,
+                            // off the dispense recorded on it.
+                            $medicineGiven = \App\Support\ConsultationMedicines::line($consultationMedicines ?? [], (int) $c->id);
 
                             $nameParts = array_values(array_filter(explode(' ', $studentName)));
                             $initials = $nameParts === []
@@ -215,7 +219,7 @@
                             $consultedOn = $c->consulted_at?->toDateString() ?? '';
                         @endphp
                         <tr class="js-consult-row"
-                            data-search="{{ strtolower($studentName.' '.$gradeSection.' '.$condition.' '.$treatment) }}"
+                            data-search="{{ strtolower(implode(' ', array_filter([$studentName, $gradeSection, $condition, $medicineGiven, $treatment], fn ($part) => $part !== ''))) }}"
                             data-grade="{{ $rowGrade }}"
                             data-section="{{ strtolower($cfRow['section']) }}"
                             data-sex="{{ strtolower($cfRow['sex']) }}"
@@ -229,6 +233,7 @@
                             <td>{{ $gradeSection !== '' ? $gradeSection : '—' }}</td>
                             <td class="tnum">{{ $c->consulted_at?->format('M j, Y') ?? '—' }}</td>
                             <td>{{ $condition !== '' ? $condition : '—' }}</td>
+                            <td>{{ $medicineGiven !== '' ? $medicineGiven : '—' }}</td>
                             <td>{{ $treatment !== '' ? $treatment : '—' }}</td>
                             <td>
                                 @if($c->status === 'referred')
@@ -240,11 +245,11 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="6" class="table-empty">No consultations recorded yet.</td>
+                            <td colspan="7" class="table-empty">No consultations recorded yet.</td>
                         </tr>
                         @endforelse
                         <tr id="consultNoMatch" hidden>
-                            <td colspan="6" class="table-empty">No consultations match your search or filters.</td>
+                            <td colspan="7" class="table-empty">No consultations match your search or filters.</td>
                         </tr>
                     </tbody>
                 </table>

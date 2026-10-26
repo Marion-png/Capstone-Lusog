@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
+use App\Rules\BloodPressure;
 use App\Support\AdviserClassScope;
 use App\Support\StudentVitalSigns;
 use Illuminate\Http\JsonResponse;
@@ -59,12 +60,15 @@ class StudentVitalSignsController extends Controller
         }
 
         // Ranges match what the adviser's form used to enforce, so a reading
-        // that was valid before this moved desks is still valid now.
+        // that was valid before this moved desks is still valid now. A blood
+        // pressure is systolic/diastolic or nothing — never free text.
         $validated = $request->validate([
             'temperature_c' => ['nullable', 'numeric', 'between:25,45'],
             'pulse_bpm' => ['nullable', 'integer', 'between:20,250'],
-            'blood_pressure' => ['nullable', 'string', 'max:20'],
+            'blood_pressure' => ['nullable', 'string', 'max:20', new BloodPressure],
         ]);
+
+        $validated['blood_pressure'] = StudentVitalSigns::normalizeBloodPressure($validated['blood_pressure'] ?? null);
 
         StudentVitalSigns::write(
             $record,

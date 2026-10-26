@@ -182,7 +182,7 @@ class ConsultationProfileStackTest extends TestCase
     {
         $html = $this->recordsPage();
 
-        $this->assertStringContainsString('window.openConsultationFor(name, section);', $html);
+        $this->assertStringContainsString('window.openConsultationFor(name, section, lrn);', $html);
         $this->assertStringContainsString('const lockLearner = (name, section) =>', $html);
         $this->assertStringContainsString('field.readOnly = locked;', $html);
     }

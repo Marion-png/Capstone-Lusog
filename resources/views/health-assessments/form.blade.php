@@ -150,7 +150,7 @@
                     <div><label class="ha-label">BMI</label><input type="number" step="0.1" name="vital_bmi" class="ha-input" value="{{ old('vital_bmi', $a?->vital_bmi) }}"></div>
                     <div><label class="ha-label">Temp (&deg;C)</label><input type="number" step="0.1" name="vital_temperature_c" class="ha-input" value="{{ old('vital_temperature_c', $a?->vital_temperature_c) }}"></div>
                     <div><label class="ha-label">Pulse (bpm)</label><input type="number" name="vital_pulse_rate" class="ha-input" value="{{ old('vital_pulse_rate', $a?->vital_pulse_rate) }}"></div>
-                    <div><label class="ha-label">BP (mmHg)</label><input type="text" name="vital_blood_pressure" class="ha-input" placeholder="120/80" value="{{ old('vital_blood_pressure', $a?->vital_blood_pressure) }}"></div>
+                    <div><label class="ha-label">BP (mmHg)</label><input type="text" name="vital_blood_pressure" class="ha-input" placeholder="120/80" inputmode="numeric" maxlength="9" pattern="\s*\d{2,3}\s*/\s*\d{2,3}\s*" title="{{ \App\Support\StudentVitalSigns::BLOOD_PRESSURE_FORMAT }}" value="{{ old('vital_blood_pressure', $a?->vital_blood_pressure) }}"></div>
                 </div>
             </div>
         </div>

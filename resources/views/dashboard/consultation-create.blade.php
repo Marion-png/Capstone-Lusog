@@ -34,7 +34,7 @@
                     <div class="field">
                         <label for="consulted_at">Date and Time</label>
                         <input id="consulted_at" type="datetime-local" name="consulted_at" value="{{ old('consulted_at', now()->format('Y-m-d\\TH:i')) }}" required>
-                        @error('consulted_at') <div class="err">{{ $message }}</div> @enderror
+                        @error('consulted_at', 'consultation') <div class="err">{{ $message }}</div> @enderror
                     </div>
                     {{-- A search over the school's roll: typing lists matching
                          learners, choosing one fills the grade and section from
@@ -50,13 +50,13 @@
                                    role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="student_results">
                             <div class="lsearch-list" id="student_results" role="listbox"></div>
                         </div>
-                        @error('student_name') <div class="err">{{ $message }}</div> @enderror
+                        @error('student_name', 'consultation') <div class="err">{{ $message }}</div> @enderror
                     </div>
                     <div class="field">
                         <label for="grade_section">Grade and Section</label>
                         <input id="grade_section" type="text" name="grade_section" value="{{ old('grade_section', $prefillSection ?? '') }}" placeholder="e.g. Grade 10 - Rizal" required autocomplete="off" @readonly(trim((string) old('grade_section', $prefillSection ?? '')) !== '')>
                         <div class="hint" id="grade_section_hint" @if (trim((string) old('grade_section', $prefillSection ?? '')) === '') hidden @endif>From the learner's record.</div>
-                        @error('grade_section') <div class="err">{{ $message }}</div> @enderror
+                        @error('grade_section', 'consultation') <div class="err">{{ $message }}</div> @enderror
                     </div>
                     <div class="field">
                         <x-condition-search
@@ -65,10 +65,28 @@
                             placeholder="Search or type a condition..."
                         />
                     </div>
+                    {{-- The medicine handed over, listed as the dialog lists it
+                         (partials/consultation-medicine-options): paracetamol
+                         first, the rest greyed out for a role restricted to it.
+                         Saving deducts it from stock in the same transaction. --}}
+                    @if (\App\Support\DispensingRights::mayDispense(session('active_role')))
+                        <div class="field">
+                            <label for="medicine_id">Medicine Given <span class="optional">(optional)</span></label>
+                            <select id="medicine_id" name="medicine_id">
+                                @include('partials.consultation-medicine-options', ['role' => session('active_role')])
+                            </select>
+                            @error('medicine_id', 'consultation') <div class="err">{{ $message }}</div> @enderror
+                        </div>
+                        <div class="field">
+                            <label for="medicine_quantity">Quantity</label>
+                            <input id="medicine_quantity" type="number" name="medicine_quantity" min="1" step="1" value="{{ old('medicine_quantity') }}" placeholder="e.g. 1" autocomplete="off">
+                            @error('medicine_quantity', 'consultation') <div class="err">{{ $message }}</div> @enderror
+                        </div>
+                    @endif
                     <div class="field full">
-                        <label for="treatment_given">Treatment Given</label>
-                        <textarea id="treatment_given" name="treatment_given" placeholder="Medicine given, recommendations, referral note...">{{ old('treatment_given') }}</textarea>
-                        @error('treatment_given') <div class="err">{{ $message }}</div> @enderror
+                        <label for="treatment_given">Recommendations <span class="optional">(optional)</span></label>
+                        <textarea id="treatment_given" name="treatment_given" maxlength="1000" placeholder="Advice, follow-up, or referral note">{{ old('treatment_given') }}</textarea>
+                        @error('treatment_given', 'consultation') <div class="err">{{ $message }}</div> @enderror
                     </div>
                     <div class="field">
                         <label for="status">Status</label>
@@ -76,7 +94,7 @@
                             <option value="treated" @selected(old('status') === 'treated')>Treated</option>
                             <option value="referred" @selected(old('status') === 'referred')>Referred</option>
                         </select>
-                        @error('status') <div class="err">{{ $message }}</div> @enderror
+                        @error('status', 'consultation') <div class="err">{{ $message }}</div> @enderror
                     </div>
                     {{-- The clinic note goes with the visit — the same field the
                          profile's dialog carries — and reads back under this
@@ -85,7 +103,7 @@
                         <div class="field full">
                             <label for="notes">Clinic Notes <span class="optional">(optional)</span></label>
                             <textarea id="notes" name="notes" maxlength="2000" placeholder="Clinical observation, follow-up, or anything worth noting about this visit">{{ old('notes') }}</textarea>
-                            @error('notes') <div class="err">{{ $message }}</div> @enderror
+                            @error('notes', 'consultation') <div class="err">{{ $message }}</div> @enderror
                             @if (\App\Support\SchemaCache::hasColumn('consultations', 'notes_shared_with_adviser'))
                                 {{-- The one way a clinic note reaches the class
                                      adviser, and the nurse's decision to make. --}}

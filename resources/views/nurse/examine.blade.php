@@ -240,7 +240,7 @@
                             <td>
                                 <select name="systems[{{ $key }}][finding]" aria-label="{{ $label }} finding">
                                     <option value="">— Select —</option>
-                                    @foreach (\App\Support\Sheet2Review::FINDINGS as $finding)
+                                    @foreach (\App\Support\Sheet2Review::findingsFor($key) as $finding)
                                         <option value="{{ $finding }}" @selected($row['finding'] === $finding)>{{ $finding }}</option>
                                     @endforeach
                                 </select>

@@ -34,6 +34,7 @@ use App\Http\Controllers\SchoolHeadProgramController;
 use App\Http\Controllers\SchoolHeadReportsController;
 use App\Http\Controllers\SchoolYearTransitionController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\StudentAllergyController;
 use App\Http\Controllers\StudentHealthRecordController;
 use App\Http\Controllers\StudentIncidentReportController;
 use App\Http\Controllers\StudentMedicalDocumentController;
@@ -49,6 +50,7 @@ use App\Models\StudentHealthRecord;
 use App\Support\AccountSettings;
 use App\Support\AuditTrail;
 use App\Support\ClinicDashboard;
+use App\Support\ConsultationMedicines;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingProgramCycle;
@@ -513,6 +515,14 @@ Route::post('/dashboard/medicine-inventory/{medicine}/receive', [MedicineInvento
     ->whereNumber('medicine')
     ->name('medicine-inventory.receive');
 
+// Expired stock off the shelf. Dispensing never draws an expired lot, so a lot
+// past its date stays counted until a stock writer removes it here — one
+// transaction, the medicine row locked, every lot it touches audited
+// (MedicineInventoryController::disposeExpired).
+Route::post('/dashboard/medicine-inventory/{medicine}/dispose-expired', [MedicineInventoryController::class, 'disposeExpired'])
+    ->whereNumber('medicine')
+    ->name('medicine-inventory.dispose-expired');
+
 // The Dispensing Log page was retired. A dispense is recorded where it
 // actually happens — in the consultation dialog, which locks the medicine
 // row, refuses to go below stock, writes the `medicine_dispenses` row and
@@ -567,6 +577,9 @@ Route::get('/dashboard/clinic-staff', function (Request $request) {
         ? Consultation::query()
             ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
             ->orderByDesc('consulted_at')
+            // Two visits logged in the same minute read newest first, as the
+            // consultation log and the nurse's dashboard order them.
+            ->orderByDesc('id')
             ->limit(50)
             ->get()
         : collect();
@@ -596,6 +609,8 @@ Route::get('/dashboard/clinic-staff', function (Request $request) {
         'atRiskStudents' => $atRiskStudents,
         'showFlags' => $showFlags,
         'consultations' => $consultations,
+        // What was handed over at the visits the panel lists, read at once.
+        'consultationMedicines' => ConsultationMedicines::forConsultations($consultations->take(6)),
         'medicines' => $medicines,
         'stats' => [
             'walk_ins_today' => $consultations->filter(fn ($c) => $c->consulted_at?->isToday() ?? false)->count(),
@@ -937,6 +952,12 @@ Route::get('/health-records/students/{lrn}/vitals', [StudentVitalSignsController
     ->name('student-vitals.show');
 Route::post('/health-records/students/{lrn}/vitals', [StudentVitalSignsController::class, 'store'])
     ->name('student-vitals.store');
+
+// A learner's recorded allergies, read by the New Consultation dialog when
+// the learner is chosen — every place an allergy is recorded, in one answer
+// (App\Support\LearnerAllergies). Clinic desks only; audited as a read.
+Route::get('/health-records/students/{lrn}/allergies', [StudentAllergyController::class, 'show'])
+    ->name('student-allergies.show');
 
 // Photographs attached to a consultation — a cut, a rash, a swelling, so an
 // injury can be seen rather than described. The clinic takes them; the class

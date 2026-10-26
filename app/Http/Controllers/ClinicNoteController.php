@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ClinicNote;
 use App\Models\Consultation;
 use App\Models\StudentHealthRecord;
+use App\Support\ConsultationMedicines;
 use App\Support\SchemaCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -126,12 +127,16 @@ class ClinicNoteController extends Controller
             ->filter(fn (Consultation $c) => $this->normalizeName((string) $c->student_name) === $needle)
             ->take(20);
 
+        // The medicine handed over at each visit, read for the list at once.
+        $medicines = ConsultationMedicines::forConsultations($consultations);
+
         return response()->json([
             'consultations' => $consultations->map(fn (Consultation $c) => [
                 'id' => $c->id,
                 'date' => $c->consulted_at?->format('M j, Y'),
                 'grade_section' => (string) $c->grade_section,
                 'condition' => (string) $c->condition,
+                'medicine' => ConsultationMedicines::line($medicines, (int) $c->id),
                 'treatment' => (string) $c->treatment_given,
                 // The note written with the visit — clinic-only, like the
                 // rest of this endpoint.

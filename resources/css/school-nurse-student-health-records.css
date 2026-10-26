@@ -208,6 +208,11 @@ body.sn-profile-stacked .profile-backdrop.open { background: transparent; }
 .shr-table td { padding: 11px 16px; border-bottom: 1px solid var(--border); font-size: .81rem; color: var(--text-2); vertical-align: middle; }
 .shr-table tbody tr:hover td { background: var(--g50); }
 .shr-table tr[hidden] { display: none; }
+/* The whole row opens the learner's profile: a cursor and a focus ring say
+   so, the way a button would. */
+.shr-table tbody tr.js-record-row { cursor: pointer; }
+.shr-table tbody tr.js-record-row:focus { outline: none; }
+.shr-table tbody tr.js-record-row:focus-visible td { background: var(--g100); box-shadow: inset 0 2px 0 var(--g700), inset 0 -2px 0 var(--g700); }
 .shr-name { font-weight: 600; color: var(--g900); }
 
 .shr-status { display: inline-flex; align-items: center; gap: 5px; padding: 3px 11px; border-radius: 999px; font-size: .68rem; font-weight: 700; white-space: nowrap; }
