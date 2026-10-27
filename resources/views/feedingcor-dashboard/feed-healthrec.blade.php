@@ -282,13 +282,18 @@
                                         $grade = preg_replace('/^grade\s*/i', '', (string) $record->grade_level);
                                         $segment = $record->segment ?? 'other';
                                         // Enrolling is only ever offered to a learner
-                                        // the measurement qualifies and nobody has
-                                        // enrolled yet. Everyone else is here to be
-                                        // read, not acted on.
-                                        $canEnrol = $segment === 'pending' && $record->id;
-                                        [$standing, $standingBadge] = match ($segment) {
-                                            'beneficiary' => ['Enrolled', 'badge-normal'],
-                                            'pending' => ['Awaiting enrollment', 'badge-monitor'],
+                                        // the measurement qualifies, nobody has
+                                        // enrolled yet, and whose parent has signed
+                                        // the feeding program consent. Everyone else
+                                        // is here to be read, not acted on.
+                                        $consent = $record->feeding_consent ?? \App\Support\FeedingConsent::NONE;
+                                        $canEnrol = $segment === 'pending' && $record->id
+                                            && \App\Support\FeedingConsent::allowsEnrolment($consent);
+                                        [$standing, $standingBadge] = match (true) {
+                                            $segment === 'beneficiary' => ['Enrolled', 'badge-normal'],
+                                            $segment === 'pending' && $canEnrol => ['Consent on file, awaiting enrollment', 'badge-monitor'],
+                                            $segment === 'pending' && $consent === \App\Support\FeedingConsent::DECLINED => ['Parent declined', 'badge-critical'],
+                                            $segment === 'pending' => ['Waiting for parent\'s consent', 'badge-monitor'],
                                             default => ['Not qualified', 'badge-neutral'],
                                         };
                                     @endphp

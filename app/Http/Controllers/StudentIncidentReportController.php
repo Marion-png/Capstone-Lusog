@@ -18,9 +18,10 @@ use Illuminate\Validation\ValidationException;
  * Focus / Data / Action / Response — which is clinical documentation: reading
  * what happened to a learner, recording what was done and whether it worked is
  * the clinic's assessment to make — the nurse's, or the clinic teacher's while
- * they cover. Withdrawing one stays the nurse's. The class adviser sees the
- * same reports on their own profile, read-only, because an incident involving
- * a learner in their class is something they have to know about.
+ * they cover. Withdrawing one stays the nurse's. Clinic staff read the same
+ * reports on the clinic's profile, read-only. The class adviser sees them on
+ * their own profile, read-only, because an incident involving a learner in
+ * their class is something they have to know about.
  *
  * Both roles are scoped to their school. The adviser is scoped a second time,
  * like every other adviser surface, to their own class — an LRN off the wire

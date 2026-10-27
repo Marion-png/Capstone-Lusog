@@ -602,6 +602,7 @@ class FeedingExcusedAbsenceTest extends TestCase
     public function a_removed_learner_returns_to_the_waiting_list_and_can_be_re_enrolled(): void
     {
         $learner = $this->makeStudent();
+        $this->fileFeedingConsent($learner);
 
         $this->withSession($this->coordinatorSession())
             ->post("/dashboard/feedingcor-program/enrollment/{$learner->id}/remove", ['reason' => 'Moved away'])

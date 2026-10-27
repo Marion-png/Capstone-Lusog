@@ -30,6 +30,10 @@ class ParentalConsentFormController extends Controller
 
         $validated = $request->validate([
             'lrn' => ['required', 'string', 'max:50'],
+            // Which signed form this is. The health-services letter unless the
+            // adviser says otherwise, so every upload made before the choice
+            // existed means what it always meant.
+            'program' => ['nullable', 'string', 'in:'.implode(',', array_keys(ParentalConsentForm::PROGRAMS))],
             // The dialog asks, but does not insist: an adviser filing a stack
             // of forms must not be made to guess, so "not recorded yet" stays a
             // real answer and an upload carrying none reads as pending rather
@@ -62,6 +66,24 @@ class ParentalConsentFormController extends Controller
         ], [
             'answer_confirmed.accepted_if' => 'Confirm that the answer read from the photo matches the signed form.',
         ]);
+
+        $program = $validated['program'] ?? ParentalConsentForm::PROGRAM_HEALTH_SERVICES;
+        $feeding = $program === ParentalConsentForm::PROGRAM_FEEDING;
+
+        // The feeding-programme consent is what lets the Feeding Coordinator
+        // enrol a learner, so it is filed only as what it is: the signed form
+        // itself, and the parent's yes or no. There is no "except" on it, and
+        // the photo reader is not offered — it reads the Sulat-Pahibalo.
+        if ($feeding) {
+            $request->validate([
+                'consent_type' => ['required', 'in:full,refused'],
+                'consent' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            ], [
+                'consent_type.required' => 'Record whether the parent agreed to the feeding program.',
+                'consent_type.in' => 'The feeding program consent is either agreed or declined.',
+                'consent.required' => 'Attach the signed feeding program consent form.',
+            ]);
+        }
 
         $advisedGrade = (string) $request->session()->get('assigned_grade_level', '');
         $advisedSection = (string) $request->session()->get('assigned_section', '');
@@ -103,10 +125,10 @@ class ParentalConsentFormController extends Controller
 
         $upload = ParentalConsentForm::create([
             'student_health_record_id' => $record->id,
-            'program_type' => 'Deworming',
+            'program_type' => $program,
             'school_year' => $schoolYear,
             'consent_type' => $validated['consent_type'] ?? null,
-            'partial_exception' => $validated['partial_exception'] ?? null,
+            'partial_exception' => $feeding ? null : ($validated['partial_exception'] ?? null),
             'refused_reason' => $validated['refused_reason'] ?? null,
             'allergy_food' => ! empty($validated['allergy_food']),
             'allergy_food_detail' => $validated['allergy_food_detail'] ?? null,
@@ -130,13 +152,19 @@ class ParentalConsentFormController extends Controller
         // Who decided the answer is part of the evidence: a nurse asking how a
         // "full consent" got onto this record can find that the reader
         // proposed it and the adviser confirmed it against the paper.
-        if (! empty($validated['answer_from_scan']) && ($validated['consent_type'] ?? null) !== null) {
+        if (! $feeding && ! empty($validated['answer_from_scan']) && ($validated['consent_type'] ?? null) !== null) {
             AuditTrail::record(
                 'confirmed',
                 'ParentalConsentForm',
                 $upload->id,
                 'Consent answer read from the photographed form and confirmed by the class adviser',
             );
+        }
+
+        if ($feeding) {
+            return back()->with('consent_success', ($validated['consent_type'] === 'full'
+                ? 'Feeding program consent filed: the parent agreed. The Feeding Coordinator can now enrol this learner'
+                : 'Feeding program consent filed: the parent declined. This learner will not be enrolled').' for SY '.$schoolYear.'.');
         }
 
         $typeLabel = match ($validated['consent_type'] ?? null) {

@@ -161,11 +161,16 @@
 			     the class adviser's, so this record reports baseline and endline
 			     and never asks for them. --}}
 			<div class="bd-actions">
-				@if ($standing['qualified'] && ! $standing['enrolled'])
+				{{-- Enrolling needs the parent's signed feeding program consent;
+				     without it the record says what it is waiting for, and the
+				     endpoint refuses the enrolment regardless. --}}
+				@if ($standing['qualified'] && ! $standing['enrolled'] && \App\Support\FeedingConsent::allowsEnrolment($standing['consent']))
 					<button type="button" class="btn btn-primary" id="bdEnroll">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
 						{{ $wasRemoved ? 'Return to Active List' : 'Enroll Beneficiary' }}
 					</button>
+				@elseif ($standing['qualified'] && ! $standing['enrolled'])
+					<span class="badge {{ $standing['consent'] === \App\Support\FeedingConsent::DECLINED ? 'badge-critical' : 'badge-monitor' }}">{{ \App\Support\FeedingConsent::label($standing['consent']) }}</span>
 				@endif
 				@if ($standing['enrolled'])
 					{{-- Leaving the programme is a decision about one learner, so it

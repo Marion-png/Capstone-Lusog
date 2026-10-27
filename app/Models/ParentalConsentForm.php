@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Casts\EncryptedBoolean;
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,6 +14,26 @@ class ParentalConsentForm extends Model
 {
     use Auditable;
     use HasFactory;
+
+    /**
+     * Which signed form a scan is. Two forms come back from parents and they
+     * answer different questions, so they must never be read as each other:
+     * a parent agreeing to the feeding programme has not agreed to deworming
+     * or an injection, and the reverse.
+     *
+     * The health-services letter (the Sulat-Pahibalo) is stored under the name
+     * it had when deworming was its only service.
+     */
+    public const PROGRAM_HEALTH_SERVICES = 'Deworming';
+
+    /** The parent's consent to the School-Based Feeding Program. */
+    public const PROGRAM_FEEDING = 'SBFP';
+
+    /** @var array<string, string> */
+    public const PROGRAMS = [
+        self::PROGRAM_HEALTH_SERVICES => 'Health services consent (Sulat-Pahibalo)',
+        self::PROGRAM_FEEDING => 'School-Based Feeding Program consent',
+    ];
 
     protected $fillable = [
         'student_health_record_id',
@@ -67,6 +88,18 @@ class ParentalConsentForm extends Model
     public function studentHealthRecord(): BelongsTo
     {
         return $this->belongsTo(StudentHealthRecord::class);
+    }
+
+    /** Scans of the health-services letter only. */
+    public function scopeHealthServices(Builder $query): Builder
+    {
+        return $query->where('program_type', self::PROGRAM_HEALTH_SERVICES);
+    }
+
+    /** Scans of the parent's feeding-programme consent only. */
+    public function scopeFeeding(Builder $query): Builder
+    {
+        return $query->where('program_type', self::PROGRAM_FEEDING);
     }
 
     /**

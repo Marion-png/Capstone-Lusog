@@ -46,10 +46,10 @@
                 Withdrawing a report is the school nurse's.
             @endunless
         @else
-            Incidents involving this learner, charted by the school nurse in
+            Incidents involving this learner, charted by the clinic in
             <b>F-DAR</b> — Date/Time, Focus, and the Progress Notes as Data,
-            Action, Response. Read-only here: filing and withdrawing a report
-            is the nurse's.
+            Action, Response. Read-only here: filing a report is the school
+            nurse's or the clinic teacher's, and withdrawing one the nurse's.
         @endif
     </div>
 

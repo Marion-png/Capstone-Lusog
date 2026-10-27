@@ -6,6 +6,7 @@ use App\Models\StudentHealthRecord;
 use App\Support\AccountSettings;
 use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingBeneficiarySummary;
+use App\Support\FeedingConsent;
 use App\Support\MasterlistSheet;
 use App\Support\NutritionalHealthStatus;
 use App\Support\SchoolHeadOverview;
@@ -393,8 +394,13 @@ class SchoolHeadMasterlistController extends Controller
             ? StudentRecordPurge::nearingAt($institutionId)
             : [];
 
+        // Whether each learner's parent has signed the feeding program consent,
+        // read once: a qualified learner is waiting for it, or for the Feeding
+        // Coordinator once it is on file — never enrolled by the measurement.
+        $feedingConsents = FeedingConsent::forRecords($scoped->values());
+
         $rows = $scoped
-            ->map(fn (StudentHealthRecord $record): array => $this->buildRow($record, $standings, $overview, $nearing, $showFlags))
+            ->map(fn (StudentHealthRecord $record): array => $this->buildRow($record, $standings, $overview, $nearing, $showFlags, $feedingConsents))
             ->values();
 
         $total = $rows->count();
@@ -424,8 +430,10 @@ class SchoolHeadMasterlistController extends Controller
      * @param  array<string, array<string, mixed>>  $nearing  LRN => retention standing
      * @return array<string, mixed>
      */
-    private function buildRow(StudentHealthRecord $record, array $standings, SchoolHeadOverview $overview, array $nearing = [], bool $showFlags = false): array
+    private function buildRow(StudentHealthRecord $record, array $standings, SchoolHeadOverview $overview, array $nearing = [], bool $showFlags = false, array $feedingConsents = []): array
     {
+        $feedingConsent = $feedingConsents[$record->id] ?? FeedingConsent::NONE;
+
         $details = is_array($record->student_details) ? $record->student_details : [];
         $baseline = SchoolHeadOverview::phaseStatus($record, 'baseline');
         $latest = SchoolHeadOverview::phaseStatus($record, 'latest');
@@ -498,7 +506,9 @@ class SchoolHeadMasterlistController extends Controller
             },
             'standing_label' => match (true) {
                 $isBeneficiary => 'Enrolled beneficiary',
-                $isPending => 'Qualified, awaiting enrolment',
+                $isPending && FeedingConsent::allowsEnrolment($feedingConsent) => 'Qualified, consent on file — awaiting enrolment',
+                $isPending && $feedingConsent === FeedingConsent::DECLINED => 'Qualified, parent declined the feeding program',
+                $isPending => 'Qualified, waiting for parent\'s consent',
                 default => 'Not a beneficiary',
             },
             'rate' => $standing['rate'] ?? null,

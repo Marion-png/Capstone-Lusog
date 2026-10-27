@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\StudentHealthRecord;
 use App\Support\AuditTrail;
 use App\Support\FeedingBeneficiarySummary;
+use App\Support\FeedingConsent;
 use App\Support\SchemaCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -17,8 +18,10 @@ use Illuminate\Support\Facades\DB;
  *
  * Qualifying and being enrolled are two different facts. The class adviser
  * measures a learner and their status decides whether they *qualify*; the
- * Feeding Coordinator then decides whether to *enrol* them. This controller
- * serves the waiting list and records that decision.
+ * Feeding Coordinator then decides whether to *enrol* them — and may only once
+ * the learner's parent or guardian has signed the feeding program consent,
+ * which the adviser files (FeedingConsent). A measurement never enrols anybody.
+ * This controller serves the waiting list and records that decision.
  *
  * A learner never enrols themselves out of the list by accident: enrolling is
  * additive and idempotent — re-enrolling an already-enrolled learner is a no-op
@@ -66,13 +69,22 @@ class FeedingEnrollmentController extends Controller
         // for a vacated slot comes from.
         $waiting = $qualified->filter(fn (StudentHealthRecord $r): bool => ! FeedingBeneficiarySummary::isEnrolled($r));
 
+        // Qualifying is not consenting: a learner the measurement qualifies is
+        // listed here either way, but only one whose parent signed the feeding
+        // program consent can be enrolled, and the row says which.
+        $consents = FeedingConsent::forRecords($waiting);
+
         // student_name is encrypted, so sorting happens in PHP too.
         $rows = $waiting
-            ->map(function (StudentHealthRecord $record): array {
+            ->map(function (StudentHealthRecord $record) use ($consents): array {
                 [$grade, $section] = $this->splitSection((string) $record->section);
                 $status = $this->normalizeStatus((string) $record->nutritional_status);
+                $consent = $consents[$record->id] ?? FeedingConsent::NONE;
 
                 return [
+                    'consent' => $consent,
+                    'consent_label' => FeedingConsent::label($consent),
+                    'can_enroll' => FeedingConsent::allowsEnrolment($consent),
                     'id' => $record->id,
                     'name' => (string) $record->student_name,
                     'grade' => $grade,
@@ -106,6 +118,7 @@ class FeedingEnrollmentController extends Controller
             'rows' => $rows,
             'enrolled' => $qualified->count() - $waiting->count(),
             'waiting' => $waiting->count(),
+            'waiting_consent' => collect($rows)->where('can_enroll', false)->count(),
             'weigh_in' => $weighIn?->format('j F Y'),
             'grades' => collect($rows)->pluck('grade')->filter()->unique()->sort(SORT_NATURAL)->values()->all(),
             'sections' => collect($rows)->pluck('section')->filter()->unique()->sort(SORT_NATURAL)->values()->all(),
@@ -151,6 +164,27 @@ class FeedingEnrollmentController extends Controller
             ], 422);
         }
 
+        // A parent's signed consent is what puts a child on the feeding line.
+        // Refused here, whatever a page drew: a learner with no consent on file,
+        // or whose parent declined, is not enrolled.
+        $consents = FeedingConsent::forRecords($eligible);
+        $withoutConsent = $eligible
+            ->reject(fn (StudentHealthRecord $r): bool => FeedingConsent::allowsEnrolment($consents[$r->id] ?? FeedingConsent::NONE))
+            ->count();
+        $eligible = $eligible
+            ->filter(fn (StudentHealthRecord $r): bool => FeedingConsent::allowsEnrolment($consents[$r->id] ?? FeedingConsent::NONE))
+            ->values();
+
+        if ($eligible->isEmpty()) {
+            return response()->json([
+                'message' => 'No parent\'s consent to the feeding program is on file for '
+                    .($withoutConsent === 1 ? 'that learner' : 'those learners')
+                    .'. The class adviser files the signed consent before a learner can be enrolled.',
+                'enrolled_now' => 0,
+                'without_consent' => $withoutConsent,
+            ], 422);
+        }
+
         $coordinator = (string) $request->session()->get('active_name', 'Feeding Coordinator');
         $now = now();
 
@@ -185,7 +219,14 @@ class FeedingEnrollmentController extends Controller
             $eligible->count().' learner(s) enrolled into the feeding programme by '.$coordinator
         );
 
-        return response()->json(['enrolled_now' => $eligible->count()]);
+        return response()->json(array_filter([
+            'enrolled_now' => $eligible->count(),
+            'without_consent' => $withoutConsent,
+            'message' => $withoutConsent > 0
+                ? $withoutConsent.' '.($withoutConsent === 1 ? 'learner was' : 'learners were')
+                    .' not enrolled: no parent\'s consent to the feeding program is on file.'
+                : null,
+        ], fn ($value) => $value !== null));
     }
 
     /**

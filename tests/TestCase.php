@@ -2,6 +2,8 @@
 
 namespace Tests;
 
+use App\Models\ParentalConsentForm;
+use App\Models\StudentHealthRecord;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
@@ -37,5 +39,23 @@ abstract class TestCase extends BaseTestCase
         Carbon::setTestNow();
 
         parent::tearDown();
+    }
+
+    /**
+     * The parent's signed feeding program consent, filed for one learner as
+     * the class adviser files it — the thing that lets the Feeding Coordinator
+     * enrol them. `full` is agreed, `refused` declined.
+     */
+    protected function fileFeedingConsent(StudentHealthRecord $record, string $answer = 'full'): ParentalConsentForm
+    {
+        return ParentalConsentForm::create([
+            'student_health_record_id' => $record->id,
+            'program_type' => ParentalConsentForm::PROGRAM_FEEDING,
+            'school_year' => (string) $record->school_year,
+            'consent_type' => $answer,
+            'file_path' => 'parental-consents/'.$record->id.'/sbfp-consent.jpg',
+            'file_original_name' => 'sbfp-consent.jpg',
+            'uploaded_by_name' => 'Class Adviser',
+        ]);
     }
 }

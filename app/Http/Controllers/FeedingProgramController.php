@@ -15,6 +15,7 @@ use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
+use App\Support\FeedingConsent;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
 use App\Support\UploadReadFailure;
@@ -1088,6 +1089,9 @@ class FeedingProgramController extends Controller
                 'qualified' => $qualified,
                 'enrolled' => $enrolled,
                 'at_risk' => $atRisk,
+                // Whether the parent has signed the feeding program consent:
+                // without it a qualified learner cannot be enrolled.
+                'consent' => FeedingConsent::forRecord($learner),
             ],
             'baseline' => [
                 'height_cm' => $this->measurement($learner->baseline_height_cm ?? $details['height_cm'] ?? null),

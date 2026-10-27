@@ -221,7 +221,10 @@ class HealthConsentFormController extends Controller
         $lrnByRecordId = $records->pluck('student_id', 'id');
 
         // Sorted oldest-first so keyBy leaves the most recent upload per learner.
-        return ParentalConsentForm::whereIn('student_health_record_id', $records->pluck('id'))
+        // The health-services letter only: a feeding-programme consent answers
+        // a different question and must never stand in for this one.
+        return ParentalConsentForm::healthServices()
+            ->whereIn('student_health_record_id', $records->pluck('id'))
             ->where('school_year', $schoolYear)
             ->get()
             ->sortBy('created_at')

@@ -298,6 +298,24 @@
                     <p class="pc-hint">Select the student whose parent signed the consent form.</p>
                 </div>
 
+                {{-- Two forms come back from parents, and they answer different
+                     questions: the Sulat-Pahibalo covers the health services, the
+                     feeding program consent is what lets the Feeding Coordinator
+                     enrol a learner in the SBFP. They are filed apart so neither
+                     is ever read as the other. --}}
+                <div class="pc-field">
+                    <label for="pc_program">Which form is this? <span class="pc-req">*</span></label>
+                    <div class="pc-input">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        <select id="pc_program" name="program">
+                            @foreach (\App\Models\ParentalConsentForm::PROGRAMS as $programValue => $programLabel)
+                                <option value="{{ $programValue }}" @selected(old('program', \App\Models\ParentalConsentForm::PROGRAM_HEALTH_SERVICES) === $programValue)>{{ $programLabel }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <p class="pc-hint">A learner measured as wasted can be enrolled in the feeding program only once their parent's signed feeding program consent is filed here.</p>
+                </div>
+
                 <div class="pc-field">
                     <label for="pc_school_year">School Year <span class="pc-req">*</span></label>
                     <div class="pc-input">
@@ -307,7 +325,7 @@
                 </div>
 
                 <div class="pc-field">
-                    <label>Upload Signed Sulat-Pahibalo Form <span class="pc-req">*</span></label>
+                    <label id="pcFileLabel">Upload Signed Sulat-Pahibalo Form <span class="pc-req">*</span></label>
                     <div class="pc-drop" id="pcDrop" role="button" tabindex="0">
                         <div id="pcDropBody">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/><polyline points="12 16 12 11"/><polyline points="9.5 13 12 10.5 14.5 13"/></svg>
@@ -342,7 +360,7 @@
                      with no answer still reads as PENDING and authorises
                      nothing. --}}
                 <div class="pc-field">
-                    <label for="pc_consent_type">What did the guardian answer? <span class="pc-optional">(Optional)</span></label>
+                    <label for="pc_consent_type">What did the guardian answer? <span class="pc-optional" id="pcAnswerOptional">(Optional)</span></label>
                     @if ($scannerReady)
                         <div class="pc-read">
                             <button type="button" class="btn btn-secondary" id="pcReadAnswer" disabled>Read the answer from the photo</button>
@@ -352,13 +370,15 @@
                     <div class="pc-input">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                         <select id="pc_consent_type" name="consent_type">
-                            <option value="">Not recorded yet</option>
-                            <option value="full" @selected(old('consent_type') === 'full')>Full consent &mdash; agreed to every service</option>
-                            <option value="partial" @selected(old('consent_type') === 'partial')>Partial consent &mdash; agreed, with exceptions</option>
-                            <option value="refused" @selected(old('consent_type') === 'refused')>Declined &mdash; did not agree</option>
+                            <option value="" id="pcNotRecordedOption">Not recorded yet</option>
+                            <option value="full" @selected(old('consent_type') === 'full')
+                                data-feeding-label="Agreed &mdash; the parent consents to the feeding program">Full consent &mdash; agreed to every service</option>
+                            <option value="partial" id="pcPartialOption" @selected(old('consent_type') === 'partial')>Partial consent &mdash; agreed, with exceptions</option>
+                            <option value="refused" @selected(old('consent_type') === 'refused')
+                                data-feeding-label="Declined &mdash; the parent does not consent">Declined &mdash; did not agree</option>
                         </select>
                     </div>
-                    <p class="pc-hint">
+                    <p class="pc-hint" id="pcAnswerHint">
                         Read it off the signed form. Leave it as <strong>Not recorded yet</strong> if you are
                         filing the document now and will read it later &mdash; the form still counts as returned,
                         but no service may be given until an answer is on file.
@@ -405,6 +425,59 @@
         </form>
     </div>
 </div>
+<script>
+    // The feeding program consent is a yes or a no on its own signed form: no
+    // "except", no "not recorded yet", and no photo reader, which reads the
+    // Sulat-Pahibalo. The server holds the same rules whatever is drawn here.
+    (function () {
+        const program = document.getElementById('pc_program');
+        const answer = document.getElementById('pc_consent_type');
+        if (!program || !answer) return;
+
+        const feeding = @json(\App\Models\ParentalConsentForm::PROGRAM_FEEDING);
+        const fileLabel = document.getElementById('pcFileLabel');
+        const read = document.querySelector('#uploadConsentModal .pc-read');
+        const confirmBox = document.getElementById('pcAnswerConfirm');
+        const fromScan = document.getElementById('pcAnswerFromScan');
+        const swapped = [document.getElementById('pcPartialOption'), document.getElementById('pcNotRecordedOption')];
+        const relabelled = Array.from(answer.querySelectorAll('option[data-feeding-label]'));
+        relabelled.forEach((option) => { option.dataset.healthLabel = option.textContent; });
+
+        const sync = () => {
+            const isFeeding = program.value === feeding;
+
+            swapped.forEach((option) => {
+                if (!option) return;
+                option.hidden = isFeeding;
+                option.disabled = isFeeding;
+            });
+            if (isFeeding && (answer.value === 'partial' || answer.value === '')) answer.value = 'full';
+
+            relabelled.forEach((option) => {
+                option.textContent = isFeeding ? option.dataset.feedingLabel : option.dataset.healthLabel;
+            });
+            answer.required = isFeeding;
+
+            ['pcAnswerOptional', 'pcAnswerHint'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.hidden = isFeeding;
+            });
+            if (read) read.hidden = isFeeding;
+            if (isFeeding) {
+                if (confirmBox) confirmBox.hidden = true;
+                if (fromScan) fromScan.value = '0';
+            }
+            if (fileLabel) {
+                fileLabel.firstChild.textContent = isFeeding
+                    ? 'Upload the Signed Feeding Program Consent '
+                    : 'Upload Signed Sulat-Pahibalo Form ';
+            }
+        };
+
+        program.addEventListener('change', sync);
+        sync();
+    })();
+</script>
 @endif
 
 {{-- ── Consent details (read-only) ──────────────────────────────────── --}}

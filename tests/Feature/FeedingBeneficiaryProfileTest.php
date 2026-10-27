@@ -536,6 +536,16 @@ class FeedingBeneficiaryProfileTest extends TestCase
     {
         $record = $this->makeStudent(['feeding_enrolled_at' => null]);
 
+        // Measured and qualified, but no parent has signed the feeding program
+        // consent: the record says what it is waiting for and offers no Enroll.
+        $this->openRecord($record)
+            ->assertOk()
+            ->assertSee('Pending Enrollment')
+            ->assertSee('Waiting for parent&#039;s consent', false)
+            ->assertDontSee('Enroll Beneficiary');
+
+        $this->fileFeedingConsent($record);
+
         $response = $this->openRecord($record)->assertOk();
 
         $response->assertSee('Pending Enrollment');

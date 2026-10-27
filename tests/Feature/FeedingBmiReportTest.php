@@ -667,6 +667,7 @@ class FeedingBmiReportTest extends TestCase
         $this->assertSame(['feeding-beneficiaries'], $row['lists']);
 
         $this->travel(1)->seconds();
+        $this->fileFeedingConsent($learner);
         $this->withSession($this->coordinatorSession())
             ->postJson(route('feedingcor-program.enrollment.store'), ['record_ids' => [$learner->id]])
             ->assertOk();

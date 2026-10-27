@@ -119,6 +119,7 @@ class FeedingEnrollmentTest extends TestCase
     public function enrolling_a_learner_makes_them_a_beneficiary(): void
     {
         $learner = $this->makeCandidate();
+        $this->fileFeedingConsent($learner);
 
         $this->withSession($this->coordinatorSession())
             ->postJson(self::ENROLL, ['record_ids' => [$learner->id]])
@@ -145,6 +146,8 @@ class FeedingEnrollmentTest extends TestCase
     {
         $first = $this->makeCandidate();
         $second = $this->makeCandidate('Severely Wasted', 'Grade 8 / Luna');
+        $this->fileFeedingConsent($first);
+        $this->fileFeedingConsent($second);
 
         $this->withSession($this->coordinatorSession())
             ->postJson(self::ENROLL, ['record_ids' => [$first->id, $second->id]])
@@ -204,6 +207,7 @@ class FeedingEnrollmentTest extends TestCase
     public function enrolment_is_audited(): void
     {
         $learner = $this->makeCandidate();
+        $this->fileFeedingConsent($learner);
 
         $this->withSession($this->coordinatorSession())
             ->postJson(self::ENROLL, ['record_ids' => [$learner->id]])

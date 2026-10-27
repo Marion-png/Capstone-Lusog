@@ -72,6 +72,7 @@
 						<th>Section</th>
 						<th>Gender</th>
 						<th>Status</th>
+						<th>Parent's consent</th>
 						<th>Action</th>
 					</tr>
 				</thead>
@@ -153,7 +154,7 @@
 				: 'Enroll selected';
 		}
 
-		const shown = visible();
+		const shown = visible().filter((row) => row.can_enroll);
 		if (checkAll) {
 			const allChecked = shown.length > 0 && shown.every((row) => selected.has(row.id));
 			checkAll.checked = allChecked;
@@ -172,15 +173,23 @@
 			emptyNote.hidden = candidates.length !== 0;
 		}
 
+		// A learner whose parent has not signed the feeding program consent is
+		// listed — they qualify — but carries no checkbox and no Enroll: the
+		// server refuses them regardless.
 		rowsBody.innerHTML = shown.map((row) => `
 			<tr data-id="${row.id}">
-				<td class="enroll-check"><input type="checkbox" data-select="${row.id}" ${selected.has(row.id) ? 'checked' : ''} aria-label="Select ${esc(row.name)}"></td>
+				<td class="enroll-check">${row.can_enroll
+					? `<input type="checkbox" data-select="${row.id}" ${selected.has(row.id) ? 'checked' : ''} aria-label="Select ${esc(row.name)}">`
+					: ''}</td>
 				<td><strong>${esc(row.name)}</strong></td>
 				<td>${esc(row.grade)}</td>
 				<td>${esc(row.section || '—')}</td>
 				<td>${esc(row.sex || '—')}</td>
 				<td><span class="badge ${row.badge}">${esc(row.status_short)}</span></td>
-				<td><button type="button" class="btn btn-primary btn-sm" data-enroll="${row.id}">Enroll</button></td>
+				<td><span class="badge ${row.can_enroll ? 'badge-normal' : (row.consent === 'declined' ? 'badge-critical' : 'badge-monitor')}">${esc(row.consent_label)}</span></td>
+				<td>${row.can_enroll
+					? `<button type="button" class="btn btn-primary btn-sm" data-enroll="${row.id}">Enroll</button>`
+					: '<span class="enroll-blocked">&mdash;</span>'}</td>
 			</tr>`).join('');
 
 		syncFooter();
@@ -262,8 +271,12 @@
 				return;
 			}
 
+			const done = await response.json().catch(() => ({}));
 			ids.forEach((id) => selected.delete(id));
 			await load();
+			// Learners turned away for want of a parent's consent are named,
+			// rather than the enrolment reading as complete.
+			if (done.message) setError(done.message);
 			// The figures behind the modal count enrolled learners, so they are
 			// re-read now rather than at the next pulse.
 			document.dispatchEvent(new CustomEvent('fc:refresh-request'));
@@ -335,7 +348,7 @@
 	});
 
 	checkAll?.addEventListener('change', () => {
-		visible().forEach((row) => {
+		visible().filter((row) => row.can_enroll).forEach((row) => {
 			if (checkAll.checked) selected.add(row.id);
 			else selected.delete(row.id);
 		});

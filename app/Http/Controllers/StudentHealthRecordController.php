@@ -18,6 +18,7 @@ use App\Support\ConsultationVisibility;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
+use App\Support\FeedingConsent;
 use App\Support\FeedingProgramCycle;
 use App\Support\LearnerPlacement;
 use App\Support\NutritionalHealthStatus;
@@ -639,7 +640,10 @@ class StudentHealthRecordController extends Controller
             fn (StudentHealthRecord $record) => [$record->id => (string) $record->student_id]
         );
 
-        return $this->memo('consent_uploads:'.md5($ids->implode(',')), fn () => ParentalConsentForm::whereIn('student_health_record_id', $ids)
+        // The health-services letter only: a feeding-programme consent answers a
+        // different question and must never stand in for this one.
+        return $this->memo('consent_uploads:'.md5($ids->implode(',')), fn () => ParentalConsentForm::healthServices()
+            ->whereIn('student_health_record_id', $ids)
             ->where('school_year', ParentalConsentForm::currentSchoolYear())
             ->get()
             ->sortBy('created_at')
@@ -1647,10 +1651,17 @@ class StudentHealthRecordController extends Controller
             }))
             ->values();
 
+        // Whether each learner's parent has signed the feeding program consent,
+        // read once for the page: a learner the measurement qualifies can be
+        // enrolled only with it, and the row says which they are waiting for.
+        $feedingConsents = FeedingConsent::forRecords(
+            $records->filter(fn ($record): bool => $record instanceof StudentHealthRecord)->values()
+        );
+
         // `section` holds "Grade 7 / Section A" (see StudentRosterSync). Split it
         // so grade level and section can be filtered independently, and flatten
         // both sources to one shape the view can read without special-casing.
-        $records = $records->map(function ($record) use ($standings, $todayMarks): object {
+        $records = $records->map(function ($record) use ($standings, $todayMarks, $feedingConsents): object {
             $raw = trim((string) ($record->section ?? ''));
             $parts = array_map('trim', explode('/', $raw, 2));
             $grade = ($parts[0] ?? '') !== '' ? $parts[0] : 'Unassigned';
@@ -1692,6 +1703,7 @@ class StudentHealthRecordController extends Controller
                     $qualified => 'pending',
                     default => 'other',
                 },
+                'feeding_consent' => $feedingConsents[$id ?? -1] ?? FeedingConsent::NONE,
                 'at_risk' => (bool) ($standings[$id]['at_risk'] ?? false),
                 // NULL, not 0: a learner no confirmed session has covered has
                 // no turnout to report, which the table prints as an em dash.

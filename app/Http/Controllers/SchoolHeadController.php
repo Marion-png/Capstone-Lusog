@@ -479,7 +479,7 @@ class SchoolHeadController extends Controller
             $items[] = [
                 'severity' => 'medium',
                 'title' => $pending.' qualified '.$this->plural('learner', 'learners', $pending).' awaiting enrolment',
-                'detail' => 'Measured into a qualifying status; the Feeding Coordinator enrols them.',
+                'detail' => 'Measured into a qualifying status. Each is enrolled by the Feeding Coordinator once the parent\'s signed feeding program consent is on file.',
                 'action' => ['label' => 'View learners', 'url' => route('dashboard.school-head.masterlist', ['standing' => 'pending'])],
             ];
         }

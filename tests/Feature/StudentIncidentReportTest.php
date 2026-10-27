@@ -19,9 +19,9 @@ use Tests\TestCase;
  * clinical documentation — reading what happened to a learner, recording what
  * was done and whether it worked is the clinic's assessment to make: the
  * nurse's, or the clinic teacher's while they cover. Withdrawing a report stays
- * the nurse's. The class adviser sees the same reports on their own profile,
- * read-only, because an incident involving a learner in their class is
- * something they have to know about.
+ * the nurse's. Clinic staff read the same reports, read-only. The class adviser
+ * sees them on their own profile, read-only, because an incident involving a
+ * learner in their class is something they have to know about.
  *
  * Everything a person typed here is personal information about a child, so it
  * is encrypted at rest and every write is audited. Both roles are scoped to
@@ -456,12 +456,73 @@ class StudentIncidentReportTest extends TestCase
         $this->assertStringContainsString('Withdrawing a report is the school nurse\'s.', $html);
     }
 
+    // ── Clinic staff ────────────────────────────────────────────────────────
+
+    private function clinicStaffSession(): array
+    {
+        return [
+            'active_role' => 'clinic_staff',
+            'active_name' => 'Staff Dizon',
+            'active_school_name' => 'Sta. Ana NHS',
+            'active_institution_id' => $this->school->id,
+        ];
+    }
+
+    /**
+     * Clinic staff read what the nurse charted, and nothing more: no filing,
+     * no withdrawing, on the endpoint or on the page.
+     */
+    #[Test]
+    public function clinic_staff_read_the_nurses_report_and_cannot_write(): void
+    {
+        $this->learner();
+        $this->file()->assertCreated();
+        $report = StudentIncidentReport::firstOrFail();
+
+        $this->withSession($this->clinicStaffSession())
+            ->getJson(route('student-incidents.index', '900000000001'))
+            ->assertOk()
+            ->assertJsonPath('can_file', false)
+            ->assertJsonPath('can_withdraw', false)
+            ->assertJsonPath('reports.0.reported_by', 'Nurse Reyes')
+            ->assertJsonPath('reports.0.reported_by_title', 'School Nurse')
+            ->assertJsonPath('reports.0.response', 'Pain settled, no further bleeding. Returned to class at 10:20.');
+
+        $this->withSession($this->clinicStaffSession())
+            ->postJson(route('student-incidents.store', '900000000001'), $this->payload())
+            ->assertForbidden();
+
+        $this->withSession($this->clinicStaffSession())
+            ->deleteJson(route('student-incidents.destroy', ['lrn' => '900000000001', 'id' => $report->id]))
+            ->assertForbidden();
+
+        $this->assertSame(1, StudentIncidentReport::count());
+    }
+
+    /** Their panel lists the reports and draws no form and no Withdraw. */
+    #[Test]
+    public function clinic_staffs_panel_renders_read_only(): void
+    {
+        $this->learner();
+
+        $html = $this->withSession($this->clinicStaffSession())
+            ->get(route('dashboard.student-health-records'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('data-panel="p-incidents"', $html);
+        $this->assertStringContainsString('id="incidentReadOnly"', $html);
+        $this->assertStringNotContainsString('id="incidentForm"', $html);
+        $this->assertStringNotContainsString('File an Incident Report', $html);
+        $this->assertStringContainsString('data-can-withdraw="0"', $html);
+    }
+
     #[Test]
     public function no_other_role_can_read_or_write(): void
     {
         $this->learner();
 
-        foreach (['clinic_staff', 'school_head', 'feeding_coor', 'nutricor'] as $role) {
+        foreach (['school_head', 'feeding_coor', 'nutricor'] as $role) {
             $session = [
                 'active_role' => $role,
                 'active_name' => 'Someone',

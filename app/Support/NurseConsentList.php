@@ -244,8 +244,10 @@ final class NurseConsentList
             return collect();
         }
 
-        // Oldest first, so keyBy leaves the most recent upload per learner.
-        return ParentalConsentForm::whereIn('student_health_record_id', $records->pluck('id'))
+        // Oldest first, so keyBy leaves the most recent upload per learner. The
+        // health-services letter only — a feeding-programme consent is not one.
+        return ParentalConsentForm::healthServices()
+            ->whereIn('student_health_record_id', $records->pluck('id'))
             ->where('school_year', $schoolYear)
             ->get()
             ->sortBy('created_at')
