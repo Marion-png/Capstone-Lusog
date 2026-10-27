@@ -63,6 +63,9 @@ class AdviserFeedingStatusTest extends TestCase
     #[Test]
     public function it_derives_eligibility_program_state_and_attendance_rate(): void
     {
+        // A short cycle, so this school's programme has run its feeding days.
+        $this->institution->forceFill(['feeding_cycle_days' => 5])->save();
+
         $wasted = $this->record([
             'student_id' => '100000000001',
             'student_name' => 'Reyes, Maria',
@@ -72,6 +75,7 @@ class AdviserFeedingStatusTest extends TestCase
             'baseline_weight_kg' => '32.5',
             'baseline_recorded_at' => now()->subMonths(2),
             'attendance_sessions_count' => 6,
+            'feeding_enrolled_at' => now()->subMonths(2),
         ]);
 
         $completed = $this->record([
@@ -82,8 +86,11 @@ class AdviserFeedingStatusTest extends TestCase
             'baseline_weight_kg' => '28.0',
             'baseline_recorded_at' => now()->subMonths(3),
             'endline_weight_kg' => '31.0',
+            'endline_bmi_value' => '14.0',
+            'endline_nutritional_status' => 'Wasted',
             'endline_recorded_at' => now()->subWeek(),
             'attendance_sessions_count' => 10,
+            'feeding_enrolled_at' => now()->subMonths(3),
         ]);
 
         $normal = $this->record([
@@ -125,7 +132,10 @@ class AdviserFeedingStatusTest extends TestCase
         $byLrn = $students->keyBy('lrn');
 
         $this->assertTrue($byLrn['100000000001']['eligible']);
+        $this->assertTrue($byLrn['100000000001']['enrolled']);
+        // The feeding days are done, but there is no endline yet.
         $this->assertSame('ongoing', $byLrn['100000000001']['program']);
+        $this->assertSame('Endline measurement not recorded', $byLrn['100000000001']['program_note']);
         $this->assertSame('pending', $byLrn['100000000001']['assessment']);
         $this->assertSame(6, $byLrn['100000000001']['attended']);
         $this->assertSame(8, $byLrn['100000000001']['sessions']);
@@ -155,6 +165,84 @@ class AdviserFeedingStatusTest extends TestCase
         $response->assertSee('Severely Wasted')
             ->assertSee('Feeding Attendance &amp; Progress', false)
             ->assertSee('6 / 8');
+    }
+
+    /**
+     * Enrolled is not completed. The nurse's examination writes an endline
+     * weight — often on the first visit — and that used to read as a finished
+     * programme the day the learner was enrolled. Completed means the cycle
+     * has run its feeding days, the endline is recorded and the learner
+     * attended, exactly as the dashboard's Completed Program card reads it.
+     */
+    #[Test]
+    public function an_enrolled_learner_is_not_completed_until_the_programme_is(): void
+    {
+        $learner = $this->record([
+            'student_id' => '100000000001',
+            'student_name' => 'Reyes, Maria',
+            'bmi_value' => '13.1',
+            'nutritional_status' => 'Severely Wasted',
+            'baseline_weight_kg' => '28.0',
+            'baseline_recorded_at' => now()->subWeek(),
+            // What the nurse's Fill Medical Record writes.
+            'endline_weight_kg' => '28.4',
+            'endline_bmi_value' => '13.3',
+            'endline_nutritional_status' => 'Severely Wasted',
+            'endline_recorded_at' => now()->subDay(),
+            'feeding_enrolled_at' => now()->subWeek(),
+        ]);
+
+        FeedingAttendance::create([
+            'student_health_record_id' => $learner->id,
+            'session_date' => now()->subDays(2),
+            'is_present' => true,
+        ]);
+
+        $response = $this->withSession($this->adviserSession([
+            ['lrn' => '100000000001', 'grade_level' => 'Grade 10', 'section' => 'Dalton'],
+        ]))->get('/dashboard/class-adviser/feeding-status')->assertOk();
+
+        $row = $response->viewData('students')->first();
+
+        $this->assertSame('ongoing', $row['program']);
+        $this->assertStringStartsWith('Feeding programme is on day ', $row['program_note']);
+        $this->assertSame(0, $response->viewData('stats')['completed']);
+        $response->assertSee('Ongoing')->assertDontSee('>Completed</span>', false);
+    }
+
+    /**
+     * Measuring a learner as wasted qualifies them; it does not enrol them.
+     * The row says what they are waiting for — the parent's consent is the
+     * adviser's to file.
+     */
+    #[Test]
+    public function a_qualified_learner_nobody_enrolled_is_not_counted_as_enrolled(): void
+    {
+        $learner = $this->record([
+            'student_id' => '100000000001',
+            'student_name' => 'Reyes, Maria',
+            'bmi_value' => '14.2',
+            'nutritional_status' => 'Wasted',
+        ]);
+
+        $roster = [['lrn' => '100000000001', 'grade_level' => 'Grade 10', 'section' => 'Dalton']];
+
+        $response = $this->withSession($this->adviserSession($roster))
+            ->get('/dashboard/class-adviser/feeding-status')->assertOk();
+        $row = $response->viewData('students')->first();
+
+        $this->assertTrue($row['eligible']);
+        $this->assertFalse($row['enrolled']);
+        $this->assertSame('not-enrolled', $row['program']);
+        $this->assertSame('Qualifies · Waiting for parent\'s consent', $row['program_note']);
+        $this->assertSame(0, $response->viewData('stats')['enrolled']);
+        $response->assertSee('data-enrolled="0"', false);
+
+        $this->fileFeedingConsent($learner);
+
+        $row = $this->withSession($this->adviserSession($roster))
+            ->get('/dashboard/class-adviser/feeding-status')->viewData('students')->first();
+        $this->assertSame('Qualifies · Parent\'s consent on file', $row['program_note']);
     }
 
     #[Test]

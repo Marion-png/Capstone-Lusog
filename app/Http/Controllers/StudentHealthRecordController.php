@@ -1163,13 +1163,25 @@ class StudentHealthRecordController extends Controller
                 ->pluck('total_sessions', 'student_health_record_id');
         }
 
+        // A learner completes the programme when it has run its feeding days,
+        // their endline is recorded and they attended — the rule the dashboard's
+        // Completed Program card reads. An endline weight on its own is not it:
+        // the nurse's examination writes one, often on the first visit.
+        $cycle = $this->adviserCycle($institutionId);
+        $attendedIds = $this->recordsWithConfirmedAttendance($records);
+        $consents = FeedingConsent::forRecords($records);
+
         $students = $records
-            ->map(function (StudentHealthRecord $record) use ($sessionTotals): array {
+            ->map(function (StudentHealthRecord $record) use ($sessionTotals, $cycle, $attendedIds, $consents): array {
                 $status = trim((string) $record->nutritional_status);
                 $statusKey = $this->nutritionStatusKey($status);
                 // The feeding program targets undernourished learners only;
                 // eligibility is derived from BMI-for-age, never tagged by hand.
                 $eligible = in_array($statusKey, ['wasted', 'severely-wasted'], true);
+                // Qualifying is not enrolment: only the Feeding Coordinator
+                // enrols, once the parent's consent is on file.
+                $enrolled = FeedingBeneficiarySummary::isEnrolled($record);
+                $attendedAny = $attendedIds->has($record->id);
 
                 $attended = max(0, (int) $record->attendance_sessions_count);
                 $sessions = max(0, (int) ($sessionTotals[$record->id] ?? 0));
@@ -1181,9 +1193,19 @@ class StudentHealthRecordController extends Controller
                     || trim((string) $record->endline_weight_kg) !== '';
 
                 $program = match (true) {
-                    ! $eligible => 'not-enrolled',
-                    $hasEndline => 'completed',
+                    ! $enrolled => 'not-enrolled',
+                    ProfileCompletionRule::isComplete($cycle, $record, $attendedAny) => 'completed',
                     default => 'ongoing',
+                };
+
+                $programNote = match (true) {
+                    // Why an enrolled learner is not done yet: the day the
+                    // programme is on, a missing endline, no session attended.
+                    $program === 'ongoing' => ProfileCompletionRule::outstanding($cycle, $record, $attendedAny),
+                    // A learner who qualifies is waiting on something, and the
+                    // parent's consent is the adviser's to file.
+                    $program === 'not-enrolled' && $eligible => 'Qualifies · '.FeedingConsent::label($consents[$record->id] ?? FeedingConsent::NONE),
+                    default => '',
                 };
 
                 $assessment = match (true) {
@@ -1210,7 +1232,9 @@ class StudentHealthRecordController extends Controller
                     'status' => $status,
                     'status_key' => $statusKey,
                     'eligible' => $eligible,
+                    'enrolled' => $enrolled,
                     'program' => $program,
+                    'program_note' => $programNote,
                     'attended' => $attended,
                     'sessions' => $sessions,
                     'rate' => $rate,
@@ -1234,7 +1258,7 @@ class StudentHealthRecordController extends Controller
                 'normal' => $students->where('status_key', 'normal')->count(),
                 'wasted' => $students->where('status_key', 'wasted')->count(),
                 'severely_wasted' => $students->where('status_key', 'severely-wasted')->count(),
-                'enrolled' => $students->where('eligible', true)->count(),
+                'enrolled' => $students->where('enrolled', true)->count(),
                 'ongoing' => $students->where('program', 'ongoing')->count(),
                 'completed' => $students->where('program', 'completed')->count(),
                 'attendance_rate' => $totalSessions > 0

@@ -165,7 +165,7 @@
                                 data-lrn="{{ strtolower($student['lrn']) }}"
                                 data-status="{{ $statusKey }}"
                                 data-program="{{ $student['program'] }}"
-                                data-enrolled="{{ $student['eligible'] ? '1' : '0' }}">
+                                data-enrolled="{{ $student['enrolled'] ? '1' : '0' }}">
                                 <td><strong>{{ $student['lrn'] !== '' ? $student['lrn'] : '-' }}</strong></td>
                                 <td class="ms-student-name">{{ $student['name'] !== '' ? $student['name'] : '-' }}</td>
                                 <td>
@@ -178,6 +178,11 @@
                                 <td>
                                     <div class="fs-badge-stack">
                                         <span class="ms-badge {{ $programTones[$student['program']] }}">{{ $programLabels[$student['program']] }}</span>
+                                        {{-- Why an enrolled learner is not done yet, or what a
+                                             qualified one is waiting for. --}}
+                                        @if ($student['program_note'] !== '')
+                                            <span class="fs-sub">{{ $student['program_note'] }}</span>
+                                        @endif
                                     </div>
                                 </td>
                                 <td>
