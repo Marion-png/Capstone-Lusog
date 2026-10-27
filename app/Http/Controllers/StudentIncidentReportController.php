@@ -14,12 +14,13 @@ use Illuminate\Validation\ValidationException;
 /**
  * Incident reports on a learner's student profile: list, file, withdraw.
  *
- * **The nurse writes; the adviser reads.** The report is charted in FDAR —
+ * **The clinic writes; the adviser reads.** The report is charted in FDAR —
  * Focus / Data / Action / Response — which is clinical documentation: reading
  * what happened to a learner, recording what was done and whether it worked is
- * the nurse's assessment to make. The class adviser sees the same reports on
- * their own profile, read-only, because an incident involving a learner in
- * their class is something they have to know about.
+ * the clinic's assessment to make — the nurse's, or the clinic teacher's while
+ * they cover. Withdrawing one stays the nurse's. The class adviser sees the
+ * same reports on their own profile, read-only, because an incident involving
+ * a learner in their class is something they have to know about.
  *
  * Both roles are scoped to their school. The adviser is scoped a second time,
  * like every other adviser surface, to their own class — an LRN off the wire
@@ -43,10 +44,11 @@ class StudentIncidentReportController extends Controller
 
         return response()->json([
             'reports' => $this->listFor($request, $lrn),
-            // The panel draws its write controls from this rather than from a
-            // role check of its own, so the form and the endpoint cannot
-            // disagree about who may file.
+            // The panel draws its write controls from these rather than from a
+            // role check of its own, so the form and the endpoints cannot
+            // disagree about who may file or withdraw.
             'can_file' => $this->mayWrite($request, $lrn),
+            'can_withdraw' => $this->mayWithdraw($request, $lrn),
         ]);
     }
 
@@ -60,10 +62,15 @@ class StudentIncidentReportController extends Controller
             return response()->json(['message' => 'Incident reports are not available.'], 503);
         }
 
+        // "Today" and "now" are the school's, not the server's: the date and
+        // time on the form are what the clinic's clock read, and the server
+        // keeps UTC — eight hours behind Davao.
+        $now = now((string) config('app.school_timezone'));
+
         $validated = $request->validate([
             // An incident is something that already happened. A future date is
             // a typo, and it would sort to the top of the learner's history.
-            'occurred_at' => ['required', 'date', 'before_or_equal:today'],
+            'occurred_at' => ['required', 'date', 'before_or_equal:'.$now->toDateString()],
             // F-DAR's first column is the date AND the time. Optional, because
             // a nurse charting from a note that carried no clock reading must
             // still be able to file; a time later than now on today's date is
@@ -103,7 +110,7 @@ class StudentIncidentReportController extends Controller
         // An incident is something that already happened, to the minute: a
         // time still ahead of the clock on today's date is the same typo as a
         // date in the future, and it would sort above what actually occurred.
-        if ($time !== '' && $validated['occurred_at'] === now()->toDateString() && $time > now()->format('H:i')) {
+        if ($time !== '' && $validated['occurred_at'] === $now->toDateString() && $time > $now->format('H:i')) {
             throw ValidationException::withMessages([
                 'occurred_time' => 'The time of the incident cannot be later than now.',
             ]);
@@ -145,18 +152,19 @@ class StudentIncidentReportController extends Controller
     }
 
     /**
-     * Withdrawing a report the nurse filed by mistake.
+     * Withdrawing a report filed by mistake.
      *
-     * Whoever may file may withdraw, and nobody else — an adviser reading the
-     * panel has no delete, on the endpoint or on the page. Deliberately
-     * hard-scoped besides: the row must belong to this school AND to the
-     * learner in the URL. The delete is audited by the Auditable trait, so a
-     * withdrawn report leaves a record that it existed — an incident log you
-     * can silently empty is not one.
+     * The nurse's alone — an adviser reading the panel has no delete, and
+     * neither has a clinic teacher, who may chart an incident while covering
+     * but not take a clinical note off a child's record; the endpoint refuses
+     * both whatever a page draws. Deliberately hard-scoped besides: the row
+     * must belong to this school AND to the learner in the URL. The delete is
+     * audited by the Auditable trait, so a withdrawn report leaves a record that
+     * it existed — an incident log you can silently empty is not one.
      */
     public function destroy(Request $request, string $lrn, int $id): JsonResponse
     {
-        if (! $this->mayWrite($request, $lrn)) {
+        if (! $this->mayWithdraw($request, $lrn)) {
             return response()->json(['message' => 'Forbidden.'], 403);
         }
 
@@ -231,7 +239,8 @@ class StudentIncidentReportController extends Controller
     }
 
     /**
-     * Who may file or withdraw one: the nurse, on a learner they may read.
+     * Who may file one: the nurse or the clinic teacher, on a learner they
+     * may read.
      *
      * Reading is the wider permission and writing is a subset of it, so this
      * is deliberately mayRead() plus the role rather than a second scope
@@ -240,6 +249,13 @@ class StudentIncidentReportController extends Controller
     private function mayWrite(Request $request, string $lrn): bool
     {
         return StudentIncidentReport::canFile((string) $request->session()->get('active_role'))
+            && $this->mayRead($request, $lrn);
+    }
+
+    /** Who may withdraw one: the nurse, on a learner they may read. */
+    private function mayWithdraw(Request $request, string $lrn): bool
+    {
+        return StudentIncidentReport::canWithdraw((string) $request->session()->get('active_role'))
             && $this->mayRead($request, $lrn);
     }
 
@@ -294,11 +310,13 @@ class StudentIncidentReportController extends Controller
             'reported_by' => (string) $report->reported_by_name,
             'reported_by_title' => match ((string) $report->reported_by_role) {
                 'school_nurse' => 'School Nurse',
+                'clinic_teacher' => 'Clinic Teacher',
                 'clinic_staff' => 'Clinic Staff',
                 'class_adviser' => 'Class Adviser',
                 default => '',
             },
-            'filed_label' => $report->created_at?->format('d M Y, g:i A'),
+            // Stored in UTC; shown on the school's clock, like the time charted.
+            'filed_label' => $report->created_at?->copy()->setTimezone((string) config('app.school_timezone'))->format('d M Y, g:i A'),
         ];
     }
 }

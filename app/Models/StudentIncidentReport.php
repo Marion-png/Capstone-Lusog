@@ -31,11 +31,17 @@ class StudentIncidentReport extends Model
      * Who files one, and who may read it.
      *
      * The report is charted in FDAR — a clinical documentation format — so the
-     * **school nurse** writes it: assessing a learner and recording what was
-     * done and how they responded is the nurse's work, not the adviser's. The
-     * **class adviser reads it**, because an incident involving a learner in
+     * clinic writes it: the **school nurse**, and the **clinic teacher** who
+     * covers the clinic when the nurse is not in it, since an incident does not
+     * wait for the nurse to come back. Both read every report on the profile.
+     * The **class adviser reads it**, because an incident involving a learner in
      * their class is something they have to know about, and their profile is
      * where they would look.
+     *
+     * **Withdrawing is narrower than filing.** A withdrawn report is a clinical
+     * note taken off a child's record, so it is the nurse's alone: a clinic
+     * teacher can chart what happened while covering, but not remove what the
+     * nurse charted.
      *
      * Declared here rather than on the controller so the endpoints and the two
      * profiles that render the panel read one list. A view that decides for
@@ -45,14 +51,22 @@ class StudentIncidentReport extends Model
      *
      * @var list<string>
      */
-    public const WRITE_ROLES = ['school_nurse'];
+    public const WRITE_ROLES = ['school_nurse', 'clinic_teacher'];
 
     /** @var list<string> */
-    public const READ_ROLES = ['school_nurse', 'class_adviser'];
+    public const WITHDRAW_ROLES = ['school_nurse'];
+
+    /** @var list<string> */
+    public const READ_ROLES = ['school_nurse', 'clinic_teacher', 'class_adviser'];
 
     public static function canFile(?string $role): bool
     {
         return in_array((string) $role, self::WRITE_ROLES, true);
+    }
+
+    public static function canWithdraw(?string $role): bool
+    {
+        return in_array((string) $role, self::WITHDRAW_ROLES, true);
     }
 
     public static function canView(?string $role): bool

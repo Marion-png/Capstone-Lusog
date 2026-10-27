@@ -117,6 +117,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | School Timezone
+    |--------------------------------------------------------------------------
+    |
+    | The clock the schools keep, used to judge what "today" and "now" mean for
+    | a date or time a person typed — an incident at 11:30 in the morning is not
+    | in the future at 12:14 PM in Davao just because the server's clock reads
+    | 04:14. Timestamps are still stored in the application timezone above;
+    | this only decides how a typed wall-clock value is checked and how a
+    | stored one is shown.
+    |
+    */
+
+    'school_timezone' => env('SCHOOL_TIMEZONE', 'Asia/Manila'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |

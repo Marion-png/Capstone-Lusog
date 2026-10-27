@@ -22,6 +22,7 @@
     use App\Models\StudentIncidentReport;
 
     $incidentCanFile = StudentIncidentReport::canFile(session('active_role'));
+    $incidentCanWithdraw = StudentIncidentReport::canWithdraw(session('active_role'));
     $studentIncidentsCss = resource_path('css/student-incidents.css');
 @endphp
 {{-- The panel carries its own sheet, like the documents one: the two profiles
@@ -41,6 +42,9 @@
             Chart an incident involving this learner in <b>F-DAR</b> — Date/Time,
             Focus, then the Progress Notes as Data, Action, Response. The
             learner's class adviser can read what you file.
+            @unless ($incidentCanWithdraw)
+                Withdrawing a report is the school nurse's.
+            @endunless
         @else
             Incidents involving this learner, charted by the school nurse in
             <b>F-DAR</b> — Date/Time, Focus, and the Progress Notes as Data,
@@ -86,7 +90,7 @@
                         <label for="incidentDate">Date and time</label>
                         <p class="fdar-hint">When it happened.</p>
                         <div class="fdar-when">
-                            <input type="date" id="incidentDate" name="occurred_at" max="{{ now()->toDateString() }}" required aria-label="Date of incident">
+                            <input type="date" id="incidentDate" name="occurred_at" max="{{ now((string) config('app.school_timezone'))->toDateString() }}" required aria-label="Date of incident">
                             @if ($incidentChartColumns)
                                 <input type="time" id="incidentTime" name="occurred_time" aria-label="Time of incident">
                             @endif
@@ -208,5 +212,5 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
         Incident History
     </div>
-    <div id="vpIncidentsList"></div>
+    <div id="vpIncidentsList" data-can-withdraw="{{ $incidentCanWithdraw ? '1' : '0' }}"></div>
 </section>

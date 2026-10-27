@@ -7,6 +7,7 @@ use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Models\StudentIncidentReport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -14,12 +15,13 @@ use Tests\TestCase;
 /**
  * Incident Reports, charted in FDAR.
  *
- * **The nurse writes; the adviser reads.** Focus / Data / Action / Response is
+ * **The clinic writes; the adviser reads.** Focus / Data / Action / Response is
  * clinical documentation — reading what happened to a learner, recording what
- * was done and whether it worked is the nurse's assessment to make. The class
- * adviser sees the same reports on their own profile, read-only, because an
- * incident involving a learner in their class is something they have to know
- * about.
+ * was done and whether it worked is the clinic's assessment to make: the
+ * nurse's, or the clinic teacher's while they cover. Withdrawing a report stays
+ * the nurse's. The class adviser sees the same reports on their own profile,
+ * read-only, because an incident involving a learner in their class is
+ * something they have to know about.
  *
  * Everything a person typed here is personal information about a child, so it
  * is encrypted at rest and every write is audited. Both roles are scoped to
@@ -181,21 +183,57 @@ class StudentIncidentReportTest extends TestCase
     #[Test]
     public function a_time_later_than_now_today_is_refused(): void
     {
+        // 9:00 in the morning on the school's clock.
+        $this->travelTo(Carbon::parse('2026-10-27 09:00', 'Asia/Manila'));
         $this->learner();
 
-        $this->travelTo(now()->setTime(9, 0));
-
-        $this->file(['occurred_at' => now()->toDateString(), 'occurred_time' => '11:30'])
+        $this->file(['occurred_at' => '2026-10-27', 'occurred_time' => '11:30'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('occurred_time');
 
         // The same time yesterday, or an earlier time today, is fine.
-        $this->file(['occurred_at' => now()->subDay()->toDateString(), 'occurred_time' => '11:30'])->assertCreated();
-        $this->file(['occurred_at' => now()->toDateString(), 'occurred_time' => '08:15'])->assertCreated();
+        $this->file(['occurred_at' => '2026-10-26', 'occurred_time' => '11:30'])->assertCreated();
+        $this->file(['occurred_at' => '2026-10-27', 'occurred_time' => '08:15'])->assertCreated();
 
         $this->file(['occurred_time' => 'ten past'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('occurred_time');
+    }
+
+    /**
+     * The clock is the school's, not the server's. The server keeps UTC,
+     * eight hours behind Davao: at 12:14 PM there it reads 04:14, and every
+     * time charted after four in the morning used to be refused as "later than
+     * now" — and before eight, today's date was refused as a future one.
+     */
+    #[Test]
+    public function the_time_is_judged_on_the_schools_clock_not_the_servers(): void
+    {
+        // 12:14 PM on 27 Oct in Davao.
+        $this->travelTo(Carbon::parse('2026-10-27 04:14:00', 'UTC'));
+        $this->learner();
+
+        $this->file(['occurred_at' => '2026-10-27', 'occurred_time' => '11:30'])
+            ->assertCreated()
+            ->assertJsonPath('report.filed_label', '27 Oct 2026, 12:14 PM');
+
+        $this->file(['occurred_at' => '2026-10-27', 'occurred_time' => '12:30'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('occurred_time');
+
+        // 6:00 AM on 27 Oct in Davao, still the 26th on the server.
+        $this->travelTo(Carbon::parse('2026-10-26 22:00:00', 'UTC'));
+
+        $this->file(['occurred_at' => '2026-10-27', 'occurred_time' => '05:30'])->assertCreated();
+        $this->file(['occurred_at' => '2026-10-28'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('occurred_at');
+
+        // And the date picker offers today, not yesterday.
+        $this->withSession($this->nurseSession())
+            ->get(route('dashboard.student-health-records'))
+            ->assertOk()
+            ->assertSee('max="2026-10-27"', false);
     }
 
     /** The Response is stored, encrypted, and read back. */
@@ -324,6 +362,98 @@ class StudentIncidentReportTest extends TestCase
         $this->assertStringContainsString('id="incidentForm"', $html);
         $this->assertStringContainsString('File an Incident Report', $html);
         $this->assertStringContainsString('data-panel="p-incidents"', $html);
+        $this->assertStringContainsString('data-can-withdraw="1"', $html);
+    }
+
+    // ── The clinic teacher ──────────────────────────────────────────────────
+
+    private function clinicTeacherSession(): array
+    {
+        return [
+            'active_role' => 'clinic_teacher',
+            'active_name' => 'Teacher Lim',
+            'active_school_name' => 'Sta. Ana NHS',
+            'active_institution_id' => $this->school->id,
+        ];
+    }
+
+    /**
+     * A clinic teacher covering the clinic charts an incident, and the report
+     * is signed as theirs — not the nurse's — so whoever reads it later knows
+     * who was there.
+     */
+    #[Test]
+    public function the_clinic_teacher_can_chart_an_incident(): void
+    {
+        $this->learner();
+
+        $this->file([], $this->clinicTeacherSession())
+            ->assertCreated()
+            ->assertJsonPath('report.reported_by', 'Teacher Lim')
+            ->assertJsonPath('report.reported_by_title', 'Clinic Teacher');
+
+        $this->assertSame('clinic_teacher', StudentIncidentReport::firstOrFail()->reported_by_role);
+    }
+
+    /** They read the learner's every report, the nurse's included. */
+    #[Test]
+    public function the_clinic_teacher_reads_every_report(): void
+    {
+        $this->learner();
+        $this->file()->assertCreated();
+
+        $this->withSession($this->clinicTeacherSession())
+            ->getJson(route('student-incidents.index', '900000000001'))
+            ->assertOk()
+            ->assertJsonPath('can_file', true)
+            ->assertJsonPath('can_withdraw', false)
+            ->assertJsonPath('reports.0.reported_by', 'Nurse Reyes')
+            ->assertJsonPath('reports.0.response', 'Pain settled, no further bleeding. Returned to class at 10:20.');
+    }
+
+    /**
+     * Withdrawing takes a clinical note off a child's record, so it stays the
+     * nurse's: a clinic teacher can chart while covering, not remove what the
+     * nurse charted — nor their own, which the nurse can withdraw if it was a
+     * mistake.
+     */
+    #[Test]
+    public function the_clinic_teacher_cannot_withdraw_a_report(): void
+    {
+        $this->learner();
+        $this->file()->assertCreated();
+        $this->file([], $this->clinicTeacherSession())->assertCreated();
+
+        foreach (StudentIncidentReport::all() as $report) {
+            $this->withSession($this->clinicTeacherSession())
+                ->deleteJson(route('student-incidents.destroy', ['lrn' => '900000000001', 'id' => $report->id]))
+                ->assertForbidden();
+        }
+
+        $this->assertSame(2, StudentIncidentReport::count());
+
+        // The nurse still can.
+        $this->withSession($this->nurseSession())
+            ->deleteJson(route('student-incidents.destroy', ['lrn' => '900000000001', 'id' => StudentIncidentReport::max('id')]))
+            ->assertOk();
+        $this->assertSame(1, StudentIncidentReport::count());
+    }
+
+    /** Their panel carries the form, and draws no Withdraw button. */
+    #[Test]
+    public function the_clinic_teachers_panel_carries_the_form_without_withdraw(): void
+    {
+        $this->learner();
+
+        $html = $this->withSession($this->clinicTeacherSession())
+            ->get(route('dashboard.student-health-records'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('id="incidentForm"', $html);
+        $this->assertStringContainsString('File an Incident Report', $html);
+        $this->assertStringContainsString('data-can-withdraw="0"', $html);
+        $this->assertStringContainsString('Withdrawing a report is the school nurse\'s.', $html);
     }
 
     #[Test]

@@ -44,6 +44,10 @@ window.StudentIncidents = (() => {
     // list; until it has answered, the panel is whatever the page rendered.
     let canFile = !!form;
 
+    // Withdrawing is narrower than filing — the nurse's alone — so it is its
+    // own answer, read the same way.
+    let canWithdraw = list.dataset.canWithdraw === '1';
+
     const setOpen = (open) => {
         if (!form) return;
         form.hidden = !open;
@@ -149,10 +153,10 @@ window.StudentIncidents = (() => {
             head.appendChild(el('span', 'incident-flag', 'Guardian informed'));
         }
 
-        // Withdrawing is for a report filed by mistake, and it belongs to
-        // whoever may file. An adviser reading the panel gets no button —
-        // and the endpoint refuses them regardless of what is drawn.
-        if (canFile) {
+        // Withdrawing is for a report filed by mistake, and it is the
+        // nurse's. An adviser or a clinic teacher reading the panel gets no
+        // button — and the endpoint refuses them regardless of what is drawn.
+        if (canWithdraw) {
             const remove = el('button', 'incident-remove', 'Withdraw');
             remove.type = 'button';
             remove.dataset.remove = report.id;
@@ -214,6 +218,10 @@ window.StudentIncidents = (() => {
                 }
             }
 
+            if (typeof data.can_withdraw === 'boolean') {
+                canWithdraw = data.can_withdraw;
+            }
+
             render(Array.isArray(data.reports) ? data.reports : []);
         } catch (_) {
             // Leave whatever is on screen rather than blanking the history.
@@ -262,7 +270,7 @@ window.StudentIncidents = (() => {
 
     list.addEventListener('click', async (event) => {
         const button = event.target.closest('[data-remove]');
-        if (!button || !canFile || currentLrn === '') return;
+        if (!button || !canWithdraw || currentLrn === '') return;
 
         if (!window.confirm('Withdraw this incident report? This is recorded in the audit trail.')) return;
 
