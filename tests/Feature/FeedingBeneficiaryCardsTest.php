@@ -6,6 +6,8 @@ use App\Models\FeedingAttendance;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Support\FeedingAtRiskRule;
+use App\Support\MasterlistSheet;
+use App\Support\SchoolLetterhead;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ConfirmsFeedingFlags;
@@ -318,11 +320,96 @@ class FeedingBeneficiaryCardsTest extends TestCase
         // Beneficiaries — the enrolled roll. The candidate list of qualified
         // learners is a separate document under its own title (?list=qualified).
         $this->assertStringContainsString('Master List of Beneficiaries', $sheet);
-        $this->assertStringContainsString('Test School', $sheet);
+        $this->assertStringContainsString('TEST SCHOOL', $sheet);
         $this->assertStringContainsString('Maria Clara Santos', $sheet);
         $this->assertStringContainsString('Sampaguita', $sheet);
         $this->assertStringContainsString('Prepared by:', $sheet);
         $this->assertStringContainsString('Noted by:', $sheet);
+    }
+
+    /**
+     * The form is headed with the school's office letterhead: the Division
+     * seal and the school seal embedded as images beside the letterhead's
+     * lines, with the deployment school's own street, landline and e-mail.
+     */
+    #[Test]
+    public function the_masterlist_export_carries_the_letterhead_with_both_seals(): void
+    {
+        $this->institution->update(['name' => 'Sta. Ana National High School']);
+        $learner = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', name: 'Maria Clara Santos');
+
+        $binary = $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-health-records/masterlist', ['record_ids' => [$learner->id], 'scoped' => '1'])
+            ->assertOk()
+            ->streamedContent();
+
+        $path = tempnam(sys_get_temp_dir(), 'masterlist-test-');
+        file_put_contents($path, $binary);
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($path) === true);
+        $sheet = (string) $zip->getFromName('xl/worksheets/sheet1.xml');
+        $drawing = (string) $zip->getFromName('xl/drawings/drawing1.xml');
+        $media = array_filter(
+            array_map(fn (int $i): string => (string) $zip->getNameIndex($i), range(0, $zip->numFiles - 1)),
+            fn (string $name): bool => str_starts_with($name, 'xl/media/'),
+        );
+        $zip->close();
+        @unlink($path);
+
+        // Two seals, side by side in A and B, anchored on the same line.
+        $this->assertCount(2, $media);
+        $this->assertSame(2, substr_count($drawing, '<xdr:oneCellAnchor>'));
+        $this->assertStringContainsString('<xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>1</xdr:row>', $drawing);
+        $this->assertStringContainsString('<xdr:col>1</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>1</xdr:row>', $drawing);
+        $this->assertStringContainsString('<drawing r:id=', $sheet);
+
+        foreach ([
+            'Republika ng Pilipinas', 'Kagawaran ng Edukasyon', 'Division of Davao City Schools',
+            'STA. ANA NATIONAL HIGH SCHOOL', 'Sales Street, Davao City', 'OFFICE OF THE PRINCIPAL',
+            'Landline No. (082) 222-44-21 • Email: staana.nhs@deped.gov.ph',
+        ] as $line) {
+            $this->assertStringContainsString($line, $sheet);
+        }
+
+        // The letterhead runs from C beside the seals; the names span B and C.
+        $this->assertStringContainsString('<mergeCell ref="C1:E1"/>', $sheet);
+        $this->assertMatchesRegularExpression('/<mergeCell ref="B(\d+):C\1"\/>/', $sheet);
+    }
+
+    /**
+     * Print Masterlist sets the export's form for paper: the same letterhead
+     * with both seals, the same rows in the screen's order, padded to the
+     * form's twenty lines — and a search nobody matched prints the empty form.
+     */
+    #[Test]
+    public function print_masterlist_is_the_same_form_set_for_paper(): void
+    {
+        $first = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', name: 'Ana Abad');
+        $second = $this->makeStudent('Grade 8 / Rosal', 'Wasted', name: 'Carla Cruz');
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get(route('dashboard.feedingcor-health-records.masterlist.print', ['scoped' => 1, 'ids' => $second->id.','.$first->id]))
+            ->assertOk()
+            ->assertSee('data-masterlist-sheet', false)
+            ->assertSee('src="'.asset(SchoolLetterhead::seals()['deped']).'"', false)
+            ->assertSee('src="'.asset(SchoolLetterhead::seals()['school']).'"', false)
+            ->assertSeeInOrder(['Republika ng Pilipinas', 'Kagawaran ng Edukasyon', 'Division of Davao City Schools', 'TEST SCHOOL', 'OFFICE OF THE PRINCIPAL'])
+            ->assertSee('Master List of Beneficiaries')
+            ->assertSeeInOrder(['Carla Cruz', 'Ana Abad'])
+            ->assertSee('Prepared by:')
+            ->assertSee('Noted by:');
+
+        $this->assertSame(MasterlistSheet::MIN_ROWS, substr_count($response->getContent(), '<td class="ml-no">'));
+
+        $this->withSession($this->coordinatorSession())
+            ->get(route('dashboard.feedingcor-health-records.masterlist.print', ['scoped' => 1, 'ids' => '']))
+            ->assertOk()
+            ->assertDontSee('Ana Abad')
+            ->assertDontSee('Carla Cruz');
+
+        $this->withSession(['active_role' => 'class_adviser', 'active_institution_id' => $this->institution->id])
+            ->get(route('dashboard.feedingcor-health-records.masterlist.print'))
+            ->assertRedirect(route('login'));
     }
 
     /** Ids off the wire decide nothing: another school's learner never lands in the file. */

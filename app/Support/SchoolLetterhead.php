@@ -31,6 +31,35 @@ final class SchoolLetterhead
     public const DEPARTMENT = 'Department of Education';
 
     /**
+     * The same two lines as the school's own office letterhead sets them —
+     * in Filipino, above the division — which the masterlist is headed with.
+     */
+    public const REPUBLIC_FIL = 'Republika ng Pilipinas';
+
+    public const DEPARTMENT_FIL = 'Kagawaran ng Edukasyon';
+
+    /** The office the masterlist's letterhead is issued from. */
+    public const OFFICE = 'OFFICE OF THE PRINCIPAL';
+
+    /**
+     * What a school's own letterhead carries that the app holds nowhere else,
+     * keyed by the school's name in lower case.
+     *
+     * Matched by name and never assumed for anybody else, for the reason the
+     * address fallback always was: one school's street, landline or e-mail on
+     * another school's submitted form is worse than a gap in it. A school not
+     * listed prints its stored address and no contact line.
+     *
+     * @var array<string, array{address: string, contact: string}>
+     */
+    private const OFFICIAL = [
+        'sta. ana national high school' => [
+            'address' => 'Sales Street, Davao City',
+            'contact' => 'Landline No. (082) 222-44-21 • Email: staana.nhs@deped.gov.ph',
+        ],
+    ];
+
+    /**
      * The seals the form carries, left and right of the heading.
      *
      * They are looked up as files under `public/images` rather than hardcoded
@@ -57,7 +86,7 @@ final class SchoolLetterhead
     /**
      * The heading for the school a session is scoped to.
      *
-     * @return array{school: string, address: string, region: string, division: string, republic: string, department: string}
+     * @return array{school: string, address: string, contact: string, region: string, division: string, republic: string, department: string}
      */
     public static function for(?int $institutionId, string $schoolName = ''): array
     {
@@ -69,19 +98,22 @@ final class SchoolLetterhead
 
         $name = trim((string) ($institution?->name ?: $schoolName));
         $address = trim((string) ($institution?->address ?? ''));
+        $official = self::OFFICIAL[strtolower($name)] ?? null;
 
-        // The one school whose address the app already holds — it is printed on
-        // the Sulat-Pahibalo. It is matched by name rather than assumed for
-        // everybody, because putting one school's street on another school's
-        // submitted form is exactly the error this class exists to avoid.
-        if ($address === '' && strcasecmp($name, HealthConsentForm::DEFAULT_SCHOOL_NAME) === 0) {
-            $address = HealthConsentForm::DEFAULT_SCHOOL_ADDRESS;
+        // A school with no address on file falls back to its own letterhead's,
+        // matched by name rather than assumed for everybody, because putting
+        // one school's street on another school's submitted form is exactly
+        // the error this class exists to avoid.
+        if ($address === '' && $official !== null) {
+            $address = $official['address'];
         }
 
         return [
             'school' => $name !== '' ? $name : 'School name not set',
             // Empty is a real answer: the form prints a line to write on.
             'address' => $address,
+            // The landline and e-mail line, or nothing at all.
+            'contact' => $official['contact'] ?? '',
             // The app serves one division, and neither is held per school yet.
             // They are named here rather than typed into four Blade files so
             // there is one place to widen when a second division arrives.
@@ -134,9 +166,8 @@ final class SchoolLetterhead
     /**
      * The heading as the lines a workbook writes, top to bottom.
      *
-     * A spreadsheet carries no images, so the seals cannot travel into an
-     * export — the text block is what makes the exported sheet the same
-     * document as the printed one.
+     * For the workbooks that set the heading as text alone; the masterlist
+     * embeds the seals beside masthead() instead (MasterlistSheet).
      *
      * @param  array<string, string>  $letterhead
      * @return list<string>
@@ -149,6 +180,45 @@ final class SchoolLetterhead
             $letterhead['region'],
             self::divisionLine($letterhead['division']),
         ];
+    }
+
+    /**
+     * The masterlist's letterhead, top to bottom, as the school's own office
+     * letterhead sets it beside the two seals: Republika / Kagawaran, the
+     * division, the school, its address, the office and its landline and
+     * e-mail. Each line names its role, so the printed form and the workbook
+     * set every line the same way. An address nobody holds stays as a line to
+     * write on; a contact line nobody holds is left out.
+     *
+     * @param  array<string, string>  $letterhead  for()
+     * @return list<array{role: string, text: string}>
+     */
+    public static function masthead(array $letterhead): array
+    {
+        $lines = [
+            ['role' => 'republic', 'text' => self::REPUBLIC_FIL],
+            ['role' => 'department', 'text' => self::DEPARTMENT_FIL],
+            ['role' => 'division', 'text' => 'Division of '.ucwords(strtolower(trim($letterhead['division']))).' Schools'],
+            ['role' => 'school', 'text' => mb_strtoupper($letterhead['school'])],
+            ['role' => 'address', 'text' => $letterhead['address']],
+            ['role' => 'office', 'text' => self::OFFICE],
+            ['role' => 'contact', 'text' => $letterhead['contact'] ?? ''],
+        ];
+
+        return array_values(array_filter($lines, fn (array $line): bool => $line['role'] !== 'contact' || $line['text'] !== ''));
+    }
+
+    /**
+     * The seals as files on disk, for a workbook that embeds them — or null
+     * where a school has not dropped one in.
+     *
+     * @return array{deped: ?string, school: ?string}
+     */
+    public static function sealFiles(): array
+    {
+        $file = static fn (string $relative): ?string => is_file(public_path($relative)) ? public_path($relative) : null;
+
+        return ['deped' => $file(self::DEPED_LOGO), 'school' => $file(self::SCHOOL_LOGO)];
     }
 
     /**

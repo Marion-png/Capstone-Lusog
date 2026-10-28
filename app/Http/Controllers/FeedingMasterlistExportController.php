@@ -9,7 +9,7 @@ use App\Support\SchemaCache;
 use App\Support\SchoolLetterhead;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
+use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
@@ -107,7 +107,7 @@ class FeedingMasterlistExportController extends Controller
         $path = $reserved.'.xlsx';
         @unlink($reserved);
 
-        $writer = new XlsxWriter;
+        $writer = MasterlistSheet::writer(3);
         $writer->openToFile($path);
 
         // The form itself — heading, the four-column ruled table, and the
@@ -124,6 +124,7 @@ class FeedingMasterlistExportController extends Controller
             rows: array_map(static fn (array $row): array => [$row['name'], $row['grade'], $row['section']], $rows),
             preparedBy: (string) $request->session()->get('active_name', ''),
             preparedRole: 'Feeding Coordinator',
+            widths: [42, 9, 24],
         );
 
         $writer->close();
@@ -131,6 +132,38 @@ class FeedingMasterlistExportController extends Controller
         $filename = 'SBFP-'.$slug.'-'.str_replace('/', '-', $schoolYear).'-'.now()->format('Ymd').'.xlsx';
 
         return response()->download($path, $filename)->deleteFileAfterSend();
+    }
+
+    /**
+     * Print Masterlist: the same form as the export, set for paper — the
+     * school's letterhead with both seals, the title, the ruled table and the
+     * signature block — for the Beneficiaries tab to print from a hidden frame.
+     * The rows are the export's own reading, so the paper and the workbook
+     * list the same learners in the same order. The ids ride the query string
+     * as one comma-separated value; they are re-scoped like the export's.
+     */
+    public function print(Request $request): View|RedirectResponse
+    {
+        if (! $this->isCoordinator($request)) {
+            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can print the masterlist.');
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+        $schoolYear = trim((string) $request->query('school_year', '')) ?: StudentHealthRecord::currentSchoolYear();
+        $request->merge(['record_ids' => array_filter(explode(',', (string) $request->query('ids', '')))]);
+
+        $letterhead = SchoolLetterhead::for($institutionId, (string) $request->session()->get('active_school_name', 'School'));
+
+        return view('feedingcor-dashboard.masterlist-print', [
+            'masthead' => SchoolLetterhead::masthead($letterhead),
+            'seals' => SchoolLetterhead::seals(),
+            'title' => self::LISTS['beneficiaries'][0],
+            'schoolYear' => $schoolYear,
+            'rows' => $this->rows($request, $institutionId, $schoolYear, 'beneficiaries'),
+            'minRows' => MasterlistSheet::MIN_ROWS,
+            'preparedBy' => (string) $request->session()->get('active_name', ''),
+            'preparedRole' => 'Feeding Coordinator',
+        ]);
     }
 
     /**
@@ -158,6 +191,14 @@ class FeedingMasterlistExportController extends Controller
                 ->filter()
                 ->values()
             : collect();
+
+        // The page sends the rows on screen and says so (`scoped`), so a
+        // search nobody matched is the empty form, never the whole roll. Only
+        // a request that sends nothing at all — a browser with JS off — falls
+        // back to the roll.
+        if ($list === 'beneficiaries' && $request->boolean('scoped') && $requested->isEmpty()) {
+            return [];
+        }
 
         $records = StudentHealthRecord::query()
             ->when($institutionId, fn ($query) => $query->where('institution_id', $institutionId))

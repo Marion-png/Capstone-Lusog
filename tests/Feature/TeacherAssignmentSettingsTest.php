@@ -6,6 +6,7 @@ use App\Models\AuditLog;
 use App\Models\Institution;
 use App\Models\InstitutionSection;
 use App\Models\StudentHealthRecord;
+use App\Support\LearnerPlacement;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -234,8 +235,8 @@ class TeacherAssignmentSettingsTest extends TestCase
     public static function invalidAssignments(): array
     {
         return [
-            'previous year' => [['school_year' => '2025-2026'], 'school_year'],
-            'future year' => [['school_year' => '2027-2028'], 'school_year'],
+            'not a school year' => [['school_year' => '2027-2029'], 'school_year'],
+            'year off the list' => [['school_year' => '2040-2041'], 'school_year'],
             'missing year' => [['school_year' => null], 'school_year'],
             'no confirmation' => [['confirm_assignment' => null], 'confirm_assignment'],
             'declined confirmation' => [['confirm_assignment' => '0'], 'confirm_assignment'],
@@ -297,8 +298,122 @@ class TeacherAssignmentSettingsTest extends TestCase
         $this->assertNotNull($entry);
         $this->assertSame('teacher.cruz', $entry->actor_username);
         $this->assertSame('2026-2027', $entry->details['school_year']);
-        $this->assertSame(['assigned_grade_level' => 'Grade 7', 'assigned_section' => 'MATIYAGA'], $entry->details['old']);
-        $this->assertSame(['assigned_grade_level' => 'Grade 8', 'assigned_section' => 'EAGLE'], $entry->details['new']);
+        $this->assertSame(['assigned_grade_level' => 'Grade 7', 'assigned_section' => 'MATIYAGA', 'assigned_school_year' => null], $entry->details['old']);
+        $this->assertSame(['assigned_grade_level' => 'Grade 8', 'assigned_section' => 'EAGLE', 'assigned_school_year' => null], $entry->details['new']);
+    }
+
+    // ── School-year testing ──────────────────────────────────────────
+
+    #[Test]
+    #[DataProvider('teacherRoles')]
+    public function while_testing_a_teacher_may_set_their_assignment_to_any_school_year(string $role): void
+    {
+        $id = $this->account($role);
+
+        $this->withSession($this->teacherSession($role))->get(route('settings'))->assertOk()
+            ->assertSee('<select class="input" id="assignmentYear" name="school_year" required>', false)
+            ->assertSee('<option value="2026-2027" selected>2026-2027 (current)</option>', false)
+            ->assertSee('<option value="2031-2032" >', false)
+            ->assertSee('<option value="2021-2022" >', false);
+
+        $this->withSession($this->teacherSession($role))->from(route('settings'))
+            ->post(route('settings.assignment'), $this->assignment(['school_year' => '2027-2028']))
+            ->assertRedirect(route('settings'))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success', fn (string $message) => str_contains($message, 'SY 2027-2028'))
+            ->assertSessionHas('assigned_school_year', '2027-2028');
+        $this->assertDatabaseHas('accounts', ['id' => $id, 'assigned_school_year' => '2027-2028']);
+
+        $this->get(route('settings'))
+            ->assertSee('<option value="2027-2028" selected>2027-2028</option>', false);
+
+        // Choosing the calendar's year again stores nothing, so the
+        // assignment follows the calendar into June as before.
+        $this->from(route('settings'))
+            ->post(route('settings.assignment'), $this->assignment(['school_year' => '2026-2027']))
+            ->assertSessionHasNoErrors()
+            ->assertSessionMissing('assigned_school_year');
+        $this->assertDatabaseHas('accounts', ['id' => $id, 'assigned_school_year' => null]);
+    }
+
+    #[Test]
+    public function only_the_teachers_own_session_works_in_the_chosen_year(): void
+    {
+        $this->account('class_adviser', [
+            'assigned_grade_level' => 'Grade 8',
+            'assigned_section' => 'EAGLE',
+            'assigned_school_year' => '2027-2028',
+        ]);
+        $this->learner('THIS-YEAR', 'Grade 8', 'EAGLE');
+        $this->learner('NEXT-YEAR', 'Grade 8', 'EAGLE', '2027-2028');
+
+        $response = $this->withSession($this->teacherSession())->get('/dashboard/class-adviser')->assertOk();
+        $this->assertSame(['NEXT-YEAR'], collect($response->viewData('records'))->pluck('student_id')->all());
+
+        // A stray year in another role's session moves nothing.
+        $this->flushSession()->withSession([
+            'active_role' => 'school_nurse',
+            'active_name' => 'Nurse Reyes',
+            'active_institution_id' => $this->school->id,
+            'assigned_school_year' => '2027-2028',
+        ])->get('/dashboard/student-health-records')->assertOk()
+            ->assertSee('THIS-YEAR')
+            ->assertDontSee('NEXT-YEAR');
+    }
+
+    #[Test]
+    public function with_testing_off_the_assignment_is_for_the_calendars_year_alone(): void
+    {
+        config(['app.school_year_testing' => false]);
+        $id = $this->account('class_adviser', ['assigned_school_year' => '2027-2028']);
+
+        // A year stored while testing was on is ignored once it is off.
+        $this->withSession($this->teacherSession())->get(route('settings'))->assertOk()
+            ->assertSee('id="assignmentYear" name="school_year" value="2026-2027" readonly', false)
+            ->assertDontSee('<select class="input" id="assignmentYear"', false);
+
+        foreach (['2025-2026', '2027-2028'] as $year) {
+            $this->withSession($this->teacherSession())->from(route('settings'))
+                ->post(route('settings.assignment'), $this->assignment(['school_year' => $year]))
+                ->assertSessionHasErrors('school_year', null, 'assignment');
+        }
+
+        $this->assertDatabaseHas('accounts', ['id' => $id, 'assigned_section' => 'MATIYAGA']);
+    }
+
+    /**
+     * What the setting is for: close a Grade 7 class, move to next year's
+     * Grade 8, and carry the learner over — their Grade 7 year kept beside it.
+     */
+    #[Test]
+    public function a_learner_can_be_followed_into_the_next_school_year(): void
+    {
+        $this->account();
+        $this->learner('100000000777', 'Grade 7', 'MATIYAGA');
+
+        $this->withSession($this->teacherSession())
+            ->post(route('class-adviser.close-year.store'), [
+                'school_year' => '2026-2027',
+                'statuses' => ['100000000777' => LearnerPlacement::PROMOTED],
+            ])
+            ->assertSessionHas('success');
+
+        $this->from(route('settings'))
+            ->post(route('settings.assignment'), $this->assignment(['school_year' => '2027-2028']))
+            ->assertSessionHasNoErrors();
+
+        $this->post(route('adviser.add-to-section'), ['add_lrn' => '100000000777'])
+            ->assertSessionHas('success');
+
+        $rows = StudentHealthRecord::where('student_id', '100000000777')->orderBy('school_year')->get();
+        $this->assertSame(['2026-2027', '2027-2028'], $rows->pluck('school_year')->all());
+        $this->assertSame('Grade 7 / MATIYAGA', $rows[0]->section);
+        $this->assertSame(LearnerPlacement::PROMOTED, $rows[0]->end_status);
+        $this->assertSame('Grade 8 / EAGLE', $rows[1]->section);
+        $this->assertSame(LearnerPlacement::CARRIED_OVER, $rows[1]->joined_as);
+
+        $response = $this->get('/dashboard/class-adviser')->assertOk();
+        $this->assertSame(['100000000777'], collect($response->viewData('records'))->pluck('student_id')->all());
     }
 
     #[Test]

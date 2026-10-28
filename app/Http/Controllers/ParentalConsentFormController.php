@@ -2,17 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\HealthConsentForm;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use App\Support\AdviserClassScope;
 use App\Support\AuditTrail;
+use App\Support\ConsentFormScanner;
 use App\Support\EncryptedFileStorage;
 use App\Support\LearnerPlacement;
+use App\Support\SchemaCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class ParentalConsentFormController extends Controller
 {
@@ -49,6 +53,11 @@ class ParentalConsentFormController extends Controller
             // none, exactly as before.
             'answer_from_scan' => ['nullable', 'boolean'],
             'answer_confirmed' => ['accepted_if:answer_from_scan,1'],
+            // The services the letter lists, ticked off the paper. Optional,
+            // as the answer is: an upload without them reads as the program
+            // it was filed for, exactly as every upload did before.
+            'services' => ['nullable', 'array'],
+            'services.*' => ['string', Rule::in(array_keys(HealthConsentForm::PLANNED_SERVICES))],
             'partial_exception' => ['nullable', 'string', 'max:500'],
             'refused_reason' => ['nullable', 'string', 'max:500'],
             'allergy_food' => ['nullable', 'boolean'],
@@ -123,20 +132,36 @@ class ParentalConsentFormController extends Controller
             $medCertPath = EncryptedFileStorage::store($medCert, 'parental-consents/'.$record->id.'/med-cert');
         }
 
+        $consentType = $validated['consent_type'] ?? null;
+
+        // A write-in line counts when something is written on it: "wala" on
+        // the allergy line is the parent saying there is none.
+        $writes = fn (string $field): bool => ConsentFormScanner::saysSomething((string) ($validated[$field] ?? ''));
+
+        $services = array_values(array_unique($validated['services'] ?? []));
+
         $upload = ParentalConsentForm::create([
             'student_health_record_id' => $record->id,
             'program_type' => $program,
             'school_year' => $schoolYear,
+<<<<<<< HEAD
+            'consent_type' => $consentType,
+            // Each blank belongs to the answer it is written under.
+            'partial_exception' => $consentType === 'partial' ? ($validated['partial_exception'] ?? null) : null,
+            'refused_reason' => $consentType === 'refused' ? ($validated['refused_reason'] ?? null) : null,
+            'allergy_food' => ! empty($validated['allergy_food']) || $writes('allergy_food_detail'),
+=======
             'consent_type' => $validated['consent_type'] ?? null,
             'partial_exception' => $feeding ? null : ($validated['partial_exception'] ?? null),
             'refused_reason' => $validated['refused_reason'] ?? null,
             'allergy_food' => ! empty($validated['allergy_food']),
+>>>>>>> 515166068f922e6bb548e9602d66a78a8a1db6d7
             'allergy_food_detail' => $validated['allergy_food_detail'] ?? null,
-            'allergy_medicine' => ! empty($validated['allergy_medicine']),
+            'allergy_medicine' => ! empty($validated['allergy_medicine']) || $writes('allergy_medicine_detail'),
             'allergy_medicine_detail' => $validated['allergy_medicine_detail'] ?? null,
-            'prev_immunization' => ! empty($validated['prev_immunization']),
+            'prev_immunization' => ! empty($validated['prev_immunization']) || $writes('prev_immunization_detail'),
             'prev_immunization_detail' => $validated['prev_immunization_detail'] ?? null,
-            'has_other_illness' => ! empty($validated['has_other_illness']),
+            'has_other_illness' => ! empty($validated['has_other_illness']) || $writes('other_illness_detail'),
             'other_illness_detail' => $validated['other_illness_detail'] ?? null,
             // Uploading a certificate is itself proof one was attached, so the
             // flag is set either by the file or by the explicit checkbox.
@@ -147,7 +172,11 @@ class ParentalConsentFormController extends Controller
             'file_path' => $path,
             'file_original_name' => $originalName,
             'uploaded_by_name' => (string) $request->session()->get('active_name', 'Class Adviser'),
-        ]);
+        ] + (SchemaCache::hasColumn('parental_consent_forms', 'services')
+            // Written once the column exists, so an upload still files
+            // before `php artisan migrate` has been run.
+            ? ['services' => $services !== [] ? $services : null]
+            : []));
 
         // Who decided the answer is part of the evidence: a nurse asking how a
         // "full consent" got onto this record can find that the reader

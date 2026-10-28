@@ -44,18 +44,17 @@
 			<div class="flash err">{{ $errors->first() }}</div>
 		@endif
 
-		{{-- A recorded session is closed as a whole: this screen becomes a record,
-		     the same way the Attendance tab's sheet does, and the endpoint refuses
-		     the write regardless of what is on screen. A wrong mark, or a learner
-		     this session missed, is put right on that learner's beneficiary record
-		     where the change is attributed and audited. --}}
+		{{-- A recorded session closes as a whole at the end of its own day: this
+		     screen then becomes a record, the same way the Attendance tab's sheet
+		     does, and the endpoint refuses the write regardless of what is on
+		     screen. On the day itself it stays editable for late arrivals. --}}
 		@if ($sessionLocked || ! $isFeedingDay)
 			<div class="alert-bar is-info">
 				<div class="alert-body">
 					<div>
 						@if ($sessionLocked)
 							<strong>Attendance for {{ $sessionLabel }} has already been recorded</strong>
-							<span>This session is read-only. Correct a mark on the learner&rsquo;s beneficiary record.</span>
+							<span>This session is read-only. A session can only be edited on its own day.</span>
 						@else
 							<strong>{{ $sessionLabel }} is a {{ \Carbon\Carbon::parse($sessionDate)->format('l') }}</strong>
 							<span>There are no feeding sessions on Saturdays or Sundays.</span>
@@ -88,7 +87,11 @@
 				<div class="ra-bulk" @if ($sessionLocked || ! $isFeedingDay) hidden @endif>
 					<button type="button" class="btn btn-secondary" data-mark-all="present">All present</button>
 					<button type="button" class="btn btn-secondary" data-mark-all="absent">All absent</button>
-					<button type="button" class="btn btn-ghost" data-mark-all="">Clear</button>
+					{{-- Not while editing: a blank row writes nothing, so a cleared
+					     mark would stay on file. --}}
+					@unless ($sessionMarked)
+						<button type="button" class="btn btn-ghost" data-mark-all="">Clear</button>
+					@endunless
 				</div>
 			</div>
 

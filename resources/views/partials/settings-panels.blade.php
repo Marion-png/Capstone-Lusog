@@ -10,7 +10,8 @@
     copy so the two shells cannot drift.
 
     Expects: $profile (App\Support\AccountSettings::profileFor) and
-    $passwordBlockedReason, $assignmentSchoolYear and $assignmentCatalog.
+    $passwordBlockedReason, $assignmentSchoolYear, $calendarSchoolYear,
+    $assignmentYearOptions and $assignmentCatalog.
 --}}
 @php
     use App\Support\AccountPassword;

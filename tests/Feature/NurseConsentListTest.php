@@ -408,6 +408,31 @@ class NurseConsentListTest extends TestCase
     }
 
     #[Test]
+    public function an_uploaded_scan_with_its_services_ticked_reads_as_them(): void
+    {
+        $record = $this->record('930000000002', 'Diaz, Dina');
+
+        ParentalConsentForm::create([
+            'student_health_record_id' => $record->id,
+            'program_type' => 'Deworming',
+            'school_year' => HealthConsentForm::currentSchoolYear(),
+            'services' => ['checkup', 'vitamin_a'],
+            'consent_type' => 'full',
+            'file_path' => 'parental-consents/'.$record->id.'/scan.jpg',
+            'file_original_name' => 'scan.jpg',
+            'uploaded_by_name' => 'Test Adviser',
+        ]);
+
+        $this->assertStringContainsString('>Consented</span>', $this->list(['service' => 'vitamin_a']));
+        $this->assertStringContainsString('>Not on the form</span>', $this->list(['service' => 'deworming_worms']));
+
+        $this->withSession($this->readerSession())
+            ->get(route('consent-forms.nurse-learner', $record))
+            ->assertOk()
+            ->assertSee('Consents to all 2 services offered');
+    }
+
+    #[Test]
     public function an_unknown_filter_value_narrows_nothing(): void
     {
         $record = $this->record('940000000001', 'Abad, Ana');

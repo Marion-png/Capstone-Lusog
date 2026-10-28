@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AttendanceImport;
+use App\Models\AuditLog;
 use App\Models\FeedingAttendance;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
@@ -145,24 +146,48 @@ class FeedingRecordAttendanceTest extends TestCase
 
     /**
      * Nothing to read back on a day nobody can record: the dialog is not drawn
-     * once a session is closed, exactly as the record form is not.
+     * once a session is closed, exactly as the record form is not. A session
+     * recorded today is still open — for late arrivals — and comes back with
+     * its marks already selected.
      */
     #[Test]
-    public function a_recorded_session_offers_no_confirmation_dialog(): void
+    public function a_session_recorded_on_an_earlier_day_offers_no_confirmation_dialog(): void
     {
         $learner = $this->makeStudent();
-        FeedingAttendance::create([
-            'student_health_record_id' => $learner->id,
-            'session_date' => now()->toDateString(),
-            'is_present' => true,
-            'needs_review' => false,
-            'source' => 'manual_entry',
-        ]);
+
+        foreach ([$this->yesterday(), now()->toDateString()] as $date) {
+            FeedingAttendance::create([
+                'student_health_record_id' => $learner->id,
+                'session_date' => $date,
+                'is_present' => true,
+                'needs_review' => false,
+                'source' => 'manual_entry',
+            ]);
+        }
+
+        $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-program/attendance/record?date='.$this->yesterday())
+            ->assertOk()
+            ->assertSee('has already been recorded')
+            ->assertDontSee('id="confirmBackdrop"', false);
 
         $this->withSession($this->coordinatorSession())
             ->get('/dashboard/feedingcor-program/attendance/record')
             ->assertOk()
-            ->assertDontSee('id="confirmBackdrop"', false);
+            ->assertSee('id="confirmBackdrop"', false)
+            ->assertSee('name="marks['.$learner->id.']" value="present" checked', false);
+    }
+
+    /** The weekday before today's, so the test never lands on a weekend. */
+    private function yesterday(): string
+    {
+        $day = now()->subDay();
+
+        while ($day->isWeekend()) {
+            $day->subDay();
+        }
+
+        return $day->toDateString();
     }
 
     #[Test]
@@ -217,70 +242,95 @@ class FeedingRecordAttendanceTest extends TestCase
     }
 
     /**
-     * A recorded mark is settled. Re-posting the sheet cannot rewrite it — the
-     * screen renders those rows without controls, but a stale tab or a replayed
-     * form would still reach this endpoint, so the refusal lives on the server.
-     * A genuine mistake is put right on the learner's beneficiary record, where
-     * the correction is attributed and audited.
+     * A learner who arrives late is marked on the same day. The edit posts the
+     * whole roll pre-filled, and only what changed is written: the late
+     * arrival's mark, under the name of whoever changed it, while every other
+     * mark keeps the name of the person who took it. It adds no second batch.
      */
     #[Test]
-    public function a_recorded_mark_cannot_be_rewritten_by_saving_the_sheet_again(): void
+    public function a_late_arrival_is_marked_present_on_the_same_day(): void
     {
-        $learner = $this->makeStudent();
+        $onTime = $this->makeStudent();
+        $late = $this->makeStudent();
+        $skipped = $this->makeStudent();
         $today = now()->toDateString();
 
         $this->withSession($this->coordinatorSession())
             ->post('/dashboard/feedingcor-program/attendance/record', [
                 'session_date' => $today,
-                'marks' => [$learner->id => 'present'],
-            ]);
+                'marks' => [$onTime->id => 'present', $late->id => 'absent'],
+                'remarks' => [$late->id => 'Not yet in'],
+            ])
+            ->assertSessionHas('success');
 
-        $this->withSession($this->coordinatorSession())
+        $editor = ['active_name' => 'Second Coordinator'] + $this->coordinatorSession();
+        $before = (int) AuditLog::max('id');
+
+        $this->withSession($editor)
             ->post('/dashboard/feedingcor-program/attendance/record', [
                 'session_date' => $today,
-                'marks' => [$learner->id => 'absent'],
-                'remarks' => [$learner->id => 'Changed my mind'],
+                'marks' => [$onTime->id => 'present', $late->id => 'present', $skipped->id => 'absent'],
+                'remarks' => [$late->id => 'Not yet in'],
+                'return_to' => 'attendance',
             ])
-            ->assertSessionHas('error');
+            ->assertRedirect(route('dashboard.feedingcor-attendance', ['date' => $today]))
+            ->assertSessionHas('success', '2 mark(s) updated for '.now()->format('M d, Y').'.');
 
-        $rows = FeedingAttendance::where('student_health_record_id', $learner->id)->get();
+        $mark = fn (StudentHealthRecord $learner) => FeedingAttendance::where('student_health_record_id', $learner->id)->firstOrFail();
 
-        $this->assertCount(1, $rows, 'The second save writes nothing, not a duplicate.');
-        $this->assertTrue((bool) $rows->first()->is_present, 'The mark on file is the one first recorded.');
-        $this->assertSame('', trim((string) $rows->first()->remarks), 'And its remark is untouched too.');
+        $this->assertTrue((bool) $mark($late)->is_present);
+        $this->assertSame('', trim((string) $mark($late)->remarks), 'A present learner keeps no reason for an absence.');
+        $this->assertSame('Second Coordinator', $mark($late)->recorded_by_name);
+        $this->assertFalse((bool) $mark($skipped)->is_present, 'A learner the first pass missed can be added.');
+        $this->assertSame('Test Coordinator', $mark($onTime)->recorded_by_name, 'An unchanged mark keeps who took it.');
+
+        $this->assertSame(1, AttendanceImport::count(), 'An edit belongs to the session already filed.');
+        $this->assertTrue(AuditLog::where('id', '>', $before)
+            ->where('action', 'updated')->where('subject_type', 'FeedingAttendance')->exists());
+
+        // Saving the same marks again changes nothing.
+        $this->withSession($editor)
+            ->post('/dashboard/feedingcor-program/attendance/record', [
+                'session_date' => $today,
+                'marks' => [$onTime->id => 'present', $late->id => 'present'],
+            ])
+            ->assertSessionHas('success', 'No mark was changed for '.now()->format('M d, Y').'.');
     }
 
     /**
-     * A recorded session is closed as a whole, not learner by learner.
-     *
-     * Recording is one act covering the entire roll, so the first confirmed mark
-     * closes the day: a second pass cannot add a learner the first one missed,
-     * and cannot rewrite one it recorded. That gap is filled on the learner's own
-     * beneficiary record, where the change carries who made it and is audited —
-     * rather than by two people writing the same day from two screens.
+     * After its day a session is a record. Re-posting the sheet cannot rewrite
+     * a mark or add a learner — the screen renders those rows without controls,
+     * but a stale tab or a replayed form would still reach this endpoint, so
+     * the refusal lives on the server.
      */
     #[Test]
-    public function a_recorded_session_is_closed_to_a_second_save(): void
+    public function a_session_recorded_on_an_earlier_day_is_closed_to_a_second_save(): void
     {
         $first = $this->makeStudent();
         $second = $this->makeStudent();
-        $today = now()->toDateString();
+        $yesterday = $this->yesterday();
+
+        FeedingAttendance::create([
+            'student_health_record_id' => $first->id,
+            'session_date' => $yesterday,
+            'is_present' => true,
+            'needs_review' => false,
+            'source' => 'manual_entry',
+        ]);
 
         $this->withSession($this->coordinatorSession())
             ->post('/dashboard/feedingcor-program/attendance/record', [
-                'session_date' => $today,
-                'marks' => [$first->id => 'present'],
-            ]);
-
-        $this->withSession($this->coordinatorSession())
-            ->post('/dashboard/feedingcor-program/attendance/record', [
-                'session_date' => $today,
+                'session_date' => $yesterday,
                 'marks' => [$first->id => 'absent', $second->id => 'absent'],
+                'remarks' => [$first->id => 'Changed my mind'],
             ])
-            ->assertSessionHas('error');
+            ->assertSessionHas('error', fn (string $message) => str_contains($message, 'can only be edited on its own day'));
 
         // The first pass stands, and the second wrote nothing at all.
-        $this->assertTrue((bool) FeedingAttendance::where('student_health_record_id', $first->id)->first()->is_present);
+        $rows = FeedingAttendance::where('student_health_record_id', $first->id)->get();
+        $this->assertCount(1, $rows);
+        $this->assertTrue((bool) $rows->first()->is_present);
+        $this->assertSame('', trim((string) $rows->first()->remarks));
         $this->assertNull(FeedingAttendance::where('student_health_record_id', $second->id)->first());
     }
 

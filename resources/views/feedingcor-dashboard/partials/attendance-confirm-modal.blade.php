@@ -1,8 +1,7 @@
 {{-- ── Confirm Attendance ─────────────────────────────────────────────────
-     A recorded session is closed as a whole — the first confirmed mark ends
-     the day, and a wrong one is put right afterwards on the learner's own
-     beneficiary record, where the change is attributed and audited. So the
-     save is worth reading back before it is made: this dialog names every
+     A recorded session can be edited on its own day and closes as a whole
+     when the day ends. So the save is worth reading back before it is made:
+     this dialog names every
      learner and the mark entered for them, and nothing reaches the endpoint
      until it is confirmed.
 

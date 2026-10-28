@@ -873,10 +873,11 @@ class FeedingProgramController extends Controller
             ->sortBy(fn (array $row) => strtolower($row['name']))
             ->values();
 
-        // A recorded session is closed as a whole, so this screen becomes a
-        // record too: no inputs, no save. The same rule the Attendance tab's
-        // sheet and this endpoint's POST apply, asked in one place.
-        $sessionLocked = $this->sessionIsRecorded($beneficiaries->pluck('id')->map(fn ($id): int => (int) $id)->all(), $sessionDate);
+        // A recorded session closes as a whole at the end of its own day, so
+        // from then this screen is a record too: no inputs, no save. The same
+        // rule the Attendance tab's sheet and this endpoint's POST apply.
+        $sessionMarked = $this->sessionIsRecorded($beneficiaries->pluck('id')->map(fn ($id): int => (int) $id)->all(), $sessionDate);
+        $sessionLocked = $sessionMarked && ! FeedingProgramCycle::sessionStaysOpen($sessionDate);
 
         return view('feedingcor-dashboard.record-attendance', [
             'rows' => $rows,
@@ -885,6 +886,7 @@ class FeedingProgramController extends Controller
             'today' => now()->toDateString(),
             'alreadyRecorded' => $existing->count(),
             'sessionLocked' => $sessionLocked,
+            'sessionMarked' => $sessionMarked,
             'isFeedingDay' => FeedingProgramCycle::isFeedingDay($sessionDate),
         ]);
     }
@@ -1396,24 +1398,43 @@ class FeedingProgramController extends Controller
             return back()->with('error', 'None of the submitted learners belong to this school.');
         }
 
-        // A recorded session is closed, as a whole.
+        $remarks = collect($request->input('remarks', []));
+
+        // A recorded session stays open until the end of its own day, then
+        // closes as a whole.
         //
-        // Once a human has confirmed any mark for this date the session is a
-        // record rather than a form: the sheet reports it, the record dialog will
-        // not reopen it, and this endpoint refuses it — because a stale tab or a
-        // replayed form reaches here all the same, and a read-only screen whose
-        // endpoint still accepts writes is only a suggestion. A wrong mark, and a
-        // learner the session skipped, are both put right on that learner's
-        // beneficiary record, where the change is attributed and audited.
+        // Learners arrive late while the session is still being served, so on
+        // the day itself the coordinator can open it again and mark them. From
+        // the next day it is a record rather than a form: the sheet reports it,
+        // the record dialog will not reopen it, and this endpoint refuses it —
+        // because a stale tab or a replayed form reaches here all the same, and
+        // a read-only screen whose endpoint still accepts writes is only a
+        // suggestion.
         //
         // An UNCONFIRMED scanned mark does not close a session: nobody has read
         // it, and recording on site is exactly how it gets decided.
-        if ($this->sessionIsRecorded($allowedIds, $sessionDate)) {
+        $editing = $this->sessionIsRecorded($allowedIds, $sessionDate);
+
+        if ($editing && ! FeedingProgramCycle::sessionStaysOpen($sessionDate)) {
             return back()->with(
                 'error',
-                'Attendance for '.Carbon::parse($sessionDate)->format('F j, Y').' has already been recorded. '
-                    .'Correct a mark on the learner’s beneficiary record.'
+                'Attendance for '.Carbon::parse($sessionDate)->format('F j, Y').' has already been recorded, '
+                    .'and a session can only be edited on its own day.'
             );
+        }
+
+        // Editing writes only what changed — the late arrival marked present —
+        // so every other learner's mark keeps the name of whoever took it.
+        if ($editing) {
+            $marks = $this->changedMarks($marks, $remarks, $sessionDate);
+        }
+
+        $redirect = $request->input('return_to') === 'attendance'
+            ? redirect()->route('dashboard.feedingcor-attendance', ['date' => $sessionDate])
+            : redirect()->route('dashboard.feedingcor-dashboard');
+
+        if ($marks->isEmpty()) {
+            return $redirect->with('success', 'No mark was changed for '.Carbon::parse($sessionDate)->format('M d, Y').'.');
         }
 
         $now = now();
@@ -1422,7 +1443,6 @@ class FeedingProgramController extends Controller
         $hasRecorder = SchemaCache::hasColumn('feeding_attendances', 'recorded_by_name');
         $hasExcused = SchemaCache::hasColumn('feeding_attendances', 'is_excused');
         $recorder = (string) $request->session()->get('active_name', 'Feeding Coordinator');
-        $remarks = collect($request->input('remarks', []));
 
         // An excuse this database cannot store is refused, never downgraded.
         //
@@ -1485,7 +1505,7 @@ class FeedingProgramController extends Controller
         $presentCount = $marks->filter(fn ($mark): bool => $mark === FeedingAttendanceMark::PRESENT)->count();
         $excusedCount = $marks->filter(fn ($mark): bool => $mark === FeedingAttendanceMark::EXCUSED)->count();
 
-        DB::transaction(function () use ($upserts, $hasReviewColumns, $hasRemarks, $hasRecorder, $hasExcused, $institutionId, $sessionDate, $marks, $recorder): void {
+        DB::transaction(function () use ($upserts, $hasReviewColumns, $hasRemarks, $hasRecorder, $hasExcused, $institutionId, $sessionDate, $marks, $recorder, $editing): void {
             $updateColumns = ['is_present', 'updated_at'];
             if ($hasExcused) {
                 $updateColumns[] = 'is_excused';
@@ -1508,6 +1528,11 @@ class FeedingProgramController extends Controller
 
             $this->refreshAttendanceRiskFlags($institutionId);
 
+            // An edit belongs to the session the first save already filed.
+            if ($editing) {
+                return;
+            }
+
             // The batch record is what makes "attendance exists for this period"
             // true, so a hand-recorded session gates the workflow exactly as an
             // uploaded sheet does.
@@ -1528,10 +1553,10 @@ class FeedingProgramController extends Controller
         });
 
         AuditTrail::record(
-            'created',
+            $editing ? 'updated' : 'created',
             'FeedingAttendance',
             null,
-            'Attendance for '.$sessionDate.' recorded on site by '.$recorder
+            'Attendance for '.$sessionDate.($editing ? ' edited on the day by ' : ' recorded on site by ').$recorder
                 .': '.$presentCount.' present, '.($marks->count() - $presentCount - $excusedCount).' absent, '
                 .$excusedCount.' excused'
         );
@@ -1539,11 +1564,8 @@ class FeedingProgramController extends Controller
         // Back to the screen the marks were entered on, with the same session
         // still open — a coordinator correcting one learner should not have to
         // navigate back to the day they were working on.
-        $redirect = $request->input('return_to') === 'attendance'
-            ? redirect()->route('dashboard.feedingcor-attendance', ['date' => $sessionDate])
-            : redirect()->route('dashboard.feedingcor-dashboard');
-
-        return $redirect->with('success', $marks->count().' mark(s) recorded for '.Carbon::parse($sessionDate)->format('M d, Y').'.');
+        return $redirect->with('success', $marks->count().' mark(s) '.($editing ? 'updated' : 'recorded')
+            .' for '.Carbon::parse($sessionDate)->format('M d, Y').'.');
     }
 
     /**
@@ -2089,6 +2111,38 @@ class FeedingProgramController extends Controller
     private function sessionIsRecorded(array $recordIds, string $sessionDate): bool
     {
         return $this->settledMarkIds($recordIds, $sessionDate) !== [];
+    }
+
+    /**
+     * Of the marks posted for a session already recorded, the ones that differ
+     * from what is on file — the mark itself, or the reason given with an
+     * absence. The edit dialog posts the whole roll pre-filled, so without
+     * this every learner's mark would be rewritten under the editor's name.
+     *
+     * @param  Collection<int|string, string>  $marks  record id => posted mark
+     * @param  Collection<int|string, mixed>  $remarks  record id => posted remark
+     * @return Collection<int|string, string>
+     */
+    private function changedMarks(Collection $marks, Collection $remarks, string $sessionDate): Collection
+    {
+        $onFile = FeedingAttendance::query()
+            ->whereIn('student_health_record_id', $marks->keys()->map(fn ($id): int => (int) $id)->all())
+            ->whereDate('session_date', $sessionDate)
+            ->get()
+            ->keyBy('student_health_record_id');
+
+        return $marks->filter(function (string $mark, $recordId) use ($onFile, $remarks): bool {
+            $row = $onFile->get((int) $recordId);
+
+            if (FeedingAttendanceMark::state($row) !== $mark) {
+                return true;
+            }
+
+            // A present learner carries no reason, so only an absence's can change.
+            $remark = $mark === FeedingAttendanceMark::PRESENT ? '' : trim((string) ($remarks[$recordId] ?? ''));
+
+            return $remark !== trim((string) ($row->remarks ?? ''));
+        });
     }
 
     /**

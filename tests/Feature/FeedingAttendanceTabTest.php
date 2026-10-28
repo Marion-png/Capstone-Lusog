@@ -238,9 +238,11 @@ class FeedingAttendanceTabTest extends TestCase
     {
         $recorded = $this->makeStudent(['student_name' => 'Already Recorded']);
         $skipped = $this->makeStudent(['student_name' => 'Nobody Marked Me']);
-        $this->mark($recorded, now()->toDateString(), false, remarks: 'Sick');
+        // A session closes when its own day ends, so an earlier day is read.
+        $yesterday = now()->subDay()->toDateString();
+        $this->mark($recorded, $yesterday, false, remarks: 'Sick');
 
-        $response = $this->open()->assertOk();
+        $response = $this->open('?date='.$yesterday)->assertOk();
 
         $response->assertSee('Sick');
         $response->assertSee('has been recorded');
@@ -254,6 +256,27 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertDontSee('Save Attendance');
         $response->assertDontSee('data-record-all="present"', false);
         $response->assertDontSee('id="recordBackdrop"', false);
+    }
+
+    /**
+     * On its own day a recorded session is still open, for the learners who
+     * arrive late: the sheet reads Recorded, and the dialog opens as Edit
+     * Attendance with the marks on file already selected.
+     */
+    #[Test]
+    public function a_session_recorded_today_can_still_be_edited(): void
+    {
+        $absent = $this->makeStudent(['student_name' => 'Came Late']);
+        $this->mark($absent, now()->toDateString(), false, remarks: 'Not yet in');
+
+        $response = $this->open()->assertOk();
+
+        $response->assertSee('<span class="fa-glyph">✓</span>Recorded', false);
+        $response->assertSee('data-record-open>Edit Attendance</button>', false);
+        $response->assertSee('id="recordForm"', false);
+        $response->assertSee('name="marks['.$absent->id.']" value="absent" checked', false);
+        $response->assertSee('value="Not yet in"', false);
+        $response->assertDontSee('has been recorded');
     }
 
     /** An open session offers exactly one way in: the dialog. */
@@ -353,8 +376,9 @@ class FeedingAttendanceTabTest extends TestCase
 
         $response = $this->open('?status=absent')->assertOk();
 
-        $response->assertSee('Absent Learner');
-        $response->assertDontSee('Present Learner');
+        // The sheet's rows. Today's session is still open, so the record
+        // dialog on the page lists the whole roll whatever the filter.
+        $this->assertSame(['Absent Learner'], collect($response->viewData('rows'))->pluck('name')->all());
     }
 
     /**
@@ -726,7 +750,7 @@ class FeedingAttendanceTabTest extends TestCase
     }
 
     #[Test]
-    public function the_attendance_notices_point_the_coordinator_at_the_at_risk_tab(): void
+    public function the_attendance_notices_are_notes_with_no_action(): void
     {
         // The deployment school's rule: a notice at day 3, the threshold at 7.
         $this->institution->update(['feeding_at_risk_mode' => 'unexcused_absence_days']);
@@ -747,9 +771,15 @@ class FeedingAttendanceTabTest extends TestCase
 
         $response->assertSee('1 attendance notice to verify');
         $response->assertSee('1 attendance record awaiting confirmation');
-        $response->assertSee(route('dashboard.feedingcor-at-risk', ['status' => 'notice']), false);
-        $response->assertSee(route('dashboard.feedingcor-at-risk', ['status' => 'awaiting_confirmation']), false);
         $this->assertSame(0, $response->viewData('atRisk')['count']);
+
+        // A note says what is true; it offers nothing to click — on the page
+        // and in the panel the live refresh re-renders.
+        $response->assertDontSee(route('dashboard.feedingcor-at-risk', ['status' => 'notice']), false);
+        $response->assertDontSee(route('dashboard.feedingcor-at-risk', ['status' => 'awaiting_confirmation']), false);
+        $notices = view('feedingcor-dashboard.partials.attendance-notices', $response->original->getData())->render();
+        $this->assertStringContainsString('awaiting confirmation', $notices);
+        $this->assertDoesNotMatchRegularExpression('/<(a|button)\b/', $notices);
     }
 
     #[Test]

@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\InstitutionSection;
+use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use App\Support\AccountPassword;
 use App\Support\AccountSettings;
 use App\Support\AuditTrail;
 use App\Support\RequestMemo;
+use App\Support\WorkingSchoolYear;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -34,6 +36,7 @@ class SettingsController extends Controller
     public function index(Request $request)
     {
         $profile = AccountSettings::profileFor($request);
+        $institutionId = (int) $request->session()->get('active_institution_id');
 
         $view = $profile['role'] === 'nutricor' ? 'nutricor.settings' : 'dashboard.settings';
 
@@ -41,30 +44,49 @@ class SettingsController extends Controller
             'profile' => $profile,
             'passwordBlockedReason' => AccountSettings::passwordBlockedReason($profile),
             'assignmentSchoolYear' => StudentHealthRecord::currentSchoolYear(),
+            'calendarSchoolYear' => ParentalConsentForm::calendarSchoolYear(),
+            // Any school year may be chosen only while testing; otherwise the
+            // assignment is for the year the calendar is in, as before.
+            'assignmentYearOptions' => $profile['can_change_assignment'] && WorkingSchoolYear::enabled()
+                ? WorkingSchoolYear::options($institutionId)
+                : [],
             'assignmentCatalog' => $profile['can_change_assignment']
-                ? InstitutionSection::catalogFor((int) $request->session()->get('active_institution_id'))
+                ? InstitutionSection::catalogFor($institutionId)
                 : [],
         ]);
     }
 
-    /** Update the teacher's current assignment without moving student records. */
+    /**
+     * Update the teacher's assignment without moving student records.
+     *
+     * While school-year testing is on, the assignment may be for any school
+     * year, and the teacher then works in that year (WorkingSchoolYear). The
+     * calendar's year is stored as NULL, so the assignment follows the
+     * calendar into the next year again.
+     */
     public function updateAssignment(Request $request)
     {
         $profile = AccountSettings::profileFor($request);
         abort_unless($profile['can_change_assignment'], 403, 'Only teachers with a stored account can update their own assignment.');
 
-        $schoolYear = StudentHealthRecord::currentSchoolYear();
+        $institutionId = (int) $request->session()->get('active_institution_id');
+        $anyYear = WorkingSchoolYear::enabled();
+
         $validated = $request->validateWithBag('assignment', [
             'assigned_grade_level' => ['required', 'string', 'max:50'],
             'assigned_section' => ['required', 'string', 'max:100'],
-            'school_year' => ['required', Rule::in([$schoolYear])],
+            'school_year' => ['required', Rule::in($anyYear
+                ? WorkingSchoolYear::options($institutionId)
+                : [StudentHealthRecord::currentSchoolYear()])],
             'confirm_assignment' => ['accepted'],
         ], [
-            'school_year.in' => 'The school year has changed. Reload Settings before updating your assignment.',
+            'school_year.in' => $anyYear
+                ? 'Choose a school year from the list.'
+                : 'The school year has changed. Reload Settings before updating your assignment.',
             'confirm_assignment.accepted' => 'Confirm that this is your assigned class and the change should take effect now.',
         ]);
 
-        $institutionId = (int) $request->session()->get('active_institution_id');
+        $schoolYear = $validated['school_year'];
         $grade = trim($validated['assigned_grade_level']);
         $section = trim($validated['assigned_section']);
 
@@ -73,7 +95,7 @@ class SettingsController extends Controller
 
             if ($canonical === null) {
                 return redirect()->route('settings')->withInput($request->only([
-                    'assigned_grade_level', 'assigned_section',
+                    'assigned_grade_level', 'assigned_section', 'school_year',
                 ]))->withErrors([
                     'assigned_section' => 'Select a grade level and section offered by your school.',
                 ], 'assignment');
@@ -82,7 +104,7 @@ class SettingsController extends Controller
             [$grade, $section] = $canonical;
         }
 
-        $account = DB::transaction(function () use ($profile, $institutionId, $grade, $section, $schoolYear) {
+        $account = DB::transaction(function () use ($profile, $institutionId, $grade, $section, $schoolYear, $anyYear) {
             // Lock the account so concurrent saves record the actual previous
             // assignment. The request supplies neither the account nor school.
             $row = DB::table('accounts')
@@ -97,6 +119,11 @@ class SettingsController extends Controller
                 'assigned_section' => $row->assigned_section,
             ];
             $new = ['assigned_grade_level' => $grade, 'assigned_section' => $section];
+
+            if ($anyYear) {
+                $old['assigned_school_year'] = $row->assigned_school_year;
+                $new['assigned_school_year'] = $schoolYear === ParentalConsentForm::calendarSchoolYear() ? null : $schoolYear;
+            }
 
             if ($old !== $new) {
                 DB::table('accounts')->where('id', $row->id)->update($new + ['updated_at' => now()]);

@@ -46,7 +46,7 @@
         <div class="page-header">
             <div class="page-eyebrow">Account</div>
             <h1 class="page-title">Your <span>Settings</span></h1>
-            <p class="page-sub">Your account, password@if ($profile['shows_assignment']) and teaching assignment@endif.</p>
+            <p class="page-sub">Your account{{ $profile['shows_assignment'] ? ', password and teaching assignment' : ' and password' }}.</p>
         </div>
 
         @include('partials.settings-panels')

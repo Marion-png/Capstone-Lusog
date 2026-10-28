@@ -280,17 +280,16 @@ class FeedingCoordinatorDashboardTest extends TestCase
     }
 
     /**
-     * A recorded session is closed as a whole — but the control stays.
+     * A day already recorded stays open until it ends, for late arrivals.
      *
-     * A button that vanishes once the day is done leaves a coordinator with
-     * nothing to press and no way to tell "already recorded" from "broken", so
-     * the same dialog opens on the session as a *record*: the marks it came to,
-     * the reasons filed with them, and why nothing more can be entered. Nothing
-     * writable is rendered — no form, no radios, no Save — and
-     * `storeRecordedAttendance` refuses the write regardless.
+     * The Dashboard always works on today, so once today is recorded the same
+     * control reads "Edit Today's Attendance" and opens the dialog on the
+     * marks on file, already selected, with the read-back ready to confirm
+     * the change. (A day that is truly closed — a weekend, outside the cycle —
+     * is covered below.)
      */
     #[Test]
-    public function a_recorded_day_still_opens_the_dialog_but_as_a_record(): void
+    public function a_day_recorded_today_opens_the_dialog_to_edit_it(): void
     {
         $learner = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', 15.1);
         $this->markAttendance($learner, now()->toDateString(), true);
@@ -299,30 +298,16 @@ class FeedingCoordinatorDashboardTest extends TestCase
             ->get('/dashboard/feedingcor-dashboard')
             ->assertOk();
 
-        $this->assertFalse($response->viewData('canRecordToday'));
+        $this->assertTrue($response->viewData('canRecordToday'));
+        $this->assertTrue($response->viewData('recordMarked'));
 
-        // The way in is still there, and it still opens a dialog rather than
-        // sending the coordinator to another tab.
-        $response->assertSee('Record Today&rsquo;s Attendance', false);
+        $response->assertSee('Edit Today&rsquo;s Attendance', false);
         $response->assertSee('data-record-open', false);
-        $response->assertSee('id="recordBackdrop"', false);
-        $response->assertSee('has already been recorded');
-        $response->assertSee($learner->student_name);
-
-        // The dialog's markup alone: its script names the radios it drives on
-        // a day that has any, so the slice stops where the markup does.
-        $html = $response->getContent();
-        $dialog = substr($html, strpos($html, 'id="recordBackdrop"'));
-        $dialog = substr($dialog, 0, strpos($dialog, '<script>'));
-
-        // Nothing on screen could post: no form action, no radios, no remark
-        // field, no Save, and no read-back to confirm.
-        $this->assertStringNotContainsString('id="recordForm"', $dialog);
-        $this->assertStringNotContainsString(route('feedingcor-program.attendance.record.store'), $dialog);
-        $this->assertStringNotContainsString('type="radio"', $dialog);
-        $this->assertStringNotContainsString('name="marks[', $dialog);
-        $this->assertStringNotContainsString('Save Attendance', $dialog);
-        $this->assertStringNotContainsString('id="confirmBackdrop"', $html);
+        $response->assertSee('id="recordForm"', false);
+        $response->assertSee('id="recordTitle">Edit Attendance</h2>', false);
+        $response->assertSee('name="marks['.$learner->id.']" value="present" checked', false);
+        $response->assertSee('id="confirmBackdrop"', false);
+        $response->assertDontSee('has already been recorded');
     }
 
     /** A weekend is not a session, so the dialog reports that rather than offering to write one. */

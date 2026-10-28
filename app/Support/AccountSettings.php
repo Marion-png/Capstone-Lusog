@@ -102,9 +102,13 @@ class AccountSettings
         $session = $request->session();
         $grade = (string) ($account['assigned_grade_level'] ?? '');
         $section = (string) ($account['assigned_section'] ?? '');
+        // Empty for the calendar's year — every account until a teacher
+        // chooses another one while testing (WorkingSchoolYear).
+        $year = (string) ($account['assigned_school_year'] ?? '');
 
         if ($grade !== (string) $session->get('assigned_grade_level', '')
-            || $section !== (string) $session->get('assigned_section', '')) {
+            || $section !== (string) $session->get('assigned_section', '')
+            || $year !== (string) $session->get('assigned_school_year', '')) {
             // Normal roster reads rebuild this from current-year records.
             $session->forget('school_health_card_records');
         }
@@ -114,6 +118,12 @@ class AccountSettings
             'assigned_section' => $section,
             'assigned_school_name' => $account['school_name'] ?? $session->get('active_school_name'),
         ]);
+
+        if ($year !== '') {
+            $session->put('assigned_school_year', $year);
+        } else {
+            $session->forget('assigned_school_year');
+        }
     }
 
     /**
@@ -148,6 +158,7 @@ class AccountSettings
             'school_name' => trim((string) ($account['school_name'] ?? $session->get('active_school_name', ''))),
             'assigned_grade_level' => $grade,
             'assigned_section' => $section,
+            'assigned_school_year' => (string) ($account['assigned_school_year'] ?? ''),
             'shows_assignment' => in_array($role, self::TEACHER_ROLES, true),
             'can_change_assignment' => $hasAccount
                 && in_array($role, self::TEACHER_ROLES, true)

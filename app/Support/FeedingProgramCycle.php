@@ -108,6 +108,20 @@ class FeedingProgramCycle
     }
 
     /**
+     * Whether a session already recorded can still be edited.
+     *
+     * Until the end of its own day: learners arrive late while the session is
+     * still being served, and the coordinator has to be able to mark them
+     * present then. From the next day the session is a record. "Today" is the
+     * one every feeding screen already uses (`now()->toDateString()`), so the
+     * sheet, the Dashboard and the endpoint close the day at the same moment.
+     */
+    public static function sessionStaysOpen(string $sessionDate): bool
+    {
+        return $sessionDate === now()->toDateString();
+    }
+
+    /**
      * The current feeding day, 1-based and capped at the cycle length; 0 before
      * the first session.
      *

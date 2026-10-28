@@ -154,7 +154,7 @@ class ConsentHistoryTest extends TestCase
             ->assertSee('School Year '.$last)
             ->assertSee('123456789012')
             ->assertSee('data-status="approved"', false)
-            ->assertSee('sulat-pahibalo-2025.pdf')
+            ->assertSee('Read from the uploaded photo')
             ->assertSee('id="pastYearNotice"', false)
             ->getContent();
 
@@ -165,7 +165,7 @@ class ConsentHistoryTest extends TestCase
 
         // And the scan itself still opens, through the audited download.
         $this->assertStringContainsString(
-            json_encode(route('parental-consent.download', $upload->id)),
+            'src="'.e(route('parental-consent.download', $upload->id)).'"',
             $html
         );
         $this->flushSession()->withSession($this->adviserSession())

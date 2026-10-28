@@ -69,8 +69,17 @@ class HealthConsentFormController extends Controller
                 'lrn' => $student['lrn'],
                 'name' => $student['name'],
                 'parent_guardian' => $student['parent_guardian'],
+                'class_line' => trim($student['grade_level'].' – '.$student['section'], ' –'),
                 'form' => $form,
                 'upload' => $upload,
+                // What View Details shows: the form the clinic reads, read the
+                // way the clinic reads it, from the rows already fetched. A
+                // draft nobody sent is not a form.
+                'reading' => NurseConsentList::reading(
+                    $form !== null && $form->status !== HealthConsentForm::STATUS_DRAFT ? $form : null,
+                    $upload,
+                    LearnerPlacement::gradeNumber($student['grade_level']),
+                ),
                 'status' => $this->deriveConsentStatus($form, $upload),
                 'dated_at' => $upload?->created_at?->toDateString()
                     ?? $form?->signed_at?->toDateString(),
@@ -110,6 +119,9 @@ class HealthConsentFormController extends Controller
             // photo only where a reader is configured; otherwise the adviser
             // chooses it from the paper exactly as before.
             'scannerReady' => app(ConsentFormScanner::class)->isAvailable(),
+            'plannedServices' => HealthConsentForm::PLANNED_SERVICES,
+            'adviserName' => (string) $request->session()->get('active_name', ''),
+            'simulatedData' => (bool) config('app.simulated_data'),
             'stats' => [
                 'approved' => $counts['approved'] ?? 0,
                 'partial' => $counts['partial'] ?? 0,

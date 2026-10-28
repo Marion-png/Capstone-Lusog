@@ -757,6 +757,12 @@
         });
     });
 
+    // The record ids of the rows still on screen, in screen order — what the
+    // export and the print both carry, so they list what was being read.
+    const visibleIds = () => rows
+        .filter((row) => row.style.display !== 'none' && row.dataset.recordId)
+        .map((row) => row.dataset.recordId);
+
     // ── Export Masterlist ──────────────────────────────────────────────
     // The file is the school's own DepEd masterlist form — heading, ruled
     // No./Name/Grade/Section table, and the Prepared by / Noted by block — so
@@ -797,8 +803,10 @@
             field('school_year', new URLSearchParams(window.location.search).get('school_year') ?? '');
 
             if (list === 'beneficiaries') {
-                rows.filter((row) => row.style.display !== 'none' && row.dataset.recordId)
-                    .forEach((row) => field('record_ids[]', row.dataset.recordId));
+                // These are the rows on screen, so a search nobody matched
+                // exports the empty form rather than the whole roll.
+                field('scoped', '1');
+                visibleIds().forEach((id) => field('record_ids[]', id));
             }
 
             document.body.appendChild(form);
@@ -807,12 +815,51 @@
         });
     });
 
-    // ── Print Masterlist: the same roster on paper. The print stylesheet
-    // drops the rail, the toolbar and the buttons, so the sheet carries the
-    // header, the five figures and the table and nothing else. A row hidden
-    // by the search is hidden on paper too — one roster, two media. ──
-    document.getElementById('printMasterlistBtn').addEventListener('click', () => {
-        window.print();
+    // ── Print Masterlist: the export's form, set for paper — the school's
+    // letterhead with both seals, the title, the ruled table and the
+    // signature block — for the same rows in the same order. It is printed
+    // from a hidden frame, so this page stays where it is behind the dialog.
+    const printButton = document.getElementById('printMasterlistBtn');
+    printButton.addEventListener('click', () => {
+        const url = new URL(@json(route('dashboard.feedingcor-health-records.masterlist.print')));
+        url.searchParams.set('scoped', '1');
+        url.searchParams.set('ids', visibleIds().join(','));
+        const year = new URLSearchParams(window.location.search).get('school_year');
+        if (year) url.searchParams.set('school_year', year);
+
+        document.getElementById('masterlistPrintFrame')?.remove();
+        const frame = document.createElement('iframe');
+        frame.id = 'masterlistPrintFrame';
+        frame.title = 'Masterlist print';
+        frame.tabIndex = -1;
+        frame.setAttribute('aria-hidden', 'true');
+        frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none';
+        printButton.disabled = true;
+
+        frame.addEventListener('load', () => {
+            printButton.disabled = false;
+            let doc = null;
+            try { doc = frame.contentDocument; } catch (e) { doc = null; }
+
+            // Not the form — a session that ran out, say. Show what came back
+            // rather than print it.
+            if (!doc || !doc.body || !doc.body.hasAttribute('data-masterlist-sheet')) {
+                frame.remove();
+                window.open(url.toString(), '_blank', 'noopener');
+                return;
+            }
+
+            // The seals must be on the page before the printer reads it.
+            const seals = Array.from(doc.images).filter((img) => !img.complete);
+            Promise.all(seals.map((img) => new Promise((done) => { img.onload = img.onerror = done; })))
+                .then(() => {
+                    frame.contentWindow.focus();
+                    frame.contentWindow.print();
+                });
+        }, { once: true });
+
+        frame.src = url.toString();
+        document.body.appendChild(frame);
     });
 })();
 </script>

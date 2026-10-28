@@ -210,18 +210,115 @@ class AdviserConsentPageTest extends TestCase
             ->get(route('consent-forms.index'));
 
         $response->assertOk();
-        $response->assertSee('sulat_pahibalo_dela_cruz.pdf', false);
-        $response->assertSee('No deworming', false);
-        $response->assertSee('status_label', false);
+        $panel = $this->viewPanel($response->getContent(), '123456789012');
+
+        $this->assertStringContainsString('Consents except listed services', $panel);
+        $this->assertStringContainsString('As written by the parent: “No deworming”', $panel);
+        $this->assertStringContainsString('<dt>Medical certificate</dt><dd>Attached</dd>', $panel);
+        $this->assertStringContainsString('Uploaded by Test Adviser on', $panel);
 
         // The scan opens through the one audited download, which serves the
         // learner's own adviser (see the_learners_own_adviser_can_open_the_
-        // uploaded_form) — never a path on disk.
+        // uploaded_form) — never a path on disk. A PDF is shown in a frame.
         $upload = ParentalConsentForm::latest('id')->firstOrFail();
-        $this->assertSame(1, preg_match("/data-detail='([^']*)'/", $response->getContent(), $m));
-        $detail = json_decode($m[1], true);
-        $this->assertSame(route('parental-consent.download', $upload->id), $detail['file_url']);
+        $this->assertStringContainsString('<iframe class="pc-view-doc" src="'.e(route('parental-consent.download', $upload->id)).'"', $panel);
         $response->assertDontSee('parental-consents/', false);
+    }
+
+    /**
+     * View Details reads the form back as the paper was signed: the photo
+     * beside every service's standing, the allergies and who filed it.
+     *
+     * @test
+     */
+    public function the_details_view_reads_back_the_uploaded_photo(): void
+    {
+        $this->enrol();
+
+        $this->flushSession()->withSession($this->adviserSession())
+            ->post(route('parental-consent.store'), [
+                'lrn' => '123456789012',
+                'consent_type' => 'full',
+                'services' => array_keys(HealthConsentForm::PLANNED_SERVICES),
+                'allergy_food_detail' => 'Shrimp',
+                'allergy_medicine_detail' => 'wala',
+                'consent' => UploadedFile::fake()->create('sulat-pahibalo.jpg', 120, 'image/jpeg'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $upload = ParentalConsentForm::latest('id')->firstOrFail();
+        $this->assertSame(array_keys(HealthConsentForm::PLANNED_SERVICES), $upload->services);
+        $this->assertTrue($upload->allergy_food);
+        // "Wala" is the parent saying there is none, not an allergy.
+        $this->assertFalse($upload->allergy_medicine);
+
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('consent-forms.index'))
+            ->assertOk()
+            ->getContent();
+        $panel = $this->viewPanel($html, '123456789012');
+
+        $this->assertStringContainsString('Dela Cruz, Juan A', $panel);
+        $this->assertStringContainsString('Grade 1 – Sampaguita', $panel);
+        $this->assertStringContainsString('Adviser: Test Adviser', $panel);
+        $this->assertStringContainsString('<img src="'.e(route('parental-consent.download', $upload->id)).'"', $panel);
+        $this->assertStringContainsString('Read from the uploaded photo', $panel);
+        $this->assertStringContainsString('All required fields completed', $panel);
+
+        // A Grade 1 learner: the Grade 7 immunization does not apply to them,
+        // and every other service on the letter is consented.
+        $this->assertStringContainsString('Consents to all 8 services offered', $panel);
+        $this->assertSame(9, substr_count($panel, '<li><span>'));
+        $this->assertSame(8, substr_count($panel, '>Consented</span></li>'));
+        $this->assertStringContainsString('>Not applicable</span></li>', $panel);
+
+        $this->assertStringContainsString('<dt>Allergies</dt><dd>Food: Shrimp</dd>', $panel);
+        $this->assertStringContainsString('<dt>Other illnesses</dt><dd>None indicated</dd>', $panel);
+        $this->assertStringContainsString('Uploaded by Test Adviser on', $panel);
+        $this->assertStringContainsString('Valid for all service cycles in SY '.ParentalConsentForm::currentSchoolYear(), $panel);
+    }
+
+    /** @test */
+    public function the_upload_keeps_only_the_line_its_answer_calls_for(): void
+    {
+        $this->enrol();
+
+        $this->withSession($this->adviserSession())
+            ->post(route('parental-consent.store'), [
+                'lrn' => '123456789012',
+                'consent_type' => 'partial',
+                'services' => ['checkup', 'dental'],
+                'partial_exception' => 'Dental',
+                'refused_reason' => 'Left over from another answer',
+                'consent' => UploadedFile::fake()->create('sulat-pahibalo.jpg', 120, 'image/jpeg'),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $upload = ParentalConsentForm::latest('id')->firstOrFail();
+        $this->assertSame('Dental', $upload->partial_exception);
+        $this->assertNull($upload->refused_reason);
+
+        // A service the letter does not list is refused.
+        $this->withSession($this->adviserSession())
+            ->post(route('parental-consent.store'), [
+                'lrn' => '123456789012',
+                'services' => ['not-a-service'],
+                'consent' => UploadedFile::fake()->create('sulat-pahibalo.jpg', 120, 'image/jpeg'),
+            ])
+            ->assertSessionHasErrors('services.0');
+        $this->assertSame(1, ParentalConsentForm::count());
+    }
+
+    /** One learner's View Details panel, as rendered into its template. */
+    private function viewPanel(string $html, string $lrn): string
+    {
+        $this->assertSame(
+            1,
+            preg_match('#<template class="pc-view-source" data-view-for="'.$lrn.'">(.*?)</template>#s', $html, $m),
+            'No View Details panel for '.$lrn.'.'
+        );
+
+        return $m[1];
     }
 
     /** @test */
@@ -250,21 +347,28 @@ class AdviserConsentPageTest extends TestCase
         // when it did not — without that, a filed form read as PENDING for
         // ever and the school could see a consent had come back but never
         // whether it said yes or no. It is **one optional select**, not the
-        // old radio group: the write-in fields it used to reveal are still
-        // gone, because the detail of a partial or a refusal is recorded on
-        // Record Signed Paper Form, where the adviser attests to it.
+        // old radio group.
         $this->assertStringContainsString('name="consent_type"', $html);
         $this->assertStringContainsString('Not recorded yet', $html);
         $this->assertStringNotContainsString('name="consent_type" required', $html);
-        $this->assertStringNotContainsString('id="pcPartialField"', $html);
-        $this->assertStringNotContainsString('id="pcRefusedField"', $html);
+
+        // The rest of the paper follows it — the services the letter lists,
+        // the exception or reason line the answer calls for (shown by the
+        // answer, so hidden until one is chosen) and the allergy lines — so
+        // View Details can read the form back as it was signed.
+        $services = strpos($html, '<input type="checkbox" name="services[]"');
+        $partial = strpos($html, 'id="pcPartialField" hidden');
+        $refused = strpos($html, 'id="pcRefusedField" hidden');
+        $allergies = strpos($html, 'name="allergy_food_detail"');
+        $this->assertSame(count(HealthConsentForm::PLANNED_SERVICES), substr_count($html, '<input type="checkbox" name="services[]"'));
 
         $this->assertTrue($student < $year, 'Select Student comes first.');
         $this->assertTrue($year < $signedForm, 'School Year precedes the signed form upload.');
         // The answer is read off the photo — by the adviser, or by the consent
         // reader where one is set up — so the photo is attached first.
         $this->assertTrue($signedForm < $answer, 'The signed form precedes the guardian answer.');
-        $this->assertTrue($answer < $medCert, 'Medical Certificate follows the guardian answer.');
+        $this->assertTrue($answer < $services && $services < $partial && $partial < $refused && $refused < $allergies, 'What the paper says follows the answer.');
+        $this->assertTrue($allergies < $medCert, 'Medical Certificate follows what the paper says.');
         $this->assertTrue($medCert < $notes, 'Additional Notes come last.');
 
         $this->assertStringContainsString('Click to upload Medical Certificate', $html);
@@ -353,8 +457,9 @@ class AdviserConsentPageTest extends TestCase
         $response->assertSee('0%');
 
         // The recorded answer is still surfaced, just never as consent.
-        $response->assertSee('recorded_response', false);
-        $response->assertSee('Full Consent', false);
+        $panel = $this->viewPanel($response->getContent(), '123456789012');
+        $this->assertStringContainsString('<b>No form yet.</b>', $panel);
+        $this->assertStringContainsString('Recorded as <b>Full Consent</b>, but the signed form has not been uploaded.', $panel);
     }
 
     /** @test */

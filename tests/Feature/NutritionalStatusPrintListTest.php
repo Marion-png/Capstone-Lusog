@@ -93,14 +93,25 @@ class NutritionalStatusPrintListTest extends TestCase
         $rows = $this->workbook($response)['rows'];
         $head = $this->headerIndex($rows);
 
-        $this->assertSame('Test School', $rows[$head - 5][0]);
+        // The school's office letterhead, set beside the seals from column C.
+        // This school has no address or landline on file, so the address is a
+        // blank line and no contact line is printed.
+        $this->assertSame([
+            ['', '', 'Republika ng Pilipinas'],
+            ['', '', 'Kagawaran ng Edukasyon'],
+            ['', '', 'Division of Davao City Schools'],
+            ['', '', 'TEST SCHOOL'],
+            [],
+            ['', '', 'OFFICE OF THE PRINCIPAL'],
+        ], array_slice($rows, 0, 6));
         $this->assertSame('Nutritional Health Status', $rows[$head - 3][0]);
         $this->assertSame('S.Y. '.StudentHealthRecord::currentSchoolYear(), $rows[$head - 2][0]);
 
         // The table's own columns, with Grade and Section split and named as
-        // the coordinator's form names them.
+        // the coordinator's form names them. The first column spans B and C,
+        // so C reads empty.
         $this->assertSame([
-            'No.', 'LRN', 'Name', 'Grade', 'Section', 'Gender', 'Age',
+            'No.', 'LRN', '', 'Name', 'Grade', 'Section', 'Gender', 'Age',
             'Baseline Weight (kg)', 'Baseline Height (cm)', 'Baseline BMI', 'Baseline Status', 'Baseline Height-for-Age',
             'Endline Weight (kg)', 'Endline Height (cm)', 'Endline BMI', 'Latest Status', 'Endline Height-for-Age', 'Change',
         ], $rows[$head]);
@@ -108,13 +119,13 @@ class NutritionalStatusPrintListTest extends TestCase
         $learner = $rows[$head + 1];
         // The LRN stays text: as a number Excel would print it in scientific notation.
         $this->assertSame('109876543201', $learner[1]);
-        $this->assertSame(['Maria Clara Santos', '7', 'Rizal', 'Female'], array_slice($learner, 2, 4));
+        $this->assertSame(['Maria Clara Santos', '7', 'Rizal', 'Female'], array_slice($learner, 3, 4));
         // Age is the latest one on file (the endline's), as on screen. Baseline
         // height-for-age is the adviser's stored reading; the endline one is
         // computed from the endline height and age.
         $this->assertEquals(
             [13, 38, 150, 16.9, 'Wasted', 'Stunted', 47, 155, 19.6, 'Normal', 'Normal Height-for-Age', 'Improved'],
-            array_slice($learner, 6)
+            array_slice($learner, 7)
         );
 
         // The form's twenty ruled lines, numbered, the learner on the first.
@@ -124,9 +135,9 @@ class NutritionalStatusPrintListTest extends TestCase
 
         // Signed by the reader, noted by the principal — the coordinator's block.
         $tail = array_slice($rows, -3);
-        $this->assertSame(['Prepared by:', '', 'Noted by:'], $tail[0]);
+        $this->assertSame(['Prepared by:', '', '', 'Noted by:'], $tail[0]);
         $this->assertSame('Principal Reyes', $tail[1][0]);
-        $this->assertSame(['School Head', '', 'Principal'], $tail[2]);
+        $this->assertSame(['School Head', '', '', 'Principal'], $tail[2]);
     }
 
     /**
@@ -161,7 +172,7 @@ class NutritionalStatusPrintListTest extends TestCase
             array_slice($printList['rows'], 0, $printHead - 3)
         );
         $this->assertSame($coordinator['rows'][$coordinatorHead - 2], $printList['rows'][$printHead - 2]);
-        $this->assertSame(['No.', 'Name', 'Grade', 'Section'], $coordinator['rows'][$coordinatorHead]);
+        $this->assertSame(['No.', 'Name', '', 'Grade', 'Section'], $coordinator['rows'][$coordinatorHead]);
 
         $this->assertSame(array_slice($coordinator['rows'], -3, 1), array_slice($printList['rows'], -3, 1));
     }
@@ -249,13 +260,13 @@ class NutritionalStatusPrintListTest extends TestCase
 
         $baseline = $this->workbook($this->withSession($this->sessionFor())->get(self::HEAD_PRINT.'?weighing=baseline')->assertOk())['rows'];
         $this->assertSame(
-            ['No.', 'LRN', 'Name', 'Grade', 'Section', 'Gender', 'Age', 'Baseline Weight (kg)', 'Baseline Height (cm)', 'Baseline BMI', 'Baseline Status', 'Baseline Height-for-Age'],
+            ['No.', 'LRN', '', 'Name', 'Grade', 'Section', 'Gender', 'Age', 'Baseline Weight (kg)', 'Baseline Height (cm)', 'Baseline BMI', 'Baseline Status', 'Baseline Height-for-Age'],
             $baseline[$this->headerIndex($baseline)]
         );
 
         $endline = $this->workbook($this->withSession($this->sessionFor())->get(self::HEAD_PRINT.'?weighing=endline')->assertOk())['rows'];
         $this->assertSame(
-            ['No.', 'LRN', 'Name', 'Grade', 'Section', 'Gender', 'Age', 'Endline Weight (kg)', 'Endline Height (cm)', 'Endline BMI', 'Latest Status', 'Endline Height-for-Age'],
+            ['No.', 'LRN', '', 'Name', 'Grade', 'Section', 'Gender', 'Age', 'Endline Weight (kg)', 'Endline Height (cm)', 'Endline BMI', 'Latest Status', 'Endline Height-for-Age'],
             $endline[$this->headerIndex($endline)]
         );
     }
@@ -347,7 +358,7 @@ class NutritionalStatusPrintListTest extends TestCase
             $rows = $this->workbook($this->withSession($this->sessionFor($role, 'Clinic Reader'))->get($url)->assertOk())['rows'];
 
             $this->assertSame(['Ana Abad'], $this->names($rows));
-            $this->assertSame([$label, '', 'Principal'], $rows[count($rows) - 1]);
+            $this->assertSame([$label, '', '', 'Principal'], $rows[count($rows) - 1]);
         }
     }
 
@@ -455,8 +466,9 @@ class NutritionalStatusPrintListTest extends TestCase
             if (! is_int($row[0] ?? null) && ! is_float($row[0] ?? null)) {
                 break;
             }
-            if (($row[2] ?? '') !== '') {
-                $names[] = $row[2];
+            // No., LRN (across B and C), then the name.
+            if (($row[3] ?? '') !== '') {
+                $names[] = $row[3];
             }
         }
 

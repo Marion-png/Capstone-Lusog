@@ -4,8 +4,13 @@
      there is exactly one way to record a session and one way to change one
      afterwards (the learner's beneficiary record, where it is audited).
 
+     **A recorded day stays editable until it ends** (`FeedingProgramCycle::
+     sessionStaysOpen()`), so a learner who arrives late can still be marked:
+     the dialog then opens as "Edit Attendance" on the marks on file, and the
+     endpoint writes only the marks that changed.
+
      **A closed day opens the dialog as a record, not as a form.** `$recordCanSave`
-     is false once a human has confirmed any mark for the date, on a weekend,
+     is false from the day after a session was recorded, on a weekend,
      outside the running cycle, or with nobody enrolled: the form element, the
      radios, the remark fields, the bulk marks and the Save button are then not
      rendered at all — a disabled control is still one a browser can re-enable
@@ -44,6 +49,11 @@
 		$raKey = array_key_exists($raRow['status'], $raTally) ? $raRow['status'] : 'unmarked';
 		$raTally[$raKey]++;
 	}
+
+	// A session already recorded is still open on its own day, for learners
+	// who arrive late: the dialog then opens on the marks on file, and saving
+	// writes only the ones changed.
+	$raEditing = $raCanSave && ($raTally['present'] + $raTally['absent'] + $raTally['excused']) > 0;
 @endphp
 <div class="modal-backdrop" id="recordBackdrop" data-session-date="{{ $selectedDate }}">
 	<div class="modal-panel ra-modal{{ $raCanSave ? '' : ' is-readonly' }}" role="dialog" aria-modal="true" aria-labelledby="recordTitle">
@@ -65,7 +75,7 @@
 			<header class="modal-head">
 				<div>
 					<p class="modal-eyebrow">Feeding Day {{ $programDay }} of {{ $programDuration }}</p>
-					<h2 class="modal-title" id="recordTitle">{{ $raCanSave ? 'Record Attendance' : 'Attendance' }}</h2>
+					<h2 class="modal-title" id="recordTitle">{{ $raCanSave ? ($raEditing ? 'Edit Attendance' : 'Record Attendance') : 'Attendance' }}</h2>
 					<p class="modal-sub">{{ $selectedDateLabel }} &middot; {{ $beneficiaryCount }} enrolled {{ \Illuminate\Support\Str::plural('beneficiary', $beneficiaryCount) }}</p>
 				</div>
 				<button type="button" class="modal-close" data-record-close aria-label="Close">&times;</button>
@@ -96,7 +106,11 @@
 						<div class="ra-modal-bulk">
 							<button type="button" class="btn btn-secondary" data-record-all="present">Mark All Present</button>
 							<button type="button" class="btn btn-secondary" data-record-all="absent">Mark All Absent</button>
-							<button type="button" class="btn btn-ghost" data-record-all="">Clear</button>
+							{{-- Not while editing: a blank row writes nothing, so a
+							     cleared mark would read as unmarked here and stay on file. --}}
+							@unless ($raEditing)
+								<button type="button" class="btn btn-ghost" data-record-all="">Clear</button>
+							@endunless
 						</div>
 					@endif
 				</div>
@@ -134,15 +148,15 @@
 											     at-risk flag. --}}
 											<div class="fa-toggle" role="group" aria-label="Attendance for {{ $row['name'] }}">
 												<label class="fa-opt fa-opt-present">
-													<input type="radio" name="marks[{{ $row['id'] }}]" value="present">
+													<input type="radio" name="marks[{{ $row['id'] }}]" value="present" @checked($row['status'] === 'present')>
 													<span>Present</span>
 												</label>
 												<label class="fa-opt fa-opt-absent">
-													<input type="radio" name="marks[{{ $row['id'] }}]" value="absent">
+													<input type="radio" name="marks[{{ $row['id'] }}]" value="absent" @checked($row['status'] === 'absent')>
 													<span>Absent</span>
 												</label>
 												<label class="fa-opt fa-opt-excused">
-													<input type="radio" name="marks[{{ $row['id'] }}]" value="excused">
+													<input type="radio" name="marks[{{ $row['id'] }}]" value="excused" @checked($row['status'] === 'excused')>
 													<span>Excused</span>
 												</label>
 											</div>
@@ -164,8 +178,9 @@
 											     for either kind and clears when the learner is
 											     marked present. --}}
 											<input type="text" class="input fa-remark" maxlength="255"
-												name="remarks[{{ $row['id'] }}]" value=""
-												aria-label="Reason {{ $row['name'] }} was absent" disabled>
+												name="remarks[{{ $row['id'] }}]" value="{{ in_array($row['status'], ['absent', 'excused'], true) ? ($row['remarks'] ?? '') : '' }}"
+												aria-label="Reason {{ $row['name'] }} was absent"
+												@disabled(! in_array($row['status'], ['absent', 'excused'], true))>
 										@else
 											<span class="ra-remark-read">{{ ($row['remarks'] ?? '') !== '' ? $row['remarks'] : '—' }}</span>
 										@endif

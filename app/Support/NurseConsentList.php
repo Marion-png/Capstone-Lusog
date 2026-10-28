@@ -70,11 +70,6 @@ final class NurseConsentList
 
         $letter = self::letters($institutionId, $schoolYear, [(string) $record->student_id])->first();
         $upload = self::uploads(collect([$record]), $schoolYear)->first();
-        $answer = ConsentStanding::answer($letter, $upload);
-
-        // The record that answers, or failing that whatever is on file: a
-        // letter still out, or a scan nobody has recorded the answer of.
-        $source = $answer['source'] ?? ($upload?->file_path !== null ? 'upload' : ($letter !== null ? 'letter' : null));
 
         return [
             'record' => $record,
@@ -85,18 +80,61 @@ final class NurseConsentList
             'adviser' => self::advisers($institutionId)[self::classKey($gradeLabel, $sectionName)] ?? '',
             'school_year' => $schoolYear,
             'service' => $service,
+        ] + self::reading($letter, $upload, LearnerPlacement::gradeNumber($gradeLabel), $service);
+    }
+
+    /**
+     * What one learner's forms say, from forms already fetched: the standing,
+     * the photo, the values the adviser confirmed and each service's standing.
+     * The clinic's form page and the adviser's consent list both read it, so a
+     * list can open every learner's form without a query per row, and the two
+     * desks cannot read one form two ways.
+     *
+     * @param  HealthConsentForm|null  $letter  a letter that was sent; never a draft
+     * @return array<string, mixed>
+     */
+    public static function reading(?HealthConsentForm $letter, ?ParentalConsentForm $upload, ?int $grade, string $service = ''): array
+    {
+        $answer = ConsentStanding::answer($letter, $upload);
+
+        // The record that answers, or failing that whatever is on file: a
+        // letter still out, or a scan nobody has recorded the answer of.
+        $source = $answer['source'] ?? ($upload?->file_path !== null ? 'upload' : ($letter !== null ? 'letter' : null));
+        $perService = $answer !== null ? self::perService($grade, $answer) : [];
+
+        return [
             'status' => $service !== ''
-                ? ConsentStanding::forService($service, LearnerPlacement::gradeNumber($gradeLabel), true, $answer)
+                ? ConsentStanding::forService($service, $grade, true, $answer)
                 : ConsentStanding::overall(true, $answer),
             'answer' => $answer,
             'source' => $source,
             'letter' => $letter,
             'upload' => $upload,
             'photo' => self::photo($source, $letter, $upload),
-            'values' => $answer !== null ? self::values($source, $letter, $upload, $answer) : [],
+            'values' => $answer !== null ? self::values($source, $letter, $upload, $answer, $perService) : [],
+            'per_service' => $perService,
             'missing' => $answer !== null ? self::missing($source, $letter, $upload, $answer) : [],
             'filed' => self::filed($source, $letter, $upload),
         ];
+    }
+
+    /**
+     * Every planned service and where the learner stands for it, in the
+     * letter's own order — read through forService(), the same rule the
+     * list and its counts use.
+     *
+     * @param  array<string, mixed>  $answer
+     * @return list<array{label: string, status: string}>
+     */
+    private static function perService(?int $grade, array $answer): array
+    {
+        $rows = [];
+
+        foreach (HealthConsentForm::PLANNED_SERVICES as $key => $label) {
+            $rows[] = ['label' => $label, 'status' => ConsentStanding::forService($key, $grade, true, $answer)];
+        }
+
+        return $rows;
     }
 
     /** All but the last five digits hidden — the only LRN this page sends. */
@@ -332,10 +370,15 @@ final class NurseConsentList
      * The values the adviser confirmed, as the clinic reads them.
      *
      * @param  array<string, mixed>  $answer
+     * @param  list<array{label: string, status: string}>  $perService
      * @return array<string, string>
      */
-    private static function values(?string $source, ?HealthConsentForm $letter, ?ParentalConsentForm $upload, array $answer): array
+    private static function values(?string $source, ?HealthConsentForm $letter, ?ParentalConsentForm $upload, array $answer, array $perService): array
     {
+        // "All" is said with the number it covers, counted off the same
+        // per-service reading the page prints under it.
+        $offered = count(array_filter($perService, fn (array $row): bool => $row['status'] === ConsentStanding::SERVICE_CONSENTED));
+
         $choice = $answer['choice'];
         $isLetter = $source === 'letter' && $letter !== null;
 
@@ -359,7 +402,11 @@ final class NurseConsentList
 
         return [
             'Parent decision' => match ($choice) {
-                HealthConsentForm::CONSENT_ALL => 'Consents to all services',
+                HealthConsentForm::CONSENT_ALL => match (true) {
+                    $offered > 1 => 'Consents to all '.$offered.' services offered',
+                    $offered === 1 => 'Consents to the one service offered',
+                    default => 'Consents to all services',
+                },
                 HealthConsentForm::CONSENT_SPECIFIC => 'Consents except listed services',
                 default => 'Declines',
             },

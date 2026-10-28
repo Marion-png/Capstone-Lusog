@@ -2,10 +2,19 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedArray;
 use App\Casts\EncryptedBoolean;
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
+<<<<<<< Updated upstream
 use Illuminate\Database\Eloquent\Builder;
+=======
+<<<<<<< HEAD
+use App\Support\WorkingSchoolYear;
+=======
+use Illuminate\Database\Eloquent\Builder;
+>>>>>>> 515166068f922e6bb548e9602d66a78a8a1db6d7
+>>>>>>> Stashed changes
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -39,6 +48,7 @@ class ParentalConsentForm extends Model
         'student_health_record_id',
         'program_type',
         'school_year',
+        'services',
         'consent_type',
         'partial_exception',
         'refused_reason',
@@ -68,6 +78,9 @@ class ParentalConsentForm extends Model
      * because queries filter on them.
      */
     protected $casts = [
+        // The services the letter lists, as ticked off the paper. NULL on a
+        // row filed before they were recorded: it covers its program alone.
+        'services' => EncryptedArray::class,
         'consent_type' => EncryptedString::class,
         'partial_exception' => EncryptedString::class,
         'refused_reason' => EncryptedString::class,
@@ -103,12 +116,23 @@ class ParentalConsentForm extends Model
     }
 
     /**
-     * Returns the current Philippine school year string (e.g. "2025-2026").
+     * The school year the application is working in — the one every other
+     * model's currentSchoolYear() delegates to. The calendar's, unless the
+     * signed-in teacher has set their Teaching Assignment to another year
+     * for testing (WorkingSchoolYear).
+     */
+    public static function currentSchoolYear(): string
+    {
+        return WorkingSchoolYear::chosen() ?? self::calendarSchoolYear();
+    }
+
+    /**
+     * Returns the Philippine school year the calendar is in (e.g. "2025-2026").
      * DepEd's academic year runs June–May, so months 6–12 belong to the SY
      * starting that calendar year; months 1–5 belong to the SY that started
      * the previous calendar year.
      */
-    public static function currentSchoolYear(): string
+    public static function calendarSchoolYear(): string
     {
         $month = (int) now()->format('n');
         $year = (int) now()->format('Y');

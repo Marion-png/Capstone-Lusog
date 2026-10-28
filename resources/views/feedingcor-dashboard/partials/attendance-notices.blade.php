@@ -10,7 +10,11 @@
      The last two are separate notices on purpose. A learner inside the
      observation window is not a quieter kind of at-risk; they are unclassified,
      and putting them in the same red bar is exactly the confusion the window
-     exists to prevent. --}}
+     exists to prevent.
+
+     They are notes and nothing else: no notice carries a button or a link.
+     Recording sits on the Attendance Sheet, and verifying, confirming and
+     following up sit on the At-Risk Students tab. --}}
 @php
 	$unrecorded = ! $sessionRecorded;
 	$incomplete = $sessionRecorded && $tally['recorded'] < $beneficiaryCount;
@@ -25,7 +29,6 @@
 				<span>{{ $beneficiaryCount }} beneficiaries are waiting on this session.</span>
 			</div>
 		</div>
-		<button type="button" class="btn btn-primary" data-open-sheet>Record Attendance</button>
 	</div>
 @elseif ($incomplete)
 	<div class="alert-bar is-info">
@@ -36,12 +39,10 @@
 				<span>{{ $tally['recorded'] }} of {{ $beneficiaryCount }} beneficiaries recorded.</span>
 			</div>
 		</div>
-		<button type="button" class="btn btn-secondary" data-open-sheet>Continue Recording</button>
 	</div>
 @endif
 
-{{-- The notices the attendance flow sends the coordinator. Each one opens the
-     per-beneficiary roll already narrowed to the learners it counts. --}}
+{{-- The notices the attendance flow sends the coordinator. --}}
 @if (($atRisk['awaiting'] ?? 0) > 0)
 	<div class="alert-bar">
 		<div class="alert-body">
@@ -51,7 +52,6 @@
 				<span>{{ ucfirst($atRisk['rule']) }}</span>
 			</div>
 		</div>
-		<a class="btn btn-secondary" href="{{ route('dashboard.feedingcor-at-risk', ['status' => \App\Support\FeedingAttendanceFlag::AWAITING_CONFIRMATION]) }}">Confirm Records</a>
 	</div>
 @endif
 
@@ -64,7 +64,6 @@
 				<span>{{ $atRisk['noticeLabel'] }} of consecutive unexcused absence</span>
 			</div>
 		</div>
-		<a class="btn btn-secondary" href="{{ route('dashboard.feedingcor-at-risk', ['status' => \App\Support\FeedingAttendanceFlag::NOTICE]) }}">Verify Attendance</a>
 	</div>
 @endif
 
@@ -77,9 +76,6 @@
 				<span>{{ ucfirst($atRisk['rule']) }}</span>
 			</div>
 		</div>
-		{{-- Opens the per-beneficiary roll with the flag already applied, so the
-		     list the coordinator lands on is exactly the one counted here. --}}
-		<a class="btn btn-secondary" href="{{ $pageUrl(['view' => 'beneficiary', 'standing' => 'at_risk', 'status' => '']) }}">View Flagged Beneficiaries</a>
 	</div>
 @endif
 
@@ -92,6 +88,5 @@
 				<span>At-risk classification begins after {{ $atRisk['minimumObservationDays'] }} recorded feeding days &middot; {{ $cumulative['sessions'] }} recorded so far.</span>
 			</div>
 		</div>
-		<a class="btn btn-secondary" href="{{ $pageUrl(['view' => 'beneficiary', 'standing' => 'early_monitoring', 'status' => '']) }}">View Under Observation</a>
 	</div>
 @endif

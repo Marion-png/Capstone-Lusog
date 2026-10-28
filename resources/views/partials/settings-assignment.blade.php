@@ -15,7 +15,7 @@
         @endphp
 
         <p class="set-note" id="assignmentHelp">
-            Save this change once your new assignment starts. It applies immediately to the current school year.
+            Save this change once your new assignment starts. It applies immediately to the school year shown.
             Existing student records stay in their original grades, sections and school years.
             @if ($profile['role'] === 'class_adviser')
                 Your student list will show your newly assigned class.
@@ -37,8 +37,21 @@
 
             <div class="set-assignment-fields">
                 <div class="set-field">
-                    <label class="field-label" for="assignmentYear">Current school year</label>
-                    <input class="input" id="assignmentYear" name="school_year" value="{{ $assignmentSchoolYear }}" readonly>
+                    {{-- Any school year while school-year testing is on
+                         (WorkingSchoolYear): the teacher then works in it,
+                         so a learner can be followed into the next year. --}}
+                    @if ($assignmentYearOptions !== [])
+                        @php $assignmentYear = old('school_year', $assignmentSchoolYear); @endphp
+                        <label class="field-label" for="assignmentYear">School year</label>
+                        <select class="input" id="assignmentYear" name="school_year" required>
+                            @foreach ($assignmentYearOptions as $year)
+                                <option value="{{ $year }}" @selected($assignmentYear === $year)>{{ $year }}{{ $year === $calendarSchoolYear ? ' (current)' : '' }}</option>
+                            @endforeach
+                        </select>
+                    @else
+                        <label class="field-label" for="assignmentYear">Current school year</label>
+                        <input class="input" id="assignmentYear" name="school_year" value="{{ $assignmentSchoolYear }}" readonly>
+                    @endif
                 </div>
 
                 <div class="set-field">

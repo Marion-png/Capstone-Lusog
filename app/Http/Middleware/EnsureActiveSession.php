@@ -66,8 +66,10 @@ class EnsureActiveSession
             $request->session()->put('assigned_grade_level', 'Grade 4/SPED');
             $request->session()->put('assigned_section', 'SPED-A');
             $request->session()->put('assigned_school_name', $institution?->name);
+            // A demo session belongs to no account, so it works in the calendar's year.
+            $request->session()->forget('assigned_school_year');
         } else {
-            $request->session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name']);
+            $request->session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name', 'assigned_school_year']);
         }
     }
 

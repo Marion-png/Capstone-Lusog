@@ -264,7 +264,7 @@ class SchoolHeadMasterlistController extends Controller
         $path = $reserved.'.xlsx';
         @unlink($reserved);
 
-        $writer = new XlsxWriter;
+        $writer = MasterlistSheet::writer(count($columns));
         $writer->openToFile($path);
 
         $institutionId = $request->session()->get('active_institution_id');

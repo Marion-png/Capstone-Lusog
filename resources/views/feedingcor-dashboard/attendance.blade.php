@@ -275,15 +275,17 @@
 						<input type="search" id="faSearch" placeholder="Search name or section" autocomplete="off" aria-label="Search beneficiaries by name or section">
 					</div>
 					<div class="fa-sheet-standing">
-						@if ($sessionLocked)
+						@if ($sessionMarked)
 							<span class="badge badge-normal has-glyph"><span class="fa-glyph">✓</span>Recorded</span>
 						@elseif (! $isFeedingDay)
 							<span class="badge badge-neutral">No session &mdash; weekend</span>
 						@else
 							<span class="badge badge-neutral">Not yet recorded</span>
 						@endif
+						{{-- A recorded session is still open on its own day, for
+						     the learners who arrive late. --}}
 						@if ($canRecord)
-							<button type="button" class="btn btn-primary" data-record-open>Record Attendance</button>
+							<button type="button" class="btn btn-primary" data-record-open>{{ $sessionMarked ? 'Edit Attendance' : 'Record Attendance' }}</button>
 						@endif
 					</div>
 				</div>
@@ -294,7 +296,7 @@
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
 							<div>
 								<strong>Attendance for {{ $selectedDateLabel }} has been recorded</strong>
-								<span>This session is read-only. Correct a mark on the learner&rsquo;s beneficiary record.</span>
+								<span>This session is read-only. A session can only be edited on its own day.</span>
 							</div>
 						</div>
 					</div>
@@ -396,8 +398,8 @@
      the other views are readings of their own. --}}
 @if ($view === 'sheet' && $canRecord)
 	@include('feedingcor-dashboard.partials.attendance-record-modal')
-	{{-- A recorded session cannot be reopened, so the marks are read back and
-	     confirmed before they are posted. --}}
+	{{-- A recorded session closes at the end of its day, so the marks are
+	     read back and confirmed before they are posted. --}}
 	@include('feedingcor-dashboard.partials.attendance-confirm-modal', [
 		'confirmSessionLabel' => $selectedDateLabel,
 	])
@@ -415,15 +417,6 @@
 	if (!page) return;
 
 	document.getElementById('faPrint')?.addEventListener('click', () => window.print());
-
-	// A notice's action jumps to the sheet for the session it is talking about.
-	page.addEventListener('click', (event) => {
-		const opener = event.target.closest('[data-open-sheet]');
-		if (!opener) return;
-		const url = new URL(window.location.href);
-		url.searchParams.set('view', 'sheet');
-		window.location.href = url.toString();
-	});
 
 	// Every control in the toolbar applies itself. The date picker's own
 	// min/max already refuse a date outside the running programme; the server

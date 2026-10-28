@@ -884,6 +884,10 @@ Route::get('/dashboard/feedingcor-health-records/cards', [FeedingCoordinatorCont
 // carry and is a read of learner data either way.
 Route::post('/dashboard/feedingcor-health-records/masterlist', FeedingMasterlistExportController::class)
     ->name('dashboard.feedingcor-health-records.masterlist');
+// The same form set for paper, loaded into a hidden frame by Print Masterlist.
+// GET so a frame can load it; the ids travel as one comma-separated value.
+Route::get('/dashboard/feedingcor-health-records/masterlist/print', [FeedingMasterlistExportController::class, 'print'])
+    ->name('dashboard.feedingcor-health-records.masterlist.print');
 
 Route::post('/dashboard/class-adviser/health-records/baseline', [StudentHealthRecordController::class, 'storeBaseline'])
     ->name('class-adviser.health-records.baseline.store');
@@ -1702,7 +1706,7 @@ Route::post('/logout', function (Request $request) {
 
     Auth::logout();
 
-    $request->session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name', 'active_role', 'active_name', 'active_username', 'active_school_name', 'active_institution_id']);
+    $request->session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name', 'assigned_school_year', 'active_role', 'active_name', 'active_username', 'active_school_name', 'active_institution_id']);
     $request->session()->regenerateToken();
 
     return redirect()->route('login');
@@ -1777,8 +1781,14 @@ Route::post('/login', function (Request $request) {
         $request->session()->put('assigned_grade_level', $account['assigned_grade_level'] ?? null);
         $request->session()->put('assigned_section', $account['assigned_section'] ?? null);
         $request->session()->put('assigned_school_name', $account['school_name'] ?? null);
+        // The year a teacher chose while testing (WorkingSchoolYear); none is the calendar's.
+        if (filled($account['assigned_school_year'] ?? null)) {
+            $request->session()->put('assigned_school_year', $account['assigned_school_year']);
+        } else {
+            $request->session()->forget('assigned_school_year');
+        }
     } else {
-        $request->session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name']);
+        $request->session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name', 'assigned_school_year']);
     }
 
     $request->session()->put('active_role', $role);
@@ -1823,7 +1833,7 @@ Route::post('/admin-login', function (Request $request) {
     $request->session()->put('active_role', 'system_admin');
     $request->session()->put('active_name', 'System Admin');
     $request->session()->put('active_username', $validated['username']);
-    $request->session()->forget(['assigned_grade_level', 'assigned_section']);
+    $request->session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_year']);
 
     AuditTrail::record('login', null, null, 'System Admin logged in');
 

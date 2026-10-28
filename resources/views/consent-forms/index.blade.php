@@ -169,28 +169,11 @@
                                 $rowStatusLabel = ($row['status'] === 'pending' && $form === null && $row['upload'] === null)
                                     ? 'No form yet'
                                     : $statusLabels[$row['status']];
-                                $detail = [
-                                    'name' => $row['name'],
-                                    'lrn' => $row['lrn'],
-                                    'guardian' => $row['parent_guardian'] ?: null,
-                                    'status' => $row['status'],
-                                    'status_label' => $rowStatusLabel,
-                                    'school_year' => $schoolYear,
-                                    'dated_at' => $row['dated_at'],
-                                    'notes' => $row['notes'],
-                                    'has_form_file' => $row['has_form_file'],
-                                    'has_med_cert' => $row['has_med_cert'],
-                                    'file_name' => $row['file_name'],
-                                    'file_url' => $row['file_url'],
-                                    'med_cert_name' => $row['med_cert_name'],
-                                    'recorded_response' => $row['recorded_response'],
-                                ];
                             @endphp
                             <tr class="js-consent-row"
                                 data-name="{{ strtolower($row['name']) }}"
                                 data-lrn="{{ strtolower($row['lrn']) }}"
-                                data-status="{{ $row['status'] }}"
-                                data-detail='@json($detail)'>
+                                data-status="{{ $row['status'] }}">
                                 <td><strong>{{ $row['lrn'] !== '' ? $row['lrn'] : '-' }}</strong></td>
                                 <td class="ms-student-name">{{ $row['name'] }}</td>
                                 <td>{{ $row['parent_guardian'] !== '' ? $row['parent_guardian'] : '-' }}</td>
@@ -215,7 +198,7 @@
                                 </td>
                                 <td>
                                     <div class="ms-actions">
-                                        <button type="button" class="ms-act ms-act-view js-consent-view" title="View Details" aria-label="View Details">
+                                        <button type="button" class="ms-act ms-act-view js-consent-view" title="View Details" aria-label="View Details" data-lrn="{{ $row['lrn'] }}">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                         </button>
                                         @if ($isCurrentYear)
@@ -378,11 +361,21 @@
                                 data-feeding-label="Declined &mdash; the parent does not consent">Declined &mdash; did not agree</option>
                         </select>
                     </div>
+<<<<<<< Updated upstream
                     <p class="pc-hint" id="pcAnswerHint">
+=======
+<<<<<<< HEAD
+                    {{-- One span, so the hint's flex layout keeps the bold words
+                         inside the sentence instead of splitting it into columns. --}}
+                    <p class="pc-hint"><span>
+=======
+                    <p class="pc-hint" id="pcAnswerHint">
+>>>>>>> 515166068f922e6bb548e9602d66a78a8a1db6d7
+>>>>>>> Stashed changes
                         Read it off the signed form. Leave it as <strong>Not recorded yet</strong> if you are
                         filing the document now and will read it later &mdash; the form still counts as returned,
                         but no service may be given until an answer is on file.
-                    </p>
+                    </span></p>
                     @if ($scannerReady)
                         {{-- The reader's answer goes into the select above and is
                              filed only once the adviser ticks this — the server
@@ -395,6 +388,55 @@
                         </label>
                     @endif
                 </div>
+
+                {{-- What the rest of the paper says, so View Details can read
+                     the form back as it was signed rather than as one word.
+                     The services are the ones ticked in the letter's list; an
+                     upload with none ticked reads as the program it is filed
+                     for, as uploads always did. --}}
+                <fieldset class="pc-field pc-fieldset">
+                    <legend>Services listed on the form</legend>
+                    <div class="pc-services" id="pcServices">
+                        <label class="pc-check pc-check-all"><input type="checkbox" id="pcServicesAll"> All services</label>
+                        @foreach ($plannedServices as $key => $label)
+                            <label class="pc-check">
+                                <input type="checkbox" name="services[]" value="{{ $key }}" data-parent="{{ \App\Models\HealthConsentForm::parentService($key) }}">
+                                {{ $label }}
+                            </label>
+                        @endforeach
+                    </div>
+                </fieldset>
+
+                <div class="pc-field" id="pcPartialField" hidden>
+                    <label for="pc_partial_exception">Services the parent excepted</label>
+                    <div class="pc-input is-plain">
+                        <input id="pc_partial_exception" name="partial_exception" type="text" maxlength="500" autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="pc-field" id="pcRefusedField" hidden>
+                    <label for="pc_refused_reason">Reason given</label>
+                    <div class="pc-input is-plain">
+                        <input id="pc_refused_reason" name="refused_reason" type="text" maxlength="500" autocomplete="off">
+                    </div>
+                </div>
+
+                <fieldset class="pc-field pc-fieldset">
+                    <legend>Allergies and illnesses</legend>
+                    <div class="pc-writeins">
+                        @foreach ([
+                            'allergy_food_detail' => 'Food allergy',
+                            'allergy_medicine_detail' => 'Medicine allergy',
+                            'prev_immunization_detail' => 'Previous immunization',
+                            'other_illness_detail' => 'Other illnesses',
+                        ] as $field => $caption)
+                            <label class="pc-writein">
+                                <span>{{ $caption }}</span>
+                                <span class="pc-input is-plain"><input name="{{ $field }}" type="text" maxlength="255" autocomplete="off"></span>
+                            </label>
+                        @endforeach
+                    </div>
+                </fieldset>
 
                 <div class="pc-field">
                     <label>Medical Certificate <span class="pc-optional">(Optional)</span></label>
@@ -481,55 +523,127 @@
 @endif
 
 {{-- ── Consent details (read-only) ──────────────────────────────────── --}}
-<div class="confirm-overlay pc-modal" id="consentDetailModal" aria-hidden="true">
-    <div class="confirm-modal" role="dialog" aria-modal="true" aria-label="Consent details">
-        <div class="confirm-head">
-            <div class="confirm-title">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M14.5 18.5c1-1.5 2-1.5 3 0s2 1.5 3 0"/><path d="M12 16c1.5-3.5 3-5 4-3.5s-1 3.5-2 5"/></svg>
-                Consent Details
-                <small>Sulat-Pahibalo</small>
-            </div>
-            <button type="button" class="confirm-close" id="consentDetailClose">&times;</button>
-        </div>
-        <div class="confirm-body">
-            <div class="pc-detail-grid">
-                <div><span>Student Name</span><b id="cdName">-</b></div>
-                <div><span>LRN</span><b id="cdLrn">-</b></div>
-                <div><span>Guardian</span><b id="cdGuardian">-</b></div>
-                <div><span>School Year</span><b><span class="pc-sy-badge" id="cdYear">-</span></b></div>
-                <div><span>Date Uploaded</span><b id="cdDate">-</b></div>
-                <div><span>Notes</span><b id="cdNotes">-</b></div>
-            </div>
-
-            <div class="pc-strip" id="cdStatusStrip">
-                <span class="ms-badge" id="cdStatusBadge">-</span>
-                <span class="pc-strip-note" id="cdFormState">-</span>
-            </div>
-
-            {{-- Shown when an answer was recorded but its signed scan is not in
-                 yet, so the recorded answer is never mistaken for consent. --}}
-            <div class="pc-strip pc-strip-warn" id="cdAwaitingStrip" hidden>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                Recorded as <b id="cdRecorded">-</b>, but the signed form has not been uploaded.
-            </div>
-
-            <div class="pc-strip pc-strip-ok" id="cdFileStrip" hidden>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                Uploaded Form: <b id="cdFileName">-</b>
-                <a id="cdFileLink" class="pc-strip-link" href="#" target="_blank" rel="noopener" hidden>Open</a>
-            </div>
-
-            <div class="pc-strip pc-strip-ok" id="cdMedCertStrip" hidden>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-                Medical Certificate: <b id="cdMedCertName">-</b>
-            </div>
-
-            <div class="confirm-actions">
-                <button type="button" class="btn btn-secondary" id="consentDetailDone">Close</button>
-            </div>
-        </div>
+{{-- One learner's form, read back the way the clinic reads it
+     (NurseConsentList::reading): the photo the adviser uploaded beside what
+     was recorded from it. Each learner's panel is rendered here and cloned in
+     on open, so the photo is fetched — through the audited, role-checked
+     download — only when somebody opens it. --}}
+<div class="confirm-overlay pc-view" id="consentDetailModal" aria-hidden="true">
+    <div class="confirm-modal pc-view-modal" role="dialog" aria-modal="true" aria-labelledby="pcViewName">
+        <div class="pc-view-body" id="consentDetailBody"></div>
     </div>
 </div>
+
+@foreach ($rows as $row)
+    @php
+        $reading = $row['reading'];
+        $photo = $reading['photo'];
+        $letter = $reading['letter'];
+        $upload = $row['upload'];
+        $filed = $reading['filed'];
+        $hasAnswer = $reading['answer'] !== null;
+        $hasForm = $hasAnswer || $photo['url'] !== null || $photo['online'];
+        $shownUpload = $reading['source'] === 'upload' ? $upload : null;
+    @endphp
+    <template class="pc-view-source" data-view-for="{{ $row['lrn'] }}">
+        <div class="pc-view-head">
+            <div>
+                <h3 class="pc-view-name" id="pcViewName">{{ $row['name'] }}</h3>
+                <p class="pc-view-sub">
+                    {{ $row['class_line'] !== '' ? $row['class_line'] : 'Class not recorded' }}
+                    &middot; Adviser: {{ $adviserName !== '' ? $adviserName : 'not on record' }}
+                </p>
+                <p class="pc-view-standing">
+                    All services &middot; SY {{ $schoolYear }}:
+                    <span class="pc-std is-{{ $reading['status'] }}">{{ \App\Support\ConsentStanding::SERVICE_LABELS[$reading['status']] }}</span>
+                </p>
+            </div>
+            <button type="button" class="btn btn-secondary pc-view-close" data-view-close>Close</button>
+        </div>
+
+        @if (! $hasForm)
+            <div class="pc-view-empty">
+                <p><b>No form yet.</b></p>
+                {{-- An answer with no scan behind it authorises nothing, so it
+                     is said rather than shown as a consent. --}}
+                @if ($row['recorded_response'] !== null && ! $row['has_form_file'])
+                    <p>Recorded as <b>{{ $row['recorded_response'] }}</b>, but the signed form has not been uploaded.</p>
+                @endif
+                @if ($letter !== null && $letter->status === \App\Models\HealthConsentForm::STATUS_SENT)
+                    <p>A letter was sent to the parent on {{ optional($letter->sent_at)->format('M j, Y') }} and has not been answered.</p>
+                @endif
+            </div>
+        @else
+            <div class="pc-view-grid">
+                <section class="pc-view-form">
+                    <div class="pc-view-section-head">
+                        <h4>{{ $photo['online'] ? 'Signed online' : 'Uploaded form' }} &middot; SY {{ $schoolYear }}</h4>
+                        @if ($photo['url'] !== null)
+                            <a class="btn btn-secondary pc-view-enlarge" href="{{ $photo['url'] }}" target="_blank" rel="noopener">{{ $photo['is_image'] ? 'Enlarge' : 'Open' }}</a>
+                        @endif
+                    </div>
+                    @if ($photo['url'] !== null && $photo['is_image'])
+                        <figure class="pc-view-photo">
+                            <img src="{{ $photo['url'] }}" alt="Photo of the signed Sulat-Pahibalo for {{ $row['name'] }}">
+                            @if ($simulatedData) <span class="pc-view-mark" aria-hidden="true">SAMPLE · FICTITIOUS DATA</span> @endif
+                        </figure>
+                    @elseif ($photo['url'] !== null)
+                        <iframe class="pc-view-doc" src="{{ $photo['url'] }}" title="Signed Sulat-Pahibalo for {{ $row['name'] }}"></iframe>
+                    @else
+                        <p class="pc-view-note">The parent signed this letter online, so there is no photograph.</p>
+                        @if ($letter !== null)
+                            <a class="btn btn-secondary" href="{{ route('consent-forms.show', $letter) }}">Open the full letter</a>
+                        @endif
+                    @endif
+                </section>
+
+                <section class="pc-view-read">
+                    <h4>{{ $photo['online'] ? 'As the parent answered online' : 'Read from the uploaded photo' }}</h4>
+                    @if (! $hasAnswer)
+                        <p class="pc-view-flash is-warn">The parent's answer on this form has not been recorded.</p>
+                    @else
+                        @if ($reading['missing'] === [])
+                            <p class="pc-view-flash is-ok">&#10003; All required fields completed</p>
+                        @else
+                            <p class="pc-view-flash is-err">Missing from this form: {{ implode(', ', $reading['missing']) }}.</p>
+                        @endif
+                        <dl class="pc-view-kv">
+                            @foreach ($reading['values'] as $label => $value)
+                                <div class="pc-view-row"><dt>{{ $label }}</dt><dd>{{ $value }}</dd></div>
+                                @if ($label === 'Parent decision')
+                                    <div class="pc-view-row is-list">
+                                        <dt>Consent per service</dt>
+                                        <dd>
+                                            <ul class="pc-view-services">
+                                                @foreach ($reading['per_service'] as $item)
+                                                    <li><span>{{ $item['label'] }}</span><span class="pc-std is-{{ $item['status'] }}">{{ \App\Support\ConsentStanding::SERVICE_LABELS[$item['status']] }}</span></li>
+                                                @endforeach
+                                            </ul>
+                                        </dd>
+                                    </div>
+                                @endif
+                            @endforeach
+                            @if ($shownUpload !== null && $shownUpload->medical_cert_attached)
+                                <div class="pc-view-row"><dt>Medical certificate</dt><dd>{{ $shownUpload->med_cert_original_name ?: 'Attached' }}</dd></div>
+                            @endif
+                            @if ($shownUpload !== null && filled($shownUpload->notes))
+                                <div class="pc-view-row"><dt>Notes</dt><dd>{{ $shownUpload->notes }}</dd></div>
+                            @endif
+                        </dl>
+                    @endif
+                </section>
+            </div>
+
+            @if ($filed !== null)
+                <p class="pc-view-foot">
+                    {{ $filed['how'] }} by {{ $filed['by'] }}{{ $filed['on'] !== '' ? ' on '.$filed['on'] : '' }}.
+                    Valid for all service cycles in SY {{ $schoolYear }}.
+                    Only the class adviser can upload or replace this form.
+                </p>
+            @endif
+        @endif
+    </template>
+@endforeach
 
 <script>
 // Table: search + status filter + pagination, mirroring My Students.
@@ -725,13 +839,52 @@
 
         consentFile?.addEventListener('change', () => consentDrop?.classList.remove('invalid'));
 
+        // ── What the rest of the paper says ──────────────────────────
+        const answerField = document.getElementById('pc_consent_type');
+        const servicesBox = document.getElementById('pcServices');
+        const servicesAll = document.getElementById('pcServicesAll');
+        const serviceBoxes = Array.from(uploadForm?.querySelectorAll('input[name="services[]"]') || []);
+        const answerLines = { partial: document.getElementById('pcPartialField'), refused: document.getElementById('pcRefusedField') };
+
+        // The exception line belongs to a partial consent and the reason to a
+        // refusal; the server keeps only the one the answer calls for.
+        const syncAnswerLines = () => {
+            Object.entries(answerLines).forEach(([answer, field]) => {
+                if (field) field.hidden = answerField?.value !== answer;
+            });
+        };
+
+        const syncAllServices = () => {
+            if (!servicesAll) return;
+            const ticked = serviceBoxes.filter((box) => box.checked).length;
+            servicesAll.checked = ticked === serviceBoxes.length;
+            servicesAll.indeterminate = ticked > 0 && ticked < serviceBoxes.length;
+            if (ticked > 0) servicesBox?.classList.remove('invalid');
+        };
+
+        answerField?.addEventListener('change', syncAnswerLines);
+        serviceBoxes.forEach((box) => box.addEventListener('change', syncAllServices));
+        servicesAll?.addEventListener('change', () => {
+            serviceBoxes.forEach((box) => { box.checked = servicesAll.checked; });
+            syncAllServices();
+        });
+
         uploadForm?.addEventListener('submit', (event) => {
-            if (!consentFile || (consentFile.files && consentFile.files.length > 0)) {
+            if (consentFile && !(consentFile.files && consentFile.files.length > 0)) {
+                event.preventDefault();
+                consentDrop?.classList.add('invalid');
+                consentDrop?.scrollIntoView({ block: 'center', behavior: 'smooth' });
                 return;
             }
-            event.preventDefault();
-            consentDrop?.classList.add('invalid');
-            consentDrop?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+
+            // An agreement is an agreement to the services the letter lists,
+            // so it is not filed until they are ticked.
+            const agreed = ['full', 'partial'].includes(answerField?.value || '');
+            if (agreed && !serviceBoxes.some((box) => box.checked)) {
+                event.preventDefault();
+                servicesBox?.classList.add('invalid');
+                servicesBox?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }
         });
 
         // ── Reading the answer off the photo ─────────────────────────
@@ -772,6 +925,49 @@
                     : (chosenLearner() === '' ? 'Select the student first.' : ''));
         };
 
+        // The written lines the reader transcribes, keyed by the field each
+        // one fills here.
+        const writtenFields = {
+            consent_exceptions: 'partial_exception',
+            refusal_reason: 'refused_reason',
+            allergy_food: 'allergy_food_detail',
+            allergy_medicine: 'allergy_medicine_detail',
+            prev_immunization: 'prev_immunization_detail',
+            other_illness: 'other_illness_detail',
+        };
+        let filledFromScan = false;
+
+        const fillFromReading = (draft) => {
+            const services = draft.services || {};
+            const ticked = (key) => services[key] === 'yes';
+
+            // A sub-item is read off its own box; a ticked heading with none
+            // of its own sub-items ticked covers them all, as on the letter.
+            serviceBoxes.forEach((box) => {
+                const parent = box.dataset.parent || '';
+                const siblingTicked = parent !== '' && serviceBoxes.some((other) => other.dataset.parent === parent && ticked(other.value));
+                box.checked = ticked(box.value) || (parent !== '' && ticked(parent) && !siblingTicked);
+            });
+            syncAllServices();
+
+            Object.entries(writtenFields).forEach(([from, to]) => {
+                const input = uploadForm?.querySelector('[name="' + to + '"]');
+                if (input) input.value = (draft.written && draft.written[from] && draft.written[from].text) || '';
+            });
+            filledFromScan = true;
+        };
+
+        const clearReading = () => {
+            if (!filledFromScan) return;
+            serviceBoxes.forEach((box) => { box.checked = false; });
+            syncAllServices();
+            Object.values(writtenFields).forEach((name) => {
+                const input = uploadForm?.querySelector('[name="' + name + '"]');
+                if (input) input.value = '';
+            });
+            filledFromScan = false;
+        };
+
         if (readButton && answerSelect) {
             // A reading belongs to the photo it was taken from, and to the
             // learner it was checked against.
@@ -779,7 +975,9 @@
                 if (answerFromScan?.value === '1') {
                     answerSelect.value = '';
                     setReaderAnswer(false);
+                    syncAnswerLines();
                 }
+                clearReading();
                 syncReader();
             };
 
@@ -830,6 +1028,14 @@
                     // to "Not recorded yet" and the reason is said instead.
                     answerSelect.value = answer;
                     setReaderAnswer(answer !== '');
+                    syncAnswerLines();
+
+                    // Another child's sheet, or one nothing could be read
+                    // off, fills nothing in.
+                    clearReading();
+                    if (!draft.unreadable && !draft.learner_mismatch) {
+                        fillFromReading(draft);
+                    }
 
                     if (draft.unreadable) {
                         readState.textContent = 'The photo could not be read. Choose the answer from the paper.';
@@ -853,6 +1059,10 @@
             resetConsentDrop();
             resetMedCertDrop();
             setReaderAnswer(false);
+            filledFromScan = false;
+            syncAnswerLines();
+            syncAllServices();
+            servicesBox?.classList.remove('invalid');
             if (studentSelect && lrn) studentSelect.value = lrn;
             syncReader();
             open(uploadModal);
@@ -873,77 +1083,32 @@
     }
 
     // ── Details ─────────────────────────────────────────────────────
-    if (detailModal) {
-        const setText = (id, value) => {
-            const node = document.getElementById(id);
-            if (node) {
-                node.textContent = value === null || value === undefined || value === '' ? '-' : String(value);
-            }
-        };
+    // Each learner's panel is server-rendered into a <template>; opening one
+    // clones it in, and closing empties the dialog so the photo goes with it.
+    const detailBody = document.getElementById('consentDetailBody');
+    const closeDetail = () => {
+        if (!detailModal) return;
+        close(detailModal);
+        if (detailBody) detailBody.textContent = '';
+    };
+
+    if (detailModal && detailBody) {
+        const panels = new Map();
+        document.querySelectorAll('template.pc-view-source').forEach((tpl) => panels.set(tpl.dataset.viewFor, tpl));
 
         document.querySelectorAll('.js-consent-view').forEach((button) => {
             button.addEventListener('click', () => {
-                let detail = {};
-                try {
-                    detail = JSON.parse(button.closest('tr')?.getAttribute('data-detail') || '{}');
-                } catch (_err) {
-                    detail = {};
-                }
-
-                setText('cdName', detail.name);
-                setText('cdLrn', detail.lrn);
-                setText('cdGuardian', detail.guardian);
-                setText('cdYear', detail.school_year);
-                setText('cdDate', detail.dated_at);
-                setText('cdNotes', detail.notes);
-
-                const badge = document.getElementById('cdStatusBadge');
-                if (badge) {
-                    badge.textContent = detail.status_label || '-';
-                    badge.className = 'ms-badge ms-consent-' + (detail.status || 'pending');
-                }
-                setText('cdFormState', detail.has_form_file ? 'Form uploaded' : 'Awaiting signed form');
-
-                // An answer with no scan behind it is reported as pending, so
-                // say what was recorded rather than dropping it silently.
-                const awaiting = document.getElementById('cdAwaitingStrip');
-                if (awaiting) {
-                    const unbacked = !detail.has_form_file && Boolean(detail.recorded_response);
-                    awaiting.hidden = !unbacked;
-                    setText('cdRecorded', detail.recorded_response);
-                }
-
-                const fileStrip = document.getElementById('cdFileStrip');
-                if (fileStrip) {
-                    fileStrip.hidden = !detail.has_form_file;
-                    setText('cdFileName', detail.file_name || 'Uploaded file');
-
-                    // The learner's own adviser may open the scan they filed,
-                    // through the same audited route the clinic uses — which
-                    // is what keeps an earlier year's form readable, not just
-                    // named.
-                    const fileLink = document.getElementById('cdFileLink');
-                    if (fileLink) {
-                        fileLink.hidden = !detail.file_url;
-                        fileLink.href = detail.file_url || '#';
-                    }
-                }
-
-                const medStrip = document.getElementById('cdMedCertStrip');
-                if (medStrip) {
-                    medStrip.hidden = !detail.has_med_cert;
-                    setText('cdMedCertName', detail.med_cert_name || 'Attached');
-                }
-
+                const tpl = panels.get(button.dataset.lrn || '');
+                if (!tpl) return;
+                detailBody.replaceChildren(tpl.content.cloneNode(true));
                 open(detailModal);
+                detailBody.querySelector('[data-view-close]')?.focus();
             });
         });
 
-        document.getElementById('consentDetailClose')?.addEventListener('click', () => close(detailModal));
-        document.getElementById('consentDetailDone')?.addEventListener('click', () => close(detailModal));
         detailModal.addEventListener('click', (event) => {
-            if (event.target === detailModal) {
-                close(detailModal);
+            if (event.target === detailModal || event.target.closest('[data-view-close]')) {
+                closeDetail();
             }
         });
     }
@@ -951,7 +1116,7 @@
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
             if (uploadModal) close(uploadModal);
-            if (detailModal) close(detailModal);
+            closeDetail();
         }
     });
 })();

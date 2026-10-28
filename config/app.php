@@ -61,6 +61,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | School Year Testing
+    |--------------------------------------------------------------------------
+    |
+    | Lets a teacher set their Teaching Assignment to any school year, and work
+    | in that year instead of the calendar's, so a learner can be followed from
+    | one year into the next (close the year, carry them over, read their
+    | history) without waiting for June. It moves where that teacher's records
+    | are written, so it is a testing aid: off unless the environment is local
+    | or testing; SCHOOL_YEAR_TESTING overrides it.
+    |
+    */
+
+    'school_year_testing' => (bool) env(
+        'SCHOOL_YEAR_TESTING',
+        in_array(env('APP_ENV', 'production'), ['local', 'testing'], true)
+    ),
+
+    /*
+    |--------------------------------------------------------------------------
     | Simulated Data
     |--------------------------------------------------------------------------
     |

@@ -182,8 +182,10 @@ final class ConsentStanding
                 return null;
             }
 
-            // A scan is filed against one program, named as the catalogue
-            // names it.
+            // The services the letter lists, as the adviser ticked them off
+            // the paper. A scan filed before they were recorded covers the one
+            // program it was filed against, named as the catalogue names it.
+            $services = array_values(array_filter((array) ($upload->services ?? []), 'is_string'));
             $program = array_search(
                 strtolower(trim((string) $upload->program_type)),
                 array_map('strtolower', HealthConsentForm::SERVICE_NAMES),
@@ -193,7 +195,7 @@ final class ConsentStanding
             return [
                 'source' => 'upload',
                 'choice' => $choice,
-                'services' => $program !== false ? [$program] : [],
+                'services' => $services !== [] ? $services : ($program !== false ? [$program] : []),
                 'exceptions' => $choice === HealthConsentForm::CONSENT_SPECIFIC ? trim((string) $upload->partial_exception) : '',
                 'excluded' => null,
             ];
