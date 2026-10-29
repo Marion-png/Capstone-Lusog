@@ -126,6 +126,18 @@ class AdviserController extends Controller
                 ->with('error', 'LRN '.$validated['lrn'].' is already enrolled in another class at this school. Ask the School Head or System Admin to transfer the learner.');
         }
 
+        // Enroll and Edit share one form. Only Edit may change a learner the
+        // section already holds; entering the same learner again on Enroll —
+        // a learner carried into this year included — is refused, never
+        // quietly written over their record.
+        $enrolling = $request->input('form_mode') === 'enrol';
+
+        if ($enrolling && $existingRecord !== null) {
+            return back()
+                ->withInput()
+                ->with('error', LearnerPlacement::displayName(LearnerPlacement::nameOnFile($existingRecord)).' (LRN '.$validated['lrn'].') is already enrolled in your section. Open their profile from My Students to update their record.');
+        }
+
         // A learner new to this section this school year joins it by the same
         // LRN checks every other way in does: the record of a learner the
         // school already holds moves to the section, it is never typed again.
@@ -144,6 +156,15 @@ class AdviserController extends Controller
                 return back()->withInput()->with('error', in_array($placement['outcome'], [LearnerPlacement::MATCHED, LearnerPlacement::FOUND_IN_ARCHIVED], true)
                     ? 'LRN '.$validated['lrn'].' already has a record at this school. Use Add to my section so the record carries over.'
                     : 'LRN '.$validated['lrn'].': '.$placement['message']);
+            }
+
+            if ($enrolling) {
+                $namesake = AdviserClassScope::records($request)
+                    ->first(fn (StudentHealthRecord $record): bool => LearnerPlacement::sameName(LearnerPlacement::nameOnFile($record), $validated));
+
+                if ($namesake !== null) {
+                    return back()->withInput()->with('error', LearnerPlacement::displayName(LearnerPlacement::nameOnFile($namesake)).' is already enrolled in your section (LRN '.$namesake->student_id.'). Open their profile from My Students to update their record.');
+                }
             }
         }
 

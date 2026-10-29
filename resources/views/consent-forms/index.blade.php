@@ -12,6 +12,7 @@
     @if (file_exists($classAdviserCssPath))
         <style>{!! file_get_contents($classAdviserCssPath) !!}</style>
     @endif
+    <style>{!! file_get_contents(resource_path('css/consent-copy.css')) !!}</style>
     {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
          last so it overrides this page's own :root colours. --}}
     <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
@@ -349,6 +350,7 @@
                             <button type="button" class="btn btn-secondary" id="pcReadAnswer" disabled>Read the answer from the photo</button>
                             <span class="pc-read-state" id="pcReadState" aria-live="polite">Attach a photo of the signed form first.</span>
                         </div>
+                        <div class="pc-copy" id="pcCopy" hidden></div>
                     @endif
                     <div class="pc-input">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -361,17 +363,9 @@
                                 data-feeding-label="Declined &mdash; the parent does not consent">Declined &mdash; did not agree</option>
                         </select>
                     </div>
-<<<<<<< Updated upstream
-                    <p class="pc-hint" id="pcAnswerHint">
-=======
-<<<<<<< HEAD
                     {{-- One span, so the hint's flex layout keeps the bold words
                          inside the sentence instead of splitting it into columns. --}}
-                    <p class="pc-hint"><span>
-=======
-                    <p class="pc-hint" id="pcAnswerHint">
->>>>>>> 515166068f922e6bb548e9602d66a78a8a1db6d7
->>>>>>> Stashed changes
+                    <p class="pc-hint" id="pcAnswerHint"><span>
                         Read it off the signed form. Leave it as <strong>Not recorded yet</strong> if you are
                         filing the document now and will read it later &mdash; the form still counts as returned,
                         but no service may be given until an answer is on file.
@@ -505,6 +499,8 @@
                 if (el) el.hidden = isFeeding;
             });
             if (read) read.hidden = isFeeding;
+            const copy = document.getElementById('pcCopy');
+            if (copy) copy.hidden = isFeeding || copy.innerHTML.trim() === '';
             if (isFeeding) {
                 if (confirmBox) confirmBox.hidden = true;
                 if (fromScan) fromScan.value = '0';
@@ -601,32 +597,20 @@
                     <h4>{{ $photo['online'] ? 'As the parent answered online' : 'Read from the uploaded photo' }}</h4>
                     @if (! $hasAnswer)
                         <p class="pc-view-flash is-warn">The parent's answer on this form has not been recorded.</p>
+                    @elseif ($reading['missing'] === [])
+                        <p class="pc-view-flash is-ok">&#10003; All required fields completed</p>
                     @else
-                        @if ($reading['missing'] === [])
-                            <p class="pc-view-flash is-ok">&#10003; All required fields completed</p>
-                        @else
-                            <p class="pc-view-flash is-err">Missing from this form: {{ implode(', ', $reading['missing']) }}.</p>
-                        @endif
+                        <p class="pc-view-flash is-err">Missing from this form: {{ implode(', ', $reading['missing']) }}.</p>
+                    @endif
+                    @if ($reading['copy'] !== null)
+                        @include('consent-forms._paper-copy', ['copy' => $reading['copy']])
+                    @endif
+                    @if ($hasAnswer && $shownUpload !== null && ($shownUpload->medical_cert_attached || filled($shownUpload->notes)))
                         <dl class="pc-view-kv">
-                            @foreach ($reading['values'] as $label => $value)
-                                <div class="pc-view-row"><dt>{{ $label }}</dt><dd>{{ $value }}</dd></div>
-                                @if ($label === 'Parent decision')
-                                    <div class="pc-view-row is-list">
-                                        <dt>Consent per service</dt>
-                                        <dd>
-                                            <ul class="pc-view-services">
-                                                @foreach ($reading['per_service'] as $item)
-                                                    <li><span>{{ $item['label'] }}</span><span class="pc-std is-{{ $item['status'] }}">{{ \App\Support\ConsentStanding::SERVICE_LABELS[$item['status']] }}</span></li>
-                                                @endforeach
-                                            </ul>
-                                        </dd>
-                                    </div>
-                                @endif
-                            @endforeach
-                            @if ($shownUpload !== null && $shownUpload->medical_cert_attached)
+                            @if ($shownUpload->medical_cert_attached)
                                 <div class="pc-view-row"><dt>Medical certificate</dt><dd>{{ $shownUpload->med_cert_original_name ?: 'Attached' }}</dd></div>
                             @endif
-                            @if ($shownUpload !== null && filled($shownUpload->notes))
+                            @if (filled($shownUpload->notes))
                                 <div class="pc-view-row"><dt>Notes</dt><dd>{{ $shownUpload->notes }}</dd></div>
                             @endif
                         </dl>
@@ -898,6 +882,15 @@
         const answerFromScan = document.getElementById('pcAnswerFromScan');
         const answerConfirm = document.getElementById('pcAnswerConfirm');
         const answerConfirmed = document.getElementById('pcAnswerConfirmed');
+        const copyBox = document.getElementById('pcCopy');
+
+        // The sheet as the reader saw it, drawn by the server in the form's
+        // own words. It belongs to one photo and one learner, like the rest.
+        const showCopy = (html) => {
+            if (!copyBox) return;
+            copyBox.innerHTML = html || '';
+            copyBox.hidden = !html;
+        };
 
         const setReaderAnswer = (fromScan) => {
             if (!answerFromScan || !answerConfirm || !answerConfirmed) return;
@@ -972,6 +965,7 @@
             // A reading belongs to the photo it was taken from, and to the
             // learner it was checked against.
             const dropReading = () => {
+                showCopy(null);
                 if (answerFromScan?.value === '1') {
                     answerSelect.value = '';
                     setReaderAnswer(false);
@@ -996,6 +990,7 @@
 
                 readButton.disabled = true;
                 readState.textContent = 'Reading the form…';
+                showCopy(null);
 
                 const body = new FormData();
                 body.append('photo', file);
@@ -1036,6 +1031,7 @@
                     if (!draft.unreadable && !draft.learner_mismatch) {
                         fillFromReading(draft);
                     }
+                    showCopy(data.copy_html);
 
                     if (draft.unreadable) {
                         readState.textContent = 'The photo could not be read. Choose the answer from the paper.';
@@ -1060,6 +1056,7 @@
             resetMedCertDrop();
             setReaderAnswer(false);
             filledFromScan = false;
+            showCopy(null);
             syncAnswerLines();
             syncAllServices();
             servicesBox?.classList.remove('invalid');

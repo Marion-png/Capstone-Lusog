@@ -30,6 +30,7 @@
             <div class="section">
                 <form method="POST" action="{{ route('adviser.store') }}">
                     @csrf
+                    <input type="hidden" name="form_mode" value="enrol">
 
                     <h3>Student Info</h3>
                     <div class="form-grid">

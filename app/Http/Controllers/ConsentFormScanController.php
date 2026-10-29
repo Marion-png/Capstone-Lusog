@@ -6,6 +6,8 @@ use App\Models\HealthConsentForm;
 use App\Support\AdviserClassScope;
 use App\Support\AuditTrail;
 use App\Support\ConsentFormScanner;
+use App\Support\ConsentPaperCopy;
+use App\Support\LearnerPlacement;
 use App\Support\StudentRosterSync;
 use App\Support\UploadReadFailure;
 use Illuminate\Http\JsonResponse;
@@ -96,8 +98,13 @@ class ConsentFormScanController extends Controller
                 .(($draft['learner_mismatch'] ?? false) ? ' (the name on the sheet is another learner\'s)' : ''),
         );
 
+        $copy = ConsentPaperCopy::fromDraft($draft, $learner['grade'] ?? null);
+
         return response()->json([
             'draft' => $draft,
+            // The sheet drawn back as the parent marked it, in the letter's
+            // own words, by the partial every read-back of a form uses.
+            'copy_html' => $copy !== null ? view('consent-forms._paper-copy', ['copy' => $copy])->render() : null,
             'labels' => ConsentFormScanner::serviceKeys(),
             'choices' => [
                 HealthConsentForm::CONSENT_ALL => 'Agreed to all services',
@@ -117,7 +124,7 @@ class ConsentFormScanController extends Controller
      * learner of another class (or school) is never compared against, and the
      * answer never says anything about them.
      *
-     * @return array{first_name: string, last_name: string, name: string}|null
+     * @return array{first_name: string, last_name: string, name: string, grade: int|null}|null
      */
     private function learner(Request $request, string $lrn): ?array
     {
@@ -141,6 +148,7 @@ class ConsentFormScanController extends Controller
             'first_name' => $first,
             'last_name' => $last,
             'name' => trim($first.' '.$last),
+            'grade' => LearnerPlacement::gradeNumber((string) ($row['grade_level'] ?? '')),
         ];
     }
 }

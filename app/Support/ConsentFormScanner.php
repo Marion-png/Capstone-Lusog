@@ -182,6 +182,8 @@ class ConsentFormScanner
     /**
      * @return array{
      *     consent_choice: string,
+     *     consent_boxes: array<string, string>,
+     *     allergy_boxes: array<string, string>,
      *     consent_reason: string,
      *     services: array<string, string>,
      *     written: array<string, array{text: string, confident: bool, readable: bool, box?: string}>,
@@ -826,8 +828,21 @@ class ConsentFormScanner
 
         $signature = ! $unreadable && self::flag($payload['signature_present'] ?? false) === true;
 
+        // What each box itself shows, beside the verdicts drawn from them, so
+        // the form can be drawn back exactly as the parent marked it.
+        $boxesSeen = function (string $key, array $boxes) use ($payload, $unreadable): array {
+            $seen = is_array($payload[$key] ?? null) ? $payload[$key] : [];
+
+            return array_map(
+                fn (string $box): string => $unreadable ? self::UNCLEAR : self::answer($seen[$box] ?? null),
+                array_combine($boxes, $boxes),
+            );
+        };
+
         return [
             'consent_choice' => $choice,
+            'consent_boxes' => $boxesSeen('consent_boxes', array_keys(self::CONSENT_BOXES)),
+            'allergy_boxes' => $boxesSeen('allergy_boxes', array_keys(self::ALLERGY_BOXES)),
             // Why the consent could not be decided, in words the adviser can
             // act on — "two boxes are ticked" sends them to the parent, "a box
             // could not be made out" sends them to the paper. Empty when it was.

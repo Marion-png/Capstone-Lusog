@@ -84,7 +84,11 @@ final class ConsentStanding
 
     public const SERVICE_NO_FORM = 'no_form';
 
-    /** The letter the parent answered did not ask about this service. */
+    /**
+     * The letter the parent answered did not ask about this service, so it was
+     * not consented to. Shown as "Not consented"; the key keeps its old name
+     * because it travels on filter links.
+     */
     public const SERVICE_NOT_ON_FORM = 'not_on_form';
 
     public const SERVICE_NOT_ENROLLED = 'not_enrolled';
@@ -98,7 +102,7 @@ final class ConsentStanding
         self::SERVICE_DECLINED => 'Declined',
         self::SERVICE_CHECK_EXCEPTIONS => 'Check the exceptions',
         self::SERVICE_NO_FORM => 'No form yet',
-        self::SERVICE_NOT_ON_FORM => 'Not on the form',
+        self::SERVICE_NOT_ON_FORM => 'Not consented',
         self::SERVICE_NOT_ENROLLED => 'Not enrolled that year',
         self::SERVICE_NOT_APPLICABLE => 'Not applicable',
     ];

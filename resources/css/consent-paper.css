@@ -74,6 +74,7 @@
 
 .pf-flags { margin-bottom: 14px; display: grid; gap: 7px; }
 .pf-flags[hidden] { display: none; }
+.pf-copy { margin-bottom: 16px; }
 .pf-flags-item {
 	padding: 9px 12px; border-radius: 8px;
 	background: #FDF4E2; border: 1px solid #fcd34d;

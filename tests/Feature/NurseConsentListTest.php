@@ -301,16 +301,44 @@ class NurseConsentListTest extends TestCase
         $record = $this->record('800000000001', 'Abad, Ana');
         $this->letter('800000000001', HealthConsentForm::CONSENT_SPECIFIC, ['checkup', 'dental'], 'Dental');
 
-        $this->withSession($this->readerSession())
+        $html = $this->withSession($this->readerSession())
             ->get(route('consent-forms.nurse-learner', ['record' => $record->id, 'service' => 'dental']))
             ->assertOk()
             ->assertSee('Dental check-up')
             ->assertSee('>Check the exceptions</span>', false)
-            ->assertSee('Consents except listed services')
-            ->assertSee('As written by the parent: “Dental”')
-            ->assertSee('Not required')
             ->assertSee('All required fields completed.')
-            ->assertSee('Valid for all service cycles in SY');
+            ->assertSee('Valid for all service cycles in SY')
+            ->getContent();
+
+        // The form drawn back as the paper carries it: the "gawas lamang
+        // niini" box ticked, with the parent's own words on its line.
+        $this->assertBox($html, 'yes', HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_SPECIFIC]);
+        $this->assertBox($html, 'no', HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_DENY]);
+        $this->assertStringContainsString('<span class="pcopy-written">Dental</span>', $html);
+        $this->assertService($html, HealthConsentForm::SERVICES['dental']['label'], 'check_exceptions', 'Check the exceptions');
+    }
+
+    /** A box on the drawn form, in the state given, with the printed words beside it. */
+    private function assertBox(string $html, string $state, string $label): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/<span class="pcopy-text" lang="ceb">'.preg_quote(e($label), '/').'(?:<span class="pcopy-written">[^<]*<\/span>)?<\/span><\/span>'
+                .'<span class="pcopy-std is-'.['yes' => 'ticked', 'no' => 'not_ticked', 'unclear' => 'unclear'][$state].'">/u',
+            $html,
+            'Expected "'.$label.'" to read '.$state.'.',
+        );
+    }
+
+    /** A service row on the drawn form: marked as a service, its printed name, its standing. */
+    private function assertService(string $html, string $label, string $standing, string $pill): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/<li class="pcopy-row is-'.$standing.' is-service"><span class="pcopy-label"><span class="pcopy-mark"[^>]*>.*?<\/span>'
+                .'<span class="pcopy-text" lang="ceb">'.preg_quote(e($label), '/').'<\/span><\/span>'
+                .'<span class="pcopy-std is-'.$standing.'">'.preg_quote(e($pill), '/').'<\/span><\/li>/u',
+            $html,
+            'Expected the service "'.$label.'" to read '.$pill.'.',
+        );
     }
 
     #[Test]
@@ -372,7 +400,7 @@ class NurseConsentListTest extends TestCase
 
         $html = $this->list(['service' => 'dental']);
 
-        $this->assertStringContainsString('>Not on the form</span>', $html);
+        $this->assertStringContainsString('>Not consented</span>', $html);
         $this->assertMatchesRegularExpression($this->card('Consent rate', '—'), $html);
     }
 
@@ -404,7 +432,7 @@ class NurseConsentListTest extends TestCase
         ]);
 
         $this->assertStringContainsString('>Consented</span>', $this->list(['service' => 'deworming_worms']));
-        $this->assertStringContainsString('>Not on the form</span>', $this->list(['service' => 'vitamin_a']));
+        $this->assertStringContainsString('>Not consented</span>', $this->list(['service' => 'vitamin_a']));
     }
 
     #[Test]
@@ -424,12 +452,18 @@ class NurseConsentListTest extends TestCase
         ]);
 
         $this->assertStringContainsString('>Consented</span>', $this->list(['service' => 'vitamin_a']));
-        $this->assertStringContainsString('>Not on the form</span>', $this->list(['service' => 'deworming_worms']));
+        $this->assertStringContainsString('>Not consented</span>', $this->list(['service' => 'deworming_worms']));
 
-        $this->withSession($this->readerSession())
+        $html = $this->withSession($this->readerSession())
             ->get(route('consent-forms.nurse-learner', $record))
             ->assertOk()
-            ->assertSee('Consents to all 2 services offered');
+            ->getContent();
+
+        // The form drawn back as the paper carries it, in its own words.
+        $this->assertBox($html, 'yes', HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_ALL]);
+        $this->assertService($html, HealthConsentForm::SERVICES['checkup']['label'], 'consented', 'Consented');
+        $this->assertService($html, HealthConsentForm::SERVICES['vitamin_a']['label'], 'consented', 'Consented');
+        $this->assertService($html, 'Pag Bitok / Worms', 'not_on_form', 'Not consented');
     }
 
     #[Test]

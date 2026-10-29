@@ -497,6 +497,49 @@ class SchoolYearTransitionTest extends TestCase
             ->assertSessionHasErrors('add_lrn');
     }
 
+    /**
+     * A learner carried into Grade 8 and then typed again on Enroll Student is
+     * reported as already enrolled — by LRN or by name — and their record is
+     * not touched. Edit Profile still updates it.
+     */
+    #[Test]
+    public function the_enrol_form_says_a_carried_over_learner_is_already_enrolled(): void
+    {
+        $this->learner('100000000001', 'Grade 7 / MATIYAGA');
+        $this->closeYear($this->grade7(), ['100000000001' => LearnerPlacement::PROMOTED]);
+
+        $this->duringNewYear();
+        $this->as($this->grade8())->post(route('adviser.add-to-section'), ['add_lrn' => '100000000001'])
+            ->assertSessionHas('success');
+        $address = $this->rowFor('100000000001', self::NEW_YEAR)->student_details['address'];
+
+        $form = [
+            'form_mode' => 'enrol',
+            'last_name' => 'Dela Cruz', 'first_name' => 'Juan', 'middle_name' => 'Reyes', 'lrn' => '100000000001',
+            'birth_month' => 4, 'birth_day' => 9, 'birth_year' => 2013,
+            'birthplace' => 'Davao City', 'parent_guardian' => 'Pedro Dela Cruz', 'address' => '99 Changed St.',
+            'telephone_no' => '09171234567', 'gender' => 'Male',
+            'height_cm' => 150, 'weight_kg' => 40, 'grade_level' => 'Grade 8', 'section' => 'MASIPAG',
+        ];
+        $alreadyEnrolled = fn (string $m) => str_contains($m, 'Dela Cruz, Juan R.') && str_contains($m, 'already enrolled in your section');
+
+        // The same LRN.
+        $this->as($this->grade8())->post(route('adviser.store'), $form)
+            ->assertSessionHas('error', $alreadyEnrolled);
+        $this->assertSame($address, $this->rowFor('100000000001', self::NEW_YEAR)->student_details['address']);
+
+        // The same name under another LRN.
+        $this->as($this->grade8())->post(route('adviser.store'), ['lrn' => '100000000077'] + $form)
+            ->assertSessionHas('error', $alreadyEnrolled);
+        $this->assertNull($this->rowFor('100000000077', self::NEW_YEAR));
+
+        // Edit Profile posts the same form and updates the record.
+        $this->as($this->grade8())->post(route('adviser.store'), ['form_mode' => 'edit'] + $form)
+            ->assertSessionHas('success', 'Student record updated.');
+        $this->assertSame('99 Changed St.', $this->rowFor('100000000001', self::NEW_YEAR)->student_details['address']);
+        $this->assertSame(1, StudentHealthRecord::where('student_id', '100000000001')->where('school_year', self::NEW_YEAR)->count());
+    }
+
     // ── Access ──────────────────────────────────────────────────────────
 
     /** Spec test 10: "No access", and not the learner's new section either. */

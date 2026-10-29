@@ -12,6 +12,7 @@
     @if (file_exists($cfCss)) <style>{!! file_get_contents($cfCss) !!}</style> @endif
     @php $paperCss = resource_path('css/consent-paper.css'); @endphp
     @if (file_exists($paperCss)) <style>{!! file_get_contents($paperCss) !!}</style> @endif
+    <style>{!! file_get_contents(resource_path('css/consent-copy.css')) !!}</style>
     <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
 <body>
@@ -73,6 +74,7 @@
         <div class="cf-card-head"><h2>2 &middot; The parent's answers</h2></div>
         <div class="cf-card-body">
             <div class="pf-flags" id="scanFlags" hidden></div>
+            <div class="pf-copy" id="scanCopy" hidden></div>
 
             <fieldset class="pf-field">
                 <legend>Consent given</legend>
@@ -165,7 +167,17 @@
         if (previewImg) previewImg.src = URL.createObjectURL(file);
         if (preview) preview.hidden = false;
         if (scanBtn) scanBtn.disabled = false;
+        showCopy(null);
     });
+
+    // The sheet as the reader saw it, drawn by the server in the form's own
+    // words. It belongs to the photo it was read from.
+    const copyBox = document.getElementById('scanCopy');
+    const showCopy = (html) => {
+        if (!copyBox) return;
+        copyBox.innerHTML = html || '';
+        copyBox.hidden = !html;
+    };
 
     const setFlag = (field, text) => {
         const el = form.querySelector('[data-flag-for="' + field + '"]');
@@ -260,6 +272,7 @@
 
             scanBtn.disabled = true;
             scanState.textContent = 'Reading the form…';
+            showCopy(null);
 
             const body = new FormData();
             body.append('photo', file);
@@ -285,6 +298,7 @@
 
                 const draft = data.draft || {};
                 apply(draft);
+                showCopy(data.copy_html);
                 scanState.textContent = draft.unreadable || draft.learner_mismatch
                     ? 'Nothing was filled in — see the notes.'
                     : (draft.needs_review

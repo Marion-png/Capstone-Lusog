@@ -755,6 +755,7 @@
                     <input id="proto_height_cm" name="height_cm" type="hidden" value="{{ old('height_cm') }}">
                     <input type="hidden" name="grade_level" value="{{ $assignedGradeLevel ?? '' }}">
                     <input type="hidden" name="section" value="{{ $assignedSection ?? '' }}">
+                    <input type="hidden" name="form_mode" id="proto_form_mode" value="enrol">
 
                 <div class="sheet-panel active" id="sheetPanel1" role="tabpanel" aria-labelledby="sheetTab1">
                 <div class="student-section">
@@ -2156,6 +2157,8 @@ window.showAdviserSheet = (panelId) => {
         if (sub) sub.textContent = editing ? EDIT_SUB : ENROL_SUB;
         if (lrnInput) lrnInput.readOnly = editing;
         form.dataset.mode = editing ? 'edit' : 'enrol';
+        const modeInput = document.getElementById('proto_form_mode');
+        if (modeInput) modeInput.value = form.dataset.mode;
 
         // The spreadsheet import enrols a class; an edit is one learner.
         const importBox = document.getElementById('studentImportBox');

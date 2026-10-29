@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     @php $cfCss = resource_path('css/consent-form.css'); @endphp
     @if (file_exists($cfCss)) <style>{!! file_get_contents($cfCss) !!}</style> @endif
+    <style>{!! file_get_contents(resource_path('css/consent-copy.css')) !!}</style>
     {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
          last so it overrides this page's own :root colours. --}}
     <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
@@ -101,6 +102,9 @@
         <div class="cf-card">
             <div class="cf-card-body">
                 <p class="cf-empty-note"><b>The parent's answer on this form has not been recorded.</b> Follow up with the class adviser.</p>
+                @if ($detail['copy'] !== null)
+                    @include('consent-forms._paper-copy', ['copy' => $detail['copy']])
+                @endif
             </div>
         </div>
     @endif
@@ -116,12 +120,9 @@
                         Missing from this form: {{ implode(', ', $detail['missing']) }}. Follow up with the class adviser.
                     </div>
                 @endif
-                <dl class="cf-kv">
-                    @foreach ($detail['values'] as $label => $value)
-                        <dt>{{ $label }}</dt>
-                        <dd>{{ $value }}</dd>
-                    @endforeach
-                </dl>
+                @if ($detail['copy'] !== null)
+                    @include('consent-forms._paper-copy', ['copy' => $detail['copy']])
+                @endif
             </div>
         </div>
     @endif

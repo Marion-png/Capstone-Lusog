@@ -57,7 +57,8 @@ final class NurseConsentList
 
     /**
      * One learner's form as the clinic reads it: the standing for the chosen
-     * service, the photo it came from, and the values the adviser confirmed.
+     * service, the photo it came from, and the form drawn back as the paper
+     * carries it (ConsentPaperCopy).
      * Nothing here calls the photo reader.
      *
      * @return array<string, mixed>
@@ -85,7 +86,8 @@ final class NurseConsentList
 
     /**
      * What one learner's forms say, from forms already fetched: the standing,
-     * the photo, the values the adviser confirmed and each service's standing.
+     * the photo, and the form as the paper carries it with each service's
+     * standing.
      * The clinic's form page and the adviser's consent list both read it, so a
      * list can open every learner's form without a query per row, and the two
      * desks cannot read one form two ways.
@@ -100,7 +102,6 @@ final class NurseConsentList
         // The record that answers, or failing that whatever is on file: a
         // letter still out, or a scan nobody has recorded the answer of.
         $source = $answer['source'] ?? ($upload?->file_path !== null ? 'upload' : ($letter !== null ? 'letter' : null));
-        $perService = $answer !== null ? self::perService($grade, $answer) : [];
 
         return [
             'status' => $service !== ''
@@ -111,30 +112,17 @@ final class NurseConsentList
             'letter' => $letter,
             'upload' => $upload,
             'photo' => self::photo($source, $letter, $upload),
-            'values' => $answer !== null ? self::values($source, $letter, $upload, $answer, $perService) : [],
-            'per_service' => $perService,
+            // The form drawn back as the paper carries it. An uploaded scan
+            // shows whatever was recorded off it, answered or not; a letter
+            // only once the parent has answered it.
+            'copy' => match (true) {
+                $source === 'upload' && $upload !== null => ConsentPaperCopy::fromUpload($upload, $grade),
+                $source === 'letter' && $answer !== null && $letter !== null => ConsentPaperCopy::fromLetter($letter, $grade),
+                default => null,
+            },
             'missing' => $answer !== null ? self::missing($source, $letter, $upload, $answer) : [],
             'filed' => self::filed($source, $letter, $upload),
         ];
-    }
-
-    /**
-     * Every planned service and where the learner stands for it, in the
-     * letter's own order — read through forService(), the same rule the
-     * list and its counts use.
-     *
-     * @param  array<string, mixed>  $answer
-     * @return list<array{label: string, status: string}>
-     */
-    private static function perService(?int $grade, array $answer): array
-    {
-        $rows = [];
-
-        foreach (HealthConsentForm::PLANNED_SERVICES as $key => $label) {
-            $rows[] = ['label' => $label, 'status' => ConsentStanding::forService($key, $grade, true, $answer)];
-        }
-
-        return $rows;
     }
 
     /** All but the last five digits hidden — the only LRN this page sends. */
@@ -364,83 +352,6 @@ final class NurseConsentList
         }
 
         return ['url' => null, 'is_image' => false, 'online' => false];
-    }
-
-    /**
-     * The values the adviser confirmed, as the clinic reads them.
-     *
-     * @param  array<string, mixed>  $answer
-     * @param  list<array{label: string, status: string}>  $perService
-     * @return array<string, string>
-     */
-    private static function values(?string $source, ?HealthConsentForm $letter, ?ParentalConsentForm $upload, array $answer, array $perService): array
-    {
-        // "All" is said with the number it covers, counted off the same
-        // per-service reading the page prints under it.
-        $offered = count(array_filter($perService, fn (array $row): bool => $row['status'] === ConsentStanding::SERVICE_CONSENTED));
-
-        $choice = $answer['choice'];
-        $isLetter = $source === 'letter' && $letter !== null;
-
-        $reason = $isLetter ? trim((string) $letter->refusal_reason) : trim((string) $upload?->refused_reason);
-
-        $allergies = $isLetter
-            ? array_filter([
-                'Food' => trim((string) $letter->allergy_food),
-                'Medicine' => trim((string) $letter->allergy_medicine),
-                'Previous immunization' => trim((string) $letter->prev_immunization),
-            ])
-            : array_filter([
-                'Food' => $upload?->allergy_food ? (trim((string) $upload->allergy_food_detail) ?: 'type not written') : '',
-                'Medicine' => $upload?->allergy_medicine ? (trim((string) $upload->allergy_medicine_detail) ?: 'type not written') : '',
-                'Previous immunization' => $upload?->prev_immunization ? (trim((string) $upload->prev_immunization_detail) ?: 'type not written') : '',
-            ]);
-
-        $illness = $isLetter
-            ? trim((string) $letter->other_illness)
-            : ($upload?->has_other_illness ? (trim((string) $upload->other_illness_detail) ?: 'Indicated, not described') : '');
-
-        return [
-            'Parent decision' => match ($choice) {
-                HealthConsentForm::CONSENT_ALL => match (true) {
-                    $offered > 1 => 'Consents to all '.$offered.' services offered',
-                    $offered === 1 => 'Consents to the one service offered',
-                    default => 'Consents to all services',
-                },
-                HealthConsentForm::CONSENT_SPECIFIC => 'Consents except listed services',
-                default => 'Declines',
-            },
-            'Excluded services' => match (true) {
-                $choice !== HealthConsentForm::CONSENT_SPECIFIC => 'None',
-                $answer['excluded'] !== null => implode(', ', array_map(
-                    fn (string $key): string => HealthConsentForm::PLANNED_SERVICES[$key] ?? HealthConsentForm::serviceName($key),
-                    $answer['excluded'],
-                )) ?: 'None',
-                $answer['exceptions'] !== '' => 'As written by the parent: “'.$answer['exceptions'].'”',
-                default => 'Not written on the form',
-            },
-            'Reason given' => $choice === HealthConsentForm::CONSENT_DENY ? ($reason !== '' ? $reason : 'Not written on the form') : 'Not required',
-            'Allergies' => $allergies !== []
-                ? implode(' · ', array_map(fn (string $kind, string $what): string => $kind.': '.$what, array_keys($allergies), $allergies))
-                : 'None indicated',
-            'Other illnesses' => $illness !== '' ? $illness : 'None indicated',
-            'Signatures' => self::signatures($isLetter ? $letter : null),
-        ];
-    }
-
-    /**
-     * What is known about the two signatures. A parent who signs online leaves
-     * a drawn signature on the record; for a signed paper form the photo is
-     * the evidence and nobody has recorded what it shows, so the page says
-     * that rather than claiming either way.
-     */
-    private static function signatures(?HealthConsentForm $letter): string
-    {
-        if ($letter !== null && trim((string) $letter->signature) !== '') {
-            return 'Parent/guardian: present (signed online) · School head: printed on the letter';
-        }
-
-        return 'Not recorded — check the photo of the signed form';
     }
 
     /**

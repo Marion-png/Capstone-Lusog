@@ -15,7 +15,6 @@ use App\Http\Controllers\FeedingCoordinatorController;
 use App\Http\Controllers\FeedingEnrollmentController;
 use App\Http\Controllers\FeedingMasterlistExportController;
 use App\Http\Controllers\FeedingProgramController;
-use App\Http\Controllers\FhirExchangeController;
 use App\Http\Controllers\HealthAssessmentController;
 use App\Http\Controllers\HealthConsentFormController;
 use App\Http\Controllers\MedicalCertificateController;
@@ -727,28 +726,6 @@ Route::get('/dashboard/school-nurse/nutritional-status/export', [SchoolHeadMaste
 
 Route::get('/dashboard/school-nurse/nutritional-status/print', [SchoolHeadMasterlistController::class, 'printList'])
     ->name('dashboard.school-nurse.nutritional-status.print');
-
-// Health Data Exchange — one learner's record as an HL7 FHIR R4 bundle, sent
-// to the receiving server over HTTPS (docs/fhir-interoperability.md). The
-// School Nurse's alone, under the nurse's path for the same reason as above.
-Route::get('/dashboard/school-nurse/data-exchange', [FhirExchangeController::class, 'index'])
-    ->name('dashboard.school-nurse.data-exchange');
-
-Route::get('/dashboard/school-nurse/data-exchange/learners/{lrn}', [FhirExchangeController::class, 'preview'])
-    ->where('lrn', '[A-Za-z0-9\-]+')
-    ->name('dashboard.school-nurse.data-exchange.preview');
-
-Route::get('/dashboard/school-nurse/data-exchange/learners/{lrn}/download', [FhirExchangeController::class, 'download'])
-    ->where('lrn', '[A-Za-z0-9\-]+')
-    ->name('dashboard.school-nurse.data-exchange.download');
-
-Route::post('/dashboard/school-nurse/data-exchange/learners/{lrn}/transmit', [FhirExchangeController::class, 'transmit'])
-    ->where('lrn', '[A-Za-z0-9\-]+')
-    ->name('dashboard.school-nurse.data-exchange.transmit');
-
-Route::get('/dashboard/school-nurse/data-exchange/transmissions/{transmission}', [FhirExchangeController::class, 'transmission'])
-    ->whereNumber('transmission')
-    ->name('dashboard.school-nurse.data-exchange.transmission');
 
 // Keeps the school head's dashboard current without a reload: the page polls
 // the pulse (a stamp, no data) and only re-reads the metrics when it moves.

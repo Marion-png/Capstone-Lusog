@@ -578,7 +578,9 @@ final class LearnerPlacement
      * Whether two spellings name the same learner: last and first name,
      * without regard to case, punctuation or spacing, and the middle initial
      * only where both carry one. Used to decide whether the preview shows both
-     * names — never to decide who a learner is; that is the LRN's job.
+     * names, and to stop the Enroll form adding a learner already in the
+     * section a second time — never to decide who a learner is; that is the
+     * LRN's job.
      */
     public static function sameName(array $a, array $b): bool
     {

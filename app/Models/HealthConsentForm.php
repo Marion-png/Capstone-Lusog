@@ -49,6 +49,22 @@ class HealthConsentForm extends Model
 
     public const CONSENT_DENY = 'deny';
 
+    /** The parent's three consent boxes, worded exactly as the paper prints them. */
+    public const CONSENT_TEXT = [
+        self::CONSENT_ALL => 'Oo, ako mutugot nga mahatagan o mahimong benepisyaryo akong anak sa mga serbisyong panglawas nga ihatag sa iskwelahan base sa rekomendasyon sa DOH',
+        self::CONSENT_SPECIFIC => 'Oo, ako mutugot nga mahatagan o mahimong benepisyaryo akong anak sa mga serbisyong panglawas, gawas lamang niini (palihug isulat):',
+        self::CONSENT_DENY => 'Dili ko mutugot nga mahatagan o mahimong benepisyaryo akong anak sa mga serbisyong panglawas, tungod niining mosunod nga rason (palihug isulat):',
+    ];
+
+    /** The allergy and illness boxes, worded exactly as the paper prints them. */
+    public const ALLERGY_TEXT = [
+        'allergy' => 'Kon adunay Allergy ang bata, palihug butang ug tsek (✓) sa kahon kon unsang klase:',
+        'allergy_food' => 'Pagkaon/Food (isulat unsang klaseng pagkaon)',
+        'allergy_medicine' => 'Tambal/Medicines (isulat unsang klaseng tambal)',
+        'prev_immunization' => 'Nahatag nga Bakuna/Previous Immunization (isulat unsang klaseng bakuna)',
+        'other_illness' => 'Kasamtangang Sakit or Gibati / Other Illnesses',
+    ];
+
     /**
      * Health services exactly as they appear on the paper Sulat-Pahibalo.
      * Keys are stored in the `services` JSON column; `children` are indented

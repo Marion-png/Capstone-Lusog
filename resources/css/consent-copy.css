@@ -1,0 +1,264 @@
+/* A Sulat-Pahibalo's answers as the paper carries them
+   (consent-forms._paper-copy): three sections — the services, the parent's
+   consent, allergies and illnesses — each a list of rows with the letter's
+   own words on the left and a pill on the right.
+
+   Spacing runs on one scale (4 / 6 / 10 / 16 px) so the three sections and
+   every row line up. Colour carries one meaning each: teal marks a service
+   (the row is a service the school offers, not a box the parent ticked),
+   the solid ink pill is a tick on the paper, amber is "read the paper", and
+   the consent standings keep the colours the clinic's list uses. Green is
+   never decoration — it means Consented and nothing else. */
+
+.pcopy {
+	background: #fff;
+	border: 1px solid var(--lg-border, #DCE5DF);
+	border-radius: 12px;
+	color: var(--lg-ink, #1B2A22);
+	font-size: .84rem;
+	line-height: 1.45;
+	text-align: left;
+	overflow: hidden;
+}
+
+* + .pcopy {
+	margin-top: 12px;
+}
+
+.pcopy-section {
+	padding: 16px;
+}
+
+.pcopy-section + .pcopy-section {
+	border-top: 1px solid var(--lg-border, #DCE5DF);
+}
+
+/* ── Section heads ─────────────────────────────────────────────────── */
+
+.pcopy .pcopy-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 0 0 10px;
+	font-size: .72rem;
+	font-weight: 700;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft, #5B6B62);
+}
+
+.pcopy-head-icon {
+	flex: 0 0 auto;
+	width: 24px;
+	height: 24px;
+	border-radius: 7px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--lg-page, #F6F9F7);
+	color: var(--lg-ink-soft, #5B6B62);
+}
+
+.pcopy-head-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.pcopy-head-icon.is-service {
+	background: var(--lg-info-tint, #E8F2F5);
+	color: var(--lg-info-ink, #1F5F70);
+}
+
+.pcopy-title {
+	margin: 0 0 4px;
+	font-size: .76rem;
+	font-weight: 700;
+	letter-spacing: .02em;
+	color: var(--lg-ink, #1B2A22);
+}
+
+.pcopy-lead {
+	margin: 0 0 10px;
+	font-size: .78rem;
+	font-style: italic;
+	color: var(--lg-ink-soft, #5B6B62);
+}
+
+.pcopy-foot {
+	margin: 10px 0 0;
+	font-size: .74rem;
+	font-style: italic;
+	color: var(--lg-ink-soft, #5B6B62);
+}
+
+/* ── Rows ──────────────────────────────────────────────────────────── */
+
+.pcopy-rows {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: 6px;
+}
+
+/* The label keeps at least 220px beside the pill; on a screen too narrow
+   for both, the pill drops to its own line, still on the right, rather than
+   squeezing the printed words into a column one word wide. */
+.pcopy-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 10px;
+	padding: 10px 12px;
+	background: var(--lg-page, #F6F9F7);
+	border: 1px solid transparent;
+	border-radius: 8px;
+}
+
+.pcopy-label {
+	flex: 1 1 220px;
+	min-width: 0;
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	font-weight: 500;
+}
+
+.pcopy-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow-wrap: break-word;
+}
+
+/* The service marker: every service row carries it, no box row does. */
+.pcopy-mark {
+	flex: 0 0 auto;
+	width: 20px;
+	height: 20px;
+	margin-top: 1px;
+	border-radius: 50%;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--lg-info-tint, #E8F2F5);
+	color: var(--lg-info-ink, #1F5F70);
+}
+
+.pcopy-mark svg {
+	width: 11px;
+	height: 11px;
+}
+
+/* The box the parent ticked stands out from the ones they left empty. */
+.pcopy-row.is-ticked {
+	background: #fff;
+	border-color: var(--lg-border-strong, #C5D3CA);
+	box-shadow: inset 3px 0 0 var(--lg-ink, #1B2A22);
+}
+
+.pcopy-row.is-not_ticked .pcopy-label,
+.pcopy-row.is-not_applicable .pcopy-label {
+	color: var(--lg-ink-soft, #5B6B62);
+}
+
+.pcopy-row.is-unclear {
+	background: #FFFBF3;
+	border-color: #F0DDB0;
+}
+
+/* What the parent wrote on the line, set like a filled-in field. */
+.pcopy-written {
+	display: block;
+	margin-top: 6px;
+	padding: 6px 10px;
+	background: #fff;
+	border: 1px solid var(--lg-border, #DCE5DF);
+	border-radius: 6px;
+	font-size: .8rem;
+	font-weight: 600;
+	color: var(--lg-ink, #1B2A22);
+}
+
+/* A printed heading over its sub-items (Pag Purga, Immunization, the kinds
+   of allergy), with the sub-items hung from a rule beneath it. */
+.pcopy-group-label {
+	display: block;
+	margin: 4px 0 6px 2px;
+	font-size: .8rem;
+	font-weight: 600;
+	color: var(--lg-ink, #1B2A22);
+}
+
+.pcopy-group > .pcopy-rows {
+	margin-left: 10px;
+	padding-left: 12px;
+	border-left: 2px solid var(--lg-border, #DCE5DF);
+}
+
+/* ── Pills ─────────────────────────────────────────────────────────── */
+
+.pcopy-std {
+	flex: 0 0 auto;
+	margin-left: auto;
+	min-width: 92px;
+	padding: 4px 10px;
+	border: 1px solid transparent;
+	border-radius: 999px;
+	font-size: .68rem;
+	font-weight: 700;
+	line-height: 1.3;
+	text-align: center;
+	white-space: nowrap;
+}
+
+.pcopy-std.is-consented {
+	background: var(--lg-mint, #E7F5EC);
+	color: var(--lg-success-ink, #14653C);
+}
+
+.pcopy-std.is-ticked {
+	background: var(--lg-ink, #1B2A22);
+	color: #fff;
+}
+
+.pcopy-std.is-consented_with_exceptions,
+.pcopy-std.is-check_exceptions,
+.pcopy-std.is-unclear {
+	background: var(--lg-amber-tint, #FDF4E2);
+	color: var(--lg-amber-ink, #8A5A06);
+}
+
+.pcopy-std.is-declined {
+	background: var(--lg-danger-tint, #FCECEC);
+	color: var(--lg-danger-ink, #A32B2B);
+}
+
+.pcopy-std.is-not_on_form,
+.pcopy-std.is-no_form {
+	background: #EDF1EF;
+	color: #4A5A52;
+}
+
+.pcopy-std.is-not_ticked {
+	background: #fff;
+	border-color: var(--lg-border, #DCE5DF);
+	color: var(--lg-ink-soft, #5B6B62);
+}
+
+.pcopy-std.is-not_applicable,
+.pcopy-std.is-not_enrolled {
+	background: #fff;
+	border: 1px dashed var(--lg-border-strong, #C5D3CA);
+	color: var(--lg-ink-soft, #5B6B62);
+}
+
+@media (max-width: 480px) {
+	.pcopy-section {
+		padding: 14px 12px;
+	}
+
+	.pcopy-group > .pcopy-rows {
+		margin-left: 4px;
+		padding-left: 10px;
+	}
+}

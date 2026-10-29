@@ -212,8 +212,10 @@ class AdviserConsentPageTest extends TestCase
         $response->assertOk();
         $panel = $this->viewPanel($response->getContent(), '123456789012');
 
-        $this->assertStringContainsString('Consents except listed services', $panel);
-        $this->assertStringContainsString('As written by the parent: “No deworming”', $panel);
+        // The form drawn back as the paper carries it, in its own words.
+        $this->assertBox($panel, 'yes', HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_SPECIFIC]);
+        $this->assertBox($panel, 'no', HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_ALL]);
+        $this->assertStringContainsString('<span class="pcopy-written">No deworming</span>', $panel);
         $this->assertStringContainsString('<dt>Medical certificate</dt><dd>Attached</dd>', $panel);
         $this->assertStringContainsString('Uploaded by Test Adviser on', $panel);
 
@@ -267,13 +269,30 @@ class AdviserConsentPageTest extends TestCase
 
         // A Grade 1 learner: the Grade 7 immunization does not apply to them,
         // and every other service on the letter is consented.
-        $this->assertStringContainsString('Consents to all 8 services offered', $panel);
-        $this->assertSame(9, substr_count($panel, '<li><span>'));
+        $this->assertBox($panel, 'yes', HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_ALL]);
+        // One row per box on the paper: nine services, three consent boxes,
+        // the allergy box with its three kinds, and the illness box.
+        // Only the nine services carry the service marker.
+        $this->assertSame(9 + 3 + 5, substr_count($panel, '<li class="pcopy-row '));
+        $this->assertSame(9, substr_count($panel, ' is-service"><span class="pcopy-label"><span class="pcopy-mark"'));
         $this->assertSame(8, substr_count($panel, '>Consented</span></li>'));
         $this->assertStringContainsString('>Not applicable</span></li>', $panel);
 
-        $this->assertStringContainsString('<dt>Allergies</dt><dd>Food: Shrimp</dd>', $panel);
-        $this->assertStringContainsString('<dt>Other illnesses</dt><dd>None indicated</dd>', $panel);
+        // Each service by the letter's own printed name, never the English
+        // short name, with its standing beside it.
+        $this->assertService($panel, HealthConsentForm::SERVICES['checkup']['label'], 'consented', 'Consented');
+        $this->assertService($panel, 'Pag Bitok / Worms', 'consented', 'Consented');
+        $this->assertService($panel, HealthConsentForm::SERVICES['immunization']['children']['immunization_grade7'], 'not_applicable', 'Not applicable');
+        foreach (HealthConsentForm::PLANNED_SERVICES as $english) {
+            $this->assertStringNotContainsString('>'.e($english).'<', $panel);
+        }
+
+        // The allergy lines as written: "wala" stays on its line, unticked.
+        $this->assertBox($panel, 'yes', HealthConsentForm::ALLERGY_TEXT['allergy_food']);
+        $this->assertStringContainsString('<span class="pcopy-written">Shrimp</span>', $panel);
+        $this->assertBox($panel, 'no', HealthConsentForm::ALLERGY_TEXT['allergy_medicine']);
+        $this->assertStringContainsString('<span class="pcopy-written">wala</span>', $panel);
+        $this->assertBox($panel, 'no', HealthConsentForm::ALLERGY_TEXT['other_illness']);
         $this->assertStringContainsString('Uploaded by Test Adviser on', $panel);
         $this->assertStringContainsString('Valid for all service cycles in SY '.ParentalConsentForm::currentSchoolYear(), $panel);
     }
@@ -307,6 +326,29 @@ class AdviserConsentPageTest extends TestCase
             ])
             ->assertSessionHasErrors('services.0');
         $this->assertSame(1, ParentalConsentForm::count());
+    }
+
+    /** A box on the drawn form, in the state given, with the printed words beside it. */
+    private function assertBox(string $html, string $state, string $label): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/<span class="pcopy-text" lang="ceb">'.preg_quote(e($label), '/').'(?:<span class="pcopy-written">[^<]*<\/span>)?<\/span><\/span>'
+                .'<span class="pcopy-std is-'.['yes' => 'ticked', 'no' => 'not_ticked', 'unclear' => 'unclear'][$state].'">/u',
+            $html,
+            'Expected "'.$label.'" to read '.$state.'.',
+        );
+    }
+
+    /** A service row on the drawn form: marked as a service, its printed name, its standing. */
+    private function assertService(string $html, string $label, string $standing, string $pill): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/<li class="pcopy-row is-'.$standing.' is-service"><span class="pcopy-label"><span class="pcopy-mark"[^>]*>.*?<\/span>'
+                .'<span class="pcopy-text" lang="ceb">'.preg_quote(e($label), '/').'<\/span><\/span>'
+                .'<span class="pcopy-std is-'.$standing.'">'.preg_quote(e($pill), '/').'<\/span><\/li>/u',
+            $html,
+            'Expected the service "'.$label.'" to read '.$pill.'.',
+        );
     }
 
     /** One learner's View Details panel, as rendered into its template. */

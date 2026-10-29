@@ -41,14 +41,12 @@ earlier name, LUSOG.
   confirmation, follow-ups, and the DepEd BMI forms and masterlists.
 - **Oversight.** The school head's dashboard, programme reports, consent
   compliance and inventory overview, with DepEd form exports — all read-only.
-- **Health data exchange.** One learner's record sent as an HL7 FHIR R4
-  transaction bundle to an external endpoint, pseudonymised by default.
 
 ## Roles
 
 | Role | What they do |
 |---|---|
-| **School Nurse** | Health records, examinations (MLAT Sheet 2), consultations, dispensing, medicine inventory, consent forms (read-only), data visualization, FHIR exchange |
+| **School Nurse** | Health records, examinations (MLAT Sheet 2), consultations, dispensing, medicine inventory, consent forms (read-only), data visualization |
 | **Clinic Teacher** | A teacher covering the clinic: reads the nurse's screens, dispenses paracetamol only, never changes stock |
 | **Clinic Staff** | Consultation logging and medicine inventory |
 | **Class Adviser** | Enrols and measures their own class, health cards, consent forms, medical documents, closes the school year |
@@ -75,7 +73,7 @@ site.
 - PHPUnit with in-memory SQLite for the test suite
 - OpenSpout for XLSX imports and exports
 - Optional: Google Gemini (class masterlist and consent form photos), Anthropic
-  Claude (feeding attendance sheet photos), an HL7 FHIR R4 server
+  Claude (feeding attendance sheet photos)
 - Deployed on Railway with Railpack (FrankenPHP) behind the repository's `Caddyfile`
 
 ## Getting started
@@ -129,14 +127,11 @@ them in only once the school has agreed to that.
 |---|---|
 | `GEMINI_API_KEY` (and `GEMINI_MODEL`) | Reading a photographed class masterlist and a photographed Sulat-Pahibalo |
 | `ANTHROPIC_API_KEY` | Reading a photographed feeding attendance sheet against the known roster |
-| `FHIR_ENDPOINT` and its credentials | The nurse's Health Data Exchange (HTTPS only) |
 
 The photo readers propose and people decide. A class list or a consent read
 from a photo is saved only after the adviser has checked it against the paper,
 and an attendance mark the reader was unsure of counts for nothing until the
 coordinator reviews it. No reader is ever used to identify anyone from a face.
-See [docs/fhir-interoperability.md](docs/fhir-interoperability.md) for the
-exchange.
 
 ## Development
 
@@ -154,8 +149,8 @@ php artisan test --filter ClassName::methodName     # one test
 ```
 
 Tests run against in-memory SQLite (`phpunit.xml`) and never touch Railway;
-`phpunit.xml` also blanks every provider key, so no test can reach Gemini,
-Anthropic or a FHIR server. Because there is no Auth facade, feature tests set
+`phpunit.xml` also blanks every provider key, so no test can reach Gemini
+or Anthropic. Because there is no Auth facade, feature tests set
 the session directly with `$this->withSession([...])`.
 
 Several tests exist to guard a rule rather than a feature — among them
@@ -189,7 +184,6 @@ See [docs/deployment.md](docs/deployment.md) for the service settings.
 php artisan audit:verify                                   # check every audit entry's seal
 php artisan students:purge-expired --dry-run               # list archived learners past their deletion date
 php artisan students:purge-expired                         # delete them, with every file attached
-php artisan fhir:transmit <lrn> --institution=<id> --preview   # print one learner's FHIR bundle; drop --preview to send it
 ```
 
 `students:purge-expired` is scheduled daily in `routes/console.php`, but nothing
@@ -232,14 +226,14 @@ app/Http/Controllers   one controller per role surface (Adviser*, Feeding*, Scho
 app/Http/Middleware    EnsureActiveSession, InstitutionScope, RestrictSchoolHeadWrites, AuditSensitiveAccess
 app/Support            the business rules: FeedingAttendanceFlag, FeedingBeneficiarySummary,
                        LearnerPlacement, SchoolYearTransition, BmiAssessmentReport,
-                       SchoolHeadOverview, ConsentFormScanner, FhirBundle, ...
+                       SchoolHeadOverview, ConsentFormScanner, ...
 app/Casts              EncryptedString / EncryptedArray / EncryptedBoolean
-app/Console/Commands   audit:verify, students:purge-expired, fhir:transmit
+app/Console/Commands   audit:verify, students:purge-expired
 resources/views        Blade templates, grouped by role dashboard
 resources/css          lusog-theme.css (the design system) plus one sheet per page
 routes/web.php         every route, inline or controller-backed; no role route groups
 database/migrations    schema history; database/seeders seeds conditions, schools and sections
-docs/                  deployment, database access, FHIR, test cases, open decisions, progress
+docs/                  deployment, database access, test cases, open decisions, progress
 scripts/               check-railway-db.php (read-only environment check)
 tests/Feature          the suite, including the invariant guards above
 ```
@@ -249,7 +243,6 @@ tests/Feature          the suite, including the invariant guards above
 - [CLAUDE.md](CLAUDE.md) — the architecture and every invariant, in full
 - [docs/deployment.md](docs/deployment.md) — the Railway service and how to deploy it
 - [docs/railway-database-access.md](docs/railway-database-access.md) — connecting to the deployed database
-- [docs/fhir-interoperability.md](docs/fhir-interoperability.md) — the HL7 FHIR exchange, with sample bundles in `docs/fhir-samples`
 - [docs/test-cases.md](docs/test-cases.md) — manual test cases by role
 - [docs/open-decisions.md](docs/open-decisions.md) — product questions still awaiting a ruling
 - [docs/progress-report.md](docs/progress-report.md) — module status by role

@@ -6,15 +6,8 @@ use App\Casts\EncryptedArray;
 use App\Casts\EncryptedBoolean;
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
-<<<<<<< Updated upstream
-use Illuminate\Database\Eloquent\Builder;
-=======
-<<<<<<< HEAD
 use App\Support\WorkingSchoolYear;
-=======
 use Illuminate\Database\Eloquent\Builder;
->>>>>>> 515166068f922e6bb548e9602d66a78a8a1db6d7
->>>>>>> Stashed changes
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;

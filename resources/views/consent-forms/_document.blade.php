@@ -128,8 +128,7 @@
                 <span class="doc-box">{!! $form->consent_choice === 'all' ? '&#10003;' : '' !!}</span>
                 <span>
             @endif
-                Oo, ako mutugot nga mahatagan o mahimong benepisyaryo akong anak sa mga serbisyong
-                panglawas nga ihatag sa iskwelahan base sa rekomendasyon sa DOH
+                {{ HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_ALL] }}
             @if ($editConsent) </label> @else </span> @endif
         </div>
 
@@ -138,15 +137,13 @@
             @if ($editConsent)
                 <input type="radio" id="consent-specific" name="consent_choice" value="specific" @checked(old('consent_choice', $form->consent_choice) === 'specific')>
                 <label for="consent-specific" style="flex:1;">
-                    Oo, ako mutugot nga mahatagan o mahimong benepisyaryo akong anak sa mga serbisyong
-                    panglawas, gawas lamang niini (palihug isulat):
+                    {{ HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_SPECIFIC] }}
                     <input type="text" name="consent_exceptions" class="doc-writein" value="{{ old('consent_exceptions', $form->consent_exceptions) }}" placeholder="">
                 </label>
             @else
                 <span class="doc-box">{!! $form->consent_choice === 'specific' ? '&#10003;' : '' !!}</span>
                 <span style="flex:1;">
-                    Oo, ako mutugot nga mahatagan o mahimong benepisyaryo akong anak sa mga serbisyong
-                    panglawas, gawas lamang niini (palihug isulat):
+                    {{ HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_SPECIFIC] }}
                     <span class="doc-line" style="display:block;">{{ $form->consent_exceptions }}</span>
                 </span>
             @endif
@@ -157,15 +154,13 @@
             @if ($editConsent)
                 <input type="radio" id="consent-deny" name="consent_choice" value="deny" @checked(old('consent_choice', $form->consent_choice) === 'deny')>
                 <label for="consent-deny" style="flex:1;">
-                    Dili ko mutugot nga mahatagan o mahimong benepisyaryo akong anak sa mga serbisyong
-                    panglawas, tungod niining mosunod nga rason (palihug isulat):
+                    {{ HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_DENY] }}
                     <input type="text" name="refusal_reason" class="doc-writein" value="{{ old('refusal_reason', $form->refusal_reason) }}" placeholder="">
                 </label>
             @else
                 <span class="doc-box">{!! $form->consent_choice === 'deny' ? '&#10003;' : '' !!}</span>
                 <span style="flex:1;">
-                    Dili ko mutugot nga mahatagan o mahimong benepisyaryo akong anak sa mga serbisyong
-                    panglawas, tungod niining mosunod nga rason (palihug isulat):
+                    {{ HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_DENY] }}
                     <span class="doc-line" style="display:block;">{{ $form->refusal_reason }}</span>
                 </span>
             @endif
@@ -180,17 +175,13 @@
         an illness were something the child is allergic to.
     --}}
     @php
-        $allergyKinds = [
-            'allergy_food' => 'Pagkaon/Food (isulat unsang klaseng pagkaon)',
-            'allergy_medicine' => 'Tambal/Medicines (isulat unsang klaseng tambal)',
-            'prev_immunization' => 'Nahatag nga Bakuna/Previous Immunization (isulat unsang klaseng bakuna)',
-        ];
+        $allergyKinds = array_intersect_key(HealthConsentForm::ALLERGY_TEXT, array_flip(['allergy_food', 'allergy_medicine', 'prev_immunization']));
     @endphp
 
     <div class="doc-consent-options doc-allergy-block">
         <div class="doc-consent-option">
             <span class="doc-box">{!! $hasAllergy ? '&#10003;' : '' !!}</span>
-            <span style="flex:1;">Kon adunay Allergy ang bata, palihug butang ug tsek (&#10003;) sa kahon kon unsang klase:</span>
+            <span style="flex:1;">{{ HealthConsentForm::ALLERGY_TEXT['allergy'] }}</span>
         </div>
 
         @foreach ($allergyKinds as $field => $label)
@@ -216,13 +207,13 @@
             @if ($editConsent)
                 <span class="doc-box">{!! old('other_illness', $form->other_illness) ? '&#10003;' : '' !!}</span>
                 <label style="flex:1;">
-                    Kasamtangang Sakit or Gibati / Other Illnesses
+                    {{ HealthConsentForm::ALLERGY_TEXT['other_illness'] }}
                     <input type="text" name="other_illness" class="doc-writein" value="{{ old('other_illness', $form->other_illness) }}">
                 </label>
             @else
                 <span class="doc-box">{!! $form->other_illness ? '&#10003;' : '' !!}</span>
                 <span style="flex:1;">
-                    Kasamtangang Sakit or Gibati / Other Illnesses
+                    {{ HealthConsentForm::ALLERGY_TEXT['other_illness'] }}
                     <span class="doc-line" style="display:block;">{{ $form->other_illness }}</span>
                 </span>
             @endif

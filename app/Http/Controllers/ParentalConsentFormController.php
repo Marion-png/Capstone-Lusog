@@ -144,18 +144,12 @@ class ParentalConsentFormController extends Controller
             'student_health_record_id' => $record->id,
             'program_type' => $program,
             'school_year' => $schoolYear,
-<<<<<<< HEAD
             'consent_type' => $consentType,
-            // Each blank belongs to the answer it is written under.
-            'partial_exception' => $consentType === 'partial' ? ($validated['partial_exception'] ?? null) : null,
+            // Each blank belongs to the answer it is written under, and the
+            // feeding consent has no "except" at all.
+            'partial_exception' => ! $feeding && $consentType === 'partial' ? ($validated['partial_exception'] ?? null) : null,
             'refused_reason' => $consentType === 'refused' ? ($validated['refused_reason'] ?? null) : null,
             'allergy_food' => ! empty($validated['allergy_food']) || $writes('allergy_food_detail'),
-=======
-            'consent_type' => $validated['consent_type'] ?? null,
-            'partial_exception' => $feeding ? null : ($validated['partial_exception'] ?? null),
-            'refused_reason' => $validated['refused_reason'] ?? null,
-            'allergy_food' => ! empty($validated['allergy_food']),
->>>>>>> 515166068f922e6bb548e9602d66a78a8a1db6d7
             'allergy_food_detail' => $validated['allergy_food_detail'] ?? null,
             'allergy_medicine' => ! empty($validated['allergy_medicine']) || $writes('allergy_medicine_detail'),
             'allergy_medicine_detail' => $validated['allergy_medicine_detail'] ?? null,

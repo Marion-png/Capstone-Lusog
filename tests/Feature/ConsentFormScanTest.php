@@ -7,6 +7,7 @@ use App\Models\HealthConsentForm;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Support\ConsentFormScanner;
+use App\Support\ConsentPaperCopy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request as ClientRequest;
@@ -1333,5 +1334,107 @@ class ConsentFormScanTest extends TestCase
         $theirs = $scan('130000000002');
         $this->assertNull($theirs['learner']['matches']);
         $this->assertSame(HealthConsentForm::CONSENT_ALL, $theirs['consent_choice']);
+    }
+
+    // ── The sheet drawn back ─────────────────────────────────────────
+
+    /**
+     * A service row on the drawn sheet: marked as a service, its printed name,
+     * and the standing beside it.
+     */
+    private function assertService(string $html, string $label, string $standing, string $pill): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/<li class="pcopy-row is-'.$standing.' is-service"><span class="pcopy-label"><span class="pcopy-mark"[^>]*>.*?<\/span>'
+                .'<span class="pcopy-text" lang="ceb">'.preg_quote(e($label), '/').'<\/span><\/span>'
+                .'<span class="pcopy-std is-'.$standing.'">'.preg_quote(e($pill), '/').'<\/span><\/li>/u',
+            $html,
+            'Expected the service "'.$label.'" to read '.$pill.'.',
+        );
+    }
+
+    /** A box on the drawn sheet, in the state given, with the printed words beside it. */
+    private function assertBox(string $html, string $state, string $label): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/<span class="pcopy-text" lang="ceb">'.preg_quote(e($label), '/').'(?:<span class="pcopy-written">[^<]*<\/span>)?<\/span><\/span>'
+                .'<span class="pcopy-std is-'.['yes' => 'ticked', 'no' => 'not_ticked', 'unclear' => 'unclear'][$state].'">/u',
+            $html,
+            'Expected "'.$label.'" to read '.$state.'.',
+        );
+    }
+
+    /**
+     * What the reader saw comes back as the paper itself: the letter's own
+     * Cebuano wording, each box ticked, empty or unclear as on the sheet, and
+     * each handwritten line as the parent wrote it.
+     */
+    #[Test]
+    public function the_scan_draws_the_sheet_back_in_the_forms_own_words(): void
+    {
+        $this->fakeGemini($this->draft([
+            'deworming' => ConsentFormScanner::TICKED,
+            'deworming_worms' => ConsentFormScanner::TICKED,
+            'vitamin_a' => ConsentFormScanner::UNCLEAR,
+        ], [
+            'consent_choice' => HealthConsentForm::CONSENT_SPECIFIC,
+            'written' => [
+                'consent_exceptions' => ['text' => 'Bakuna', 'readable' => true, 'confident' => true],
+                'allergy_food' => ['text' => 'Kinhason', 'readable' => true, 'confident' => true],
+            ],
+            'allergy_boxes' => $this->allergyBoxes(['allergy' => 'yes', 'allergy_food' => 'yes']),
+        ]));
+
+        $html = (string) $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->json('copy_html');
+
+        $this->assertStringContainsString('lang="ceb"', $html);
+
+        // Each service by its printed name, with the standing the reading
+        // gives it: "gawas lamang niini" leaves the listed ones to be checked
+        // against the parent's exceptions, and a box nobody could make out is
+        // read off the paper.
+        $this->assertStringContainsString('<span class="pcopy-group-label" lang="ceb">'.e(HealthConsentForm::SERVICES['deworming']['label']).'</span>', $html);
+        $this->assertService($html, 'Pag Bitok / Worms', 'check_exceptions', 'Check the exceptions');
+        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_filariasis'], 'check_exceptions', 'Check the exceptions');
+        $this->assertService($html, HealthConsentForm::SERVICES['checkup']['label'], 'not_on_form', 'Not consented');
+        $this->assertService($html, HealthConsentForm::SERVICES['vitamin_a']['label'], 'unclear', '?');
+        $this->assertService($html, HealthConsentForm::SERVICES['immunization']['children']['immunization_grade7'], 'not_applicable', 'Not applicable');
+        $this->assertStringNotContainsString('Check-up (Nurse or Doctor)', $html);
+
+        $this->assertBox($html, ConsentFormScanner::NOT_TICKED, HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_ALL]);
+        $this->assertBox($html, ConsentFormScanner::TICKED, HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_SPECIFIC]);
+        $this->assertBox($html, ConsentFormScanner::NOT_TICKED, HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_DENY]);
+        $this->assertStringContainsString('<span class="pcopy-written">Bakuna</span>', $html);
+
+        $this->assertBox($html, ConsentFormScanner::TICKED, HealthConsentForm::ALLERGY_TEXT['allergy']);
+        $this->assertBox($html, ConsentFormScanner::TICKED, HealthConsentForm::ALLERGY_TEXT['allergy_food']);
+        $this->assertBox($html, ConsentFormScanner::NOT_TICKED, HealthConsentForm::ALLERGY_TEXT['other_illness']);
+        $this->assertStringContainsString('<span class="pcopy-written">Kinhason</span>', $html);
+
+        // Nothing is put into the application's own English.
+        $this->assertStringNotContainsString('Food allergy', $html);
+        $this->assertStringNotContainsString('Full consent', $html);
+    }
+
+    /** Another child's sheet, or one nothing could be read off, draws nothing. */
+    #[Test]
+    public function another_childs_sheet_or_an_unreadable_one_draws_nothing(): void
+    {
+        $this->learner('130000000001', 'Juan', 'Dela Cruz');
+
+        $this->fakeGemini($this->draft([], [
+            'student_name' => ['text' => 'SANTOS, PEDRO', 'readable' => true, 'confident' => true],
+        ]));
+
+        $this->assertNull($this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg(), 'lrn' => '130000000001'], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->json('copy_html'));
+
+        $this->assertNull(ConsentPaperCopy::fromDraft(ConsentFormScanner::interpret($this->draft([], ['unreadable' => true]))));
+        $this->assertNotNull(ConsentPaperCopy::fromDraft(ConsentFormScanner::interpret($this->draft())));
     }
 }
