@@ -1,8 +1,15 @@
 {{-- ── Record Attendance ──────────────────────────────────────────────────
-     The one place a mark is entered. The Attendance Sheet behind it is a
-     record of what this dialog wrote and carries no control of its own, so
-     there is exactly one way to record a session and one way to change one
-     afterwards (the learner's beneficiary record, where it is audited).
+     The one place a mark is entered or changed. The Attendance Sheet behind it
+     is a record of what this dialog wrote and carries no control of its own,
+     so there is exactly one way to write a session.
+
+     **A session is open for its own day, and only that day**
+     (FeedingAttendanceWindow, on the school's clock). Recorded or not, today's
+     session opens as a form; once it has been recorded (`$recordEditing`) the
+     marks on file come back selected, with their reasons, and saving changes
+     them. There is no Clear on an edit: a mark can be changed to another
+     answer, never back to "not marked", so a save cannot quietly leave an
+     earlier mark standing behind an empty row.
 
      **A recorded day stays editable until it ends** (`FeedingProgramCycle::
      sessionStaysOpen()`), so a learner who arrives late can still be marked:
@@ -10,6 +17,7 @@
      endpoint writes only the marks that changed.
 
      **A closed day opens the dialog as a record, not as a form.** `$recordCanSave`
+<<<<<<< Updated upstream
      is false from the day after a session was recorded, on a weekend,
      outside the running cycle, or with nobody enrolled: the form element, the
      radios, the remark fields, the bulk marks and the Save button are then not
@@ -17,10 +25,19 @@
      and post — and the session is reported with the marks it came to and the
      reason it is closed. `storeRecordedAttendance` re-checks every one of those
      conditions, because a dialog that is not drawn is not a guarantee.
+=======
+     is false once the day has ended, on a weekend, outside the running cycle,
+     or with nobody enrolled: the form element, the radios, the remark fields,
+     the bulk marks and the Save button are then not rendered at all — a
+     disabled control is still one a browser can re-enable and post — and the
+     session is reported with the marks it came to and the reason it is closed.
+     `storeRecordedAttendance` re-checks every one of those conditions, because
+     a dialog that is not drawn is not a guarantee.
+>>>>>>> Stashed changes
 
      A control that opens a dialog either way is deliberate: a button that
-     vanishes once the day is recorded leaves a coordinator with nothing to
-     press and nothing to read, and no way to tell "already done" from "broken".
+     vanishes once the day is closed leaves a coordinator with nothing to press
+     and nothing to read, and no way to tell "already done" from "broken".
 
      **It carries its own behaviour.** The script below travels with the markup,
      so including this partial is the whole of adding the dialog to a page — the
@@ -36,6 +53,9 @@
 	// and says which kind of day it is.
 	$raCanSave = $recordCanSave ?? true;
 	$raBlocked = trim((string) ($recordBlockedReason ?? ''));
+	// Today's session, already recorded: the form opens on the marks on file.
+	$raEditing = $raCanSave && ($recordEditing ?? false);
+	$raAway = ['absent', 'excused'];
 
 	// The marks on file, for a session being read rather than written.
 	$raMarks = [
@@ -75,13 +95,24 @@
 			<header class="modal-head">
 				<div>
 					<p class="modal-eyebrow">Feeding Day {{ $programDay }} of {{ $programDuration }}</p>
+<<<<<<< Updated upstream
 					<h2 class="modal-title" id="recordTitle">{{ $raCanSave ? ($raEditing ? 'Edit Attendance' : 'Record Attendance') : 'Attendance' }}</h2>
+=======
+					<h2 class="modal-title" id="recordTitle">{{ ! $raCanSave ? 'Attendance' : ($raEditing ? 'Edit Attendance' : 'Record Attendance') }}</h2>
+>>>>>>> Stashed changes
 					<p class="modal-sub">{{ $selectedDateLabel }} &middot; {{ $beneficiaryCount }} enrolled {{ \Illuminate\Support\Str::plural('beneficiary', $beneficiaryCount) }}</p>
 				</div>
 				<button type="button" class="modal-close" data-record-close aria-label="Close">&times;</button>
 			</header>
 
-			@if (! $raCanSave && $raBlocked !== '')
+			@if ($raEditing)
+				<div class="alert-bar is-info ra-modal-notice">
+					<div class="alert-body">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+						<div><strong>Already recorded today. You can change a mark until the end of the day; after that, this session is closed.</strong></div>
+					</div>
+				</div>
+			@elseif (! $raCanSave && $raBlocked !== '')
 				<div class="alert-bar is-info ra-modal-notice">
 					<div class="alert-body">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -106,8 +137,14 @@
 						<div class="ra-modal-bulk">
 							<button type="button" class="btn btn-secondary" data-record-all="present">Mark All Present</button>
 							<button type="button" class="btn btn-secondary" data-record-all="absent">Mark All Absent</button>
+<<<<<<< Updated upstream
 							{{-- Not while editing: a blank row writes nothing, so a
 							     cleared mark would read as unmarked here and stay on file. --}}
+=======
+							{{-- Not on an edit: an unmarked row writes nothing, so
+							     clearing a recorded mark would look undone on screen
+							     and stay on file. --}}
+>>>>>>> Stashed changes
 							@unless ($raEditing)
 								<button type="button" class="btn btn-ghost" data-record-all="">Clear</button>
 							@endunless
@@ -146,6 +183,9 @@
 											     accepted is a different fact from one it did
 											     not: only the unexcused kind counts toward the
 											     at-risk flag. --}}
+											{{-- A mark already on file for today comes back
+											     selected, so saving again changes it rather
+											     than starting the session over. --}}
 											<div class="fa-toggle" role="group" aria-label="Attendance for {{ $row['name'] }}">
 												<label class="fa-opt fa-opt-present">
 													<input type="radio" name="marks[{{ $row['id'] }}]" value="present" @checked($row['status'] === 'present')>
@@ -178,9 +218,16 @@
 											     for either kind and clears when the learner is
 											     marked present. --}}
 											<input type="text" class="input fa-remark" maxlength="255"
+<<<<<<< Updated upstream
 												name="remarks[{{ $row['id'] }}]" value="{{ in_array($row['status'], ['absent', 'excused'], true) ? ($row['remarks'] ?? '') : '' }}"
 												aria-label="Reason {{ $row['name'] }} was absent"
 												@disabled(! in_array($row['status'], ['absent', 'excused'], true))>
+=======
+												name="remarks[{{ $row['id'] }}]"
+												value="{{ in_array($row['status'], $raAway, true) ? ($row['remarks'] ?? '') : '' }}"
+												aria-label="Reason {{ $row['name'] }} was absent"
+												@disabled(! in_array($row['status'], $raAway, true))>
+>>>>>>> Stashed changes
 										@else
 											<span class="ra-remark-read">{{ ($row['remarks'] ?? '') !== '' ? $row['remarks'] : '—' }}</span>
 										@endif
@@ -203,7 +250,7 @@
 					</div>
 					<div class="modal-actions">
 						<button type="button" class="btn btn-ghost" data-record-close>Cancel</button>
-						<button type="submit" class="btn btn-primary" id="recordSave">Save Attendance</button>
+						<button type="submit" class="btn btn-primary" id="recordSave">{{ $raEditing ? 'Save Changes' : 'Save Attendance' }}</button>
 					</div>
 				@else
 					{{-- What the session came to, not what is about to be saved.

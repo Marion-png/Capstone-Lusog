@@ -93,6 +93,7 @@ class NutritionalStatusPrintListTest extends TestCase
         $rows = $this->workbook($response)['rows'];
         $head = $this->headerIndex($rows);
 
+<<<<<<< Updated upstream
         // The school's office letterhead, set beside the seals from column C.
         // This school has no address or landline on file, so the address is a
         // blank line and no contact line is printed.
@@ -105,6 +106,17 @@ class NutritionalStatusPrintListTest extends TestCase
             ['', '', 'OFFICE OF THE PRINCIPAL'],
         ], array_slice($rows, 0, 6));
         $this->assertSame('Nutritional Health Status', $rows[$head - 3][0]);
+=======
+        // The school's template letterhead, as text: this school has no
+        // letterhead picture on file.
+        $this->assertSame('Republika ng Pilipinas', $rows[0][0]);
+        $this->assertSame('TEST SCHOOL', $rows[3][0]);
+        $this->assertSame('OFFICE OF THE PRINCIPAL', $rows[5][0]);
+        // The title in the template's capitals; a short one leaves the
+        // block's second line empty.
+        $this->assertSame('NUTRITIONAL HEALTH STATUS', $rows[$head - 4][0]);
+        $this->assertSame([], $rows[$head - 3]);
+>>>>>>> Stashed changes
         $this->assertSame('S.Y. '.StudentHealthRecord::currentSchoolYear(), $rows[$head - 2][0]);
 
         // The table's own columns, with Grade and Section split and named as
@@ -166,11 +178,13 @@ class NutritionalStatusPrintListTest extends TestCase
         $printHead = $this->headerIndex($printList['rows']);
         $this->assertSame($coordinatorHead, $printHead, 'The heading block is the same height.');
 
-        // Letterhead, school and address are identical; the title is each list's own.
+        // Letterhead, school and address are identical; the two-line title
+        // block is each list's own.
         $this->assertSame(
-            array_slice($coordinator['rows'], 0, $coordinatorHead - 3),
-            array_slice($printList['rows'], 0, $printHead - 3)
+            array_slice($coordinator['rows'], 0, $coordinatorHead - 4),
+            array_slice($printList['rows'], 0, $printHead - 4)
         );
+        $this->assertNotSame($coordinator['rows'][$coordinatorHead - 4], $printList['rows'][$printHead - 4]);
         $this->assertSame($coordinator['rows'][$coordinatorHead - 2], $printList['rows'][$printHead - 2]);
         $this->assertSame(['No.', 'Name', '', 'Grade', 'Section'], $coordinator['rows'][$coordinatorHead]);
 

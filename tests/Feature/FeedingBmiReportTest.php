@@ -559,11 +559,16 @@ class FeedingBmiReportTest extends TestCase
         $response->assertSee('value="feeding-masterlist"', false);
         $response->assertSee('value="feeding-beneficiaries"', false);
 
-        // Two panels, each under the title the export files that list under.
+        // Two panels under two titles: the enrolled roll under the title the
+        // export files it under, the advisers' roll under its own.
         $response->assertSee('id="masterlistPanel"', false);
         $response->assertSee('id="beneficiariesPanel"', false);
-        $response->assertSee(FeedingMasterlistExportController::LISTS['qualified'][0], false);
         $response->assertSee(FeedingMasterlistExportController::LISTS['beneficiaries'][0], false);
+        $response->assertSee(FeedingMasterlistExportController::ADVISER_ROLL_TITLE, false);
+        $this->assertNotSame(
+            FeedingMasterlistExportController::LISTS['beneficiaries'][0],
+            FeedingMasterlistExportController::ADVISER_ROLL_TITLE
+        );
 
         // Their drafts are keyed apart, so saving one never overwrites the
         // other.

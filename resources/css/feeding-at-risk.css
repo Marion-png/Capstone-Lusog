@@ -344,6 +344,8 @@
 .ar-verify-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ar-verify-main strong { font-size: .82rem; font-weight: 600; color: var(--lg-ink); }
 .ar-verify-meta, .ar-verify-note { font-size: .74rem; color: var(--lg-ink-soft); overflow-wrap: anywhere; }
+/* An earlier day's absence: its attendance closed with the day. */
+.ar-verify-closed { font-size: .74rem; color: var(--lg-ink-soft); }
 .ar-correct { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
 .ar-correct .select { width: auto; min-width: 108px; flex: 0 0 auto; }
 /* Out-ranks the theme's input[type="text"].input, which is full width. */

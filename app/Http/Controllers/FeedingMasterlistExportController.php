@@ -9,7 +9,10 @@ use App\Support\SchemaCache;
 use App\Support\SchoolLetterhead;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+<<<<<<< Updated upstream
 use Illuminate\View\View;
+=======
+>>>>>>> Stashed changes
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
@@ -18,11 +21,11 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  * Two decisions worth keeping:
  *
  * 1. **It is the printed form, not a dump of the screen.** The file opens on
- *    the DepEd masterlist heading the coordinator already fills in by hand on
- *    the SBFP Forms page — school, address, title, school year — carries the
- *    same four columns (No. / Name / Grade / Section), and ends with the same
- *    "Prepared by / Noted by" block. Someone can print it and hand it in; a
- *    bare table of whatever was on screen always needed retyping first.
+ *    the school's own template heading — its office letterhead with both
+ *    seals, ruled off, then the title and school year — carries the same four
+ *    columns (No. / Name / Grade / Section), and ends with the same "Prepared
+ *    by / Noted by" block. Someone can print it and hand it in; a bare table of
+ *    whatever was on screen always needed retyping first.
  *
  * 2. **It is a real workbook.** A .csv is a text file, and which program opens
  *    one is a setting on the reader's computer that no web application can
@@ -46,8 +49,8 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  * supports. Printing them under one heading is what let the two be confused for
  * each other:
  *
- *   beneficiaries  the enrolled roll — DepEd Form 1's Master List of
- *                  Beneficiaries, and the default
+ *   beneficiaries  the enrolled roll, under the school's template title, and
+ *                  the default
  *   qualified      every learner the measurement qualifies, enrolled or not —
  *                  the candidate list
  *   waitlist       the qualified learners nobody has enrolled: the coordinator's
@@ -59,20 +62,30 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 class FeedingMasterlistExportController extends Controller
 {
     /**
-     * The three lists this endpoint can write, with the DepEd title each one is
+     * The three lists this endpoint can write, with the title each one is
      * filed under and the slug its filename carries.
      *
-     * Public because the SBFP Forms page heads its two masterlist forms with
-     * these same titles: a form typed under one heading and exported under
+     * Public because the SBFP Forms page heads its masterlist form with the
+     * enrolled roll's title: a form typed under one heading and exported under
      * another is two documents claiming to be one.
+     *
+     * The enrolled roll — what Export Masterlist writes — carries the title of
+     * the school's own template word for word, which is also the heading the
+     * SBFP Forms page prints over the same learners and the attendance sheet
+     * prints over their attendance. It used to export as "Master List of
+     * Beneficiaries", the heading the SBFP Forms page gives a different roll
+     * (every learner the class advisers enrolled, ADVISER_ROLL_TITLE), so the
+     * workbook and the form of the same name listed different children.
      */
     public const LISTS = [
         'beneficiaries' => [
-            'Master List of Beneficiaries',
+            'Lists of Identified Severely Wasted and Wasted Students Who Are Qualified for Feeding Program',
             'Beneficiaries',
         ],
+        // Every learner the measurement qualifies, enrolled or not — a
+        // different population from the enrolled roll, so never its title.
         'qualified' => [
-            'Masterlists of Identified Severely Wasted and Wasted Students Who Are Qualified for Feeding Program',
+            'Masterlist of All Identified Severely Wasted and Wasted Students',
             'Qualified',
         ],
         'waitlist' => [
@@ -80,6 +93,12 @@ class FeedingMasterlistExportController extends Controller
             'Waiting-List',
         ],
     ];
+
+    /**
+     * The SBFP Forms page's other roll: every learner the class advisers
+     * enrolled, measured or not. This endpoint never writes it.
+     */
+    public const ADVISER_ROLL_TITLE = 'Master List of Beneficiaries';
 
     public function __invoke(Request $request): BinaryFileResponse|RedirectResponse
     {
@@ -107,6 +126,7 @@ class FeedingMasterlistExportController extends Controller
         $path = $reserved.'.xlsx';
         @unlink($reserved);
 
+<<<<<<< Updated upstream
         $writer = MasterlistSheet::writer(3);
         $writer->openToFile($path);
 
@@ -115,8 +135,15 @@ class FeedingMasterlistExportController extends Controller
         // and a printed form are the same document. MasterlistSheet holds the
         // layout; the Nutritional Health Status list's Print list writes
         // through it too.
+=======
+        // The form itself — the school's office letterhead, the title, the
+        // four-column ruled table and the signature block — is the school's
+        // own template, so a printed export can be handed in as it is.
+        // MasterlistSheet holds the layout; the Nutritional Health Status
+        // list's Print list writes through it too.
+>>>>>>> Stashed changes
         MasterlistSheet::write(
-            $writer,
+            $path,
             letterhead: SchoolLetterhead::for($institutionId, (string) $request->session()->get('active_school_name', 'School')),
             title: $title,
             schoolYear: $schoolYear,
@@ -126,8 +153,6 @@ class FeedingMasterlistExportController extends Controller
             preparedRole: 'Feeding Coordinator',
             widths: [42, 9, 24],
         );
-
-        $writer->close();
 
         $filename = 'SBFP-'.$slug.'-'.str_replace('/', '-', $schoolYear).'-'.now()->format('Ymd').'.xlsx';
 

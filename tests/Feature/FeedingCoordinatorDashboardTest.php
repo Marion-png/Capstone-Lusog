@@ -276,10 +276,12 @@ class FeedingCoordinatorDashboardTest extends TestCase
         $response->assertDontSee('record=1', false);
 
         $this->assertTrue($response->viewData('canRecordToday'));
+        $this->assertFalse($response->viewData('recordEditing'));
         $this->assertCount(1, $response->viewData('recordRows'));
     }
 
     /**
+<<<<<<< Updated upstream
      * A day already recorded stays open until it ends, for late arrivals.
      *
      * The Dashboard always works on today, so once today is recorded the same
@@ -290,6 +292,18 @@ class FeedingCoordinatorDashboardTest extends TestCase
      */
     #[Test]
     public function a_day_recorded_today_opens_the_dialog_to_edit_it(): void
+=======
+     * Today's session stays open until the day ends — recorded or not.
+     *
+     * Once it has been recorded the same button opens the same dialog on the
+     * marks on file, each one selected, so a wrong mark is changed where it was
+     * entered; the read-back still confirms the save. There is no Clear on an
+     * edit: an unmarked row writes nothing, so clearing a recorded mark would
+     * look undone on screen and stay on file.
+     */
+    #[Test]
+    public function a_recorded_day_reopens_the_dialog_to_change_a_mark(): void
+>>>>>>> Stashed changes
     {
         $learner = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', 15.1);
         $this->markAttendance($learner, now()->toDateString(), true);
@@ -299,6 +313,7 @@ class FeedingCoordinatorDashboardTest extends TestCase
             ->assertOk();
 
         $this->assertTrue($response->viewData('canRecordToday'));
+<<<<<<< Updated upstream
         $this->assertTrue($response->viewData('recordMarked'));
 
         $response->assertSee('Edit Today&rsquo;s Attendance', false);
@@ -308,6 +323,26 @@ class FeedingCoordinatorDashboardTest extends TestCase
         $response->assertSee('name="marks['.$learner->id.']" value="present" checked', false);
         $response->assertSee('id="confirmBackdrop"', false);
         $response->assertDontSee('has already been recorded');
+=======
+        $this->assertTrue($response->viewData('recordEditing'));
+
+        $response->assertSee('Edit Today&rsquo;s Attendance', false);
+        $response->assertSee('data-record-open', false);
+        $response->assertSee('until the end of the day');
+        $response->assertSee('id="confirmBackdrop"', false);
+
+        // The dialog's markup alone: its script names the controls it drives,
+        // so the slice stops where the markup does.
+        $html = $response->getContent();
+        $dialog = substr($html, strpos($html, 'id="recordBackdrop"'));
+        $dialog = substr($dialog, 0, strpos($dialog, '<script>'));
+
+        $this->assertStringContainsString(route('feedingcor-program.attendance.record.store'), $dialog);
+        $this->assertStringContainsString('Edit Attendance', $dialog);
+        $this->assertStringContainsString('Save Changes', $dialog);
+        $this->assertMatchesRegularExpression('/name="marks\['.$learner->id.'\]" value="present"\s+checked/', $dialog);
+        $this->assertStringNotContainsString('data-record-all=""', $dialog);
+>>>>>>> Stashed changes
     }
 
     /** A weekend is not a session, so the dialog reports that rather than offering to write one. */

@@ -329,7 +329,7 @@
 						{{-- The title the export files this list under, read from the
 						     one declaration so the form and the workbook cannot
 						     head the same list two ways. --}}
-						<div class="report-title-lines">{{ \App\Http\Controllers\FeedingMasterlistExportController::LISTS['qualified'][0] }}</div>
+						<div class="report-title-lines">{{ \App\Http\Controllers\FeedingMasterlistExportController::LISTS['beneficiaries'][0] }}</div>
 						<div class="report-sy">S.Y. <input type="text" class="inline-line-input" data-field="ml_school_year" value="{{ $schoolYear }}" aria-label="School year"></div>
 						<div class="report-scope" data-scope-line></div>
 					</div>
@@ -396,7 +396,7 @@
 				<div class="form-sheet-inner">
 					<div class="report-head">
 						@include('feedingcor-dashboard.partials.form-letterhead', ['addressField' => 'mlb_school_address'])
-						<div class="report-title-lines">{{ \App\Http\Controllers\FeedingMasterlistExportController::LISTS['beneficiaries'][0] }}</div>
+						<div class="report-title-lines">{{ \App\Http\Controllers\FeedingMasterlistExportController::ADVISER_ROLL_TITLE }}</div>
 						<div class="report-sy">S.Y. <input type="text" class="inline-line-input" data-field="mlb_school_year" value="{{ $schoolYear }}" aria-label="School year"></div>
 						<div class="report-scope" data-scope-line></div>
 					</div>

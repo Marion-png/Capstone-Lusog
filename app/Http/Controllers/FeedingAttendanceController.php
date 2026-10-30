@@ -7,6 +7,7 @@ use App\Models\StudentHealthRecord;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingAttendanceMark;
+use App\Support\FeedingAttendanceWindow;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
@@ -407,7 +408,8 @@ class FeedingAttendanceController extends Controller
         $allMarks = $this->marksFor($allBeneficiaries);
         $allByDate = $allMarks->groupBy('date')->map(fn (Collection $rows) => $rows->keyBy('record_id'));
 
-        $today = now()->toDateString();
+        // The school's date, not the server's: it decides which session is open.
+        $today = FeedingAttendanceWindow::today();
         $selectedDate = $this->resolveDate(
             $request,
             $allMarks->pluck('date')->unique()->sort()->values()->all(),
@@ -459,6 +461,7 @@ class FeedingAttendanceController extends Controller
         $rows = $allRows->filter(fn (array $row): bool => $scopedIds->has($row['id']))->values();
         $filteredRows = $this->applyFilters($rows, $filters);
 
+<<<<<<< Updated upstream
         // Whether this session has been recorded, and whether it is closed.
         //
         // Deliberately read off the UNFILTERED rows: a session's standing is a
@@ -471,9 +474,27 @@ class FeedingAttendanceController extends Controller
         // decided.
         $sessionMarked = $allRows->contains('locked', true);
         $sessionLocked = $sessionMarked && ! FeedingProgramCycle::sessionStaysOpen($selectedDate);
+=======
+        // Where this session stands.
+        //
+        // Deliberately read off the UNFILTERED rows: a session's standing is a
+        // fact about the day, and narrowing to one section must never change it.
+        // Two separate questions. Has a human confirmed a mark for it? Then it
+        // is recorded, and recording it again today is an edit. Has its day
+        // ended on the school's clock? Then it is closed, recorded or not, and
+        // nothing can be entered or changed for it any more. An UNCONFIRMED
+        // scanned mark records nothing: nobody has read it, and recording on
+        // site is exactly how it gets decided.
+        $sessionConfirmed = $allRows->contains('locked', true);
+        $sessionClosed = ! FeedingAttendanceWindow::isOpen($selectedDate);
+>>>>>>> Stashed changes
         $isFeedingDay = FeedingProgramCycle::isFeedingDay($selectedDate);
         $withinWindow = $selectedDate <= $window['end']
             && ($window['start'] === null || $selectedDate >= $window['start']);
+        $canRecord = ! $sessionClosed
+            && $isFeedingDay
+            && $withinWindow
+            && $allBeneficiaries->isNotEmpty();
 
         $standings = $this->standings($beneficiaries, $byRecord, $rule, count($sessionDates));
         // Flagged learners only: the threshold reached AND the record confirmed
@@ -547,24 +568,36 @@ class FeedingAttendanceController extends Controller
             // computed off a filtered list delete the very choice that would
             // widen it again.
             'filterOptions' => $filterOptions,
-            'sessionRecorded' => $allByDate->has($selectedDate),
             // The sheet is a record, never a form: it reports what was recorded
             // and offers no control at all. Recording happens in the modal, and
+<<<<<<< Updated upstream
             // only for a session still open.
             'sessionLocked' => $sessionLocked,
             // Recorded, whether or not it is still open to editing today.
             'sessionMarked' => $sessionMarked,
+=======
+            // only on the session's own day.
+            'sessionRecorded' => $allByDate->has($selectedDate),
+            // A human has confirmed a mark for it, so recording it again today
+            // is an edit.
+            'sessionConfirmed' => $sessionConfirmed,
+            'sessionClosed' => $sessionClosed,
+>>>>>>> Stashed changes
             'isFeedingDay' => $isFeedingDay,
-            'canRecord' => ! $sessionLocked
-                && $isFeedingDay
-                && $withinWindow
-                && $allBeneficiaries->isNotEmpty(),
+            'canRecord' => $canRecord,
+            // Today's session, already recorded: the dialog opens on the marks
+            // on file and saving changes them.
+            'recordEditing' => $canRecord && $sessionConfirmed,
             // Why recording is unavailable, in the words the coordinator needs.
             'recordBlockedReason' => match (true) {
                 $allBeneficiaries->isEmpty() => 'No beneficiary is enrolled for this school year yet.',
                 ! $isFeedingDay => Carbon::parse($selectedDate)->format('l, F j, Y').' is a weekend. There are no feeding sessions on Saturdays or Sundays.',
+                $sessionClosed => FeedingAttendanceWindow::closedReason($selectedDate),
                 ! $withinWindow => 'That date is outside the running feeding programme.',
+<<<<<<< Updated upstream
                 $sessionLocked => 'Attendance for '.Carbon::parse($selectedDate)->format('F j, Y').' has already been recorded, and a session can only be edited on its own day.',
+=======
+>>>>>>> Stashed changes
                 default => '',
             },
             // The modal's roll: every beneficiary, unfiltered, so a coordinator
@@ -628,7 +661,7 @@ class FeedingAttendanceController extends Controller
 
         return FeedingAttendance::query()
             ->whereIn('student_health_record_id', $beneficiaries->pluck('id'))
-            ->whereDate('session_date', '<=', now()->toDateString())
+            ->whereDate('session_date', '<=', FeedingAttendanceWindow::today())
             ->orderBy('session_date')
             ->get($columns)
             ->map(fn (FeedingAttendance $row): array => [
@@ -669,11 +702,11 @@ class FeedingAttendanceController extends Controller
                 'sex' => FeedingBeneficiarySummary::sexOf($record),
                 'status' => $status,
                 'remarks' => $mark['remarks'] ?? '',
-                // A mark a human has already recorded for this learner on this
-                // day is settled: the sheet shows it and offers no way to
-                // change it, here or on the server. An UNCONFIRMED scanned mark
-                // is deliberately not locked — nobody has read it yet, and
-                // recording on site is exactly how it gets decided.
+                // A mark a human has already confirmed for this learner on this
+                // day. It can still be changed until the day ends, and never
+                // after. An UNCONFIRMED scanned mark is deliberately not
+                // counted — nobody has read it yet, and recording on site is
+                // exactly how it gets decided.
                 'locked' => in_array($status, FeedingAttendanceMark::RECORDABLE, true),
             ];
         })->values();
@@ -942,7 +975,7 @@ class FeedingAttendanceController extends Controller
         $month = Carbon::parse($selectedDate)->startOfMonth();
         $cursor = $month->copy()->startOfWeek(Carbon::MONDAY);
         $end = $month->copy()->endOfMonth()->endOfWeek(Carbon::SUNDAY);
-        $today = now()->toDateString();
+        $today = FeedingAttendanceWindow::today();
 
         $weeks = [];
         $week = [];

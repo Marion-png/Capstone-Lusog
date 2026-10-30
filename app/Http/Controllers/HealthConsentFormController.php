@@ -8,6 +8,7 @@ use App\Models\StudentHealthRecord;
 use App\Support\AccountSettings;
 use App\Support\AdviserClassScope;
 use App\Support\ConsentFormScanner;
+use App\Support\ConsentPhotoSummary;
 use App\Support\ConsentStanding;
 use App\Support\EncryptedFileStorage;
 use App\Support\FeedingBeneficiarySummary;
@@ -61,13 +62,17 @@ class HealthConsentFormController extends Controller
 
         // One row per learner, combining the e-signature workflow with any
         // scanned Sulat-Pahibalo that was uploaded for them.
-        $rows = $students->map(function (array $student) use ($forms, $uploads) {
+        $rows = $students->map(function (array $student) use ($forms, $uploads, $request) {
             $form = $forms->get($student['lrn']);
             $upload = $uploads->get($student['lrn']);
+            $scan = $upload?->scan_result;
+            $paperForm = $upload?->file_path === null && $form?->paper_form_path;
 
             return [
                 'lrn' => $student['lrn'],
                 'name' => $student['name'],
+                'class_label' => trim(($student['grade_level'] ?? '').' – '.($student['section'] ?? ''), ' –'),
+                'adviser' => (string) $request->session()->get('active_name', 'Class Adviser'),
                 'parent_guardian' => $student['parent_guardian'],
                 'class_line' => trim($student['grade_level'].' – '.$student['section'], ' –'),
                 'form' => $form,
@@ -83,7 +88,13 @@ class HealthConsentFormController extends Controller
                 'status' => $this->deriveConsentStatus($form, $upload),
                 'dated_at' => $upload?->created_at?->toDateString()
                     ?? $form?->signed_at?->toDateString(),
-                'has_form_file' => $upload !== null && $upload->file_path !== null,
+                'has_form_file' => ($upload !== null && $upload->file_path !== null) || $paperForm,
+                'file_is_image' => $paperForm || in_array(strtolower(pathinfo((string) $upload?->file_original_name, PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'webp'], true),
+                'photo_summary' => is_array($scan)
+                    ? ConsentPhotoSummary::fromDraft($scan, LearnerPlacement::gradeNumber((string) ($student['grade_level'] ?? '')))
+                    : null,
+                'uploaded_by' => $upload?->uploaded_by_name ?: ($paperForm ? $form->created_by_name : null),
+                'uploaded_on' => $upload?->created_at?->format('M j, Y') ?? ($paperForm ? $form->signed_at?->format('M j, Y') : null),
                 'has_med_cert' => (bool) $upload?->medical_cert_attached,
                 // The adviser's own remark, falling back to the reason recorded
                 // against a partial or declined consent.
@@ -95,7 +106,7 @@ class HealthConsentFormController extends Controller
                 // can still be opened, not just named.
                 'file_url' => $upload !== null && $upload->file_path !== null
                     ? route('parental-consent.download', $upload->id)
-                    : null,
+                    : ($paperForm ? route('consent-forms.paper.image', $form) : null),
                 'med_cert_name' => $upload?->med_cert_original_name,
                 // Surfaced so a record awaiting its scan still shows what the
                 // parent answered, without that answer being read as consent.

@@ -208,17 +208,22 @@
 					     endpoint.
 
 					     It is drawn every day, recorded or not. Once today's
-					     session is closed the same dialog opens on it as a
-					     record — the marks it came to and why nothing more can
-					     be entered — because a control that disappears leaves a
-					     coordinator with nothing to press and no way to tell
-					     "already done" from "broken". Nothing writable is
-					     rendered on a closed day, and the endpoint refuses the
-					     write regardless. --}}
+					     session is recorded it opens the same dialog on the
+					     marks on file, to change them until the day ends; on a
+					     day with no session (a weekend, outside the cycle) it
+					     opens on the day as a record and says why — a control
+					     that disappears leaves a coordinator with nothing to
+					     press and no way to tell "already done" from "broken".
+					     Nothing writable is rendered on a closed day, and the
+					     endpoint refuses the write regardless. --}}
 					<a class="btn btn-primary" data-record-open
 						href="{{ route('feedingcor-program.attendance.record') }}">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+<<<<<<< Updated upstream
 						{{ $recordMarked ? 'Edit' : 'Record' }} Today&rsquo;s Attendance
+=======
+						{{ $recordEditing ? 'Edit' : 'Record' }} Today&rsquo;s Attendance
+>>>>>>> Stashed changes
 					</a>
 				</div>
 				<div class="live-pane" id="fc-attendance">
@@ -292,6 +297,8 @@
 	// On a closed day the dialog renders no form, no radios and no Save — it
 	// reports the session instead of offering to write it.
 	'recordCanSave' => $canRecordToday,
+	// Already recorded today: the marks on file come back selected.
+	'recordEditing' => $recordEditing,
 	'recordBlockedReason' => $recordBlockedReason,
 ])
 {{-- The read-back only exists where there is something to write. --}}

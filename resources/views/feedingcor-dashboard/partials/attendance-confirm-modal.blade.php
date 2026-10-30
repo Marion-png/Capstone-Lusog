@@ -1,9 +1,16 @@
 {{-- ── Confirm Attendance ─────────────────────────────────────────────────
+<<<<<<< Updated upstream
      A recorded session can be edited on its own day and closes as a whole
      when the day ends. So the save is worth reading back before it is made:
      this dialog names every
      learner and the mark entered for them, and nothing reaches the endpoint
      until it is confirmed.
+=======
+     A session can be changed until its day ends and never after, so the save
+     is worth reading back before it is made: this dialog names every learner
+     and the mark entered for them, says how long the marks stay open, and
+     nothing reaches the endpoint until it is confirmed.
+>>>>>>> Stashed changes
 
      It reads the record form rather than the server, so it can only ever show
      what is about to be posted; it writes nothing itself and adds no second
@@ -53,6 +60,7 @@
 		</div>
 
 		<footer class="modal-foot">
+			<p class="ac-note">You can change these marks until the end of the day. After that, this day&rsquo;s attendance is closed.</p>
 			<div class="modal-actions">
 				<button type="button" class="btn btn-ghost" data-confirm-close>Back</button>
 				<button type="button" class="btn btn-primary" data-confirm-submit>Save Attendance</button>

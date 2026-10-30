@@ -18,6 +18,8 @@
 @php
 	$unrecorded = ! $sessionRecorded;
 	$incomplete = $sessionRecorded && $tally['recorded'] < $beneficiaryCount;
+	// A day that has ended is closed, so neither notice offers to record it.
+	$sessionOpen = $canRecord ?? false;
 @endphp
 
 @if ($beneficiaryCount > 0 && $unrecorded)
@@ -26,9 +28,17 @@
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
 			<div>
 				<strong>Attendance has not been recorded for {{ $selectedDateLabel }}</strong>
-				<span>{{ $beneficiaryCount }} beneficiaries are waiting on this session.</span>
+				{{-- On a closed day, the reason it is closed — the same words the
+				     sheet's dialog would give. --}}
+				<span>{{ $sessionOpen ? $beneficiaryCount.' beneficiaries are waiting on this session.' : ($recordBlockedReason ?? '') }}</span>
 			</div>
 		</div>
+<<<<<<< Updated upstream
+=======
+		@if ($sessionOpen)
+			<button type="button" class="btn btn-primary" data-open-sheet>Record Attendance</button>
+		@endif
+>>>>>>> Stashed changes
 	</div>
 @elseif ($incomplete)
 	<div class="alert-bar is-info">
@@ -39,6 +49,12 @@
 				<span>{{ $tally['recorded'] }} of {{ $beneficiaryCount }} beneficiaries recorded.</span>
 			</div>
 		</div>
+<<<<<<< Updated upstream
+=======
+		@if ($sessionOpen)
+			<button type="button" class="btn btn-secondary" data-open-sheet>Continue Recording</button>
+		@endif
+>>>>>>> Stashed changes
 	</div>
 @endif
 

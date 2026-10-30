@@ -2,11 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\FeedingMasterlistExportController;
 use App\Models\FeedingAttendance;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Support\FeedingAtRiskRule;
+<<<<<<< Updated upstream
 use App\Support\MasterlistSheet;
+=======
+>>>>>>> Stashed changes
 use App\Support\SchoolLetterhead;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -316,11 +320,27 @@ class FeedingBeneficiaryCardsTest extends TestCase
         // learner — read out of the sheet XML inside the .xlsx.
         $sheet = $this->readSheetXml($response->streamedContent());
 
+<<<<<<< Updated upstream
         // The Beneficiaries tab exports DepEd Form 1's Master List of
         // Beneficiaries — the enrolled roll. The candidate list of qualified
         // learners is a separate document under its own title (?list=qualified).
         $this->assertStringContainsString('Master List of Beneficiaries', $sheet);
         $this->assertStringContainsString('TEST SCHOOL', $sheet);
+=======
+        // The Beneficiaries tab exports the enrolled roll under the school's
+        // own template title, in the template's capitals and broken where the
+        // template breaks it. The candidate list of every qualified learner is
+        // a separate document under its own title (?list=qualified).
+        $this->assertStringContainsString('LISTS OF IDENTIFIED SEVERELY WASTED AND WASTED STUDENTS WHO ARE', $sheet);
+        $this->assertStringContainsString('QUALIFIED FOR FEEDING PROGRAM', $sheet);
+        $this->assertStringNotContainsString(FeedingMasterlistExportController::ADVISER_ROLL_TITLE, $sheet);
+        // A school with no letterhead picture on file gets the template's
+        // letterhead lines as text, under its own name.
+        $this->assertStringContainsString('Republika ng Pilipinas', $sheet);
+        $this->assertStringContainsString('Kagawaran ng Edukasyon', $sheet);
+        $this->assertStringContainsString('TEST SCHOOL', $sheet);
+        $this->assertStringContainsString('OFFICE OF THE PRINCIPAL', $sheet);
+>>>>>>> Stashed changes
         $this->assertStringContainsString('Maria Clara Santos', $sheet);
         $this->assertStringContainsString('Sampaguita', $sheet);
         $this->assertStringContainsString('Prepared by:', $sheet);
@@ -328,6 +348,7 @@ class FeedingBeneficiaryCardsTest extends TestCase
     }
 
     /**
+<<<<<<< Updated upstream
      * The form is headed with the school's office letterhead: the Division
      * seal and the school seal embedded as images beside the letterhead's
      * lines, with the deployment school's own street, landline and e-mail.
@@ -410,6 +431,58 @@ class FeedingBeneficiaryCardsTest extends TestCase
         $this->withSession(['active_role' => 'class_adviser', 'active_institution_id' => $this->institution->id])
             ->get(route('dashboard.feedingcor-health-records.masterlist.print'))
             ->assertRedirect(route('login'));
+=======
+     * A school whose office letterhead is on file is headed with it, exactly
+     * as its own template is: the one picture — both seals, the school, its
+     * street and landline — placed at the top of the sheet, never retyped. It
+     * is looked up by the school's own name, so another school never gets it.
+     */
+    #[Test]
+    public function the_masterlist_is_headed_with_the_schools_own_letterhead(): void
+    {
+        $staAna = Institution::create(['name' => 'Sta. Ana National High School', 'status' => 'active']);
+        $banner = SchoolLetterhead::officeBanner($staAna->name);
+        $this->assertNotNull($banner, 'Sta. Ana’s letterhead is on file.');
+        $this->assertNull(SchoolLetterhead::officeBanner('Test School'), 'Another school has none.');
+
+        $learner = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', name: 'Maria Clara Santos');
+        $learner->update(['institution_id' => $staAna->id, 'school_name' => $staAna->name]);
+
+        $response = $this->withSession(array_merge($this->coordinatorSession(), [
+            'active_institution_id' => $staAna->id,
+            'active_school_name' => $staAna->name,
+        ]))
+            ->post('/dashboard/feedingcor-health-records/masterlist', ['record_ids' => [$learner->id]])
+            ->assertOk();
+
+        $path = tempnam(sys_get_temp_dir(), 'masterlist-test-');
+        file_put_contents($path, $response->streamedContent());
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($path) === true);
+
+        $sheet = (string) $zip->getFromName('xl/worksheets/sheet1.xml');
+        $drawing = (string) $zip->getFromName('xl/drawings/drawing1.xml');
+        $media = [];
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            if (str_starts_with((string) $zip->getNameIndex($i), 'xl/media/')) {
+                $media[] = (string) $zip->getFromIndex($i);
+            }
+        }
+        $zip->close();
+        @unlink($path);
+
+        // The picture is the school's own file, anchored at the top-left of
+        // the sheet, and the sheet draws it.
+        $this->assertSame([file_get_contents($banner)], $media);
+        $this->assertStringContainsString('<drawing r:id=', $sheet);
+        $this->assertStringContainsString('<xdr:col>0</xdr:col>', $drawing);
+        $this->assertStringContainsString('<xdr:row>0</xdr:row>', $drawing);
+
+        // The letterhead is not typed out a second time underneath it.
+        $this->assertStringNotContainsString('Republika ng Pilipinas', $sheet);
+        $this->assertStringContainsString('LISTS OF IDENTIFIED SEVERELY WASTED AND WASTED STUDENTS WHO ARE', $sheet);
+        $this->assertStringContainsString('Maria Clara Santos', $sheet);
+>>>>>>> Stashed changes
     }
 
     /** Ids off the wire decide nothing: another school's learner never lands in the file. */

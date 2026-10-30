@@ -285,11 +285,24 @@ class FeedingExcusedAbsenceTest extends TestCase
         // The surfaces that print the mark itself also print the reason beside
         // it: an excused absence read without its reason is indistinguishable
         // from one nobody explained.
+<<<<<<< Updated upstream
+=======
+        //
+        // The sheet is read off its own rows: today's session is open all day,
+        // so the Record Attendance dialog is drawn beside it and lists the whole
+        // enrolled roll by design.
+        $sheet = $this->withSession($session)->get('/dashboard/feedingcor-attendance?status=excused&date='.$date)
+            ->assertOk()
+            ->assertSee('Fasting for Ramadan');
+        $this->assertSame([$excused->student_name], collect($sheet->viewData('rows'))->pluck('name')->all());
+
+>>>>>>> Stashed changes
         $this->withSession($session)->get('/dashboard/feedingcor-attendance?view=beneficiary&status=excused&date='.$date)
             ->assertOk()
             ->assertSee($excused->student_name)
             ->assertDontSee($present->student_name)
             ->assertSee('Fasting for Ramadan');
+<<<<<<< Updated upstream
 
         // The sheet is read off its rows: the session was recorded today and is
         // still open, so the page also carries the Record Attendance dialog,
@@ -298,6 +311,8 @@ class FeedingExcusedAbsenceTest extends TestCase
             ->assertOk()
             ->assertSee('Fasting for Ramadan');
         $this->assertSame([$excused->student_name], collect($sheet->viewData('rows'))->pluck('name')->all());
+=======
+>>>>>>> Stashed changes
 
         // The Dashboard's roll narrows the same way. It is read off the panel
         // rather than off the page, because the page also carries the Record

@@ -417,23 +417,33 @@ class FeedingAtRiskTabTest extends TestCase
         $this->assertSame(0, FeedingFollowUp::query()->count());
     }
 
+    /**
+     * Verifying a record can find it wrong — for today's absence. A day's
+     * attendance closes when the day does, so an earlier absence is verified as
+     * it stands: it carries no correction form, and the endpoint refuses one.
+     */
     #[Test]
-    public function the_absences_under_verification_can_be_corrected_and_the_standing_follows(): void
+    public function only_todays_absence_under_verification_can_be_corrected(): void
     {
-        $record = $this->absentInARow('Wrongly Marked', 7);
+        // Six absences on days that have closed, and a seventh today — the one
+        // that reaches the threshold, and the only one still open.
+        $record = $this->absentInARow('Wrongly Marked', 6);
+        $this->markOn($record, 0, false);
 
         $response = $this->open()->assertOk();
-        // Each absence being verified carries the one audited correction path.
-        $response->assertSee(route('feedingcor-program.beneficiary.attendance.correct', $record->id), false);
+        $this->assertSame(1, $response->viewData('cards')['awaiting']);
         $response->assertSee('Absences to verify');
+        // Exactly one correction form — today's — and the rest say why not.
+        $response->assertSee(route('feedingcor-program.beneficiary.attendance.correct', $record->id), false);
+        $this->assertSame(1, substr_count($response->getContent(), 'class="ar-correct"'));
+        $response->assertSee('a mark can only be changed on its own day');
 
-        // The coordinator finds the fourth absence was wrong: the learner was
-        // there. The run is broken, so day 7 was never reached.
-        $wrongDay = FeedingAttendance::query()
+        // An earlier absence is refused at the endpoint, whatever a page drew.
+        $earlier = FeedingAttendance::query()
             ->where('student_health_record_id', $record->id)
             ->where('is_present', false)
-            ->orderBy('session_date')
-            ->skip(3)
+            ->whereDate('session_date', '<', now()->toDateString())
+            ->orderByDesc('session_date')
             ->first()
             ->session_date
             ->toDateString();
@@ -441,14 +451,26 @@ class FeedingAtRiskTabTest extends TestCase
         $this->withSession($this->coordinatorSession())
             ->from('/dashboard/feedingcor-at-risk')
             ->post(route('feedingcor-program.beneficiary.attendance.correct', $record->id), [
-                'session_date' => $wrongDay,
+                'session_date' => $earlier,
                 'mark' => 'present',
             ])
-            ->assertRedirect('/dashboard/feedingcor-at-risk');
+            ->assertRedirect('/dashboard/feedingcor-at-risk')
+            ->assertSessionHas('error');
 
-        $response = $this->open()->assertOk();
-        $this->assertSame(0, $response->viewData('cards')['awaiting']);
-        $this->assertSame(1, $response->viewData('cards')['notices']);
+        $this->assertSame(1, $this->open()->viewData('cards')['awaiting']);
+
+        // Today's absence was wrong: the learner was there. The run stops at
+        // six, so day 7 was never reached.
+        $this->withSession($this->coordinatorSession())
+            ->from('/dashboard/feedingcor-at-risk')
+            ->post(route('feedingcor-program.beneficiary.attendance.correct', $record->id), [
+                'session_date' => now()->toDateString(),
+                'mark' => 'present',
+            ])
+            ->assertRedirect('/dashboard/feedingcor-at-risk')
+            ->assertSessionHas('success');
+
+        $this->assertSame(0, $this->open()->viewData('cards')['awaiting']);
     }
 
     #[Test]

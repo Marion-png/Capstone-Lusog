@@ -225,16 +225,17 @@ class FeedingAttendanceTabTest extends TestCase
     }
 
     /**
-     * The sheet is a record, not a form.
+     * The sheet is a record, not a form — and today's recorded session can
+     * still be changed, through the dialog.
      *
-     * It reports what was recorded and offers no control over it — no radio, no
-     * remark box, no bulk mark, no save bar — and a recorded session closes as
-     * a whole, not learner by learner: one confirmed mark for the day is enough.
-     * A disabled input would still be a control the browser could re-enable and
-     * post; rendering none at all cannot be.
+     * The sheet reports what was recorded and offers no control over it: no
+     * radio, no remark box, no bulk mark, no save bar. Until the day ends the
+     * dialog opens on the marks on file, each one selected with its reason, so
+     * saving changes them; there is no Clear, because an unmarked row writes
+     * nothing and would leave the earlier mark standing behind it.
      */
     #[Test]
-    public function a_recorded_session_is_read_only_on_the_sheet(): void
+    public function todays_recorded_session_is_a_record_on_the_sheet_and_editable_in_the_dialog(): void
     {
         $recorded = $this->makeStudent(['student_name' => 'Already Recorded']);
         $skipped = $this->makeStudent(['student_name' => 'Nobody Marked Me']);
@@ -244,18 +245,54 @@ class FeedingAttendanceTabTest extends TestCase
 
         $response = $this->open('?date='.$yesterday)->assertOk();
 
-        $response->assertSee('Sick');
         $response->assertSee('has been recorded');
+        $response->assertSee('until the end of the day');
         $response->assertSee('Not recorded');
+        $this->assertTrue($response->viewData('recordEditing'));
 
-        // No control anywhere, for either learner.
+        // The sheet itself carries no control, for either learner.
+        $html = $response->getContent();
+        $sheet = substr($html, 0, strpos($html, 'id="recordBackdrop"'));
         foreach ([$recorded, $skipped] as $learner) {
-            $response->assertDontSee('marks['.$learner->id.']', false);
-            $response->assertDontSee('remarks['.$learner->id.']', false);
+            $this->assertStringNotContainsString('marks['.$learner->id.']', $sheet);
+            $this->assertStringNotContainsString('remarks['.$learner->id.']', $sheet);
         }
-        $response->assertDontSee('Save Attendance');
-        $response->assertDontSee('data-record-all="present"', false);
-        $response->assertDontSee('id="recordBackdrop"', false);
+
+        // The dialog opens on what is on file, ready to change.
+        $response->assertSee('Edit Attendance');
+        $response->assertSee('Save Changes');
+        $this->assertMatchesRegularExpression('/name="marks\['.$recorded->id.'\]" value="absent"\s+checked/', $html);
+        $this->assertMatchesRegularExpression('/name="remarks\['.$recorded->id.'\]"\s+value="Sick"/', $html);
+        $response->assertSee('marks['.$skipped->id.']', false);
+        $response->assertDontSee('data-record-all=""', false);
+    }
+
+    /**
+     * A day that has ended is closed — recorded or not. Neither the sheet nor
+     * a dialog offers a way to write it, and the notice that a session was
+     * never recorded no longer offers to record it.
+     */
+    #[Test]
+    public function a_past_session_is_closed_whether_or_not_it_was_recorded(): void
+    {
+        $learner = $this->makeStudent(['student_name' => 'Past Learner']);
+        $twoDaysAgo = now()->subDays(2)->toDateString();
+        $yesterday = now()->subDay()->toDateString();
+        // The programme began two days ago; yesterday nobody recorded anything.
+        $this->mark($learner, $twoDaysAgo, true);
+
+        foreach ([$twoDaysAgo, $yesterday] as $date) {
+            $response = $this->open('?date='.$date)->assertOk();
+
+            $this->assertSame($date, $response->viewData('selectedDate'));
+            $this->assertFalse($response->viewData('canRecord'));
+            $response->assertSee('is closed');
+            $response->assertDontSee('id="recordBackdrop"', false);
+            $response->assertDontSee('marks['.$learner->id.']', false);
+            $response->assertDontSee('Save Attendance');
+            // No notice button offering to record it either.
+            $response->assertDontSee('data-open-sheet>', false);
+        }
     }
 
     /**
@@ -300,8 +337,8 @@ class FeedingAttendanceTabTest extends TestCase
      * The dialog lists the whole roll, whatever the sheet is filtered to.
      *
      * Recording is one act covering every beneficiary, and the session closes
-     * when it is saved — so recording through a filtered list would shut the
-     * day on the learners the filter was hiding, with no way back to them.
+     * when the day does — so recording through a filtered list would leave the
+     * learners the filter was hiding unmarked when it shut.
      */
     #[Test]
     public function the_record_dialog_ignores_the_sheets_filters(): void
@@ -374,11 +411,17 @@ class FeedingAttendanceTabTest extends TestCase
         $this->mark($present, now()->toDateString(), true);
         $this->mark($absent, now()->toDateString(), false);
 
-        $response = $this->open('?status=absent')->assertOk();
+        $rows = collect($this->open('?status=absent')->assertOk()->viewData('rows'));
 
+<<<<<<< Updated upstream
         // The sheet's rows. Today's session is still open, so the record
         // dialog on the page lists the whole roll whatever the filter.
         $this->assertSame(['Absent Learner'], collect($response->viewData('rows'))->pluck('name')->all());
+=======
+        // Asserted on the sheet's own rows: today's session is open all day, so
+        // the record dialog is drawn beside it and lists every beneficiary.
+        $this->assertSame(['Absent Learner'], $rows->pluck('name')->all());
+>>>>>>> Stashed changes
     }
 
     /**
