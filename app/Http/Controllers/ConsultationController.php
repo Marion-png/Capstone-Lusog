@@ -15,6 +15,7 @@ use App\Support\DispensingRights;
 use App\Support\EncryptedFileStorage;
 use App\Support\LearnerSearchIndex;
 use App\Support\MedicineBatches;
+use App\Support\ParentNotifier;
 use App\Support\SchemaCache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -206,6 +207,10 @@ class ConsultationController extends Controller
             ],
             'photo_caption' => ['nullable', 'string', 'max:500'],
             'photo_shared_with_adviser' => ['nullable', 'boolean'],
+            // The learner chosen off the roll, when one was: how their parent
+            // is found for a text message. A name typed and never chosen
+            // carries none, and nobody is texted.
+            'student_lrn' => ['nullable', 'string', 'max:20'],
         ]);
 
         $photos = array_values(array_filter((array) $request->file('photos', [])));
@@ -260,8 +265,9 @@ class ConsultationController extends Controller
         // without its consultation would be a draw nobody can account for.
         // Either both land or neither does.
         $photoCount = 0;
+        $consultationId = null;
 
-        DB::transaction(function () use ($validated, $conditionName, $conditionId, $institutionId, $medicineId, $quantity, $photos, $request, $activeRole, &$dispensed, &$photoCount) {
+        DB::transaction(function () use ($validated, $conditionName, $conditionId, $institutionId, $medicineId, $quantity, $photos, $request, $activeRole, &$dispensed, &$photoCount, &$consultationId) {
             // The note travels only where its column has been migrated, so an
             // older database still records the visit. Whether the clinic
             // shared it with the class adviser rides with it — a note nobody
@@ -288,6 +294,7 @@ class ConsultationController extends Controller
                 'treatment_given' => $validated['treatment_given'] ?? null,
                 'status' => $validated['status'],
             ]);
+            $consultationId = $consultation->id;
 
             // Photographs attached at the point of recording. Written through
             // the model and EncryptedFileStorage exactly as the Photos dialog
@@ -409,9 +416,49 @@ class ConsultationController extends Controller
             $message .= ' '.$photoCount.' '.Str::plural('photo', $photoCount).' attached.';
         }
 
+        // Only once the visit is committed: a text about a consultation that
+        // rolled back would tell a parent about a visit the clinic has no
+        // record of. The send itself happens after this response.
+        if ($sms = $this->textParent($validated, $institutionId, $consultationId)) {
+            $message .= ' '.$sms;
+        }
+
         return redirect()
             ->to($this->returnTo($request))
             ->with('success', $message);
+    }
+
+    /**
+     * Text the parent of the learner this visit was filed under, if they
+     * opted in. Returns what the nurse is told, or null when there is nothing
+     * to say (the feature is off, or no learner was chosen off the roll).
+     *
+     * The learner is looked up by the LRN the dialog posted and only within
+     * the nurse's own school, so an LRN off the wire cannot reach another
+     * school's parent.
+     */
+    private function textParent(array $validated, mixed $institutionId, ?int $consultationId): ?string
+    {
+        $lrn = trim((string) ($validated['student_lrn'] ?? ''));
+        $notifier = app(ParentNotifier::class);
+
+        if ($lrn === '' || ! $institutionId || $consultationId === null || ! $notifier->isReady()) {
+            return null;
+        }
+
+        $record = StudentHealthRecord::query()
+            ->where('institution_id', $institutionId)
+            ->where('student_id', $lrn)
+            ->latest('id')
+            ->first();
+
+        if ($record === null) {
+            return null;
+        }
+
+        return ParentNotifier::describe(
+            $notifier->clinicVisit($record, $consultationId, Carbon::parse($validated['consulted_at'], config('app.school_timezone')))
+        );
     }
 
     /**

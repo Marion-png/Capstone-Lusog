@@ -91,7 +91,7 @@
 
 <div class="main">
     <header class="topbar">
-        <div class="topbar-bc"><span>{{ session('active_role') === 'clinic_staff' ? 'Clinic Staff' : 'School Nurse' }}</span><span class="bc-sep">&rsaquo;</span><span>Health Records</span></div>
+        <div class="topbar-bc"><span>{{ \App\Support\AccountSettings::roleLabel(session('active_role')) }}</span><span class="bc-sep">&rsaquo;</span><span>Health Records</span></div>
 
         @include('partials.nurse-learner-search')
         <div class="topbar-spacer"></div>

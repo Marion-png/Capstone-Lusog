@@ -33,6 +33,7 @@ use App\Http\Controllers\SchoolHeadProgramController;
 use App\Http\Controllers\SchoolHeadReportsController;
 use App\Http\Controllers\SchoolYearTransitionController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\SmsNotificationController;
 use App\Http\Controllers\StudentAllergyController;
 use App\Http\Controllers\StudentHealthRecordController;
 use App\Http\Controllers\StudentIncidentReportController;
@@ -1507,6 +1508,17 @@ Route::get('/dashboard/system-admin/audit-logs', function (Request $request) {
         'filterUsername' => $filterUsername,
     ]);
 })->name('dashboard.system-admin.audit-logs');
+
+// Parent text messages (Semaphore SMS): the gateway's standing, the log of
+// every message, a sample send, delivery reports and retry. System Admin only.
+Route::get('/dashboard/system-admin/sms', [SmsNotificationController::class, 'index'])
+    ->name('dashboard.system-admin.sms');
+Route::post('/dashboard/system-admin/sms/test', [SmsNotificationController::class, 'test'])
+    ->name('dashboard.system-admin.sms.test');
+Route::post('/dashboard/system-admin/sms/refresh', [SmsNotificationController::class, 'refresh'])
+    ->name('dashboard.system-admin.sms.refresh');
+Route::post('/dashboard/system-admin/sms/{notification}/retry', [SmsNotificationController::class, 'retry'])
+    ->whereNumber('notification')->name('dashboard.system-admin.sms.retry');
 
 Route::post('/dashboard/system-admin/accounts', function (Request $request) {
     if ($request->session()->get('active_role') !== 'system_admin') {

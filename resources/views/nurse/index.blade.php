@@ -39,7 +39,7 @@
     @endphp
 
     <header class="topbar">
-        <div class="topbar-bc"><span>School Nurse</span><span class="bc-sep">&rsaquo;</span><span>Health Assessment</span></div>
+        <div class="topbar-bc"><span>{{ \App\Support\AccountSettings::roleLabel(session('active_role')) }}</span><span class="bc-sep">&rsaquo;</span><span>Health Assessment</span></div>
 
         @include('partials.nurse-learner-search')
         <div class="topbar-spacer"></div>

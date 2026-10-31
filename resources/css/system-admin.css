@@ -262,3 +262,14 @@
 @media (max-width: 420px) {
 	.sa-policy-grid { grid-template-columns: 1fr; }
 }
+
+/* ---- Parent SMS (dashboard/system-admin-sms) ---- */
+.sa-sms-actions { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 16px 20px; margin: 20px 0 16px; }
+.sa-sms-test { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.sa-sms-test .input { min-width: 220px; }
+.sa-sms-table .sa-sms-message { min-width: 260px; max-width: 420px; font-size: .8rem; line-height: 1.45; }
+.sa-sms-error { display: block; margin-top: 4px; font-size: .74rem; color: var(--lg-danger-ink); }
+.sa-sms-retry { padding: 5px 12px; font-size: .76rem; }
+@media (max-width: 640px) {
+	.sa-sms-test, .sa-sms-test > div, .sa-sms-test .input { width: 100%; min-width: 0; }
+}

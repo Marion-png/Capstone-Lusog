@@ -378,6 +378,68 @@ class SchoolYearTransitionTest extends TestCase
         $this->assertSame([self::OLD_YEAR, self::NEW_YEAR], array_column($years, 'school_year'));
     }
 
+    /**
+     * Every answer on MLAT Sheet 1 travels with a promoted learner: each box in
+     * B. Medical History and C. Family History, every line written beside them,
+     * and D. General Appearance. The test above carries one allergy through the
+     * master list; this carries the whole sheet through Add to my section by
+     * LRN, and reads it back where the new adviser and the clinic read it — the
+     * profile and the printed MLAT of the new section.
+     */
+    #[Test]
+    public function every_sheet_one_answer_is_carried_into_the_new_section_and_onto_its_mlat(): void
+    {
+        $history = [
+            'med_asthma' => true, 'med_diabetes' => true, 'med_seizure' => true, 'med_infections' => true,
+            'med_heart' => true, 'med_tuberculosis' => true, 'med_hospitalization' => true, 'med_allergies' => true,
+            'fam_hypertension' => true, 'fam_diabetes' => true, 'fam_heart' => true, 'fam_cancer' => true, 'fam_mental' => true,
+            'allergies_detail' => 'Shrimp', 'hospitalization_detail' => 'Tonsillectomy 2021',
+            'current_medications' => 'Cetirizine', 'other_conditions' => 'Eczema', 'genetic_disorders' => 'G6PD deficiency',
+            'consciousness' => 'Other', 'consciousness_other' => 'Lethargic', 'posture' => 'Poor',
+            'posture_detail' => 'Limps on the left', 'hygiene' => 'Needs Attention',
+        ];
+
+        $old = $this->learner('100000000001', 'Grade 7 / MATIYAGA');
+        $old->student_details = ['health_history' => $history] + $old->student_details;
+        $old->save();
+        $this->closeYear($this->grade7(), ['100000000001' => LearnerPlacement::PROMOTED]);
+
+        $this->duringNewYear();
+        $this->as($this->grade8())->post(route('adviser.add-to-section'), ['add_lrn' => '100000000001'])
+            ->assertRedirect(route('dashboard.class-adviser', ['tab' => 'saved']));
+
+        $carried = $this->rowFor('100000000001', self::NEW_YEAR);
+        $this->assertNotNull($carried);
+        $this->assertSame(LearnerPlacement::CARRIED_OVER, $carried->joined_as);
+        $this->assertSame($history, array_intersect_key($carried->student_details['health_history'], $history));
+
+        // The year's own readings are this year's to take, so they start empty.
+        $this->assertNull($carried->baseline_weight_kg);
+
+        // The new adviser's profile is drawn from the carried record.
+        $this->as($this->grade8())->get(route('dashboard.class-adviser.student-profile', '100000000001'))
+            ->assertOk()
+            ->assertSee('"allergies_detail":"Shrimp"', false)
+            ->assertSee('"genetic_disorders":"G6PD deficiency"', false);
+
+        // And the new section's MLAT prints the whole of Sheet 1.
+        $sheet = $this->as($this->grade8())
+            ->get(route('student-mlat.print', ['lrn' => '100000000001', 'sheet' => 1, 'view' => 1]))
+            ->assertOk();
+
+        foreach ([
+            'Grade 8 - MASIPAG',
+            '☑ Asthma', '☑ Diabetes', '☑ Seizure Disorder', '☑ Frequent Infections', '☑ Heart Condition', '☑ Tuberculosis',
+            '☑ Allergies: Shrimp', '☑ Hospitalization/Surgery: Tonsillectomy 2021',
+            'Current Medications: Cetirizine', 'Other Conditions: Eczema',
+            '☑ Hypertension', '☑ Heart Disease', '☑ Cancer', '☑ Mental Health Conditions',
+            'Genetic/Hereditary Disorders: G6PD deficiency',
+            'Other — Lethargic', 'Poor — Limps on the left', 'Needs Attention',
+        ] as $line) {
+            $sheet->assertSee($line, false);
+        }
+    }
+
     /** Spec test 5. */
     #[Test]
     public function an_lrn_sigla_has_never_seen_creates_a_new_enrollee(): void

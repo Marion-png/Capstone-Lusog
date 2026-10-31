@@ -427,6 +427,30 @@ class ClinicTeacherRoleTest extends TestCase
         }
     }
 
+    /**
+     * The screens this role shares with the nurse name the clinic teacher in
+     * the breadcrumb. Four of them said "School Nurse" to anybody who was not
+     * clinic staff, so a teacher covering the clinic read the nurse's title
+     * above their own Health Records.
+     */
+    #[Test]
+    public function the_shared_clinic_screens_name_the_clinic_teacher_in_the_breadcrumb(): void
+    {
+        $session = $this->sessionFor('clinic_teacher');
+
+        foreach ([
+            'Health Records' => route('dashboard.student-health-records'),
+            'Health Assessment' => route('nurse.index'),
+            'Consultation Log' => route('dashboard.consultation-log'),
+            'Nutritional Health Status' => route('dashboard.clinic-teacher.feeding-program'),
+        ] as $page => $url) {
+            $this->withSession($session)->get($url)->assertOk()->assertSee(
+                '<div class="topbar-bc"><span>Clinic Teacher</span><span class="bc-sep">&rsaquo;</span><span>'.$page.'</span>',
+                false
+            );
+        }
+    }
+
     /** CT-18-01: the feeding programme is a read for the clinic. */
     #[Test]
     public function the_feeding_programme_page_is_read_only_for_a_clinic_teacher(): void
