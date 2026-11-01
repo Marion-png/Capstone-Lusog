@@ -44,20 +44,6 @@
 			<div class="flash err">{{ $errors->first() }}</div>
 		@endif
 
-<<<<<<< Updated upstream
-		{{-- A recorded session closes as a whole at the end of its own day: this
-		     screen then becomes a record, the same way the Attendance tab's sheet
-		     does, and the endpoint refuses the write regardless of what is on
-		     screen. On the day itself it stays editable for late arrivals. --}}
-		@if ($sessionLocked || ! $isFeedingDay)
-			<div class="alert-bar is-info">
-				<div class="alert-body">
-					<div>
-						@if ($sessionLocked)
-							<strong>Attendance for {{ $sessionLabel }} has already been recorded</strong>
-							<span>This session is read-only. A session can only be edited on its own day.</span>
-						@else
-=======
 		{{-- A session is open on its own day and closed after it, recorded or
 		     not: a closed day makes this screen a record, the same way the
 		     Attendance tab's sheet does, and the endpoint refuses the write
@@ -68,7 +54,6 @@
 				<div class="alert-body">
 					<div>
 						@if (! $isFeedingDay)
->>>>>>> Stashed changes
 							<strong>{{ $sessionLabel }} is a {{ \Carbon\Carbon::parse($sessionDate)->format('l') }}</strong>
 							<span>There are no feeding sessions on Saturdays or Sundays.</span>
 						@elseif ($sessionClosed)
@@ -106,15 +91,9 @@
 				<div class="ra-bulk" @if ($readOnly) hidden @endif>
 					<button type="button" class="btn btn-secondary" data-mark-all="present">All present</button>
 					<button type="button" class="btn btn-secondary" data-mark-all="absent">All absent</button>
-<<<<<<< Updated upstream
-					{{-- Not while editing: a blank row writes nothing, so a cleared
-					     mark would stay on file. --}}
-					@unless ($sessionMarked)
-=======
 					{{-- Not on an edit: an unmarked row writes nothing, so clearing
 					     a recorded mark would look undone and stay on file. --}}
 					@unless ($sessionRecorded)
->>>>>>> Stashed changes
 						<button type="button" class="btn btn-ghost" data-mark-all="">Clear</button>
 					@endunless
 				</div>

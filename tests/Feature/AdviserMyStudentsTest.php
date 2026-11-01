@@ -436,7 +436,15 @@ class AdviserMyStudentsTest extends TestCase
         $this->assertStringContainsString('id="incidentReadOnly"', $incidentPanel);
         $this->assertStringNotContainsString('id="incidentForm"', $incidentPanel);
         $this->assertStringNotContainsString('File an Incident Report', $incidentPanel);
-        $this->assertSame(0, substr_count($card, '<form'), 'The student profile writes nothing at all.');
+
+        // The one form on the page is the parent's signed consent, filed from
+        // the Consent tab through the Consent Forms page's own upload dialog.
+        // Like an incident report it files a NEW record — the guardian's form
+        // — and edits nothing on the learner's health card, which is what
+        // this guard protects; its fields sit outside the read-only part
+        // checked above.
+        $this->assertSame(1, substr_count($card, '<form'), 'The consent upload is the only form on the student profile.');
+        $this->assertStringContainsString('<form method="POST" action="'.route('parental-consent.store').'"', $card);
         $this->assertStringNotContainsString(route('adviser.store'), $card);
 
         $this->assertStringNotContainsString(route('health-assessment.store'), $card);

@@ -264,16 +264,13 @@ class SchoolHeadMasterlistController extends Controller
         $path = $reserved.'.xlsx';
         @unlink($reserved);
 
-<<<<<<< Updated upstream
         $writer = MasterlistSheet::writer(count($columns));
         $writer->openToFile($path);
 
-=======
->>>>>>> Stashed changes
         $institutionId = $request->session()->get('active_institution_id');
 
         MasterlistSheet::write(
-            $path,
+            $writer,
             letterhead: SchoolLetterhead::for($institutionId, (string) $data['schoolName']),
             title: 'Nutritional Health Status',
             schoolYear: $data['schoolYear'],
@@ -283,6 +280,8 @@ class SchoolHeadMasterlistController extends Controller
             preparedRole: AccountSettings::roleLabel($request->session()->get('active_role')),
             scope: $this->scopeLine($filters),
         );
+
+        $writer->close();
 
         // The coordinator's pattern — list, year, date — with the grade and
         // section in it when the list was narrowed to them.

@@ -9,10 +9,7 @@ use App\Support\SchemaCache;
 use App\Support\SchoolLetterhead;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-<<<<<<< Updated upstream
 use Illuminate\View\View;
-=======
->>>>>>> Stashed changes
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
@@ -126,7 +123,6 @@ class FeedingMasterlistExportController extends Controller
         $path = $reserved.'.xlsx';
         @unlink($reserved);
 
-<<<<<<< Updated upstream
         $writer = MasterlistSheet::writer(3);
         $writer->openToFile($path);
 
@@ -135,15 +131,8 @@ class FeedingMasterlistExportController extends Controller
         // and a printed form are the same document. MasterlistSheet holds the
         // layout; the Nutritional Health Status list's Print list writes
         // through it too.
-=======
-        // The form itself — the school's office letterhead, the title, the
-        // four-column ruled table and the signature block — is the school's
-        // own template, so a printed export can be handed in as it is.
-        // MasterlistSheet holds the layout; the Nutritional Health Status
-        // list's Print list writes through it too.
->>>>>>> Stashed changes
         MasterlistSheet::write(
-            $path,
+            $writer,
             letterhead: SchoolLetterhead::for($institutionId, (string) $request->session()->get('active_school_name', 'School')),
             title: $title,
             schoolYear: $schoolYear,
@@ -153,6 +142,8 @@ class FeedingMasterlistExportController extends Controller
             preparedRole: 'Feeding Coordinator',
             widths: [42, 9, 24],
         );
+
+        $writer->close();
 
         $filename = 'SBFP-'.$slug.'-'.str_replace('/', '-', $schoolYear).'-'.now()->format('Ymd').'.xlsx';
 

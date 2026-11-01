@@ -401,20 +401,11 @@ class FeedingCoordinatorController extends Controller
             ];
         })->values();
 
-<<<<<<< Updated upstream
-        // A mark a human has already confirmed records the day, and the day
-        // stays open to editing until it ends, for late arrivals — the same
-        // rule the Attendance tab and the endpoint apply. An unconfirmed
-        // scanned mark records nothing.
-        $marked = $rows->contains(
-=======
         // A mark a human has already confirmed makes today's save an edit. An
         // unconfirmed scanned one deliberately does not.
         $recorded = $rows->contains(
->>>>>>> Stashed changes
             fn (array $row): bool => in_array($row['status'], FeedingAttendanceMark::RECORDABLE, true)
         );
-        $locked = $marked && ! FeedingProgramCycle::sessionStaysOpen($today);
 
         $start = $cycle->startDateIso();
         $end = $cycle->endDateIso() ?? $today;
@@ -429,13 +420,9 @@ class FeedingCoordinatorController extends Controller
             'recordRows' => $rows->all(),
             'recordBeneficiaryCount' => $beneficiaries->count(),
             'canRecordToday' => $canRecord,
-<<<<<<< Updated upstream
-            'recordMarked' => $marked,
-=======
             // Already recorded today: the button and the dialog say "Edit", and
             // the marks on file come back selected.
             'recordEditing' => $canRecord && $recorded,
->>>>>>> Stashed changes
             // Why the day is closed, in the words the coordinator needs. The
             // button is drawn either way and the dialog opens either way: on a
             // closed day it opens on the session as a record rather than as a

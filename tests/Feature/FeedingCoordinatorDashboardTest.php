@@ -281,18 +281,6 @@ class FeedingCoordinatorDashboardTest extends TestCase
     }
 
     /**
-<<<<<<< Updated upstream
-     * A day already recorded stays open until it ends, for late arrivals.
-     *
-     * The Dashboard always works on today, so once today is recorded the same
-     * control reads "Edit Today's Attendance" and opens the dialog on the
-     * marks on file, already selected, with the read-back ready to confirm
-     * the change. (A day that is truly closed — a weekend, outside the cycle —
-     * is covered below.)
-     */
-    #[Test]
-    public function a_day_recorded_today_opens_the_dialog_to_edit_it(): void
-=======
      * Today's session stays open until the day ends — recorded or not.
      *
      * Once it has been recorded the same button opens the same dialog on the
@@ -303,7 +291,6 @@ class FeedingCoordinatorDashboardTest extends TestCase
      */
     #[Test]
     public function a_recorded_day_reopens_the_dialog_to_change_a_mark(): void
->>>>>>> Stashed changes
     {
         $learner = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', 15.1);
         $this->markAttendance($learner, now()->toDateString(), true);
@@ -313,17 +300,6 @@ class FeedingCoordinatorDashboardTest extends TestCase
             ->assertOk();
 
         $this->assertTrue($response->viewData('canRecordToday'));
-<<<<<<< Updated upstream
-        $this->assertTrue($response->viewData('recordMarked'));
-
-        $response->assertSee('Edit Today&rsquo;s Attendance', false);
-        $response->assertSee('data-record-open', false);
-        $response->assertSee('id="recordForm"', false);
-        $response->assertSee('id="recordTitle">Edit Attendance</h2>', false);
-        $response->assertSee('name="marks['.$learner->id.']" value="present" checked', false);
-        $response->assertSee('id="confirmBackdrop"', false);
-        $response->assertDontSee('has already been recorded');
-=======
         $this->assertTrue($response->viewData('recordEditing'));
 
         $response->assertSee('Edit Today&rsquo;s Attendance', false);
@@ -342,7 +318,6 @@ class FeedingCoordinatorDashboardTest extends TestCase
         $this->assertStringContainsString('Save Changes', $dialog);
         $this->assertMatchesRegularExpression('/name="marks\['.$learner->id.'\]" value="present"\s+checked/', $dialog);
         $this->assertStringNotContainsString('data-record-all=""', $dialog);
->>>>>>> Stashed changes
     }
 
     /** A weekend is not a session, so the dialog reports that rather than offering to write one. */

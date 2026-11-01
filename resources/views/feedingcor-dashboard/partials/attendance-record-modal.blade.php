@@ -7,25 +7,13 @@
      (FeedingAttendanceWindow, on the school's clock). Recorded or not, today's
      session opens as a form; once it has been recorded (`$recordEditing`) the
      marks on file come back selected, with their reasons, and saving changes
-     them. There is no Clear on an edit: a mark can be changed to another
-     answer, never back to "not marked", so a save cannot quietly leave an
-     earlier mark standing behind an empty row.
-
-     **A recorded day stays editable until it ends** (`FeedingProgramCycle::
-     sessionStaysOpen()`), so a learner who arrives late can still be marked:
-     the dialog then opens as "Edit Attendance" on the marks on file, and the
-     endpoint writes only the marks that changed.
+     them — so a learner who arrives late can still be marked, and the
+     endpoint writes only the marks that changed. There is no Clear on an
+     edit: a mark can be changed to another answer, never back to "not
+     marked", so a save cannot quietly leave an earlier mark standing behind
+     an empty row.
 
      **A closed day opens the dialog as a record, not as a form.** `$recordCanSave`
-<<<<<<< Updated upstream
-     is false from the day after a session was recorded, on a weekend,
-     outside the running cycle, or with nobody enrolled: the form element, the
-     radios, the remark fields, the bulk marks and the Save button are then not
-     rendered at all — a disabled control is still one a browser can re-enable
-     and post — and the session is reported with the marks it came to and the
-     reason it is closed. `storeRecordedAttendance` re-checks every one of those
-     conditions, because a dialog that is not drawn is not a guarantee.
-=======
      is false once the day has ended, on a weekend, outside the running cycle,
      or with nobody enrolled: the form element, the radios, the remark fields,
      the bulk marks and the Save button are then not rendered at all — a
@@ -33,7 +21,6 @@
      session is reported with the marks it came to and the reason it is closed.
      `storeRecordedAttendance` re-checks every one of those conditions, because
      a dialog that is not drawn is not a guarantee.
->>>>>>> Stashed changes
 
      A control that opens a dialog either way is deliberate: a button that
      vanishes once the day is closed leaves a coordinator with nothing to press
@@ -69,11 +56,6 @@
 		$raKey = array_key_exists($raRow['status'], $raTally) ? $raRow['status'] : 'unmarked';
 		$raTally[$raKey]++;
 	}
-
-	// A session already recorded is still open on its own day, for learners
-	// who arrive late: the dialog then opens on the marks on file, and saving
-	// writes only the ones changed.
-	$raEditing = $raCanSave && ($raTally['present'] + $raTally['absent'] + $raTally['excused']) > 0;
 @endphp
 <div class="modal-backdrop" id="recordBackdrop" data-session-date="{{ $selectedDate }}">
 	<div class="modal-panel ra-modal{{ $raCanSave ? '' : ' is-readonly' }}" role="dialog" aria-modal="true" aria-labelledby="recordTitle">
@@ -95,11 +77,7 @@
 			<header class="modal-head">
 				<div>
 					<p class="modal-eyebrow">Feeding Day {{ $programDay }} of {{ $programDuration }}</p>
-<<<<<<< Updated upstream
-					<h2 class="modal-title" id="recordTitle">{{ $raCanSave ? ($raEditing ? 'Edit Attendance' : 'Record Attendance') : 'Attendance' }}</h2>
-=======
 					<h2 class="modal-title" id="recordTitle">{{ ! $raCanSave ? 'Attendance' : ($raEditing ? 'Edit Attendance' : 'Record Attendance') }}</h2>
->>>>>>> Stashed changes
 					<p class="modal-sub">{{ $selectedDateLabel }} &middot; {{ $beneficiaryCount }} enrolled {{ \Illuminate\Support\Str::plural('beneficiary', $beneficiaryCount) }}</p>
 				</div>
 				<button type="button" class="modal-close" data-record-close aria-label="Close">&times;</button>
@@ -137,14 +115,9 @@
 						<div class="ra-modal-bulk">
 							<button type="button" class="btn btn-secondary" data-record-all="present">Mark All Present</button>
 							<button type="button" class="btn btn-secondary" data-record-all="absent">Mark All Absent</button>
-<<<<<<< Updated upstream
-							{{-- Not while editing: a blank row writes nothing, so a
-							     cleared mark would read as unmarked here and stay on file. --}}
-=======
 							{{-- Not on an edit: an unmarked row writes nothing, so
 							     clearing a recorded mark would look undone on screen
 							     and stay on file. --}}
->>>>>>> Stashed changes
 							@unless ($raEditing)
 								<button type="button" class="btn btn-ghost" data-record-all="">Clear</button>
 							@endunless
@@ -218,16 +191,10 @@
 											     for either kind and clears when the learner is
 											     marked present. --}}
 											<input type="text" class="input fa-remark" maxlength="255"
-<<<<<<< Updated upstream
-												name="remarks[{{ $row['id'] }}]" value="{{ in_array($row['status'], ['absent', 'excused'], true) ? ($row['remarks'] ?? '') : '' }}"
-												aria-label="Reason {{ $row['name'] }} was absent"
-												@disabled(! in_array($row['status'], ['absent', 'excused'], true))>
-=======
 												name="remarks[{{ $row['id'] }}]"
 												value="{{ in_array($row['status'], $raAway, true) ? ($row['remarks'] ?? '') : '' }}"
 												aria-label="Reason {{ $row['name'] }} was absent"
 												@disabled(! in_array($row['status'], $raAway, true))>
->>>>>>> Stashed changes
 										@else
 											<span class="ra-remark-read">{{ ($row['remarks'] ?? '') !== '' ? $row['remarks'] : '—' }}</span>
 										@endif

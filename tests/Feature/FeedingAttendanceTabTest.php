@@ -239,12 +239,13 @@ class FeedingAttendanceTabTest extends TestCase
     {
         $recorded = $this->makeStudent(['student_name' => 'Already Recorded']);
         $skipped = $this->makeStudent(['student_name' => 'Nobody Marked Me']);
-        // A session closes when its own day ends, so an earlier day is read.
-        $yesterday = now()->subDay()->toDateString();
-        $this->mark($recorded, $yesterday, false, remarks: 'Sick');
+        // Today's session: recorded, and still open until the day ends. A day
+        // that has ended is covered by the closed-session test below.
+        $this->mark($recorded, now()->toDateString(), false, remarks: 'Sick');
 
-        $response = $this->open('?date='.$yesterday)->assertOk();
+        $response = $this->open()->assertOk();
 
+        $response->assertSee('Sick');
         $response->assertSee('has been recorded');
         $response->assertSee('until the end of the day');
         $response->assertSee('Not recorded');
@@ -313,7 +314,9 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertSee('id="recordForm"', false);
         $response->assertSee('name="marks['.$absent->id.']" value="absent" checked', false);
         $response->assertSee('value="Not yet in"', false);
-        $response->assertDontSee('has been recorded');
+        // Recorded, and still open: the sheet says so, and never that it is closed.
+        $response->assertSee('until the end of the day');
+        $response->assertDontSee('is closed</strong>', false);
     }
 
     /** An open session offers exactly one way in: the dialog. */
@@ -413,15 +416,9 @@ class FeedingAttendanceTabTest extends TestCase
 
         $rows = collect($this->open('?status=absent')->assertOk()->viewData('rows'));
 
-<<<<<<< Updated upstream
-        // The sheet's rows. Today's session is still open, so the record
-        // dialog on the page lists the whole roll whatever the filter.
-        $this->assertSame(['Absent Learner'], collect($response->viewData('rows'))->pluck('name')->all());
-=======
         // Asserted on the sheet's own rows: today's session is open all day, so
         // the record dialog is drawn beside it and lists every beneficiary.
         $this->assertSame(['Absent Learner'], $rows->pluck('name')->all());
->>>>>>> Stashed changes
     }
 
     /**

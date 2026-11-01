@@ -461,20 +461,6 @@ class FeedingAttendanceController extends Controller
         $rows = $allRows->filter(fn (array $row): bool => $scopedIds->has($row['id']))->values();
         $filteredRows = $this->applyFilters($rows, $filters);
 
-<<<<<<< Updated upstream
-        // Whether this session has been recorded, and whether it is closed.
-        //
-        // Deliberately read off the UNFILTERED rows: a session's standing is a
-        // fact about the day, and narrowing to one section must never reopen it.
-        // Once a human has confirmed a mark for this date the session is
-        // recorded; it stays open to editing until the end of its own day, so
-        // a learner who arrives late can still be marked, and is a record from
-        // then on. An UNCONFIRMED scanned mark does not record a session:
-        // nobody has read it, and recording on site is exactly how it gets
-        // decided.
-        $sessionMarked = $allRows->contains('locked', true);
-        $sessionLocked = $sessionMarked && ! FeedingProgramCycle::sessionStaysOpen($selectedDate);
-=======
         // Where this session stands.
         //
         // Deliberately read off the UNFILTERED rows: a session's standing is a
@@ -487,7 +473,6 @@ class FeedingAttendanceController extends Controller
         // site is exactly how it gets decided.
         $sessionConfirmed = $allRows->contains('locked', true);
         $sessionClosed = ! FeedingAttendanceWindow::isOpen($selectedDate);
->>>>>>> Stashed changes
         $isFeedingDay = FeedingProgramCycle::isFeedingDay($selectedDate);
         $withinWindow = $selectedDate <= $window['end']
             && ($window['start'] === null || $selectedDate >= $window['start']);
@@ -570,19 +555,12 @@ class FeedingAttendanceController extends Controller
             'filterOptions' => $filterOptions,
             // The sheet is a record, never a form: it reports what was recorded
             // and offers no control at all. Recording happens in the modal, and
-<<<<<<< Updated upstream
-            // only for a session still open.
-            'sessionLocked' => $sessionLocked,
-            // Recorded, whether or not it is still open to editing today.
-            'sessionMarked' => $sessionMarked,
-=======
             // only on the session's own day.
             'sessionRecorded' => $allByDate->has($selectedDate),
             // A human has confirmed a mark for it, so recording it again today
             // is an edit.
             'sessionConfirmed' => $sessionConfirmed,
             'sessionClosed' => $sessionClosed,
->>>>>>> Stashed changes
             'isFeedingDay' => $isFeedingDay,
             'canRecord' => $canRecord,
             // Today's session, already recorded: the dialog opens on the marks
@@ -594,10 +572,6 @@ class FeedingAttendanceController extends Controller
                 ! $isFeedingDay => Carbon::parse($selectedDate)->format('l, F j, Y').' is a weekend. There are no feeding sessions on Saturdays or Sundays.',
                 $sessionClosed => FeedingAttendanceWindow::closedReason($selectedDate),
                 ! $withinWindow => 'That date is outside the running feeding programme.',
-<<<<<<< Updated upstream
-                $sessionLocked => 'Attendance for '.Carbon::parse($selectedDate)->format('F j, Y').' has already been recorded, and a session can only be edited on its own day.',
-=======
->>>>>>> Stashed changes
                 default => '',
             },
             // The modal's roll: every beneficiary, unfiltered, so a coordinator

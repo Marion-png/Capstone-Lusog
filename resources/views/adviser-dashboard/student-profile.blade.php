@@ -13,6 +13,8 @@
     @if (file_exists($classAdviserCssPath))
         <style>{!! file_get_contents($classAdviserCssPath) !!}</style>
     @endif
+    {{-- The upload dialog draws the sheet the consent reader saw. --}}
+    <style>{!! file_get_contents(resource_path('css/consent-copy.css')) !!}</style>
     {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
          last so it overrides this page's own :root colours. --}}
     <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
@@ -28,7 +30,14 @@
             $middleInitial = $middle !== '' ? (' ' . strtoupper(substr($middle, 0, 1)) . '.') : '';
             $fullName = trim(($prototypeRecord['last_name'] ?? '') . ', ' . ($prototypeRecord['first_name'] ?? '') . $middleInitial);
             $lrn = (string) ($prototypeRecord['lrn'] ?? '');
+            // An upload from the Consent tab comes back here by a redirect,
+            // and a redirect carries no #tab=, so the tab is reopened from
+            // what the upload left behind.
+            $consentReturned = session()->has('consent_success') || $errors->any();
         @endphp
+
+        @if (session('consent_success')) <div class="flash flash-ok">{{ session('consent_success') }}</div> @endif
+        @if ($errors->any()) <div class="flash flash-err">{{ $errors->first() }}</div> @endif
 
         <div class="student-profile-topline">
             <a href="{{ route('dashboard.class-adviser', ['tab' => 'saved']) }}" class="student-profile-back" aria-label="Back to My Students">&larr;</a>
@@ -73,9 +82,9 @@
                     @include('partials.mlat-menus', ['mlatId' => 'vpMlatMenus', 'mlatLrn' => $lrn])
                     {{-- The learner's Sulat-Pahibalo, now that the roster row
                          opens this page instead of carrying the action. A link,
-                         not a form: this page writes nothing. With no form on
-                         file yet it leads to the Consent Forms page, where one
-                         is started. --}}
+                         not a form: the letter is read here, not changed. With
+                         no form on file yet it leads to the Consent Forms page,
+                         where one is started. --}}
                     <a href="{{ ($meta['consent_detail']['form_url'] ?? null) ?: route('consent-forms.index') }}" class="btn btn-secondary" id="vpOpenConsent">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M14.5 18.5c1-1.5 2-1.5 3 0s2 1.5 3 0"/><path d="M12 16c1.5-3.5 3-5 4-3.5s-1 3.5-2 5"/></svg>
                         Parent's Consent
@@ -171,7 +180,13 @@
 
             <div class="sp-panel" id="vpTabConsent" role="tabpanel">
                 <section class="student-profile-section">
-                    <h4>Parent's Consent</h4>
+                    <div class="sp-panel-head has-action">
+                        <h4>Parent's Consent</h4>
+                        <button type="button" class="btn" id="vpUploadConsent" data-consent-upload>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            Upload Consent Form
+                        </button>
+                    </div>
                     {{-- A consent comes back one of two ways, and this panel used
                          to know about only one of them: it read the digital
                          Sulat-Pahibalo alone, so an adviser who had just uploaded
@@ -282,6 +297,13 @@
         </div>
     </div>
 </div>
+
+{{-- The Consent Forms page's own upload dialog, with this learner fixed.
+     The endpoint re-checks that they are in this adviser's class. --}}
+@include('consent-forms._upload-modal', [
+    'uploadLearner' => ['lrn' => $lrn, 'name' => $fullName],
+    'schoolYear' => $consentSchoolYear,
+])
 
 @include('partials.sheet2-review-script')
 @include('partials.mlat-menus-script')
@@ -1041,6 +1063,8 @@ const STUDENT_PROFILE_LRN = @json($lrn);
         : '';
     if (reopenTab !== '' && document.getElementById(reopenTab)?.classList.contains('sp-panel')) {
         showProfileTab(reopenTab);
+    } else if (@json($consentReturned)) {
+        showProfileTab('vpTabConsent');
     }
 })();
 </script>

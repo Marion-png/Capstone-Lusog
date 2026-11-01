@@ -33,12 +33,6 @@
 				<span>{{ $sessionOpen ? $beneficiaryCount.' beneficiaries are waiting on this session.' : ($recordBlockedReason ?? '') }}</span>
 			</div>
 		</div>
-<<<<<<< Updated upstream
-=======
-		@if ($sessionOpen)
-			<button type="button" class="btn btn-primary" data-open-sheet>Record Attendance</button>
-		@endif
->>>>>>> Stashed changes
 	</div>
 @elseif ($incomplete)
 	<div class="alert-bar is-info">
@@ -49,12 +43,6 @@
 				<span>{{ $tally['recorded'] }} of {{ $beneficiaryCount }} beneficiaries recorded.</span>
 			</div>
 		</div>
-<<<<<<< Updated upstream
-=======
-		@if ($sessionOpen)
-			<button type="button" class="btn btn-secondary" data-open-sheet>Continue Recording</button>
-		@endif
->>>>>>> Stashed changes
 	</div>
 @endif
 

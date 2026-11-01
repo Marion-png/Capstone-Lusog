@@ -948,4 +948,121 @@ class AdviserConsentPageTest extends TestCase
         $meta = $this->profileMeta($html);
         $this->assertSame('corrected.pdf', $meta['consent_detail']['file_name']);
     }
+
+    // ── Uploading from the learner's own profile ───────────────────────
+
+    /** The dialog between the form choice and Cancel, which both pages share. */
+    private function uploadDialogFields(string $html): string
+    {
+        $start = strpos($html, 'id="pc_program"');
+        $end = strpos($html, 'id="uploadConsentCancel"', (int) $start);
+        $this->assertNotFalse($start, 'No upload dialog on the page.');
+        $this->assertNotFalse($end, 'The upload dialog has no Cancel.');
+
+        return substr($html, $start, $end - $start);
+    }
+
+    /** @test */
+    public function the_profile_consent_tab_opens_the_consent_pages_upload_dialog_for_that_learner(): void
+    {
+        $this->enrol();
+
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'))
+            ->assertOk()
+            ->getContent();
+
+        // The button sits on the Consent tab, not elsewhere on the profile.
+        $panelStart = strpos($html, 'id="vpTabConsent"');
+        $panelEnd = strpos($html, 'id="vpTabFeeding"', $panelStart);
+        $panel = substr($html, $panelStart, $panelEnd - $panelStart);
+        $this->assertStringContainsString('id="vpUploadConsent" data-consent-upload', $panel);
+        $this->assertStringContainsString('Upload Consent Form', $panel);
+
+        // The learner is the profile's own: posted as a hidden field, with
+        // no list to pick somebody else from.
+        $this->assertSame(1, substr_count($html, 'id="uploadConsentModal"'));
+        $this->assertStringContainsString('action="'.route('parental-consent.store').'"', $html);
+        $this->assertStringContainsString('<input type="hidden" id="pc_lrn" name="lrn" value="123456789012">', $html);
+        $this->assertStringContainsString('value="Dela Cruz, Juan A. (123456789012)" readonly', $html);
+        $this->assertStringNotContainsString('<select id="pc_lrn"', $html);
+        $this->assertStringContainsString('value="'.ParentalConsentForm::currentSchoolYear().' (Current)"', $html);
+
+        // Everything after the learner is the Consent Forms page's dialog,
+        // character for character — one partial, not a copy of it.
+        $consentPage = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('consent-forms.index'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertSame($this->uploadDialogFields($consentPage), $this->uploadDialogFields($html));
+    }
+
+    /** @test */
+    public function an_upload_from_the_profile_comes_back_to_its_consent_tab(): void
+    {
+        $this->enrol();
+        $profile = route('dashboard.class-adviser.student-profile', '123456789012');
+
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->from($profile)
+            ->followingRedirects()
+            ->post(route('parental-consent.store'), [
+                'lrn' => '123456789012',
+                'program' => ParentalConsentForm::PROGRAM_HEALTH_SERVICES,
+                'consent_type' => 'full',
+                'services' => ['deworming_worms'],
+                'consent' => UploadedFile::fake()->create('sulat-pahibalo.pdf', 40, 'application/pdf'),
+            ])
+            ->assertOk()
+            ->getContent();
+
+        $record = StudentHealthRecord::where('student_id', '123456789012')->first();
+        $upload = ParentalConsentForm::where('student_health_record_id', $record->id)->first();
+        $this->assertNotNull($upload);
+        $this->assertSame('full', $upload->consent_type);
+
+        // Back on the profile, with the confirmation and the Consent tab open.
+        $this->assertStringContainsString('id="vpTabConsent"', $html);
+        $this->assertStringContainsString('Full consent filed successfully for SY '.ParentalConsentForm::currentSchoolYear().'.', $html);
+        $this->assertStringContainsString("} else if (true) {\n        showProfileTab('vpTabConsent');", $html);
+        $this->assertSame('sulat-pahibalo.pdf', $this->profileMeta($html)['consent_detail']['file_name']);
+    }
+
+    /** @test */
+    public function a_refused_upload_from_the_profile_says_why_on_its_consent_tab(): void
+    {
+        $this->enrol();
+        $profile = route('dashboard.class-adviser.student-profile', '123456789012');
+
+        // The feeding program consent is filed only with its signed form.
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->from($profile)
+            ->followingRedirects()
+            ->post(route('parental-consent.store'), [
+                'lrn' => '123456789012',
+                'program' => ParentalConsentForm::PROGRAM_FEEDING,
+                'consent_type' => 'full',
+            ])
+            ->assertOk()
+            ->getContent();
+
+        $this->assertSame(0, ParentalConsentForm::count());
+        $this->assertStringContainsString('<div class="flash flash-err">Attach the signed feeding program consent form.</div>', $html);
+        $this->assertStringContainsString("} else if (true) {\n        showProfileTab('vpTabConsent');", $html);
+    }
+
+    /** @test */
+    public function the_profile_opens_on_sheet_one_when_nothing_was_uploaded(): void
+    {
+        $this->enrol();
+
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString("} else if (false) {\n        showProfileTab('vpTabConsent');", $html);
+        $this->assertStringNotContainsString('class="flash', $html);
+    }
 }

@@ -17,12 +17,9 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
-<<<<<<< Updated upstream
 use Illuminate\Validation\Rule;
-=======
 use Illuminate\Validation\ValidationException;
 use Throwable;
->>>>>>> Stashed changes
 
 class ParentalConsentFormController extends Controller
 {
@@ -208,16 +205,12 @@ class ParentalConsentFormController extends Controller
             'file_path' => $path,
             'file_original_name' => $originalName,
             'uploaded_by_name' => (string) $request->session()->get('active_name', 'Class Adviser'),
-<<<<<<< Updated upstream
+            ...($storesScanResult ? ['scan_result' => $scan] : []),
         ] + (SchemaCache::hasColumn('parental_consent_forms', 'services')
             // Written once the column exists, so an upload still files
             // before `php artisan migrate` has been run.
             ? ['services' => $services !== [] ? $services : null]
             : []));
-=======
-            ...($storesScanResult ? ['scan_result' => $scan] : []),
-        ]);
->>>>>>> Stashed changes
 
         // Who decided the answer is part of the evidence: a nurse asking how a
         // "full consent" got onto this record can find that the reader

@@ -13,6 +13,7 @@ use App\Models\StudentHealthRecord;
 use App\Support\AdviserClassScope;
 use App\Support\BmiClassifier;
 use App\Support\ChangeStamp;
+use App\Support\ConsentFormScanner;
 use App\Support\ConsentStanding;
 use App\Support\ConsultationVisibility;
 use App\Support\FeedingAtRiskRule;
@@ -284,6 +285,13 @@ class StudentHealthRecordController extends Controller
                 'consultations' => collect(),
                 'clinic_notes' => collect(),
             ],
+            // The Consent tab opens the Consent Forms page's own upload dialog
+            // (consent-forms._upload-modal) with this learner already chosen,
+            // so it is handed what that page hands it. An upload is always
+            // filed under the current school year.
+            'consentSchoolYear' => ParentalConsentForm::currentSchoolYear(),
+            'scannerReady' => app(ConsentFormScanner::class)->isAvailable(),
+            'plannedServices' => HealthConsentForm::PLANNED_SERVICES,
         ]);
     }
 
