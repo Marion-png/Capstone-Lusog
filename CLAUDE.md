@@ -257,17 +257,6 @@ Every access and action on personal/sensitive personal information is logged to 
 
 The School Nurse's HL7 FHIR exchange was removed on 2026-10-29: no screen, route, command or job sends a learner's record outside the school. The `fhir_transmissions` table is left in place (its migration already ran) and is still purged with the learner (`StudentRecordPurge::LRN_KEYED`), since it may hold copies sent before the removal. Do not re-add an outbound exchange without asking.
 
-### Parent SMS (Semaphore API)
-
-A parent who opted in on their online Sulat-Pahibalo is texted, through the Semaphore SMS gateway, when their child visits the clinic (a consultation saved for a learner chosen off the roll) and when a run of unexcused feeding absences reaches the school's attendance notice. Full reference: `docs/sms-notifications.md`. Rules to preserve:
-
-- **`App\Support\SemaphoreClient` is the only code that calls the gateway, and `App\Support\ParentNotifier` the only code that composes a message or decides whether one is sent.** Add a trigger by calling the notifier, never the client.
-- **No health information in a text** — the child's first name and the event, never a complaint, medicine, status or measurement; the message asks the parent to contact the school. `ParentSmsNotificationTest::the_text_carries_no_health_information` guards it.
-- **Opt-in only**: `health_consent_forms.sms_opt_in` / `sms_number` (encrypted) / `sms_language`, and the parent's *latest* answered form decides. The paper consent path does not set it.
-- **One event, one message** (`sms_notifications.dedupe_key`, unique), a per-school daily cap (`SMS_DAILY_CAP`), and the clinic trigger finds the learner by LRN **within the session's school** only.
-- **A failed text never undoes what triggered it.** Messages are queued rows sent after the response (`SendParentSms::dispatchAfterResponse`, no worker needed); the attendance trigger runs `DB::afterCommit`. A send is retried only on 429/5xx — never on a dropped connection, which may already have been accepted.
-- `SEMAPHORE_API_KEY` blank = off; `SMS_DRY_RUN=true` logs without sending. `phpunit.xml` blanks the key. The System Admin's console is `/dashboard/system-admin/sms`; `php artisan sms:refresh-status` fetches delivery reports.
-
 ### Round Trips Are The Cost (invariant)
 
 This app runs against a hosted Postgres reached through a tunnel, where **one round trip costs the better part of a second**. What makes a screen feel slow here is therefore not how much work it does but how many separate times it asks the database to do some — and that is invisible against the local SQLite the tests use unless something counts it. Four rules:

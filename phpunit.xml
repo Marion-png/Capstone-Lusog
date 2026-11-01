@@ -39,8 +39,6 @@
              and leave the network in the test path. -->
         <env name="ANTHROPIC_API_KEY" value=""/>
         <env name="GEMINI_API_KEY" value=""/>
-        <env name="SEMAPHORE_API_KEY" value=""/>
-        <env name="SMS_DRY_RUN" value="false"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

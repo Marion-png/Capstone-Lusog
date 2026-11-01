@@ -62,10 +62,6 @@
                  child they were reading. The server accepts only a URL inside
                  this app and otherwise falls back to the log. --}}
             <input type="hidden" name="return_to" id="cm_return_to" value="{{ old('return_to', url()->full()) }}">
-            {{-- The LRN of the learner chosen off the roll, so the server can
-                 find their parent (App\Support\ParentNotifier). Empty for a
-                 name typed and never chosen. --}}
-            <input type="hidden" name="student_lrn" id="cm_student_lrn" value="{{ old('student_lrn') }}">
             <div class="bmodal-head">
                 <div>
                     <div class="bmodal-eyebrow">Consultation</div>
@@ -748,8 +744,6 @@
     const forLearner = (name, lrn) => {
         pickedName = String(name || '').trim();
         pickedLrn = String(lrn || '').trim();
-        const lrnField = document.getElementById('cm_student_lrn');
-        if (lrnField) lrnField.value = pickedLrn;
         if (pickedLrn !== '') allergies.show(pickedLrn);
         else allergies.clear();
     };

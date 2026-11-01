@@ -158,8 +158,6 @@ class HealthConsentForm extends Model
         'allergy_food', 'allergy_medicine', 'prev_immunization', 'other_illness',
         'signature', 'paper_form_path', 'sent_at', 'signed_at', 'reviewed_at',
         'created_by_name', 'adviser_unread', 'audit',
-        // The parent's choice to be texted (App\Support\ParentNotifier).
-        'sms_opt_in', 'sms_number', 'sms_language',
     ];
 
     /**
@@ -190,8 +188,6 @@ class HealthConsentForm extends Model
         'services' => EncryptedArray::class,
         'audit' => EncryptedArray::class,
         'adviser_unread' => 'boolean',
-        'sms_opt_in' => 'boolean',
-        'sms_number' => EncryptedString::class,
         'sent_at' => 'datetime',
         'signed_at' => 'datetime',
         'reviewed_at' => 'datetime',
