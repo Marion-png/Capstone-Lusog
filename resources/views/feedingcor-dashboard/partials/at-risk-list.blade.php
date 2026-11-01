@@ -232,8 +232,10 @@
 			</section>
 
 			{{-- The absences a confirmation is about. While the record is being
-			     verified, each one can be put right through the one audited
-			     correction path; once it is confirmed, they are a reading. --}}
+			     verified, today's absence can be put right through the one audited
+			     correction path; an earlier day's attendance closed when the day
+			     did, so it is verified as it stands. Once confirmed, they are all
+			     a reading. --}}
 			<section class="ar-panel {{ $row['can_correct'] ? 'ar-panel-wide' : '' }}">
 				<p class="ar-panel-title">{{ $row['can_correct'] ? 'Absences to verify' : 'Recent absences' }}</p>
 				@if ($row['absences'] !== [])
@@ -247,7 +249,7 @@
 										<span class="ar-verify-note">{{ $absence['remarks'] }}</span>
 									@endif
 								</div>
-								@if ($row['can_correct'])
+								@if ($row['can_correct'] && $absence['open'])
 									<form method="POST" class="ar-correct"
 										action="{{ route('feedingcor-program.beneficiary.attendance.correct', $row['id']) }}">
 										@csrf
@@ -262,6 +264,8 @@
 											aria-label="Reason for the correction on {{ $absence['label'] }}">
 										<button type="submit" class="btn btn-secondary">Correct</button>
 									</form>
+								@elseif ($row['can_correct'])
+									<span class="ar-verify-closed">Closed &middot; a mark can only be changed on its own day</span>
 								@endif
 							</li>
 						@endforeach

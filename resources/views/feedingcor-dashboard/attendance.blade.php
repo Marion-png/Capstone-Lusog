@@ -265,9 +265,8 @@
 			{{-- ── The sheet is a record, not a form. ──
 			     It reports the marks a coordinator recorded and offers no control
 			     over them: no radio, no remark field, no bulk mark, no save bar.
-			     Recording happens once, in the dialog, and a mistake or a learner
-			     the session missed is put right on that learner's own beneficiary
-			     record where the change is attributed and audited. --}}
+			     Recording and changing a mark both happen in the dialog, on the
+			     session's own day; once the day ends the session is closed. --}}
 			<div id="faSheet">
 				<div class="card fa-bulkbar">
 					<div class="lg-search fa-search">
@@ -275,7 +274,11 @@
 						<input type="search" id="faSearch" placeholder="Search name or section" autocomplete="off" aria-label="Search beneficiaries by name or section">
 					</div>
 					<div class="fa-sheet-standing">
+<<<<<<< Updated upstream
 						@if ($sessionMarked)
+=======
+						@if ($sessionConfirmed)
+>>>>>>> Stashed changes
 							<span class="badge badge-normal has-glyph"><span class="fa-glyph">✓</span>Recorded</span>
 						@elseif (! $isFeedingDay)
 							<span class="badge badge-neutral">No session &mdash; weekend</span>
@@ -285,18 +288,40 @@
 						{{-- A recorded session is still open on its own day, for
 						     the learners who arrive late. --}}
 						@if ($canRecord)
+<<<<<<< Updated upstream
 							<button type="button" class="btn btn-primary" data-record-open>{{ $sessionMarked ? 'Edit Attendance' : 'Record Attendance' }}</button>
+=======
+							{{-- Today's session stays open all day: once recorded,
+							     the same control opens it again to change a mark. --}}
+							<button type="button" class="btn btn-primary" data-record-open>{{ $recordEditing ? 'Edit Attendance' : 'Record Attendance' }}</button>
+>>>>>>> Stashed changes
 						@endif
 					</div>
 				</div>
 
-				@if ($sessionLocked)
+				@if ($recordEditing)
+					<div class="alert-bar is-info fa-lockbar">
+						<div class="alert-body">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+							<div>
+								<strong>Attendance for {{ $selectedDateLabel }} has been recorded</strong>
+								<span>You can still change a mark until the end of the day. After that, this session is closed.</span>
+							</div>
+						</div>
+					</div>
+				@elseif ($sessionClosed && $isFeedingDay)
+					{{-- A day that has ended is closed, recorded or not. --}}
 					<div class="alert-bar is-info fa-lockbar">
 						<div class="alert-body">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
 							<div>
+<<<<<<< Updated upstream
 								<strong>Attendance for {{ $selectedDateLabel }} has been recorded</strong>
 								<span>This session is read-only. A session can only be edited on its own day.</span>
+=======
+								<strong>Attendance for {{ $selectedDateLabel }} is closed</strong>
+								<span>A day&rsquo;s attendance can only be recorded or changed on that day.</span>
+>>>>>>> Stashed changes
 							</div>
 						</div>
 					</div>
@@ -398,8 +423,13 @@
      the other views are readings of their own. --}}
 @if ($view === 'sheet' && $canRecord)
 	@include('feedingcor-dashboard.partials.attendance-record-modal')
+<<<<<<< Updated upstream
 	{{-- A recorded session closes at the end of its day, so the marks are
 	     read back and confirmed before they are posted. --}}
+=======
+	{{-- The marks are read back and confirmed before they are posted: they
+	     can be changed until the day ends, and never after. --}}
+>>>>>>> Stashed changes
 	@include('feedingcor-dashboard.partials.attendance-confirm-modal', [
 		'confirmSessionLabel' => $selectedDateLabel,
 	])

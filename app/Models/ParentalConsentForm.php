@@ -60,6 +60,7 @@ class ParentalConsentForm extends Model
         'file_path',
         'file_original_name',
         'uploaded_by_name',
+        'scan_result',
     ];
 
     /** Where the files sit on disk is the server's business; pages link by id. */
@@ -71,9 +72,13 @@ class ParentalConsentForm extends Model
      * because queries filter on them.
      */
     protected $casts = [
+<<<<<<< Updated upstream
         // The services the letter lists, as ticked off the paper. NULL on a
         // row filed before they were recorded: it covers its program alone.
         'services' => EncryptedArray::class,
+=======
+        'scan_result' => EncryptedArray::class,
+>>>>>>> Stashed changes
         'consent_type' => EncryptedString::class,
         'partial_exception' => EncryptedString::class,
         'refused_reason' => EncryptedString::class,

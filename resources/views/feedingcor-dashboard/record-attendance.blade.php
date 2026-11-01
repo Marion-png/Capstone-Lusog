@@ -44,6 +44,7 @@
 			<div class="flash err">{{ $errors->first() }}</div>
 		@endif
 
+<<<<<<< Updated upstream
 		{{-- A recorded session closes as a whole at the end of its own day: this
 		     screen then becomes a record, the same way the Attendance tab's sheet
 		     does, and the endpoint refuses the write regardless of what is on
@@ -56,8 +57,26 @@
 							<strong>Attendance for {{ $sessionLabel }} has already been recorded</strong>
 							<span>This session is read-only. A session can only be edited on its own day.</span>
 						@else
+=======
+		{{-- A session is open on its own day and closed after it, recorded or
+		     not: a closed day makes this screen a record, the same way the
+		     Attendance tab's sheet does, and the endpoint refuses the write
+		     regardless of what is on screen. --}}
+		@php($readOnly = $sessionClosed || ! $isFeedingDay)
+		@if ($readOnly || $sessionRecorded)
+			<div class="alert-bar is-info">
+				<div class="alert-body">
+					<div>
+						@if (! $isFeedingDay)
+>>>>>>> Stashed changes
 							<strong>{{ $sessionLabel }} is a {{ \Carbon\Carbon::parse($sessionDate)->format('l') }}</strong>
 							<span>There are no feeding sessions on Saturdays or Sundays.</span>
+						@elseif ($sessionClosed)
+							<strong>Attendance for {{ $sessionLabel }} is closed</strong>
+							<span>A day&rsquo;s attendance can only be recorded or changed on that day.</span>
+						@else
+							<strong>Attendance for {{ $sessionLabel }} has been recorded</strong>
+							<span>You can still change a mark until the end of the day. After that, this session is closed.</span>
 						@endif
 					</div>
 				</div>
@@ -84,12 +103,18 @@
 						<input type="search" id="raSearch" placeholder="Name or section" autocomplete="off" aria-label="Search beneficiaries by name or section">
 					</div>
 				</div>
-				<div class="ra-bulk" @if ($sessionLocked || ! $isFeedingDay) hidden @endif>
+				<div class="ra-bulk" @if ($readOnly) hidden @endif>
 					<button type="button" class="btn btn-secondary" data-mark-all="present">All present</button>
 					<button type="button" class="btn btn-secondary" data-mark-all="absent">All absent</button>
+<<<<<<< Updated upstream
 					{{-- Not while editing: a blank row writes nothing, so a cleared
 					     mark would stay on file. --}}
 					@unless ($sessionMarked)
+=======
+					{{-- Not on an edit: an unmarked row writes nothing, so clearing
+					     a recorded mark would look undone and stay on file. --}}
+					@unless ($sessionRecorded)
+>>>>>>> Stashed changes
 						<button type="button" class="btn btn-ghost" data-mark-all="">Clear</button>
 					@endunless
 				</div>
@@ -120,7 +145,7 @@
 									<td>{{ $row['grade'] }}</td>
 									<td>{{ $row['section'] ?: '—' }}</td>
 									<td class="ta-r">
-										@if ($sessionLocked || ! $isFeedingDay)
+										@if ($readOnly)
 											{{-- The session is a record: the mark is shown and no
 											     input is rendered at all. A disabled control is
 											     still one a browser can re-enable and post. --}}
@@ -154,7 +179,7 @@
 										@endif
 									</td>
 									<td>
-										@if ($sessionLocked || ! $isFeedingDay)
+										@if ($readOnly)
 											<span class="ra-remark-read">{{ $row['remarks'] !== '' ? $row['remarks'] : '—' }}</span>
 										@else
 											{{-- Only an absence carries a reason, so the field opens
@@ -176,7 +201,7 @@
 				</div>
 			</div>
 
-			@if ($rows->isNotEmpty() && ! $sessionLocked && $isFeedingDay)
+			@if ($rows->isNotEmpty() && ! $readOnly)
 				{{-- A learner left unmarked is saved as nothing at all, never as an
 				     absence, so the bar counts what is still undecided. --}}
 				<div class="ra-savebar">
@@ -198,10 +223,10 @@
 
 {{-- Outside .main so this fixed backdrop always remains relative to the
      viewport. Every dialog in this role follows the same placement. --}}
-@if ($rows->isNotEmpty() && ! $sessionLocked && $isFeedingDay)
-	{{-- A recorded session cannot be reopened, so the marks are read back and
-	     confirmed before they are posted. Same dialog the Attendance tab uses,
-	     wired to the same form id. --}}
+@if ($rows->isNotEmpty() && ! $readOnly)
+	{{-- The marks can be changed until the day ends and never after, so they
+	     are read back and confirmed before they are posted. Same dialog the
+	     Attendance tab uses, wired to the same form id. --}}
 	@include('feedingcor-dashboard.partials.attendance-confirm-modal', [
 		'confirmSessionLabel' => $sessionLabel,
 	])

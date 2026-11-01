@@ -424,6 +424,58 @@ tbody tr:hover td{background:#f7fbf8}
 .pc-modal .confirm-title small{font-size:.74rem;font-weight:500;color:var(--muted)}
 .pc-modal .confirm-close{color:var(--muted);font-size:1.2rem}
 .pc-modal .confirm-close:hover{color:var(--red)}
+<<<<<<< Updated upstream
+=======
+/* The uploaded sheet and its reading stay together while the adviser reviews. */
+.pc-review-modal,.pc-modal.is-reviewing .confirm-modal{width:min(1040px,96vw)}
+.pc-review-modal .confirm-head{padding:20px 24px;border-bottom:0}
+.pc-review-modal .confirm-body{padding:0 24px 22px}
+.pc-detail-title h2,.pc-scan-review-head h2{font-size:1.14rem;font-weight:700;color:var(--text)}
+.pc-detail-title p,.pc-scan-review-head p{font-size:.77rem;color:var(--muted);margin-top:4px}
+.pc-detail-context{display:flex;align-items:center;flex-wrap:wrap;gap:10px;font-size:.76rem;color:var(--muted);margin:0 0 20px}
+.pc-photo-review{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);align-items:start;gap:24px;margin-bottom:18px}
+.pc-photo-review[hidden],.pc-photo-review [hidden],.pc-modal [hidden]{display:none!important}
+.pc-review-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:31px;margin-bottom:8px}
+.pc-review-heading h3{font-size:.79rem;font-weight:700;color:var(--text)}
+.pc-review-heading>span{font-size:.72rem;white-space:nowrap;font-weight:600}
+.pc-review-heading .btn{font-size:.72rem;padding:6px 11px}
+.pc-photo-frame{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg)}
+.pc-photo-frame img{display:block;width:100%;height:auto;object-fit:contain}
+.pc-review-empty{padding:36px 18px;border:1px dashed var(--border);border-radius:8px;background:var(--bg);text-align:center;font-size:.8rem;color:var(--muted)}
+.pc-review-complete{padding:9px 12px;border-radius:8px;background:var(--g100);color:var(--g700);font-size:.76rem;font-weight:600;margin-bottom:6px}
+.pc-review-complete.is-warning{background:#fff8e6;color:#8a5a00}
+.pc-review-warnings{padding:10px 12px 10px 28px;border-radius:8px;background:#fff8e6;color:#8a5a00;font-size:.74rem;line-height:1.5;margin:8px 0}
+.pc-review-facts{font-size:.76rem;line-height:1.5}
+.pc-review-facts>div{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:14px;padding:9px 0;border-bottom:1px solid var(--border)}
+.pc-review-facts dt{color:var(--muted)}
+.pc-review-facts dd{margin:0;color:var(--text);overflow-wrap:anywhere;white-space:pre-line}
+.pc-review-decision dd{font-weight:700}
+.pc-service-group{padding:12px 0;border-bottom:1px solid var(--border)}
+.pc-service-group .pc-review-heading{min-height:0;margin-bottom:7px}
+.pc-service-group ul{display:grid;gap:4px;padding:0;margin:0;list-style:none}
+.pc-service-group li{display:flex;align-items:baseline;gap:8px;border-radius:6px;background:var(--g50,#f0f7f3);padding:7px 10px;font-size:.75rem;line-height:1.4;color:var(--text)}
+.pc-service-group li::before{content:'✓';color:var(--g700);font-weight:700;flex-shrink:0}
+.pc-service-group.is-consented .pc-review-heading>span{color:var(--g700)}
+.pc-service-group.is-declined li{background:#faf0eb}
+.pc-service-group.is-declined li::before{content:'×';color:#9a5738}
+.pc-service-group.is-declined .pc-review-heading>span{color:#9a5738}
+.pc-service-group.is-unclear li{background:#fff8e6}
+.pc-service-group.is-unclear li::before{content:'?';color:#8a5a00}
+.pc-review-note{font-size:.72rem;color:var(--muted);line-height:1.5;margin-top:8px}
+.pc-review-footnote{font-size:.72rem;line-height:1.6;color:var(--muted);margin-top:20px}
+.pc-scan-review-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.pc-modal.is-reviewing .pc-upload-setup{display:none}
+.pc-modal.is-reviewing .pc-read{margin-top:12px}
+.pc-photo-dialog{width:min(1100px,96vw);max-height:94vh;overflow:auto;padding:14px;border:1px solid var(--border);border-radius:12px;margin:auto;background:var(--card,#fff)}
+.pc-photo-dialog::backdrop{background:rgba(15,35,25,.65)}
+.pc-photo-dialog form{position:sticky;top:0;display:flex;justify-content:flex-end;margin-bottom:12px}
+.pc-photo-dialog img{display:block;max-width:100%;height:auto;margin:auto}
+@media(max-width:700px){.pc-photo-review{grid-template-columns:1fr;gap:20px}.pc-review-modal .confirm-head{padding:16px}.pc-review-modal .confirm-body{padding:0 16px 18px}.pc-scan-review-head{align-items:flex-start;flex-direction:column}.pc-photo-frame img{max-height:480px}.pc-review-modal,.pc-modal.is-reviewing .confirm-modal{width:100%}}
+.pc-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 22px;margin-bottom:14px}
+.pc-detail-grid span{display:block;font-size:.71rem;font-weight:600;color:var(--muted)}
+.pc-detail-grid b{display:block;font-size:.86rem;font-weight:700;color:var(--text);margin-top:3px}
+.pc-sy-badge{display:inline-block;background:var(--g100);color:var(--g900);font-size:.74rem;font-weight:700;padding:3px 11px;border-radius:999px}
+>>>>>>> Stashed changes
 .pc-strip{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:#f7faf8;border-radius:10px;padding:11px 14px;margin-bottom:9px;font-size:.8rem;color:var(--text)}
 .pc-strip svg{width:15px;height:15px;color:var(--g700);flex-shrink:0}
 

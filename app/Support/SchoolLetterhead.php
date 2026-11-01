@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\HealthConsentForm;
 use App\Models\Institution;
+use Illuminate\Support\Str;
 
 /**
  * The heading every DepEd form in this app is printed under.
@@ -82,6 +83,28 @@ final class SchoolLetterhead
      * change and one that has not is drawn a placeholder.
      */
     public const DOH_LOGO = 'images/doh-logo.png';
+
+    /**
+     * Where a school's own office letterhead is kept: one picture per school,
+     * named after it (`Str::slug($name).png`).
+     *
+     * The letterhead a school heads its own lists with — the two seals on the
+     * left, its name, its street, "Office of the Principal" and how to reach it
+     * set right beside them — is a designed block the school already has. A
+     * spreadsheet cannot set left-aligned text beside a picture without bending
+     * the table's own columns to fit it, so the block travels into a workbook
+     * as the one picture it is. Keyed by the school's own name, so one school's
+     * street can never head another school's list; a school with no picture on
+     * file gets the same lines as text (officeLines()).
+     */
+    public const OFFICE_LETTERHEADS = 'images/letterheads';
+
+    /** The office letterhead's Republic / Department lines, as the school's template sets them. */
+    public const REPUBLIC_FIL = 'Republika ng Pilipinas';
+
+    public const DEPARTMENT_FIL = 'Kagawaran ng Edukasyon';
+
+    public const OFFICE = 'OFFICE OF THE PRINCIPAL';
 
     /**
      * The heading for the school a session is scoped to.
@@ -166,8 +189,14 @@ final class SchoolLetterhead
     /**
      * The heading as the lines a workbook writes, top to bottom.
      *
+<<<<<<< Updated upstream
      * For the workbooks that set the heading as text alone; the masterlist
      * embeds the seals beside masthead() instead (MasterlistSheet).
+=======
+     * The text block is what makes an exported sheet the same document as the
+     * printed one where the seals are not carried. The masterlist heads itself
+     * with the school's own office letterhead instead (officeBanner()).
+>>>>>>> Stashed changes
      *
      * @param  array<string, string>  $letterhead
      * @return list<string>
@@ -229,5 +258,43 @@ final class SchoolLetterhead
     public static function divisionLine(string $division): string
     {
         return 'Schools Division of '.ucwords(strtolower(trim($division)));
+    }
+
+    /**
+     * The school's office letterhead picture, as an absolute path — or null
+     * when this school has none on file.
+     */
+    public static function officeBanner(string $schoolName): ?string
+    {
+        $slug = Str::slug($schoolName);
+
+        if ($slug === '') {
+            return null;
+        }
+
+        $path = public_path(self::OFFICE_LETTERHEADS.'/'.$slug.'.png');
+
+        return is_file($path) ? $path : null;
+    }
+
+    /**
+     * The office letterhead as text, top to bottom: the lines the school's own
+     * template carries, in its own language, for a school whose letterhead
+     * picture is not on file. The address is the one on record — empty is a
+     * line to write on, never a neighbouring school's street.
+     *
+     * @param  array<string, string>  $letterhead  for()
+     * @return list<string>
+     */
+    public static function officeLines(array $letterhead): array
+    {
+        return [
+            self::REPUBLIC_FIL,
+            self::DEPARTMENT_FIL,
+            'Division of '.ucwords(strtolower(trim($letterhead['division']))).' Schools',
+            strtoupper($letterhead['school']),
+            $letterhead['address'],
+            self::OFFICE,
+        ];
     }
 }

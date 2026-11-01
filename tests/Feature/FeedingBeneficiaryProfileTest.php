@@ -293,11 +293,12 @@ class FeedingBeneficiaryProfileTest extends TestCase
 
         $this->withSession($this->coordinatorSession())
             ->post('/dashboard/feedingcor-program/attendance/record', [
-                'session_date' => '2026-08-10',
+                'session_date' => now()->toDateString(),
                 'marks' => [$record->id => 'present'],
             ])
-            ->assertRedirect();
+            ->assertSessionHas('success');
 
+        $this->assertSame('Test Coordinator', FeedingAttendance::query()->first()->recorded_by_name);
         $this->openRecord($record)->assertOk()->assertSee('Test Coordinator');
     }
 
@@ -334,15 +335,19 @@ class FeedingBeneficiaryProfileTest extends TestCase
         $response->assertSee('Fever');
     }
 
+    // A correction writes today's session only: a day's attendance closes when
+    // the day does (FeedingAttendanceWindow), so these all correct today.
+
     #[Test]
     public function the_coordinator_can_correct_a_mark_and_the_change_is_audited(): void
     {
         $record = $this->makeStudent();
-        $this->mark($record, '2026-08-10', false);
+        $today = now()->toDateString();
+        $this->mark($record, $today, false);
 
         $this->withSession($this->coordinatorSession())
             ->post('/dashboard/feedingcor-program/beneficiary/'.$record->id.'/attendance', [
-                'session_date' => '2026-08-10',
+                'session_date' => $today,
                 'mark' => 'present',
             ])
             ->assertRedirect();
@@ -350,7 +355,7 @@ class FeedingBeneficiaryProfileTest extends TestCase
         $this->assertTrue(
             (bool) FeedingAttendance::query()
                 ->where('student_health_record_id', $record->id)
-                ->whereDate('session_date', '2026-08-10')
+                ->whereDate('session_date', $today)
                 ->value('is_present')
         );
 
@@ -369,11 +374,11 @@ class FeedingBeneficiaryProfileTest extends TestCase
     {
         $record = $this->makeStudent();
         // An unread scanned mark: correcting it is also confirming it.
-        $this->mark($record, '2026-08-10', null, true);
+        $this->mark($record, now()->toDateString(), null, true);
 
         $this->withSession($this->coordinatorSession())
             ->post('/dashboard/feedingcor-program/beneficiary/'.$record->id.'/attendance', [
-                'session_date' => '2026-08-10',
+                'session_date' => now()->toDateString(),
                 'mark' => 'absent',
                 'remarks' => 'Sick',
             ])
@@ -397,11 +402,11 @@ class FeedingBeneficiaryProfileTest extends TestCase
     {
         $record = $this->makeStudent();
         $other = $this->makeStudent(['student_name' => 'Second Learner']);
-        $this->mark($other, '2026-08-10', true);
+        $this->mark($other, now()->toDateString(), true);
 
         $this->withSession($this->coordinatorSession())
             ->post('/dashboard/feedingcor-program/beneficiary/'.$record->id.'/attendance', [
-                'session_date' => '2026-08-10',
+                'session_date' => now()->toDateString(),
                 'mark' => 'present',
             ])
             ->assertRedirect();
@@ -417,13 +422,13 @@ class FeedingBeneficiaryProfileTest extends TestCase
     public function a_correction_cannot_invent_a_feeding_day(): void
     {
         $record = $this->makeStudent();
-        $this->mark($record, '2026-08-10', true);
+        $this->mark($record, now()->subDay()->toDateString(), true);
 
-        // No session was held on the 11th, so there is no mark to correct and
+        // No session has been held today, so there is no mark to correct and
         // no denominator to quietly enlarge.
         $this->withSession($this->coordinatorSession())
             ->post('/dashboard/feedingcor-program/beneficiary/'.$record->id.'/attendance', [
-                'session_date' => '2026-08-11',
+                'session_date' => now()->toDateString(),
                 'mark' => 'absent',
             ])
             ->assertRedirect()
@@ -432,16 +437,45 @@ class FeedingBeneficiaryProfileTest extends TestCase
         $this->assertDatabaseCount('feeding_attendances', 1);
     }
 
+    /**
+     * A day's attendance closes when the day does. The correction path is no
+     * way around that: an earlier day's mark is refused one learner at a time
+     * exactly as the session is refused whole.
+     */
+    #[Test]
+    public function a_past_days_mark_cannot_be_corrected(): void
+    {
+        $record = $this->makeStudent();
+        $yesterday = now()->subDay()->toDateString();
+        $this->mark($record, $yesterday, false);
+        $logs = AuditLog::query()->max('id') ?? 0;
+
+        $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-program/beneficiary/'.$record->id.'/attendance', [
+                'session_date' => $yesterday,
+                'mark' => 'present',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->assertFalse((bool) FeedingAttendance::query()->where('student_health_record_id', $record->id)->value('is_present'));
+        $this->assertSame(
+            0,
+            AuditLog::query()->where('id', '>', $logs)->where('subject_type', 'FeedingAttendance')->count(),
+            'A refused correction changes nothing, so it records no correction.'
+        );
+    }
+
     #[Test]
     public function a_correction_is_refused_for_another_schools_learner(): void
     {
         $otherSchool = Institution::create(['name' => 'Other School', 'status' => 'active']);
         $record = $this->makeStudent(['student_name' => 'Other School Learner'], $otherSchool);
-        $this->mark($record, '2026-08-10', true);
+        $this->mark($record, now()->toDateString(), true);
 
         $this->withSession($this->coordinatorSession())
             ->post('/dashboard/feedingcor-program/beneficiary/'.$record->id.'/attendance', [
-                'session_date' => '2026-08-10',
+                'session_date' => now()->toDateString(),
                 'mark' => 'absent',
             ])
             ->assertRedirect(route('dashboard.feedingcor-health-records'));
@@ -453,7 +487,7 @@ class FeedingBeneficiaryProfileTest extends TestCase
     public function only_the_feeding_coordinator_may_correct_a_mark(): void
     {
         $record = $this->makeStudent();
-        $this->mark($record, '2026-08-10', true);
+        $this->mark($record, now()->toDateString(), true);
 
         $this->withSession([
             'active_role' => 'class_adviser',
@@ -461,7 +495,7 @@ class FeedingBeneficiaryProfileTest extends TestCase
             'active_institution_id' => $this->institution->id,
         ])
             ->post('/dashboard/feedingcor-program/beneficiary/'.$record->id.'/attendance', [
-                'session_date' => '2026-08-10',
+                'session_date' => now()->toDateString(),
                 'mark' => 'absent',
             ])
             ->assertRedirect(route('login'));
@@ -473,26 +507,21 @@ class FeedingBeneficiaryProfileTest extends TestCase
     public function a_correction_moves_the_at_risk_flag(): void
     {
         // This test is about a correction recomputing the flag, so the school
-        // classifies from the first session — otherwise three feeding days
-        // would leave the learner unclassified for an unrelated reason.
+        // classifies from the first session — otherwise two feeding days would
+        // leave the learner unclassified for an unrelated reason.
         $this->institution->update(['feeding_min_observation_days' => 1]);
 
         $record = $this->makeStudent();
-        $this->mark($record, '2026-08-10', true);
-        $this->mark($record, '2026-08-11', false);
-        $this->mark($record, '2026-08-12', false);
+        $this->mark($record, now()->subDay()->toDateString(), true);
+        $this->mark($record, now()->toDateString(), false);
 
-        // 33% — under the 80% default, so the record awaits confirmation.
+        // 50% — under the 80% default, so the record awaits confirmation.
         $this->openRecord($record)->assertOk()->assertSee('Awaiting Confirmation');
 
+        // Today's mark is still open, and it was wrong.
         $this->withSession($this->coordinatorSession())
             ->post('/dashboard/feedingcor-program/beneficiary/'.$record->id.'/attendance', [
-                'session_date' => '2026-08-11',
-                'mark' => 'present',
-            ]);
-        $this->withSession($this->coordinatorSession())
-            ->post('/dashboard/feedingcor-program/beneficiary/'.$record->id.'/attendance', [
-                'session_date' => '2026-08-12',
+                'session_date' => now()->toDateString(),
                 'mark' => 'present',
             ]);
 

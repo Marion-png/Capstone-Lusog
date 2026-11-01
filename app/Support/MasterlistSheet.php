@@ -10,8 +10,13 @@ use OpenSpout\Common\Entity\Style\BorderName;
 use OpenSpout\Common\Entity\Style\BorderPart;
 use OpenSpout\Common\Entity\Style\BorderWidth;
 use OpenSpout\Common\Entity\Style\CellAlignment;
+use OpenSpout\Common\Entity\Style\CellVerticalAlignment;
 use OpenSpout\Common\Entity\Style\Style;
+<<<<<<< Updated upstream
 use OpenSpout\Writer\XLSX\Options;
+=======
+use OpenSpout\Writer\XLSX\Options as XlsxOptions;
+>>>>>>> Stashed changes
 use OpenSpout\Writer\XLSX\Options\PageOrientation;
 use OpenSpout\Writer\XLSX\Options\PageSetup;
 use OpenSpout\Writer\XLSX\Options\PaperSize;
@@ -21,6 +26,7 @@ use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
  * The school's masterlist form, written into a workbook.
  *
  * One layout for every list that leaves the app as a masterlist: the school's
+<<<<<<< Updated upstream
  * office letterhead with its two seals, the list's title and school year, a
  * ruled table numbered down its first column and padded to the form's twenty
  * lines, then the "Prepared by / Noted by" block. The printed masterlist
@@ -29,6 +35,23 @@ use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
  * list's Print list is the second. Two copies of the layout would be two forms
  * that drift apart, so both write through here and each decides only its
  * title, its columns and its rows.
+=======
+ * office letterhead, the list's title and school year, a ruled table numbered
+ * down its first column and padded to the form's twenty lines, then the
+ * "Prepared by / Noted by" block. The Feeding Coordinator's SBFP masterlist was
+ * written this way first; the Nutritional Health Status list's Print list is
+ * the second. Two copies of the layout would be two forms that drift apart, so
+ * both write through here and each decides only its title, its columns and its
+ * rows.
+ *
+ * **The heading is the school's own template's.** Its office letterhead — the
+ * two seals on the left, Republika ng Pilipinas / Kagawaran ng Edukasyon /
+ * Division, the school, its street, Office of the Principal and its landline —
+ * is placed as the one picture it is (SchoolLetterhead::officeBanner()), ruled
+ * off underneath, and the title follows in the template's capitals, broken
+ * where the template breaks it. A school whose letterhead is not on file gets
+ * the same lines as text, never another school's picture.
+>>>>>>> Stashed changes
  */
 final class MasterlistSheet
 {
@@ -45,6 +68,7 @@ final class MasterlistSheet
     private const SEAL_COLUMN = 11.8;
 
     /**
+<<<<<<< Updated upstream
      * The letterhead's line heights, in points, by role. Set rather than left
      * to Excel so the block the seals sit beside is the same height wherever
      * the file is opened.
@@ -79,6 +103,28 @@ final class MasterlistSheet
      * table's "No.", and B — and the letterhead starts in C. The table's first
      * column is B and C merged, row by row, so it reads as one wide column on
      * screen and on paper.
+=======
+     * How tall the letterhead picture is shown, in pixels. Its width follows
+     * the picture's own proportions, so a school's own letterhead dropped in at
+     * any resolution is shown the same size.
+     */
+    public const BANNER_HEIGHT = 104;
+
+    /** Characters per title line before it wraps — where the school's template breaks its title. */
+    public const TITLE_LINE = 64;
+
+    /**
+     * Lines the title block always takes, a short title leaving the second
+     * empty, so every list's heading is the same height — one template.
+     */
+    public const TITLE_LINES = 2;
+
+    /** The school's name on the text letterhead, in the school's own green. */
+    private const SCHOOL_GREEN = '1F7A3A';
+
+    /**
+     * Writes the form to a new .xlsx at $path.
+>>>>>>> Stashed changes
      *
      * @param  array<string, string>  $letterhead  SchoolLetterhead::for()
      * @param  list<string>  $columns  the column heads after "No."
@@ -87,7 +133,7 @@ final class MasterlistSheet
      * @param  list<float>  $widths  Excel widths for the columns after "No.", in order; the first includes the seal column
      */
     public static function write(
-        XlsxWriter $writer,
+        string $path,
         array $letterhead,
         string $title,
         string $schoolYear,
@@ -100,6 +146,7 @@ final class MasterlistSheet
         string $scope = '',
         array $widths = [],
     ): void {
+<<<<<<< Updated upstream
         $options = $writer->getOptions();
         // 0-based: No. (A), the first column across B and C, then the rest.
         $lastColumn = count($columns) + 1;
@@ -120,7 +167,140 @@ final class MasterlistSheet
 
         $titleStyle = (new Style)->withFontBold(true)->withFontSize(12)->withCellAlignment(CellAlignment::CENTER);
         $centered = (new Style)->withCellAlignment(CellAlignment::CENTER);
+=======
+        $width = count($columns) + 1;
+        $lastColumn = $width - 1;
+>>>>>>> Stashed changes
 
+        // Each style is made once: OpenSpout registers a style per object it is
+        // handed, so building one per line would give two lists different
+        // stylesheets for the same template.
+        $centred = (new Style)
+            ->withCellAlignment(CellAlignment::CENTER)
+            ->withCellVerticalAlignment(CellVerticalAlignment::CENTER);
+        $officeLine = $centred->withFontSize(10);
+        $department = $centred->withFontBold(true)->withFontSize(10);
+        $school = $centred->withFontBold(true)->withFontSize(14)->withFontColor(self::SCHOOL_GREEN);
+        $titleStyle = $centred->withFontBold(true)->withFontSize(13);
+        $schoolYearStyle = $centred->withFontBold(true);
+        $rule = (new Style)->withBorder(new Border(
+            new BorderPart(BorderName::BOTTOM, width: BorderWidth::MEDIUM),
+        ));
+
+        // The heading, top to bottom, before anything is written: OpenSpout
+        // takes merges as options on the writer, so every row the heading
+        // spans has to be known when the writer is made.
+        $heading = [];
+
+        $banner = SchoolLetterhead::officeBanner($letterhead['school']);
+        if ($banner !== null) {
+            $heading[] = ['banner' => $banner];
+        } else {
+            foreach (SchoolLetterhead::officeLines($letterhead) as $index => $line) {
+                $heading[] = ['text' => $line, 'style' => match ($index) {
+                    // Kagawaran ng Edukasyon, then the school, as the
+                    // template weights them.
+                    1 => $department,
+                    3 => $school,
+                    default => $officeLine,
+                }];
+            }
+        }
+
+        // The rule under the letterhead, across the whole form.
+        $heading[] = ['rule' => true];
+        $heading[] = ['blank' => true];
+
+        // The title names WHICH list this is. Lists the school keeps
+        // separately must never share a heading, or they get filed as each
+        // other.
+        foreach (self::titleLines($title) as $line) {
+            $heading[] = ['text' => $line, 'style' => $titleStyle];
+        }
+
+        // A filtered list says what it was filtered to, so a filed copy never
+        // reads as the whole school.
+        $heading[] = ['text' => 'S.Y. '.$schoolYear.($scope !== '' ? ' · '.$scope : ''), 'style' => $schoolYearStyle];
+        $heading[] = ['blank' => true];
+
+        // A wide list goes landscape; every list is fitted to the page's width
+        // and runs onto as many pages as it needs.
+        $options = new XlsxOptions(
+            pageSetup: new PageSetup(
+                $width > 6 ? PageOrientation::LANDSCAPE : PageOrientation::PORTRAIT,
+                PaperSize::A4,
+                fitToHeight: 0,
+                fitToWidth: 1,
+            ),
+        );
+
+        foreach (self::columnWidths($columns, $rows) as $column => $characters) {
+            $options->setColumnWidth($characters, $column + 1);
+        }
+
+        foreach ($heading as $index => $line) {
+            if (isset($line['text'])) {
+                $options->mergeCells(0, $index + 1, $lastColumn, $index + 1);
+            }
+        }
+
+        $writer = new XlsxWriter($options);
+        $writer->openToFile($path);
+
+        try {
+            self::writeForm($writer, $heading, $width, $rule, $columns, $rows, $preparedBy, $preparedRole, $notedBy, $notedRole);
+        } finally {
+            $writer->close();
+        }
+    }
+
+    /**
+     * A roster's "Grade 8 / Rosal" as the form's two columns.
+     *
+     * "Grade 8" prints as 8: the column head already says Grade.
+     *
+     * @return array{0: string, 1: string}
+     */
+    public static function gradeAndSection(string $section): array
+    {
+        [$grade, $sectionName] = FeedingBeneficiarySummary::splitSection($section);
+
+        return [(string) preg_replace('/^grade\s*/i', '', $grade), $sectionName];
+    }
+
+    /**
+     * The title in the template's capitals, broken into lines where the
+     * template breaks it — "…STUDENTS WHO ARE" / "QUALIFIED FOR FEEDING
+     * PROGRAM" — so a long title is never one line running off the page, and
+     * padded to TITLE_LINES so a short one takes the same room.
+     *
+     * @return list<string>
+     */
+    public static function titleLines(string $title): array
+    {
+        $upper = mb_strtoupper(trim((string) preg_replace('/\s+/', ' ', $title)));
+        $lines = explode("\n", wordwrap($upper, self::TITLE_LINE, "\n", false));
+
+        return array_pad($lines, self::TITLE_LINES, '');
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $heading
+     * @param  list<string>  $columns
+     * @param  list<list<string|int|float>>  $rows
+     */
+    private static function writeForm(
+        XlsxWriter $writer,
+        array $heading,
+        int $width,
+        Style $rule,
+        array $columns,
+        array $rows,
+        string $preparedBy,
+        string $preparedRole,
+        string $notedBy,
+        string $notedRole,
+    ): void {
         // A hairline box, as on the printed sheet: the DepEd form is a ruled
         // table, and an unruled block of names is not the same document.
         $box = static fn (): Border => new Border(
@@ -140,6 +320,7 @@ final class MasterlistSheet
             $values
         )));
 
+<<<<<<< Updated upstream
         // ── The letterhead, read through SchoolLetterhead so this sheet and
         // the printed masterlist head the same school the same way. ──
         $mastheadStyles = [
@@ -182,6 +363,29 @@ final class MasterlistSheet
         // reads as the whole school.
         $across($add($line(['S.Y. '.$schoolYear.($scope !== '' ? ' · '.$scope : '')], $centered)));
         $add($line(['']));
+=======
+        foreach ($heading as $entry) {
+            if (isset($entry['banner'])) {
+                [$pixelsWide, $pixelsHigh] = getimagesize($entry['banner']) ?: [self::BANNER_HEIGHT * 5, self::BANNER_HEIGHT];
+                $shownWide = (int) round(self::BANNER_HEIGHT * $pixelsWide / max(1, $pixelsHigh));
+
+                // The picture floats from A1; the row is made as tall as it is
+                // shown (points are three-quarters of a pixel), so nothing below
+                // sits under it.
+                $writer->addRow(
+                    (new Row([new ImageCell($entry['banner'], $shownWide, self::BANNER_HEIGHT)]))
+                        ->withHeight(self::BANNER_HEIGHT * 0.75 + 2)
+                );
+            } elseif (isset($entry['rule'])) {
+                $writer->addRow($line(array_fill(0, $width, ''), $rule)->withHeight(6));
+            } elseif (isset($entry['blank'])) {
+                $writer->addRow($line(['']));
+            } else {
+                // Empty is a real answer for the address: a line to write on.
+                $writer->addRow($line([$entry['text']], $entry['style']));
+            }
+        }
+>>>>>>> Stashed changes
 
         // The table: the first column after "No." spans B and C, so C is
         // written empty and merged into B.
@@ -212,16 +416,28 @@ final class MasterlistSheet
     }
 
     /**
-     * A roster's "Grade 8 / Rosal" as the form's two columns.
+     * Each column as wide as the longest thing in it, so a name is never cut
+     * off by the cell beside it — and the Name column wide enough to write a
+     * name into on an empty ruled line.
      *
-     * "Grade 8" prints as 8: the column head already says Grade.
-     *
-     * @return array{0: string, 1: string}
+     * @param  list<string>  $columns
+     * @param  list<list<string|int|float>>  $rows
+     * @return list<float>  widths in characters, "No." first
      */
-    public static function gradeAndSection(string $section): array
+    private static function columnWidths(array $columns, array $rows): array
     {
-        [$grade, $sectionName] = FeedingBeneficiarySummary::splitSection($section);
+        $widths = [6.0];
 
-        return [(string) preg_replace('/^grade\s*/i', '', $grade), $sectionName];
+        foreach (array_values($columns) as $index => $head) {
+            $longest = mb_strlen($head);
+            foreach ($rows as $row) {
+                $longest = max($longest, mb_strlen((string) ($row[$index] ?? '')));
+            }
+
+            $least = strcasecmp($head, 'Name') === 0 ? 36 : 8;
+            $widths[] = (float) min(48, max($least, $longest + 2));
+        }
+
+        return $widths;
     }
 }

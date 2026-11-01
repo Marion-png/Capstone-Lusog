@@ -3,10 +3,9 @@
      question the roll's counts raise and cannot answer: 1 of 4 — which four,
      and what was written beside them.
 
-     It is a reading, never a form. Marks are entered in the Record Attendance
-     dialog and corrected on the learner's own beneficiary record, where the
-     change is attributed and audited; this dialog renders no radio, no remark
-     field and no endpoint at all.
+     It is a reading, never a form. Marks are entered and changed in the
+     Record Attendance dialog, on the session's own day; this dialog renders no
+     radio, no remark field and no endpoint at all.
 
      Every figure it prints is the row's own, carried on the button that opened
      it, so the dialog and the row are one render and cannot disagree. The

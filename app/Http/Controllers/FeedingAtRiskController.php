@@ -10,6 +10,7 @@ use App\Support\AuditTrail;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingAttendanceMark;
+use App\Support\FeedingAttendanceWindow;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
@@ -44,7 +45,9 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  *   (`feeding_attendance_confirmations`) — the only thing that flags anybody;
  * - a **correction** to one of the absences being verified, through the one
  *   audited correction path (`feedingcor-program.beneficiary.attendance.correct`)
- *   — verifying a record has to be able to find it wrong;
+ *   — offered for today's absence only, because a day's attendance closes when
+ *   the day does (FeedingAttendanceWindow); an earlier absence is verified as
+ *   it stands;
  * - the **follow-up** (`feeding_follow_ups`) on a flagged learner.
  *
  * None of them touches enrolment. A flag is a reason to follow a learner up,
@@ -630,10 +633,14 @@ class FeedingAtRiskController extends Controller
     }
 
     /**
+     * `open` is whether the absence is from today: a mark can be changed on its
+     * own day and never after (FeedingAttendanceWindow), so only today's
+     * absence carries the correction form.
+     *
      * @param  list<string>  $dates  newest first
      * @param  Collection<string, array<string, mixed>>  $byDate
      * @param  array<string, int>  $dayNumbers
-     * @return list<array{date: string, label: string, day: int, remarks: string, recorded_by: string}>
+     * @return list<array{date: string, label: string, day: int, remarks: string, recorded_by: string, open: bool}>
      */
     private function absenceRows(array $dates, Collection $byDate, array $dayNumbers): array
     {
@@ -643,6 +650,7 @@ class FeedingAtRiskController extends Controller
             'day' => ($dayNumbers[$date] ?? 0) + 1,
             'remarks' => (string) ($byDate->get($date)['remarks'] ?? ''),
             'recorded_by' => (string) ($byDate->get($date)['recorded_by'] ?? ''),
+            'open' => FeedingAttendanceWindow::isOpen($date),
         ], $dates));
     }
 

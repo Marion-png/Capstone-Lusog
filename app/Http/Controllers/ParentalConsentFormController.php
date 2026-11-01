@@ -15,8 +15,14 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
+<<<<<<< Updated upstream
 use Illuminate\Validation\Rule;
+=======
+use Illuminate\Validation\ValidationException;
+use Throwable;
+>>>>>>> Stashed changes
 
 class ParentalConsentFormController extends Controller
 {
@@ -52,6 +58,7 @@ class ParentalConsentFormController extends Controller
             // Paper Form asks for. An answer the adviser chose themselves needs
             // none, exactly as before.
             'answer_from_scan' => ['nullable', 'boolean'],
+            'scan_token' => ['nullable', 'string', 'max:100000'],
             'answer_confirmed' => ['accepted_if:answer_from_scan,1'],
             // The services the letter lists, ticked off the paper. Optional,
             // as the answer is: an upload without them reads as the program
@@ -113,6 +120,41 @@ class ParentalConsentFormController extends Controller
             'You may only upload consent forms for students in your assigned class.'
         );
 
+        $scan = ! $feeding ? $this->verifiedScan($request, $validated) : null;
+        $storesScanResult = SchemaCache::hasColumn('parental_consent_forms', 'scan_result');
+        if ($scan !== null && ! $storesScanResult) {
+            throw ValidationException::withMessages([
+                'consent' => 'The consent photo reading cannot be saved yet. Please contact the system administrator to finish the consent update.',
+            ]);
+        }
+
+        if ($scan !== null && ($validated['consent_type'] ?? null) !== null) {
+            $request->validate(['answer_confirmed' => ['accepted']], [
+                'answer_confirmed.accepted' => 'Confirm that the answer read from the photo matches the signed form.',
+            ]);
+            $validated['answer_from_scan'] = true;
+
+            // Keep the clinical fields in step with the reading the adviser
+            // checked. Explicit corrections take precedence over a proposal.
+            foreach (['consent_exceptions' => 'partial_exception', 'refusal_reason' => 'refused_reason'] as $source => $target) {
+                if (! array_key_exists($target, $validated)) {
+                    $validated[$target] = (string) data_get($scan, 'written.'.$source.'.text', '');
+                }
+            }
+            foreach (['allergy_food' => 'allergy_food', 'allergy_medicine' => 'allergy_medicine', 'prev_immunization' => 'prev_immunization', 'other_illness' => 'has_other_illness'] as $source => $target) {
+                $entry = data_get($scan, 'written.'.$source, []);
+                $detail = (string) ($entry['text'] ?? '');
+                $detailKey = $source === 'other_illness' ? 'other_illness_detail' : $source.'_detail';
+                if (! array_key_exists($target, $validated)) {
+                    $validated[$target] = ($entry['box'] ?? '') === ConsentFormScanner::TICKED
+                        || ConsentFormScanner::saysSomething($detail);
+                }
+                if (! array_key_exists($detailKey, $validated)) {
+                    $validated[$detailKey] = $detail;
+                }
+            }
+        }
+
         $schoolYear = ParentalConsentForm::currentSchoolYear();
         $path = null;
         $originalName = null;
@@ -166,11 +208,16 @@ class ParentalConsentFormController extends Controller
             'file_path' => $path,
             'file_original_name' => $originalName,
             'uploaded_by_name' => (string) $request->session()->get('active_name', 'Class Adviser'),
+<<<<<<< Updated upstream
         ] + (SchemaCache::hasColumn('parental_consent_forms', 'services')
             // Written once the column exists, so an upload still files
             // before `php artisan migrate` has been run.
             ? ['services' => $services !== [] ? $services : null]
             : []));
+=======
+            ...($storesScanResult ? ['scan_result' => $scan] : []),
+        ]);
+>>>>>>> Stashed changes
 
         // Who decided the answer is part of the evidence: a nurse asking how a
         // "full consent" got onto this record can find that the reader
@@ -199,7 +246,47 @@ class ParentalConsentFormController extends Controller
             default => 'Signed form',
         };
 
-        return back()->with('consent_success', "{$typeLabel} filed successfully for SY {$schoolYear}.");
+        return back()
+            ->with('consent_success', "{$typeLabel} filed successfully for SY {$schoolYear}.")
+            ->with('consent_detail_lrn', $validated['lrn']);
+    }
+
+    /** Only the server's reading of this exact learner and image can be filed. */
+    private function verifiedScan(Request $request, array $validated): ?array
+    {
+        $token = $validated['scan_token'] ?? null;
+        if (! is_string($token) || $token === '') {
+            return null;
+        }
+
+        try {
+            $payload = json_decode(Crypt::decryptString($token), true, 512, JSON_THROW_ON_ERROR);
+        } catch (Throwable) {
+            throw ValidationException::withMessages(['scan_token' => 'The saved reading is invalid. Read the photo again.']);
+        }
+
+        $file = $request->file('consent');
+        if (! is_array($payload)
+            || ! is_array($payload['draft'] ?? null)
+            || ($payload['expires_at'] ?? 0) < now()->timestamp
+            || ($payload['lrn'] ?? '') !== trim($validated['lrn'])
+            || (string) ($payload['institution_id'] ?? '') !== (string) $request->session()->get('active_institution_id')
+            || ($payload['actor'] ?? '') !== (string) $request->session()->get('active_username', '')
+            || $file === null
+            || ! hash_equals((string) ($payload['photo_hash'] ?? ''), (string) hash_file('sha256', $file->getRealPath()))) {
+            throw ValidationException::withMessages(['scan_token' => 'This reading no longer matches the selected student and photo. Read the photo again.']);
+        }
+
+        if (! empty($payload['draft']['learner_mismatch'])) {
+            throw ValidationException::withMessages(['consent' => 'The name on this form belongs to another student. Choose the correct signed form.']);
+        }
+
+        $readAnswer = ['all' => 'full', 'specific' => 'partial', 'deny' => 'refused'][$payload['draft']['consent_choice'] ?? ''] ?? null;
+        if (($validated['consent_type'] ?? null) !== null && $readAnswer !== $validated['consent_type']) {
+            throw ValidationException::withMessages(['scan_token' => 'The selected answer differs from the photo reading. Read the photo again or record the corrected answer without the reading.']);
+        }
+
+        return $payload['draft'];
     }
 
     /**

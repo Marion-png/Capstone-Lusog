@@ -170,6 +170,31 @@
                                 $rowStatusLabel = ($row['status'] === 'pending' && $form === null && $row['upload'] === null)
                                     ? 'No form yet'
                                     : $statusLabels[$row['status']];
+<<<<<<< Updated upstream
+=======
+                                $detail = [
+                                    'name' => $row['name'],
+                                    'class_label' => $row['class_label'],
+                                    'adviser' => $row['adviser'],
+                                    'lrn' => $row['lrn'],
+                                    'guardian' => $row['parent_guardian'] ?: null,
+                                    'status' => $row['status'],
+                                    'status_label' => $rowStatusLabel,
+                                    'school_year' => $schoolYear,
+                                    'dated_at' => $row['dated_at'],
+                                    'notes' => $row['notes'],
+                                    'has_form_file' => $row['has_form_file'],
+                                    'has_med_cert' => $row['has_med_cert'],
+                                    'file_name' => $row['file_name'],
+                                    'file_url' => $row['file_url'],
+                                    'file_is_image' => $row['file_is_image'],
+                                    'photo_summary' => $row['photo_summary'],
+                                    'uploaded_by' => $row['uploaded_by'],
+                                    'uploaded_on' => $row['uploaded_on'],
+                                    'med_cert_name' => $row['med_cert_name'],
+                                    'recorded_response' => $row['recorded_response'],
+                                ];
+>>>>>>> Stashed changes
                             @endphp
                             <tr class="js-consent-row"
                                 data-name="{{ strtolower($row['name']) }}"
@@ -263,12 +288,12 @@
                 Upload Sulat-Pahibalo
                 <small>Parent's Consent Form</small>
             </div>
-            <button type="button" class="confirm-close" id="uploadConsentClose">&times;</button>
+            <button type="button" class="confirm-close" id="uploadConsentClose" aria-label="Close upload">&times;</button>
         </div>
         <form method="POST" action="{{ route('parental-consent.store') }}" enctype="multipart/form-data" id="uploadConsentForm">
             @csrf
             <div class="confirm-body">
-                <div class="pc-field">
+                <div class="pc-field pc-upload-setup">
                     <label for="pc_lrn">Select Student <span class="pc-req">*</span></label>
                     <div class="pc-input">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
@@ -287,7 +312,7 @@
                      feeding program consent is what lets the Feeding Coordinator
                      enrol a learner in the SBFP. They are filed apart so neither
                      is ever read as the other. --}}
-                <div class="pc-field">
+                <div class="pc-field pc-upload-setup">
                     <label for="pc_program">Which form is this? <span class="pc-req">*</span></label>
                     <div class="pc-input">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -300,7 +325,7 @@
                     <p class="pc-hint">A learner measured as wasted can be enrolled in the feeding program only once their parent's signed feeding program consent is filed here.</p>
                 </div>
 
-                <div class="pc-field">
+                <div class="pc-field pc-upload-setup">
                     <label for="pc_school_year">School Year <span class="pc-req">*</span></label>
                     <div class="pc-input">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -308,7 +333,7 @@
                     </div>
                 </div>
 
-                <div class="pc-field">
+                <div class="pc-field pc-upload-setup">
                     <label id="pcFileLabel">Upload Signed Sulat-Pahibalo Form <span class="pc-req">*</span></label>
                     <div class="pc-drop" id="pcDrop" role="button" tabindex="0">
                         <div id="pcDropBody">
@@ -319,6 +344,12 @@
                     </div>
                     <input type="file" id="pc_file" name="consent" accept=".png,.jpg,.jpeg,.pdf" hidden>
                 </div>
+
+                <div class="pc-scan-review-head" id="pcScanReviewHead" hidden>
+                    <div><h2 id="pcScanStudent"></h2><p>{{ $pcGradeSection }} &middot; SY {{ $schoolYear }}</p></div>
+                    <button type="button" class="btn btn-secondary" id="pcChangePhoto">Change photo or student</button>
+                </div>
+                @include('consent-forms._photo-review', ['reviewId' => 'pcScanReview'])
 
                 {{-- What the guardian answered. It sits under the file because
                      the photo is what the answer is read off — by the adviser,
@@ -376,6 +407,7 @@
                              refuses it otherwise. Choosing an answer by hand
                              makes it the adviser's own and hides the box again. --}}
                         <input type="hidden" name="answer_from_scan" id="pcAnswerFromScan" value="0">
+                        <input type="hidden" name="scan_token" id="pcScanToken" value="">
                         <label class="pc-confirm" id="pcAnswerConfirm" hidden>
                             <input type="checkbox" name="answer_confirmed" value="1" id="pcAnswerConfirmed">
                             <span>I checked this answer against the signed form.</span>
@@ -519,6 +551,7 @@
 @endif
 
 {{-- ── Consent details (read-only) ──────────────────────────────────── --}}
+<<<<<<< Updated upstream
 {{-- One learner's form, read back the way the clinic reads it
      (NurseConsentList::reading): the photo the adviser uploaded beside what
      was recorded from it. Each learner's panel is rendered here and cloned in
@@ -628,6 +661,53 @@
         @endif
     </template>
 @endforeach
+=======
+<div class="confirm-overlay pc-modal" id="consentDetailModal" aria-hidden="true">
+    <div class="confirm-modal pc-review-modal" role="dialog" aria-modal="true" aria-labelledby="cdName" tabindex="-1">
+        <div class="confirm-head">
+            <div class="pc-detail-title">
+                <h2 id="cdName">Consent Details</h2>
+                <p id="cdClass"></p>
+            </div>
+            <button type="button" class="btn btn-secondary" id="consentDetailClose">Close</button>
+        </div>
+        <div class="confirm-body">
+            <div class="pc-detail-context" id="cdStatusStrip">
+                <span>Sulat-Pahibalo &middot; SY <span id="cdYear">-</span></span>
+                <span class="ms-badge" id="cdStatusBadge">-</span>
+                <span class="pc-strip-note" id="cdFormState">-</span>
+            </div>
+
+            @include('consent-forms._photo-review', ['reviewId' => 'cdPhotoReview'])
+
+            {{-- Shown when an answer was recorded but its signed scan is not in
+                 yet, so the recorded answer is never mistaken for consent. --}}
+            <div class="pc-strip pc-strip-warn" id="cdAwaitingStrip" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Recorded as <b id="cdRecorded">-</b>, but the signed form has not been uploaded.
+            </div>
+
+            <div class="pc-strip pc-strip-ok" id="cdFileStrip" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Uploaded Form: <b id="cdFileName">-</b>
+                <a id="cdFileLink" class="pc-strip-link" href="#" target="_blank" rel="noopener" hidden>Open</a>
+            </div>
+
+            <div class="pc-strip pc-strip-ok" id="cdMedCertStrip" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+                Medical Certificate: <b id="cdMedCertName">-</b>
+            </div>
+            <p class="pc-review-note" id="cdNotesRow" hidden>Notes: <span id="cdNotes"></span></p>
+            <p class="pc-review-footnote" id="cdFiled"></p>
+        </div>
+    </div>
+</div>
+
+<dialog class="pc-photo-dialog" id="consentPhotoDialog" aria-label="Uploaded consent form, full size">
+    <form method="dialog"><button class="btn btn-secondary" autofocus>Close enlarged photo</button></form>
+    <img id="consentPhotoFull" alt="Uploaded signed consent form, full size">
+</dialog>
+>>>>>>> Stashed changes
 
 <script>
 // Table: search + status filter + pagination, mirroring My Students.
@@ -742,17 +822,105 @@
 
 // Modals
 (() => {
+    const returnFocus = new WeakMap();
     const open = (modal) => {
+        returnFocus.set(modal, document.activeElement);
         modal.classList.add('open');
         modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        (modal.querySelector('button') || modal.querySelector('[tabindex="-1"]'))?.focus();
     };
     const close = (modal) => {
+        if (!modal.classList.contains('open')) return;
         modal.classList.remove('open');
         modal.setAttribute('aria-hidden', 'true');
+        if (!document.querySelector('.confirm-overlay.open')) document.body.style.overflow = '';
+        returnFocus.get(modal)?.focus();
     };
 
     const uploadModal = document.getElementById('uploadConsentModal');
     const detailModal = document.getElementById('consentDetailModal');
+    const photoDialog = document.getElementById('consentPhotoDialog');
+    const fullPhoto = document.getElementById('consentPhotoFull');
+    const schoolYear = @json($schoolYear);
+
+    photoDialog?.addEventListener('click', (event) => {
+        if (event.target === photoDialog) photoDialog.close();
+    });
+    photoDialog?.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') event.stopPropagation();
+    });
+    document.querySelectorAll('[data-review-enlarge]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const photo = button.closest('.pc-photo-review').querySelector('[data-review-photo]');
+            if (!photo?.getAttribute('src')) return;
+            fullPhoto.src = photo.src;
+            fullPhoto.alt = photo.alt + ', full size';
+            photoDialog.showModal();
+        });
+    });
+
+    // Both the unsaved reading and the saved record use the same presentation.
+    const renderPhotoReview = (root, { summary, url, isImage, name, year, decision }) => {
+        const find = (key) => root.querySelector('[data-review-' + key + ']');
+        const text = (key, value) => { find(key).textContent = value || ''; };
+        root.hidden = false;
+        text('year', '· SY ' + (year || schoolYear));
+        const image = find('photo');
+        image.removeAttribute('src');
+        find('frame').hidden = !url || !isImage;
+        find('enlarge').hidden = !url || !isImage;
+        find('empty').hidden = Boolean(url && isImage);
+        text('empty', url ? 'This form was uploaded as a document.' : 'No signed form has been uploaded yet.');
+        if (url && isImage) {
+            image.src = url;
+            image.alt = 'Uploaded signed consent form for ' + (name || 'this learner');
+        }
+        image.onerror = () => {
+            find('frame').hidden = true;
+            find('enlarge').hidden = true;
+            find('empty').hidden = false;
+            text('empty', 'The photo could not be displayed. Open the uploaded form to check it.');
+            find('file').hidden = !url;
+        };
+        find('file').hidden = !url || isImage;
+        if (url) find('file').href = url;
+        else find('file').removeAttribute('href');
+        text('title', summary ? 'Read from the uploaded photo' : 'Recorded consent');
+        find('complete').hidden = !summary;
+        find('complete').classList.toggle('is-warning', Boolean(summary && !summary.complete));
+        text('complete', summary?.complete ? '✓ All required fields completed' : 'Check the highlighted details against the form');
+        text('decision', summary?.decision || decision || 'Not recorded yet');
+        const warnings = find('warnings');
+        warnings.replaceChildren();
+        (summary?.warnings || []).forEach((warning) => {
+            const item = document.createElement('li');
+            item.textContent = warning;
+            warnings.appendChild(item);
+        });
+        warnings.hidden = !warnings.childElementCount;
+        root.querySelectorAll('[data-review-group]').forEach((group) => {
+            const services = summary?.groups?.[group.dataset.reviewGroup] || [];
+            group.hidden = services.length === 0;
+            group.querySelector('[data-review-count]').textContent = services.length + (services.length === 1 ? ' service' : ' services');
+            const list = group.querySelector('[data-review-services]');
+            list.replaceChildren();
+            services.forEach((label) => {
+                const item = document.createElement('li');
+                item.textContent = label;
+                list.appendChild(item);
+            });
+        });
+        [['not-applicable', 'not_applicable', 'Not applicable to this learner: '], ['not-offered', 'not_offered', 'Not offered on this form: ']].forEach(([key, group, label]) => {
+            const services = summary?.groups?.[group] || [];
+            find(key).hidden = services.length === 0;
+            text(key, label + services.join(', '));
+        });
+        find('facts').hidden = !summary;
+        find('unread').hidden = Boolean(summary);
+        find('exceptions-row').hidden = !summary?.exceptions;
+        ['exceptions', 'reason', 'allergies', 'illnesses', 'signatures'].forEach((key) => text(key, summary?.[key]));
+    };
 
     // ── Upload ──────────────────────────────────────────────────────
     if (uploadModal) {
@@ -882,6 +1050,7 @@
         const answerFromScan = document.getElementById('pcAnswerFromScan');
         const answerConfirm = document.getElementById('pcAnswerConfirm');
         const answerConfirmed = document.getElementById('pcAnswerConfirmed');
+<<<<<<< Updated upstream
         const copyBox = document.getElementById('pcCopy');
 
         // The sheet as the reader saw it, drawn by the server in the form's
@@ -891,6 +1060,16 @@
             copyBox.innerHTML = html || '';
             copyBox.hidden = !html;
         };
+=======
+        const scanToken = document.getElementById('pcScanToken');
+        const scanReview = document.getElementById('pcScanReview');
+        const scanReviewHead = document.getElementById('pcScanReviewHead');
+        const programSelect = document.getElementById('pc_program');
+        const submitButton = uploadForm?.querySelector('button[type="submit"]');
+        let scanVersion = 0;
+        let scanPhotoUrl = null;
+        let scanRequest = null;
+>>>>>>> Stashed changes
 
         const setReaderAnswer = (fromScan) => {
             if (!answerFromScan || !answerConfirm || !answerConfirmed) return;
@@ -906,11 +1085,12 @@
         // The reader checks the name on the sheet against the learner the
         // answer will be filed for, so it reads once one is chosen.
         const chosenLearner = () => studentSelect?.value || '';
+        const isHealthForm = () => programSelect?.value === @json(\App\Models\ParentalConsentForm::PROGRAM_HEALTH_SERVICES);
 
         const syncReader = () => {
             if (!readButton || !readState) return;
             const file = consentFile?.files && consentFile.files[0];
-            readButton.disabled = !readable(file) || chosenLearner() === '';
+            readButton.disabled = !readable(file) || chosenLearner() === '' || !isHealthForm();
             readState.textContent = !file
                 ? 'Attach a photo of the signed form first.'
                 : (!readable(file)
@@ -918,6 +1098,7 @@
                     : (chosenLearner() === '' ? 'Select the student first.' : ''));
         };
 
+<<<<<<< Updated upstream
         // The written lines the reader transcribes, keyed by the field each
         // one fills here.
         const writtenFields = {
@@ -959,12 +1140,27 @@
                 if (input) input.value = '';
             });
             filledFromScan = false;
+=======
+        const resetScanReview = () => {
+            scanVersion++;
+            scanRequest?.abort();
+            scanRequest = null;
+            if (scanToken) scanToken.value = '';
+            scanReview.hidden = true;
+            scanReviewHead.hidden = true;
+            uploadModal.classList.remove('is-reviewing');
+            scanReview.querySelector('[data-review-photo]').removeAttribute('src');
+            if (scanPhotoUrl) URL.revokeObjectURL(scanPhotoUrl);
+            scanPhotoUrl = null;
+            if (submitButton) submitButton.disabled = false;
+>>>>>>> Stashed changes
         };
 
         if (readButton && answerSelect) {
             // A reading belongs to the photo it was taken from, and to the
             // learner it was checked against.
             const dropReading = () => {
+<<<<<<< Updated upstream
                 showCopy(null);
                 if (answerFromScan?.value === '1') {
                     answerSelect.value = '';
@@ -972,23 +1168,41 @@
                     syncAnswerLines();
                 }
                 clearReading();
+=======
+                if ((answerFromScan?.value === '1' || scanToken?.value) && isHealthForm()) answerSelect.value = '';
+                resetScanReview();
+                setReaderAnswer(false);
+>>>>>>> Stashed changes
                 syncReader();
             };
 
             consentFile?.addEventListener('change', dropReading);
             studentSelect?.addEventListener('change', dropReading);
+            programSelect?.addEventListener('change', dropReading);
+            document.getElementById('pcChangePhoto')?.addEventListener('click', () => {
+                dropReading();
+                studentSelect?.focus();
+            });
 
             // Choosing by hand makes the answer the adviser's own.
-            answerSelect.addEventListener('change', () => setReaderAnswer(false));
+            answerSelect.addEventListener('change', () => {
+                resetScanReview();
+                setReaderAnswer(false);
+                syncReader();
+            });
 
             const choiceToAnswer = { all: 'full', specific: 'partial', deny: 'refused' };
 
             readButton.addEventListener('click', async () => {
                 const file = consentFile?.files && consentFile.files[0];
                 const lrn = chosenLearner();
-                if (!readable(file) || lrn === '') return;
+                if (!readable(file) || lrn === '' || !isHealthForm()) return;
 
+                dropReading();
+                const version = scanVersion;
+                scanRequest = new AbortController();
                 readButton.disabled = true;
+                if (submitButton) submitButton.disabled = true;
                 readState.textContent = 'Reading the form…';
                 showCopy(null);
 
@@ -1004,12 +1218,13 @@
                             Accept: 'application/json',
                         },
                         body,
+                        signal: scanRequest.signal,
                     });
                     const data = await response.json().catch(() => ({}));
 
                     // The adviser swapped the photo, or the learner, while it
                     // was being read.
-                    if (!consentFile.files || consentFile.files[0] !== file || chosenLearner() !== lrn) return;
+                    if (version !== scanVersion || !consentFile.files || consentFile.files[0] !== file || chosenLearner() !== lrn || !isHealthForm()) return;
 
                     if (!response.ok) {
                         readState.textContent = data.message || 'The form could not be read. Choose the answer from the paper.';
@@ -1023,6 +1238,7 @@
                     // to "Not recorded yet" and the reason is said instead.
                     answerSelect.value = answer;
                     setReaderAnswer(answer !== '');
+<<<<<<< Updated upstream
                     syncAnswerLines();
 
                     // Another child's sheet, or one nothing could be read
@@ -1032,6 +1248,16 @@
                         fillFromReading(draft);
                     }
                     showCopy(data.copy_html);
+=======
+                    if (scanToken) scanToken.value = data.scan_token || '';
+                    scanPhotoUrl = URL.createObjectURL(file);
+                    const studentName = studentSelect.options[studentSelect.selectedIndex]?.text.replace(/\s*\([^)]*\)$/, '') || '';
+                    document.getElementById('pcScanStudent').textContent = studentName;
+                    renderPhotoReview(scanReview, { summary: data.summary, url: scanPhotoUrl, isImage: true, name: studentName, year: schoolYear });
+                    scanReviewHead.hidden = false;
+                    uploadModal.classList.add('is-reviewing');
+                    uploadModal.querySelector('.confirm-modal').scrollTop = 0;
+>>>>>>> Stashed changes
 
                     if (draft.unreadable) {
                         readState.textContent = 'The photo could not be read. Choose the answer from the paper.';
@@ -1043,9 +1269,13 @@
                             + (draft.signature_present ? '' : ' No parent\'s signature was found on the photo.');
                     }
                 } catch (_err) {
-                    readState.textContent = 'The form could not be read. Choose the answer from the paper.';
+                    if (version === scanVersion) readState.textContent = 'The form could not be read. Choose the answer from the paper.';
                 } finally {
-                    readButton.disabled = !readable(consentFile?.files && consentFile.files[0]) || chosenLearner() === '';
+                    if (version === scanVersion) {
+                        scanRequest = null;
+                        readButton.disabled = !readable(consentFile?.files && consentFile.files[0]) || chosenLearner() === '' || !isHealthForm();
+                        if (submitButton) submitButton.disabled = false;
+                    }
                 }
             });
         }
@@ -1054,6 +1284,7 @@
             document.getElementById('uploadConsentForm')?.reset();
             resetConsentDrop();
             resetMedCertDrop();
+            resetScanReview();
             setReaderAnswer(false);
             filledFromScan = false;
             showCopy(null);
@@ -1061,6 +1292,7 @@
             syncAllServices();
             servicesBox?.classList.remove('invalid');
             if (studentSelect && lrn) studentSelect.value = lrn;
+            programSelect?.dispatchEvent(new Event('change'));
             syncReader();
             open(uploadModal);
         };
@@ -1070,11 +1302,13 @@
             button.addEventListener('click', () => openUpload(button.dataset.lrn || ''));
         });
 
-        document.getElementById('uploadConsentClose')?.addEventListener('click', () => close(uploadModal));
-        document.getElementById('uploadConsentCancel')?.addEventListener('click', () => close(uploadModal));
+        const closeUpload = () => { resetScanReview(); close(uploadModal); };
+        document.getElementById('uploadConsentClose')?.addEventListener('click', closeUpload);
+        document.getElementById('uploadConsentCancel')?.addEventListener('click', closeUpload);
+        uploadModal.addEventListener('consent:close', closeUpload);
         uploadModal.addEventListener('click', (event) => {
             if (event.target === uploadModal) {
-                close(uploadModal);
+                closeUpload();
             }
         });
     }
@@ -1095,14 +1329,88 @@
 
         document.querySelectorAll('.js-consent-view').forEach((button) => {
             button.addEventListener('click', () => {
+<<<<<<< Updated upstream
                 const tpl = panels.get(button.dataset.lrn || '');
                 if (!tpl) return;
                 detailBody.replaceChildren(tpl.content.cloneNode(true));
+=======
+                let detail = {};
+                try {
+                    detail = JSON.parse(button.closest('tr')?.getAttribute('data-detail') || '{}');
+                } catch (_err) {
+                    detail = {};
+                }
+
+                setText('cdName', detail.name);
+                setText('cdClass', [detail.class_label, detail.adviser ? 'Adviser: ' + detail.adviser : '', detail.lrn ? 'LRN ' + detail.lrn : ''].filter(Boolean).join(' · '));
+                setText('cdYear', detail.school_year);
+                setText('cdNotes', detail.notes);
+                document.getElementById('cdNotesRow').hidden = !detail.notes;
+                renderPhotoReview(document.getElementById('cdPhotoReview'), {
+                    summary: detail.photo_summary, url: detail.file_url, isImage: detail.file_is_image,
+                    name: detail.name, year: detail.school_year, decision: detail.recorded_response,
+                });
+                const filed = document.getElementById('cdFiled');
+                filed.hidden = !detail.has_form_file;
+                filed.textContent = 'Uploaded' + (detail.uploaded_by ? ' by ' + detail.uploaded_by : '')
+                    + (detail.uploaded_on ? ' on ' + detail.uploaded_on : '') + '. Valid for all service cycles in SY '
+                    + detail.school_year + '. Only the class adviser can upload or replace this form.';
+
+                const badge = document.getElementById('cdStatusBadge');
+                if (badge) {
+                    badge.textContent = detail.status_label || '-';
+                    badge.className = 'ms-badge ms-consent-' + (detail.status || 'pending');
+                }
+                setText('cdFormState', detail.has_form_file ? 'Form uploaded' : 'Awaiting signed form');
+
+                // An answer with no scan behind it is reported as pending, so
+                // say what was recorded rather than dropping it silently.
+                const awaiting = document.getElementById('cdAwaitingStrip');
+                if (awaiting) {
+                    const unbacked = !detail.has_form_file && Boolean(detail.recorded_response);
+                    awaiting.hidden = !unbacked;
+                    setText('cdRecorded', detail.recorded_response);
+                }
+
+                const fileStrip = document.getElementById('cdFileStrip');
+                if (fileStrip) {
+                    fileStrip.hidden = !detail.has_form_file || detail.file_is_image;
+                    setText('cdFileName', detail.file_name || 'Uploaded file');
+
+                    // The learner's own adviser may open the scan they filed,
+                    // through the same audited route the clinic uses — which
+                    // is what keeps an earlier year's form readable, not just
+                    // named.
+                    const fileLink = document.getElementById('cdFileLink');
+                    if (fileLink) {
+                        fileLink.hidden = !detail.file_url;
+                        fileLink.href = detail.file_url || '#';
+                    }
+                }
+
+                const medStrip = document.getElementById('cdMedCertStrip');
+                if (medStrip) {
+                    medStrip.hidden = !detail.has_med_cert;
+                    setText('cdMedCertName', detail.med_cert_name || 'Attached');
+                }
+
+>>>>>>> Stashed changes
                 open(detailModal);
                 detailBody.querySelector('[data-view-close]')?.focus();
             });
         });
 
+<<<<<<< Updated upstream
+=======
+        const uploadedLrn = @json(session('consent_detail_lrn'));
+        if (uploadedLrn) {
+            Array.from(document.querySelectorAll('.js-consent-row'))
+                .find((row) => row.dataset.lrn === uploadedLrn)?.querySelector('.js-consent-view')?.click();
+        }
+
+        document.getElementById('consentDetailClose')?.addEventListener('click', () => close(detailModal));
+        document.getElementById('consentDetailDone')?.addEventListener('click', () => close(detailModal));
+>>>>>>> Stashed changes
         detailModal.addEventListener('click', (event) => {
             if (event.target === detailModal || event.target.closest('[data-view-close]')) {
                 closeDetail();
@@ -1111,9 +1419,28 @@
     }
 
     document.addEventListener('keydown', (event) => {
+        if (photoDialog?.open) return;
         if (event.key === 'Escape') {
+<<<<<<< Updated upstream
             if (uploadModal) close(uploadModal);
             closeDetail();
+=======
+            if (uploadModal) uploadModal.dispatchEvent(new Event('consent:close'));
+            if (detailModal) close(detailModal);
+>>>>>>> Stashed changes
+        }
+        if (event.key === 'Tab') {
+            const modal = document.querySelector('.confirm-overlay.open');
+            if (!modal) return;
+            const focusable = Array.from(modal.querySelectorAll('button, a[href], input, select, textarea, [tabindex="0"]'))
+                .filter((node) => !node.disabled && node.getClientRects().length > 0);
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault(); last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault(); first?.focus();
+            }
         }
     });
 })();

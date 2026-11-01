@@ -6,12 +6,17 @@ use App\Models\HealthConsentForm;
 use App\Support\AdviserClassScope;
 use App\Support\AuditTrail;
 use App\Support\ConsentFormScanner;
+<<<<<<< Updated upstream
 use App\Support\ConsentPaperCopy;
+=======
+use App\Support\ConsentPhotoSummary;
+>>>>>>> Stashed changes
 use App\Support\LearnerPlacement;
 use App\Support\StudentRosterSync;
 use App\Support\UploadReadFailure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Throwable;
 
 /**
@@ -102,9 +107,23 @@ class ConsentFormScanController extends Controller
 
         return response()->json([
             'draft' => $draft,
+<<<<<<< Updated upstream
             // The sheet drawn back as the parent marked it, in the letter's
             // own words, by the partial every read-back of a form uses.
             'copy_html' => $copy !== null ? view('consent-forms._paper-copy', ['copy' => $copy])->render() : null,
+=======
+            'summary' => ConsentPhotoSummary::fromDraft($draft, $learner['grade'] ?? null),
+            // The upload can retain this reading without trusting JSON posted
+            // by the browser or making another model call.
+            'scan_token' => Crypt::encryptString(json_encode([
+                'draft' => $draft,
+                'lrn' => trim((string) ($validated['lrn'] ?? '')),
+                'institution_id' => $request->session()->get('active_institution_id'),
+                'actor' => (string) $request->session()->get('active_username', ''),
+                'photo_hash' => hash_file('sha256', $validated['photo']->getRealPath()),
+                'expires_at' => now()->addHour()->timestamp,
+            ], JSON_THROW_ON_ERROR)),
+>>>>>>> Stashed changes
             'labels' => ConsentFormScanner::serviceKeys(),
             'choices' => [
                 HealthConsentForm::CONSENT_ALL => 'Agreed to all services',

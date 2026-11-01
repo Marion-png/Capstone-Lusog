@@ -10,6 +10,7 @@ use App\Support\ClassMasterlistTemplate;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingAttendanceMark;
+use App\Support\FeedingAttendanceWindow;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingNutritionProgress;
 use App\Support\FeedingProgramCycle;
@@ -19,6 +20,7 @@ use App\Support\SchemaCache;
 use App\Support\SchoolLetterhead;
 use App\Support\SchoolPulse;
 use App\Support\SchoolSignatories;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -343,14 +345,16 @@ class FeedingCoordinatorController extends Controller
      * Three rules it inherits rather than re-decides:
      *
      * - **The roll is the whole enrolled roll, unfiltered.** Recording through
-     *   the page's grade/section/gender filter would close the day on the
-     *   learners the filter was hiding, with no way back to them.
-     * - **A recorded session is closed as a whole.** The first confirmed mark
-     *   for the date ends it, so the dialog is not rendered thereafter — and
-     *   `storeRecordedAttendance` refuses the write regardless, because a
-     *   read-only screen whose endpoint still accepts writes is a suggestion.
-     *   An *unconfirmed* scanned mark does not close a session: nobody has read
-     *   it, and recording on site is exactly how it gets decided.
+     *   the page's grade/section/gender filter would leave the learners the
+     *   filter was hiding unmarked.
+     * - **Today's session is open all day, recorded or not**
+     *   (FeedingAttendanceWindow, on the school's clock). Once it has been
+     *   recorded the dialog opens on the marks on file and saving changes them;
+     *   when the day ends it closes, and `storeRecordedAttendance` refuses the
+     *   write regardless, because a read-only screen whose endpoint still
+     *   accepts writes is a suggestion. An *unconfirmed* scanned mark records
+     *   nothing: nobody has read it, and recording on site is exactly how it
+     *   gets decided.
      * - **A weekend is not a feeding day**, and neither is a date outside the
      *   running cycle.
      *
@@ -358,7 +362,9 @@ class FeedingCoordinatorController extends Controller
      */
     private function buildRecordSession(?int $institutionId): array
     {
-        $today = now()->toDateString();
+        // The school's date, not the server's: before 8 AM in Davao the server
+        // is still on yesterday.
+        $today = FeedingAttendanceWindow::today();
         $cycle = FeedingProgramCycle::forInstitution($institutionId);
 
         // The enrolled roll for the year being recorded — always the current
@@ -395,11 +401,17 @@ class FeedingCoordinatorController extends Controller
             ];
         })->values();
 
+<<<<<<< Updated upstream
         // A mark a human has already confirmed records the day, and the day
         // stays open to editing until it ends, for late arrivals — the same
         // rule the Attendance tab and the endpoint apply. An unconfirmed
         // scanned mark records nothing.
         $marked = $rows->contains(
+=======
+        // A mark a human has already confirmed makes today's save an edit. An
+        // unconfirmed scanned one deliberately does not.
+        $recorded = $rows->contains(
+>>>>>>> Stashed changes
             fn (array $row): bool => in_array($row['status'], FeedingAttendanceMark::RECORDABLE, true)
         );
         $locked = $marked && ! FeedingProgramCycle::sessionStaysOpen($today);
@@ -409,15 +421,21 @@ class FeedingCoordinatorController extends Controller
         $withinWindow = $start === null || ($today >= $start && $today <= $end);
 
         $isFeedingDay = FeedingProgramCycle::isFeedingDay($today);
-        $canRecord = ! $locked && $isFeedingDay && $withinWindow && $beneficiaries->isNotEmpty();
+        $canRecord = $isFeedingDay && $withinWindow && $beneficiaries->isNotEmpty();
 
         return [
             'recordSelectedDate' => $today,
-            'recordSelectedDateLabel' => now()->format('F j, Y'),
+            'recordSelectedDateLabel' => Carbon::parse($today)->format('F j, Y'),
             'recordRows' => $rows->all(),
             'recordBeneficiaryCount' => $beneficiaries->count(),
             'canRecordToday' => $canRecord,
+<<<<<<< Updated upstream
             'recordMarked' => $marked,
+=======
+            // Already recorded today: the button and the dialog say "Edit", and
+            // the marks on file come back selected.
+            'recordEditing' => $canRecord && $recorded,
+>>>>>>> Stashed changes
             // Why the day is closed, in the words the coordinator needs. The
             // button is drawn either way and the dialog opens either way: on a
             // closed day it opens on the session as a record rather than as a
@@ -426,9 +444,8 @@ class FeedingCoordinatorController extends Controller
             'recordBlockedReason' => match (true) {
                 $canRecord => '',
                 $beneficiaries->isEmpty() => 'No beneficiary is enrolled for this school year yet.',
-                ! $isFeedingDay => now()->format('l, F j, Y').' is a weekend. There are no feeding sessions on Saturdays or Sundays.',
-                ! $withinWindow => 'Today is outside the running feeding programme.',
-                default => 'Attendance for '.now()->format('F j, Y').' has already been recorded.',
+                ! $isFeedingDay => Carbon::parse($today)->format('l, F j, Y').' is a weekend. There are no feeding sessions on Saturdays or Sundays.',
+                default => 'Today is outside the running feeding programme.',
             },
         ];
     }
@@ -899,7 +916,8 @@ class FeedingCoordinatorController extends Controller
      */
     private function buildTodayAttendance(Collection $beneficiaries, array $filters): array
     {
-        $today = now()->toDateString();
+        // The same "today" the Record Attendance dialog beside it writes to.
+        $today = FeedingAttendanceWindow::today();
         $marks = $this->marksForSession($beneficiaries, $today);
 
         $counts = ['present' => 0, 'absent' => 0, 'excused' => 0, 'unconfirmed' => 0, 'unrecorded' => 0];
@@ -1020,7 +1038,9 @@ class FeedingCoordinatorController extends Controller
             // touching a mark, so both are watched too.
             ['student_health_records', 'feeding_attendances', 'feeding_attendance_confirmations', 'feeding_follow_ups'],
             $institutionId,
-            [now()->toDateString()],
+            // The school's date, so the panels roll over at the school's
+            // midnight — when today's session closes.
+            [FeedingAttendanceWindow::today()],
         );
     }
 
