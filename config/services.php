@@ -66,4 +66,42 @@ return [
         'max_upload_kb' => (int) env('GEMINI_MAX_UPLOAD_KB', 10240),
     ],
 
+    /*
+     * Calendarific, read for the Philippine public holidays so a holiday is
+     * not counted as a feeding day (App\Support\PublicHolidaySync). The key is
+     * never committed — set CALENDARIFIC_API_KEY in .env. With no key the
+     * sync is disabled and every weekday stays a feeding day, as before.
+     *
+     * `location` is an ISO 3166-2 code; leave it empty for national holidays
+     * only. A regional holiday (BARMM's, a city's) is kept only when it names
+     * the location set here.
+     */
+    'calendarific' => [
+        'key' => env('CALENDARIFIC_API_KEY'),
+        'endpoint' => env('CALENDARIFIC_ENDPOINT', 'https://calendarific.com/api/v2'),
+        'country' => env('CALENDARIFIC_COUNTRY', 'PH'),
+        'location' => env('CALENDARIFIC_LOCATION', ''),
+        'timeout' => (int) env('CALENDARIFIC_TIMEOUT', 20),
+    ],
+
+    /*
+     * Semaphore (semaphore.co), the Philippine SMS gateway that texts a
+     * parent who opted in on the Sulat-Pahibalo (App\Support\ParentNotifier).
+     * The key is never committed — set SEMAPHORE_API_KEY in .env.
+     *
+     * With no key the feature is off and nothing else changes. SMS_DRY_RUN
+     * composes and logs every message exactly as a real send would but never
+     * calls the gateway, for demonstrating the flow without spending credits;
+     * it wins over a key that is set. The daily cap is per school, so a bug or
+     * a replayed sheet cannot drain the account.
+     */
+    'semaphore' => [
+        'key' => env('SEMAPHORE_API_KEY'),
+        'sender_name' => env('SEMAPHORE_SENDER_NAME'),
+        'endpoint' => env('SEMAPHORE_ENDPOINT', 'https://api.semaphore.co/api/v4'),
+        'timeout' => (int) env('SEMAPHORE_TIMEOUT', 15),
+        'dry_run' => (bool) env('SMS_DRY_RUN', false),
+        'daily_cap' => (int) env('SMS_DAILY_CAP', 300),
+    ],
+
 ];

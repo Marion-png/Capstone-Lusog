@@ -398,6 +398,17 @@ a.fa-cal-day:focus-visible { outline: none; box-shadow: var(--lg-focus); }
 	background: repeating-linear-gradient(135deg, var(--lg-rail) 0 5px, var(--lg-card) 5px 10px);
 }
 .fa-cal-day.is-locked .fa-cal-num { color: var(--lg-ink-soft); opacity: .6; }
+/* A weekday the school calendar closes: locked like a weekend, tagged with
+   what closed it. */
+.fa-cal-tag {
+	max-width: 100%;
+	font-size: .6rem;
+	font-weight: 700;
+	letter-spacing: .04em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft);
+	white-space: nowrap;
+}
 .fa-cal-head.is-weekend { opacity: .55; }
 .fa-cal-day.is-today { border-color: var(--lg-ink); }
 .fa-cal-day.is-selected { border-color: var(--lg-emerald); box-shadow: inset 0 0 0 1px var(--lg-emerald); }
@@ -423,6 +434,9 @@ a.fa-cal-day:focus-visible { outline: none; box-shadow: var(--lg-focus); }
 	.fa-dategroup { width: 100%; }
 	.fa-dateinput { flex: 1 1 auto; min-width: 0; text-align: center; }
 	.fa-cal-day { min-height: 44px; }
+	/* A phone's day cell is too narrow for the tag; the hatching and the
+	   cell's own label still say the day is closed. */
+	.fa-cal-tag { display: none; }
 }
 
 /* ── Print — the attendance sheet on paper ─────────────────────────

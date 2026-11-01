@@ -138,6 +138,19 @@
 	border-top: 1px solid var(--lg-border);
 }
 
+/* ══ School calendar ════════════════════════════════════════════════
+   The holidays synced per calendar year, then the list of closed days. ══ */
+
+.sa-sync-years { display: flex; flex-wrap: wrap; gap: 10px 28px; }
+.sa-sync-year { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: .8rem; color: var(--lg-ink-soft); }
+.sa-sync-year strong { font-size: .95rem; font-weight: 600; color: var(--lg-ink); }
+.sa-sync-year .sa-sep { color: var(--lg-border-strong); }
+.sa-calendar-table { margin-top: 16px; }
+/* A school's full name needs more room than a date does. The narrower
+   breakpoints below fall back to the policy grid's columns. */
+.sa-calendar-grid { grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr); }
+.sa-calendar-table form { display: inline; margin: 0; }
+
 /* ══ Audit trail ════════════════════════════════════════════════════ */
 
 .sa-audit-table th, .sa-audit-table td { vertical-align: top; }
@@ -248,6 +261,8 @@
 
 @media (max-width: 1100px) {
 	.sa-policy-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	/* Too narrow for a school's full name in a third of the row. */
+	.sa-calendar-grid > .sa-field:first-child { grid-column: 1 / -1; }
 }
 @media (max-width: 900px) {
 	.sa-actions { width: 100%; margin-left: 0; }
@@ -261,4 +276,15 @@
 }
 @media (max-width: 420px) {
 	.sa-policy-grid { grid-template-columns: 1fr; }
+}
+
+/* ---- Parent SMS (dashboard/system-admin-sms) ---- */
+.sa-sms-actions { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 16px 20px; margin: 20px 0 16px; }
+.sa-sms-test { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.sa-sms-test .input { min-width: 220px; }
+.sa-sms-table .sa-sms-message { min-width: 260px; max-width: 420px; font-size: .8rem; line-height: 1.45; }
+.sa-sms-error { display: block; margin-top: 4px; font-size: .74rem; color: var(--lg-danger-ink); }
+.sa-sms-retry { padding: 5px 12px; font-size: .76rem; }
+@media (max-width: 640px) {
+	.sa-sms-test, .sa-sms-test > div, .sa-sms-test .input { width: 100%; min-width: 0; }
 }

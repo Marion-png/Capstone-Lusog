@@ -24,6 +24,7 @@ use App\Http\Controllers\NurseController;
 use App\Http\Controllers\NutricorController;
 use App\Http\Controllers\NutritionCoordinatorController;
 use App\Http\Controllers\ParentalConsentFormController;
+use App\Http\Controllers\SchoolCalendarController;
 use App\Http\Controllers\SchoolHeadConsentController;
 use App\Http\Controllers\SchoolHeadController;
 use App\Http\Controllers\SchoolHeadHealthController;
@@ -33,6 +34,7 @@ use App\Http\Controllers\SchoolHeadProgramController;
 use App\Http\Controllers\SchoolHeadReportsController;
 use App\Http\Controllers\SchoolYearTransitionController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\SmsNotificationController;
 use App\Http\Controllers\StudentAllergyController;
 use App\Http\Controllers\StudentHealthRecordController;
 use App\Http\Controllers\StudentIncidentReportController;
@@ -1338,8 +1340,21 @@ Route::get('/dashboard/system-admin', function () {
             FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS => 'A run of unexcused absences',
             FeedingAtRiskRule::MODE_CONSECUTIVE_ABSENCES => 'A run of absences of any kind',
         ],
+        // The public holidays read from Calendarific and the suspensions and
+        // breaks entered here — the days a school holds no feeding session.
+        'calendar' => SchoolCalendarController::overview(),
     ]);
 })->name('dashboard.system-admin');
+
+// The School Calendar (SchoolCalendarController). Named, like every write:
+// RestrictSchoolHeadWrites matches on the name.
+Route::post('/dashboard/system-admin/calendar/sync', [SchoolCalendarController::class, 'sync'])
+    ->name('dashboard.system-admin.calendar.sync');
+Route::post('/dashboard/system-admin/calendar', [SchoolCalendarController::class, 'store'])
+    ->name('dashboard.system-admin.calendar.store');
+Route::delete('/dashboard/system-admin/calendar/{day}', [SchoolCalendarController::class, 'destroy'])
+    ->whereNumber('day')
+    ->name('dashboard.system-admin.calendar.destroy');
 
 /**
  * Sets one school's feeding policy.
@@ -1507,6 +1522,17 @@ Route::get('/dashboard/system-admin/audit-logs', function (Request $request) {
         'filterUsername' => $filterUsername,
     ]);
 })->name('dashboard.system-admin.audit-logs');
+
+// Parent text messages (Semaphore SMS): the gateway's standing, the log of
+// every message, a sample send, delivery reports and retry. System Admin only.
+Route::get('/dashboard/system-admin/sms', [SmsNotificationController::class, 'index'])
+    ->name('dashboard.system-admin.sms');
+Route::post('/dashboard/system-admin/sms/test', [SmsNotificationController::class, 'test'])
+    ->name('dashboard.system-admin.sms.test');
+Route::post('/dashboard/system-admin/sms/refresh', [SmsNotificationController::class, 'refresh'])
+    ->name('dashboard.system-admin.sms.refresh');
+Route::post('/dashboard/system-admin/sms/{notification}/retry', [SmsNotificationController::class, 'retry'])
+    ->whereNumber('notification')->name('dashboard.system-admin.sms.retry');
 
 Route::post('/dashboard/system-admin/accounts', function (Request $request) {
     if ($request->session()->get('active_role') !== 'system_admin') {

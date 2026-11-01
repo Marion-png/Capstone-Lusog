@@ -9,13 +9,22 @@
      no sheet worth opening, and a click there only ever led to a notice. They
      are never links. A mark written on one before the weekend guard existed
      still shows its glyph, so a recorded day is never made invisible — it is
-     read as the Monday after, and that is the sheet to open. --}}
+     read as the Monday after, and that is the sheet to open.
+
+     A weekday the school calendar closes (a public holiday, a suspension, a
+     break — App\Support\SchoolCalendar) is locked the same way, tagged with
+     its kind; the full name is its title and its accessible label. --}}
 @php
 	$weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 	$stateBadge = [
 		'complete' => ['fa-day-complete', '✓'],
 		'partial' => ['fa-day-partial', '◐'],
 		'none' => ['', ''],
+	];
+	$closureTag = [
+		\App\Support\SchoolCalendar::KIND_HOLIDAY => 'Holiday',
+		\App\Support\SchoolCalendar::KIND_SUSPENSION => 'Suspended',
+		\App\Support\SchoolCalendar::KIND_BREAK => 'Break',
 	];
 @endphp
 
@@ -48,6 +57,18 @@
 						<span class="fa-cal-num">{{ $day['day'] }}</span>
 						@if ($day['state'] !== 'none')
 							<span class="fa-cal-mark">{{ $glyph }}</span>
+						@endif
+					</div>
+				@elseif (! empty($day['closure']))
+					<div class="fa-cal-day is-closed is-locked {{ $day['is_today'] ? 'is-today' : '' }}" role="gridcell"
+						aria-disabled="true"
+						title="{{ $day['closure']['name'] }}"
+						aria-label="{{ \Carbon\Carbon::parse($day['date'])->format('l, F j') }} — {{ $day['closure']['name'] }}, no feeding">
+						<span class="fa-cal-num">{{ $day['day'] }}</span>
+						@if ($day['state'] !== 'none')
+							<span class="fa-cal-mark">{{ $glyph }}</span>
+						@else
+							<span class="fa-cal-tag">{{ $closureTag[$day['closure']['kind']] ?? 'Closed' }}</span>
 						@endif
 					</div>
 				@elseif ($day['state'] === 'none')

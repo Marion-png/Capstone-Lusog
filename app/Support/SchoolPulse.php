@@ -86,6 +86,9 @@ final class SchoolPulse
         'medicines',
         'medicine_dispenses',
         'medicine_receipts',
+        // A suspension the System Admin enters closes today's session on
+        // every screen that offers it.
+        'school_calendar_days',
     ];
 
     /**

@@ -14,11 +14,15 @@
     - The month grid disables weekends and any day outside the input's
       min/max. They are disabled <button>s, so they cannot be clicked, tabbed
       to or chosen from the keyboard; the arrow keys step over them.
+    - A weekday the school is closed — a public holiday, a class suspension,
+      a school break (App\Support\SchoolCalendar) — is locked the same way,
+      from the input's `data-closed-dates` (a JSON object, date => name), and
+      its name is read out with it.
     - The panel is appended to <body> and positioned from the button, because
       the controls it serves sit inside boxes that clip their overflow and a
       page whose wrapper can carry a transform while it fades in.
 
-    The server refuses a weekend on save regardless — a control is a
+    The server refuses a weekend or a closed day on save regardless — a control is a
     convenience, never the guarantee. Without JavaScript the native input is
     simply left as it was.
 --}}
@@ -95,7 +99,8 @@
 	.wdp-day:disabled { color: var(--lg-border-strong, #C7DCCE); cursor: not-allowed; }
 	/* Locked for a stronger reason: a weekend is never a feeding day. Hatched
 	   rather than merely faded, so it reads as closed and not as "later". */
-	.wdp-day.is-weekend:disabled {
+	.wdp-day.is-weekend:disabled,
+	.wdp-day.is-closed:disabled {
 		color: var(--lg-ink-soft, #6B7C72);
 		opacity: .55;
 		background: repeating-linear-gradient(135deg, var(--lg-rail, #EEF4F0) 0 4px, transparent 4px 8px);
@@ -129,7 +134,17 @@
 
 		const min = input.min || '';
 		const max = input.max || '';
-		const selectable = (d) => !isWeekend(d) && (min === '' || iso(d) >= min) && (max === '' || iso(d) <= max);
+		// date => name of every weekday the school is closed.
+		let closedDates = {};
+		try {
+			const parsed = JSON.parse(input.dataset.closedDates || '{}');
+			closedDates = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+		} catch (e) {
+			closedDates = {};
+		}
+		const closedName = (d) => (Object.prototype.hasOwnProperty.call(closedDates, iso(d)) ? String(closedDates[iso(d)]) : null);
+		const selectable = (d) => !isWeekend(d) && closedName(d) === null && (min === '' || iso(d) >= min) && (max === '' || iso(d) <= max);
+		const escapeText = (text) => text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 		const trigger = document.createElement('button');
 		trigger.type = 'button';
@@ -185,9 +200,13 @@
 				const d = new Date(year, month, day);
 				const key = iso(d);
 				const open = selectable(d);
-				const classes = ['wdp-day', isWeekend(d) ? 'is-weekend' : '', key === today ? 'is-today' : '', key === selected ? 'is-selected' : ''].join(' ');
-				const note = isWeekend(d) ? ' — no feeding on weekends' : (open ? '' : ' — outside the programme');
-				cells += `<button type="button" class="${classes}" data-date="${key}" tabindex="-1" ${open ? '' : 'disabled'} aria-label="${longLabel(d)}${note}" ${key === selected ? 'aria-pressed="true"' : ''}>${day}</button>`;
+				const closed = isWeekend(d) ? null : closedName(d);
+				const classes = ['wdp-day', isWeekend(d) ? 'is-weekend' : '', closed !== null ? 'is-closed' : '', key === today ? 'is-today' : '', key === selected ? 'is-selected' : ''].join(' ');
+				const note = isWeekend(d)
+					? ' — no feeding on weekends'
+					: (closed !== null ? ` — ${escapeText(closed)}, no feeding` : (open ? '' : ' — outside the programme'));
+				const title = closed !== null ? ` title="${escapeText(closed)}"` : '';
+				cells += `<button type="button" class="${classes}" data-date="${key}" tabindex="-1" ${open ? '' : 'disabled'}${title} aria-label="${longLabel(d)}${note}" ${key === selected ? 'aria-pressed="true"' : ''}>${day}</button>`;
 			}
 
 			panel.innerHTML = `

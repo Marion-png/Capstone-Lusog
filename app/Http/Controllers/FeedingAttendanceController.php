@@ -11,6 +11,7 @@ use App\Support\FeedingAttendanceWindow;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
+use App\Support\SchoolCalendar;
 use App\Support\SchoolLetterhead;
 use App\Support\SchoolSignatories;
 use Carbon\Carbon;
@@ -473,7 +474,7 @@ class FeedingAttendanceController extends Controller
         // site is exactly how it gets decided.
         $sessionConfirmed = $allRows->contains('locked', true);
         $sessionClosed = ! FeedingAttendanceWindow::isOpen($selectedDate);
-        $isFeedingDay = FeedingProgramCycle::isFeedingDay($selectedDate);
+        $isFeedingDay = FeedingProgramCycle::isFeedingDay($selectedDate, $institutionId);
         $withinWindow = $selectedDate <= $window['end']
             && ($window['start'] === null || $selectedDate >= $window['start']);
         $canRecord = ! $sessionClosed
@@ -534,8 +535,11 @@ class FeedingAttendanceController extends Controller
             'programDuration' => $cycle->durationDays(),
             'window' => $window,
             'sessionDates' => $sessionDates,
-            'previousDate' => $this->stepDate($selectedDate, $sessionDates, $window, -1),
-            'nextDate' => $this->stepDate($selectedDate, $sessionDates, $window, 1),
+            'previousDate' => $this->stepDate($selectedDate, $sessionDates, $window, -1, $institutionId),
+            'nextDate' => $this->stepDate($selectedDate, $sessionDates, $window, 1, $institutionId),
+            // The weekdays the school is closed, for the date picker to lock
+            // beside the weekends.
+            'closedDates' => SchoolCalendar::pickerDates($institutionId),
             'beneficiaryCount' => $beneficiaries->count(),
             // The whole enrolled roll, so a scoped page can still say what it is
             // a slice of.
@@ -562,6 +566,9 @@ class FeedingAttendanceController extends Controller
             'sessionConfirmed' => $sessionConfirmed,
             'sessionClosed' => $sessionClosed,
             'isFeedingDay' => $isFeedingDay,
+            // Why the selected date holds no session — a weekend, a holiday, a
+            // suspension or a break — in the one set of words every screen uses.
+            'noSession' => SchoolCalendar::noSession($selectedDate, $institutionId),
             'canRecord' => $canRecord,
             // Today's session, already recorded: the dialog opens on the marks
             // on file and saving changes them.
@@ -569,7 +576,7 @@ class FeedingAttendanceController extends Controller
             // Why recording is unavailable, in the words the coordinator needs.
             'recordBlockedReason' => match (true) {
                 $allBeneficiaries->isEmpty() => 'No beneficiary is enrolled for this school year yet.',
-                ! $isFeedingDay => Carbon::parse($selectedDate)->format('l, F j, Y').' is a weekend. There are no feeding sessions on Saturdays or Sundays.',
+                ! $isFeedingDay => (string) SchoolCalendar::reason($selectedDate, $institutionId),
                 $sessionClosed => FeedingAttendanceWindow::closedReason($selectedDate),
                 ! $withinWindow => 'That date is outside the running feeding programme.',
                 default => '',
@@ -601,7 +608,7 @@ class FeedingAttendanceController extends Controller
                 $byRecord,
                 $filters
             ),
-            'calendar' => $this->calendar($selectedDate, $byDate, $beneficiaries->count()),
+            'calendar' => $this->calendar($selectedDate, $byDate, $beneficiaries->count(), $institutionId),
             'exportRows' => $this->exportRows($beneficiaries, $byRecord),
         ];
     }
@@ -939,12 +946,12 @@ class FeedingAttendanceController extends Controller
     /**
      * The selected date's month as a Monday-first grid, with what was recorded
      * on each day. Weekends are drawn too — a session recorded on one must not
-     * be invisible.
+     * be invisible — and so is a closed weekday, with what closed it.
      *
      * @param  Collection<string, Collection<int, array<string, mixed>>>  $byDate
      * @return array{label: string, weeks: list<list<?array<string, mixed>>>}
      */
-    private function calendar(string $selectedDate, Collection $byDate, int $expected): array
+    private function calendar(string $selectedDate, Collection $byDate, int $expected, ?int $institutionId = null): array
     {
         $month = Carbon::parse($selectedDate)->startOfMonth();
         $cursor = $month->copy()->startOfWeek(Carbon::MONDAY);
@@ -963,6 +970,8 @@ class FeedingAttendanceController extends Controller
                 'day' => $cursor->day,
                 'in_month' => $cursor->month === $month->month,
                 'is_weekend' => $cursor->isWeekend(),
+                // A holiday, suspension or break on a weekday; null otherwise.
+                'closure' => $cursor->isWeekend() ? null : SchoolCalendar::closureOn($cursor, $institutionId),
                 'is_today' => $date === $today,
                 'is_selected' => $date === $selectedDate,
                 'is_future' => $date > $today,
@@ -1076,7 +1085,7 @@ class FeedingAttendanceController extends Controller
      * @param  list<string>  $sessionDates
      * @param  array{start: ?string, end: string}  $window
      */
-    private function stepDate(string $selectedDate, array $sessionDates, array $window, int $direction): ?string
+    private function stepDate(string $selectedDate, array $sessionDates, array $window, int $direction, ?int $institutionId = null): ?string
     {
         $neighbours = $direction < 0
             ? array_values(array_filter($sessionDates, fn (string $date): bool => $date < $selectedDate))
@@ -1088,6 +1097,7 @@ class FeedingAttendanceController extends Controller
 
         // Step over the weekend rather than onto it: Saturday and Sunday are not
         // feeding days, so "previous day" from a Monday is the Friday before.
+        // A holiday, a suspension and a break are stepped over the same way.
         $cursor = Carbon::parse($selectedDate);
 
         do {
@@ -1101,7 +1111,7 @@ class FeedingAttendanceController extends Controller
             if ($window['start'] !== null && $candidate < $window['start']) {
                 return null;
             }
-        } while (! FeedingProgramCycle::isFeedingDay($cursor));
+        } while (! FeedingProgramCycle::isFeedingDay($cursor, $institutionId));
 
         return $candidate;
     }

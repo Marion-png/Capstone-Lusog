@@ -18,7 +18,9 @@ use App\Support\FeedingAttendanceWindow;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingConsent;
 use App\Support\FeedingProgramCycle;
+use App\Support\ParentNotifier;
 use App\Support\SchemaCache;
+use App\Support\SchoolCalendar;
 use App\Support\UploadReadFailure;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -36,6 +38,9 @@ class FeedingProgramController extends Controller
 
     /** Memoized per request — see hasExcusedColumn(). */
     private ?bool $hasExcusedColumn = null;
+
+    /** How many parents this request queued a text for, for the save's message. */
+    private int $parentsTexted = 0;
 
     public function index(Request $request): View
     {
@@ -891,7 +896,9 @@ class FeedingProgramController extends Controller
             'alreadyRecorded' => $existing->count(),
             'sessionRecorded' => $sessionRecorded,
             'sessionClosed' => ! FeedingAttendanceWindow::isOpen($sessionDate),
-            'isFeedingDay' => FeedingProgramCycle::isFeedingDay($sessionDate),
+            'isFeedingDay' => FeedingProgramCycle::isFeedingDay($sessionDate, $institutionId),
+            'noSession' => SchoolCalendar::noSession($sessionDate, $institutionId, 'M d, Y'),
+            'closedDates' => SchoolCalendar::pickerDates($institutionId),
         ]);
     }
 
@@ -1363,13 +1370,10 @@ class FeedingProgramController extends Controller
 
         // Nobody is fed on a Saturday or a Sunday, so a weekend mark is not a
         // session the school held — it is a mistyped date that would add a day
-        // to the denominator every at-risk rate is divided by.
-        if (! FeedingProgramCycle::isFeedingDay($requestedDate)) {
-            return back()->with(
-                'error',
-                Carbon::parse($requestedDate)->format('F j, Y').' is a '
-                    .Carbon::parse($requestedDate)->format('l').'. There are no feeding sessions on weekends.'
-            );
+        // to the denominator every at-risk rate is divided by. A holiday, a
+        // class suspension and a school break are refused for the same reason.
+        if (! FeedingProgramCycle::isFeedingDay($requestedDate, $institutionId)) {
+            return back()->with('error', (string) SchoolCalendar::reason($requestedDate, $institutionId));
         }
 
         // A day's attendance is written on that day and on no other — recorded
@@ -1590,7 +1594,7 @@ class FeedingProgramController extends Controller
         // still open — a coordinator correcting one learner should not have to
         // navigate back to the day they were working on.
         return $redirect->with('success', $marks->count().' mark(s) '.($editing ? 'updated' : 'recorded')
-            .' for '.Carbon::parse($sessionDate)->format('M d, Y').'.');
+            .' for '.Carbon::parse($sessionDate)->format('M d, Y').'.'.$this->parentsTextedNote());
     }
 
     /**
@@ -2214,5 +2218,22 @@ class FeedingProgramController extends Controller
     private function refreshAttendanceRiskFlags(?int $institutionId = null): void
     {
         FeedingAttendanceFlag::refreshStoredFlags($institutionId);
+
+        // A parent who opted in hears about a run of absences that reached the
+        // school's attendance notice — once the marks are committed, so a save
+        // that rolls back texts nobody. ParentNotifier sends each run once.
+        DB::afterCommit(function () use ($institutionId): void {
+            $this->parentsTexted += app(ParentNotifier::class)->attendanceNotices($institutionId);
+        });
+    }
+
+    private function parentsTextedNote(): string
+    {
+        if ($this->parentsTexted === 0) {
+            return '';
+        }
+
+        return ' '.$this->parentsTexted.' '.($this->parentsTexted === 1 ? 'parent was' : 'parents were')
+            .' sent a text message about consecutive absences.';
     }
 }

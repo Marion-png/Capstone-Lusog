@@ -33,3 +33,15 @@ Schedule::command('students:purge-expired')
     ->dailyAt('02:30')
     ->withoutOverlapping()
     ->onOneServer();
+
+/*
+ * The public holidays (App\Support\PublicHolidaySync). Monthly, because a
+ * proclamation can add or move a special non-working day partway through the
+ * year; two requests a month against the free plan's 500. The same caveat as
+ * the purge applies: until something runs `schedule:run`, the System Admin's
+ * Sync Holidays button is how the calendar gets read.
+ */
+Schedule::command('holidays:sync')
+    ->monthlyOn(1, '03:00')
+    ->withoutOverlapping()
+    ->onOneServer();

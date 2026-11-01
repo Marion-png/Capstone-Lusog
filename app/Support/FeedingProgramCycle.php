@@ -34,6 +34,7 @@ class FeedingProgramCycle
     private function __construct(
         private readonly ?Carbon $startDate,
         private readonly int $durationDays = self::DURATION_DAYS,
+        private readonly ?int $institutionId = null,
     ) {}
 
     /**
@@ -51,7 +52,7 @@ class FeedingProgramCycle
 
     public static function forInstitution(?int $institutionId = null): self
     {
-        return new self(self::resolveStartDate($institutionId), self::durationForInstitution($institutionId));
+        return new self(self::resolveStartDate($institutionId), self::durationForInstitution($institutionId), $institutionId);
     }
 
     /**
@@ -101,10 +102,17 @@ class FeedingProgramCycle
      * inside it, so the header ran ahead of the programme and every "day N of
      * 120" was too high. It is asked here so the cycle, the write guard and the
      * calendar all agree on which dates exist.
+     *
+     * A public holiday, a class suspension or a school break is not a feeding
+     * day either, for the same reason: `SchoolCalendar` holds those, the
+     * holidays read from the Calendarific API and the rest entered by the
+     * System Admin. Pass the school, or only the national holidays are known.
      */
-    public static function isFeedingDay(Carbon|string $date): bool
+    public static function isFeedingDay(Carbon|string $date, ?int $institutionId = null): bool
     {
-        return ! (is_string($date) ? Carbon::parse($date) : $date)->isWeekend();
+        $day = is_string($date) ? Carbon::parse($date) : $date;
+
+        return ! $day->isWeekend() && SchoolCalendar::closureOn($day, $institutionId) === null;
     }
 
     /**
@@ -119,14 +127,15 @@ class FeedingProgramCycle
             return 0;
         }
 
-        return min($this->durationDays, self::countFeedingDays($this->startDate, now()));
+        return min($this->durationDays, self::countFeedingDays($this->startDate, now(), $this->institutionId));
     }
 
     /**
      * School days from $from to $to inclusive. Whole weeks are counted
-     * arithmetically so a long cycle costs no loop over ~170 dates.
+     * arithmetically so a long cycle costs no loop over ~170 dates, and the
+     * school's closed weekdays are then taken back off.
      */
-    public static function countFeedingDays(Carbon $from, Carbon $to): int
+    public static function countFeedingDays(Carbon $from, Carbon $to, ?int $institutionId = null): int
     {
         $start = $from->copy()->startOfDay();
         $end = $to->copy()->startOfDay();
@@ -142,13 +151,13 @@ class FeedingProgramCycle
         // The remainder, walked one day at a time — at most six of them.
         $cursor = $start->copy()->addDays($wholeWeeks * 7);
         while ($cursor->lte($end)) {
-            if (self::isFeedingDay($cursor)) {
+            if (! $cursor->isWeekend()) {
                 $days++;
             }
             $cursor->addDay();
         }
 
-        return $days;
+        return $days - SchoolCalendar::closedWeekdaysBetween($start, $end, $institutionId);
     }
 
     public function daysRemaining(): int
@@ -199,7 +208,7 @@ class FeedingProgramCycle
 
         while ($counted < $this->durationDays) {
             $cursor->addDay();
-            if (self::isFeedingDay($cursor)) {
+            if (self::isFeedingDay($cursor, $this->institutionId)) {
                 $counted++;
             }
         }
@@ -236,7 +245,7 @@ class FeedingProgramCycle
                 ->min('session_date');
 
             if ($firstAttendanceDate) {
-                return self::toFeedingDay(Carbon::parse($firstAttendanceDate));
+                return self::toFeedingDay(Carbon::parse($firstAttendanceDate), $institutionId);
             }
         }
 
@@ -246,7 +255,7 @@ class FeedingProgramCycle
                 ->min('consulted_at');
 
             if ($firstFeedingDate) {
-                return self::toFeedingDay(Carbon::parse($firstFeedingDate));
+                return self::toFeedingDay(Carbon::parse($firstFeedingDate), $institutionId);
             }
         }
 
@@ -260,11 +269,13 @@ class FeedingProgramCycle
      * guard existed still can. A cycle starting on a Saturday would count zero
      * school days up to that Saturday, reporting day 0 for a programme that has
      * demonstrably started, so a legacy weekend start is read as the Monday
-     * that follows it.
+     * that follows it. A start on a day later marked closed moves the same way.
      */
-    private static function toFeedingDay(Carbon $date): Carbon
+    private static function toFeedingDay(Carbon $date, ?int $institutionId = null): Carbon
     {
-        while (! self::isFeedingDay($date)) {
+        // Bounded: a calendar closed for a whole year is bad data, not a
+        // reason to loop forever.
+        for ($guard = 0; $guard < 366 && ! self::isFeedingDay($date, $institutionId); $guard++) {
             $date->addDay();
         }
 

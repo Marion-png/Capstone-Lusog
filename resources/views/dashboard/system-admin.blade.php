@@ -326,6 +326,139 @@
 			</div>
 		</section>
 
+		{{-- The days a school holds no feeding session beyond the weekend:
+		     public holidays read from the Calendarific API, which close every
+		     school, and the suspensions and breaks entered here, which close
+		     one. App\Support\SchoolCalendar is the one reading of them. --}}
+		@php
+			$cal = $calendar ?? ['supported' => false, 'configured' => false, 'schoolYear' => '', 'status' => [], 'entries' => collect(), 'manualKinds' => []];
+			$calEntries = collect($cal['entries']);
+			$calRange = fn ($start, $end): string => $start->isSameDay($end)
+				? $start->format('D, M j, Y')
+				: $start->format('M j, Y').' – '.$end->format('M j, Y');
+			$calKind = [
+				\App\Support\SchoolCalendar::KIND_HOLIDAY => ['Public holiday', 'badge-info'],
+				\App\Support\SchoolCalendar::KIND_SUSPENSION => ['Class suspension', 'badge-neutral'],
+				\App\Support\SchoolCalendar::KIND_BREAK => ['School break', 'badge-neutral'],
+			];
+		@endphp
+		<section class="sa-block" id="school-calendar">
+			<div class="section-head">
+				<h2 class="section-title">School Calendar</h2>
+				<span class="section-meta tnum">S.Y. {{ $cal['schoolYear'] }} &middot; {{ number_format($calEntries->count()) }} {{ \Illuminate\Support\Str::plural('entry', $calEntries->count()) }}</span>
+			</div>
+
+			@if (! $cal['supported'])
+				<div class="empty-panel">The school calendar is not set up on this database yet.</div>
+			@else
+				<div class="sa-policy-list">
+					<article class="card sa-policy">
+						<form method="POST" action="{{ route('dashboard.system-admin.calendar.sync') }}">
+							@csrf
+							<div class="sa-policy-head">
+								<div class="sa-policy-school">Public Holidays</div>
+								@if ($cal['configured'])
+									<span class="badge badge-normal">Calendarific connected</span>
+								@else
+									<span class="badge badge-neutral">API key not set</span>
+								@endif
+							</div>
+							<div class="sa-sync-years">
+								@foreach ($cal['status'] as $year => $yearStatus)
+									<div class="sa-sync-year">
+										<strong class="tnum">{{ $year }}</strong>
+										<span class="tnum">{{ number_format($yearStatus['count']) }} {{ \Illuminate\Support\Str::plural('holiday', $yearStatus['count']) }}</span>
+										<span class="sa-sep">&middot;</span>
+										<span class="tnum">{{ $yearStatus['synced_at'] ? 'Synced '.\Illuminate\Support\Carbon::parse($yearStatus['synced_at'])->setTimezone(config('app.school_timezone'))->format('M j, Y g:i A') : 'Not synced' }}</span>
+									</div>
+								@endforeach
+							</div>
+							<div class="sa-policy-foot">
+								<button type="submit" class="btn btn-primary" @disabled(! $cal['configured'])>Sync Holidays</button>
+							</div>
+						</form>
+					</article>
+
+					<article class="card sa-policy">
+						<form method="POST" action="{{ route('dashboard.system-admin.calendar.store') }}">
+							@csrf
+							<div class="sa-policy-head">
+								<div class="sa-policy-school">Class Suspension or School Break</div>
+							</div>
+							<div class="sa-policy-grid sa-calendar-grid">
+								<div class="sa-field">
+									<label class="field-label" for="cal-school">School</label>
+									<select class="select" id="cal-school" name="institution_id" required>
+										@foreach ($institutionsCollection as $school)
+											<option value="{{ $school->id }}" @selected((string) old('institution_id') === (string) $school->id)>{{ $school->name }}</option>
+										@endforeach
+									</select>
+								</div>
+								<div class="sa-field">
+									<label class="field-label" for="cal-kind">Type</label>
+									<select class="select" id="cal-kind" name="kind" required>
+										@foreach ($cal['manualKinds'] as $kindValue => $kindLabel)
+											<option value="{{ $kindValue }}" @selected(old('kind') === $kindValue)>{{ $kindLabel }}</option>
+										@endforeach
+									</select>
+								</div>
+								<div class="sa-field">
+									<label class="field-label" for="cal-from">From</label>
+									<input type="date" class="input" id="cal-from" name="starts_on" value="{{ old('starts_on') }}" required>
+								</div>
+								<div class="sa-field">
+									<label class="field-label" for="cal-to">To</label>
+									<input type="date" class="input" id="cal-to" name="ends_on" value="{{ old('ends_on') }}">
+								</div>
+								<div class="sa-field">
+									<label class="field-label" for="cal-name">Reason</label>
+									<input type="text" class="input" id="cal-name" name="name" maxlength="120" value="{{ old('name') }}" placeholder="Typhoon Signal No. 2" required>
+								</div>
+							</div>
+							<div class="sa-policy-foot">
+								<button type="submit" class="btn btn-primary" @disabled($institutionsCollection->isEmpty())>Add to Calendar</button>
+							</div>
+						</form>
+					</article>
+				</div>
+
+				<div class="table-card sa-calendar-table">
+					<div class="table-scroll">
+						<table>
+							<thead><tr><th>Date</th><th>Name</th><th>Type</th><th>School</th><th>Action</th></tr></thead>
+							<tbody>
+								@forelse ($calEntries as $entry)
+									@php [$kindLabel, $kindBadge] = $calKind[$entry->kind] ?? [ucfirst((string) $entry->kind), 'badge-neutral']; @endphp
+									<tr>
+										<td class="sa-nowrap tnum">{{ $calRange($entry->starts_on, $entry->ends_on) }}</td>
+										<td>
+											<strong>{{ $entry->name }}</strong>
+											<span class="sa-cell-sub">{{ $entry->source === \App\Support\SchoolCalendar::SOURCE_API ? 'Calendarific' : 'Entered by '.($entry->created_by_name ?: 'System Admin') }}</span>
+										</td>
+										<td><span class="badge {{ $kindBadge }}">{{ $kindLabel }}</span></td>
+										<td>{{ $entry->institution_id === null ? 'All schools' : ($entry->institution->name ?? '—') }}</td>
+										<td>
+											@if ($entry->source === \App\Support\SchoolCalendar::SOURCE_MANUAL)
+												<form method="POST" action="{{ route('dashboard.system-admin.calendar.destroy', $entry->id) }}">
+													@csrf
+													@method('DELETE')
+													<button type="submit" class="btn btn-secondary btn-sm is-danger">Remove</button>
+												</form>
+											@else
+												<span class="muted">&mdash;</span>
+											@endif
+										</td>
+									</tr>
+								@empty
+									<tr><td colspan="5" class="table-empty">No holidays, suspensions or breaks on file for S.Y. {{ $cal['schoolYear'] }}.</td></tr>
+								@endforelse
+							</tbody>
+						</table>
+					</div>
+				</div>
+			@endif
+		</section>
+
 		<section class="sa-block" id="account-history">
 			<div class="section-head">
 				<h2 class="section-title">Account Request History</h2>

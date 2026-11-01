@@ -81,7 +81,8 @@
 					<div class="sbfp-progress" id="sbfpProgress" role="progressbar"
 						aria-valuemin="0" aria-valuemax="{{ $cycleDuration }}" aria-valuenow="{{ $cycleDay }}"
 						aria-valuetext="Feeding day {{ $cycleDay }} of {{ $cycleDuration }}"
-						data-start="{{ $cycle['start_date'] }}" data-duration="{{ $cycleDuration }}">
+						data-start="{{ $cycle['start_date'] }}" data-duration="{{ $cycleDuration }}"
+						data-closed="{{ json_encode($cycle['closed_dates'] ?? []) }}">
 						<span class="sbfp-progress-fill" style="width: {{ $cycle['percent'] }}%"></span>
 					</div>
 
@@ -326,7 +327,16 @@
 
 	// School days (Mon-Fri) from the start to today, inclusive — the same count
 	// FeedingProgramCycle::countFeedingDays() makes. A weekend is not a feeding
-	// day, so counting calendar days here would run ahead of the server.
+	// day, so counting calendar days here would run ahead of the server; nor is
+	// a holiday, a suspension or a break, which arrive as data-closed.
+	let closed = [];
+	try {
+		closed = JSON.parse(bar.dataset.closed || '[]');
+	} catch (e) {
+		closed = [];
+	}
+	const pad = (n) => String(n).padStart(2, '0');
+	const iso = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 	const feedingDaysTo = (end) => {
 		if (end < start) {
 			return 0;
@@ -343,7 +353,9 @@
 			}
 			cursor.setDate(cursor.getDate() + 1);
 		}
-		return days;
+		const from = iso(start);
+		const to = iso(end);
+		return days - closed.filter((date) => date >= from && date <= to).length;
 	};
 
 	const tick = () => {

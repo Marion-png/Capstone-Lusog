@@ -17,6 +17,7 @@ use App\Support\FeedingProgramCycle;
 use App\Support\FeedingReportNarrative;
 use App\Support\RequestMemo;
 use App\Support\SchemaCache;
+use App\Support\SchoolCalendar;
 use App\Support\SchoolLetterhead;
 use App\Support\SchoolPulse;
 use App\Support\SchoolSignatories;
@@ -411,7 +412,7 @@ class FeedingCoordinatorController extends Controller
         $end = $cycle->endDateIso() ?? $today;
         $withinWindow = $start === null || ($today >= $start && $today <= $end);
 
-        $isFeedingDay = FeedingProgramCycle::isFeedingDay($today);
+        $isFeedingDay = FeedingProgramCycle::isFeedingDay($today, $institutionId);
         $canRecord = $isFeedingDay && $withinWindow && $beneficiaries->isNotEmpty();
 
         return [
@@ -431,7 +432,7 @@ class FeedingCoordinatorController extends Controller
             'recordBlockedReason' => match (true) {
                 $canRecord => '',
                 $beneficiaries->isEmpty() => 'No beneficiary is enrolled for this school year yet.',
-                ! $isFeedingDay => Carbon::parse($today)->format('l, F j, Y').' is a weekend. There are no feeding sessions on Saturdays or Sundays.',
+                ! $isFeedingDay => (string) SchoolCalendar::reason($today, $institutionId),
                 default => 'Today is outside the running feeding programme.',
             },
         ];
@@ -684,6 +685,9 @@ class FeedingCoordinatorController extends Controller
                 // The date of the last feeding day, counted in school days,
                 // so the header can say when the cycle ends.
                 'end_date' => $cycle->endDateIso(),
+                // The closed weekdays, so the bar's own midnight recount takes
+                // a holiday off exactly as countFeedingDays() does.
+                'closed_dates' => array_keys(SchoolCalendar::pickerDates($institutionId)),
             ],
             'nutritionStatus' => $this->buildNutritionStatus(
                 $filters['population'] === self::POPULATION_ALL_STUDENTS

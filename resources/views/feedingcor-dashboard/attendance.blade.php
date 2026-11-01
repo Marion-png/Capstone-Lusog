@@ -147,11 +147,13 @@
 
 					{{-- data-weekday-picker: Saturdays and Sundays are locked in
 					     the picker (partials/weekday-date-picker), since neither is
-					     ever a feeding day. --}}
+					     ever a feeding day, and so is every weekday the school
+					     calendar closes. --}}
 					<input type="date" class="input fa-dateinput" id="faDate" name="date"
 						value="{{ $selectedDate }}"
 						aria-label="Feeding date"
 						data-weekday-picker
+						data-closed-dates="{{ json_encode((object) ($closedDates ?? [])) }}"
 						@if ($window['start'] !== null) min="{{ $window['start'] }}" @endif
 						max="{{ $window['end'] }}">
 
@@ -277,7 +279,7 @@
 						@if ($sessionConfirmed)
 							<span class="badge badge-normal has-glyph"><span class="fa-glyph">✓</span>Recorded</span>
 						@elseif (! $isFeedingDay)
-							<span class="badge badge-neutral">No session &mdash; weekend</span>
+							<span class="badge badge-neutral">No session &mdash; {{ $noSession['label'] ?? 'weekend' }}</span>
 						@else
 							<span class="badge badge-neutral">Not yet recorded</span>
 						@endif
@@ -315,8 +317,8 @@
 						<div class="alert-body">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
 							<div>
-								<strong>{{ $selectedDateLabel }} is a {{ \Carbon\Carbon::parse($selectedDate)->format('l') }}</strong>
-								<span>There are no feeding sessions on Saturdays or Sundays.</span>
+								<strong>{{ $noSession['title'] ?? $selectedDateLabel }}</strong>
+								<span>{{ $noSession['detail'] ?? '' }}</span>
 							</div>
 						</div>
 					</div>

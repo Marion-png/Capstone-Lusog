@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
+use App\Support\FeedingAttendanceWindow;
+use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
 use App\Support\SchoolHeadHealthOverview;
 use App\Support\SchoolHeadOverview;
@@ -387,7 +389,6 @@ class SchoolHeadController extends Controller
         array $clinic,
     ): array {
         $items = [];
-        $today = now()->toDateString();
         $sessionDates = $overview->sessionDates();
 
         // 1. Learners flagged for follow-up — the threshold reached AND the
@@ -448,8 +449,15 @@ class SchoolHeadController extends Controller
         }
 
         // 5. Today's session. Only once the cycle is actually running — before
-        //    the first sheet there is no session to be missing.
-        if ($overview->cycle->hasStarted() && $sessionDates !== [] && ! in_array($today, $sessionDates, true)) {
+        //    the first sheet there is no session to be missing — and only on a
+        //    day the school feeds: a weekend, a public holiday, a suspension or
+        //    a break has no session to record. "Today" is the school's, not the
+        //    server's, which is still on yesterday until 8 AM in Davao.
+        $schoolToday = FeedingAttendanceWindow::today();
+        if ($overview->cycle->hasStarted()
+            && $sessionDates !== []
+            && FeedingProgramCycle::isFeedingDay($schoolToday, $overview->institutionId)
+            && ! in_array($schoolToday, $sessionDates, true)) {
             $items[] = [
                 'severity' => 'medium',
                 'title' => 'Today’s feeding session has not been recorded',

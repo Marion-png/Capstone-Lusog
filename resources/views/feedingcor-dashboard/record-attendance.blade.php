@@ -54,8 +54,8 @@
 				<div class="alert-body">
 					<div>
 						@if (! $isFeedingDay)
-							<strong>{{ $sessionLabel }} is a {{ \Carbon\Carbon::parse($sessionDate)->format('l') }}</strong>
-							<span>There are no feeding sessions on Saturdays or Sundays.</span>
+							<strong>{{ $noSession['title'] ?? $sessionLabel }}</strong>
+							<span>{{ $noSession['detail'] ?? '' }}</span>
 						@elseif ($sessionClosed)
 							<strong>Attendance for {{ $sessionLabel }} is closed</strong>
 							<span>A day&rsquo;s attendance can only be recorded or changed on that day.</span>
@@ -79,6 +79,7 @@
 					<input type="date" class="input" id="sessionDate" name="session_date"
 						value="{{ $sessionDate }}" max="{{ $today }}" required
 						aria-label="Session date" data-weekday-picker
+						data-closed-dates="{{ json_encode((object) ($closedDates ?? [])) }}"
 						data-reload-url="{{ route('feedingcor-program.attendance.record') }}">
 				</div>
 				<div class="ra-field ra-field-grow">

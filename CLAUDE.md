@@ -73,6 +73,14 @@ Roles stored as strings in `session('active_role')`. The eight roles are:
 
 Role checks in controllers are manual string comparisons on `session('active_role')`.
 
+### School Calendar (Calendarific API)
+
+**A holiday, a class suspension and a school break are not feeding days, exactly as a weekend is not.** `App\Support\SchoolCalendar` is the one reading of which weekdays a school is closed, and `FeedingProgramCycle::isFeedingDay($date, $institutionId)` asks it, so `countFeedingDays()`, `endDateIso()`, the Attendance tab's stepping and calendar, the weekday date picker (`data-closed-dates`), the record endpoint's refusal, the Dashboard bar's midnight recount (`data-closed`) and the School Head's "today's session has not been recorded" item all agree. **Always pass the institution** — without it only the national holidays are known. The words for why a date holds no session come from `SchoolCalendar::noSession()` / `reason()`, never typed in a view.
+
+- **National holidays come from the Calendarific API** (`CalendarificClient` → `PublicHolidaySync`, `CALENDARIFIC_API_KEY`, `php artisan holidays:sync`, the System Admin's Sync Holidays button) and carry no `institution_id`. `interpret()` keeps only national, non-working, nationwide days inside the requested year, and **a reply with nothing usable is a failure, never an empty year** — a sync replaces the year's API rows in one transaction, so a bad reply must not wipe them. Calendarific takes the key in the query string, so every failure is logged with it redacted. Only transient statuses are retried; 401/403/429 are answers, and every request spends the free plan's 500 a month (the button is rate-limited to 6 an hour).
+- **Suspensions and breaks are the System Admin's** (`SchoolCalendarController`, Control Center → School Calendar), belong to one school, are Auditable with the enterer's name encrypted, and are refused over a day the school recorded attendance on. A synced holiday cannot be removed (the next sync would restore it).
+- Until migration `2026_11_01_000001` runs, `SchoolCalendar::supported()` is false and every weekday is a feeding day, as before. `SchoolCalendarTest` guards all of it; `docs/school-calendar-api.md` is the full write-up.
+
 ### Feeding Coordinator workflow (attendance-first)
 
 The coordinator's flow is ordered and mostly computed — the period is the `school_year`:
@@ -256,6 +264,17 @@ Every access and action on personal/sensitive personal information is logged to 
 ### Health Data Exchange (removed)
 
 The School Nurse's HL7 FHIR exchange was removed on 2026-10-29: no screen, route, command or job sends a learner's record outside the school. The `fhir_transmissions` table is left in place (its migration already ran) and is still purged with the learner (`StudentRecordPurge::LRN_KEYED`), since it may hold copies sent before the removal. Do not re-add an outbound exchange without asking.
+
+### Parent SMS (Semaphore API)
+
+A parent who opted in on their online Sulat-Pahibalo is texted, through the Semaphore SMS gateway, when their child visits the clinic (a consultation saved for a learner chosen off the roll) and when a run of unexcused feeding absences reaches the school's attendance notice. Full reference: `docs/sms-notifications.md`. Rules to preserve:
+
+- **`App\Support\SemaphoreClient` is the only code that calls the gateway, and `App\Support\ParentNotifier` the only code that composes a message or decides whether one is sent.** Add a trigger by calling the notifier, never the client.
+- **No health information in a text** — the child's first name and the event, never a complaint, medicine, status or measurement; the message asks the parent to contact the school. `ParentSmsNotificationTest::the_text_carries_no_health_information` guards it.
+- **Opt-in only**: `health_consent_forms.sms_opt_in` / `sms_number` (encrypted) / `sms_language`, and the parent's *latest* answered form decides. The paper consent path does not set it.
+- **One event, one message** (`sms_notifications.dedupe_key`, unique), a per-school daily cap (`SMS_DAILY_CAP`), and the clinic trigger finds the learner by LRN **within the session's school** only.
+- **A failed text never undoes what triggered it.** Messages are queued rows sent after the response (`SendParentSms::dispatchAfterResponse`, no worker needed); the attendance trigger runs `DB::afterCommit`. A send is retried only on 429/5xx — never on a dropped connection, which may already have been accepted.
+- `SEMAPHORE_API_KEY` blank = off; `SMS_DRY_RUN=true` logs without sending. `phpunit.xml` blanks the key. The System Admin's console is `/dashboard/system-admin/sms`; `php artisan sms:refresh-status` fetches delivery reports.
 
 ### Round Trips Are The Cost (invariant)
 
