@@ -129,7 +129,28 @@
                             <button type="button" class="btn btn-secondary" id="pcReadAnswer" disabled>Read the answer from the photo</button>
                             <span class="pc-read-state" id="pcReadState" aria-live="polite">Attach a photo of the signed form first.</span>
                         </div>
-                        <div class="pc-copy" id="pcCopy" hidden></div>
+                        {{-- What the reader made of the photo, laid out as View
+                             Details lays out a filed form: the photo beside the
+                             reading, so the adviser checks one against the
+                             other before anything is filed. --}}
+                        <div class="pc-review" id="pcReview" hidden>
+                            <div class="pc-view-grid">
+                                <section class="pc-view-form">
+                                    <div class="pc-view-section-head">
+                                        <h4>Uploaded form &middot; SY {{ $schoolYear }}</h4>
+                                        <button type="button" class="btn btn-secondary pc-view-enlarge" id="pcReviewEnlarge">Enlarge</button>
+                                    </div>
+                                    <figure class="pc-view-photo">
+                                        <img id="pcReviewPhoto" alt="Photo of the signed Sulat-Pahibalo">
+                                    </figure>
+                                </section>
+                                <section class="pc-view-read">
+                                    <h4>Read from the uploaded photo</h4>
+                                    <div class="pc-view-flash" id="pcReviewFlash" role="status"></div>
+                                    <div id="pcCopy"></div>
+                                </section>
+                            </div>
+                        </div>
                     @endif
                     <div class="pc-input">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -162,23 +183,14 @@
                     @endif
                 </div>
 
-                {{-- What the rest of the paper says, so View Details can read
-                     the form back as it was signed rather than as one word.
-                     The services are the ones ticked in the letter's list; an
-                     upload with none ticked reads as the program it is filed
-                     for, as uploads always did. --}}
-                <fieldset class="pc-field pc-fieldset">
-                    <legend>Services listed on the form</legend>
-                    <div class="pc-services" id="pcServices">
-                        <label class="pc-check pc-check-all"><input type="checkbox" id="pcServicesAll"> All services</label>
-                        @foreach ($plannedServices as $key => $label)
-                            <label class="pc-check">
-                                <input type="checkbox" name="services[]" value="{{ $key }}" data-parent="{{ \App\Models\HealthConsentForm::parentService($key) }}">
-                                {{ $label }}
-                            </label>
-                        @endforeach
-                    </div>
-                </fieldset>
+                {{-- The services ticked in the letter's list, so View Details
+                     can read the form back as it was signed. They are not
+                     asked for on screen: the reader reads them off the photo
+                     and the script posts them here as hidden fields, checked
+                     by the adviser in the reading beside the photo. An upload
+                     with none reads as the program it is filed for, as
+                     uploads always did. --}}
+                <div id="pcServices" hidden></div>
 
                 <div class="pc-field" id="pcPartialField" hidden>
                     <label for="pc_partial_exception">Services the parent excepted</label>
@@ -240,6 +252,16 @@
         </form>
     </div>
 </div>
+@if ($scannerReady)
+    {{-- The photo at full size. Outside the upload form, so nothing in it
+         can submit that form. --}}
+    <dialog class="pc-photo-dialog" id="pcPhotoDialog" aria-label="Uploaded consent form">
+        <div class="pc-photo-dialog-bar">
+            <button type="button" class="btn btn-secondary" id="pcPhotoDialogClose">Close</button>
+        </div>
+        <img id="pcPhotoDialogImg" alt="Photo of the signed Sulat-Pahibalo">
+    </dialog>
+@endif
 <script>
 (() => {
     const uploadModal = document.getElementById('uploadConsentModal');
@@ -301,8 +323,6 @@
             if (el) el.hidden = isFeeding;
         });
         if (read) read.hidden = isFeeding;
-        const copy = document.getElementById('pcCopy');
-        if (copy) copy.hidden = isFeeding || copy.innerHTML.trim() === '';
         if (isFeeding) {
             const confirmBox = document.getElementById('pcAnswerConfirm');
             const fromScan = document.getElementById('pcAnswerFromScan');
@@ -381,9 +401,6 @@
     consentFile?.addEventListener('change', () => consentDrop?.classList.remove('invalid'));
 
     // ── What the rest of the paper says ─────────────────────────────
-    const servicesBox = document.getElementById('pcServices');
-    const servicesAll = document.getElementById('pcServicesAll');
-    const serviceBoxes = Array.from(uploadForm.querySelectorAll('input[name="services[]"]'));
     const answerLines = { partial: document.getElementById('pcPartialField'), refused: document.getElementById('pcRefusedField') };
 
     // The exception line belongs to a partial consent and the reason to a
@@ -394,38 +411,32 @@
         });
     };
 
-    const syncAllServices = () => {
-        if (!servicesAll) return;
-        const ticked = serviceBoxes.filter((box) => box.checked).length;
-        servicesAll.checked = ticked === serviceBoxes.length;
-        servicesAll.indeterminate = ticked > 0 && ticked < serviceBoxes.length;
-        if (ticked > 0) servicesBox?.classList.remove('invalid');
-    };
-
     answerSelect.addEventListener('change', syncAnswerLines);
-    serviceBoxes.forEach((box) => box.addEventListener('change', syncAllServices));
-    servicesAll?.addEventListener('change', () => {
-        serviceBoxes.forEach((box) => { box.checked = servicesAll.checked; });
-        syncAllServices();
-    });
 
     uploadForm.addEventListener('submit', (event) => {
         if (consentFile && !(consentFile.files && consentFile.files.length > 0)) {
             event.preventDefault();
             consentDrop?.classList.add('invalid');
             consentDrop?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-            return;
-        }
-
-        // An agreement is an agreement to the services the letter lists,
-        // so it is not filed until they are ticked.
-        const agreed = ['full', 'partial'].includes(answerSelect.value || '');
-        if (agreed && !serviceBoxes.some((box) => box.checked)) {
-            event.preventDefault();
-            servicesBox?.classList.add('invalid');
-            servicesBox?.scrollIntoView({ block: 'center', behavior: 'smooth' });
         }
     });
+
+    // The services ticked in the letter's list, as hidden fields. Only the
+    // reader fills them, with the list the server read off the paper
+    // (ConsentPaperCopy::tickedServices); with none the upload reads as the
+    // program it is filed for.
+    const servicesBox = document.getElementById('pcServices');
+    const setServices = (keys) => {
+        if (!servicesBox) return;
+        servicesBox.textContent = '';
+        keys.forEach((key) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'services[]';
+            input.value = key;
+            servicesBox.appendChild(input);
+        });
+    };
 
     // ── Reading the answer off the photo ────────────────────────────
     // The consent reader proposes; the adviser records. Its answer lands
@@ -437,17 +448,91 @@
     const answerFromScan = document.getElementById('pcAnswerFromScan');
     const answerConfirm = document.getElementById('pcAnswerConfirm');
     const answerConfirmed = document.getElementById('pcAnswerConfirmed');
+    const review = document.getElementById('pcReview');
+    const reviewPhoto = document.getElementById('pcReviewPhoto');
+    const reviewFlash = document.getElementById('pcReviewFlash');
+    const reviewEnlarge = document.getElementById('pcReviewEnlarge');
     const copyBox = document.getElementById('pcCopy');
+    const photoDialog = document.getElementById('pcPhotoDialog');
+    const photoDialogImg = document.getElementById('pcPhotoDialogImg');
     let readVersion = 0;
     let readRequest = null;
+    let photoUrl = null;
 
-    // The sheet as the reader saw it, drawn by the server in the form's
-    // own words. It belongs to one photo and one learner, like the rest.
-    const showCopy = (html) => {
-        if (!copyBox) return;
-        copyBox.innerHTML = html || '';
-        copyBox.hidden = !html;
+    // The line over the reading: complete, what to check, or why nothing
+    // could be read. Written as text — the checks carry the reader's words.
+    const setFlash = (kind, title, items = []) => {
+        if (!reviewFlash) return;
+        reviewFlash.className = 'pc-view-flash is-' + kind + (items.length ? ' has-list' : '');
+        reviewFlash.textContent = title;
+        if (items.length) {
+            const list = document.createElement('ul');
+            list.className = 'pc-review-checks';
+            items.forEach((item) => {
+                const line = document.createElement('li');
+                line.textContent = item;
+                list.appendChild(line);
+            });
+            reviewFlash.appendChild(list);
+        }
     };
+
+    // The photo beside the sheet as the reader saw it, drawn by the server
+    // in the form's own words. It belongs to one photo and one learner,
+    // like the rest, so it is dropped with them.
+    const showReview = (file, data) => {
+        if (photoDialog?.open) photoDialog.close();
+        if (photoUrl) {
+            URL.revokeObjectURL(photoUrl);
+            photoUrl = null;
+        }
+        if (!review) return;
+
+        if (!file || !data) {
+            review.hidden = true;
+            uploadModal.classList.remove('is-reviewing');
+            reviewPhoto?.removeAttribute('src');
+            photoDialogImg?.removeAttribute('src');
+            if (copyBox) copyBox.innerHTML = '';
+            return;
+        }
+
+        photoUrl = URL.createObjectURL(file);
+        if (reviewPhoto) reviewPhoto.src = photoUrl;
+        if (reviewEnlarge) reviewEnlarge.hidden = typeof photoDialog?.showModal !== 'function';
+
+        const draft = data.draft || {};
+        const summary = data.summary || {};
+        const checks = (Array.isArray(summary.warnings) ? summary.warnings : [])
+            .filter((item) => typeof item === 'string' && item.trim() !== '');
+
+        if (draft.learner_mismatch) {
+            setFlash('err', draft.consent_reason || 'The name on this form is another learner\'s.');
+        } else if (draft.unreadable) {
+            setFlash('err', 'The photo could not be read. Choose the answer from the paper.');
+        } else if (summary.complete) {
+            setFlash('ok', '✓ All required fields completed');
+        } else if (checks.length) {
+            setFlash('warn', 'Check against the signed form:', checks);
+        } else {
+            setFlash('warn', summary.decision || 'Check the reading against the signed form.');
+        }
+
+        if (copyBox) copyBox.innerHTML = data.copy_html || '';
+        review.hidden = false;
+        uploadModal.classList.add('is-reviewing');
+    };
+
+    reviewEnlarge?.addEventListener('click', () => {
+        if (!photoUrl || !photoDialog || !photoDialogImg) return;
+        photoDialogImg.src = photoUrl;
+        photoDialog.showModal();
+    });
+    document.getElementById('pcPhotoDialogClose')?.addEventListener('click', () => photoDialog?.close());
+    // A click on the dim backdrop lands on the dialog itself.
+    photoDialog?.addEventListener('click', (event) => {
+        if (event.target === photoDialog) photoDialog.close();
+    });
 
     const setReaderAnswer = (fromScan) => {
         if (!answerFromScan || !answerConfirm || !answerConfirmed) return;
@@ -487,18 +572,8 @@
     };
     let filledFromScan = false;
 
-    const fillFromReading = (draft) => {
-        const services = draft.services || {};
-        const ticked = (key) => services[key] === 'yes';
-
-        // A sub-item is read off its own box; a ticked heading with none
-        // of its own sub-items ticked covers them all, as on the letter.
-        serviceBoxes.forEach((box) => {
-            const parent = box.dataset.parent || '';
-            const siblingTicked = parent !== '' && serviceBoxes.some((other) => other.dataset.parent === parent && ticked(other.value));
-            box.checked = ticked(box.value) || (parent !== '' && ticked(parent) && !siblingTicked);
-        });
-        syncAllServices();
+    const fillFromReading = (draft, services) => {
+        setServices(Array.isArray(services) ? services : []);
 
         Object.entries(writtenFields).forEach(([from, to]) => {
             const input = uploadForm.querySelector('[name="' + to + '"]');
@@ -509,8 +584,7 @@
 
     const clearReading = () => {
         if (!filledFromScan) return;
-        serviceBoxes.forEach((box) => { box.checked = false; });
-        syncAllServices();
+        setServices([]);
         Object.values(writtenFields).forEach((name) => {
             const input = uploadForm.querySelector('[name="' + name + '"]');
             if (input) input.value = '';
@@ -532,7 +606,7 @@
     // learner it was checked against.
     const dropReading = () => {
         cancelRead();
-        showCopy(null);
+        showReview(null);
         if (answerFromScan?.value === '1') {
             answerSelect.value = '';
             setReaderAnswer(false);
@@ -609,9 +683,9 @@
                 // off, fills nothing in.
                 clearReading();
                 if (!draft.unreadable && !draft.learner_mismatch) {
-                    fillFromReading(draft);
+                    fillFromReading(draft, data.ticked_services);
                 }
-                showCopy(data.copy_html);
+                showReview(file, data);
 
                 if (draft.unreadable) {
                     readState.textContent = 'The photo could not be read. Choose the answer from the paper.';
@@ -641,10 +715,9 @@
         cancelRead();
         setReaderAnswer(false);
         filledFromScan = false;
-        showCopy(null);
+        setServices([]);
+        showReview(null);
         syncAnswerLines();
-        syncAllServices();
-        servicesBox?.classList.remove('invalid');
         consentDrop?.classList.remove('invalid');
         // Only the student list can be pointed at a learner; a learner
         // fixed by their own profile stays theirs.
@@ -674,6 +747,9 @@
     // open rather than wandering into the page behind.
     document.addEventListener('keydown', (event) => {
         if (!uploadModal.classList.contains('open')) return;
+        // The enlarged photo sits above the dialog and closes itself on
+        // Escape; the upload behind it stays open.
+        if (photoDialog?.open) return;
         if (event.key === 'Escape') {
             closeUpload();
             return;

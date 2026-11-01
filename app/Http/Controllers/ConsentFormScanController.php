@@ -107,6 +107,10 @@ class ConsentFormScanController extends Controller
             // The sheet drawn back as the parent marked it, in the letter's
             // own words, by the partial every read-back of a form uses.
             'copy_html' => $copy !== null ? view('consent-forms._paper-copy', ['copy' => $copy])->render() : null,
+            // The services the upload dialog files with this reading — the
+            // same list the copy above judged each service by. Nothing for a
+            // photo that could not be read or another child's sheet.
+            'ticked_services' => $copy !== null ? ConsentPaperCopy::tickedServices((array) ($draft['services'] ?? [])) : [],
             'summary' => ConsentPhotoSummary::fromDraft($draft, $learner['grade'] ?? null),
             // The upload can retain this reading without trusting JSON posted
             // by the browser or making another model call.

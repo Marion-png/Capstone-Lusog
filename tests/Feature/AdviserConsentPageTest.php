@@ -397,12 +397,16 @@ class AdviserConsentPageTest extends TestCase
         // The rest of the paper follows it — the services the letter lists,
         // the exception or reason line the answer calls for (shown by the
         // answer, so hidden until one is chosen) and the allergy lines — so
-        // View Details can read the form back as it was signed.
-        $services = strpos($html, '<input type="checkbox" name="services[]"');
+        // View Details can read the form back as it was signed. The services
+        // are not a list to tick any more: the reader posts the ones it read
+        // off the photo into a hidden holder, checked beside the photo.
+        $services = strpos($html, '<div id="pcServices" hidden></div>');
         $partial = strpos($html, 'id="pcPartialField" hidden');
         $refused = strpos($html, 'id="pcRefusedField" hidden');
         $allergies = strpos($html, 'name="allergy_food_detail"');
-        $this->assertSame(count(HealthConsentForm::PLANNED_SERVICES), substr_count($html, '<input type="checkbox" name="services[]"'));
+        $this->assertNotFalse($services);
+        $this->assertStringNotContainsString('Services listed on the form', $html);
+        $this->assertStringNotContainsString('<input type="checkbox" name="services[]"', $html);
 
         $this->assertTrue($student < $year, 'Select Student comes first.');
         $this->assertTrue($year < $signedForm, 'School Year precedes the signed form upload.');

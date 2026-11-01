@@ -60,7 +60,9 @@ final class ConsentPaperCopy
         $answer = array_key_exists($choice, HealthConsentForm::CONSENT_TEXT) ? [
             'source' => 'scan',
             'choice' => $choice,
-            'services' => array_keys(array_filter($services, fn ($state): bool => $state === self::TICKED)),
+            // The services the upload will store, so the reading the adviser
+            // checks is the reading that is filed.
+            'services' => self::tickedServices($services),
             'exceptions' => $choice === HealthConsentForm::CONSENT_SPECIFIC ? trim((string) ($written['consent_exceptions']['text'] ?? '')) : '',
             'excluded' => null,
         ] : null;
@@ -73,6 +75,41 @@ final class ConsentPaperCopy
             $answer,
             $grade,
         );
+    }
+
+    /**
+     * The services the letter lists that a read paper ticks, as an upload
+     * stores them: each sub-item read off its own box, and a ticked heading
+     * (Pag Purga, Immunization) covering its sub-items only when none of them
+     * is ticked on its own — a parent who ticks the heading and one sub-item
+     * has chosen that sub-item. The upload dialog posts exactly this list.
+     *
+     * @param  array<string, mixed>  $boxes  every box of the letter's list, as the reader reported it
+     * @return list<string> keys of HealthConsentForm::PLANNED_SERVICES
+     */
+    public static function tickedServices(array $boxes): array
+    {
+        $ticked = fn (string $key): bool => ($boxes[$key] ?? null) === self::TICKED;
+        $keys = array_keys(HealthConsentForm::PLANNED_SERVICES);
+
+        return array_values(array_filter($keys, function (string $key) use ($ticked, $keys): bool {
+            if ($ticked($key)) {
+                return true;
+            }
+
+            $parent = HealthConsentForm::parentService($key);
+            if ($parent === null || ! $ticked($parent)) {
+                return false;
+            }
+
+            foreach ($keys as $other) {
+                if (HealthConsentForm::parentService($other) === $parent && $ticked($other)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }));
     }
 
     /**

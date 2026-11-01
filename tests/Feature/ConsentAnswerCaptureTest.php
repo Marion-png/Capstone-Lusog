@@ -278,6 +278,8 @@ class ConsentAnswerCaptureTest extends TestCase
 
         $this->assertStringNotContainsString('id="pcReadAnswer"', $html);
         $this->assertStringNotContainsString('name="answer_confirmed"', $html);
+        $this->assertStringNotContainsString('id="pcReview"', $html);
+        $this->assertStringNotContainsString('id="pcPhotoDialog"', $html);
 
         $this->swap(ConsentFormScanner::class, new class extends ConsentFormScanner
         {
@@ -295,6 +297,16 @@ class ConsentAnswerCaptureTest extends TestCase
         $this->assertStringContainsString('Read the answer from the photo', $html);
         $this->assertStringContainsString('name="answer_from_scan"', $html);
         $this->assertStringContainsString('name="answer_confirmed"', $html);
+
+        // What it reads is laid out as View Details lays out a filed form:
+        // the photo beside the reading, with the photo at full size a click
+        // away — in a dialog outside the upload form, so it cannot submit it.
+        $this->assertStringContainsString('<div class="pc-review" id="pcReview" hidden>', $html);
+        $this->assertStringContainsString('Uploaded form &middot; SY '.ParentalConsentForm::currentSchoolYear(), $html);
+        $this->assertStringContainsString('Read from the uploaded photo', $html);
+        $this->assertStringContainsString('id="pcReviewEnlarge"', $html);
+        $formEnd = strpos($html, '</form>', (int) strpos($html, 'id="uploadConsentForm"'));
+        $this->assertGreaterThan($formEnd, strpos($html, 'id="pcPhotoDialog"'));
     }
 
     /**

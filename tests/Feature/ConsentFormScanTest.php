@@ -1398,7 +1398,9 @@ class ConsentFormScanTest extends TestCase
         // read off the paper.
         $this->assertStringContainsString('<span class="pcopy-group-label" lang="ceb">'.e(HealthConsentForm::SERVICES['deworming']['label']).'</span>', $html);
         $this->assertService($html, 'Pag Bitok / Worms', 'check_exceptions', 'Check the exceptions');
-        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_filariasis'], 'check_exceptions', 'Check the exceptions');
+        // Pag Purga is ticked with only Pag Bitok under it, so Filariasis was
+        // not chosen — as the upload files it (ConsentPaperCopy::tickedServices).
+        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_filariasis'], 'not_on_form', 'Not consented');
         $this->assertService($html, HealthConsentForm::SERVICES['checkup']['label'], 'not_on_form', 'Not consented');
         $this->assertService($html, HealthConsentForm::SERVICES['vitamin_a']['label'], 'unclear', '?');
         $this->assertService($html, HealthConsentForm::SERVICES['immunization']['children']['immunization_grade7'], 'not_applicable', 'Not applicable');
@@ -1417,6 +1419,40 @@ class ConsentFormScanTest extends TestCase
         // Nothing is put into the application's own English.
         $this->assertStringNotContainsString('Food allergy', $html);
         $this->assertStringNotContainsString('Full consent', $html);
+    }
+
+    /**
+     * Pag Purga ticked with only Pag Bitok under it is a choice of Pag Bitok:
+     * the reading the adviser checks says so, and the services the dialog
+     * files are that same list — so View Details cannot say otherwise later.
+     */
+    #[Test]
+    public function a_ticked_heading_with_one_sub_item_ticked_covers_only_that_sub_item(): void
+    {
+        $this->learner('130000000001', 'Juan', 'Dela Cruz');
+
+        $this->fakeGemini($this->draft([
+            'checkup' => ConsentFormScanner::TICKED,
+            'deworming' => ConsentFormScanner::TICKED,
+            'deworming_worms' => ConsentFormScanner::TICKED,
+        ], ['consent_choice' => HealthConsentForm::CONSENT_ALL]));
+
+        $response = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg(), 'lrn' => '130000000001'], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $this->assertSame(['checkup', 'deworming_worms'], $response->json('ticked_services'));
+
+        $html = (string) $response->json('copy_html');
+        $this->assertService($html, 'Pag Bitok / Worms', 'consented', 'Consented');
+        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_schistosomiasis'], 'not_on_form', 'Not consented');
+        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_filariasis'], 'not_on_form', 'Not consented');
+
+        // A heading ticked alone still covers every sub-item under it.
+        $this->assertSame(
+            ['deworming_worms', 'deworming_schistosomiasis', 'deworming_filariasis'],
+            ConsentPaperCopy::tickedServices(['deworming' => ConsentFormScanner::TICKED]),
+        );
     }
 
     /** Another child's sheet, or one nothing could be read off, draws nothing. */
