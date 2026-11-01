@@ -1634,7 +1634,26 @@ class FeedingProgramController extends Controller
         // navigate back to the day they were working on.
 <<<<<<< Updated upstream
         return $redirect->with('success', $marks->count().' mark(s) '.($editing ? 'updated' : 'recorded')
+<<<<<<< Updated upstream
             .' for '.Carbon::parse($sessionDate)->format('M d, Y').'.');
+=======
+<<<<<<< HEAD
+            .' for '.Carbon::parse($sessionDate)->format('M d, Y').'.'.$this->parentsTextedNote());
+=======
+            .' for '.Carbon::parse($sessionDate)->format('M d, Y').'.');
+=======
+        $redirect = $request->input('return_to') === 'attendance'
+            ? redirect()->route('dashboard.feedingcor-attendance', ['date' => $sessionDate])
+            : redirect()->route('dashboard.feedingcor-dashboard');
+
+        return $redirect->with(
+            'success',
+            $marks->count().' mark(s) '.($isEdit ? 'saved' : 'recorded').' for '.Carbon::parse($sessionDate)->format('M d, Y')
+                .'. You can change them until the end of the day.'
+        );
+>>>>>>> Stashed changes
+>>>>>>> d0ed9b70a75a7e0b82e81899c94830d2d9985483
+>>>>>>> Stashed changes
     }
 
     /**
