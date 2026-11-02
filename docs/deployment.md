@@ -41,9 +41,6 @@ Every value lives in Railway → `lusog-web` → **Variables**, never in the rep
 | `RAILPACK_PHP_EXTENSIONS` | `pdo_pgsql,zip` | Postgres, and OpenSpout's XLSX writer. |
 | `GEMINI_API_KEY` | the team key | Masterlist and consent-form photo reading. Leave it empty to disable. |
 | `CALENDARIFIC_API_KEY` | the team key | Public holidays for the school calendar (`docs/school-calendar-api.md`). Leave it empty to disable Sync Holidays. |
-| `SEMAPHORE_API_KEY` | the team key | Texts to parents who opted in (`docs/sms-notifications.md`). Leave it empty to turn texting off. |
-| `SEMAPHORE_SENDER_NAME` | approved name, or empty | The sender shown on the parent's phone; must be approved on the Semaphore account first. |
-| `SMS_DRY_RUN` | `true` for a demo | Composes and logs every message without sending or spending credits. Wins over a key that is set. |
 
 **Uploaded documents** (medical certificates, consent scans, attendance
 photos) live on the volume `lusog-web-volume`, mounted at `/app/storage/app`.

@@ -86,6 +86,7 @@ class MedicineDispenseTest extends TestCase
                 'treatment_given' => 'Rest and paracetamol.',
                 'medicine_id' => $this->medicine->id,
                 'medicine_quantity' => $quantity,
+                'allergy_acknowledged' => '1',
             ])
             ->assertRedirect();
     }

@@ -79,6 +79,9 @@ class ClinicTeacherRoleTest extends TestCase
             'grade_section' => 'Grade 10 - Dalton',
             'condition' => 'Headache',
             'status' => 'treated',
+            // No learner chosen off the roll: the allergy check asks for an
+            // acknowledgement (App\Support\AllergyCheck).
+            'allergy_acknowledged' => '1',
         ], $overrides);
     }
 
@@ -178,8 +181,8 @@ class ClinicTeacherRoleTest extends TestCase
                 'medicine_id' => $this->amoxicillin->id,
                 'medicine_quantity' => 1,
             ]))
-            ->assertRedirect(route('dashboard.consultation-log'))
-            ->assertSessionHasErrors('medicine_id', null, 'consultation');
+            // RX-14: refused outright, not returned to the form to try again.
+            ->assertForbidden();
 
         $this->assertSame(50, $this->amoxicillin->fresh()->stock_quantity, 'Nothing came off the shelf.');
     }
@@ -237,7 +240,7 @@ class ClinicTeacherRoleTest extends TestCase
                 'medicine_id' => $this->amoxicillin->id,
                 'medicine_quantity' => 1,
             ]))
-            ->assertSessionHasErrors('medicine_id', null, 'consultation');
+            ->assertForbidden();
 
         $this->assertSame(1, Consultation::count(), 'The refused visit rolled back with its dispense.');
         $this->assertSame(50, $this->amoxicillin->fresh()->stock_quantity);

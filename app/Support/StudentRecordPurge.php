@@ -82,8 +82,10 @@ final class StudentRecordPurge
         // Exchange was in use. Nothing writes here any more, but a copy of
         // what was disclosed still goes with the record it was copied from.
         'fhir_transmissions' => [],
-        // The parent's number and every text sent about the learner.
-        'sms_notifications' => [],
+        // The RxNorm allergy check: the learner's medicine allergies and every
+        // check made on a medicine given to them.
+        'learner_medicine_allergies' => [],
+        'dispense_allergy_checks' => [],
     ];
 
     /**

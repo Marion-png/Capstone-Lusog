@@ -60,6 +60,18 @@
         </div>
     @endif
 
+    {{-- What RxNorm is asked for, for the allergy check on every dispense
+         (App\Support\RxNormService). Filled from the name chosen above until
+         the nurse types their own. --}}
+    @if (\App\Support\RxNormService::supported())
+        <div class="field full">
+            <label for="generic_name">Generic Name</label>
+            <input class="input" id="generic_name" name="generic_name" type="text" maxlength="100" required
+                   pattern="[A-Za-z0-9 .\/\-]{2,100}" value="{{ old('generic_name') }}" placeholder="e.g. Mefenamic Acid" autocomplete="off">
+            @error('generic_name') <div class="err">{{ $message }}</div> @enderror
+        </div>
+    @endif
+
     <div class="field">
         <label for="stock_quantity">Current Stock</label>
         <input class="input" id="stock_quantity" name="stock_quantity" type="number" min="0" value="{{ old('stock_quantity', 0) }}" required>
@@ -93,6 +105,27 @@
 </div>
 
 <script>
+(() => {
+    // "Paracetamol 500mg tablet" is looked up as "Paracetamol": the name
+    // without its strength or form. A generic the nurse typed is never
+    // overwritten.
+    const select = document.getElementById('catalogue_name');
+    const generic = document.getElementById('generic_name');
+    if (!select || !generic) return;
+
+    let automatic = generic.value === '';
+    generic.addEventListener('input', () => { automatic = generic.value === ''; });
+    select.addEventListener('change', () => {
+        if (!automatic) return;
+        const option = select.options[select.selectedIndex];
+        generic.value = option && option.value !== '' && option.closest('optgroup')
+            ? option.value.split(/\s\d|\s\(/)[0]
+                .replace(/\s+(tablets?|capsules?|syrup|suspension|solution|cream|lotion|sachets?|drops)\b.*$/i, '')
+                .trim()
+            : '';
+    });
+})();
+
 (() => {
     const select = document.getElementById('catalogue_name');
     const block = document.getElementById('offCatalogueBlock');

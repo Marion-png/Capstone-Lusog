@@ -6,6 +6,7 @@ use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\Http;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -28,6 +29,10 @@ abstract class TestCase extends BaseTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // No test reaches a real provider: a request nobody faked fails at
+        // once, which every client here reads as "unavailable".
+        Http::preventStrayRequests();
 
         Carbon::setTestNow(
             Carbon::now()->startOfWeek(Carbon::MONDAY)->addDays(4)->setTime(9, 0)

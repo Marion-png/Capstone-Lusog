@@ -10,6 +10,7 @@ use App\Support\AuditTrail;
 use App\Support\ConsentFormScanner;
 use App\Support\EncryptedFileStorage;
 use App\Support\LearnerPlacement;
+use App\Support\MedicineAllergies;
 use App\Support\SchemaCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -223,6 +224,10 @@ class ParentalConsentFormController extends Controller
                 'Consent answer read from the photographed form and confirmed by the class adviser',
             );
         }
+
+        // A medicine allergy on the returned form, as the adviser confirmed it,
+        // is looked up in RxNorm.
+        MedicineAllergies::syncLater($record->institution_id, $record->student_id, (string) $request->session()->get('active_name', ''));
 
         if ($feeding) {
             return back()->with('consent_success', ($validated['consent_type'] === 'full'

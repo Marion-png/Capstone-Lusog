@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\HealthAssessment;
 use App\Models\HealthConsentForm;
+use App\Models\LearnerMedicineAllergy;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 
@@ -39,7 +40,7 @@ class LearnerAllergies
     public const NOT_SPECIFIED = 'Not specified';
 
     /**
-     * @return list<array{kind: string, text: string, sources: list<string>}>
+     * @return list<array{kind: string, text: string, sources: list<string>, source: string}>
      */
     public static function for(?int $institutionId, string $lrn): array
     {
@@ -66,12 +67,19 @@ class LearnerAllergies
         // is the one on file.
         $details = is_array($records->first()->student_details) ? $records->first()->student_details : [];
         $history = is_array($details['health_history'] ?? null) ? $details['health_history'] : [];
+        // The adviser says whether it is a food or a medicine allergy; an
+        // answer from before the question was asked stays general.
         self::add(
             $found,
-            self::KIND_GENERAL,
+            match ($history['allergies_type'] ?? null) {
+                'medicine' => self::KIND_MEDICINE,
+                'food' => self::KIND_FOOD,
+                default => self::KIND_GENERAL,
+            },
             (bool) ($history['med_allergies'] ?? false),
             (string) ($history['allergies_detail'] ?? ''),
-            'Health card (Sheet 1)'
+            'Health card (Sheet 1)',
+            LearnerMedicineAllergy::SOURCE_SHEET1
         );
 
         if (SchemaCache::hasTable('health_consent_forms')) {
@@ -83,8 +91,8 @@ class LearnerAllergies
 
             foreach ($forms as $form) {
                 $source = "Parent's consent form, S.Y. ".$form->school_year;
-                self::add($found, self::KIND_MEDICINE, false, (string) $form->allergy_medicine, $source);
-                self::add($found, self::KIND_FOOD, false, (string) $form->allergy_food, $source);
+                self::add($found, self::KIND_MEDICINE, false, (string) $form->allergy_medicine, $source, LearnerMedicineAllergy::SOURCE_CONSENT);
+                self::add($found, self::KIND_FOOD, false, (string) $form->allergy_food, $source, LearnerMedicineAllergy::SOURCE_CONSENT);
             }
         }
 
@@ -98,8 +106,8 @@ class LearnerAllergies
 
             foreach ($uploads as $upload) {
                 $source = 'Returned consent form, S.Y. '.$upload->school_year;
-                self::add($found, self::KIND_MEDICINE, (bool) $upload->allergy_medicine, (string) $upload->allergy_medicine_detail, $source);
-                self::add($found, self::KIND_FOOD, (bool) $upload->allergy_food, (string) $upload->allergy_food_detail, $source);
+                self::add($found, self::KIND_MEDICINE, (bool) $upload->allergy_medicine, (string) $upload->allergy_medicine_detail, $source, LearnerMedicineAllergy::SOURCE_CONSENT);
+                self::add($found, self::KIND_FOOD, (bool) $upload->allergy_food, (string) $upload->allergy_food_detail, $source, LearnerMedicineAllergy::SOURCE_CONSENT);
             }
         }
 
@@ -115,7 +123,8 @@ class LearnerAllergies
                     self::KIND_GENERAL,
                     (bool) $assessment->med_allergies,
                     (string) $assessment->med_allergies_detail,
-                    'Health assessment, S.Y. '.$assessment->school_year
+                    'Health assessment, S.Y. '.$assessment->school_year,
+                    LearnerMedicineAllergy::SOURCE_ASSESSMENT
                 );
             }
         }
@@ -129,9 +138,12 @@ class LearnerAllergies
      * The same text from two places is one allergy with two sources; the
      * specific kind (medicine, food) wins over the general one.
      *
-     * @param  array<string, array{kind: string, text: string, sources: list<string>}>  $found
+     * `source` is where it was first recorded, as LearnerMedicineAllergy names
+     * it, for the medicine allergy rows read off this (MedicineAllergies).
+     *
+     * @param  array<string, array{kind: string, text: string, sources: list<string>, source: string}>  $found
      */
-    private static function add(array &$found, string $kind, bool $ticked, string $text, string $source): void
+    private static function add(array &$found, string $kind, bool $ticked, string $text, string $source, string $sourceKey): void
     {
         $text = trim((string) preg_replace('/\s+/u', ' ', $text));
         $says = $text !== '' && ConsentFormScanner::saysSomething($text);
@@ -154,6 +166,6 @@ class LearnerAllergies
             return;
         }
 
-        $found[$key] = ['kind' => $kind, 'text' => $text, 'sources' => [$source]];
+        $found[$key] = ['kind' => $kind, 'text' => $text, 'sources' => [$source], 'source' => $sourceKey];
     }
 }

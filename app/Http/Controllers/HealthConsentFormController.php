@@ -13,9 +13,8 @@ use App\Support\ConsentStanding;
 use App\Support\EncryptedFileStorage;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\LearnerPlacement;
+use App\Support\MedicineAllergies;
 use App\Support\NurseConsentList;
-use App\Support\ParentNotifier;
-use App\Support\PhilippineMobileNumber;
 use App\Support\SchemaCache;
 use App\Support\SchoolHeadOverview;
 use App\Support\StudentRosterSync;
@@ -402,32 +401,7 @@ class HealthConsentFormController extends Controller
     {
         $form = HealthConsentForm::where('token', $token)->firstOrFail();
 
-        // The text-message opt-in is offered once its columns exist, with the
-        // contact number the adviser already holds written in as a suggestion
-        // the parent can correct.
-        $smsOffered = SchemaCache::hasColumn('health_consent_forms', 'sms_opt_in');
-        $smsNumber = '';
-
-        if ($smsOffered) {
-            $smsNumber = (string) $form->sms_number;
-
-            if ($smsNumber === '' && $form->student_lrn) {
-                $details = StudentHealthRecord::query()
-                    ->where('institution_id', $form->institution_id)
-                    ->where('student_id', $form->student_lrn)
-                    ->latest('id')
-                    ->first()?->student_details;
-
-                $suggested = is_array($details) ? (string) ($details['telephone_no'] ?? '') : '';
-                $smsNumber = (string) PhilippineMobileNumber::normalize($suggested);
-            }
-        }
-
-        return view('consent-forms.parent', [
-            'form' => $form,
-            'smsOffered' => $smsOffered,
-            'smsNumber' => $smsNumber,
-        ]);
+        return view('consent-forms.parent', ['form' => $form]);
     }
 
     /** Parent: submit the consent section with the electronic signature. */
@@ -449,16 +423,7 @@ class HealthConsentFormController extends Controller
             'prev_immunization' => ['nullable', 'string', 'max:1000'],
             'other_illness' => ['nullable', 'string', 'max:1000'],
             'signature' => ['required', 'string', 'starts_with:data:image/png;base64,', 'max:200000'],
-            // Texts are opt-in, and only to a number that can receive one.
-            'sms_opt_in' => ['nullable', 'boolean'],
-            'sms_number' => ['nullable', 'required_if_accepted:sms_opt_in', 'string', 'max:30', function (string $attribute, mixed $value, \Closure $fail) use ($request): void {
-                if ($request->boolean('sms_opt_in') && ! PhilippineMobileNumber::isValid((string) $value)) {
-                    $fail('Please enter a Philippine mobile number, e.g. 0917 123 4567.');
-                }
-            }],
-            'sms_language' => ['nullable', 'in:'.implode(',', array_keys(ParentNotifier::LANGUAGES))],
         ], [
-            'sms_number.required_if_accepted' => 'Please enter the mobile number for text messages.',
             'consent_choice.required' => 'Please choose one consent option.',
             'consent_exceptions.required_if' => 'Please specify which health services.',
             'refusal_reason.required_if' => 'Please provide the reason.',
@@ -475,21 +440,14 @@ class HealthConsentFormController extends Controller
             'other_illness' => $validated['other_illness'] ?? null,
             'signature' => $validated['signature'],
         ]);
-
-        if (SchemaCache::hasColumn('health_consent_forms', 'sms_opt_in')) {
-            $optIn = (bool) ($validated['sms_opt_in'] ?? false);
-            $form->fill([
-                'sms_opt_in' => $optIn,
-                'sms_number' => $optIn ? PhilippineMobileNumber::normalize((string) $validated['sms_number']) : null,
-                'sms_language' => $optIn ? ($validated['sms_language'] ?? 'en') : null,
-            ]);
-        }
-
         $form->status = HealthConsentForm::STATUS_SIGNED;
         $form->signed_at = now();
         $form->adviser_unread = true;
         $form->addAudit('Signed by parent/guardian', 'parent_guardian', (string) ($form->parent_guardian_name ?: 'Parent/Guardian'));
         $form->save();
+
+        // A medicine allergy the parent wrote is looked up in RxNorm.
+        MedicineAllergies::syncLater($form->institution_id, $form->student_lrn, 'Parent/Guardian');
 
         return redirect()->route('consent-forms.parent', $token)
             ->with('success', 'Consent form submitted. Thank you!');
@@ -626,6 +584,8 @@ class HealthConsentFormController extends Controller
             (string) $request->session()->get('active_name', 'Class Adviser'),
         );
         $form->save();
+
+        MedicineAllergies::syncLater($form->institution_id, $form->student_lrn, (string) $request->session()->get('active_name', ''));
 
         return redirect()->route('consent-forms.show', $form)
             ->with('success', 'Consent recorded from the paper form. Review it to release it to the School Nurse.');

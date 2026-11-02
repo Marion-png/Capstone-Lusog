@@ -19,7 +19,6 @@ use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingConsent;
 use App\Support\FeedingNutritionProgress;
 use App\Support\FeedingProgramCycle;
-use App\Support\ParentNotifier;
 use App\Support\SchemaCache;
 use App\Support\SchoolCalendar;
 use App\Support\UploadReadFailure;
@@ -40,9 +39,6 @@ class FeedingProgramController extends Controller
 
     /** Memoized per request — see hasExcusedColumn(). */
     private ?bool $hasExcusedColumn = null;
-
-    /** How many parents this request queued a text for, for the save's message. */
-    private int $parentsTexted = 0;
 
     /**
      * The roles that read the programme page — each on its own path, so
@@ -1710,7 +1706,7 @@ class FeedingProgramController extends Controller
         // still open — a coordinator correcting one learner should not have to
         // navigate back to the day they were working on.
         return $redirect->with('success', $marks->count().' mark(s) '.($editing ? 'updated' : 'recorded')
-            .' for '.Carbon::parse($sessionDate)->format('M d, Y').'.'.$this->parentsTextedNote());
+            .' for '.Carbon::parse($sessionDate)->format('M d, Y').'.');
     }
 
     /**
@@ -2301,22 +2297,5 @@ class FeedingProgramController extends Controller
     private function refreshAttendanceRiskFlags(?int $institutionId = null): void
     {
         FeedingAttendanceFlag::refreshStoredFlags($institutionId);
-
-        // A parent who opted in hears about a run of absences that reached the
-        // school's attendance notice — once the marks are committed, so a save
-        // that rolls back texts nobody. ParentNotifier sends each run once.
-        DB::afterCommit(function () use ($institutionId): void {
-            $this->parentsTexted += app(ParentNotifier::class)->attendanceNotices($institutionId);
-        });
-    }
-
-    private function parentsTextedNote(): string
-    {
-        if ($this->parentsTexted === 0) {
-            return '';
-        }
-
-        return ' '.$this->parentsTexted.' '.($this->parentsTexted === 1 ? 'parent was' : 'parents were')
-            .' sent a text message about consecutive absences.';
     }
 }

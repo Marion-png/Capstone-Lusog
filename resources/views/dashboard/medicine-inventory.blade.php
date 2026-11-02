@@ -42,6 +42,9 @@
             // actions column holds Receive alone.
             $invHasActions = $invMayReceive;
             $invShelves = $shelves ?? collect();
+            // The generic name each item is looked up by in RxNorm, for the
+            // allergy check on every dispense.
+            $invRx = $supports_rxnorm ?? false;
         @endphp
         <div class="topbar-bc"><span>{{ \App\Support\AccountSettings::roleLabel(session('active_role')) }}</span><span class="bc-sep">&rsaquo;</span><span>Medicine Inventory</span></div>
 
@@ -296,7 +299,31 @@
                             $shelfLots = $shelf['lots'] ?? [];
                         @endphp
                         <tr>
-                            <td><strong>{{ $medicine->name }}</strong></td>
+                            <td>
+                                <strong>{{ $medicine->name }}</strong>
+                                @if ($invRx)
+                                    @php
+                                        [$rxLabel, $rxBadge] = match ($medicine->rx_status) {
+                                            \App\Support\RxNormService::MATCHED => ['Matched', 'badge-normal'],
+                                            \App\Support\RxNormService::NOT_FOUND => ['Not found', 'badge-critical'],
+                                            \App\Support\RxNormService::UNVERIFIED => ['Not verified', 'badge-monitor'],
+                                            default => ['Not checked', 'badge-neutral'],
+                                        };
+                                    @endphp
+                                    <div class="inv-rx">
+                                        @if ($invMayWriteStock)
+                                            <button type="button" class="inv-rx-edit" data-rx-open
+                                                    data-rx-url="{{ route('medicine-inventory.rxnorm', $medicine) }}"
+                                                    data-rx-medicine="{{ $medicine->id }}"
+                                                    data-medicine-name="{{ $medicine->name }}"
+                                                    data-generic-name="{{ $medicine->generic_name }}">{{ $medicine->generic_name ?: 'Generic name' }}</button>
+                                        @elseif ($medicine->generic_name)
+                                            <span>{{ $medicine->generic_name }}</span>
+                                        @endif
+                                        <span class="badge {{ $rxBadge }}" title="{{ $medicine->rxConcept ? 'RxNorm: '.$medicine->rxConcept->name.' ('.$medicine->rxConcept->rxcui.')' : '' }}">{{ $rxLabel }}</span>
+                                    </div>
+                                @endif
+                            </td>
                             <td class="num">{{ $medicine->stock_quantity }} {{ $medicine->unit }}</td>
                             <td class="num">{{ $medicine->minimum_threshold }} {{ $medicine->unit }}</td>
                             @php
@@ -561,11 +588,120 @@
 
     // A refused save comes back here, so the dialog reopens on the values the
     // nurse typed rather than closing over an error nobody saw.
-    @if ($errors->hasAny(['name', 'catalogue_name', 'custom_name', 'off_catalogue_reason', 'stock_quantity', 'minimum_threshold', 'unit', 'notes']))
+    @if ($errors->hasAny(['name', 'catalogue_name', 'custom_name', 'off_catalogue_reason', 'stock_quantity', 'minimum_threshold', 'unit', 'notes', 'generic_name']))
         open(); // reopened after a refused save
     @endif
 })();
 </script>
+@endif
+
+@if ($invRx && $invMayWriteStock)
+    @php
+        // A lookup with no confident match comes back with candidates for the
+        // nurse to choose from; a refused generic name comes back with its
+        // error. Either way the dialog reopens on the item it was for.
+        $rxPick = session('rx_pick');
+        $rxMedicineId = $rxPick['medicine_id'] ?? old('rx_medicine');
+        $rxMedicine = $rxMedicineId ? $medicines->firstWhere('id', (int) $rxMedicineId) : null;
+        $rxReopen = $rxMedicine !== null && ($rxPick !== null || $errors->rxnorm->any());
+    @endphp
+    <div class="inv-modal-backdrop" id="rxBackdrop" hidden @if ($rxReopen) data-reopen @endif>
+        <div class="inv-modal" role="dialog" aria-modal="true" aria-labelledby="rxTitle">
+            <form method="POST" id="rxForm" action="{{ $rxReopen ? route('medicine-inventory.rxnorm', $rxMedicine) : '' }}">
+                @csrf
+                <input type="hidden" name="rx_medicine" id="rxMedicine" value="{{ $rxReopen ? $rxMedicine->id : '' }}">
+                <div class="inv-modal-head">
+                    <div>
+                        <div class="page-eyebrow">RxNorm</div>
+                        <h2 id="rxTitle" class="inv-modal-title">{{ $rxReopen ? $rxMedicine->name : 'Medicine' }}</h2>
+                    </div>
+                    <button type="button" class="inv-modal-close" data-rx-close aria-label="Close">&times;</button>
+                </div>
+                <div class="inv-modal-body">
+                    <div class="inv-form-grid">
+                        <div class="field full">
+                            <label for="rxGeneric">Generic Name</label>
+                            <input class="input" id="rxGeneric" name="generic_name" type="text" maxlength="100" required
+                                   pattern="[A-Za-z0-9 .\/\-]{2,100}" autocomplete="off" placeholder="e.g. Mefenamic Acid"
+                                   value="{{ $rxReopen ? ($rxPick['generic_name'] ?? old('generic_name', $rxMedicine->generic_name)) : '' }}">
+                        </div>
+                    </div>
+                    @if ($rxPick && $rxReopen)
+                        <fieldset class="inv-rx-choices" id="rxChoices">
+                            <legend>RxNorm candidates</legend>
+                            @foreach ($rxPick['candidates'] as $candidate)
+                                <label class="inv-rx-choice">
+                                    <input type="radio" name="rxcui" value="{{ $candidate['rxcui'] }}" @checked($loop->first)>
+                                    {{ $candidate['name'] }}
+                                    <span>RxCUI {{ $candidate['rxcui'] }}</span>
+                                </label>
+                            @endforeach
+                        </fieldset>
+                    @endif
+                    @if ($errors->rxnorm->any())
+                        <div class="inv-form-error">{{ $errors->rxnorm->first() }}</div>
+                    @endif
+                </div>
+                <div class="inv-modal-foot">
+                    <button type="button" class="btn btn-secondary" data-rx-close>Cancel</button>
+                    <button type="submit" class="btn btn-primary">{{ $rxPick && $rxReopen ? 'Use Selected' : 'Look Up' }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    (() => {
+        const backdrop = document.getElementById('rxBackdrop');
+        const form = document.getElementById('rxForm');
+        if (!backdrop || !form) return;
+
+        const title = document.getElementById('rxTitle');
+        const generic = document.getElementById('rxGeneric');
+        const medicine = document.getElementById('rxMedicine');
+        const choices = document.getElementById('rxChoices');
+        const submit = form.querySelector('button[type="submit"]');
+
+        const open = () => {
+            backdrop.hidden = false;
+            document.body.classList.add('inv-modal-open');
+            generic?.focus();
+        };
+        const close = () => {
+            backdrop.hidden = true;
+            document.body.classList.remove('inv-modal-open');
+        };
+
+        document.querySelectorAll('[data-rx-open]').forEach((button) => {
+            button.addEventListener('click', () => {
+                // The candidates belong to the item they were offered for.
+                const same = medicine.value === button.dataset.rxMedicine;
+                if (choices && !same) {
+                    choices.remove();
+                    if (submit) submit.textContent = 'Look Up';
+                }
+                form.action = button.dataset.rxUrl || '';
+                medicine.value = button.dataset.rxMedicine || '';
+                title.textContent = button.dataset.medicineName || 'Medicine';
+                if (!same) generic.value = button.dataset.genericName || '';
+                open();
+            });
+        });
+
+        // Typing a new name asks RxNorm again rather than taking a candidate.
+        generic?.addEventListener('input', () => {
+            if (!choices || !choices.isConnected) return;
+            choices.remove();
+            if (submit) submit.textContent = 'Look Up';
+        });
+
+        backdrop.querySelectorAll('[data-rx-close]').forEach((button) => button.addEventListener('click', close));
+        backdrop.addEventListener('click', (event) => { if (event.target === backdrop) close(); });
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !backdrop.hidden) close(); });
+
+        if (backdrop.hasAttribute('data-reopen')) open();
+    })();
+    </script>
 @endif
 
 @if ($invMayDispose)

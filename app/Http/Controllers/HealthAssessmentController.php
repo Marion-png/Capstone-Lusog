@@ -7,6 +7,7 @@ use App\Models\StudentHealthRecord;
 use App\Rules\BloodPressure;
 use App\Support\AdviserClassScope;
 use App\Support\LearnerPlacement;
+use App\Support\MedicineAllergies;
 use App\Support\SchemaCache;
 use App\Support\StudentRosterSync;
 use App\Support\StudentVitalSigns;
@@ -161,6 +162,8 @@ class HealthAssessmentController extends Controller
             'examiner_signature' => $validated['examiner_signature'] ?? null,
             'submitted_by_name' => (string) $request->session()->get('active_name', 'Class Adviser'),
         ]);
+
+        MedicineAllergies::syncLater($record->institution_id, $record->student_id, (string) $request->session()->get('active_name', ''));
 
         return back()->with('health_assessment_success', 'Health assessment saved successfully for SY '.$schoolYear.'.');
     }

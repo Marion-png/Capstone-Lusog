@@ -62,10 +62,6 @@
                  child they were reading. The server accepts only a URL inside
                  this app and otherwise falls back to the log. --}}
             <input type="hidden" name="return_to" id="cm_return_to" value="{{ old('return_to', url()->full()) }}">
-            {{-- The LRN of the learner chosen off the roll, so the server can
-                 find their parent (App\Support\ParentNotifier). Empty for a
-                 name typed and never chosen. --}}
-            <input type="hidden" name="student_lrn" id="cm_student_lrn" value="{{ old('student_lrn') }}">
             <div class="bmodal-head">
                 <div>
                     <div class="bmodal-eyebrow">Consultation</div>
@@ -271,7 +267,11 @@
                         <span class="cm-batch-label">Batch</span>
                         <span class="cm-batch-value" id="cm_medicine_batch_value"></span>
                     </div>
-                    <div class="bmodal-error" id="cm_allergy_match" hidden></div>
+                    @if (\App\Support\AllergyCheck::supported())
+                        @include('partials.consultation-allergy-check', ['prefix' => 'cm', 'medicineField' => 'cm_medicine_id'])
+                    @else
+                        <div class="bmodal-error" id="cm_allergy_match" hidden></div>
+                    @endif
                     @if ($consultDispenseNotice !== '')
                         <div class="bmodal-hint cm-dispense-limit">{{ $consultDispenseNotice }}</div>
                     @endif
@@ -443,6 +443,7 @@
     #consultModal .cm-allergy-kind { font-weight: 700; }
     #consultModal .cm-allergy-source { display: block; font-size: .68rem; color: #6B7C72; }
     #consultModal .cm-allergy-none { color: #3E5348; }
+    #consultModal .cm-allergy-unverified { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; border: 1px solid #DDE3DF; background: #EEF1EF; color: #55645C; font-size: .66rem; font-weight: 700; vertical-align: 1px; }
 
     /* The learner's LRN beside their name in the search results, so a learner
        found by LRN is recognisably the one that was typed. */
@@ -565,6 +566,15 @@
                 textContent: (allergy.kind || 'Allergy') + ': ',
             }));
             item.appendChild(document.createTextNode(String(allergy.text || '')));
+
+            // A medicine allergy RxNorm has not matched cannot be checked
+            // against what is dispensed (App\Support\MedicineAllergies).
+            if (allergy.verified === false) {
+                item.appendChild(Object.assign(document.createElement('span'), {
+                    className: 'cm-allergy-unverified',
+                    textContent: 'Allergy not verified',
+                }));
+            }
 
             const sources = Array.isArray(allergy.sources) ? allergy.sources.join(' · ') : '';
             if (sources !== '') {
@@ -748,11 +758,20 @@
     const forLearner = (name, lrn) => {
         pickedName = String(name || '').trim();
         pickedLrn = String(lrn || '').trim();
-        const lrnField = document.getElementById('cm_student_lrn');
-        if (lrnField) lrnField.value = pickedLrn;
         if (pickedLrn !== '') allergies.show(pickedLrn);
         else allergies.clear();
+
+        // The learner the dispense is checked against (partials/consultation-allergy-check).
+        const lrnField = document.getElementById('cm_student_lrn');
+        if (lrnField) lrnField.value = pickedLrn;
+        document.dispatchEvent(new CustomEvent('consult:learner'));
     };
+
+    // A refused save reopens the dialog with the learner it was for.
+    const restoredLrn = document.getElementById('cm_student_lrn')?.value || '';
+    if (restoredLrn !== '' && nameField && nameField.value.trim() !== '') {
+        forLearner(nameField.value, restoredLrn);
+    }
 
     // Called by the profile's "New Consultation" button.
     window.openConsultationFor = (name, section, lrn) => {

@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Medicine;
+use App\Support\AllergyCheck;
 use App\Support\LearnerAllergies;
+use App\Support\MedicineAllergies;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -31,9 +34,47 @@ class StudentAllergyController extends Controller
         }
 
         $institutionId = $request->session()->get('active_institution_id');
+        $institutionId = $institutionId ? (int) $institutionId : null;
 
         return response()->json([
-            'allergies' => LearnerAllergies::for($institutionId ? (int) $institutionId : null, $lrn),
+            'allergies' => MedicineAllergies::annotate(LearnerAllergies::for($institutionId, $lrn), $institutionId, $lrn),
+        ]);
+    }
+
+    /**
+     * The allergy check for a medicine about to be given (App\Support\AllergyCheck),
+     * shown in the dialog before the save. The save asks again; this answer
+     * decides nothing on its own.
+     */
+    public function check(Request $request): JsonResponse
+    {
+        $role = (string) $request->session()->get('active_role', '');
+
+        if (! in_array($role, self::ROLES, true)) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        if (! AllergyCheck::supported()) {
+            return response()->json(['result' => null]);
+        }
+
+        $validated = $request->validate([
+            'medicine_id' => ['required', 'integer'],
+            'lrn' => ['nullable', 'string', 'max:20'],
+        ]);
+
+        $institutionId = $request->session()->get('active_institution_id');
+        $medicine = Medicine::query()
+            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+            ->findOrFail($validated['medicine_id']);
+
+        $check = AllergyCheck::evaluate($role, $medicine, $institutionId ? (int) $institutionId : null, $validated['lrn'] ?? '');
+
+        return response()->json([
+            'result' => $check['result'],
+            'message' => $check['message'],
+            'note' => AllergyCheck::NOTE,
+            'requires' => AllergyCheck::requires($check['result']),
         ]);
     }
 }

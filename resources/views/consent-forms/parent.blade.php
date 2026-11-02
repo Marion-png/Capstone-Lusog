@@ -50,53 +50,6 @@
             @csrf
             @include('consent-forms._document', ['form' => $form, 'mode' => 'parent'])
 
-            {{-- Text messages to the parent (App\Support\ParentNotifier).
-                 Off unless ticked: the box is the parent's consent to be
-                 texted, and the number is the one they give here. --}}
-            @if ($smsOffered ?? false)
-                @php $smsOn = (bool) old('sms_opt_in', $form->sms_opt_in); @endphp
-                <div class="cf-card cf-sms" style="margin-top:16px;">
-                    <div class="cf-card-head"><h2>Text Message Updates</h2></div>
-                    <div class="cf-card-body">
-                        <label class="cf-sms-check">
-                            <input type="checkbox" name="sms_opt_in" value="1" id="smsOptIn" @checked($smsOn)>
-                            <span>Text me when my child visits the school clinic or misses school feeding sessions.</span>
-                        </label>
-                        <div class="cf-sms-fields" id="smsFields" @unless ($smsOn) hidden @endunless>
-                            <label class="cf-sms-field">
-                                <span>Mobile number</span>
-                                <input type="tel" name="sms_number" inputmode="tel" maxlength="30" autocomplete="tel"
-                                       placeholder="0917 123 4567" value="{{ old('sms_number', $smsNumber) }}">
-                            </label>
-                            <label class="cf-sms-field">
-                                <span>Language</span>
-                                <select name="sms_language">
-                                    @foreach (\App\Support\ParentNotifier::LANGUAGES as $code => $label)
-                                        <option value="{{ $code }}" @selected(old('sms_language', $form->sms_language ?: 'en') === $code)>{{ $label }}</option>
-                                    @endforeach
-                                </select>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-                <style>
-                    .cf-sms-check { display: flex; gap: 10px; align-items: flex-start; font-size: .88rem; color: var(--text); cursor: pointer; line-height: 1.45; }
-                    .cf-sms-check input { margin-top: 3px; width: 17px; height: 17px; accent-color: var(--lg-emerald); flex: none; }
-                    .cf-sms-fields { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; padding-left: 27px; }
-                    .cf-sms-fields[hidden] { display: none; }
-                    .cf-sms-field { display: flex; flex-direction: column; gap: 5px; font-size: .76rem; font-weight: 600; color: var(--muted); }
-                    .cf-sms-field input, .cf-sms-field select { font: inherit; font-size: .88rem; font-weight: 400; color: var(--text); padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--lg-card); min-width: 190px; }
-                    @media (max-width: 520px) { .cf-sms-fields { padding-left: 0; } .cf-sms-field { flex: 1 1 100%; } .cf-sms-field input, .cf-sms-field select { min-width: 0; width: 100%; } }
-                </style>
-                <script>
-                (function () {
-                    var box = document.getElementById('smsOptIn');
-                    var fields = document.getElementById('smsFields');
-                    if (box && fields) box.addEventListener('change', function () { fields.hidden = !box.checked; });
-                })();
-                </script>
-            @endif
-
             <div class="cf-card" style="margin-top:16px;">
                 <div class="cf-card-body">
                     <div class="cf-actions">

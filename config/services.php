@@ -85,23 +85,12 @@ return [
     ],
 
     /*
-     * Semaphore (semaphore.co), the Philippine SMS gateway that texts a
-     * parent who opted in on the Sulat-Pahibalo (App\Support\ParentNotifier).
-     * The key is never committed — set SEMAPHORE_API_KEY in .env.
-     *
-     * With no key the feature is off and nothing else changes. SMS_DRY_RUN
-     * composes and logs every message exactly as a real send would but never
-     * calls the gateway, for demonstrating the flow without spending credits;
-     * it wins over a key that is set. The daily cap is per school, so a bug or
-     * a replayed sheet cannot drain the account.
+     * RxNav (U.S. National Library of Medicine), read by App\Support\RxNormService
+     * for the dispense allergy check. Free and keyless; only a medicine name is
+     * ever sent. The base URL is here so it can change without a code edit.
      */
-    'semaphore' => [
-        'key' => env('SEMAPHORE_API_KEY'),
-        'sender_name' => env('SEMAPHORE_SENDER_NAME'),
-        'endpoint' => env('SEMAPHORE_ENDPOINT', 'https://api.semaphore.co/api/v4'),
-        'timeout' => (int) env('SEMAPHORE_TIMEOUT', 15),
-        'dry_run' => (bool) env('SMS_DRY_RUN', false),
-        'daily_cap' => (int) env('SMS_DAILY_CAP', 300),
+    'rxnorm' => [
+        'base_url' => env('RXNORM_BASE_URL', 'https://rxnav.nlm.nih.gov/REST'),
     ],
 
 ];

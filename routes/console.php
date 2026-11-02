@@ -45,3 +45,14 @@ Schedule::command('holidays:sync')
     ->monthlyOn(1, '03:00')
     ->withoutOverlapping()
     ->onOneServer();
+
+/*
+ * The RxNorm allergy check (App\Support\RxNormService). Daily: everything
+ * RxNav could not answer when it was saved is asked again, and concepts older
+ * than 90 days are refreshed. Same caveat: until something runs
+ * `schedule:run`, it is a command a human runs.
+ */
+Schedule::command('rxnorm:retry-unverified')
+    ->dailyAt('03:30')
+    ->withoutOverlapping()
+    ->onOneServer();

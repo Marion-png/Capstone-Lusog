@@ -10,6 +10,7 @@ use App\Support\ClassMasterlistTemplate;
 use App\Support\ClassMasterlistWorkbook;
 use App\Support\LearnerPlacement;
 use App\Support\MasterlistSheetScanner;
+use App\Support\MedicineAllergies;
 use App\Support\PostureGait;
 use App\Support\SchemaCache;
 use App\Support\SchoolYearTransition;
@@ -58,7 +59,7 @@ class AdviserController extends Controller
 
     /** Free-text and single-choice answers on Sheet 1 sections B-D. */
     private const HEALTH_HISTORY_TEXT = [
-        'allergies_detail', 'hospitalization_detail',
+        'allergies_detail', 'allergies_type', 'hospitalization_detail',
         'current_medications', 'other_conditions', 'genetic_disorders',
         'consciousness', 'consciousness_other',
         'posture', 'posture_detail', 'hygiene',
@@ -182,6 +183,14 @@ class AdviserController extends Controller
         );
 
         $request->session()->put('school_health_card_records', $records);
+
+        // A medicine allergy typed on Sheet 1 is looked up in RxNorm once the
+        // response has gone (App\Support\MedicineAllergies).
+        MedicineAllergies::syncLater(
+            (int) $request->session()->get('active_institution_id'),
+            (string) $validated['lrn'],
+            (string) $request->session()->get('active_name', '')
+        );
 
         return redirect()
             ->route('dashboard.class-adviser')
@@ -1466,9 +1475,16 @@ class AdviserController extends Controller
     {
         // Posture / Gait is Good or Poor; a form still posting the old
         // Normal / Abnormal words is saved under the current ones.
-        return PostureGait::normalizeHistory(
+        $history = PostureGait::normalizeHistory(
             $this->normaliseChecklist($input, self::HEALTH_HISTORY_FLAGS, self::HEALTH_HISTORY_TEXT)
         );
+
+        // Medicine or food, and nothing else (App\Support\LearnerAllergies).
+        if (! in_array($history['allergies_type'] ?? null, ['medicine', 'food'], true)) {
+            $history['allergies_type'] = null;
+        }
+
+        return $history;
     }
 
     /**

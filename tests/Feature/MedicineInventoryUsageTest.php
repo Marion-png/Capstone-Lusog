@@ -70,6 +70,7 @@ class MedicineInventoryUsageTest extends TestCase
             'grade_section' => 'Grade 10 - Dalton',
             'condition' => 'Headache',
             'status' => 'treated',
+            'allergy_acknowledged' => '1',
         ], $overrides);
     }
 
@@ -173,7 +174,7 @@ class MedicineInventoryUsageTest extends TestCase
                 'medicine_id' => $amoxicillin->id,
                 'medicine_quantity' => 1,
             ]))
-            ->assertSessionHasErrors('medicine_id', null, 'consultation');
+            ->assertForbidden();
 
         // Refused, and the visit went with it.
         $this->assertDatabaseCount('consultations', 1);

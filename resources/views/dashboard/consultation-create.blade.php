@@ -82,6 +82,9 @@
                             <input id="medicine_quantity" type="number" name="medicine_quantity" min="1" step="1" value="{{ old('medicine_quantity') }}" placeholder="e.g. 1" autocomplete="off">
                             @error('medicine_quantity', 'consultation') <div class="err">{{ $message }}</div> @enderror
                         </div>
+                        <div class="field full">
+                            @include('partials.consultation-allergy-check', ['prefix' => 'cc', 'medicineField' => 'medicine_id', 'lrn' => $prefillLrn ?? ''])
+                        </div>
                     @endif
                     <div class="field full">
                         <label for="treatment_given">Recommendations <span class="optional">(optional)</span></label>
@@ -139,6 +142,14 @@
 
     let picked = input.value.trim() !== '' && section.readOnly ? input.value.trim() : '';
 
+    // The learner the dispense is checked against (partials/consultation-allergy-check).
+    const setLrn = (lrn) => {
+        const field = document.getElementById('cc_student_lrn');
+        if (!field) return;
+        field.value = lrn || '';
+        document.dispatchEvent(new CustomEvent('consult:learner'));
+    };
+
     const close = () => { list.classList.remove('show'); input.setAttribute('aria-expanded', 'false'); };
     const lockSection = (locked) => {
         section.readOnly = locked;
@@ -151,6 +162,7 @@
         input.value = learner.name;
         section.value = learner.section || '';
         lockSection(String(learner.section || '').trim() !== '');
+        setLrn(learner.lrn);
         close();
         if (!section.readOnly) section.focus();
     };
@@ -178,6 +190,7 @@
             picked = '';
             section.value = '';
             lockSection(false);
+            setLrn('');
         }
 
         if (term === '' || learners.length === 0) { list.textContent = ''; close(); return; }

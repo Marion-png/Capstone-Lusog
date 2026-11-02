@@ -803,6 +803,13 @@
                         <div class="field">
                             <label class="sr-inline-check"><input type="checkbox" name="health_history[med_allergies]" value="1" {{ $hhFlag('med_allergies') ? 'checked' : '' }}> Allergies</label>
                             <input id="hh_allergies_detail" name="health_history[allergies_detail]" type="text" placeholder="Specify allergies" value="{{ $hhText('allergies_detail') }}">
+                            {{-- A medicine allergy is checked against every dispense
+                                 (App\Support\AllergyCheck); a food allergy stays text. --}}
+                            <select id="hh_allergies_type" name="health_history[allergies_type]" aria-label="Type of allergy" style="margin-top:6px;">
+                                <option value="">Type of allergy</option>
+                                <option value="medicine" @selected($hhText('allergies_type') === 'medicine')>Medicine</option>
+                                <option value="food" @selected($hhText('allergies_type') === 'food')>Food</option>
+                            </select>
                         </div>
                         <div class="field">
                             <label class="sr-inline-check"><input type="checkbox" name="health_history[med_hospitalization]" value="1" {{ $hhFlag('med_hospitalization') ? 'checked' : '' }}> Hospitalization / Surgery</label>

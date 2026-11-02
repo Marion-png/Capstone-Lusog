@@ -215,6 +215,7 @@ class ConsultationAllergiesAndMedicineTest extends TestCase
                 'status' => 'treated',
                 'medicine_id' => $paracetamol->id,
                 'medicine_quantity' => $quantity,
+                'allergy_acknowledged' => '1',
             ])
             ->assertSessionHasNoErrors('consultation');
 

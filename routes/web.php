@@ -34,7 +34,6 @@ use App\Http\Controllers\SchoolHeadProgramController;
 use App\Http\Controllers\SchoolHeadReportsController;
 use App\Http\Controllers\SchoolYearTransitionController;
 use App\Http\Controllers\SettingsController;
-use App\Http\Controllers\SmsNotificationController;
 use App\Http\Controllers\StudentAllergyController;
 use App\Http\Controllers\StudentHealthRecordController;
 use App\Http\Controllers\StudentIncidentReportController;
@@ -520,6 +519,12 @@ Route::post('/dashboard/medicine-inventory/{medicine}/receive', [MedicineInvento
 // past its date stays counted until a stock writer removes it here — one
 // transaction, the medicine row locked, every lot it touches audited
 // (MedicineInventoryController::disposeExpired).
+// The generic name an item is looked up by in RxNorm, and the candidate the
+// nurse chose (App\Support\RxNormService). Stock writers only.
+Route::post('/dashboard/medicine-inventory/{medicine}/rxnorm', [MedicineInventoryController::class, 'rxnorm'])
+    ->whereNumber('medicine')
+    ->name('medicine-inventory.rxnorm');
+
 Route::post('/dashboard/medicine-inventory/{medicine}/dispose-expired', [MedicineInventoryController::class, 'disposeExpired'])
     ->whereNumber('medicine')
     ->name('medicine-inventory.dispose-expired');
@@ -941,6 +946,12 @@ Route::post('/health-records/students/{lrn}/vitals', [StudentVitalSignsControlle
 // (App\Support\LearnerAllergies). Clinic desks only; audited as a read.
 Route::get('/health-records/students/{lrn}/allergies', [StudentAllergyController::class, 'show'])
     ->name('student-allergies.show');
+
+// The RxNorm allergy check for a medicine about to be dispensed
+// (App\Support\AllergyCheck), read by the dialog before the save. Database
+// only; the save runs the same check again.
+Route::get('/health-records/allergy-check', [StudentAllergyController::class, 'check'])
+    ->name('student-allergies.check');
 
 // Photographs attached to a consultation — a cut, a rash, a swelling, so an
 // injury can be seen rather than described. The clinic takes them; the class
@@ -1531,17 +1542,6 @@ Route::get('/dashboard/system-admin/audit-logs', function (Request $request) {
         'filterUsername' => $filterUsername,
     ]);
 })->name('dashboard.system-admin.audit-logs');
-
-// Parent text messages (Semaphore SMS): the gateway's standing, the log of
-// every message, a sample send, delivery reports and retry. System Admin only.
-Route::get('/dashboard/system-admin/sms', [SmsNotificationController::class, 'index'])
-    ->name('dashboard.system-admin.sms');
-Route::post('/dashboard/system-admin/sms/test', [SmsNotificationController::class, 'test'])
-    ->name('dashboard.system-admin.sms.test');
-Route::post('/dashboard/system-admin/sms/refresh', [SmsNotificationController::class, 'refresh'])
-    ->name('dashboard.system-admin.sms.refresh');
-Route::post('/dashboard/system-admin/sms/{notification}/retry', [SmsNotificationController::class, 'retry'])
-    ->whereNumber('notification')->name('dashboard.system-admin.sms.retry');
 
 Route::post('/dashboard/system-admin/accounts', function (Request $request) {
     if ($request->session()->get('active_role') !== 'system_admin') {

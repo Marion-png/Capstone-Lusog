@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Support\RxNormService;
 use App\Support\SchemaCache;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Medicine extends Model
@@ -36,12 +38,41 @@ class Medicine extends Model
         'unit',
         'expiry_date',
         'notes',
+        'generic_name',
+        'rx_concept_id',
+        'rx_status',
     ];
 
     protected $casts = [
         'off_catalogue' => 'boolean',
         'expiry_date' => 'date',
     ];
+
+    /** The RxNorm concept the generic name matched (App\Support\RxNormService). */
+    public function rxConcept(): BelongsTo
+    {
+        return $this->belongsTo(RxConcept::class, 'rx_concept_id');
+    }
+
+    /** Was this medicine matched in RxNorm, so the allergy check can read it? */
+    public function isRxMatched(): bool
+    {
+        return $this->rx_status === RxNormService::MATCHED && $this->rxConcept !== null;
+    }
+
+    /**
+     * Keep a lookup's answer (RxNormService::lookup). Candidates the nurse has
+     * not chosen from yet are not a match.
+     *
+     * @param  array{status: string, concept: ?RxConcept}  $result
+     */
+    public function applyRxNorm(string $genericName, array $result): void
+    {
+        $this->generic_name = $genericName;
+        $this->rx_status = $result['status'] === RxNormService::CANDIDATES ? RxNormService::NOT_FOUND : $result['status'];
+        $this->rx_concept_id = $result['concept']?->id;
+        $this->save();
+    }
 
     /** Whether the expiry column is on this database yet. */
     public static function supportsExpiry(): bool

@@ -152,6 +152,21 @@ body.inv-modal-open { overflow: hidden; }
 .inv-form-grid .input { width: 100%; }
 .inv-form-error { margin-top: 12px; padding: 9px 12px; border-radius: 8px; background: var(--lg-danger-tint); color: var(--lg-danger-ink); font-size: .78rem; }
 
+/* RxNorm: the generic name an item is looked up by and whether it matched,
+   under the item's name. A stock writer's generic name opens the dialog. */
+.inv-rx { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; font-size: .76rem; color: var(--lg-ink-soft); }
+.inv-rx .badge { white-space: nowrap; }
+.inv-rx-edit {
+	border: none; background: none; padding: 1px 4px; margin-left: -4px; border-radius: 5px;
+	font: inherit; font-weight: 600; color: var(--lg-emerald-dark); cursor: pointer;
+}
+.inv-rx-edit:hover, .inv-rx-edit:focus-visible { background: var(--lg-mint); }
+.inv-rx-choices { margin: 14px 0 0; padding: 0; border: none; display: grid; gap: 6px; }
+.inv-rx-choices legend { font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); margin-bottom: 4px; }
+.inv-rx-choice { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--lg-border); border-radius: 8px; font-size: .84rem; color: var(--lg-ink); cursor: pointer; }
+.inv-rx-choice:has(input:checked) { border-color: var(--lg-emerald); background: var(--lg-mint); }
+.inv-rx-choice span { margin-left: auto; color: var(--lg-ink-soft); font-size: .74rem; font-variant-numeric: var(--lg-figures); }
+
 @media (max-width: 620px) {
 	.inv-form-grid { grid-template-columns: 1fr; }
 }

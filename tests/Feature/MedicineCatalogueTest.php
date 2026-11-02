@@ -52,6 +52,7 @@ class MedicineCatalogueTest extends TestCase
                 'stock_quantity' => 50,
                 'minimum_threshold' => 20,
                 'unit' => 'pcs',
+                'generic_name' => 'Paracetamol',
             ], $payload));
     }
 

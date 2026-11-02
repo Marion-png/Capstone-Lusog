@@ -10,12 +10,12 @@ use App\Models\MedicineDispense;
 use App\Models\MedicineDispenseBatch;
 use App\Models\StudentHealthRecord;
 use App\Support\AccountSettings;
+use App\Support\AllergyCheck;
 use App\Support\ConsultationMedicines;
 use App\Support\DispensingRights;
 use App\Support\EncryptedFileStorage;
 use App\Support\LearnerSearchIndex;
 use App\Support\MedicineBatches;
-use App\Support\ParentNotifier;
 use App\Support\SchemaCache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -207,10 +207,12 @@ class ConsultationController extends Controller
             ],
             'photo_caption' => ['nullable', 'string', 'max:500'],
             'photo_shared_with_adviser' => ['nullable', 'boolean'],
-            // The learner chosen off the roll, when one was: how their parent
-            // is found for a text message. A name typed and never chosen
-            // carries none, and nobody is texted.
+            // The learner chosen off the roll, whose allergies the dispense is
+            // checked against (App\Support\AllergyCheck), and what the nurse
+            // answered to the check.
             'student_lrn' => ['nullable', 'string', 'max:20'],
+            'allergy_override_reason' => ['nullable', 'string', 'max:500'],
+            'allergy_acknowledged' => ['nullable', 'boolean'],
         ]);
 
         $photos = array_values(array_filter((array) $request->file('photos', [])));
@@ -257,6 +259,40 @@ class ConsultationController extends Controller
         $mayDispense = DispensingRights::mayDispense($activeRole);
         $medicineId = $mayDispense ? ($validated['medicine_id'] ?? null) : null;
         $quantity = max(1, (int) ($validated['medicine_quantity'] ?? 1));
+        $lrn = trim((string) ($validated['student_lrn'] ?? ''));
+        $staffName = (string) $request->session()->get('active_name', AccountSettings::roleLabel($activeRole));
+
+        // Before anything is written: a medicine this role may not give is
+        // refused outright, and the allergy check decides whether the save
+        // may go ahead. A blocked attempt is recorded on its own, since
+        // nothing else is saved.
+        $allergyCheck = null;
+        if ($medicineId) {
+            $chosen = Medicine::query()
+                ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+                ->find($medicineId);
+
+            if ($chosen !== null && ! DispensingRights::allows($activeRole, $chosen->name)) {
+                abort(403, DispensingRights::refusalMessage($activeRole, $chosen->name));
+            }
+
+            if ($chosen !== null && AllergyCheck::supported()) {
+                $allergyCheck = AllergyCheck::evaluate($activeRole, $chosen, $institutionId ? (int) $institutionId : null, $lrn);
+                $refusal = AllergyCheck::refusal(
+                    $allergyCheck,
+                    $validated['allergy_override_reason'] ?? null,
+                    (bool) ($validated['allergy_acknowledged'] ?? false),
+                );
+
+                if ($refusal !== []) {
+                    if ($allergyCheck['result'] === AllergyCheck::BLOCKED) {
+                        AllergyCheck::record($allergyCheck, $institutionId ? (int) $institutionId : null, $chosen, $lrn, null, $activeRole, $staffName);
+                    }
+
+                    return back()->withErrors($refusal, 'consultation')->withInput();
+                }
+            }
+        }
 
         $dispensed = null;
 
@@ -265,9 +301,8 @@ class ConsultationController extends Controller
         // without its consultation would be a draw nobody can account for.
         // Either both land or neither does.
         $photoCount = 0;
-        $consultationId = null;
 
-        DB::transaction(function () use ($validated, $conditionName, $conditionId, $institutionId, $medicineId, $quantity, $photos, $request, $activeRole, &$dispensed, &$photoCount, &$consultationId) {
+        DB::transaction(function () use ($validated, $conditionName, $conditionId, $institutionId, $medicineId, $quantity, $photos, $request, $activeRole, $allergyCheck, $lrn, $staffName, &$dispensed, &$photoCount) {
             // The note travels only where its column has been migrated, so an
             // older database still records the visit. Whether the clinic
             // shared it with the class adviser rides with it — a note nobody
@@ -294,7 +329,6 @@ class ConsultationController extends Controller
                 'treatment_given' => $validated['treatment_given'] ?? null,
                 'status' => $validated['status'],
             ]);
-            $consultationId = $consultation->id;
 
             // Photographs attached at the point of recording. Written through
             // the model and EncryptedFileStorage exactly as the Photos dialog
@@ -342,9 +376,7 @@ class ConsultationController extends Controller
             // refusing here rolls the whole save back — a refused dispense
             // leaves no consultation and no stock movement behind it.
             if (! DispensingRights::allows($activeRole, $medicine->name)) {
-                throw ValidationException::withMessages([
-                    'medicine_id' => DispensingRights::refusalMessage($activeRole, $medicine->name),
-                ])->errorBag('consultation');
+                abort(403, DispensingRights::refusalMessage($activeRole, $medicine->name));
             }
 
             if ($medicine->stock_quantity < $quantity) {
@@ -378,7 +410,7 @@ class ConsultationController extends Controller
                 // Whoever handed it over, not a default of whoever usually
                 // does: a Clinic Teacher's paracetamol must not be filed as the
                 // nurse's.
-                'dispensed_by_name' => (string) $request->session()->get('active_name', AccountSettings::roleLabel($activeRole)),
+                'dispensed_by_name' => $staffName,
                 'dispensed_by_role' => $activeRole,
                 'dispensed_at' => now(),
             ] + (SchemaCache::hasColumn('medicine_dispenses', 'consultation_id')
@@ -392,6 +424,10 @@ class ConsultationController extends Controller
                     'quantity' => $step['quantity'],
                     'expiry_date' => $step['batch']->expiry_date?->toDateString(),
                 ]);
+            }
+
+            if ($allergyCheck !== null) {
+                AllergyCheck::record($allergyCheck, $institutionId ? (int) $institutionId : null, $medicine, $lrn, $consultation->id, $activeRole, $staffName, $validated['allergy_override_reason'] ?? null);
             }
 
             $medicine->stock_quantity = (int) $medicine->stock_quantity - $quantity;
@@ -416,49 +452,9 @@ class ConsultationController extends Controller
             $message .= ' '.$photoCount.' '.Str::plural('photo', $photoCount).' attached.';
         }
 
-        // Only once the visit is committed: a text about a consultation that
-        // rolled back would tell a parent about a visit the clinic has no
-        // record of. The send itself happens after this response.
-        if ($sms = $this->textParent($validated, $institutionId, $consultationId)) {
-            $message .= ' '.$sms;
-        }
-
         return redirect()
             ->to($this->returnTo($request))
             ->with('success', $message);
-    }
-
-    /**
-     * Text the parent of the learner this visit was filed under, at the number
-     * on file for them. Returns what the nurse is told, or null when there is nothing
-     * to say (the feature is off, or no learner was chosen off the roll).
-     *
-     * The learner is looked up by the LRN the dialog posted and only within
-     * the nurse's own school, so an LRN off the wire cannot reach another
-     * school's parent.
-     */
-    private function textParent(array $validated, mixed $institutionId, ?int $consultationId): ?string
-    {
-        $lrn = trim((string) ($validated['student_lrn'] ?? ''));
-        $notifier = app(ParentNotifier::class);
-
-        if ($lrn === '' || ! $institutionId || $consultationId === null || ! $notifier->isReady()) {
-            return null;
-        }
-
-        $record = StudentHealthRecord::query()
-            ->where('institution_id', $institutionId)
-            ->where('student_id', $lrn)
-            ->latest('id')
-            ->first();
-
-        if ($record === null) {
-            return null;
-        }
-
-        return ParentNotifier::describe(
-            $notifier->clinicVisit($record, $consultationId, Carbon::parse($validated['consulted_at'], config('app.school_timezone')))
-        );
     }
 
     /**

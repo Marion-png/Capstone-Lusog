@@ -143,6 +143,7 @@ class InstitutionScopeTest extends TestCase
             'catalogue_name' => MedicineCatalogue::OTHER,
             'custom_name' => 'Amoxicillin',
             'off_catalogue_reason' => 'Prescribed course dispensed at the clinic',
+            'generic_name' => 'Amoxicillin',
             'stock_quantity' => 100,
             'minimum_threshold' => 20,
             'unit' => 'capsules',

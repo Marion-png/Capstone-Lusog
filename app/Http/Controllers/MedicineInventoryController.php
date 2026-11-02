@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Medicine;
 use App\Models\MedicineReceipt;
+use App\Models\RxConcept;
 use App\Support\MedicineBatches;
 use App\Support\MedicineCatalogue;
 use App\Support\MedicineUsage;
+use App\Support\RxNormService;
 use App\Support\SchemaCache;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -32,7 +34,7 @@ class MedicineInventoryController extends Controller
         }
 
         $institutionId = $request->session()->get('active_institution_id');
-        $q = Medicine::query();
+        $q = Medicine::query()->when(RxNormService::supported(), fn ($query) => $query->with('rxConcept'));
         if ($institutionId) {
             $q->where('institution_id', $institutionId);
         }
@@ -109,6 +111,7 @@ class MedicineInventoryController extends Controller
             'shelves' => $shelves,
             'supports_batches' => MedicineBatches::supported(),
             'supports_receipts' => SchemaCache::hasTable('medicine_receipts'),
+            'supports_rxnorm' => RxNormService::supported(),
             // Reading the shelf and changing it are two rights; the page
             // draws the write controls only for the second one.
             'may_write_stock' => self::mayWriteStock($request->session()->get('active_role')),
@@ -184,16 +187,22 @@ class MedicineInventoryController extends Controller
             // item created with no stock has nothing to expire.
             'expiry_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:255'],
+            // What RxNorm is asked for (App\Support\RxNormService): the
+            // generic, since a brand name is not in it.
+            ...(RxNormService::supported() ? ['generic_name' => RxNormService::nameRules()] : []),
         ]);
 
         if (! Medicine::supportsExpiry()) {
             unset($validated['expiry_date']);
         }
 
+        $genericName = trim((string) ($validated['generic_name'] ?? ''));
+        unset($validated['generic_name']);
+
         // The stock an item is created with is its first lot, at the date
         // typed for it, so the shelf can say which box goes first from the
         // first dispense on.
-        DB::transaction(function () use ($validated, $resolved, $request): void {
+        $medicine = DB::transaction(function () use ($validated, $resolved, $request): Medicine {
             $medicine = Medicine::create([
                 ...$validated,
                 'off_catalogue' => $resolved['off_catalogue'],
@@ -203,11 +212,86 @@ class MedicineInventoryController extends Controller
             if (MedicineBatches::supported()) {
                 MedicineBatches::open($medicine, $validated['expiry_date'] ?? null);
             }
+
+            return $medicine;
         });
 
-        return redirect()
-            ->route('dashboard.medicine-inventory')
-            ->with('success', 'Medicine added to inventory.');
+        // Looked up after the item is saved, never inside the transaction: a
+        // slow or failed lookup marks it unverified and loses nothing.
+        if ($genericName === '') {
+            return redirect()
+                ->route('dashboard.medicine-inventory')
+                ->with('success', 'Medicine added to inventory.');
+        }
+
+        return $this->linkRxNorm($medicine, $genericName, app(RxNormService::class)->lookup($genericName), 'Medicine added to inventory.');
+    }
+
+    /**
+     * Set or correct the generic name an item is looked up by, or choose one
+     * of the candidates a lookup offered (flow A, for an item already on the
+     * shelf). Stock writers only, scoped to the school.
+     */
+    public function rxnorm(Request $request, Medicine $medicine, RxNormService $rx): RedirectResponse
+    {
+        if ($redirect = $this->requireStockWriter($request)) {
+            return $redirect;
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+
+        if ($institutionId && (int) $medicine->institution_id !== (int) $institutionId) {
+            abort(404);
+        }
+
+        if (! RxNormService::supported()) {
+            return redirect()
+                ->route('dashboard.medicine-inventory')
+                ->with('error', 'The allergy check is not available until the database has been updated.');
+        }
+
+        $validated = $request->validateWithBag('rxnorm', [
+            'generic_name' => RxNormService::nameRules(),
+            'rxcui' => ['nullable', 'regex:/^\d{1,12}$/'],
+        ]);
+
+        $genericName = trim($validated['generic_name']);
+        $result = ! empty($validated['rxcui'])
+            ? $rx->choose($genericName, $validated['rxcui'])
+            : $rx->lookup($genericName);
+
+        return $this->linkRxNorm($medicine, $genericName, $result);
+    }
+
+    /**
+     * Keep a lookup's answer on the item and say what it was. Candidates
+     * reopen the inventory's RxNorm dialog for the nurse to choose from.
+     *
+     * @param  array{status: string, concept: ?RxConcept, candidates: list<array{rxcui: string, name: string}>}  $result
+     */
+    private function linkRxNorm(Medicine $medicine, string $genericName, array $result, ?string $saved = null): RedirectResponse
+    {
+        $medicine->applyRxNorm($genericName, $result);
+
+        $redirect = redirect()->route('dashboard.medicine-inventory');
+
+        if ($result['status'] === RxNormService::MATCHED) {
+            return $redirect->with('success', trim(($saved ?? '').' '.$medicine->name.' matched in RxNorm as '.$result['concept']->name.'.'));
+        }
+
+        if ($saved !== null) {
+            $redirect->with('success', $saved);
+        }
+
+        return match ($result['status']) {
+            RxNormService::CANDIDATES => $redirect->with('rx_pick', [
+                'medicine_id' => $medicine->id,
+                'generic_name' => $genericName,
+                'candidates' => $result['candidates'],
+            ]),
+            RxNormService::NOT_FOUND => $redirect->with('error', 'RxNorm has no match for "'.$genericName.'". Check the spelling or use the generic name.'),
+            default => $redirect->with('error', 'Allergy check unavailable; saved without verification.'),
+        };
     }
 
     /**

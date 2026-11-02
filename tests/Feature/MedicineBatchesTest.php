@@ -94,6 +94,7 @@ class MedicineBatchesTest extends TestCase
                 'status' => 'treated',
                 'medicine_id' => $medicine->id,
                 'medicine_quantity' => $quantity,
+                'allergy_acknowledged' => '1',
             ]);
     }
 
@@ -224,7 +225,7 @@ class MedicineBatchesTest extends TestCase
     {
         $this->withSession($this->sessionFor('school_nurse'))
             ->post(route('medicine-inventory.store'), [
-                'custom_name' => 'Oral Rehydration Salts', 'off_catalogue_reason' => 'Donated stock',
+                'custom_name' => 'Oral Rehydration Salts', 'off_catalogue_reason' => 'Donated stock', 'generic_name' => 'Oral Rehydration Salts',
                 'stock_quantity' => 12, 'minimum_threshold' => 4, 'unit' => 'sachets', 'expiry_date' => '2027-01-31',
             ])
             ->assertRedirect(route('dashboard.medicine-inventory'));

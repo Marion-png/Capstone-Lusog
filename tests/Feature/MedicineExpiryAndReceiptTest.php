@@ -142,6 +142,7 @@ class MedicineExpiryAndReceiptTest extends TestCase
             ->post(route('medicine-inventory.store'), [
                 'custom_name' => 'Oral Rehydration Salts',
                 'off_catalogue_reason' => 'Donated stock',
+                'generic_name' => 'Oral Rehydration Salts',
                 'stock_quantity' => 12,
                 'minimum_threshold' => 4,
                 'unit' => 'sachets',
