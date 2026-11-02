@@ -71,3 +71,6 @@
 .clog-photo-count{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--lg-emerald-deep,#126B3A);color:#fff;font-size:.68rem;font-weight:700;font-variant-numeric:tabular-nums}
 .clog-photo-none{display:inline-flex;align-items:center;gap:6px;padding:5px 0;font-size:.75rem;font-weight:500;color:var(--lg-ink-soft,#6B7C72);cursor:default;user-select:none}
 .clog-photo-none svg{width:14px;height:14px;opacity:.7}
+/* Who recorded the visit: the name, and the desk they recorded it as. */
+.clog-by{display:block;font-weight:600;color:var(--lg-ink,#1F2D25);white-space:nowrap}
+.clog-by-role{display:block;margin-top:1px;font-size:.72rem;color:var(--lg-ink-soft,#6B7C72);white-space:nowrap}

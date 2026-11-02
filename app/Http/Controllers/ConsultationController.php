@@ -317,6 +317,13 @@ class ConsultationController extends Controller
                     && (bool) ($validated['notes_shared_with_adviser'] ?? false);
             }
 
+            // Who recorded the visit, kept on it as a dispense keeps who
+            // handed the medicine over.
+            if (SchemaCache::hasColumn('consultations', 'recorded_by_name')) {
+                $note['recorded_by_name'] = $staffName;
+                $note['recorded_by_role'] = $activeRole;
+            }
+
             $consultation = Consultation::create($note + [
                 'institution_id' => $institutionId,
                 'consulted_at' => $validated['consulted_at'],

@@ -24,6 +24,8 @@ class Consultation extends Model
         'notes',
         'notes_shared_with_adviser',
         'status',
+        'recorded_by_name',
+        'recorded_by_role',
     ];
 
     /**
@@ -40,6 +42,8 @@ class Consultation extends Model
             'condition' => EncryptedString::class,
             'treatment_given' => EncryptedString::class,
             'notes' => EncryptedString::class,
+            // Who recorded the visit. The role stays plain.
+            'recorded_by_name' => EncryptedString::class,
             // A flag, not a fact about the child: plain, and queryable.
             'notes_shared_with_adviser' => 'boolean',
         ];

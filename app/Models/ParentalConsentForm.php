@@ -18,30 +18,24 @@ class ParentalConsentForm extends Model
     use HasFactory;
 
     /**
-     * Which signed form a scan is. Two forms come back from parents and they
-     * answer different questions, so they must never be read as each other:
-     * a parent agreeing to the feeding programme has not agreed to deworming
-     * or an injection, and the reverse.
-     *
-     * The health-services letter (the Sulat-Pahibalo) is stored under the name
-     * it had when deworming was its only service.
+     * The health-services letter (the Sulat-Pahibalo), stored under the name
+     * it had when deworming was its only service. Every upload is filed as it.
      */
     public const PROGRAM_HEALTH_SERVICES = 'Deworming';
 
-    /** The parent's consent to the School-Based Feeding Program. */
+    /**
+     * The parent's feeding-programme consent. Enrolment no longer needs one, so
+     * nothing files it any more; rows filed while it did keep this name and are
+     * never read as the health-services letter.
+     */
     public const PROGRAM_FEEDING = 'SBFP';
-
-    /** @var array<string, string> */
-    public const PROGRAMS = [
-        self::PROGRAM_HEALTH_SERVICES => 'Health services consent (Sulat-Pahibalo)',
-        self::PROGRAM_FEEDING => 'School-Based Feeding Program consent',
-    ];
 
     protected $fillable = [
         'student_health_record_id',
         'program_type',
         'school_year',
         'services',
+        'excluded_services',
         'consent_type',
         'partial_exception',
         'refused_reason',
@@ -75,6 +69,10 @@ class ParentalConsentForm extends Model
         // The services the letter lists, as ticked off the paper. NULL on a
         // row filed before they were recorded: it covers its program alone.
         'services' => EncryptedArray::class,
+        // The services a "yes, except" left out, as the adviser marked them on
+        // the upload's confirmation. NULL when nobody has: the exceptions are
+        // then only the parent's handwriting, and each service is checked.
+        'excluded_services' => EncryptedArray::class,
         'scan_result' => EncryptedArray::class,
         'consent_type' => EncryptedString::class,
         'partial_exception' => EncryptedString::class,
@@ -102,12 +100,6 @@ class ParentalConsentForm extends Model
     public function scopeHealthServices(Builder $query): Builder
     {
         return $query->where('program_type', self::PROGRAM_HEALTH_SERVICES);
-    }
-
-    /** Scans of the parent's feeding-programme consent only. */
-    public function scopeFeeding(Builder $query): Builder
-    {
-        return $query->where('program_type', self::PROGRAM_FEEDING);
     }
 
     /**

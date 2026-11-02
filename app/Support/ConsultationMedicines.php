@@ -26,7 +26,7 @@ class ConsultationMedicines
 {
     /**
      * @param  iterable<Consultation>  $consultations
-     * @return array<int, list<array{medicine: string, quantity: int, unit: string, expiries: list<string>, label: string}>>
+     * @return array<int, list<array{medicine: string, quantity: int, unit: string, expiries: list<string>, label: string, dispensed_by: string, dispensed_by_role: string}>>
      */
     public static function forConsultations(iterable $consultations): array
     {
@@ -56,6 +56,8 @@ class ConsultationMedicines
                 'medicine_dispenses.id',
                 'medicine_dispenses.consultation_id',
                 'medicine_dispenses.quantity',
+                'medicine_dispenses.dispensed_by_name',
+                'medicine_dispenses.dispensed_by_role',
                 'medicines.name as medicine_name',
                 'medicines.unit as medicine_unit',
             ]);
@@ -95,10 +97,37 @@ class ConsultationMedicines
                 'unit' => $unit,
                 'expiries' => $dates,
                 'label' => $label,
+                'dispensed_by' => trim((string) $dispense->dispensed_by_name),
+                'dispensed_by_role' => (string) $dispense->dispensed_by_role,
             ];
         }
 
         return $byVisit;
+    }
+
+    /**
+     * Who recorded the visit, and as what: the name kept on it, or — on a
+     * visit from before that was kept and the audit trail could not name —
+     * whoever dispensed on it, since a dispense is written by the same save
+     * as its visit. Blank when neither is on file; never a guess.
+     *
+     * @return array{name: string, role: string}
+     */
+    public static function recordedBy(array $byVisit, Consultation $consultation): array
+    {
+        $name = trim((string) $consultation->recorded_by_name);
+        $role = (string) $consultation->recorded_by_role;
+
+        if ($name === '') {
+            foreach ($byVisit[(int) $consultation->id] ?? [] as $given) {
+                if ($given['dispensed_by'] !== '') {
+                    [$name, $role] = [$given['dispensed_by'], $given['dispensed_by_role']];
+                    break;
+                }
+            }
+        }
+
+        return ['name' => $name, 'role' => $name !== '' && $role !== '' ? AccountSettings::roleLabel($role) : ''];
     }
 
     /** The visit's medicines as one line, or '' when nothing was given. */

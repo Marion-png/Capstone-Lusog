@@ -178,6 +178,7 @@
                             <th>Medicine Given</th>
                             <th>Recommendations</th>
                             <th>Status</th>
+                            <th>Recorded By</th>
                             <th>Photos</th>
                         </tr>
                     </thead>
@@ -191,8 +192,10 @@
                                 // What was handed over, read off the dispense recorded on
                                 // this visit (App\Support\ConsultationMedicines).
                                 $rowMedicine = \App\Support\ConsultationMedicines::line($consultationMedicines ?? [], (int) $consultation->id);
+                                // Who recorded the visit and dispensed on it.
+                                $rowBy = \App\Support\ConsultationMedicines::recordedBy($consultationMedicines ?? [], $consultation);
                             @endphp
-                            <tr class="js-log-row" data-search="{{ strtolower(implode(' ', array_filter([$rowName, $rowGrade, $rowCondition, $rowMedicine], fn ($part) => $part !== ''))) }}">
+                            <tr class="js-log-row" data-search="{{ strtolower(implode(' ', array_filter([$rowName, $rowGrade, $rowCondition, $rowMedicine, $rowBy['name']], fn ($part) => $part !== ''))) }}">
                                 <td class="tnum">{{ optional($consultation->consulted_at)->format('Y-m-d H:i') ?? '—' }}</td>
                                 <td><strong>{{ $rowName !== '' ? $rowName : '—' }}</strong></td>
                                 <td>{{ $rowGrade !== '' ? $rowGrade : '—' }}</td>
@@ -204,6 +207,14 @@
                                         <span class="badge badge-monitor">Referred</span>
                                     @else
                                         <span class="badge badge-normal">Treated</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    @if ($rowBy['name'] !== '')
+                                        <span class="clog-by">{{ $rowBy['name'] }}</span>
+                                        @if ($rowBy['role'] !== '')<span class="clog-by-role">{{ $rowBy['role'] }}</span>@endif
+                                    @else
+                                        &mdash;
                                     @endif
                                 </td>
                                 <td>
@@ -232,11 +243,11 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="table-empty">No consultations yet. Use New Consultation to add the first entry.</td>
+                                <td colspan="9" class="table-empty">No consultations yet. Use New Consultation to add the first entry.</td>
                             </tr>
                         @endforelse
                         <tr id="logNoMatch" hidden>
-                            <td colspan="8" class="table-empty">No consultations match your search.</td>
+                            <td colspan="9" class="table-empty">No consultations match your search.</td>
                         </tr>
                     </tbody>
                 </table>

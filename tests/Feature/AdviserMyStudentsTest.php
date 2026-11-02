@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\HealthConsentForm;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Support\BmiAssessmentReport;
@@ -307,22 +306,13 @@ class AdviserMyStudentsTest extends TestCase
         // (?edit=LRN) can hand back here and open the form for this learner.
         $this->assertMatchesRegularExpression('/<tr class="js-student-row[^>]*data-record=\'\{/s', $html);
 
-        // The profile offers both: edit, and the learner's parent's consent.
-        // With no form on file yet, the consent leads to the Consent Forms
-        // page where one is started.
+        // The profile offers Edit Profile. The parent's consent is read and
+        // uploaded on its own Consent tab, so there is no button for it here.
         $profile = $this->withSession($this->adviserSession())->get($profileUrl)->assertOk();
         $profile->assertSee('id="vpEditProfile"', false);
         $profile->assertSee(route('dashboard.class-adviser', ['tab' => 'saved', 'edit' => '123456789012']));
-        $profile->assertSee('<a href="'.route('consent-forms.index').'" class="btn btn-secondary" id="vpOpenConsent">', false);
-
-        // Once the learner has a form, it opens that form itself.
-        $this->withSession($this->adviserSession())
-            ->post(route('consent-forms.open'), ['lrn' => '123456789012'])
-            ->assertRedirect();
-        $form = HealthConsentForm::where('student_lrn', '123456789012')->firstOrFail();
-
-        $this->withSession($this->adviserSession())->get($profileUrl)->assertOk()
-            ->assertSee('<a href="'.route('consent-forms.show', $form).'" class="btn btn-secondary" id="vpOpenConsent">', false);
+        $profile->assertDontSee('id="vpOpenConsent"', false);
+        $profile->assertSee('id="vpUploadConsent" data-consent-upload', false);
     }
 
     /**

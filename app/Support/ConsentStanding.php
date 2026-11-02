@@ -196,12 +196,18 @@ final class ConsentStanding
                 true,
             );
 
+            // A "yes, except" whose exceptions the adviser marked as services
+            // when confirming the upload; NULL while they are only handwriting.
+            $excluded = $choice === HealthConsentForm::CONSENT_SPECIFIC && is_array($upload->excluded_services)
+                ? array_values(array_filter($upload->excluded_services, 'is_string'))
+                : null;
+
             return [
                 'source' => 'upload',
                 'choice' => $choice,
                 'services' => $services !== [] ? $services : ($program !== false ? [$program] : []),
                 'exceptions' => $choice === HealthConsentForm::CONSENT_SPECIFIC ? trim((string) $upload->partial_exception) : '',
-                'excluded' => null,
+                'excluded' => $excluded,
             ];
         }
 

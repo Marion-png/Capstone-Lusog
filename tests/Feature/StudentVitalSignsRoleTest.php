@@ -307,12 +307,46 @@ class StudentVitalSignsRoleTest extends TestCase
      * the guarantee. A stale tab, a replayed form or devtools all reach the
      * endpoint the same way.
      */
+    /** Clinic staff work the clinic beside the nurse and record a reading too. */
+    #[Test]
+    public function clinic_staff_can_record_vital_signs(): void
+    {
+        $record = $this->learner();
+
+        $this->recordVitals(['temperature_c' => '37.1', 'blood_pressure' => '110/70'], 'clinic_staff')
+            ->assertOk()
+            ->assertJsonPath('vitals.temperature_c', '37.1');
+
+        $vitals = StudentVitalSigns::read($record->fresh());
+        $this->assertSame('110/70', $vitals['blood_pressure']);
+        $this->assertSame('Maria Santos', $vitals['recorded_by']);
+    }
+
+    /**
+     * The health records page offers Record Vital Signs to the roles that may
+     * record, and draws no button for one that would only be refused.
+     */
+    #[Test]
+    public function the_record_button_is_drawn_only_for_roles_that_may_record(): void
+    {
+        $this->learner();
+
+        foreach (['school_nurse' => true, 'clinic_staff' => true, 'clinic_teacher' => false] as $role => $offered) {
+            $html = $this->withSession($this->sessionFor($role))
+                ->get('/dashboard/student-health-records')
+                ->assertOk()
+                ->getContent();
+
+            $this->assertSame($offered, str_contains($html, 'id="vitalsEditBtn"'), $role);
+        }
+    }
+
     #[Test]
     public function no_other_role_can_record_a_reading(): void
     {
         $record = $this->learner();
 
-        foreach (['class_adviser', 'clinic_staff', 'school_head', 'feeding_coor'] as $role) {
+        foreach (['class_adviser', 'clinic_teacher', 'school_head', 'feeding_coor'] as $role) {
             $this->withSession($this->sessionFor($role))
                 ->postJson(route('student-vitals.store', '110000000001'), ['temperature_c' => '38.0'])
                 ->assertForbidden();
@@ -419,20 +453,5 @@ class StudentVitalSignsRoleTest extends TestCase
         // three inputs rendered as bare browser boxes beside the styled ones.
         $this->assertStringContainsString('.vitals-form-grid input{', $html);
         $this->assertStringContainsString('.vitals-form-grid input:focus{', $html);
-    }
-
-    /** Clinic staff read the panel; the button is not theirs. */
-    #[Test]
-    public function clinic_staff_see_the_readings_without_the_button(): void
-    {
-        $html = $this->withSession([
-            'active_role' => 'clinic_staff',
-            'active_name' => 'Clinic Staff',
-            'active_school_name' => 'Sta. Ana NHS',
-            'active_institution_id' => $this->school->id,
-        ])->get(route('dashboard.student-health-records'))->assertOk()->getContent();
-
-        $this->assertStringContainsString('id="pvTemperature"', $html);
-        $this->assertStringContainsString('const canRecord = false;', $html);
     }
 }

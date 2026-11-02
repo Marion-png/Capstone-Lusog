@@ -18,8 +18,8 @@ use Illuminate\Http\Request;
  * and never asks for them, and this is the only endpoint that writes one.
  *
  * The read-only rendering on the adviser's form is presentation. This is the
- * guarantee: a role that is not the nurse is refused here whatever any form
- * on any page happens to render.
+ * guarantee: a role not in StudentVitalSigns::WRITE_ROLES (the nurse and
+ * clinic staff) is refused here whatever any form on any page renders.
  *
  * Routes sit under /health-records/*, not /nurse/*, for the same reason the
  * medical-documents ones do: EnsureActiveSession seeds a demo session for
@@ -29,13 +29,6 @@ use Illuminate\Http\Request;
  */
 class StudentVitalSignsController extends Controller
 {
-    /**
-     * The school nurse takes vital signs. Clinic staff deliberately are not
-     * on this list: the brief names the nurse, and widening who may write a
-     * clinical reading is a decision for the school, not a convenience.
-     */
-    private const WRITE_ROLES = ['school_nurse'];
-
     public function show(Request $request, string $lrn): JsonResponse
     {
         $record = $this->readableRecord($request, $lrn);
@@ -49,8 +42,8 @@ class StudentVitalSignsController extends Controller
 
     public function store(Request $request, string $lrn): JsonResponse
     {
-        if (! in_array((string) $request->session()->get('active_role'), self::WRITE_ROLES, true)) {
-            return response()->json(['message' => 'Only the school nurse records vital signs.'], 403);
+        if (! in_array((string) $request->session()->get('active_role'), StudentVitalSigns::WRITE_ROLES, true)) {
+            return response()->json(['message' => 'Only the school nurse and clinic staff record vital signs.'], 403);
         }
 
         $record = $this->readableRecord($request, $lrn);
@@ -84,8 +77,7 @@ class StudentVitalSignsController extends Controller
      *
      * Reading is open to the desks that already see a learner's profile — the
      * adviser's form displays these, and the nurse and clinic staff read them
-     * on the health-records page. Writing is the nurse's alone, checked
-     * separately above.
+     * on the health-records page. Writing is checked separately above.
      */
     private function readableRecord(Request $request, string $lrn): ?StudentHealthRecord
     {

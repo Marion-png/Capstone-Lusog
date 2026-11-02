@@ -469,39 +469,39 @@ class StudentIncidentReportTest extends TestCase
     }
 
     /**
-     * Clinic staff read what the nurse charted, and nothing more: no filing,
-     * no withdrawing, on the endpoint or on the page.
+     * Clinic staff chart an incident and read every report, the nurse's
+     * included — but withdrawing one stays the nurse's.
      */
     #[Test]
-    public function clinic_staff_read_the_nurses_report_and_cannot_write(): void
+    public function clinic_staff_file_a_report_and_cannot_withdraw(): void
     {
         $this->learner();
         $this->file()->assertCreated();
-        $report = StudentIncidentReport::firstOrFail();
+        $nursesReport = StudentIncidentReport::firstOrFail();
+
+        $this->withSession($this->clinicStaffSession())
+            ->postJson(route('student-incidents.store', '900000000001'), $this->payload())
+            ->assertCreated();
 
         $this->withSession($this->clinicStaffSession())
             ->getJson(route('student-incidents.index', '900000000001'))
             ->assertOk()
-            ->assertJsonPath('can_file', false)
+            ->assertJsonPath('can_file', true)
             ->assertJsonPath('can_withdraw', false)
-            ->assertJsonPath('reports.0.reported_by', 'Nurse Reyes')
-            ->assertJsonPath('reports.0.reported_by_title', 'School Nurse')
-            ->assertJsonPath('reports.0.response', 'Pain settled, no further bleeding. Returned to class at 10:20.');
+            ->assertJsonCount(2, 'reports')
+            ->assertJsonFragment(['reported_by' => 'Staff Dizon', 'reported_by_title' => 'Clinic Staff'])
+            ->assertJsonFragment(['reported_by' => 'Nurse Reyes', 'reported_by_title' => 'School Nurse']);
 
         $this->withSession($this->clinicStaffSession())
-            ->postJson(route('student-incidents.store', '900000000001'), $this->payload())
+            ->deleteJson(route('student-incidents.destroy', ['lrn' => '900000000001', 'id' => $nursesReport->id]))
             ->assertForbidden();
 
-        $this->withSession($this->clinicStaffSession())
-            ->deleteJson(route('student-incidents.destroy', ['lrn' => '900000000001', 'id' => $report->id]))
-            ->assertForbidden();
-
-        $this->assertSame(1, StudentIncidentReport::count());
+        $this->assertSame(2, StudentIncidentReport::count());
     }
 
-    /** Their panel lists the reports and draws no form and no Withdraw. */
+    /** Their panel carries the form, and draws no Withdraw button. */
     #[Test]
-    public function clinic_staffs_panel_renders_read_only(): void
+    public function clinic_staffs_panel_carries_the_form_without_withdraw(): void
     {
         $this->learner();
 
@@ -511,9 +511,8 @@ class StudentIncidentReportTest extends TestCase
             ->getContent();
 
         $this->assertStringContainsString('data-panel="p-incidents"', $html);
-        $this->assertStringContainsString('id="incidentReadOnly"', $html);
-        $this->assertStringNotContainsString('id="incidentForm"', $html);
-        $this->assertStringNotContainsString('File an Incident Report', $html);
+        $this->assertStringContainsString('id="incidentForm"', $html);
+        $this->assertStringContainsString('File an Incident Report', $html);
         $this->assertStringContainsString('data-can-withdraw="0"', $html);
     }
 

@@ -212,13 +212,12 @@ class AdviserFeedingStatusTest extends TestCase
 
     /**
      * Measuring a learner as wasted qualifies them; it does not enrol them.
-     * The row says what they are waiting for — the parent's consent is the
-     * adviser's to file.
+     * The row says they are waiting for the Feeding Coordinator.
      */
     #[Test]
     public function a_qualified_learner_nobody_enrolled_is_not_counted_as_enrolled(): void
     {
-        $learner = $this->record([
+        $this->record([
             'student_id' => '100000000001',
             'student_name' => 'Reyes, Maria',
             'bmi_value' => '14.2',
@@ -234,15 +233,9 @@ class AdviserFeedingStatusTest extends TestCase
         $this->assertTrue($row['eligible']);
         $this->assertFalse($row['enrolled']);
         $this->assertSame('not-enrolled', $row['program']);
-        $this->assertSame('Qualifies · Waiting for parent\'s consent', $row['program_note']);
+        $this->assertSame('Qualifies · Awaiting enrolment', $row['program_note']);
         $this->assertSame(0, $response->viewData('stats')['enrolled']);
         $response->assertSee('data-enrolled="0"', false);
-
-        $this->fileFeedingConsent($learner);
-
-        $row = $this->withSession($this->adviserSession($roster))
-            ->get('/dashboard/class-adviser/feeding-status')->viewData('students')->first();
-        $this->assertSame('Qualifies · Parent\'s consent on file', $row['program_note']);
     }
 
     #[Test]

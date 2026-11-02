@@ -112,6 +112,7 @@
                                 <th>Name</th>
                                 <th>Complaint</th>
                                 <th>Medicine Given</th>
+                                <th>Recorded By</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
@@ -123,6 +124,8 @@
                                     <td>{{ $consultation->condition ?: '—' }}</td>
                                     @php $medicineGiven = \App\Support\ConsultationMedicines::line($consultationMedicines ?? [], (int) $consultation->id); @endphp
                                     <td>{{ $medicineGiven !== '' ? $medicineGiven : '—' }}</td>
+                                    @php $recordedBy = \App\Support\ConsultationMedicines::recordedBy($consultationMedicines ?? [], $consultation)['name']; @endphp
+                                    <td>{{ $recordedBy !== '' ? $recordedBy : '—' }}</td>
                                     <td>
                                         @if ($consultation->status === 'referred')
                                             <span class="badge badge-monitor">Referred</span>
@@ -133,7 +136,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="table-empty">No consultations recorded yet.</td>
+                                    <td colspan="6" class="table-empty">No consultations recorded yet.</td>
                                 </tr>
                             @endforelse
                         </tbody>

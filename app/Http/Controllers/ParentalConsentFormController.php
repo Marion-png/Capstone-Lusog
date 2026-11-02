@@ -38,10 +38,6 @@ class ParentalConsentFormController extends Controller
 
         $validated = $request->validate([
             'lrn' => ['required', 'string', 'max:50'],
-            // Which signed form this is. The health-services letter unless the
-            // adviser says otherwise, so every upload made before the choice
-            // existed means what it always meant.
-            'program' => ['nullable', 'string', 'in:'.implode(',', array_keys(ParentalConsentForm::PROGRAMS))],
             // The dialog asks, but does not insist: an adviser filing a stack
             // of forms must not be made to guess, so "not recorded yet" stays a
             // real answer and an upload carrying none reads as pending rather
@@ -63,6 +59,14 @@ class ParentalConsentFormController extends Controller
             // it was filed for, exactly as every upload did before.
             'services' => ['nullable', 'array'],
             'services.*' => ['string', Rule::in(array_keys(HealthConsentForm::PLANNED_SERVICES))],
+            // The dialog's confirmation step, where the adviser marks which
+            // services the form approves. With it, `services` is the approved
+            // list and a partial consent's excepted services are recorded, so
+            // each service reads approved or not approved instead of "check the
+            // exceptions". Without it the upload reads as it always did.
+            'services_confirmed' => ['nullable', 'boolean'],
+            'excepted_services' => ['nullable', 'array'],
+            'excepted_services.*' => ['string', Rule::in(array_keys(HealthConsentForm::PLANNED_SERVICES))],
             'partial_exception' => ['nullable', 'string', 'max:500'],
             'refused_reason' => ['nullable', 'string', 'max:500'],
             'allergy_food' => ['nullable', 'boolean'],
@@ -81,21 +85,16 @@ class ParentalConsentFormController extends Controller
             'answer_confirmed.accepted_if' => 'Confirm that the answer read from the photo matches the signed form.',
         ]);
 
-        $program = $validated['program'] ?? ParentalConsentForm::PROGRAM_HEALTH_SERVICES;
-        $feeding = $program === ParentalConsentForm::PROGRAM_FEEDING;
+        $consentType = $validated['consent_type'] ?? null;
+        $agreed = in_array($consentType, ['full', 'partial'], true);
+        $confirmed = $agreed && ! empty($validated['services_confirmed']);
 
-        // The feeding-programme consent is what lets the Feeding Coordinator
-        // enrol a learner, so it is filed only as what it is: the signed form
-        // itself, and the parent's yes or no. There is no "except" on it, and
-        // the photo reader is not offered — it reads the Sulat-Pahibalo.
-        if ($feeding) {
-            $request->validate([
-                'consent_type' => ['required', 'in:full,refused'],
-                'consent' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
-            ], [
-                'consent_type.required' => 'Record whether the parent agreed to the feeding program.',
-                'consent_type.in' => 'The feeding program consent is either agreed or declined.',
-                'consent.required' => 'Attach the signed feeding program consent form.',
+        // A consent that approves nothing is not a consent: an upload confirmed
+        // as agreed names at least one service, or an empty list would be read
+        // as the one program every older upload covers.
+        if ($confirmed && empty($validated['services'])) {
+            throw ValidationException::withMessages([
+                'services' => 'Mark at least one service the parent approved.',
             ]);
         }
 
@@ -118,7 +117,7 @@ class ParentalConsentFormController extends Controller
             'You may only upload consent forms for students in your assigned class.'
         );
 
-        $scan = ! $feeding ? $this->verifiedScan($request, $validated) : null;
+        $scan = $this->verifiedScan($request, $validated);
         $storesScanResult = SchemaCache::hasColumn('parental_consent_forms', 'scan_result');
         if ($scan !== null && ! $storesScanResult) {
             throw ValidationException::withMessages([
@@ -172,22 +171,29 @@ class ParentalConsentFormController extends Controller
             $medCertPath = EncryptedFileStorage::store($medCert, 'parental-consents/'.$record->id.'/med-cert');
         }
 
-        $consentType = $validated['consent_type'] ?? null;
-
         // A write-in line counts when something is written on it: "wala" on
         // the allergy line is the parent saying there is none.
         $writes = fn (string $field): bool => ConsentFormScanner::saysSomething((string) ($validated[$field] ?? ''));
 
         $services = array_values(array_unique($validated['services'] ?? []));
 
+        // A partial consent's exceptions, as the adviser marked them. They are
+        // services the letter lists, so they stay on its list, and are read as
+        // not approved through ConsentStanding::answer()'s `excluded`.
+        $excepted = $confirmed && $consentType === 'partial'
+            ? array_values(array_diff(array_unique($validated['excepted_services'] ?? []), $services))
+            : null;
+        if ($excepted !== null) {
+            $services = array_values(array_unique([...$services, ...$excepted]));
+        }
+
         $upload = ParentalConsentForm::create([
             'student_health_record_id' => $record->id,
-            'program_type' => $program,
+            'program_type' => ParentalConsentForm::PROGRAM_HEALTH_SERVICES,
             'school_year' => $schoolYear,
             'consent_type' => $consentType,
-            // Each blank belongs to the answer it is written under, and the
-            // feeding consent has no "except" at all.
-            'partial_exception' => ! $feeding && $consentType === 'partial' ? ($validated['partial_exception'] ?? null) : null,
+            // Each blank belongs to the answer it is written under.
+            'partial_exception' => $consentType === 'partial' ? ($validated['partial_exception'] ?? null) : null,
             'refused_reason' => $consentType === 'refused' ? ($validated['refused_reason'] ?? null) : null,
             'allergy_food' => ! empty($validated['allergy_food']) || $writes('allergy_food_detail'),
             'allergy_food_detail' => $validated['allergy_food_detail'] ?? null,
@@ -211,12 +217,15 @@ class ParentalConsentFormController extends Controller
             // Written once the column exists, so an upload still files
             // before `php artisan migrate` has been run.
             ? ['services' => $services !== [] ? $services : null]
+            : [])
+        + ($excepted !== null && SchemaCache::hasColumn('parental_consent_forms', 'excluded_services')
+            ? ['excluded_services' => $excepted]
             : []));
 
         // Who decided the answer is part of the evidence: a nurse asking how a
         // "full consent" got onto this record can find that the reader
         // proposed it and the adviser confirmed it against the paper.
-        if (! $feeding && ! empty($validated['answer_from_scan']) && ($validated['consent_type'] ?? null) !== null) {
+        if (! empty($validated['answer_from_scan']) && ($validated['consent_type'] ?? null) !== null) {
             AuditTrail::record(
                 'confirmed',
                 'ParentalConsentForm',
@@ -228,12 +237,6 @@ class ParentalConsentFormController extends Controller
         // A medicine allergy on the returned form, as the adviser confirmed it,
         // is looked up in RxNorm.
         MedicineAllergies::syncLater($record->institution_id, $record->student_id, (string) $request->session()->get('active_name', ''));
-
-        if ($feeding) {
-            return back()->with('consent_success', ($validated['consent_type'] === 'full'
-                ? 'Feeding program consent filed: the parent agreed. The Feeding Coordinator can now enrol this learner'
-                : 'Feeding program consent filed: the parent declined. This learner will not be enrolled').' for SY '.$schoolYear.'.');
-        }
 
         $typeLabel = match ($validated['consent_type'] ?? null) {
             'full' => 'Full consent',

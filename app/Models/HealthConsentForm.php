@@ -236,6 +236,24 @@ class HealthConsentForm extends Model
         return null;
     }
 
+    /**
+     * A service as the printed letter words it, in Cebuano, never translated:
+     * its own line, and the heading it is indented under on the paper (Pag
+     * Purga, Immunization) or null for a service with no heading.
+     *
+     * @return array{key: string, label: string, group: string|null}
+     */
+    public static function printedService(string $key): array
+    {
+        $parent = self::parentService($key);
+
+        return [
+            'key' => $key,
+            'label' => self::serviceLabels()[$key] ?? $key,
+            'group' => $parent !== null ? self::SERVICES[$parent]['label'] : null,
+        ];
+    }
+
     /** "Deworming", or "Deworming — worms" for a sub-item. */
     public static function serviceName(string $key): string
     {

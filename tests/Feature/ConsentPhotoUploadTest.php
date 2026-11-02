@@ -233,25 +233,22 @@ class ConsentPhotoUploadTest extends TestCase
     }
 
     #[Test]
-    public function manual_and_feeding_uploads_still_work_before_the_scan_storage_update(): void
+    public function manual_uploads_still_work_before_the_scan_storage_update(): void
     {
         Schema::table('parental_consent_forms', fn ($table) => $table->dropColumn('scan_result'));
         SchemaCache::flush();
 
-        foreach ([ParentalConsentForm::PROGRAM_HEALTH_SERVICES, ParentalConsentForm::PROGRAM_FEEDING] as $program) {
-            $this->withSession($this->adviserSession())->from(route('consent-forms.index'))
-                ->post(route('parental-consent.store'), [
-                    'lrn' => '123456789012', 'program' => $program,
-                    'consent' => $this->photo(), 'consent_type' => 'full',
-                ])->assertRedirect(route('consent-forms.index'))->assertSessionHasNoErrors();
+        $this->withSession($this->adviserSession())->from(route('consent-forms.index'))
+            ->post(route('parental-consent.store'), [
+                'lrn' => '123456789012',
+                'consent' => $this->photo(), 'consent_type' => 'full',
+            ])->assertRedirect(route('consent-forms.index'))->assertSessionHasNoErrors();
 
-            $upload = ParentalConsentForm::where('program_type', $program)->sole();
-            $this->assertSame('full', $upload->consent_type);
-            $this->assertNull($upload->scan_result);
-            Storage::disk('local')->assertExists($upload->file_path);
-        }
-
-        $this->assertSame(2, ParentalConsentForm::count());
+        $upload = ParentalConsentForm::sole();
+        $this->assertSame(ParentalConsentForm::PROGRAM_HEALTH_SERVICES, $upload->program_type);
+        $this->assertSame('full', $upload->consent_type);
+        $this->assertNull($upload->scan_result);
+        Storage::disk('local')->assertExists($upload->file_path);
     }
 
     #[Test]

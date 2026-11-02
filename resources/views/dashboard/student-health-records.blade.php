@@ -436,14 +436,17 @@
                      BMI is built from and a teacher takes them with a tape and a
                      scale. Temperature, pulse and blood pressure are a clinical
                      observation, so the adviser's form shows them and only this
-                     panel writes one. Clinic staff see it read-only. --}}
+                     panel writes one — for the nurse and clinic staff
+                     (StudentVitalSigns::WRITE_ROLES). Anyone else reads it. --}}
                 <div class="student-profile-section" id="vitalsSection">
                     <div class="sp-panel-head">
                         <h4>Vital Signs</h4>
-                        <button type="button" class="btn btn-secondary" id="vitalsEditBtn">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
-                            Record Vital Signs
-                        </button>
+                        @if (in_array(session('active_role'), \App\Support\StudentVitalSigns::WRITE_ROLES, true))
+                            <button type="button" class="btn btn-secondary" id="vitalsEditBtn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+                                Record Vital Signs
+                            </button>
+                        @endif
                     </div>
 
                     <div class="kv"><div class="k">Temperature:</div><div class="v" id="pvTemperature">-</div></div>
@@ -1093,7 +1096,19 @@
             nurseSheet && typeof nurseSheet === 'object' && Object.keys(nurseSheet).length > 0
         );
 
-        loadHealthAssessment(lrn, nurseSheetFilled);
+        // The adviser fills Sheet 1 on the enrolment form, and that form always
+        // answers General Appearance; a learner only imported from a class
+        // list has no answer on it at all. So an answer on the learner's own
+        // health history is the adviser's Sheet 1 on file — the older
+        // standalone MLHAT form is no longer how it arrives.
+        const history = record.health_history && typeof record.health_history === 'object'
+            ? record.health_history
+            : {};
+        const adviserSheetFilled = Object.values(history).some(
+            (value) => value === true || (typeof value === 'string' && value.trim() !== '')
+        );
+
+        loadHealthAssessment(lrn, nurseSheetFilled, adviserSheetFilled);
         loadHealthHistory(lrn);
         loadConsultations(lrn);
 
@@ -1248,7 +1263,7 @@
         }
     };
 
-    const loadHealthAssessment = async (lrn, nurseSheetFilled = false) => {
+    const loadHealthAssessment = async (lrn, nurseSheetFilled = false, adviserSheetFilled = false) => {
         const el = document.getElementById('phaStatus');
         if (!el) return;
         const warning = document.getElementById('phaWarning');
@@ -1280,8 +1295,8 @@
 
                 // Sheet 1: the adviser's half of the card, so their
                 // outstanding submission is said there whatever the nurse has
-                // done.
-                if (adviserNote) { adviserNote.innerHTML = adviserPending; adviserNote.hidden = false; }
+                // done — and only while it is outstanding.
+                if (adviserNote && !adviserSheetFilled) { adviserNote.innerHTML = adviserPending; adviserNote.hidden = false; }
 
                 // Sheet 2: once the nurse has filled their own systems review,
                 // "no assessment on file" is no longer true of this tab — the
@@ -1533,7 +1548,7 @@
 
                 const grid = document.createElement('div');
                 grid.className = 'student-profile-grid';
-                [['Condition', row.condition], ['Medicine Given', row.medicine], ['Recommendations', row.treatment], ['Grade / Section', row.grade_section]]
+                [['Condition', row.condition], ['Medicine Given', row.medicine], ['Recommendations', row.treatment], ['Grade / Section', row.grade_section], ['Recorded By', row.recorded_by]]
                     .filter(([, value]) => value && String(value).trim() !== '')
                     .forEach(([label, value]) => {
                         const cell = document.createElement('div');
@@ -1888,11 +1903,9 @@
     const saveBtn = document.getElementById('vitalsSave');
     const errorBox = document.getElementById('vitalsError');
     const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
-    const canRecord = @json(session('active_role') === 'school_nurse');
-
-    // Clinic staff read this panel; only the nurse writes. The server refuses
-    // either way — this is what the desk sees, not what protects the field.
-    if (!canRecord && editBtn) editBtn.hidden = true;
+    // The Record button is drawn only for a role that may record; the server
+    // refuses anyone else either way.
+    const canRecord = Boolean(editBtn);
 
     let lrn = '';
 
@@ -1934,7 +1947,8 @@
 
     const setOpen = (open) => {
         if (form) form.hidden = !open;
-        if (editBtn) editBtn.hidden = open || !canRecord;
+        // .btn sets its own display, which outranks the hidden attribute.
+        if (editBtn) editBtn.style.display = open || !canRecord ? 'none' : '';
         if (open) document.getElementById('vfTemperature')?.focus();
     };
 

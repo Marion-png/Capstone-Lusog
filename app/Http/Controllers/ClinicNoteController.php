@@ -137,6 +137,7 @@ class ClinicNoteController extends Controller
                 'grade_section' => (string) $c->grade_section,
                 'condition' => (string) $c->condition,
                 'medicine' => ConsultationMedicines::line($medicines, (int) $c->id),
+                'recorded_by' => ConsultationMedicines::recordedBy($medicines, $c)['name'],
                 'treatment' => (string) $c->treatment_given,
                 // The note written with the visit — clinic-only, like the
                 // rest of this endpoint.

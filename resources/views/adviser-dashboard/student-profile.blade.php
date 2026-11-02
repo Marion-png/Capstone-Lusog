@@ -80,15 +80,8 @@
                     {{-- Print and Download, one MLAT sheet at a time, in the
                          clinic's own form (App\Support\MlatWorkbook). --}}
                     @include('partials.mlat-menus', ['mlatId' => 'vpMlatMenus', 'mlatLrn' => $lrn])
-                    {{-- The learner's Sulat-Pahibalo, now that the roster row
-                         opens this page instead of carrying the action. A link,
-                         not a form: the letter is read here, not changed. With
-                         no form on file yet it leads to the Consent Forms page,
-                         where one is started. --}}
-                    <a href="{{ ($meta['consent_detail']['form_url'] ?? null) ?: route('consent-forms.index') }}" class="btn btn-secondary" id="vpOpenConsent">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><polyline points="14 2 14 8 20 8"/><path d="M14.5 18.5c1-1.5 2-1.5 3 0s2 1.5 3 0"/><path d="M12 16c1.5-3.5 3-5 4-3.5s-1 3.5-2 5"/></svg>
-                        Parent's Consent
-                    </a>
+                    {{-- The parent's consent is read and uploaded on the Consent
+                         tab below, so there is no separate button for it here. --}}
                     <a href="{{ route('dashboard.class-adviser', ['tab' => 'saved', 'edit' => $lrn]) }}" class="btn" id="vpEditProfile">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
                         Edit Profile
@@ -200,6 +193,30 @@
                         <div><span>Guardian's signed form:</span><b id="vpConsentReturned">-</b></div>
                         <div><span>Signed by guardian:</span><b id="vpConsentSigned">-</b></div>
                         <div><span>Reviewed by adviser:</span><b id="vpConsentReviewed">-</b></div>
+                    </div>
+                    {{-- What the form approves and what it does not, service by
+                         service (StudentHealthRecordController::consentServices).
+                         Drawn only once an answer is on file. --}}
+                    <div class="sp-consent-services" id="vpConsentServices" hidden>
+                        <div class="sp-subhead">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                            Health Services
+                        </div>
+                        <div class="sp-cs-grid">
+                            <section class="sp-cs-col is-approved">
+                                <h5>Approved <span class="sp-cs-count" id="vpCsApprovedCount">0</span></h5>
+                                <ul id="vpCsApproved"></ul>
+                            </section>
+                            <section class="sp-cs-col is-denied">
+                                <h5>Not Approved <span class="sp-cs-count" id="vpCsDeniedCount">0</span></h5>
+                                <ul id="vpCsDenied"></ul>
+                            </section>
+                            <section class="sp-cs-col is-check" id="vpCsCheckCol" hidden>
+                                <h5>Check the Exceptions <span class="sp-cs-count" id="vpCsCheckCount">0</span></h5>
+                                <p class="sp-cs-quote" id="vpCsQuote"></p>
+                                <ul id="vpCsCheck"></ul>
+                            </section>
+                        </div>
                     </div>
                     {{-- The uploaded form itself. It is served by the one audited
                          route (parental-consent.download), re-scoped to this
@@ -954,6 +971,54 @@ const STUDENT_PROFILE_LRN = @json($lrn);
                 open.textContent = 'View consent form';
 
                 fileBox.append(label, meta, open);
+            }
+        }
+
+        // What the form approves and what it does not, as the server split
+        // it — each service worded as the printed letter words it, in
+        // Cebuano, under the heading it sits under on the paper.
+        const servicesBox = document.getElementById('vpConsentServices');
+        const services = consent.services || null;
+        if (servicesBox) {
+            servicesBox.hidden = !services;
+            if (services) {
+                const fillList = (listId, countId, items) => {
+                    setText(countId, String(items.length));
+                    const list = document.getElementById(listId);
+                    if (!list) return;
+                    list.textContent = '';
+                    if (!items.length) {
+                        const none = document.createElement('li');
+                        none.className = 'is-none';
+                        none.textContent = 'None';
+                        list.appendChild(none);
+                        return;
+                    }
+                    let group = null;
+                    items.forEach((service) => {
+                        if (service.group && service.group !== group) {
+                            const head = document.createElement('li');
+                            head.className = 'is-group';
+                            head.lang = 'ceb';
+                            head.textContent = service.group;
+                            list.appendChild(head);
+                        }
+                        group = service.group || null;
+                        const item = document.createElement('li');
+                        item.lang = 'ceb';
+                        item.textContent = service.label;
+                        if (service.group) item.className = 'is-child';
+                        list.appendChild(item);
+                    });
+                };
+                const toCheck = services.to_check || [];
+                fillList('vpCsApproved', 'vpCsApprovedCount', services.approved || []);
+                fillList('vpCsDenied', 'vpCsDeniedCount', services.not_approved || []);
+                fillList('vpCsCheck', 'vpCsCheckCount', toCheck);
+                const checkCol = document.getElementById('vpCsCheckCol');
+                if (checkCol) checkCol.hidden = toCheck.length === 0;
+                const quote = document.getElementById('vpCsQuote');
+                if (quote) quote.textContent = services.exceptions ? '“' + services.exceptions + '”' : '';
             }
         }
 

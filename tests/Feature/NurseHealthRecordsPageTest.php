@@ -978,7 +978,13 @@ class NurseHealthRecordsPageTest extends TestCase
         // The gate reads the same value renderSystemsReview does, so the
         // banner and the panel under it cannot disagree.
         $this->assertStringContainsString('record.examination.sheet2', $html);
-        $this->assertStringContainsString('loadHealthAssessment(lrn, nurseSheetFilled)', $html);
+        $this->assertStringContainsString('loadHealthAssessment(lrn, nurseSheetFilled, adviserSheetFilled)', $html);
+
+        // The adviser's note is gated on Sheet 1 itself: the adviser fills it
+        // on the enrolment form, which answers the learner's health history,
+        // so an answer there means it is not outstanding.
+        $this->assertStringContainsString('record.health_history', $html);
+        $this->assertStringContainsString('if (adviserNote && !adviserSheetFilled)', $html);
     }
 
     /**

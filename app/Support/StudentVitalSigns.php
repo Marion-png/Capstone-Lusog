@@ -33,6 +33,15 @@ class StudentVitalSigns
         'blood_pressure' => 'Blood pressure',
     ];
 
+    /**
+     * Who records a reading: the school nurse and the clinic staff who work the
+     * clinic beside them. The endpoint refuses everyone else, and the health
+     * records page draws the Record button from this same list.
+     *
+     * @var list<string>
+     */
+    public const WRITE_ROLES = ['school_nurse', 'clinic_staff'];
+
     /** Attribution, kept beside the readings so a figure is never anonymous. */
     public const RECORDED_BY = 'vitals_recorded_by';
 

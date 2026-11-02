@@ -562,7 +562,6 @@ class FeedingBeneficiaryCardsTest extends TestCase
     {
         $normal = $this->makeStudent('Grade 10 / Acacia', 'Normal', enrolled: false);
         $waiting = $this->makeStudent('Grade 9 / Ilang', 'Wasted', enrolled: false);
-        $this->fileFeedingConsent($waiting);
 
         $response = $this->withSession($this->coordinatorSession())
             ->get('/dashboard/feedingcor-health-records?view=all_students')
@@ -681,7 +680,6 @@ class FeedingBeneficiaryCardsTest extends TestCase
     public function the_pending_tab_is_a_waiting_list_with_the_enrol_action_on_it(): void
     {
         $waiting = $this->makeStudent('Grade 8 / Maaasahan', 'Wasted', enrolled: false, name: 'Student B');
-        $this->fileFeedingConsent($waiting);
 
         $response = $this->withSession($this->coordinatorSession())
             ->get('/dashboard/feedingcor-health-records?view=pending')

@@ -6,6 +6,7 @@ use App\Models\HealthConsentForm;
 use App\Models\Institution;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
+use App\Support\ConsentStanding;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
@@ -732,6 +733,147 @@ class AdviserConsentPageTest extends TestCase
         $this->assertSame('approved', $meta['consent_badge']);
     }
 
+    private function postConsent(array $fields): void
+    {
+        $this->flushSession()->withSession($this->adviserSession())
+            ->post(route('parental-consent.store'), $fields + [
+                'lrn' => '123456789012',
+                'consent' => UploadedFile::fake()->create('sulat-pahibalo.pdf', 40, 'application/pdf'),
+            ])
+            ->assertSessionHasNoErrors();
+    }
+
+    /** @return array<string, mixed>|null */
+    private function profileConsentServices(): ?array
+    {
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'))
+            ->assertOk()
+            ->getContent();
+
+        return $this->profileMeta($html)['consent_detail']['services'];
+    }
+
+    /**
+     * The Consent tab says what the uploaded form approves and what it does
+     * not, as the adviser marked it on the upload's confirmation.
+     */
+    /** @test */
+    public function a_confirmed_upload_lists_what_it_approves_on_the_profile(): void
+    {
+        $this->enrol();
+
+        $this->postConsent([
+            'consent_type' => 'full',
+            'services_confirmed' => '1',
+            'services' => ['checkup', 'dental', 'deworming_worms'],
+        ]);
+
+        $services = $this->profileConsentServices();
+
+        $this->assertSame(['checkup', 'dental', 'deworming_worms'], array_column($services['approved'], 'key'));
+        $this->assertSame(
+            ['deworming_schistosomiasis', 'deworming_filariasis', 'tas', 'iron', 'vitamin_a'],
+            array_column($services['not_approved'], 'key'),
+        );
+        $this->assertSame([], $services['to_check']);
+        // Grade 7 MR/Td is not a Grade 1 learner's to be asked about.
+        $this->assertNotContains('immunization_grade7', array_column([...$services['approved'], ...$services['not_approved']], 'key'));
+
+        // Worded as the printed Sulat-Pahibalo words them, never translated,
+        // with a sub-item under the heading it is indented under on the paper.
+        $this->assertSame(HealthConsentForm::SERVICES['checkup']['label'], $services['approved'][0]['label']);
+        $this->assertNull($services['approved'][0]['group']);
+        $this->assertSame('Pag Bitok / Worms', $services['approved'][2]['label']);
+        $this->assertSame(HealthConsentForm::SERVICES['deworming']['label'], $services['approved'][2]['group']);
+    }
+
+    /** @test */
+    public function a_partial_consent_records_the_services_the_parent_excepted(): void
+    {
+        $this->enrol();
+
+        $this->postConsent([
+            'consent_type' => 'partial',
+            'partial_exception' => 'Iron tablets',
+            'services_confirmed' => '1',
+            'services' => ['checkup', 'dental'],
+            'excepted_services' => ['iron'],
+        ]);
+
+        $upload = ParentalConsentForm::sole();
+        $this->assertSame(['checkup', 'dental', 'iron'], $upload->services);
+        $this->assertSame(['iron'], $upload->excluded_services);
+
+        $services = $this->profileConsentServices();
+        $this->assertSame(['checkup', 'dental'], array_column($services['approved'], 'key'));
+        $this->assertContains('iron', array_column($services['not_approved'], 'key'));
+        $this->assertSame([], $services['to_check']);
+
+        // The clinic reads the same form the same way.
+        $answer = ConsentStanding::answer(null, $upload);
+        $this->assertSame(ConsentStanding::SERVICE_DECLINED, ConsentStanding::forService('iron', 1, true, $answer));
+        $this->assertSame(ConsentStanding::SERVICE_CONSENTED, ConsentStanding::forService('checkup', 1, true, $answer));
+    }
+
+    /**
+     * A "yes, except" nobody marked the exceptions of is still only the
+     * parent's handwriting, so its services are left to be checked.
+     */
+    /** @test */
+    public function an_unconfirmed_partial_consent_leaves_its_services_to_check(): void
+    {
+        $this->enrol();
+
+        $this->postConsent([
+            'consent_type' => 'partial',
+            'partial_exception' => 'Iron tablets',
+            'services' => ['checkup', 'iron'],
+        ]);
+
+        $this->assertNull(ParentalConsentForm::sole()->excluded_services);
+
+        $services = $this->profileConsentServices();
+        $this->assertSame([], $services['approved']);
+        $this->assertSame(['checkup', 'iron'], array_column($services['to_check'], 'key'));
+        $this->assertSame('Iron tablets', $services['exceptions']);
+    }
+
+    /** @test */
+    public function a_returned_form_with_no_answer_lists_no_services(): void
+    {
+        $this->enrol();
+
+        $this->postConsent([]);
+
+        $this->assertNull($this->profileConsentServices());
+    }
+
+    /** @test */
+    public function upload_consent_opens_a_confirmation_of_the_services_first(): void
+    {
+        $this->enrol();
+
+        $html = $this->flushSession()->withSession($this->adviserSession())
+            ->get(route('dashboard.class-adviser.student-profile', '123456789012'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertSame(1, substr_count($html, 'id="pcConfirmModal"'));
+        $this->assertStringContainsString('Confirm &amp; Upload', $html);
+        $this->assertStringContainsString('name="services_confirmed" id="pcServicesConfirmed" value="0"', $html);
+        $this->assertStringContainsString('id="vpConsentServices" hidden', $html);
+
+        // The confirmation lists this class's services: no Grade 7 MR/Td here.
+        $this->assertSame(1, preg_match('/const confirmServices = (\[.*?\]);/', $html, $m));
+        $listed = json_decode($m[1], true);
+        $keys = array_column($listed, 'key');
+        $this->assertContains('checkup', $keys);
+        $this->assertNotContains('immunization_grade7', $keys);
+        // In the printed letter's own Cebuano wording.
+        $this->assertSame(HealthConsentForm::SERVICES['checkup']['label'], $listed[array_search('checkup', $keys, true)]['label']);
+    }
+
     /**
      * My Students prints the same answer as the profile does.
      *
@@ -955,10 +1097,10 @@ class AdviserConsentPageTest extends TestCase
 
     // ── Uploading from the learner's own profile ───────────────────────
 
-    /** The dialog between the form choice and Cancel, which both pages share. */
+    /** The dialog between the student field and Cancel, which both pages share. */
     private function uploadDialogFields(string $html): string
     {
-        $start = strpos($html, 'id="pc_program"');
+        $start = strpos($html, 'id="pc_school_year"');
         $end = strpos($html, 'id="uploadConsentCancel"', (int) $start);
         $this->assertNotFalse($start, 'No upload dialog on the page.');
         $this->assertNotFalse($end, 'The upload dialog has no Cancel.');
@@ -1039,20 +1181,21 @@ class AdviserConsentPageTest extends TestCase
         $this->enrol();
         $profile = route('dashboard.class-adviser.student-profile', '123456789012');
 
-        // The feeding program consent is filed only with its signed form.
+        // A consent confirmed as agreed must approve at least one service.
         $html = $this->flushSession()->withSession($this->adviserSession())
             ->from($profile)
             ->followingRedirects()
             ->post(route('parental-consent.store'), [
                 'lrn' => '123456789012',
-                'program' => ParentalConsentForm::PROGRAM_FEEDING,
                 'consent_type' => 'full',
+                'services_confirmed' => '1',
+                'consent' => UploadedFile::fake()->create('sulat-pahibalo.pdf', 40, 'application/pdf'),
             ])
             ->assertOk()
             ->getContent();
 
         $this->assertSame(0, ParentalConsentForm::count());
-        $this->assertStringContainsString('<div class="flash flash-err">Attach the signed feeding program consent form.</div>', $html);
+        $this->assertStringContainsString('<div class="flash flash-err">Mark at least one service the parent approved.</div>', $html);
         $this->assertStringContainsString("} else if (true) {\n        showProfileTab('vpTabConsent');", $html);
     }
 

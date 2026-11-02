@@ -19,7 +19,6 @@ use App\Support\ConsultationVisibility;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
-use App\Support\FeedingConsent;
 use App\Support\FeedingProgramCycle;
 use App\Support\LearnerPlacement;
 use App\Support\NutritionalHealthStatus;
@@ -457,6 +456,12 @@ class StudentHealthRecordController extends Controller
                     // filing.
                     'file_name' => $returned ? ($upload->file_original_name ?: 'Signed consent form') : null,
                     'file_url' => $returned ? route('parental-consent.download', $upload->id) : null,
+                    // What the form approves, service by service, read through
+                    // the same rule the clinic's consent list uses.
+                    'services' => $this->consentServices(
+                        ConsentStanding::answer($consent, $upload),
+                        LearnerPlacement::gradeNumber((string) ($shRecord?->section ?? '')),
+                    ),
                 ],
                 'feeding' => [
                     'baseline_status' => $shRecord?->baseline_nutritional_status,
@@ -608,6 +613,43 @@ class StudentHealthRecordController extends Controller
         $stripped = preg_replace('/[^a-z\s]/', ' ', strtolower($name)) ?? '';
 
         return trim(preg_replace('/\s+/', ' ', $stripped) ?? '');
+    }
+
+    /**
+     * Each health service the letter covers, split into what the parent's
+     * answer approves and what it does not — ConsentStanding::forService()
+     * decides every one, so this list and the clinic's cannot disagree. A
+     * "yes, except" nobody has marked the exceptions of leaves its services to
+     * be checked against the parent's handwriting. Null until an answer is on
+     * file; a service one grade alone is given is left out for the others.
+     * Each service is worded as the printed letter words it, in Cebuano, with
+     * the heading it sits under on the paper (HealthConsentForm::printedService).
+     *
+     * @param  array<string, mixed>|null  $answer  ConsentStanding::answer()
+     * @return array{approved: list<array>, not_approved: list<array>, to_check: list<array>, exceptions: string}|null
+     */
+    private function consentServices(?array $answer, ?int $grade): ?array
+    {
+        if ($answer === null) {
+            return null;
+        }
+
+        $lists = ['approved' => [], 'not_approved' => [], 'to_check' => []];
+
+        foreach (array_keys(HealthConsentForm::PLANNED_SERVICES) as $key) {
+            $list = match (ConsentStanding::forService($key, $grade, true, $answer)) {
+                ConsentStanding::SERVICE_CONSENTED => 'approved',
+                ConsentStanding::SERVICE_CHECK_EXCEPTIONS => 'to_check',
+                ConsentStanding::SERVICE_NOT_APPLICABLE => null,
+                default => 'not_approved',
+            };
+
+            if ($list !== null) {
+                $lists[$list][] = HealthConsentForm::printedService($key);
+            }
+        }
+
+        return $lists + ['exceptions' => $lists['to_check'] !== [] ? (string) $answer['exceptions'] : ''];
     }
 
     private function consentChoiceLabel(?string $choice): ?string
@@ -1177,17 +1219,16 @@ class StudentHealthRecordController extends Controller
         // the nurse's examination writes one, often on the first visit.
         $cycle = $this->adviserCycle($institutionId);
         $attendedIds = $this->recordsWithConfirmedAttendance($records);
-        $consents = FeedingConsent::forRecords($records);
 
         $students = $records
-            ->map(function (StudentHealthRecord $record) use ($sessionTotals, $cycle, $attendedIds, $consents): array {
+            ->map(function (StudentHealthRecord $record) use ($sessionTotals, $cycle, $attendedIds): array {
                 $status = trim((string) $record->nutritional_status);
                 $statusKey = $this->nutritionStatusKey($status);
                 // The feeding program targets undernourished learners only;
                 // eligibility is derived from BMI-for-age, never tagged by hand.
                 $eligible = in_array($statusKey, ['wasted', 'severely-wasted'], true);
                 // Qualifying is not enrolment: only the Feeding Coordinator
-                // enrols, once the parent's consent is on file.
+                // enrols.
                 $enrolled = FeedingBeneficiarySummary::isEnrolled($record);
                 $attendedAny = $attendedIds->has($record->id);
 
@@ -1210,9 +1251,9 @@ class StudentHealthRecordController extends Controller
                     // Why an enrolled learner is not done yet: the day the
                     // programme is on, a missing endline, no session attended.
                     $program === 'ongoing' => ProfileCompletionRule::outstanding($cycle, $record, $attendedAny),
-                    // A learner who qualifies is waiting on something, and the
-                    // parent's consent is the adviser's to file.
-                    $program === 'not-enrolled' && $eligible => 'Qualifies · '.FeedingConsent::label($consents[$record->id] ?? FeedingConsent::NONE),
+                    // A learner who qualifies is waiting for the Feeding
+                    // Coordinator to enrol them.
+                    $program === 'not-enrolled' && $eligible => 'Qualifies · Awaiting enrolment',
                     default => '',
                 };
 
@@ -1683,17 +1724,10 @@ class StudentHealthRecordController extends Controller
             }))
             ->values();
 
-        // Whether each learner's parent has signed the feeding program consent,
-        // read once for the page: a learner the measurement qualifies can be
-        // enrolled only with it, and the row says which they are waiting for.
-        $feedingConsents = FeedingConsent::forRecords(
-            $records->filter(fn ($record): bool => $record instanceof StudentHealthRecord)->values()
-        );
-
         // `section` holds "Grade 7 / Section A" (see StudentRosterSync). Split it
         // so grade level and section can be filtered independently, and flatten
         // both sources to one shape the view can read without special-casing.
-        $records = $records->map(function ($record) use ($standings, $todayMarks, $feedingConsents): object {
+        $records = $records->map(function ($record) use ($standings, $todayMarks): object {
             $raw = trim((string) ($record->section ?? ''));
             $parts = array_map('trim', explode('/', $raw, 2));
             $grade = ($parts[0] ?? '') !== '' ? $parts[0] : 'Unassigned';
@@ -1735,7 +1769,6 @@ class StudentHealthRecordController extends Controller
                     $qualified => 'pending',
                     default => 'other',
                 },
-                'feeding_consent' => $feedingConsents[$id ?? -1] ?? FeedingConsent::NONE,
                 'at_risk' => (bool) ($standings[$id]['at_risk'] ?? false),
                 // NULL, not 0: a learner no confirmed session has covered has
                 // no turnout to report, which the table prints as an em dash.

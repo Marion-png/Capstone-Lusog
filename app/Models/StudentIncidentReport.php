@@ -31,18 +31,17 @@ class StudentIncidentReport extends Model
      * Who files one, and who may read it.
      *
      * The report is charted in FDAR — a clinical documentation format — so the
-     * clinic writes it: the **school nurse**, and the **clinic teacher** who
-     * covers the clinic when the nurse is not in it, since an incident does not
-     * wait for the nurse to come back. Both read every report on the profile.
-     * **Clinic staff read it**, read-only: they work the same clinic and see the
-     * learner next, so what the nurse charted is something they need in front
-     * of them — but charting is not theirs. The **class adviser reads it**,
-     * because an incident involving a learner in their class is something they
-     * have to know about, and their profile is where they would look.
+     * clinic writes it: the **school nurse**, the **clinic staff** who work the
+     * clinic beside them, and the **clinic teacher** who covers it when the
+     * nurse is not in, since an incident does not wait for the nurse to come
+     * back. All three read every report on the profile. The **class adviser
+     * reads it**, because an incident involving a learner in their class is
+     * something they have to know about, and their profile is where they would
+     * look.
      *
      * **Withdrawing is narrower than filing.** A withdrawn report is a clinical
-     * note taken off a child's record, so it is the nurse's alone: a clinic
-     * teacher can chart what happened while covering, but not remove what the
+     * note taken off a child's record, so it is the nurse's alone: clinic staff
+     * and a clinic teacher can chart what happened, but not remove what the
      * nurse charted.
      *
      * Declared here rather than on the controller so the endpoints and the two
@@ -53,7 +52,7 @@ class StudentIncidentReport extends Model
      *
      * @var list<string>
      */
-    public const WRITE_ROLES = ['school_nurse', 'clinic_teacher'];
+    public const WRITE_ROLES = ['school_nurse', 'clinic_staff', 'clinic_teacher'];
 
     /** @var list<string> */
     public const WITHDRAW_ROLES = ['school_nurse'];

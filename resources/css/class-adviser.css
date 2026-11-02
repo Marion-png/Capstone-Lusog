@@ -424,6 +424,48 @@ tbody tr:hover td{background:#f7fbf8}
 .pc-modal .confirm-title small{font-size:.74rem;font-weight:500;color:var(--muted)}
 .pc-modal .confirm-close{color:var(--muted);font-size:1.2rem}
 .pc-modal .confirm-close:hover{color:var(--red)}
+/* The confirmation Upload Consent opens, above the upload dialog: the
+   answer, then every health service as a row that reads approved or not.
+   On an agreed form each row is a checkbox the adviser can change. */
+.pcc-overlay{z-index:1600}
+.pcc-modal{width:min(640px,96vw)}
+.pcc-summary{margin:0 0 18px;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.pcc-summary > div{display:grid;grid-template-columns:130px minmax(0,1fr);align-items:center;gap:10px;padding:9px 12px;background:#f7faf8}
+.pcc-summary > div + div{border-top:1px solid var(--border)}
+.pcc-summary dt{font-size:.73rem;font-weight:600;color:var(--muted)}
+.pcc-summary dd{margin:0;font-size:.8rem;font-weight:600;color:var(--text);overflow-wrap:anywhere}
+.pcc-answer{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.72rem;font-weight:700;line-height:1.4}
+.pcc-answer.is-full{background:var(--lg-mint,#E7F5EC);color:var(--lg-success-ink,#14653C)}
+.pcc-answer.is-partial{background:var(--lg-amber-tint,#FDF4E2);color:var(--lg-amber-ink,#8A5A06)}
+.pcc-answer.is-refused{background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B)}
+.pcc-answer.is-none{background:#f1f5f9;color:#475569}
+.pcc-services-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:8px}
+.pcc-services-head h4{font-size:.82rem;font-weight:700;color:var(--text)}
+.pcc-tally{font-size:.72rem;font-weight:600;color:var(--muted);font-variant-numeric:var(--lg-figures,tabular-nums lining-nums)}
+.pcc-list{margin:0;padding:0;list-style:none;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.pcc-list > li + li{border-top:1px solid var(--border)}
+/* A heading the paper indents its sub-items under (Pag Purga, Immunization). */
+.pcc-group{padding:9px 12px 7px;background:#f7faf8;font-size:.76rem;font-weight:600;color:var(--muted);line-height:1.4}
+.pcc-row.is-child .pcc-line{padding-left:28px}
+.pcc-line{position:relative;display:flex;align-items:center;gap:11px;padding:10px 12px;font-size:.8rem;color:var(--text);transition:background .15s ease}
+label.pcc-line{cursor:pointer}
+label.pcc-line:hover{background:#f7faf8}
+.pcc-line input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.pcc-box{display:grid;place-items:center;flex-shrink:0;width:18px;height:18px;border-radius:5px;border:1.5px solid var(--lg-border-strong,#C7DCCE);background:#fff;font-size:.62rem;font-weight:800;line-height:1;transition:background .15s ease,border-color .15s ease}
+.pcc-line input:focus-visible + .pcc-box{outline:2px solid var(--lg-emerald,#1F8A4C);outline-offset:2px}
+.pcc-name{flex:1;min-width:0;line-height:1.4}
+.pcc-state{flex-shrink:0;padding:2px 9px;border-radius:999px;font-size:.68rem;font-weight:700;white-space:nowrap}
+.pcc-row.is-approved .pcc-box{background:var(--lg-emerald,#1F8A4C);border-color:var(--lg-emerald,#1F8A4C)}
+.pcc-row.is-approved .pcc-box::after{content:"";width:8px;height:4px;margin-top:-2px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg)}
+.pcc-row.is-approved .pcc-state{background:var(--lg-mint,#E7F5EC);color:var(--lg-success-ink,#14653C)}
+.pcc-row.is-denied .pcc-name{color:var(--muted)}
+.pcc-row.is-denied .pcc-state{background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B)}
+.pcc-row.is-denied div.pcc-line .pcc-box{border-color:transparent;background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B);border-radius:50%}
+.pcc-row.is-denied div.pcc-line .pcc-box::after{content:"\2715"}
+.pcc-row.is-pending .pcc-state{background:#f1f5f9;color:#475569}
+.pcc-row.is-pending .pcc-box{border-style:dashed;border-radius:50%}
+.pcc-modal #pcConfirmSubmit:disabled{opacity:.55;cursor:not-allowed}
+@media (max-width:520px){.pcc-summary > div{grid-template-columns:1fr;gap:2px}.pcc-line{padding:10px}}
 /* The uploaded sheet and its reading stay together while the adviser reviews. */
 .pc-review-modal,.pc-modal.is-reviewing .confirm-modal{width:min(1040px,96vw)}
 .pc-review-modal .confirm-head{padding:20px 24px;border-bottom:0}
@@ -640,6 +682,35 @@ tbody tr:hover td{background:#f7fbf8}
 /* A guardian has returned their signed consent. It is an answer, so it is
    stated above the figures rather than as a footnote under them. */
 .sp-consent-returned{margin:0 0 12px;padding:10px 12px;border:1px solid #BCD3EE;border-radius:9px;background:#F1F6FC;font-size:.78rem;line-height:1.5;color:#1E4E8C}
+/* What an uploaded consent approves, service by service: one column per
+   answer, the colour on the rule and the mark beside each name. */
+.sp-consent-services[hidden],.sp-cs-col[hidden]{display:none}
+.sp-cs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.sp-cs-col{border:1px solid var(--border);border-top:3px solid var(--border);border-radius:10px;background:var(--card);padding:12px 14px 13px}
+.sp-cs-col h5{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 10px;font-size:.76rem;font-weight:700;letter-spacing:.02em}
+.sp-cs-count{min-width:24px;padding:1px 8px;border-radius:999px;font-size:.68rem;font-weight:700;text-align:center;font-variant-numeric:var(--lg-figures,tabular-nums lining-nums)}
+.sp-cs-col ul{display:grid;gap:7px;margin:0;padding:0;list-style:none}
+.sp-cs-col li{display:flex;align-items:flex-start;gap:8px;font-size:.79rem;line-height:1.4;color:var(--text)}
+.sp-cs-col li::before{display:grid;place-items:center;flex-shrink:0;width:17px;height:17px;margin-top:0;border-radius:50%;font-size:.6rem;font-weight:800;line-height:1}
+.sp-cs-col li.is-none{color:var(--muted)}
+.sp-cs-col li.is-none::before,.sp-cs-col li.is-group::before{display:none}
+/* A heading the paper indents its sub-items under (Pag Purga, Immunization). */
+.sp-cs-col li.is-group{margin-top:2px;font-size:.74rem;font-weight:600;color:var(--muted)}
+.sp-cs-col li.is-child{padding-left:14px}
+.sp-cs-col.is-approved{border-top-color:var(--lg-emerald,#1F8A4C)}
+.sp-cs-col.is-approved h5{color:var(--lg-success-ink,#14653C)}
+.sp-cs-col.is-approved .sp-cs-count{background:var(--lg-mint,#E7F5EC);color:var(--lg-success-ink,#14653C)}
+.sp-cs-col.is-approved li::before{content:"\2713";background:var(--lg-mint,#E7F5EC);color:var(--lg-success-ink,#14653C)}
+.sp-cs-col.is-denied{border-top-color:var(--lg-danger,#D95C5C)}
+.sp-cs-col.is-denied h5{color:var(--lg-danger-ink,#A32B2B)}
+.sp-cs-col.is-denied .sp-cs-count{background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B)}
+.sp-cs-col.is-denied li::before{content:"\2715";background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B)}
+.sp-cs-col.is-check{border-top-color:var(--lg-amber,#F2B84B)}
+.sp-cs-col.is-check h5{color:var(--lg-amber-ink,#8A5A06)}
+.sp-cs-col.is-check .sp-cs-count{background:var(--lg-amber-tint,#FDF4E2);color:var(--lg-amber-ink,#8A5A06)}
+.sp-cs-col.is-check li::before{content:"?";background:var(--lg-amber-tint,#FDF4E2);color:var(--lg-amber-ink,#8A5A06)}
+.sp-cs-quote{margin:0 0 9px;padding:7px 10px;border-radius:8px;background:var(--lg-amber-tint,#FDF4E2);font-size:.76rem;font-style:italic;color:var(--lg-amber-ink,#8A5A06);overflow-wrap:anywhere}
+.sp-cs-quote:empty{display:none}
 .sp-review-block{margin-bottom:10px}
 .sp-review-title{display:block;font-size:.71rem;font-weight:700;color:#334a3f;margin-bottom:5px}
 .sp-review-items{display:flex;flex-wrap:wrap;gap:5px}

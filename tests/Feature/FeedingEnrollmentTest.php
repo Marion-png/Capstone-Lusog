@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Controllers\FeedingEnrollmentController;
 use App\Models\AuditLog;
 use App\Models\Institution;
+use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
@@ -115,11 +116,40 @@ class FeedingEnrollmentTest extends TestCase
         $this->assertSame('badge-critical', $row['badge']);
     }
 
+    /**
+     * Enrolment is the coordinator's decision alone: no parent's consent is
+     * asked for, and a feeding consent filed while one was — even a refusal —
+     * neither blocks it nor appears on the list.
+     */
+    #[Test]
+    public function no_parents_consent_is_needed_to_enrol(): void
+    {
+        $learner = $this->makeCandidate();
+        ParentalConsentForm::create([
+            'student_health_record_id' => $learner->id,
+            'program_type' => ParentalConsentForm::PROGRAM_FEEDING,
+            'school_year' => (string) $learner->school_year,
+            'consent_type' => 'refused',
+            'file_path' => 'parental-consents/'.$learner->id.'/sbfp.jpg',
+            'uploaded_by_name' => 'Class Adviser',
+        ]);
+
+        $row = $this->withSession($this->coordinatorSession())->getJson(self::CANDIDATES)->assertOk()->json('rows.0');
+        $this->assertArrayNotHasKey('consent', $row);
+        $this->assertArrayNotHasKey('can_enroll', $row);
+
+        $this->withSession($this->coordinatorSession())
+            ->postJson(self::ENROLL, ['record_ids' => [$learner->id]])
+            ->assertOk()
+            ->assertExactJson(['enrolled_now' => 1]);
+
+        $this->assertNotNull($learner->fresh()->feeding_enrolled_at);
+    }
+
     #[Test]
     public function enrolling_a_learner_makes_them_a_beneficiary(): void
     {
         $learner = $this->makeCandidate();
-        $this->fileFeedingConsent($learner);
 
         $this->withSession($this->coordinatorSession())
             ->postJson(self::ENROLL, ['record_ids' => [$learner->id]])
@@ -146,8 +176,6 @@ class FeedingEnrollmentTest extends TestCase
     {
         $first = $this->makeCandidate();
         $second = $this->makeCandidate('Severely Wasted', 'Grade 8 / Luna');
-        $this->fileFeedingConsent($first);
-        $this->fileFeedingConsent($second);
 
         $this->withSession($this->coordinatorSession())
             ->postJson(self::ENROLL, ['record_ids' => [$first->id, $second->id]])
@@ -207,7 +235,6 @@ class FeedingEnrollmentTest extends TestCase
     public function enrolment_is_audited(): void
     {
         $learner = $this->makeCandidate();
-        $this->fileFeedingConsent($learner);
 
         $this->withSession($this->coordinatorSession())
             ->postJson(self::ENROLL, ['record_ids' => [$learner->id]])

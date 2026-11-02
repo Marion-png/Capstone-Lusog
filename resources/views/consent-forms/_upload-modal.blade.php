@@ -12,6 +12,11 @@
     the learner in the student list. The host page inlines class-adviser.css
     and consent-copy.css. Exactly one instance per page: the ids are fixed.
 
+    Upload Consent does not file straight away. It opens a confirmation that
+    lists every health service the form approves and does not approve; on an
+    agreed form the adviser marks them there, and those marks are what is
+    filed (`services`, and a partial consent's `excepted_services`).
+
     Expects $schoolYear (the year an upload is filed under — always the
     current one), $scannerReady and $plannedServices, plus either
     $uploadStudents (each with lrn and name, for the student list) or
@@ -20,6 +25,16 @@
 @php
     $uploadLearner = $uploadLearner ?? null;
     $uploadStudents = $uploadStudents ?? [];
+    // The services the confirmation lists, worded as the printed letter words
+    // them (in Cebuano) under the paper's own headings. Every learner in the
+    // class is in the adviser's grade, so a service one grade alone is given
+    // is listed only for that grade.
+    $uploadGrade = \App\Support\LearnerPlacement::gradeNumber((string) session('assigned_grade_level', ''));
+    $confirmServices = collect(array_keys($plannedServices ?? \App\Models\HealthConsentForm::PLANNED_SERVICES))
+        ->filter(fn (string $key): bool => (\App\Support\ConsentStanding::GRADE_ONLY_SERVICES[$key] ?? $uploadGrade) === $uploadGrade)
+        ->map(fn (string $key): array => \App\Models\HealthConsentForm::printedService($key))
+        ->values()
+        ->all();
 @endphp
 <div class="confirm-overlay pc-modal" id="uploadConsentModal" aria-hidden="true">
     <div class="confirm-modal" role="dialog" aria-modal="true" aria-label="Upload Sulat-Pahibalo">
@@ -61,23 +76,6 @@
                     </div>
                 @endif
 
-                {{-- Two forms come back from parents, and they answer different
-                     questions: the Sulat-Pahibalo covers the health services, the
-                     feeding program consent is what lets the Feeding Coordinator
-                     enrol a learner in the SBFP. They are filed apart so neither
-                     is ever read as the other. --}}
-                <div class="pc-field">
-                    <label for="pc_program">Which form is this? <span class="pc-req">*</span></label>
-                    <div class="pc-input">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        <select id="pc_program" name="program">
-                            @foreach (\App\Models\ParentalConsentForm::PROGRAMS as $programValue => $programLabel)
-                                <option value="{{ $programValue }}" @selected(old('program', \App\Models\ParentalConsentForm::PROGRAM_HEALTH_SERVICES) === $programValue)>{{ $programLabel }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <p class="pc-hint">A learner measured as wasted can be enrolled in the feeding program only once their parent's signed feeding program consent is filed here.</p>
-                </div>
 
                 <div class="pc-field">
                     <label for="pc_school_year">School Year <span class="pc-req">*</span></label>
@@ -88,7 +86,7 @@
                 </div>
 
                 <div class="pc-field">
-                    <label id="pcFileLabel">Upload Signed Sulat-Pahibalo Form <span class="pc-req">*</span></label>
+                    <label>Upload Signed Sulat-Pahibalo Form <span class="pc-req">*</span></label>
                     <div class="pc-drop" id="pcDrop" role="button" tabindex="0">
                         <div id="pcDropBody">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/><polyline points="12 16 12 11"/><polyline points="9.5 13 12 10.5 14.5 13"/></svg>
@@ -123,7 +121,7 @@
                      with no answer still reads as PENDING and authorises
                      nothing. --}}
                 <div class="pc-field">
-                    <label for="pc_consent_type">What did the guardian answer? <span class="pc-optional" id="pcAnswerOptional">(Optional)</span></label>
+                    <label for="pc_consent_type">What did the guardian answer? <span class="pc-optional">(Optional)</span></label>
                     @if ($scannerReady)
                         <div class="pc-read">
                             <button type="button" class="btn btn-secondary" id="pcReadAnswer" disabled>Read the answer from the photo</button>
@@ -155,17 +153,15 @@
                     <div class="pc-input">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                         <select id="pc_consent_type" name="consent_type">
-                            <option value="" id="pcNotRecordedOption">Not recorded yet</option>
-                            <option value="full" @selected(old('consent_type') === 'full')
-                                data-feeding-label="Agreed &mdash; the parent consents to the feeding program">Full consent &mdash; agreed to every service</option>
-                            <option value="partial" id="pcPartialOption" @selected(old('consent_type') === 'partial')>Partial consent &mdash; agreed, with exceptions</option>
-                            <option value="refused" @selected(old('consent_type') === 'refused')
-                                data-feeding-label="Declined &mdash; the parent does not consent">Declined &mdash; did not agree</option>
+                            <option value="">Not recorded yet</option>
+                            <option value="full" @selected(old('consent_type') === 'full')>Full consent &mdash; agreed to every service</option>
+                            <option value="partial" @selected(old('consent_type') === 'partial')>Partial consent &mdash; agreed, with exceptions</option>
+                            <option value="refused" @selected(old('consent_type') === 'refused')>Declined &mdash; did not agree</option>
                         </select>
                     </div>
                     {{-- One span, so the hint's flex layout keeps the bold words
                          inside the sentence instead of splitting it into columns. --}}
-                    <p class="pc-hint" id="pcAnswerHint"><span>
+                    <p class="pc-hint"><span>
                         Read it off the signed form. Leave it as <strong>Not recorded yet</strong> if you are
                         filing the document now and will read it later &mdash; the form still counts as returned,
                         but no service may be given until an answer is on file.
@@ -189,8 +185,11 @@
                      and the script posts them here as hidden fields, checked
                      by the adviser in the reading beside the photo. An upload
                      with none reads as the program it is filed for, as
-                     uploads always did. --}}
+                     uploads always did. The confirmation step rewrites them
+                     with the adviser's own marks on an agreed form. --}}
                 <div id="pcServices" hidden></div>
+                <div id="pcExcepted" hidden></div>
+                <input type="hidden" name="services_confirmed" id="pcServicesConfirmed" value="0">
 
                 <div class="pc-field" id="pcPartialField" hidden>
                     <label for="pc_partial_exception">Services the parent excepted</label>
@@ -252,6 +251,37 @@
         </form>
     </div>
 </div>
+{{-- The confirmation Upload Consent opens: who the form is for, the parent's
+     answer, and every health service it approves or does not. It sits above
+     the upload dialog, and Back returns to it untouched. --}}
+<div class="confirm-overlay pc-modal pcc-overlay" id="pcConfirmModal" aria-hidden="true">
+    <div class="confirm-modal pcc-modal" role="dialog" aria-modal="true" aria-labelledby="pcConfirmTitle">
+        <div class="confirm-head">
+            <div class="confirm-title" id="pcConfirmTitle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                Confirm Upload
+                <small id="pcConfirmLearner"></small>
+            </div>
+            <button type="button" class="confirm-close" data-confirm-back aria-label="Back to the upload form">&times;</button>
+        </div>
+        <div class="confirm-body">
+            <dl class="pcc-summary">
+                <div><dt>Parent's answer</dt><dd><span class="pcc-answer" id="pcConfirmAnswer"></span></dd></div>
+                <div><dt>Signed form</dt><dd id="pcConfirmFile"></dd></div>
+                <div id="pcConfirmNoteRow" hidden><dt id="pcConfirmNoteLabel"></dt><dd id="pcConfirmNote"></dd></div>
+            </dl>
+            <div class="pcc-services-head">
+                <h4>Health Services</h4>
+                <span class="pcc-tally" id="pcConfirmTally"></span>
+            </div>
+            <ul class="pcc-list" id="pcConfirmList"></ul>
+            <div class="confirm-actions">
+                <button type="button" class="btn btn-secondary" data-confirm-back>Back</button>
+                <button type="button" class="btn" id="pcConfirmSubmit">Confirm &amp; Upload</button>
+            </div>
+        </div>
+    </div>
+</div>
 @if ($scannerReady)
     {{-- The photo at full size. Outside the upload form, so nothing in it
          can submit that form. --}}
@@ -287,54 +317,8 @@
     // A select on the Consent Forms page; a hidden input on the learner's
     // own profile, where the learner is already chosen.
     const studentSelect = document.getElementById('pc_lrn');
-    const programSelect = document.getElementById('pc_program');
     const answerSelect = document.getElementById('pc_consent_type');
     const submitButton = uploadForm.querySelector('button[type="submit"]');
-    const isHealthForm = () => programSelect?.value === @json(\App\Models\ParentalConsentForm::PROGRAM_HEALTH_SERVICES);
-
-    // ── Which form this is ──────────────────────────────────────────
-    // The feeding program consent is a yes or a no on its own signed form: no
-    // "except", no "not recorded yet", and no photo reader, which reads the
-    // Sulat-Pahibalo. The server holds the same rules whatever is drawn here.
-    const feeding = @json(\App\Models\ParentalConsentForm::PROGRAM_FEEDING);
-    const fileLabel = document.getElementById('pcFileLabel');
-    const read = uploadModal.querySelector('.pc-read');
-    const swapped = [document.getElementById('pcPartialOption'), document.getElementById('pcNotRecordedOption')];
-    const relabelled = Array.from(answerSelect.querySelectorAll('option[data-feeding-label]'));
-    relabelled.forEach((option) => { option.dataset.healthLabel = option.textContent; });
-
-    const syncProgram = () => {
-        const isFeeding = programSelect?.value === feeding;
-
-        swapped.forEach((option) => {
-            if (!option) return;
-            option.hidden = isFeeding;
-            option.disabled = isFeeding;
-        });
-        if (isFeeding && (answerSelect.value === 'partial' || answerSelect.value === '')) answerSelect.value = 'full';
-
-        relabelled.forEach((option) => {
-            option.textContent = isFeeding ? option.dataset.feedingLabel : option.dataset.healthLabel;
-        });
-        answerSelect.required = isFeeding;
-
-        ['pcAnswerOptional', 'pcAnswerHint'].forEach((id) => {
-            const el = document.getElementById(id);
-            if (el) el.hidden = isFeeding;
-        });
-        if (read) read.hidden = isFeeding;
-        if (isFeeding) {
-            const confirmBox = document.getElementById('pcAnswerConfirm');
-            const fromScan = document.getElementById('pcAnswerFromScan');
-            if (confirmBox) confirmBox.hidden = true;
-            if (fromScan) fromScan.value = '0';
-        }
-        if (fileLabel) {
-            fileLabel.firstChild.textContent = isFeeding
-                ? 'Upload the Signed Feeding Program Consent '
-                : 'Upload Signed Sulat-Pahibalo Form ';
-        }
-    };
 
     // Both drop zones behave identically: click, keyboard, or drag a file in.
     const wireDropZone = (dropId, bodyId, inputId) => {
@@ -413,30 +397,210 @@
 
     answerSelect.addEventListener('change', syncAnswerLines);
 
+    // Upload Consent opens the confirmation; only its Confirm files the form.
+    let confirmedSubmit = false;
     uploadForm.addEventListener('submit', (event) => {
         if (consentFile && !(consentFile.files && consentFile.files.length > 0)) {
             event.preventDefault();
             consentDrop?.classList.add('invalid');
             consentDrop?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            return;
+        }
+        if (!confirmedSubmit) {
+            event.preventDefault();
+            openConfirm();
         }
     });
 
-    // The services ticked in the letter's list, as hidden fields. Only the
-    // reader fills them, with the list the server read off the paper
-    // (ConsentPaperCopy::tickedServices); with none the upload reads as the
-    // program it is filed for.
-    const servicesBox = document.getElementById('pcServices');
-    const setServices = (keys) => {
-        if (!servicesBox) return;
-        servicesBox.textContent = '';
+    // A list of service keys as hidden fields of one name.
+    const writeKeys = (box, name, keys) => {
+        if (!box) return;
+        box.textContent = '';
         keys.forEach((key) => {
             const input = document.createElement('input');
             input.type = 'hidden';
-            input.name = 'services[]';
+            input.name = name;
             input.value = key;
-            servicesBox.appendChild(input);
+            box.appendChild(input);
         });
     };
+
+    // The services ticked in the letter's list. The reader fills them with
+    // the list the server read off the paper (ConsentPaperCopy::tickedServices);
+    // with none the upload reads as the program it is filed for.
+    const servicesBox = document.getElementById('pcServices');
+    let readServices = [];
+    const setServices = (keys) => {
+        readServices = keys.slice();
+        writeKeys(servicesBox, 'services[]', keys);
+    };
+
+    // ── Confirming what the form approves ───────────────────────────
+    // Every service the letter can carry, each approved or not. On an agreed
+    // form the adviser marks them, starting from the services the reader
+    // found ticked on the paper (or all of them); the marks are what is filed:
+    // `services` the approved ones, and on a partial consent the rest of the
+    // letter's list as `excepted_services`. The server reads them with
+    // ConsentStanding, exactly as the learner's Consent tab will show them.
+    const confirmModal = document.getElementById('pcConfirmModal');
+    const confirmList = document.getElementById('pcConfirmList');
+    const confirmTally = document.getElementById('pcConfirmTally');
+    const confirmSubmit = document.getElementById('pcConfirmSubmit');
+    const exceptedBox = document.getElementById('pcExcepted');
+    const servicesConfirmed = document.getElementById('pcServicesConfirmed');
+    const confirmServices = @json($confirmServices);
+    const serviceKeys = confirmServices.map((service) => service.key);
+    const answerKinds = { full: 'is-full', partial: 'is-partial', refused: 'is-refused' };
+    // The adviser's marks, kept while they go back to the form and return;
+    // dropped when the answer, the photo or the learner changes.
+    let approvedChoice = null;
+
+    const isAgreed = () => answerSelect.value === 'full' || answerSelect.value === 'partial';
+    // The services the letter lists: what the reader saw ticked, or — with
+    // no reading — every one, as the printed letter carries them all.
+    const letterServices = () => {
+        const read = readServices.filter((key) => serviceKeys.includes(key));
+        return read.length ? read : serviceKeys.slice();
+    };
+
+    const learnerName = () => {
+        if (studentSelect?.tagName === 'SELECT') {
+            return studentSelect.options[studentSelect.selectedIndex]?.text || '';
+        }
+        return document.getElementById('pc_student')?.value || '';
+    };
+
+    const paintRow = (row, state) => {
+        row.classList.remove('is-approved', 'is-denied', 'is-pending');
+        row.classList.add('is-' + state);
+        const label = row.querySelector('.pcc-state');
+        if (label) label.textContent = { approved: 'Approved', denied: 'Not approved', pending: 'Pending' }[state];
+    };
+
+    const syncTally = () => {
+        const total = serviceKeys.length;
+        if (isAgreed()) {
+            const approved = serviceKeys.filter((key) => approvedChoice.has(key)).length;
+            confirmTally.textContent = approved + ' approved · ' + (total - approved) + ' not approved';
+            // An agreed form that approves nothing is not one the server takes.
+            confirmSubmit.disabled = approved === 0;
+        } else {
+            confirmTally.textContent = answerSelect.value === 'refused'
+                ? '0 approved · ' + total + ' not approved'
+                : total + ' pending';
+            confirmSubmit.disabled = false;
+        }
+    };
+
+    const buildRow = (service) => {
+        const row = document.createElement('li');
+        row.className = 'pcc-row';
+        const wrap = document.createElement(isAgreed() ? 'label' : 'div');
+        wrap.className = 'pcc-line';
+        const box = document.createElement('span');
+        box.className = 'pcc-box';
+        box.setAttribute('aria-hidden', 'true');
+        const name = document.createElement('span');
+        name.className = 'pcc-name';
+        name.lang = 'ceb';
+        name.textContent = service.label;
+        if (service.group) row.classList.add('is-child');
+        const state = document.createElement('span');
+        state.className = 'pcc-state';
+
+        row.append(wrap);
+
+        if (isAgreed()) {
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.checked = approvedChoice.has(service.key);
+            input.addEventListener('change', () => {
+                if (input.checked) approvedChoice.add(service.key);
+                else approvedChoice.delete(service.key);
+                paintRow(row, input.checked ? 'approved' : 'denied');
+                syncTally();
+            });
+            wrap.append(input, box, name, state);
+            paintRow(row, input.checked ? 'approved' : 'denied');
+        } else {
+            wrap.append(box, name, state);
+            paintRow(row, answerSelect.value === 'refused' ? 'denied' : 'pending');
+        }
+
+        return row;
+    };
+
+    const openConfirm = () => {
+        if (!confirmModal) return;
+        if (isAgreed() && approvedChoice === null) approvedChoice = new Set(letterServices());
+
+        document.getElementById('pcConfirmLearner').textContent = learnerName();
+        const answer = document.getElementById('pcConfirmAnswer');
+        answer.className = 'pcc-answer ' + (answerKinds[answerSelect.value] || 'is-none');
+        answer.textContent = answerSelect.options[answerSelect.selectedIndex]?.text || '';
+        document.getElementById('pcConfirmFile').textContent = consentFile?.files?.[0]?.name || '';
+
+        // What the parent wrote under their box, as the form carries it.
+        const note = { partial: ['Exceptions', 'pc_partial_exception'], refused: ['Reason given', 'pc_refused_reason'] }[answerSelect.value];
+        const noteText = note ? (document.getElementById(note[1])?.value || '').trim() : '';
+        document.getElementById('pcConfirmNoteRow').hidden = noteText === '';
+        document.getElementById('pcConfirmNoteLabel').textContent = note ? note[0] : '';
+        document.getElementById('pcConfirmNote').textContent = noteText;
+
+        // A heading the paper indents its sub-items under (Pag Purga,
+        // Immunization) heads them here too.
+        const rows = [];
+        let group = null;
+        confirmServices.forEach((service) => {
+            if (service.group && service.group !== group) {
+                const head = document.createElement('li');
+                head.className = 'pcc-group';
+                head.lang = 'ceb';
+                head.textContent = service.group;
+                rows.push(head);
+            }
+            group = service.group || null;
+            rows.push(buildRow(service));
+        });
+        confirmList.replaceChildren(...rows);
+        syncTally();
+
+        confirmModal.classList.add('open');
+        confirmModal.setAttribute('aria-hidden', 'false');
+        (confirmList.querySelector('input') || confirmSubmit).focus();
+    };
+
+    const closeConfirm = () => {
+        if (!confirmModal?.classList.contains('open')) return;
+        confirmModal.classList.remove('open');
+        confirmModal.setAttribute('aria-hidden', 'true');
+        submitButton?.focus();
+    };
+
+    confirmModal?.addEventListener('click', (event) => {
+        if (event.target === confirmModal || event.target.closest('[data-confirm-back]')) closeConfirm();
+    });
+
+    confirmSubmit?.addEventListener('click', () => {
+        if (isAgreed()) {
+            const approved = serviceKeys.filter((key) => approvedChoice.has(key));
+            if (approved.length === 0) return;
+            writeKeys(servicesBox, 'services[]', approved);
+            writeKeys(exceptedBox, 'excepted_services[]', answerSelect.value === 'partial'
+                ? letterServices().filter((key) => !approvedChoice.has(key))
+                : []);
+            servicesConfirmed.value = '1';
+        } else {
+            writeKeys(servicesBox, 'services[]', readServices);
+            writeKeys(exceptedBox, 'excepted_services[]', []);
+            servicesConfirmed.value = '0';
+        }
+
+        confirmedSubmit = true;
+        confirmSubmit.disabled = true;
+        if (typeof uploadForm.requestSubmit === 'function') uploadForm.requestSubmit();
+        else uploadForm.submit();
+    });
 
     // ── Reading the answer off the photo ────────────────────────────
     // The consent reader proposes; the adviser records. Its answer lands
@@ -552,7 +716,7 @@
     const syncReader = () => {
         if (!readButton || !readState) return;
         const file = consentFile?.files && consentFile.files[0];
-        readButton.disabled = !readable(file) || chosenLearner() === '' || !isHealthForm();
+        readButton.disabled = !readable(file) || chosenLearner() === '';
         readState.textContent = !file
             ? 'Attach a photo of the signed form first.'
             : (!readable(file)
@@ -607,6 +771,7 @@
     const dropReading = () => {
         cancelRead();
         showReview(null);
+        approvedChoice = null;
         if (answerFromScan?.value === '1') {
             answerSelect.value = '';
             setReaderAnswer(false);
@@ -618,15 +783,13 @@
 
     consentFile?.addEventListener('change', dropReading);
     studentSelect?.addEventListener('change', dropReading);
-    programSelect?.addEventListener('change', () => {
-        dropReading();
-        syncProgram();
-    });
 
-    // Choosing by hand makes the answer the adviser's own.
+    // Choosing by hand makes the answer the adviser's own, and the services
+    // it approves are marked afresh for it.
     answerSelect.addEventListener('change', () => {
         cancelRead();
         setReaderAnswer(false);
+        approvedChoice = null;
         syncReader();
     });
 
@@ -636,7 +799,7 @@
         readButton.addEventListener('click', async () => {
             const file = consentFile?.files && consentFile.files[0];
             const lrn = chosenLearner();
-            if (!readable(file) || lrn === '' || !isHealthForm()) return;
+            if (!readable(file) || lrn === '') return;
 
             dropReading();
             const version = readVersion;
@@ -661,9 +824,9 @@
                 });
                 const data = await response.json().catch(() => ({}));
 
-                // The adviser swapped the photo, the learner or the form, or
-                // chose the answer themselves, while it was being read.
-                if (version !== readVersion || !consentFile.files || consentFile.files[0] !== file || chosenLearner() !== lrn || !isHealthForm()) return;
+                // The adviser swapped the photo or the learner, or chose the
+                // answer themselves, while it was being read.
+                if (version !== readVersion || !consentFile.files || consentFile.files[0] !== file || chosenLearner() !== lrn) return;
 
                 if (!response.ok) {
                     readState.textContent = data.message || 'The form could not be read. Choose the answer from the paper.';
@@ -701,7 +864,7 @@
             } finally {
                 if (version === readVersion) {
                     readRequest = null;
-                    readButton.disabled = !readable(consentFile?.files && consentFile.files[0]) || chosenLearner() === '' || !isHealthForm();
+                    readButton.disabled = !readable(consentFile?.files && consentFile.files[0]) || chosenLearner() === '';
                     if (submitButton) submitButton.disabled = false;
                 }
             }
@@ -716,13 +879,16 @@
         setReaderAnswer(false);
         filledFromScan = false;
         setServices([]);
+        writeKeys(exceptedBox, 'excepted_services[]', []);
+        servicesConfirmed.value = '0';
+        approvedChoice = null;
+        confirmedSubmit = false;
         showReview(null);
         syncAnswerLines();
         consentDrop?.classList.remove('invalid');
         // Only the student list can be pointed at a learner; a learner
         // fixed by their own profile stays theirs.
         if (studentSelect?.tagName === 'SELECT' && lrn) studentSelect.value = lrn;
-        syncProgram();
         syncReader();
         open();
     };
@@ -733,6 +899,7 @@
 
     const closeUpload = () => {
         cancelRead();
+        closeConfirm();
         close();
     };
     document.getElementById('uploadConsentClose')?.addEventListener('click', closeUpload);
@@ -750,12 +917,16 @@
         // The enlarged photo sits above the dialog and closes itself on
         // Escape; the upload behind it stays open.
         if (photoDialog?.open) return;
+        // The confirmation sits above the upload: Escape goes back to the
+        // form, and Tab stays inside the confirmation.
+        const confirming = confirmModal?.classList.contains('open');
         if (event.key === 'Escape') {
-            closeUpload();
+            if (confirming) closeConfirm();
+            else closeUpload();
             return;
         }
         if (event.key !== 'Tab') return;
-        const focusable = Array.from(uploadModal.querySelectorAll('button, a[href], input, select, textarea, [tabindex="0"]'))
+        const focusable = Array.from((confirming ? confirmModal : uploadModal).querySelectorAll('button, a[href], input, select, textarea, [tabindex="0"]'))
             .filter((node) => !node.disabled && node.getClientRects().length > 0);
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
@@ -766,6 +937,5 @@
         }
     });
 
-    syncProgram();
 })();
 </script>
