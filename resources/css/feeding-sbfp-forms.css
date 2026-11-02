@@ -370,6 +370,40 @@
 .chart-swatch.is-female { background: #D0741C; }
 .chart-swatch.is-total { background: #4B5A52; }
 
+/* What the charts above show, in a few plain sentences, for the grade or
+   section the filter is set to. In the sheet's own register — a ruled box
+   of black text, no tint — because it prints with the form and has to read
+   as part of the document, not as app chrome pasted onto it. */
+.bmi-insight {
+	margin-top: 18px;
+	padding: 12px 14px;
+	border: 1px solid #111827;
+	break-inside: avoid;
+	page-break-inside: avoid;
+}
+.bmi-insight-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-bottom: 8px;
+	font-size: .78rem;
+	font-weight: 700;
+	color: #0f172a;
+	text-transform: uppercase;
+	letter-spacing: .04em;
+}
+.bmi-insight-scope { font-weight: 600; color: #334155; }
+.bmi-insight-scope::before { content: '— '; }
+.bmi-insight-list {
+	margin: 0;
+	padding-left: 18px;
+	font-size: .8rem;
+	line-height: 1.5;
+	color: #0f172a;
+}
+.bmi-insight-list li + li { margin-top: 3px; }
+
 /* The scope the sheet was filled for, printed on the form itself so a filed
    copy says which children it counted rather than reading as the whole
    school. Empty when nothing is narrowed. */
@@ -391,6 +425,8 @@
 	.chart-figure { font-size: 6pt; }
 	.chart-xlabel, .chart-tick { font-size: 6pt; }
 	.chart-legend { font-size: 7pt; }
+	.bmi-insight-head { font-size: 7.5pt; }
+	.bmi-insight-list { font-size: 8pt; }
 	.bmi-charts-head, .chart-title { break-after: avoid; page-break-after: avoid; }
 	/* A seal placeholder is a hint to the coordinator, not part of the form:
 	   paper gets the space it will occupy, never a dashed circle. */

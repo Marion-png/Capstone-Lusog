@@ -11,7 +11,7 @@ parent should hear about the same day. Messages are sent through
 | **Feeding absences** | Feeding Coordinator records or imports attendance | When the learner's run of unexcused absences reaches the school's *attendance notice* (default **3** sessions in a row), once per run |
 | **Test message** | System Admin, from the Parent SMS console | On demand, to any number typed in |
 
-Nothing is sent unless the **parent opted in** on their online Sulat-Pahibalo.
+Texts go **automatically** to the parent or guardian contact number on the learner's Sheet 1 (`student_details.telephone_no`, entered by the class adviser). A parent who gives a number of their own on the online Sulat-Pahibalo is texted there instead, in the language they chose. A learner with no mobile number on file is not texted.
 
 ---
 
@@ -41,9 +41,9 @@ php artisan migrate
 Migration `2026_11_01_000001_create_sms_notifications_table` adds:
 
 * `sms_notifications`: the log of every message.
-* `health_consent_forms.sms_opt_in`, `sms_number`, `sms_language`: the parent's choice.
+* `health_consent_forms.sms_opt_in`, `sms_number`, `sms_language`: a number and language the parent may choose on their own letter.
 
-Until it has run, the opt-in box is not shown and nothing is sent.
+Until it has run, nothing is sent.
 
 ### No queue worker needed
 
@@ -57,11 +57,12 @@ anyway.
 ## 2. How it works
 
 ```
- Parent's Sulat-Pahibalo ──► opt-in + number + language  (health_consent_forms)
+ Sheet 1 contact number (student_details) ─┐
+ Parent's own number on the letter ──────┴► number + language
                                       │
  Consultation saved ─┐                ▼
  Attendance saved ───┼──► ParentNotifier ── checks ──► SmsNotification (queued)
-                     │      opt-in · number · duplicate · daily cap   │
+                     │      number · duplicate · daily cap           │
                      │                                                ▼ after response
                      │                                  SendParentSms job
                      │                                                │
@@ -79,7 +80,7 @@ anyway.
 | Class | Responsibility |
 |---|---|
 | `App\Support\SemaphoreClient` | The only code that calls Semaphore: `send()`, `message()` (delivery report), `account()` (credit balance). Turns every failure into an `SmsGatewayFailure` with a readable message. |
-| `App\Support\ParentNotifier` | Decides **whether** a parent is texted and **what** the text says: opt-in, number, duplicates, daily cap, templates (English / Cebuano). |
+| `App\Support\ParentNotifier` | Decides **whether** a parent is texted and **what** the text says: which number (Sheet 1, or the parent's own), duplicates, daily cap, templates (English / Cebuano). |
 | `App\Jobs\SendParentSms` | Sends one queued row and records the gateway's answer. |
 | `App\Support\SmsDeliveryReports` | Fetches delivery reports for messages still on their way. |
 | `App\Support\PhilippineMobileNumber` | Reads `0917 123 4567`, `+63 917 123 4567`, `639171234567`, … as `09171234567`; rejects landlines. |
@@ -124,7 +125,7 @@ Cebuano:
 
 | Measure | Where |
 |---|---|
-| **Opt-in only.** The parent ticks the box and types the number on their own Sulat-Pahibalo. Their *latest* answered form decides, so next year's form without the tick stops the messages. | `ParentNotifier::optInFor()` |
+| **Where a text goes.** The Sheet 1 guardian contact number by default; a number the parent typed on their own Sulat-Pahibalo (their *latest* answered form) outranks it, and the Sheet 1 number is the fallback when that one cannot be used. | `ParentNotifier::recipientFor()` |
 | **No health information in any text.** A message names the child's first name and the event, never a complaint, medicine, diagnosis, nutritional status or measurement. An SMS sits unencrypted on a phone that may be shared. | `ParentNotifier::compose()`; `the_text_carries_no_health_information` test |
 | **Encryption at rest.** The number, the message, the gateway's error text and the staff name are encrypted (`EncryptedString`). Screens print only `•••• 4567`. | `SmsNotification`, `HealthConsentForm` casts |
 | **School scoping.** The clinic trigger looks the learner up by LRN **within the nurse's own school**, so an LRN posted from another school reaches nobody. | `ConsultationController::textParent()` |
@@ -141,14 +142,15 @@ Cebuano:
 | Situation | What happens | What staff see |
 |---|---|---|
 | No key and no dry run | Feature is off | Nothing; the consultation saves as before |
-| Parent did not opt in | Nothing sent | "The parent has not opted in to text messages, so none was sent." |
-| Number on the form is not a PH mobile | Nothing sent | "…not a valid mobile number, so no text was sent." (the parent's form refuses such a number in the first place) |
+| No contact number on Sheet 1 (and none on the parent's letter) | Nothing sent | "No contact number is on file for the parent or guardian (Sheet 1), so no text was sent." |
+| The number on file is not a PH mobile (a landline, a half-typed number) | Nothing sent | "…not a valid mobile number, so no text was sent." |
 | Same event again (re-saved attendance, replayed form) | Nothing sent | (nothing; one event = one message) |
 | Daily cap reached | Nothing sent, `sms_blocked` audited | "The school's daily text message limit has been reached…" |
 | Gateway busy (429 / 5xx) | Retried 3 times, then **Failed** with Retry offered | "The SMS gateway is unavailable at the moment. Try again shortly." |
 | Connection dropped | **Failed**, *not* repeated automatically (the message may already have been accepted; a double text is worse) | "The SMS gateway could not be reached…" |
-| Wrong API key (401/403) | **Failed** | "The Semaphore API key was refused. Check SEMAPHORE_API_KEY." |
+| Wrong API key (401/403) | **Failed** | "The Semaphore API key was refused. Check SEMAPHORE_API_KEY. (Semaphore said: HTTP 401, …)" — the gateway's own reply is printed beside it, so an unactivated account or a key from another account can be told apart from a typo. Surrounding quotes on the variable are ignored. |
 | Out of credits | **Failed** | "The SMS account has run out of credits. Top up…" |
+| Account not activated by Semaphore (status *Pending*), or no credits | **Failed** | "The Semaphore account is not active yet…"; the console also says so above the figures, from the account endpoint, even before anything is sent. A *Pending* account with a valid key is refused exactly like a wrong key would be, so the two are told apart here. |
 | Unapproved sender name | **Failed** | "The sender name is not approved…" |
 | Gateway refuses the number/message (422) | **Failed**, not retried | The gateway's own reason |
 | Message begins with "TEST" or is over 480 chars | Refused before sending (Semaphore silently discards "TEST…" messages) | — |
@@ -163,7 +165,7 @@ php artisan test --filter ParentSmsNotificationTest
 ```
 
 27 tests with the gateway faked (`Http::fake()`), covering: number formats, the
-clinic and attendance triggers, opt-in rules, the no-health-information rule,
+clinic and attendance triggers, where a text goes (Sheet 1 / the parent's own number), the no-health-information rule,
 language, dry run, retries, refusals, credits, wrong key, dropped connection,
 de-duplication, the daily cap, cross-school isolation, encryption at rest, the
 console's role check, delivery reports and retry.

@@ -337,6 +337,81 @@
 	.al-figures { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
+/* ── One day, as it happened (the Calendar's dialog) ─────────────────
+   The learner dialog's anatomy, turned the other way: one day, every
+   learner. Its figures are buttons — pressing one lists exactly the
+   learners it counts — so the strip is the filter as well as the tally. ── */
+.ad-modal { width: min(720px, 100%); }
+.ad-modal [hidden] { display: none !important; }
+.ad-figures {
+	display: grid;
+	grid-template-columns: repeat(6, minmax(0, 1fr));
+	gap: 1px;
+	border-top: 1px solid var(--lg-border);
+	border-bottom: 1px solid var(--lg-border);
+	background: var(--lg-border);
+}
+.ad-figure {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 3px;
+	padding: 11px 14px;
+	border: 0;
+	background: var(--lg-page);
+	font: inherit;
+	text-align: left;
+	color: inherit;
+}
+button.ad-figure { cursor: pointer; transition: background .15s ease; }
+button.ad-figure:hover:not(:disabled) { background: var(--lg-card); }
+button.ad-figure:focus-visible { outline: none; box-shadow: inset var(--lg-focus); position: relative; z-index: 1; }
+button.ad-figure:disabled { cursor: default; }
+/* The pressed figure carries a rule in its own state's colour, so the
+   filter in force reads at a glance and still reads without colour (the
+   label says it). */
+.ad-figure[aria-pressed="true"] { background: var(--lg-card); box-shadow: inset 0 -3px 0 var(--ad-accent, var(--lg-emerald)); }
+.ad-figure.is-present { --ad-accent: var(--lg-success-ink); }
+.ad-figure.is-absent { --ad-accent: var(--lg-danger-ink); }
+.ad-figure.is-excused { --ad-accent: var(--lg-amber-ink); }
+.ad-figure.is-unmarked { --ad-accent: var(--lg-ink-soft); }
+.ad-figure-label {
+	font-size: .64rem;
+	font-weight: 700;
+	letter-spacing: .08em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft);
+}
+.ad-figure-value {
+	font-size: 1.06rem;
+	font-weight: 700;
+	color: var(--lg-ink);
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
+}
+.ad-body { padding-top: 14px; }
+.ad-tools { display: flex; padding: 0 20px 12px; }
+.ad-search { flex: 1 1 auto; }
+.ad-search input { width: 100%; }
+.ad-scroll { max-height: 44vh; }
+.ad-table th:first-child, .ad-table td:first-child { padding-left: 20px; }
+.ad-table th:last-child, .ad-table td:last-child { padding-right: 20px; }
+.ad-place { white-space: nowrap; color: var(--lg-ink-soft); }
+.ad-empty {
+	margin: 4px 20px 18px;
+	padding: 18px;
+	border: 1px dashed var(--lg-border-strong);
+	border-radius: var(--lg-r-btn);
+	text-align: center;
+	color: var(--lg-ink-soft);
+}
+.ad-foot-note { font-size: .78rem; color: var(--lg-ink-soft); }
+
+@media (max-width: 620px) {
+	.ad-figures { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	.ad-place { white-space: normal; }
+}
+
 /* ── Calendar ───────────────────────────────────────────────────────
    A month of feeding days: complete, incomplete, or no session at all.
    Colour never travels alone — each state carries its own glyph, so the
@@ -353,6 +428,10 @@
 }
 .fa-key.fa-day-complete { background: var(--lg-mint); border-color: #C4E4D0; }
 .fa-key.fa-day-partial { background: var(--lg-amber-tint); border-color: #EFDCB2; }
+.fa-key.fa-key-closed {
+	border-color: var(--lg-border);
+	background: repeating-linear-gradient(135deg, var(--lg-rail) 0 2px, var(--lg-card) 2px 4px);
+}
 
 .fa-cal-grid {
 	display: grid;
@@ -388,6 +467,78 @@
 }
 a.fa-cal-day:hover { border-color: var(--lg-emerald); }
 a.fa-cal-day:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+/* A day that has happened opens what happened on it. A button, reset to the
+   cell's own look, so the grid reads the same and the keyboard reaches it. */
+button.fa-cal-day {
+	width: 100%;
+	font: inherit;
+	cursor: pointer;
+	transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease;
+}
+button.fa-cal-day:hover { border-color: var(--lg-emerald); transform: translateY(-1px); box-shadow: var(--lg-shadow-lift); }
+button.fa-cal-day:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+button.fa-cal-day.is-selected:hover { box-shadow: inset 0 0 0 1px var(--lg-emerald); }
+
+/* The name of a closed day, on hover and on keyboard focus. Drawn above the
+   grid, centred on the cell, and never clipped by it. */
+.fa-cal-day.is-closed.is-locked { cursor: help; }
+.fa-cal-day.is-closed:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+.fa-cal-tip {
+	position: absolute;
+	bottom: calc(100% + 8px);
+	left: 50%;
+	z-index: 20;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	width: max-content;
+	max-width: 220px;
+	padding: 8px 11px;
+	border-radius: 8px;
+	background: var(--lg-ink);
+	color: #fff;
+	text-align: left;
+	box-shadow: var(--lg-shadow-pop);
+	opacity: 0;
+	visibility: hidden;
+	transform: translate(-50%, 4px);
+	transition: opacity .14s ease, transform .14s ease, visibility .14s;
+	pointer-events: none;
+}
+.fa-cal-tip::after {
+	content: '';
+	position: absolute;
+	top: 100%;
+	left: 50%;
+	transform: translateX(-50%);
+	border: 6px solid transparent;
+	border-top-color: var(--lg-ink);
+}
+.fa-cal-tip-kind {
+	font-size: .6rem;
+	font-weight: 700;
+	letter-spacing: .08em;
+	text-transform: uppercase;
+	opacity: .72;
+}
+.fa-cal-tip-name { font-size: .8rem; font-weight: 600; line-height: 1.3; white-space: normal; }
+.fa-cal-day.is-closed:hover .fa-cal-tip,
+.fa-cal-day.is-closed:focus-visible .fa-cal-tip,
+.fa-cal-day.is-closed:focus .fa-cal-tip {
+	opacity: 1;
+	visibility: visible;
+	transform: translate(-50%, 0);
+}
+/* Cells at the edges of the week anchor their tip inwards, so it never runs
+   off the card on a narrow screen. */
+.fa-cal-grid > .fa-cal-day:nth-child(7n + 1) .fa-cal-tip { left: 0; transform: translate(0, 4px); }
+.fa-cal-grid > .fa-cal-day:nth-child(7n + 1):hover .fa-cal-tip,
+.fa-cal-grid > .fa-cal-day:nth-child(7n + 1):focus .fa-cal-tip { transform: translate(0, 0); }
+.fa-cal-grid > .fa-cal-day:nth-child(7n + 1) .fa-cal-tip::after { left: 18px; }
+.fa-cal-grid > .fa-cal-day:nth-child(7n + 5) .fa-cal-tip { left: auto; right: 0; transform: translate(0, 4px); }
+.fa-cal-grid > .fa-cal-day:nth-child(7n + 5):hover .fa-cal-tip,
+.fa-cal-grid > .fa-cal-day:nth-child(7n + 5):focus .fa-cal-tip { transform: translate(0, 0); }
+.fa-cal-grid > .fa-cal-day:nth-child(7n + 5) .fa-cal-tip::after { left: auto; right: 18px; transform: none; }
 .fa-cal-day.is-outside { border-color: transparent; background: transparent; }
 .fa-cal-day.is-weekend { background: var(--lg-rail); }
 /* Saturdays and Sundays are locked, never links: hatched and muted so they

@@ -63,6 +63,19 @@
 		@unless ($hasTable)
 			<div class="flash err">The database has not been updated for text messages yet. Run <code>php artisan migrate</code>.</div>
 		@endunless
+		{{-- The key can be right and every message still refused: Semaphore
+		     sends nothing for an account it has not activated, or one with no
+		     credits. Said here, so a refusal is not read as a wrong key. --}}
+		@if ($account && $account['ok'] && ! \App\Support\SemaphoreClient::canSend($account))
+			<div class="flash err">
+				@if (strcasecmp(trim((string) $account['status']), 'Active') !== 0)
+					The API key works, but Semaphore has not activated the account yet (status: {{ $account['status'] ?: 'unknown' }}). Messages are refused until it is.
+				@endif
+				@if ((float) ($account['credit_balance'] ?? 0) <= 0)
+					The account has no credits; top it up on semaphore.co before messages can be sent.
+				@endif
+			</div>
+		@endif
 
 		<section class="kpi-grid">
 			<article class="card kpi {{ $gateway[1] }}">
@@ -73,14 +86,14 @@
 				<div class="kpi-value">{{ $gateway[0] }}</div>
 				<div class="kpi-hint">{{ $gateway[2] }}</div>
 			</article>
-			<article class="card kpi {{ $account && ! $account['ok'] ? 'accent-danger' : 'accent-info' }}">
+			<article class="card kpi {{ $account && (! $account['ok'] || ! \App\Support\SemaphoreClient::canSend($account)) ? 'accent-danger' : 'accent-info' }}">
 				<div class="kpi-top">
 					<div class="kpi-label">Credit Balance</div>
 					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
 				</div>
 				@if ($account && $account['ok'])
 					<div class="kpi-value">{{ $account['credit_balance'] === null ? '—' : number_format($account['credit_balance'], 2) }}</div>
-					<div class="kpi-hint">{{ $account['name'] ?: 'Semaphore account' }}</div>
+					<div class="kpi-hint">{{ $account['name'] ?: 'Semaphore account' }}{{ ($account['status'] ?? '') !== '' ? ' · '.$account['status'] : '' }}</div>
 				@elseif ($account)
 					<div class="kpi-value">—</div>
 					<div class="kpi-hint">{{ $account['error'] }}</div>

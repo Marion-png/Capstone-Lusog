@@ -441,6 +441,78 @@ class FeedingBmiReportTest extends TestCase
     }
 
     /**
+     * Under the charts, an insight says what they show — for the whole school
+     * when no grade is chosen, and for exactly the grade or section the filter
+     * names once one is. It is written from the grid's own cells.
+     */
+    #[Test]
+    public function the_insight_under_the_charts_follows_the_grade_and_section_filter(): void
+    {
+        $this->makeStudent('Grade 7 / Matiyaga', 'Male', 'Wasted', 'Stunted');
+        $this->makeStudent('Grade 7 / Matiyaga', 'Female', 'Severely Wasted', 'Stunted');
+        $this->makeStudent('Grade 7 / Masigla', 'Male', 'Normal', 'Normal Height-for-Age');
+        $this->makeStudent('Grade 8 / Rosal', 'Female', 'Normal', 'Tall');
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms')
+            ->assertOk();
+
+        $insights = $response->viewData('bmiInsights');
+
+        // All Grade Level: the whole school's OVERALL grid.
+        $overall = implode(' ', $insights['']['baseline']['overall']);
+        $this->assertStringContainsString('4 learners across all grade levels have a baseline BMI-for-age on file — 2 male and 2 female.', $overall);
+        $this->assertStringContainsString('Normal is the largest group, with 2 learners (50%).', $overall);
+        $this->assertStringContainsString('2 learners (50%) are severely wasted or wasted — 1 severely wasted and 1 wasted; 1 female and 1 male.', $overall);
+        $this->assertStringContainsString('By height-for-age, 2 of 4 learners classified (50%) are stunted or severely stunted, and 1 is tall.', $overall);
+
+        // One grade: that grade only.
+        $grade8 = implode(' ', $insights['']['baseline']['g8']);
+        $this->assertStringContainsString('1 learner in Grade 8 has a baseline BMI-for-age on file', $grade8);
+        $this->assertStringContainsString('No learner in Grade 8 is severely wasted or wasted.', $grade8);
+
+        // One section: that section only, keyed as the page keys its value sets.
+        $section = implode(' ', $insights['Grade 7 / Matiyaga']['baseline']['g7']);
+        $this->assertStringContainsString('2 learners in Grade 7 · Matiyaga have a baseline BMI-for-age on file', $section);
+        $this->assertStringContainsString('2 learners (100%) are severely wasted or wasted', $section);
+        $this->assertArrayNotHasKey('overall', $insights['Grade 7 / Matiyaga']['baseline']);
+
+        // Nobody re-measured: the endline says so rather than reading as 0%.
+        $this->assertSame(
+            ['No learner across all grade levels has been re-measured at endline yet, so there is nothing to compare against the baseline.'],
+            $insights['']['endline']['overall']
+        );
+
+        // The first paint carries the whole school's insight under each block
+        // of charts, inside the sheet so it prints with the form.
+        $html = $response->getContent();
+        $this->assertSame(2, substr_count($html, 'data-insight data-insight-phase='));
+        $this->assertStringContainsString(e('4 learners across all grade levels have a baseline BMI-for-age on file — 2 male and 2 female.'), $html);
+    }
+
+    /** The endline is read against the baseline of the same scope, and says when it is partial. */
+    #[Test]
+    public function the_endline_insight_compares_with_the_baseline(): void
+    {
+        $this->makeStudent('Grade 9 / Adelfa', 'Male', 'Wasted', 'Stunted', [
+            'endline_nutritional_status' => 'Normal',
+            'endline_height_cm' => 140,
+            'endline_age' => 13,
+        ]);
+        $this->makeStudent('Grade 9 / Adelfa', 'Female', 'Wasted', 'Stunted');
+
+        $insights = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms')
+            ->assertOk()
+            ->viewData('bmiInsights');
+
+        $endline = implode(' ', $insights['']['endline']['g9']);
+        $this->assertStringContainsString('1 learner in Grade 9 has an endline BMI-for-age on file', $endline);
+        $this->assertStringContainsString('Against the baseline, severely wasted and wasted learners went from 2 to 0 — 2 fewer.', $endline);
+        $this->assertStringContainsString('The endline covers 1 of the 2 learners weighed at baseline, so the comparison is not yet complete.', $endline);
+    }
+
+    /**
      * Each grid gets a clustered column chart under it, at the foot of the
      * form — and it prints with the form, because that is what it is for.
      */

@@ -461,6 +461,10 @@
 	// counting cannot happen in SQL and must not happen twice — the grid, the
 	// chart and the table view are all read from these same numbers.
 	const bmiValueSets = @json($bmiValueSets ?? []);
+	// What each of those grids shows, in sentences, keyed exactly as the value
+	// sets are: [set]['baseline'|'endline'][grid]. Written on the server from
+	// the same numbers, so the insight and the bars cannot disagree.
+	const bmiInsights = @json($bmiInsights ?? []);
 	const gradeLevels = @json(\App\Support\FeedingBeneficiarySummary::GRADE_LEVELS);
 	// The chart's eleven columns and three rows, read from the one place that
 	// declares them, so the picture and the grid can never fall out of step.
@@ -610,6 +614,24 @@
 		return `${grade} · ${section}`;
 	};
 
+	// The insight a scope reads, picked exactly as its value set is: a
+	// section on its own, anything wider from the whole school — and the
+	// chosen grade's grid, or OVERALL when no grade is chosen.
+	const insightFor = (scope, phase) => {
+		const sectionKey = scope.grade && scope.section ? `${scope.grade} / ${scope.section}` : '';
+		const set = (sectionKey && bmiInsights[sectionKey]) ? bmiInsights[sectionKey] : (bmiInsights[''] || {});
+		return ((set[phase] || {})[gradeKeyFor(scope.grade)]) || [];
+	};
+
+	// What the insight names: the grade, the grade and section, or the whole
+	// school — never "All Sections", which would read as a section.
+	const insightScope = (scope) => {
+		if (!scope.grade) {
+			return 'All Grade Levels';
+		}
+		return scope.section ? `${scope.grade} · ${scope.section}` : scope.grade;
+	};
+
 	const autoGrowNarrative = (textarea) => {
 		if (!textarea.offsetParent) {
 			return;
@@ -741,6 +763,30 @@
 			const rules = chart.querySelector('.chart-rules');
 			if (rules) {
 				rules.innerHTML = axis.ticks.map(() => '<i></i>').join('');
+			}
+		});
+
+		// ── The insight under the charts ──────────────────────────────
+		// All Grade Level describes the whole school; a grade describes that
+		// grade; a grade and section describe that section — the same scope
+		// the grid and the bars above it were just redrawn for.
+		document.querySelectorAll('[data-insight]').forEach((box) => {
+			const lines = insightFor(scope, box.getAttribute('data-insight-phase'));
+			if (lines.length === 0) {
+				return;
+			}
+			const scopeNode = box.querySelector('[data-insight-scope]');
+			if (scopeNode) {
+				scopeNode.textContent = insightScope(scope);
+			}
+			const list = box.querySelector('[data-insight-list]');
+			if (list) {
+				list.textContent = '';
+				lines.forEach((line) => {
+					const item = document.createElement('li');
+					item.textContent = line;
+					list.appendChild(item);
+				});
 			}
 		});
 	};

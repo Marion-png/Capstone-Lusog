@@ -1114,6 +1114,12 @@ Route::get('/dashboard/feedingcor-program', function (Request $request) {
 Route::get('/dashboard/school-nurse/feeding-program', [FeedingProgramController::class, 'index'])
     ->name('dashboard.school-nurse.feeding-program');
 
+// Its live panels, re-rendered from the same partials after the school's
+// stamp (workspace.pulse) moves — so a mark recorded at the feeding line lands
+// on the nurse's open page without a reload.
+Route::get('/dashboard/school-nurse/feeding-program/metrics', [FeedingProgramController::class, 'programMetrics'])
+    ->name('dashboard.school-nurse.feeding-program.metrics');
+
 // The nurse's Forms & Templates: the Feeding Coordinator's SBFP forms page,
 // read in the nurse's rail without the narrative report, plus the class
 // advisers' blank CLASS MASTERLIST. Same controllers as the coordinator's and
@@ -1179,6 +1185,9 @@ Route::get('/dashboard/clinic-teacher/nutritional-status/print', [SchoolHeadMast
 
 Route::get('/dashboard/clinic-teacher/feeding-program', [FeedingProgramController::class, 'index'])
     ->name('dashboard.clinic-teacher.feeding-program');
+
+Route::get('/dashboard/clinic-teacher/feeding-program/metrics', [FeedingProgramController::class, 'programMetrics'])
+    ->name('dashboard.clinic-teacher.feeding-program.metrics');
 
 // Every archived learner and every learner waiting for a section, read only —
 // the School Nurse's list under their path, the Clinic Teacher's under theirs.

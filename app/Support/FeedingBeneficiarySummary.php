@@ -333,15 +333,20 @@ final class FeedingBeneficiarySummary
      * the coordinator's confirmation on record (FeedingAttendanceFlag) — read
      * live rather than off the stored is_at_risk column.
      *
+     * `$withFlags` false is for a reader who is never handed a learner's flag
+     * (FeedingAttendanceFlag::VISIBLE_TO — the Clinic Teacher): the flags are
+     * then not computed at all rather than computed and hidden, and `at_risk`
+     * comes back null.
+     *
      * @param  Collection<int, StudentHealthRecord>  $beneficiaries
-     * @return array{beneficiaries: int, severely_wasted: int, wasted: int, at_risk: int, attendance_rate: ?int, attendance_sessions: int, at_risk_rule: string, at_risk_threshold_label: string, at_risk_threshold: float}
+     * @return array{beneficiaries: int, severely_wasted: int, wasted: int, at_risk: ?int, attendance_rate: ?int, attendance_sessions: int, at_risk_rule: string, at_risk_threshold_label: string, at_risk_threshold: float}
      */
-    public static function tally(Collection $beneficiaries, FeedingAtRiskRule $rule): array
+    public static function tally(Collection $beneficiaries, FeedingAtRiskRule $rule, bool $withFlags = true): array
     {
         $marksByRecord = self::marksByRecord($beneficiaries);
         // Flagged, not "threshold reached": a learner is at risk only once the
         // coordinator has confirmed their record (FeedingAttendanceFlag).
-        $flags = FeedingAttendanceFlag::forRecords($beneficiaries, $rule);
+        $flags = $withFlags ? FeedingAttendanceFlag::forRecords($beneficiaries, $rule) : [];
 
         $confirmedSessions = 0;
         $presentSessions = 0;
@@ -373,7 +378,7 @@ final class FeedingBeneficiarySummary
             'beneficiaries' => $beneficiaries->count(),
             'severely_wasted' => $severelyWasted,
             'wasted' => $wasted,
-            'at_risk' => $atRisk,
+            'at_risk' => $withFlags ? $atRisk : null,
             // Null, not zero: no confirmed session is not a 0% turnout.
             'attendance_rate' => $confirmedSessions > 0
                 ? (int) round(($presentSessions / $confirmedSessions) * 100)

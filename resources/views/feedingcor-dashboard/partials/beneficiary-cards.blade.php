@@ -41,6 +41,10 @@
 	<div class="kpi-value">{{ $bsWasted }}</div>
 	<div class="kpi-hint">{{ $bsShare($bsWasted) }}</div>
 </article>
+{{-- A reader who is never handed a learner's flag (the Clinic Teacher, on
+     the nurse's programme view) gets a null here from tally(), and no card:
+     the figure was never computed for them, so there is nothing to draw. --}}
+@unless (array_key_exists('at_risk', $bs) && $bs['at_risk'] === null)
 <article class="card kpi accent-orange">
 	<div class="kpi-top">
 		<div class="kpi-label">At Risk</div>
@@ -53,6 +57,7 @@
 	     absence the hint named a threshold nothing was judged against. --}}
 	<div class="kpi-hint">{{ $bs['at_risk_threshold_label'] ?? '' }}</div>
 </article>
+@endunless
 <article class="card kpi accent-info">
 	<div class="kpi-top">
 		<div class="kpi-label">Currently Attending</div>

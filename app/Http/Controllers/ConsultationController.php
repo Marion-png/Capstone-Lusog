@@ -429,8 +429,8 @@ class ConsultationController extends Controller
     }
 
     /**
-     * Text the parent of the learner this visit was filed under, if they
-     * opted in. Returns what the nurse is told, or null when there is nothing
+     * Text the parent of the learner this visit was filed under, at the number
+     * on file for them. Returns what the nurse is told, or null when there is nothing
      * to say (the feature is off, or no learner was chosen off the roll).
      *
      * The learner is looked up by the LRN the dialog posted and only within

@@ -6,9 +6,9 @@
     boards are on the same dashboard — which they are on six of the seven.
 
     Class names are namespaced .bmodal-* rather than the design system's
-    .modal-*: feed-dashboard.css and feeding-program.css already define
-    .modal-panel / .modal-head / .modal-body for the Feeding Coordinator's
-    own dialogs, and the announcements board is included on that very page.
+    .modal-*: feed-dashboard.css already defines .modal-panel / .modal-head /
+    .modal-body for the Feeding Coordinator's own dialogs, and the
+    announcements board is included on that very page.
     The anatomy (backdrop / panel / head / body / foot) matches the LUSOG
     modal so a dialog still looks the same product-wide.
 --}}

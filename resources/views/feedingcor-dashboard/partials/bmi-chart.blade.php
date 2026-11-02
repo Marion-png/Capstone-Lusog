@@ -21,6 +21,14 @@
     series, so identity and magnitude are both readable without colour — which
     is what makes it survive a school printer.
 
+    Under the charts sits the **insight** (App\Support\BmiReportInsight): a few
+    sentences saying what the charts show, written from the same cells. The
+    first paint reads the whole school's OVERALL grid; on the SBFP Forms page
+    the Grade and Section filter swaps it from the precomputed `$bmiInsights`
+    map (the same keys as `$bmiValueSets`), so a filtered page describes the
+    grade or section on screen and never the school. It is inside the sheet,
+    so it prints with the form.
+
     Needs $phase, $prefix, $bmiValues, $schoolYear.
 --}}
 @php
@@ -111,4 +119,23 @@
 			</div>
 		</figure>
 	@endforeach
+
+	@php
+		// The first paint is the whole school; the page's filter takes over
+		// from there. A page with no precomputed map (the School Head's report
+		// view) reads its one grid straight from the values it already holds.
+		$insightLines = $bmiInsights[''][$phase]['overall']
+			?? \App\Support\BmiReportInsight::sentences($bmiValues ?? [], $phase, 'overall', 'All Grade Levels');
+	@endphp
+	<section class="bmi-insight" data-insight data-insight-phase="{{ $phase }}" aria-live="polite">
+		<div class="bmi-insight-head">
+			Insight
+			<span class="bmi-insight-scope" data-insight-scope>All Grade Levels</span>
+		</div>
+		<ul class="bmi-insight-list" data-insight-list>
+			@foreach ($insightLines as $line)
+				<li>{{ $line }}</li>
+			@endforeach
+		</ul>
+	</section>
 </div>

@@ -1,92 +1,73 @@
 ﻿<!DOCTYPE html>
+{{--
+	Nutritional Health Status — Feeding Programme.
+
+	The School Nurse's (and the Clinic Teacher's) read-only window onto the
+	School-Based Feeding Program, the second view inside Nutritional Health
+	Status (partials/nurse-nutrition-tabs). The Feeding Coordinator's own tab of
+	the old name was retired; this page reads the programme the way their tabs
+	do — FeedingBeneficiarySummary for who is a beneficiary and the headline
+	cards, FeedingProgramCycle for the day, FeedingAttendanceFlag for who is
+	flagged, FeedingNutritionProgress for baseline against endline — so the two
+	desks report one programme.
+
+	It is live. The page polls the school's stamp (workspace.pulse — a hash, no
+	personal data) and, when another desk writes, re-renders its panels from
+	FeedingProgramController::programMetrics, which returns the same partials
+	the first paint used. Nothing on it writes.
+--}}
 <html lang="en">
-	<head>
-		<meta charset="UTF-8">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<meta name="csrf-token" content="{{ csrf_token() }}">
-		<title>{{ (bool) ($isReadOnly ?? (session('active_role') === 'school_nurse')) ? 'Nutritional Health Status — Feeding Programme' : 'Feeding Program' }} - SIGLA</title>
-		<link rel="preconnect" href="https://fonts.googleapis.com">
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-		<link rel="icon" type="image/png" href="{{ asset('images/sigla-mark.png') }}">
-		<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
-		<script>document.documentElement.classList.add('js');</script>
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="csrf-token" content="{{ csrf_token() }}">
+	<title>Nutritional Health Status — Feeding Programme - SIGLA</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="icon" type="image/png" href="{{ asset('images/sigla-mark.png') }}">
+	<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+	<script>document.documentElement.classList.add('js');</script>
 	<style>{!! file_get_contents(resource_path('css/lusog-theme.css')) !!}</style>
-	@php $pageCssPath = resource_path('css/feeding-program.css'); @endphp
-    @if (file_exists($pageCssPath))
-        <style>{!! file_get_contents($pageCssPath) !!}</style>
-    @endif
-    {{-- Two rails share this page: the coordinator's .asb-* panel, and the
-         nurse's logo-led .sb-* rail when they open it read-only. --}}
-    @if ((bool) ($isReadOnly ?? (session('active_role') === 'school_nurse')))
-        <style>{!! file_get_contents(resource_path('css/nurse-sidebar.css')) !!}</style>
-    @else
-        <style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
-    @endif
+	<style>{!! file_get_contents(resource_path('css/feeding-program.css')) !!}</style>
+	<style>{!! file_get_contents(resource_path('css/nurse-sidebar.css')) !!}</style>
 </head>
 <body>
 @php
-	$activeRole = (string) session('active_role', '');
-	$isReadOnly = (bool) ($isReadOnly ?? ($activeRole === 'school_nurse'));
-	$programRouteName = $isReadOnly ? 'dashboard.school-nurse.feeding-program' : 'dashboard.feedingcor-program';
+	$fpCycleDay = (int) ($cycle['day'] ?? 0);
+	$fpCycleDuration = (int) ($cycle['duration'] ?? \App\Support\FeedingProgramCycle::DURATION_DAYS);
 @endphp
-{{-- The nurse reads this page too, and their rail is one shared partial.
-     It used to be hand-copied here for the read-only case, which is how it
-     drifted: renaming a tab in partials/nurse-lusog-sidebar left this copy
-     showing the old label, and its Dispensing Log and Generate Reports
-     links pointed at "#". One include, so a rail change reaches every page
-     that shows it. --}}
-@if ($isReadOnly)
-    {{-- One module, two views: the nurse's nutrition entry stays lit here,
-         because this page is a view inside it rather than a tab of its own. --}}
-    @include('partials.nurse-lusog-sidebar', ['active' => 'nutritional-status'])
-@else
-    @include('partials.feedingcor-sidebar', ['active' => 'program'])
-@endif
+{{-- Whichever clinic rail the reader belongs to: the nurse's, or the Clinic
+     Teacher's own. One module, two views, so the nutrition entry stays lit. --}}
+@include('partials.clinic-rail', ['active' => 'nutritional-status'])
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>{{ $isReadOnly ? \App\Support\AccountSettings::roleLabel($activeRole) : 'Dashboard' }}</span><span class="bc-sep">&rsaquo;</span><span>{{ $isReadOnly ? 'Nutritional Health Status' : 'Feeding Program' }}</span></div>
+		<div class="topbar-bc"><span>{{ $roleLabel }}</span><span class="bc-sep">&rsaquo;</span><span>Nutritional Health Status</span></div>
 
 		@include('partials.nurse-learner-search')
-	    @include('partials.live-clock')
+		@include('partials.live-clock')
 	</header>
 
-	<div class="content">
-		@if ($isReadOnly)
-			@include('partials.nurse-nutrition-tabs', ['active' => 'programme'])
-		@endif
-
-		@if (session('success'))
-			<div class="flash ok">{{ session('success') }}</div>
-		@endif
-		@if (session('error'))
-			<div class="flash err">{{ session('error') }}</div>
-		@endif
-		@if ($isReadOnly)
-			<div class="flash info">View-only mode: School Nurse can review feeding data but cannot submit attendance.</div>
-		@endif
+	<div class="content" id="fp-page"
+		data-pulse-url="{{ route('workspace.pulse') }}"
+		data-metrics-url="{{ route($metricsRouteName) }}">
+		@include('partials.nurse-nutrition-tabs', ['active' => 'programme'])
 
 		<div class="head-row page-header">
 			<div>
-				@if ($isReadOnly)
-					<h1 class="page-title">Nutritional Health Status <span>Feeding Programme</span></h1>
-				@else
-					<h1 class="page-title">Feeding <span>Program</span></h1>
-				@endif
-				<p class="page-sub">Participation, attendance and nutritional movement across the Supplementary Feeding Program.</p>
-				@if ($hasGradeFilter ?? false)
-					<form method="GET" action="{{ route($programRouteName) }}" class="school-filter-form">
-						<label for="gradeFilterSelect" class="school-filter-label">Grade Level</label>
-						<select id="gradeFilterSelect" name="grade" class="select school-filter-select" onchange="this.form.submit()">
-							<option value="all" {{ ($selectedGrade ?? 'all') === 'all' ? 'selected' : '' }}>All Grade Levels</option>
-							@foreach (($gradeOptions ?? collect()) as $gradeOption)
-								<option value="{{ $gradeOption }}" {{ ($selectedGrade ?? 'all') === $gradeOption ? 'selected' : '' }}>{{ $gradeOption }}</option>
-							@endforeach
-						</select>
-					</form>
-				@endif
+				<h1 class="page-title">Nutritional Health Status <span>Feeding Programme</span></h1>
+				<p class="page-sub">School-Based Feeding Program &middot; S.Y. {{ $schoolYear }}</p>
 			</div>
 			<div class="head-actions">
+				<form method="GET" action="{{ route($programRouteName) }}" class="fp-grade-form">
+					<label for="gradeFilterSelect" class="fp-grade-label">Grade Level</label>
+					<select id="gradeFilterSelect" name="grade" class="select fp-grade-select" onchange="this.form.submit()">
+						<option value="all" @selected($selectedGrade === 'all')>All Grade Levels</option>
+						@foreach ($gradeOptions as $gradeOption)
+							<option value="{{ $gradeOption }}" @selected($selectedGrade === $gradeOption)>{{ $gradeOption }}</option>
+						@endforeach
+					</select>
+				</form>
 				<button type="button" class="btn btn-secondary" id="printProgramBtn">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
 					Print Program Report
@@ -100,1650 +81,243 @@
 		<div class="print-masthead" aria-hidden="true">
 			<h2>School-Based Feeding Program</h2>
 			<p>
-				{{ session('active_school_name', 'School') }}
-				&middot; S.Y. {{ \App\Models\StudentHealthRecord::currentSchoolYear() }}
-				&middot; Day {{ (int) explode('/', $programStats['program_day'] ?? '0/120')[0] }} of {{ (int) (explode('/', $programStats['program_day'] ?? '0/120')[1] ?? \App\Support\FeedingProgramCycle::DURATION_DAYS) }}
+				{{ $schoolName }}
+				&middot; S.Y. {{ $schoolYear }}
+				&middot; Day {{ $fpCycleDay }} of {{ $fpCycleDuration }}
+				@if ($selectedGrade !== 'all') &middot; {{ $selectedGrade }} @endif
 			</p>
-			<p>Printed {{ now()->format('F j, Y') }}{{ ($programStats['sessions_held'] ?? 0) > 0 ? ' · '.$programStats['sessions_held'].' feeding sessions recorded' : '' }}</p>
+			<p>Printed {{ now(config('app.school_timezone'))->format('F j, Y') }}{{ ($programStats['sessions_held'] ?? 0) > 0 ? ' · '.$programStats['sessions_held'].' feeding sessions recorded' : '' }}</p>
 		</div>
 
-		{{-- Flagged means confirmed: the threshold was reached AND the Feeding
-		     Coordinator confirmed the record. Only the coordinator and the
-		     School Nurse see it; the Clinic Teacher reads this page without it. --}}
-		@if (($showFlags ?? false) && ($programStats['at_risk_count'] ?? 0) > 0)
-			<div class="alert-bar">
-				<div class="alert-body">
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+		<div class="live-pane" id="fp-alert">
+			@include('feedingcor-dashboard.partials.program-alert')
+		</div>
+
+		<section class="card fp-cycle live-pane" id="fp-cycle" aria-label="Feeding cycle">
+			@include('feedingcor-dashboard.partials.program-cycle')
+		</section>
+
+		<section class="kpi-grid{{ $showFlags ? ' cols-5' : '' }} fp-cards live-pane" id="fp-cards" aria-label="Programme figures">
+			@include('feedingcor-dashboard.partials.program-cards')
+		</section>
+
+		<div class="fp-split">
+			<section class="card fp-panel live-pane" id="fp-session">
+				@include('feedingcor-dashboard.partials.program-session')
+			</section>
+			<section class="card fp-panel live-pane" id="fp-nutrition">
+				@include('feedingcor-dashboard.partials.program-nutrition')
+			</section>
+		</div>
+
+		{{-- Who is flagged is shown to the School Nurse alone; the Clinic
+		     Teacher's page carries no list and no section for it. --}}
+		@if ($showFlags)
+			<section class="card fp-table-section" id="atRiskSection">
+				<div class="fp-table-head">
 					<div>
-						<strong>{{ $programStats['at_risk_count'] }} {{ \Illuminate\Support\Str::plural('beneficiary', $programStats['at_risk_count']) }} flagged for follow-up</strong>
-						{{-- The school's own rule, printed as it stands: two
-						     schools read different lines here, and the figure
-						     named is the one that was reached. --}}
-						<span>{{ ucfirst($programStats['at_risk_rule'] ?? '') }}@if (($programStats['at_risk_threshold_count'] ?? null) !== null) &middot; {{ $programStats['at_risk_threshold_count'] }} of {{ $programStats['sessions_held'] ?? 0 }} sessions needed to clear it @endif</span>
+						<h2 class="card-title">At-Risk Beneficiaries</h2>
+						<p class="card-sub">{{ ucfirst($programStats['at_risk_rule'] ?? '') }}</p>
 					</div>
-				</div>
-				<button type="button" class="btn btn-secondary" id="focusAtRiskBtn">Review List</button>
-			</div>
-		@endif
-
-		{{-- Three figures for the School Nurse, four for the coordinator: the
-		     nutritional-improvement card is hidden read-only (see below), so
-		     the row closes up rather than leaving a hole. --}}
-		<section class="kpi-grid {{ $isReadOnly ? 'cols-3' : '' }}">
-			<article class="card kpi accent-brand">
-				<div class="kpi-top">
-					<div class="kpi-label">Enrolled Students</div>
-					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-				</div>
-				<div class="kpi-value" id="enrolledStudentsValue">{{ $programStats['enrolled_students'] ?? 0 }}</div>
-				<div class="kpi-hint">Active beneficiaries</div>
-			</article>
-			<article class="card kpi accent-amber">
-				<div class="kpi-top">
-					<div class="kpi-label">Program Day</div>
-					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/></svg></div>
-				</div>
-				<div class="kpi-value">{{ $programStats['program_day'] ?? '0/120' }}</div>
-				<div class="kpi-hint">Feeding days served</div>
-			</article>
-			<article class="card kpi accent-info">
-				<div class="kpi-top">
-					<div class="kpi-label">Avg. Attendance</div>
-					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></div>
-				</div>
-				<div class="kpi-value" id="avgAttendanceValue">{{ $programStats['avg_attendance'] ?? '0%' }}</div>
-				<div class="kpi-hint">Confirmed marks only</div>
-			</article>
-			{{-- Nutritional improvement is a baseline-to-endline comparison,
-			     so it only means anything once the closing measurement has
-			     been taken. The School Nurse reads this page mid-cycle and
-			     would see a permanent 0%, which reads as "nobody improved"
-			     rather than "not measured yet". The Feeding Coordinator, who
-			     owns the endline, still sees it. --}}
-			@unless ($isReadOnly)
-			<article class="card kpi accent-success">
-				<div class="kpi-top">
-					<div class="kpi-label">Improving</div>
-					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></div>
-				</div>
-				<div class="kpi-value">{{ $programStats['improving_rate'] ?? '0%' }}</div>
-				<div class="kpi-hint">{{ $programStats['improving_hint'] ?? '0 of 0 students' }}</div>
-			</article>
-			@endunless
-		</section>
-
-		<section class="card progress-card">
-			@php
-				$programDayValue = (int) explode('/', $programStats['program_day'] ?? '0/120')[0];
-				$progressPercent = max(0, min(100, ($programDayValue / 120) * 100));
-			@endphp
-			<h2 class="section-title">Program Progress</h2>
-			<div class="prog-track" role="img" aria-label="Day {{ $programDayValue }} of 120 in the feeding cycle"><div class="prog-fill" style="width: {{ $progressPercent }}%;"></div><div class="prog-marker" style="left: {{ $progressPercent }}%;"></div></div>
-			<div class="prog-day">Day {{ $programDayValue }} of 120 &middot; {{ round($progressPercent) }}% complete</div>
-			<div class="prog-labels"><span>Baseline (Day 1)</span><span>Endline (Day 120)</span></div>
-		</section>
-
-		@if ($showFlags ?? false)
-		<section class="risk-section" id="atRiskSection">
-			@php
-				$atRiskGradeOptions = ($atRiskStudents ?? collect())
-					->pluck('grade_level')
-					->filter(fn ($grade) => filled($grade))
-					->unique()
-					->sortBy(fn ($grade) => (int) (preg_match('/(\d+)/', (string) $grade, $m) ? $m[1] : 99))
-					->values();
-			@endphp
-			<div class="risk-head">
-				<h2 class="section-title">At-Risk Beneficiaries</h2>
-				<div class="risk-filters">
-					<div class="lg-search risk-search">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-						<input type="search" id="riskSearch" placeholder="Search" autocomplete="off" aria-label="Search at-risk list by name or section">
-					</div>
-					<select class="select risk-filter" id="riskGradeFilter" aria-label="Filter at-risk list by grade level">
-						<option value="all">Grade</option>
-						@foreach ($atRiskGradeOptions as $gradeOption)
-							<option value="{{ strtolower($gradeOption) }}">{{ $gradeOption }}</option>
-						@endforeach
-					</select>
-					<select class="select risk-filter" id="riskGenderFilter" aria-label="Filter at-risk list by gender">
-						<option value="all">Gender</option>
-						<option value="male">Male</option>
-						<option value="female">Female</option>
-					</select>
-					<select class="select risk-filter" id="riskFilter" aria-label="Filter at-risk list by nutritional status">
-						<option value="all">All Nutritional Status</option>
-						<option value="severe">Severely Wasted</option>
-						<option value="wasted">Wasted</option>
-						<option value="normal">Normal</option>
-						<option value="over">Overweight</option>
-					</select>
-				</div>
-			</div>
-			<div class="table-card">
-				<div class="table-scroll">
-				<table id="riskTable">
-					<thead>
-						<tr>
-							<th>Student</th>
-							<th>Section</th>
-							<th>Attendance</th>
-							<th>Flagged On</th>
-							<th>Nutritional Status</th>
-						</tr>
-					</thead>
-					<tbody>
-						@forelse (($atRiskStudents ?? collect()) as $student)
-							@php
-								$status = strtolower((string) ($student['nutritional_status'] ?? ''));
-								// Same scale as everywhere else: severe is critical, any
-								// wasting is at-risk, overweight needs monitoring.
-								$statusBadge = str_contains($status, 'severe') ? 'badge-critical'
-									: ((str_contains($status, 'wast') || str_contains($status, 'underweight')) ? 'badge-risk'
-									: ((str_contains($status, 'over') || str_contains($status, 'obese')) ? 'badge-monitor'
-									: ($status === '' ? 'badge-neutral' : 'badge-normal')));
-							@endphp
-							<tr data-risk-status="{{ $status }}"
-								data-risk-grade="{{ strtolower((string) ($student['grade_level'] ?? '')) }}"
-								data-risk-gender="{{ strtolower((string) ($student['gender'] ?? '')) }}"
-								data-risk-search="{{ strtolower(trim(($student['student_name'] ?? '').' '.($student['section'] ?? ''))) }}">
-								<td><strong>{{ $student['student_name'] }}</strong></td>
-								<td>{{ $student['section'] }}</td>
-								{{-- Present out of the sessions the rule judged.
-								     A learner no confirmed session has covered
-								     has no rate to print. --}}
-								<td class="tnum">{{ $student['attendance'] }}{{ $student['attendance_percent'] !== null ? ' ('.$student['attendance_percent'].'%)' : '' }}</td>
-								<td class="tnum">{{ $student['flagged_on'] ?? '—' }}</td>
-								<td><span class="badge {{ $statusBadge }}">{{ $student['nutritional_status'] ?: 'Not set' }}</span></td>
-							</tr>
-						@empty
-							<tr><td colspan="5" class="table-empty">No beneficiary is flagged for follow-up right now.</td></tr>
-						@endforelse
-						@if (($atRiskStudents ?? collect())->isNotEmpty())
-							<tr id="riskNoMatchRow" style="display:none;"><td colspan="5" class="table-empty">No beneficiaries match these filters.</td></tr>
-						@endif
-					</tbody>
-				</table>
-				</div>
-			</div>
-		</section>
-		@endif
-
-		@php
-			$attendanceRosterRows = ($attendanceRoster ?? collect());
-			$rosterGradeOptions = $attendanceRosterRows
-				->pluck('grade_level')
-				->filter(fn ($grade) => filled($grade))
-				->unique()
-				->sortBy(fn ($grade) => (int) (preg_match('/(\d+)/', (string) $grade, $m) ? $m[1] : 99))
-				->values();
-		@endphp
-
-		<section class="card section attendance-section" id="attendanceRosterSection">
-			<div class="attendance-head">
-				<h2 class="section-title">Feeding Program Beneficiaries</h2>
-				<div class="attendance-actions">
-					@if ($attendanceRosterRows->isNotEmpty())
-						<div class="lg-search risk-search">
+					<div class="fp-filters">
+						<div class="lg-search fp-search">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-							<input type="search" id="rosterSearch" placeholder="Search" autocomplete="off" aria-label="Search recorded attendance by name or section">
+							<input type="search" id="riskSearch" placeholder="Search" autocomplete="off" aria-label="Search the at-risk list by name or section">
 						</div>
-						<select class="select risk-filter" id="rosterGradeFilter" aria-label="Filter recorded attendance by grade level">
-							<option value="all">Grade</option>
-							@foreach ($rosterGradeOptions as $gradeOption)
-								<option value="{{ strtolower($gradeOption) }}">{{ $gradeOption }}</option>
-							@endforeach
-						</select>
-						{{-- The at-risk list above already filters by sex; the roll
-						     it is drawn from now does too, so the two read the
-						     same population. --}}
-						<select class="select risk-filter" id="rosterGenderFilter" aria-label="Filter recorded attendance by gender">
+						<select class="select fp-filter" id="riskGenderFilter" aria-label="Filter the at-risk list by gender">
 							<option value="all">Gender</option>
 							@foreach (\App\Support\FeedingBeneficiarySummary::SEX_OPTIONS as $sexOption)
 								<option value="{{ strtolower($sexOption) }}">{{ $sexOption }}</option>
 							@endforeach
 						</select>
-					@endif
-					@if (!$isReadOnly)
-						<button type="button" class="btn btn-primary" id="uploadAttendanceBtn">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-							Upload Attendance Sheet
-						</button>
-					@endif
+					</div>
+				</div>
+				<div class="table-card fp-table-card">
+					<div class="table-scroll">
+						<table id="riskTable">
+							<thead>
+								<tr>
+									<th>Student</th>
+									<th>Attendance</th>
+									<th>Flagged On</th>
+									<th>Nutritional Status</th>
+								</tr>
+							</thead>
+							<tbody class="live-pane" id="fp-risk">
+								@include('feedingcor-dashboard.partials.program-risk-rows')
+							</tbody>
+						</table>
+					</div>
+				</div>
+			</section>
+		@endif
+
+		<section class="card fp-table-section" id="attendanceRosterSection">
+			<div class="fp-table-head">
+				<div>
+					<h2 class="card-title">Feeding Program Beneficiaries</h2>
+					<p class="card-sub"><span class="tnum" id="rosterCount">{{ ($attendanceRoster ?? collect())->count() }}</span> {{ \Illuminate\Support\Str::plural('beneficiary', ($attendanceRoster ?? collect())->count()) }}{{ $selectedGrade !== 'all' ? ' in '.$selectedGrade : '' }}</p>
+				</div>
+				<div class="fp-filters">
+					<div class="lg-search fp-search">
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+						<input type="search" id="rosterSearch" placeholder="Search" autocomplete="off" aria-label="Search beneficiaries by name or section">
+					</div>
+					<select class="select fp-filter" id="rosterStatusFilter" aria-label="Filter beneficiaries by baseline status">
+						<option value="all">Baseline Status</option>
+						<option value="severely wasted">Severely Wasted</option>
+						<option value="wasted">Wasted</option>
+					</select>
+					<select class="select fp-filter" id="rosterGenderFilter" aria-label="Filter beneficiaries by gender">
+						<option value="all">Gender</option>
+						@foreach (\App\Support\FeedingBeneficiarySummary::SEX_OPTIONS as $sexOption)
+							<option value="{{ strtolower($sexOption) }}">{{ $sexOption }}</option>
+						@endforeach
+					</select>
 				</div>
 			</div>
-
-			@if ($attendanceRosterRows->isNotEmpty())
-				@if ($latestImport ?? null)
-					<div class="roster-meta">
-						<span><strong>{{ $latestImport->original_filename ?: 'Attendance sheet' }}</strong></span>
-						<span>{{ $latestImport->created_at?->format('M d, Y') }}</span>
-						<span>{{ $latestImport->uploaded_by_name }}</span>
-						<span>{{ $attendanceRosterRows->count() }} learners</span>
-					</div>
-				@endif
-				<div class="table-card">
-					<div class="table-scroll">
-					<table id="rosterTable">
+			<div class="table-card fp-table-card">
+				<div class="table-scroll">
+					<table id="rosterTable" class="fp-roster">
 						<thead>
 							<tr>
 								<th>Student</th>
-								<th>Grade &amp; Section</th>
+								<th>Baseline Status</th>
 								<th class="num">Baseline</th>
 								<th class="num">Current</th>
 								<th class="num">Weight Change</th>
 								<th class="num">Present</th>
 								<th class="num">Absent</th>
 								<th class="num">Attendance</th>
-								<th>Status</th>
+								<th>Weight Status</th>
 							</tr>
 						</thead>
-						<tbody>
-							@foreach ($attendanceRosterRows as $row)
-								@php
-									// A learner with no baseline has no movement to
-									// report — the row says so rather than reading
-									// "No change" against a measurement nobody took.
-									$weightChange = $row['weight_change'] === null ? null : (float) $row['weight_change'];
-									$hasAttendance = $row['sessions'] > 0;
-									[$statusBadge, $statusLabel] = match (true) {
-										$weightChange === null => ['badge-neutral', 'No baseline'],
-										$weightChange > 1 => ['badge-normal', 'Improved'],
-										$weightChange < 0 => ['badge-risk', 'Declined'],
-										default => ['badge-neutral', 'No change'],
-									};
-								@endphp
-								<tr data-roster-grade="{{ strtolower((string) ($row['grade_level'] ?? '')) }}"
-									data-roster-gender="{{ strtolower((string) ($row['gender'] ?? '')) }}"
-									data-roster-search="{{ strtolower(trim(($row['student_name'] ?? '').' '.($row['section'] ?? ''))) }}">
-									<td><strong>{{ $row['student_name'] }}</strong></td>
-									<td>{{ $row['section'] }}</td>
-									<td class="num">{{ $row['baseline_weight'] === null ? '—' : number_format((float) $row['baseline_weight'], 1).' kg' }}</td>
-									<td class="num"><strong>{{ number_format((float) $row['current_weight'], 1) }} kg</strong></td>
-									<td class="num {{ $weightChange === null ? 'muted' : ($weightChange > 0 ? 'bmi-up' : ($weightChange < 0 ? 'bmi-down' : 'muted')) }}">
-										{{ $weightChange === null ? '—' : ($weightChange > 0 ? '+' : '').number_format($weightChange, 1).' kg' }}
-									</td>
-									<td class="num">
-										{{ $hasAttendance ? $row['present'] : '—' }}
-										@if ($row['pending'] > 0)
-											<span class="roster-pending">{{ $row['pending'] }} awaiting review</span>
-										@endif
-									</td>
-									<td class="num">{{ $hasAttendance ? $row['absent'] : '—' }}</td>
-									<td class="num">{{ $row['rate'] === null ? '—' : $row['rate'].'%' }}</td>
-									<td><span class="badge {{ $statusBadge }}">{{ $statusLabel }}</span></td>
-								</tr>
-							@endforeach
-							<tr id="rosterNoMatchRow" style="display:none;"><td colspan="9" class="table-empty">No learners match these filters.</td></tr>
+						<tbody class="live-pane" id="fp-roster">
+							@include('feedingcor-dashboard.partials.program-roster-rows')
 						</tbody>
 					</table>
-					</div>
 				</div>
-			@else
-				<div class="empty-panel attendance-empty">No feeding beneficiaries on file yet.</div>
-			@endif
+			</div>
 		</section>
 
+		<p class="fp-updated" aria-live="polite">Updated <span id="fpUpdated">{{ $generatedAt }}</span></p>
 	</div>
 </div>
-
-<div class="modal-backdrop" id="weightsModalBackdrop" aria-hidden="true">
-	<div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="weightsModalTitle">
-		<div class="modal-head">
-			<h2 id="weightsModalTitle" class="modal-title">Update Student Weights</h2>
-			<button type="button" class="modal-close" id="closeWeightsModal" aria-label="Close">&times;</button>
-		</div>
-		<form id="weightsForm">
-			<div class="modal-body">
-				@forelse (($students ?? collect()) as $student)
-					<div class="weight-item">
-						<div class="weight-label">{{ $student['student_name'] }} <span>({{ $student['section'] }})</span></div>
-						<div class="weight-field-wrap">
-							<input type="number" class="weight-input" data-student="{{ $student['student_name'] }}" step="0.1" min="1" value="{{ $student['current_weight'] }}" required>
-							<span class="weight-unit">kg</span>
-						</div>
-					</div>
-				@empty
-					<div class="weight-item"><div class="weight-label">No beneficiaries from master list.</div></div>
-				@endforelse
-			</div>
-			<div class="modal-foot">
-				<button type="button" class="btn btn-ghost" id="cancelWeightsModal">Cancel</button>
-				<button type="submit" class="btn btn-primary">Save Weights</button>
-			</div>
-		</form>
-	</div>
-</div>
-
-<div class="modal-backdrop" id="uploadAttendanceModalBackdrop" aria-hidden="true">
-	<div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="uploadAttendanceTitle">
-		<div class="modal-head">
-			<h2 id="uploadAttendanceTitle" class="modal-title">Upload Attendance Sheet</h2>
-			<button type="button" class="modal-close" id="closeUploadAttendanceModal" aria-label="Close">&times;</button>
-		</div>
-		<form method="POST" action="{{ route('feedingcor-program.attendance.import') }}" enctype="multipart/form-data" id="uploadAttendanceForm">
-			@csrf
-			<input type="hidden" name="grade" value="{{ $selectedGrade ?? 'all' }}">
-			<div class="modal-body">
-				<div class="weight-item">
-					<div class="weight-label">Attendance file <span>(.csv, .xlsx)</span></div>
-					<label class="dropzone" for="attendanceFileInput">
-						<input type="file" id="attendanceFileInput" name="attendance_file" accept=".csv,.txt,.xlsx,.xls" required class="dropzone-input" data-placeholder="Drop the sheet here or click to browse">
-						<svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-						<span class="dropzone-text">Drop the sheet here or click to browse</span>
-					</label>
-				</div>
-			</div>
-			<div class="modal-foot">
-				<button type="button" class="btn btn-ghost" id="cancelUploadAttendanceModal">Cancel</button>
-				<button type="submit" class="btn btn-primary">Upload &amp; Process</button>
-			</div>
-		</form>
-
-		@if (! empty($scanningEnabled))
-			<div class="scan-divider"><span>or</span></div>
-			<form method="POST" action="{{ route('feedingcor-program.attendance.scan') }}" enctype="multipart/form-data" id="scanAttendanceForm">
-				@csrf
-				<input type="hidden" name="grade" value="{{ $selectedGrade ?? 'all' }}">
-				<div class="modal-body">
-					<div class="weight-item">
-						<div class="weight-label">Photo of the marked sheet <span>(.jpg, .png)</span></div>
-						<label class="dropzone" for="attendancePhotoInput">
-							<input type="file" id="attendancePhotoInput" name="attendance_photo" accept="image/jpeg,image/png,image/webp" required class="dropzone-input" data-placeholder="Drop the photo here or click to browse">
-							<svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><polyline points="21 15 16 10 5 19"/></svg>
-							<span class="dropzone-text">Drop the photo here or click to browse</span>
-						</label>
-					</div>
-					<div class="weight-item">
-						<div class="weight-label">Session date <span>(optional)</span></div>
-						<div class="weight-field-wrap">
-							<input type="date" name="session_date" max="{{ now()->toDateString() }}" class="weight-input">
-						</div>
-					</div>
-				</div>
-				<div class="modal-foot">
-					@if (! empty($pendingReviewCount))
-						<a class="btn btn-ghost" href="{{ route('feedingcor-program.attendance.review') }}">Review ({{ $pendingReviewCount }})</a>
-					@endif
-					<button type="submit" class="btn btn-primary">Scan Photo</button>
-				</div>
-			</form>
-		@endif
-	</div>
-</div>
-
-<div class="modal-backdrop" id="encodeFormBackdrop" aria-hidden="true">
-	<div class="modal-panel encode-modal-panel" role="dialog" aria-modal="true" aria-labelledby="encodeFormTitle">
-		<div class="modal-head">
-			<h2 id="encodeFormTitle" class="modal-title">Encode SBFP Form</h2>
-			<button type="button" class="modal-close" id="closeEncodeFormModal" aria-label="Close">&times;</button>
-		</div>
-		<form id="encodeFormForm">
-			<div class="modal-body">
-				<div class="weight-item">
-					<div class="weight-label" id="encodeFormLabel">Form</div>
-				</div>
-				<p class="encode-help">Encode data directly using the official form columns below. Rows saved here are shown in Overview.</p>
-				<div class="encode-toolbar">
-					<div class="encode-toolbar-note" id="encodeToolbarNote">Simple View is on. Fill only key fields first.</div>
-					<button type="button" class="mode-toggle" id="toggleEncodeModeBtn" aria-pressed="false">Show Full Template</button>
-				</div>
-				<div class="form1-meta" id="form1MetaSection">
-					<div class="form1-meta-item"><label for="metaDivision">Division/Province:</label><input id="metaDivision" data-meta-field="division" type="text"></div>
-					<div class="form1-meta-item"><label for="metaPrincipal">Name of Principal:</label><input id="metaPrincipal" data-meta-field="principal" type="text"></div>
-					<div class="form1-meta-item"><label for="metaCity">City/Municipality/Barangay:</label><input id="metaCity" data-meta-field="city" type="text"></div>
-					<div class="form1-meta-item"><label for="metaFocal">Name of Feeding Focal Person:</label><input id="metaFocal" data-meta-field="focal_person" type="text"></div>
-					<div class="form1-meta-item"><label for="metaSchoolName">Name of School / School District:</label><input id="metaSchoolName" data-meta-field="school_name" type="text"></div>
-					<div class="form1-meta-item"><label for="metaSchoolId">School ID Number:</label><input id="metaSchoolId" data-meta-field="school_id" type="text"></div>
-				</div>
-				<div class="encode-grid-wrap">
-					<table class="encode-grid" aria-label="Encode SBFP rows">
-						<thead id="encodeGridHead"></thead>
-						<tbody id="encodeGridBody"></tbody>
-					</table>
-				</div>
-				<button type="button" class="btn btn-ghost encode-add-row" id="addEncodeRowBtn">+ Add Row</button>
-				<input type="hidden" id="encodeTemplateKey" value="form1">
-			</div>
-			<div class="modal-foot">
-				<button type="button" class="btn btn-ghost" id="cancelEncodeFormModal">Cancel</button>
-				<button type="submit" class="btn btn-primary">Save Encoded Rows</button>
-			</div>
-		</form>
-	</div>
-</div>
-
-@php
-	$improvingHintValue = $programStats['improving_hint'] ?? '0 of 0 students';
-	$avgAttendanceValue = $programStats['avg_attendance'] ?? '0%';
-	$todayLabelValue = now()->format('M d, Y');
-	$programDayLabelValue = $programStats['program_day'] ?? '0/120';
-	$liveStudentsPayload = ($students ?? collect())->map(function ($student) {
-		return [
-			'name' => $student['student_name'] ?? '',
-			'section' => $student['section'] ?? '',
-			'baseline' => $student['baseline_weight'] ?? '',
-			'current' => $student['current_weight'] ?? '',
-			'bmi' => $student['bmi_range'] ?? '',
-			'attendance' => $student['attendance'] ?? '',
-			'trend' => $student['trend_label'] ?? '',
-		];
-	})->values();
-@endphp
 
 <script>
 (() => {
-	const formsStorageKey = 'sbfp_forms_entries_v1';
-	const formsRowsStorageKey = 'sbfp_forms_encoded_rows_v1';
-	const formsMetaStorageKey = 'sbfp_forms_meta_v1';
-	const form1AgeIndex = 6;
-	const form1WeightIndex = 7;
-	const form1HeightIndex = 8;
-	const form1BmiIndex = 9;
-	const form1BmiAStatusIndex = 10;
-	const form1HfaStatusIndex = 11;
-	const formsData = [
-		{ key: 'form1', code: 'Form 1', title: 'Master List of Beneficiaries', category: 'beneficiary', description: 'Master list of SBFP beneficiaries with nutritional status, BMI, deworming, and 4Ps participation.' },
-		{ key: 'form2', code: 'Form 2', title: 'List of Schools', category: 'beneficiary', description: 'List of participating schools with BEIS ID, address, principal information, and total beneficiaries.' },
-		{ key: 'form3', code: 'Form 3', title: 'Summary of Beneficiaries & Start of Feeding', category: 'beneficiary', description: 'Summary of undernourished learners by grade level with start and end status of feeding.' },
-		{ key: 'form4', code: 'Form 4', title: 'Record of Daily Feeding', category: 'feeding', description: 'Daily feeding attendance record over the feeding days with learner-level tracking.' },
-		{ key: 'form5', code: 'Form 5', title: 'Consolidated Nutrition and Attendance', category: 'report', description: 'Consolidated before/after nutritional status and attendance percentage report.' },
-		{ key: 'milk5', code: 'Milk Form 5', title: 'List of Authorized Consignees', category: 'milk', description: 'Authorized consignee details for milk deliveries including contact and signature.' },
-		{ key: 'form6', code: 'Form 6', title: 'Milk Beneficiaries', category: 'milk', description: 'Milk component beneficiary list and intolerance classification.' },
-		{ key: 'form7', code: 'Form 7 / 7-a', title: 'Milk Deliveries', category: 'milk', description: 'Milk deliveries and school/drop-off allocation records.' },
-		{ key: 'form8', code: 'Form 8', title: 'Monthly / Quarterly Report', category: 'report', description: 'Implementation and financial status summary for SBFP reporting.' },
-	];
+	const page = document.getElementById('fp-page');
+	if (!page) return;
 
-	const formsGrid = document.getElementById('formsGrid');
-	const formsFilter = document.getElementById('formsFilter');
-	const overviewTabBtn = document.getElementById('overviewTabBtn');
-	const formsTabBtn = document.getElementById('formsTabBtn');
-	const formsHub = document.getElementById('formsHub');
-	const overviewSection = document.getElementById('overviewSection');
-	const selectedFormTitle = document.getElementById('selectedFormTitle');
-	const selectedFormHint = document.getElementById('selectedFormHint');
-	const overviewTableHead = document.getElementById('overviewTableHead');
-	const overviewTableBody = document.getElementById('overviewTableBody');
-	const encodeFormBackdrop = document.getElementById('encodeFormBackdrop');
-	const closeEncodeFormModal = document.getElementById('closeEncodeFormModal');
-	const cancelEncodeFormModal = document.getElementById('cancelEncodeFormModal');
-	const encodeFormForm = document.getElementById('encodeFormForm');
-	const encodeFormLabel = document.getElementById('encodeFormLabel');
-	const encodeTemplateKey = document.getElementById('encodeTemplateKey');
-	const encodeGridHead = document.getElementById('encodeGridHead');
-	const encodeGridBody = document.getElementById('encodeGridBody');
-	const addEncodeRowBtn = document.getElementById('addEncodeRowBtn');
-	const toggleEncodeModeBtn = document.getElementById('toggleEncodeModeBtn');
-	const toggleOverviewModeBtn = document.getElementById('toggleOverviewModeBtn');
-	const encodeToolbarNote = document.getElementById('encodeToolbarNote');
-	const overviewToolbarNote = document.getElementById('overviewToolbarNote');
-	const form1MetaSection = document.getElementById('form1MetaSection');
-	const form1MetaInputs = Array.from(document.querySelectorAll('[data-meta-field]'));
-	const openBtn = document.getElementById('openWeightsModal');
-	const uploadAttendanceBtn = document.getElementById('uploadAttendanceBtn');
-	const uploadAttendanceBackdrop = document.getElementById('uploadAttendanceModalBackdrop');
-	const closeUploadAttendanceModal = document.getElementById('closeUploadAttendanceModal');
-	const cancelUploadAttendanceModal = document.getElementById('cancelUploadAttendanceModal');
-	const focusAtRiskBtn = document.getElementById('focusAtRiskBtn');
-	const atRiskSection = document.getElementById('atRiskSection');
-	const riskFilter = document.getElementById('riskFilter');
-	const riskSearch = document.getElementById('riskSearch');
-	const riskGradeFilter = document.getElementById('riskGradeFilter');
-	const riskGenderFilter = document.getElementById('riskGenderFilter');
-	const riskNoMatchRow = document.getElementById('riskNoMatchRow');
-	const riskRows = Array.from(document.querySelectorAll('#riskTable tbody tr[data-risk-status]'));
-	const rosterSearch = document.getElementById('rosterSearch');
-	const rosterGradeFilter = document.getElementById('rosterGradeFilter');
-	const rosterGenderFilter = document.getElementById('rosterGenderFilter');
-	const rosterNoMatchRow = document.getElementById('rosterNoMatchRow');
-	const rosterRows = Array.from(document.querySelectorAll('#rosterTable tbody tr[data-roster-search]'));
-	const backdrop = document.getElementById('weightsModalBackdrop');
-	const closeBtn = document.getElementById('closeWeightsModal');
-	const cancelBtn = document.getElementById('cancelWeightsModal');
-	const form = document.getElementById('weightsForm');
-	const weightCells = Array.from(document.querySelectorAll('.current-weight'));
-	const inputs = Array.from(form ? form.querySelectorAll('.weight-input') : []);
-	let currentViewedForm = '';
-	let activeView = 'forms';
-	const improvingHint = @json($improvingHintValue);
-	const avgAttendance = @json($avgAttendanceValue);
-	const todayLabel = @json($todayLabelValue);
-	const programDayLabel = @json($programDayLabelValue);
-	const liveStudents = @json($liveStudentsPayload);
-	const enrolledStudentsValue = document.getElementById('enrolledStudentsValue');
-	const avgAttendanceValue = document.getElementById('avgAttendanceValue');
-	let simpleEncodeMode = true;
-	let simpleOverviewMode = true;
-
-	const simpleColumnMap = {
-		form1: [0, 1, 2, 3, 6, 7, 8, 9, 10, 11],
-		form2: [0, 1, 4],
-		form3: [0, 1, 2],
-		form4: [0, 1, 2, 3],
-		form5: [0, 2, 4],
-		milk5: [0, 1, 2],
-		form6: [0, 1, 2],
-		form7: [0, 1, 2, 5],
-		form8: [0, 3, 5],
-	};
-
-	const baseStudents = liveStudents.map((student) => [student.name, student.section]);
-
-	const overviewSchemas = {
-		form1: {
-			title: 'Form 1 - Master List of Beneficiaries',
-			headers: [
-				'No.',
-				'Name',
-				'Sex',
-				'Grade/Section',
-				'Date of Birth (MM/DD/YYYY)',
-				'Date of Weighing / Measuring (MM/DD/YYYY)',
-				'Age in Years / Months',
-				'Weight (kg)',
-				'Height (cm)',
-				'BMI for 6 y.o. and above',
-				'BMI-A',
-				'HFA',
-				'Dewormed? (yes or no)',
-				"Parent's consent for milk? (yes or no)",
-				'Participation in 4Ps (yes or no)',
-				'Beneficiary of SBFP in Previous Years (yes or no)',
-			],
-			rows: liveStudents.map((student, index) => {
-				const normalizedStatus = String(student.bmi || '').toLowerCase();
-				let nutritionStatus = 'N';
-				if (normalizedStatus.includes('severe')) {
-					nutritionStatus = 'Severely Wasted';
-				} else if (normalizedStatus.includes('wasted')) {
-					nutritionStatus = 'Wasted';
-				} else if (normalizedStatus.includes('normal')) {
-					nutritionStatus = 'Normal';
-				}
-
-				return [
-					String(index + 1),
-					student.name,
-					'',
-					student.section,
-					'',
-					todayLabel,
-					'',
-					student.current,
-					'',
-					student.bmi,
-					nutritionStatus,
-					'',
-					'',
-					'',
-					'',
-					'',
-				];
-			}),
-		},
-		form2: {
-			title: 'Form 2 - List of Schools',
-			headers: ['Name of School', 'BEIS ID No.', 'School Address', 'Principal/OIC', 'Total Beneficiaries'],
-			rows: [['DCNHS', '-', '-', '-', String(liveStudents.length)]],
-		},
-		form3: {
-			title: 'Form 3 - Summary of Beneficiaries & Start of Feeding',
-			headers: ['Category', 'Count', 'Notes'],
-			rows: [
-				['Undernourished Learners', String(liveStudents.length), 'Start of Feeding'],
-				['4Ps Beneficiaries', '-', 'For validation'],
-				['Repeaters', '-', 'From previous cycle'],
-			],
-		},
-		form4: {
-			title: 'Form 4 - Record of Daily Feeding',
-			headers: ['Name of Pupil', 'Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Day 7', 'Day 8'],
-			rows: baseStudents.map((item) => [item[0], '/', '/', '/', '/', '/', '/', '/', '/']),
-		},
-		form5: {
-			title: 'Form 5 - Consolidated Nutrition and Attendance',
-			headers: ['Grades & Sections', 'No. Dewormed', 'Before Status', 'After Status', '% Attendance'],
-			rows: [['All Feeding Beneficiaries', '-', String(liveStudents.length), improvingHint, avgAttendance]],
-		},
-		milk5: {
-			title: 'Milk Form 5 - Authorized Consignees',
-			headers: ['Name & Designation', 'Tel. No.', 'Mobile No.', 'Email', 'Specimen Signature'],
-			rows: [
-				['School Head', '-', '-', '-', '-'],
-				['Feeding Coordinator', '-', '-', '-', '-'],
-				['Property Custodian', '-', '-', '-', '-'],
-			],
-		},
-		form6: {
-			title: 'Form 6 - Milk Beneficiaries',
-			headers: ['Name', 'Grade & Section', 'Without Intolerance', 'With Intolerance but Willing', 'Not Allowed by Parents'],
-			rows: baseStudents.map((item) => [item[0], item[1], '/', '-', '-']),
-		},
-		form7: {
-			title: 'Form 7 / 7-a - Milk Deliveries',
-			headers: ['Grade Level / School', 'No. of Beneficiaries', 'Date Delivered', 'Packs Received', 'Replacements', 'Remarks'],
-			rows: [['All Sections', String(liveStudents.length), todayLabel, '-', '-', 'For encoding']],
-		},
-		form8: {
-			title: 'Form 8 - Monthly / Quarterly Report',
-			headers: ['Division / School', 'Target SBFP Schools', 'Actual SBFP Schools', 'Status of Implementation', 'Amount Allocated', 'Liquidation Status'],
-			rows: [['DCNHS', '1', '1', `Ongoing (${programDayLabel})`, '-', 'For submission']],
-		},
-	};
-
-	const getEffectiveForm1Rows = () => {
-		const rowsByForm = getRowsByForm();
-		const encodedRows = Array.isArray(rowsByForm.form1)
-			? rowsByForm.form1.filter((row) => Array.isArray(row) && row.some((cell) => String(cell || '').trim() !== ''))
-			: [];
-		if (encodedRows.length > 0) {
-			return encodedRows;
-		}
-		const defaultRows = overviewSchemas.form1 && Array.isArray(overviewSchemas.form1.rows)
-			? overviewSchemas.form1.rows
-			: [];
-		return defaultRows;
-	};
-
-	const getBeneficiaryRowsFromForm1 = () => {
-		return getEffectiveForm1Rows()
-			.map((row) => ({
-				name: String((Array.isArray(row) ? row[1] : '') || '').trim(),
-				section: String((Array.isArray(row) ? row[3] : '') || '').trim(),
-			}))
-			.filter((student) => student.name !== '');
-	};
-
-	const getEnrolledStudentsCount = () => getBeneficiaryRowsFromForm1().length;
-
-	const normalizeStudentKey = (value) => String(value || '').trim().toLowerCase();
-
-	const buildLiveForm4Rows = (rowsByForm = getRowsByForm()) => {
-		const headers = getTemplateHeaders('form4');
-		const defaultRow = ['', '/', '/', '/', '/', '/', '/', '/', '/'];
-		const existingRows = Array.isArray(rowsByForm.form4)
-			? rowsByForm.form4.filter((row) => Array.isArray(row) && row.some((cell) => String(cell || '').trim() !== ''))
-			: [];
-
-		const existingByStudent = new Map();
-		existingRows.forEach((row) => {
-			const nameKey = normalizeStudentKey(Array.isArray(row) ? row[0] : '');
-			if (!nameKey) {
-				return;
-			}
-			existingByStudent.set(nameKey, row);
-		});
-
-		const beneficiaries = getBeneficiaryRowsFromForm1();
-		if (beneficiaries.length === 0) {
-			return existingRows;
-		}
-
-		return beneficiaries.map((student) => {
-			const existing = existingByStudent.get(normalizeStudentKey(student.name));
-			const row = Array.isArray(existing) ? [...existing] : [...defaultRow];
-			row[0] = student.name;
-			return headers.map((_, index) => (index < row.length ? row[index] : ''));
-		});
-	};
-
-	const syncEnrolledStudentsValue = () => {
-		if (!enrolledStudentsValue) {
-			return;
-		}
-		enrolledStudentsValue.textContent = String(getEnrolledStudentsCount());
-	};
-
-	const toAttendanceToken = (value) => String(value || '').trim().toLowerCase();
-
-	const calculateAttendancePercent = (form4Rows) => {
-		const rows = Array.isArray(form4Rows) ? form4Rows : [];
-		let presentCount = 0;
-		let encodedCount = 0;
-
-		rows.forEach((row) => {
-			if (!Array.isArray(row)) {
-				return;
-			}
-			for (let index = 1; index < row.length; index++) {
-				const token = toAttendanceToken(row[index]);
-				if (!token || token === '/' || token === '-') {
-					continue;
-				}
-				encodedCount++;
-				if (token === 'present' || token === 'p') {
-					presentCount++;
-				}
-			}
-		});
-
-		if (encodedCount === 0) {
-			return avgAttendance;
-		}
-
-		return `${Math.round((presentCount / encodedCount) * 100)}%`;
-	};
-
-	const getLiveAttendancePercent = (rowsByForm = getRowsByForm()) => {
-		const form4Rows = buildLiveForm4Rows(rowsByForm);
-		return calculateAttendancePercent(form4Rows);
-	};
-
-	const syncAvgAttendanceValue = (rowsByForm = getRowsByForm()) => {
-		if (!avgAttendanceValue) {
-			return;
-		}
-		avgAttendanceValue.textContent = getLiveAttendancePercent(rowsByForm);
-	};
-
-	const getEntries = () => {
-		try {
-			const parsed = JSON.parse(window.localStorage.getItem(formsStorageKey) || '{}');
-			return parsed && typeof parsed === 'object' ? parsed : {};
-		} catch (error) {
-			return {};
-		}
-	};
-
-	const setEntries = (value) => {
-		window.localStorage.setItem(formsStorageKey, JSON.stringify(value));
-	};
-
-	const getRowsByForm = () => {
-		try {
-			const parsed = JSON.parse(window.localStorage.getItem(formsRowsStorageKey) || '{}');
-			return parsed && typeof parsed === 'object' ? parsed : {};
-		} catch (error) {
-			return {};
-		}
-	};
-
-	const setRowsByForm = (value) => {
-		window.localStorage.setItem(formsRowsStorageKey, JSON.stringify(value));
-	};
-
-	const getMetaByForm = () => {
-		try {
-			const parsed = JSON.parse(window.localStorage.getItem(formsMetaStorageKey) || '{}');
-			return parsed && typeof parsed === 'object' ? parsed : {};
-		} catch (error) {
-			return {};
-		}
-	};
-
-	const setMetaByForm = (value) => {
-		window.localStorage.setItem(formsMetaStorageKey, JSON.stringify(value));
-	};
-
-	const setForm1MetaVisibility = (visible) => {
-		if (!form1MetaSection) {
-			return;
-		}
-		form1MetaSection.classList.toggle('active', visible);
-	};
-
-	const loadFormMetaToInputs = (formKey) => {
-		if (!form1MetaInputs.length) {
-			return;
-		}
-		const metaByForm = getMetaByForm();
-		const formMeta = metaByForm[formKey] && typeof metaByForm[formKey] === 'object' ? metaByForm[formKey] : {};
-		form1MetaInputs.forEach((input) => {
-			const key = input.dataset.metaField;
-			input.value = key && formMeta[key] ? String(formMeta[key]) : '';
-		});
-	};
-
-	const saveFormMetaFromInputs = (formKey) => {
-		if (!form1MetaInputs.length) {
-			return;
-		}
-		const metaByForm = getMetaByForm();
-		const payload = {};
-		form1MetaInputs.forEach((input) => {
-			const key = input.dataset.metaField;
-			if (!key) {
-				return;
-			}
-			payload[key] = String(input.value || '').trim();
-		});
-		metaByForm[formKey] = payload;
-		setMetaByForm(metaByForm);
-	};
-
-	const escapeHtml = (value) => String(value ?? '')
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;')
-		.replace(/'/g, '&#39;');
-
-	const getTemplateHeaders = (formKey) => {
-		const schema = overviewSchemas[formKey] || overviewSchemas.form1;
-		return Array.isArray(schema.headers) ? schema.headers : [];
-	};
-
-	const buildForm1HeaderRows = (includeAction = false) => {
-		const actionCell = includeAction ? '<th class="gov-head" rowspan="2">Action</th>' : '';
-		return `
-			<tr>
-				<th class="gov-head" data-col-index="0" rowspan="2">No.</th>
-				<th class="gov-head" data-col-index="1" rowspan="2">Name</th>
-				<th class="gov-head" data-col-index="2" rowspan="2">Sex</th>
-				<th class="gov-head" data-col-index="3" rowspan="2">Grade/ Section</th>
-				<th class="gov-head" data-col-index="4" rowspan="2">Date of Birth<br>(MM/DD/YYYY)</th>
-				<th class="gov-head" data-col-index="5" rowspan="2">Date of Weighing / Measuring<br>(MM/DD/YYYY)</th>
-				<th class="gov-head" data-col-index="6" rowspan="2">Age in Years / Months</th>
-				<th class="gov-head" data-col-index="7" rowspan="2">Weight<br>(Kg)</th>
-				<th class="gov-head" data-col-index="8" rowspan="2">Height<br>(cm)</th>
-				<th class="gov-head" data-col-index="9" rowspan="2">BMI for 6 y.o.<br>and above</th>
-				<th class="gov-head" colspan="2">Nutritional Status (NS)</th>
-				<th class="gov-head" data-col-index="12" rowspan="2">Dewormed?<br>(yes or no)</th>
-				<th class="gov-head" data-col-index="13" rowspan="2">Parent's consent for milk?<br>(yes or no)</th>
-				<th class="gov-head" data-col-index="14" rowspan="2">Participation in 4Ps<br>(yes or no)</th>
-				<th class="gov-head" data-col-index="15" rowspan="2">Beneficiary of SBFP in Previous Years<br>(yes or no)</th>
-				${actionCell}
-			</tr>
-			<tr>
-				<th class="gov-head gov-subhead" data-col-index="10">BMI-A</th>
-				<th class="gov-head gov-subhead" data-col-index="11">HFA</th>
-			</tr>
-		`;
-	};
-
-	const getVisibleColumns = (formKey, isSimpleMode) => {
-		if (!isSimpleMode) {
-			return null;
-		}
-		return simpleColumnMap[formKey] || null;
-	};
-
-	const applyTableColumnVisibility = (tableElement, formKey, isSimpleMode) => {
-		if (!tableElement) {
-			return;
-		}
-
-		const visibleColumns = getVisibleColumns(formKey, isSimpleMode);
-		const visibleLookup = visibleColumns ? new Set(visibleColumns) : null;
-		const nodes = Array.from(tableElement.querySelectorAll('[data-col-index]'));
-
-		nodes.forEach((node) => {
-			const index = Number(node.getAttribute('data-col-index'));
-			const isVisible = !visibleLookup || visibleLookup.has(index);
-			node.classList.toggle('column-hidden', !isVisible);
-		});
-	};
-
-	const updateModeToggleLabels = () => {
-		if (toggleEncodeModeBtn) {
-			toggleEncodeModeBtn.textContent = simpleEncodeMode ? 'Show Full Template' : 'Show Simple View';
-			toggleEncodeModeBtn.setAttribute('aria-pressed', String(!simpleEncodeMode));
-		}
-		if (toggleOverviewModeBtn) {
-			toggleOverviewModeBtn.textContent = simpleOverviewMode ? 'Show Full Template' : 'Show Simple View';
-			toggleOverviewModeBtn.setAttribute('aria-pressed', String(!simpleOverviewMode));
-		}
-		if (encodeToolbarNote) {
-			encodeToolbarNote.textContent = simpleEncodeMode
-				? 'Simple View is on. Fill only key fields first.'
-				: 'Full template is visible. All official columns are available.';
-		}
-		if (overviewToolbarNote) {
-			overviewToolbarNote.textContent = simpleOverviewMode
-				? 'Simple View is on. Only key columns are shown.'
-				: 'Full template is visible. All official columns are shown.';
-		}
-	};
-
-	const buildEncodeHeader = (formKey, headers) => {
-		if (!encodeGridHead) {
-			return;
-		}
-		if (formKey === 'form1') {
-			encodeGridHead.innerHTML = buildForm1HeaderRows(true);
-			return;
-		}
-		encodeGridHead.innerHTML = `<tr>${headers.map((header, index) => `<th data-col-index="${index}">${escapeHtml(header)}</th>`).join('')}<th>Action</th></tr>`;
-	};
-
-	const buildEncodeRow = (formKey, headers, rowValues = []) => {
-		const cells = headers.map((_, index) => {
-			const value = escapeHtml(rowValues[index] || '');
-			const isComputedBmi = formKey === 'form1' && index === form1BmiIndex;
-			const isComputedStatus = formKey === 'form1' && index === form1BmiAStatusIndex;
-			const isComputedHfa = formKey === 'form1' && index === form1HfaStatusIndex;
-			const readonly = (isComputedBmi || isComputedStatus || isComputedHfa) ? ' readonly' : '';
-			return `<td data-col-index="${index}"><input type="text" class="encode-cell-input" data-col-index="${index}" value="${value}"${readonly} /></td>`;
-		});
-		return `<tr>${cells.join('')}<td><div class="encode-row-actions"><button type="button" class="encode-inline-btn" data-remove-row="1">Remove</button></div></td></tr>`;
-	};
-
-	const computeBmi = (weightKg, heightCm) => {
-		const weight = Number(weightKg);
-		const height = Number(heightCm);
-		if (Number.isNaN(weight) || Number.isNaN(height) || weight <= 0 || height <= 0) {
-			return '';
-		}
-		const meters = height / 100;
-		if (meters <= 0) {
-			return '';
-		}
-		const bmi = weight / (meters * meters);
-		return Number.isFinite(bmi) ? bmi.toFixed(2) : '';
-	};
-
-	const detectBmiAStatus = (bmiValue) => {
-		const bmi = Number(bmiValue);
-		if (Number.isNaN(bmi) || bmi <= 0) {
-			return '';
-		}
-		if (bmi < 16) {
-			return 'Severely Wasted';
-		}
-		if (bmi < 18.5) {
-			return 'Wasted';
-		}
-		if (bmi < 25) {
-			return 'Normal';
-		}
-		return 'Obese';
-	};
-
-	const parseAgeToYears = (ageRaw) => {
-		const text = String(ageRaw || '').trim();
-		if (!text) {
-			return null;
-		}
-		const values = (text.match(/\d+(?:\.\d+)?/g) || []).map((value) => Number(value));
-		if (!values.length || values.some((value) => Number.isNaN(value))) {
-			return null;
-		}
-		if (values.length >= 2) {
-			return values[0] + (values[1] / 12);
-		}
-		const single = values[0];
-		if (single <= 30) {
-			return single;
-		}
-		return single / 12;
-	};
-
-	const expectedHeightForAge = (ageYears) => {
-		if (!Number.isFinite(ageYears) || ageYears <= 0) {
-			return null;
-		}
-		if (ageYears <= 12) {
-			return 77 + (6 * ageYears);
-		}
-		return 149 + (5 * (ageYears - 12));
-	};
-
-	const detectHfaStatus = (heightCm, ageRaw) => {
-		const height = Number(heightCm);
-		if (!Number.isFinite(height) || height <= 0) {
-			return '';
-		}
-		const ageYears = parseAgeToYears(ageRaw);
-		const expectedHeight = expectedHeightForAge(ageYears);
-		if (!Number.isFinite(expectedHeight) || expectedHeight <= 0) {
-			return '';
-		}
-		const ratio = height / expectedHeight;
-		if (ratio < 0.90) {
-			return 'Severe Stunting';
-		}
-		if (ratio < 0.95) {
-			return 'Moderate Stunting';
-		}
-		return 'Normal';
-	};
-
-	const recalcForm1BmiInRow = (row) => {
-		if (!row) {
-			return;
-		}
-		const ageInput = row.querySelector(`.encode-cell-input[data-col-index="${form1AgeIndex}"]`);
-		const weightInput = row.querySelector(`.encode-cell-input[data-col-index="${form1WeightIndex}"]`);
-		const heightInput = row.querySelector(`.encode-cell-input[data-col-index="${form1HeightIndex}"]`);
-		const bmiInput = row.querySelector(`.encode-cell-input[data-col-index="${form1BmiIndex}"]`);
-		const statusInput = row.querySelector(`.encode-cell-input[data-col-index="${form1BmiAStatusIndex}"]`);
-		const hfaInput = row.querySelector(`.encode-cell-input[data-col-index="${form1HfaStatusIndex}"]`);
-		if (!ageInput || !weightInput || !heightInput || !bmiInput || !statusInput || !hfaInput) {
-			return;
-		}
-		const bmi = computeBmi(weightInput.value, heightInput.value);
-		bmiInput.value = bmi;
-		statusInput.value = detectBmiAStatus(bmi);
-		hfaInput.value = detectHfaStatus(heightInput.value, ageInput.value);
-	};
-
-	const recalcAllForm1Bmi = () => {
-		if (!encodeGridBody) {
-			return;
-		}
-		Array.from(encodeGridBody.querySelectorAll('tr')).forEach((row) => recalcForm1BmiInRow(row));
-	};
-
-	const renderEncodeRows = (formKey) => {
-		if (!encodeGridBody) {
-			return;
-		}
-		setForm1MetaVisibility(formKey === 'form1');
-		if (formKey === 'form1') {
-			loadFormMetaToInputs(formKey);
-		}
-		const headers = getTemplateHeaders(formKey);
-		buildEncodeHeader(formKey, headers);
-		const existingRowsByForm = getRowsByForm();
-		const existingRows = Array.isArray(existingRowsByForm[formKey]) ? existingRowsByForm[formKey] : [];
-		if (formKey === 'form4') {
-			const liveRows = buildLiveForm4Rows(existingRowsByForm);
-			if (liveRows.length > 0) {
-				encodeGridBody.innerHTML = liveRows.map((row) => buildEncodeRow(formKey, headers, row)).join('');
-				applyTableColumnVisibility(document.querySelector('.encode-grid'), formKey, simpleEncodeMode);
-				return;
-			}
-		}
-		if (existingRows.length > 0) {
-			encodeGridBody.innerHTML = existingRows.map((row) => buildEncodeRow(formKey, headers, row)).join('');
-			if (formKey === 'form1') {
-				recalcAllForm1Bmi();
-			}
-			applyTableColumnVisibility(document.querySelector('.encode-grid'), formKey, simpleEncodeMode);
-			return;
-		}
-		encodeGridBody.innerHTML = buildEncodeRow(formKey, headers);
-		if (formKey === 'form1') {
-			recalcAllForm1Bmi();
-		}
-		applyTableColumnVisibility(document.querySelector('.encode-grid'), formKey, simpleEncodeMode);
-	};
-
-	const appendEncodeRow = () => {
-		if (!encodeGridBody || !encodeTemplateKey) {
-			return;
-		}
-		const key = encodeTemplateKey.value || 'form1';
-		const headers = getTemplateHeaders(key);
-		encodeGridBody.insertAdjacentHTML('beforeend', buildEncodeRow(key, headers));
-		if (key === 'form1') {
-			recalcAllForm1Bmi();
-		}
-		applyTableColumnVisibility(document.querySelector('.encode-grid'), key, simpleEncodeMode);
-	};
-
-	const collectEncodedRows = (formKey) => {
-		if (!encodeGridBody) {
-			return [];
-		}
-		const headerCount = getTemplateHeaders(formKey).length;
-		return Array.from(encodeGridBody.querySelectorAll('tr'))
-			.map((row) => Array.from(row.querySelectorAll('.encode-cell-input')).slice(0, headerCount).map((input) => String(input.value || '').trim()))
-			.filter((rowValues) => rowValues.some((value) => value !== ''));
-	};
-
-	const setModal = (target, open) => {
-		if (!target) {
-			return;
-		}
-		target.classList.toggle('open', open);
-		const hasOpen = document.querySelectorAll('.modal-backdrop.open').length > 0;
-		document.body.style.overflow = hasOpen ? 'hidden' : '';
-	};
-
-	const setActiveView = (view) => {
-		const showOverview = view === 'overview';
-		activeView = showOverview ? 'overview' : 'forms';
-		if (overviewTabBtn) {
-			overviewTabBtn.classList.toggle('active', showOverview);
-			overviewTabBtn.classList.toggle('disabled', !showOverview);
-		}
-		if (formsTabBtn) {
-			formsTabBtn.classList.toggle('active', !showOverview);
-		}
-		if (formsHub) {
-			formsHub.classList.toggle('active', !showOverview);
-		}
-		if (overviewSection) {
-			overviewSection.classList.toggle('active', showOverview);
-		}
-	};
-
-	const switchViewSmooth = (targetView) => {
-		if (targetView !== 'overview' && targetView !== 'forms') {
-			return;
-		}
-		if (activeView === targetView) {
-			return;
-		}
-
-		const currentPanel = activeView === 'overview' ? overviewSection : formsHub;
-		const nextPanel = targetView === 'overview' ? overviewSection : formsHub;
-
-		if (!currentPanel || !nextPanel) {
-			setActiveView(targetView);
-			return;
-		}
-
-		currentPanel.classList.add('panel-leave');
-		window.setTimeout(() => {
-			currentPanel.classList.remove('panel-leave');
-			setActiveView(targetView);
-			nextPanel.classList.add('panel-enter');
-			requestAnimationFrame(() => {
-				nextPanel.classList.remove('panel-enter');
-			});
-		}, 200);
-	};
-
-	const renderOverviewTable = (formKey) => {
-		const schema = overviewSchemas[formKey] || overviewSchemas.form1;
-		const encodedRowsByForm = getRowsByForm();
-		const encodedRows = Array.isArray(encodedRowsByForm[formKey]) ? encodedRowsByForm[formKey] : null;
-		const beneficiaryRows = getBeneficiaryRowsFromForm1();
-		const enrolledCount = beneficiaryRows.length;
-		let rowsToRender = encodedRows && encodedRows.length > 0 ? encodedRows : schema.rows;
-
-		if ((!encodedRows || encodedRows.length === 0) && formKey === 'form2') {
-			rowsToRender = [['DCNHS', '-', '-', '-', String(enrolledCount)]];
-		}
-
-		if ((!encodedRows || encodedRows.length === 0) && formKey === 'form3') {
-			rowsToRender = [
-				['Undernourished Learners', String(enrolledCount), 'Start of Feeding'],
-				['4Ps Beneficiaries', '-', 'For validation'],
-				['Repeaters', '-', 'From previous cycle'],
-			];
-		}
-
-		if (formKey === 'form4') {
-			rowsToRender = buildLiveForm4Rows(encodedRowsByForm);
-		}
-
-		if ((!encodedRows || encodedRows.length === 0) && formKey === 'form5') {
-			rowsToRender = [['All Feeding Beneficiaries', '-', String(enrolledCount), improvingHint, getLiveAttendancePercent(encodedRowsByForm)]];
-		}
-
-		if ((!encodedRows || encodedRows.length === 0) && formKey === 'form6') {
-			rowsToRender = beneficiaryRows.map((item) => [item.name, item.section, '/', '-', '-']);
-		}
-
-		if ((!encodedRows || encodedRows.length === 0) && formKey === 'form7') {
-			rowsToRender = [['All Sections', String(enrolledCount), todayLabel, '-', '-', 'For encoding']];
-		}
-
-		if (selectedFormTitle) {
-			selectedFormTitle.textContent = schema.title;
-		}
-
-		if (overviewTableHead) {
-			overviewTableHead.innerHTML = formKey === 'form1'
-				? buildForm1HeaderRows(false)
-				: `<tr>${schema.headers.map((header, index) => `<th data-col-index="${index}">${escapeHtml(header)}</th>`).join('')}</tr>`;
-		}
-
-		if (overviewTableBody) {
-			overviewTableBody.innerHTML = rowsToRender
-				.map((row) => {
-					const normalizedRow = schema.headers.map((_, index) => (Array.isArray(row) && index < row.length ? row[index] : ''));
-					return `<tr>${normalizedRow.map((cell, index) => `<td data-col-index="${index}">${escapeHtml(cell)}</td>`).join('')}</tr>`;
-				})
-				.join('');
-		}
-
-		applyTableColumnVisibility(document.getElementById('overviewTable'), formKey, simpleOverviewMode);
-	};
-
-	const renderForms = () => {
-		if (!formsGrid) {
-			return;
-		}
-
-		const filter = formsFilter ? formsFilter.value : 'all';
-		const filtered = filter === 'all' ? formsData : formsData.filter((item) => item.category === filter);
-
-		if (filtered.length === 0) {
-			formsGrid.innerHTML = '<div class="form-hint">No forms found for the selected filter.</div>';
-			return;
-		}
-
-		formsGrid.innerHTML = filtered.map((item) => {
-			return `
-				<article class="form-card">
-					<div class="form-card-head">
-						<div>
-							<div class="form-code">${item.code}</div>
-							<h3 class="form-title">${item.title}</h3>
-						</div>
-					</div>
-					<p class="form-desc">${item.description}</p>
-					<div class="form-actions">
-						<button type="button" class="form-btn" data-view-form="${item.key}">View</button>
-						<button type="button" class="form-btn primary" data-encode-form="${item.key}">Encode</button>
-					</div>
-				</article>
-			`;
-		}).join('');
-	};
-
-	const viewForm = (formKey) => {
-		const selected = formsData.find((item) => item.key === formKey);
-		if (!selected) {
-			return;
-		}
-
-		currentViewedForm = formKey;
-		renderOverviewTable(formKey);
-		switchViewSmooth('overview');
-		if (selectedFormHint) {
-			selectedFormHint.textContent = `Currently viewing ${selected.code}. Use Encode to add new entries.`;
-		}
-
-		const previewSection = overviewSection;
-		if (previewSection) {
-			previewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-		}
-	};
-
-	const openEncodeForm = (formKey) => {
-		const selected = formsData.find((item) => item.key === formKey);
-		if (!selected) {
-			return;
-		}
-		if (encodeTemplateKey) {
-			encodeTemplateKey.value = selected.key;
-		}
-		if (encodeFormLabel) {
-			encodeFormLabel.textContent = `${selected.code} - ${selected.title}`;
-		}
-		renderEncodeRows(selected.key);
-		updateModeToggleLabels();
-		setModal(encodeFormBackdrop, true);
-	};
-
-	if (formsFilter) {
-		formsFilter.addEventListener('change', renderForms);
-	}
-
-	if (overviewTabBtn) {
-		overviewTabBtn.addEventListener('click', () => {
-			if (activeView === 'forms') {
-				if (selectedFormHint) {
-					selectedFormHint.textContent = 'Select a form first and click View to open it in Overview.';
-				}
-				return;
-			}
-			if (!currentViewedForm) {
-				return;
-			}
-			renderOverviewTable(currentViewedForm);
-			switchViewSmooth('overview');
-		});
-	}
-
-	if (formsTabBtn) {
-		formsTabBtn.addEventListener('click', () => {
-			switchViewSmooth('forms');
-			if (formsHub) {
-				formsHub.scrollIntoView({ behavior: 'smooth', block: 'start' });
-			}
-		});
-	}
-
-	if (formsGrid) {
-		formsGrid.addEventListener('click', (event) => {
-			const viewButton = event.target.closest('[data-view-form]');
-			if (viewButton) {
-				viewForm(viewButton.dataset.viewForm);
-				return;
-			}
-
-			const encodeButton = event.target.closest('[data-encode-form]');
-			if (encodeButton) {
-				openEncodeForm(encodeButton.dataset.encodeForm);
-			}
-		});
-	}
-
-	if (toggleEncodeModeBtn) {
-		toggleEncodeModeBtn.addEventListener('click', () => {
-			simpleEncodeMode = !simpleEncodeMode;
-			updateModeToggleLabels();
-			const key = encodeTemplateKey ? encodeTemplateKey.value : 'form1';
-			applyTableColumnVisibility(document.querySelector('.encode-grid'), key, simpleEncodeMode);
-		});
-	}
-
-	if (toggleOverviewModeBtn) {
-		toggleOverviewModeBtn.addEventListener('click', () => {
-			simpleOverviewMode = !simpleOverviewMode;
-			updateModeToggleLabels();
-			const key = currentViewedForm || 'form1';
-			applyTableColumnVisibility(document.getElementById('overviewTable'), key, simpleOverviewMode);
-		});
-	}
-
-	if (uploadAttendanceBtn && uploadAttendanceBackdrop) {
-		uploadAttendanceBtn.addEventListener('click', () => setModal(uploadAttendanceBackdrop, true));
-		// The "#record-attendance" hand-off that used to open this modal is gone:
-		// recording a mark is the Attendance tab's, and nothing links here for it.
-	}
-	[closeUploadAttendanceModal, cancelUploadAttendanceModal].forEach((btn) => {
-		if (btn) {
-			btn.addEventListener('click', () => setModal(uploadAttendanceBackdrop, false));
-		}
-	});
-
-	if (focusAtRiskBtn && atRiskSection) {
-		focusAtRiskBtn.addEventListener('click', () => {
-			atRiskSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-		});
-	}
-
-	// Printing hands the page to the sheet's @media print block, which keeps
-	// the two rolls and drops every control that means nothing on paper. Rows
-	// a filter has hidden stay hidden, so what prints is what is on screen.
 	document.getElementById('printProgramBtn')?.addEventListener('click', () => window.print());
 
-	if (riskRows.length > 0) {
-		const riskControls = [riskSearch, riskGradeFilter, riskGenderFilter, riskFilter].filter(Boolean);
-
-		const applyRiskFilters = () => {
-			const term = riskSearch ? String(riskSearch.value || '').trim().toLowerCase() : '';
-			const grade = riskGradeFilter ? String(riskGradeFilter.value || 'all').toLowerCase() : 'all';
-			const gender = riskGenderFilter ? String(riskGenderFilter.value || 'all').toLowerCase() : 'all';
-			const status = riskFilter ? String(riskFilter.value || 'all').toLowerCase() : 'all';
-			let matches = 0;
-
-			riskRows.forEach((row) => {
-				const attr = (name) => String(row.getAttribute(name) || '').toLowerCase();
-				const visible = (term === '' || attr('data-risk-search').includes(term))
-					&& (grade === 'all' || attr('data-risk-grade') === grade)
-					&& (gender === 'all' || attr('data-risk-gender') === gender)
-					&& (status === 'all' || attr('data-risk-status').includes(status));
-
-				row.style.display = visible ? '' : 'none';
-				if (visible) {
-					matches += 1;
-				}
-			});
-
-			if (riskNoMatchRow) {
-				riskNoMatchRow.style.display = matches === 0 ? '' : 'none';
-			}
-		};
-
-		riskControls.forEach((control) => {
-			control.addEventListener(control === riskSearch ? 'input' : 'change', applyRiskFilters);
+	// ── The two lists' own filters ─────────────────────────────────────
+	// Applied in the browser over the rows on the page (names are encrypted,
+	// and the server already scoped the roll to the grade on screen). Read
+	// again after every live refresh, so a redraw keeps what was chosen.
+	const applyList = (tbodyId, prefix, controls, noMatchId) => {
+		const tbody = document.getElementById(tbodyId);
+		if (!tbody) return;
+		const term = (controls.search?.value || '').trim().toLowerCase();
+		const gender = controls.gender?.value || 'all';
+		const status = controls.status?.value || 'all';
+		const rows = Array.from(tbody.querySelectorAll(`tr[data-${prefix}-search]`));
+		let shown = 0;
+		rows.forEach((row) => {
+			const visible = (term === '' || row.getAttribute(`data-${prefix}-search`).includes(term))
+				&& (gender === 'all' || row.getAttribute(`data-${prefix}-gender`) === gender)
+				&& (status === 'all' || row.getAttribute(`data-${prefix}-status`) === status);
+			row.style.display = visible ? '' : 'none';
+			if (visible) shown++;
 		});
-	}
-
-	// Drop targets: clicking is handled by the wrapping <label>, so this only
-	// adds the drag path and swaps the prompt for the chosen filename.
-	document.querySelectorAll('.dropzone').forEach((zone) => {
-		const input = zone.querySelector('.dropzone-input');
-		const text = zone.querySelector('.dropzone-text');
-		if (!input || !text) {
-			return;
-		}
-
-		const placeholder = input.getAttribute('data-placeholder') || text.textContent;
-
-		const render = () => {
-			const file = input.files && input.files[0];
-			text.textContent = file ? file.name : placeholder;
-			zone.classList.toggle('is-filled', Boolean(file));
-		};
-
-		input.addEventListener('change', render);
-
-		['dragenter', 'dragover'].forEach((name) => {
-			zone.addEventListener(name, (event) => {
-				event.preventDefault();
-				zone.classList.add('is-dragging');
-			});
-		});
-
-		['dragleave', 'drop'].forEach((name) => {
-			zone.addEventListener(name, () => zone.classList.remove('is-dragging'));
-		});
-
-		zone.addEventListener('drop', (event) => {
-			event.preventDefault();
-			const dropped = event.dataTransfer && event.dataTransfer.files;
-			if (dropped && dropped.length > 0) {
-				input.files = dropped;
-				render();
-			}
-		});
-
-		render();
-	});
-
-	if (rosterRows.length > 0) {
-		const applyRosterFilters = () => {
-			const term = rosterSearch ? String(rosterSearch.value || '').trim().toLowerCase() : '';
-			const grade = rosterGradeFilter ? String(rosterGradeFilter.value || 'all').toLowerCase() : 'all';
-			const gender = rosterGenderFilter ? String(rosterGenderFilter.value || 'all').toLowerCase() : 'all';
-			let matches = 0;
-
-			rosterRows.forEach((row) => {
-				const attr = (name) => String(row.getAttribute(name) || '').toLowerCase();
-				const visible = (term === '' || attr('data-roster-search').includes(term))
-					&& (grade === 'all' || attr('data-roster-grade') === grade)
-					&& (gender === 'all' || attr('data-roster-gender') === gender);
-
-				row.style.display = visible ? '' : 'none';
-				if (visible) {
-					matches += 1;
-				}
-			});
-
-			if (rosterNoMatchRow) {
-				rosterNoMatchRow.style.display = matches === 0 ? '' : 'none';
-			}
-		};
-
-		if (rosterSearch) {
-			rosterSearch.addEventListener('input', applyRosterFilters);
-		}
-
-		if (rosterGradeFilter) {
-			rosterGradeFilter.addEventListener('change', applyRosterFilters);
-		}
-
-		if (rosterGenderFilter) {
-			rosterGenderFilter.addEventListener('change', applyRosterFilters);
-		}
-	}
-
-	if (closeEncodeFormModal) {
-		closeEncodeFormModal.addEventListener('click', () => setModal(encodeFormBackdrop, false));
-	}
-
-	if (cancelEncodeFormModal) {
-		cancelEncodeFormModal.addEventListener('click', () => setModal(encodeFormBackdrop, false));
-	}
-
-	if (encodeFormForm) {
-		encodeFormForm.addEventListener('submit', (event) => {
-			event.preventDefault();
-			const key = encodeTemplateKey ? encodeTemplateKey.value : '';
-			if (!key) {
-				return;
-			}
-			if (key === 'form1') {
-				saveFormMetaFromInputs(key);
-			}
-
-			const encodedRows = collectEncodedRows(key);
-			if (encodedRows.length === 0) {
-				window.alert('Please encode at least one row before saving.');
-				return;
-			}
-
-			const entries = getEntries();
-			entries[key] = Number(entries[key] || 0) + encodedRows.length;
-			setEntries(entries);
-
-			const rowsByForm = getRowsByForm();
-			rowsByForm[key] = encodedRows;
-			if (key === 'form1') {
-				rowsByForm.form4 = buildLiveForm4Rows(rowsByForm);
-			}
-			setRowsByForm(rowsByForm);
-			syncEnrolledStudentsValue();
-			syncAvgAttendanceValue(rowsByForm);
-
-			renderForms();
-			viewForm(key);
-			setModal(encodeFormBackdrop, false);
-			encodeFormForm.reset();
-		});
-	}
-
-	if (addEncodeRowBtn) {
-		addEncodeRowBtn.addEventListener('click', appendEncodeRow);
-	}
-
-	if (encodeGridBody) {
-		encodeGridBody.addEventListener('input', (event) => {
-			if (!encodeTemplateKey) {
-				return;
-			}
-			const target = event.target.closest('.encode-cell-input');
-			if (!target) {
-				return;
-			}
-
-			if (encodeTemplateKey.value === 'form4') {
-				const liveDraftRows = collectEncodedRows('form4');
-				syncAvgAttendanceValue({ ...getRowsByForm(), form4: liveDraftRows });
-				return;
-			}
-
-			if (encodeTemplateKey.value !== 'form1') {
-				return;
-			}
-			const index = Number(target.dataset.colIndex);
-			if (index !== form1AgeIndex && index !== form1WeightIndex && index !== form1HeightIndex) {
-				return;
-			}
-			recalcForm1BmiInRow(target.closest('tr'));
-		});
-
-		encodeGridBody.addEventListener('click', (event) => {
-			const removeButton = event.target.closest('[data-remove-row]');
-			if (!removeButton) {
-				return;
-			}
-			const row = removeButton.closest('tr');
-			if (!row) {
-				return;
-			}
-			const rowCount = encodeGridBody.querySelectorAll('tr').length;
-			if (rowCount <= 1) {
-				Array.from(row.querySelectorAll('.encode-cell-input')).forEach((input) => {
-					input.value = '';
-				});
-				if (encodeTemplateKey && encodeTemplateKey.value === 'form4') {
-					const liveDraftRows = collectEncodedRows('form4');
-					syncAvgAttendanceValue({ ...getRowsByForm(), form4: liveDraftRows });
-				}
-				return;
-			}
-			row.remove();
-			if (encodeTemplateKey && encodeTemplateKey.value === 'form4') {
-				const liveDraftRows = collectEncodedRows('form4');
-				syncAvgAttendanceValue({ ...getRowsByForm(), form4: liveDraftRows });
-			}
-		});
-	}
-
-	renderForms();
-	setActiveView('forms');
-	syncEnrolledStudentsValue();
-	syncAvgAttendanceValue();
-	updateModeToggleLabels();
-
-	if (!openBtn || !backdrop || !closeBtn || !cancelBtn || !form) {
-		return;
-	}
-
-	const tableWeightByStudent = () => {
-		const map = new Map();
-		weightCells.forEach((cell) => {
-			const student = cell.dataset.student;
-			const raw = (cell.textContent || '').trim();
-			const parsed = parseFloat(raw.replace('kg', '').trim());
-			if (student && !Number.isNaN(parsed)) {
-				map.set(student, parsed);
-			}
-		});
-		return map;
+		const noMatch = document.getElementById(noMatchId);
+		if (noMatch) noMatch.style.display = rows.length > 0 && shown === 0 ? '' : 'none';
 	};
 
-	const syncInputsFromTable = () => {
-		const weights = tableWeightByStudent();
-		inputs.forEach((input) => {
-			const student = input.dataset.student;
-			if (!student || !weights.has(student)) {
-				return;
-			}
-			input.value = Number(weights.get(student)).toFixed(1);
-		});
+	const riskControls = {
+		search: document.getElementById('riskSearch'),
+		gender: document.getElementById('riskGenderFilter'),
+	};
+	const rosterControls = {
+		search: document.getElementById('rosterSearch'),
+		gender: document.getElementById('rosterGenderFilter'),
+		status: document.getElementById('rosterStatusFilter'),
+	};
+	const applyRisk = () => applyList('fp-risk', 'risk', riskControls, 'riskNoMatchRow');
+	const applyRoster = () => applyList('fp-roster', 'roster', rosterControls, 'rosterNoMatchRow');
+
+	Object.values(riskControls).forEach((control) => control?.addEventListener(control.tagName === 'INPUT' ? 'input' : 'change', applyRisk));
+	Object.values(rosterControls).forEach((control) => control?.addEventListener(control.tagName === 'INPUT' ? 'input' : 'change', applyRoster));
+
+	// ── Live refresh ───────────────────────────────────────────────────
+	// The stamp carries no personal data; the panels are re-read only when it
+	// moves, and the page's own query string travels with the request so a
+	// grade-filtered page redraws as the same grade.
+	const pulseUrl = page.dataset.pulseUrl;
+	const metricsUrl = page.dataset.metricsUrl;
+	const panes = {
+		alert: document.getElementById('fp-alert'),
+		cycle: document.getElementById('fp-cycle'),
+		cards: document.getElementById('fp-cards'),
+		session: document.getElementById('fp-session'),
+		nutrition: document.getElementById('fp-nutrition'),
+		risk: document.getElementById('fp-risk'),
+		roster: document.getElementById('fp-roster'),
+	};
+	const updated = document.getElementById('fpUpdated');
+	const rosterCount = document.getElementById('rosterCount');
+	let stamp = null;
+	let busy = false;
+
+	const refresh = async () => {
+		Object.values(panes).forEach((node) => node?.classList.add('is-refreshing'));
+		try {
+			const response = await fetch(metricsUrl + window.location.search, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+			if (!response.ok) return;
+			const payload = await response.json();
+			Object.entries(panes).forEach(([key, node]) => {
+				if (node && payload.html && typeof payload.html[key] === 'string') node.innerHTML = payload.html[key];
+			});
+			if (updated && payload.generatedAt) updated.textContent = payload.generatedAt;
+			if (rosterCount && panes.roster) rosterCount.textContent = String(panes.roster.querySelectorAll('tr[data-roster-search]').length);
+			applyRisk();
+			applyRoster();
+		} catch (error) {
+			/* A missed refresh is caught by the next stamp. */
+		} finally {
+			Object.values(panes).forEach((node) => node?.classList.remove('is-refreshing'));
+		}
 	};
 
-	const closeModal = () => {
-		setModal(backdrop, false);
-	};
-
-	openBtn.addEventListener('click', () => {
-		syncInputsFromTable();
-		setModal(backdrop, true);
-	});
-
-	closeBtn.addEventListener('click', closeModal);
-	cancelBtn.addEventListener('click', closeModal);
-
-	backdrop.addEventListener('click', (event) => {
-		if (event.target === backdrop) {
-			closeModal();
-		}
-	});
-
-	document.addEventListener('keydown', (event) => {
-		if (event.key === 'Escape' && backdrop.classList.contains('open')) {
-			closeModal();
-		}
-		if (event.key === 'Escape' && uploadAttendanceBackdrop && uploadAttendanceBackdrop.classList.contains('open')) {
-			setModal(uploadAttendanceBackdrop, false);
-		}
-		if (event.key === 'Escape' && encodeFormBackdrop && encodeFormBackdrop.classList.contains('open')) {
-			setModal(encodeFormBackdrop, false);
-		}
-	});
-
-	form.addEventListener('submit', (event) => {
-		event.preventDefault();
-
-		inputs.forEach((input) => {
-			const student = input.dataset.student;
-			const nextValue = Number(input.value);
-			if (Number.isNaN(nextValue)) {
+	const poll = async () => {
+		if (busy || document.hidden || !pulseUrl || !metricsUrl) return;
+		busy = true;
+		try {
+			const response = await fetch(pulseUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+			if (!response.ok) return;
+			const payload = await response.json();
+			if (stamp === null) {
+				stamp = payload.stamp;
 				return;
 			}
-			const nextWeight = `${nextValue.toFixed(1)} kg`;
-			const targetCell = weightCells.find((cell) => cell.dataset.student === student);
-			if (targetCell) {
-				targetCell.textContent = nextWeight;
+			if (payload.stamp !== stamp) {
+				stamp = payload.stamp;
+				await refresh();
 			}
-		});
+		} catch (error) {
+			/* Offline for a tick; the next one catches up. */
+		} finally {
+			busy = false;
+		}
+	};
 
-		closeModal();
-	});
+	poll();
+	window.setInterval(poll, 20000);
+	document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 })();
 </script>
+@include('partials.chart-tooltip')
+@include('partials.nurse-page-transition')
 @include('partials.sidebar-hover-pin')
 </body>
 </html>

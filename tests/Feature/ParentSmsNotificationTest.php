@@ -216,14 +216,74 @@ class ParentSmsNotificationTest extends TestCase
         $this->assertStringStartsWith('Sta. Ana NHS:', $message);
     }
 
+    /**
+     * Automatic: the guardian's number on Sheet 1 is reached without the
+     * parent having to opt in to anything first.
+     */
     #[Test]
-    public function a_parent_who_did_not_opt_in_is_not_texted(): void
+    public function the_guardian_on_sheet_one_is_texted_without_opting_in(): void
     {
         $this->consentForm(['status' => HealthConsentForm::STATUS_SIGNED, 'signed_at' => now(), 'sms_opt_in' => false]);
+        $this->gatewayAccepts();
+
+        $this->recordVisit()
+            ->assertSessionHas('success', fn (string $m) => str_contains($m, 'A text message is being sent to the parent (•••• 0101)'));
+
+        $this->assertSame(1, Consultation::count());
+        $this->assertSame(1, SmsNotification::count());
+        Http::assertSent(fn (HttpRequest $request): bool => $request['number'] === '09185550101'
+            && str_contains($request['message'], 'Ligaya visited the school clinic'));
+    }
+
+    /** No letter at all: Sheet 1 is enough. */
+    #[Test]
+    public function a_learner_with_no_consent_form_still_reaches_their_guardian(): void
+    {
+        $this->gatewayAccepts();
+
+        $this->recordVisit();
+
+        $this->assertSame(1, SmsNotification::count());
+        Http::assertSent(fn (HttpRequest $request): bool => $request['number'] === '09185550101');
+    }
+
+    #[Test]
+    public function the_parents_latest_answer_decides(): void
+    {
+        $this->optedIn(signedAt: now()->subYear())->forceFill(['school_year' => '2025-2026'])->save();
+        // Next year's letter, answered without a number of its own: the text
+        // goes back to the Sheet 1 number, not last year's choice.
+        $this->consentForm(['status' => HealthConsentForm::STATUS_SIGNED, 'signed_at' => now(), 'sms_opt_in' => false]);
+        $this->gatewayAccepts();
+
+        $this->recordVisit();
+
+        $this->assertSame(1, SmsNotification::count());
+        Http::assertSent(fn (HttpRequest $request): bool => $request['number'] === '09185550101');
+        Http::assertNotSent(fn (HttpRequest $request): bool => $request['number'] === '09171234567');
+    }
+
+    /** A number the parent typed themselves outranks the one on Sheet 1. */
+    #[Test]
+    public function the_parents_own_number_outranks_sheet_one(): void
+    {
+        $this->optedIn();
+        $this->gatewayAccepts();
+
+        $this->recordVisit();
+
+        Http::assertSent(fn (HttpRequest $request): bool => $request['number'] === '09171234567');
+        Http::assertNotSent(fn (HttpRequest $request): bool => $request['number'] === '09185550101');
+    }
+
+    #[Test]
+    public function no_number_on_file_texts_nobody(): void
+    {
+        $this->learner->forceFill(['student_details' => array_merge($this->learner->student_details, ['telephone_no' => ''])])->save();
         Http::fake();
 
         $this->recordVisit()
-            ->assertSessionHas('success', fn (string $m) => str_contains($m, 'has not opted in'));
+            ->assertSessionHas('success', fn (string $m) => str_contains($m, 'No contact number is on file'));
 
         $this->assertSame(1, Consultation::count());
         $this->assertSame(0, SmsNotification::count());
@@ -231,14 +291,13 @@ class ParentSmsNotificationTest extends TestCase
     }
 
     #[Test]
-    public function the_parents_latest_answer_decides(): void
+    public function a_landline_on_sheet_one_sends_nothing(): void
     {
-        $this->optedIn(signedAt: now()->subYear())->forceFill(['school_year' => '2025-2026'])->save();
-        // Next year's letter, answered without ticking the box.
-        $this->consentForm(['status' => HealthConsentForm::STATUS_SIGNED, 'signed_at' => now(), 'sms_opt_in' => false]);
+        $this->learner->forceFill(['student_details' => array_merge($this->learner->student_details, ['telephone_no' => '(082) 227 1234'])])->save();
         Http::fake();
 
-        $this->recordVisit();
+        $this->recordVisit()
+            ->assertSessionHas('success', fn (string $m) => str_contains($m, 'not a valid mobile number'));
 
         $this->assertSame(0, SmsNotification::count());
         Http::assertNothingSent();
@@ -367,7 +426,74 @@ class ParentSmsNotificationTest extends TestCase
             $this->fail('A wrong key must fail.');
         } catch (SmsGatewayFailure $e) {
             $this->assertStringContainsString('API key was refused', $e->getMessage());
+            // The gateway's own reply rides along, so an admin can tell a
+            // typo from an unactivated account.
+            $this->assertStringContainsString('Semaphore said: HTTP 401', $e->getMessage());
+            $this->assertStringContainsString('The selected apikey is invalid.', $e->getMessage());
+            $this->assertStringNotContainsString('test-key-not-real', $e->getMessage());
         }
+    }
+
+    /**
+     * A valid key on an account Semaphore has not activated, with no credits,
+     * is the reply the real gateway gave on 2026-11-02. The console says
+     * what is actually wrong instead of reporting a wrong key.
+     */
+    #[Test]
+    public function a_pending_account_is_named_as_such_not_as_a_wrong_key(): void
+    {
+        Http::fake(['*api.semaphore.co/api/v4/account*' => Http::response([
+            'account_id' => 87641, 'account_name' => 'SIGLA', 'status' => 'Pending', 'credit_balance' => 0,
+        ])]);
+
+        $this->withSession($this->adminSession())
+            ->get(route('dashboard.system-admin.sms'))
+            ->assertOk()
+            ->assertSee('The API key works, but Semaphore has not activated the account yet (status: Pending).')
+            ->assertSee('The account has no credits')
+            ->assertSee('SIGLA · Pending')
+            ->assertDontSee('API key was refused');
+
+        $this->assertFalse(SemaphoreClient::canSend(['status' => 'Pending', 'credit_balance' => 0]));
+        $this->assertFalse(SemaphoreClient::canSend(['status' => 'Active', 'credit_balance' => 0]));
+        $this->assertTrue(SemaphoreClient::canSend(['status' => 'Active', 'credit_balance' => 12.5]));
+    }
+
+    /** A send refused because the account is not active says so. */
+    #[Test]
+    public function a_send_refused_for_an_inactive_account_is_not_called_a_wrong_key(): void
+    {
+        Http::fake([self::GATEWAY => Http::sequence()
+            ->push(['message' => 'Your account is still pending approval.'], 403)
+            ->push(['message' => 'Forbidden.'], 403)]);
+        $client = app(SemaphoreClient::class);
+
+        try {
+            $client->send('09171234567', 'Sta. Ana NHS: hello');
+            $this->fail('A pending account must fail.');
+        } catch (SmsGatewayFailure $e) {
+            $this->assertStringContainsString('account is not active yet', $e->getMessage());
+            $this->assertStringNotContainsString('API key was refused', $e->getMessage());
+        }
+
+        try {
+            $client->send('09171234567', 'Sta. Ana NHS: hello');
+            $this->fail('A bare 403 must fail.');
+        } catch (SmsGatewayFailure $e) {
+            $this->assertStringContainsString('Check on semaphore.co that the account is active and has credits', $e->getMessage());
+        }
+    }
+
+    /** A key pasted into a host's variable editor with its quotes still works. */
+    #[Test]
+    public function a_quoted_key_is_sent_without_its_quotes(): void
+    {
+        config(['services.semaphore.key' => ' "test-key-not-real" ']);
+        $this->gatewayAccepts();
+
+        app(SemaphoreClient::class)->send('09171234567', 'Sta. Ana NHS: hello');
+
+        Http::assertSent(fn (HttpRequest $request): bool => $request['apikey'] === 'test-key-not-real');
     }
 
     #[Test]
@@ -408,16 +534,16 @@ class ParentSmsNotificationTest extends TestCase
         Http::assertNothingSent();
     }
 
+    /** A typo on the letter does not leave a family unreached when Sheet 1 has a number. */
     #[Test]
-    public function an_invalid_number_on_the_form_sends_nothing(): void
+    public function an_unusable_number_on_the_form_falls_back_to_sheet_one(): void
     {
         $this->optedIn()->forceFill(['sms_number' => '12345'])->save();
-        Http::fake();
+        $this->gatewayAccepts();
 
-        $this->recordVisit()
-            ->assertSessionHas('success', fn (string $m) => str_contains($m, 'not a valid mobile number'));
+        $this->recordVisit();
 
-        $this->assertSame(0, SmsNotification::count());
+        Http::assertSent(fn (HttpRequest $request): bool => $request['number'] === '09185550101');
     }
 
     #[Test]
@@ -497,6 +623,23 @@ class ParentSmsNotificationTest extends TestCase
         // texted a second time about the same run.
         $record();
         $this->assertSame(1, SmsNotification::count());
+    }
+
+    /** The attendance notice reaches the guardian on Sheet 1 too — no opt-in needed. */
+    #[Test]
+    public function the_attendance_notice_reaches_the_sheet_one_number(): void
+    {
+        $this->onAWednesday();
+        $this->learner->forceFill(['feeding_enrolled_at' => now()->subWeek()])->save();
+        $this->gatewayAccepts();
+
+        foreach (['2026-10-26', '2026-10-27', '2026-10-28'] as $date) {
+            $this->absentOn($this->learner, $date);
+        }
+
+        $this->assertSame(1, app(ParentNotifier::class)->attendanceNotices($this->school->id));
+
+        $this->assertSame('09185550101', (string) SmsNotification::sole()->recipient);
     }
 
     #[Test]

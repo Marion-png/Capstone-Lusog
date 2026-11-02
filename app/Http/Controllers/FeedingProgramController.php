@@ -6,10 +6,10 @@ use App\Models\AttendanceImport;
 use App\Models\FeedingAttendance;
 use App\Models\StudentHealthRecord;
 use App\Models\StudentPhoto;
+use App\Support\AccountSettings;
 use App\Support\AttendanceSheetParser;
 use App\Support\AttendanceSheetScanner;
 use App\Support\AuditTrail;
-use App\Support\BmiClassifier;
 use App\Support\EncryptedFileStorage;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceFlag;
@@ -17,12 +17,14 @@ use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingAttendanceWindow;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingConsent;
+use App\Support\FeedingNutritionProgress;
 use App\Support\FeedingProgramCycle;
 use App\Support\ParentNotifier;
 use App\Support\SchemaCache;
 use App\Support\SchoolCalendar;
 use App\Support\UploadReadFailure;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -42,134 +44,164 @@ class FeedingProgramController extends Controller
     /** How many parents this request queued a text for, for the save's message. */
     private int $parentsTexted = 0;
 
+    /**
+     * The roles that read the programme page — each on its own path, so
+     * EnsureActiveSession never re-seeds one as the other.
+     */
+    private const PROGRAM_READERS = [
+        'school_nurse' => 'dashboard.school-nurse.feeding-program',
+        'clinic_teacher' => 'dashboard.clinic-teacher.feeding-program',
+    ];
+
+    /**
+     * The panels a write elsewhere can move, by pane id => partial. The
+     * metrics endpoint renders exactly these, from the same partials the
+     * first paint used, so a live view and a reloaded one cannot drift.
+     */
+    private const PROGRAM_PANES = [
+        'alert' => 'program-alert',
+        'cycle' => 'program-cycle',
+        'cards' => 'program-cards',
+        'session' => 'program-session',
+        'nutrition' => 'program-nutrition',
+        'risk' => 'program-risk-rows',
+        'roster' => 'program-roster-rows',
+    ];
+
+    /** How many recorded sessions the turnout strip draws. */
+    private const RECENT_SESSIONS = 10;
+
+    /**
+     * The School Nurse's (and the Clinic Teacher's) read-only window onto the
+     * feeding programme — the "Feeding Programme" view inside Nutritional
+     * Health Status.
+     *
+     * It reads the programme the way the Feeding Coordinator's own tabs do —
+     * the same beneficiary test, the same cards, the same cycle, the same
+     * flag, the same baseline-to-endline progress — so the two desks report
+     * one programme. It writes nothing.
+     */
     public function index(Request $request): View
     {
+        return view('feedingcor-dashboard.feed-program', $this->programReading($request));
+    }
+
+    /**
+     * The page's live panels, re-rendered after the school's stamp moves.
+     *
+     * The page polls `workspace.pulse` (a hash, no personal data) and asks for
+     * this only when it changes — a mark recorded at the feeding line, an
+     * enrolment, a weigh-in — so a nurse reading the programme sees it land
+     * without reloading. It forwards the page's own query string, so a
+     * grade-filtered page redraws as the same grade.
+     */
+    public function programMetrics(Request $request): JsonResponse
+    {
+        if (! array_key_exists((string) $request->session()->get('active_role', ''), self::PROGRAM_READERS)) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        $data = $this->programReading($request);
+        $html = [];
+
+        foreach (self::PROGRAM_PANES as $pane => $partial) {
+            $html[$pane] = view('feedingcor-dashboard.partials.'.$partial, $data)->render();
+        }
+
+        return response()->json([
+            'generatedAt' => $data['generatedAt'],
+            'html' => $html,
+        ]);
+    }
+
+    /**
+     * Everything the programme page shows, from one reading.
+     *
+     * @return array<string, mixed>
+     */
+    private function programReading(Request $request): array
+    {
         $activeRole = (string) $request->session()->get('active_role', '');
-        $currentRouteName = (string) optional($request->route())->getName();
-        $isNurseFeedingRoute = in_array($currentRouteName, [
-            'dashboard.school-nurse.feeding-program',
-            'dashboard.clinic-teacher.feeding-program',
-        ], true);
-        // The clinic reads this page; only the Feeding Coordinator writes it.
-        $isReadOnly = $isNurseFeedingRoute || in_array($activeRole, ['school_nurse', 'clinic_teacher'], true);
-
         $institutionId = $request->session()->get('active_institution_id');
+        $schoolYear = StudentHealthRecord::currentSchoolYear();
+        $programRoute = self::PROGRAM_READERS[$activeRole] ?? self::PROGRAM_READERS['school_nurse'];
 
-        // A Feeding Coordinator is scoped to a single institution, so the
-        // relevant slice is grade level, not school. Grade level lives in the
-        // plain "section" column as "Grade X / Section"; we derive the options
-        // and filter in PHP so nothing depends on the encrypted columns.
-        $selectedGrade = trim((string) $request->query('grade', 'all'));
-        if ($selectedGrade === '') {
-            $selectedGrade = 'all';
-        }
-
-        $eligibleStudents = collect();
-        if (SchemaCache::hasTable('student_health_records')) {
-            $studentsQuery = StudentHealthRecord::query();
-            if ($institutionId) {
-                $studentsQuery->where('institution_id', $institutionId);
-            }
-
-            // nutritional_status is encrypted at rest, so eligibility filtering
-            // happens in PHP after fetch.
-            $eligibleStudents = $studentsQuery
-                ->forCurrentSchoolYear()
-                ->get()
-                ->filter(fn (StudentHealthRecord $record): bool => $this->isEnrolledBeneficiary($record))
-                ->values();
-        }
-
-        // Always offer the full DepEd grade range (Grade 1–12), regardless of
-        // which grades currently have beneficiaries on file.
-        $gradeOptions = collect(range(1, 12))
+        // The programme covers Junior High alone, so the filter offers exactly
+        // the grades it feeds — read from the one declaration, never typed.
+        $gradeOptions = collect(FeedingBeneficiarySummary::GRADE_LEVELS)
             ->map(fn (int $level): string => 'Grade '.$level)
             ->values();
-
-        if ($selectedGrade !== 'all' && ! $gradeOptions->contains($selectedGrade)) {
+        $selectedGrade = trim((string) $request->query('grade', 'all'));
+        if ($selectedGrade === '' || ! $gradeOptions->contains($selectedGrade)) {
             $selectedGrade = 'all';
         }
 
-        // student_name is encrypted at rest, so sorting happens in PHP.
-        $students = $eligibleStudents
-            ->when($selectedGrade !== 'all', fn ($collection) => $collection->filter(
+        // The beneficiary test every coordinator tab reads (qualified, in a
+        // covered grade, enrolled and not removed) over the page's shared
+        // roster read. Sorted in PHP: student_name is encrypted at rest.
+        $roster = SchemaCache::hasTable('student_health_records')
+            ? StudentHealthRecord::rosterFor($institutionId, $schoolYear)
+            : collect();
+
+        $students = $roster
+            ->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isBeneficiary($record))
+            ->when($selectedGrade !== 'all', fn (Collection $rows) => $rows->filter(
                 fn (StudentHealthRecord $record): bool => $this->resolveGradeLevel((string) $record->section) === $selectedGrade
             ))
-            ->sortBy('student_name')
+            ->sortBy(fn (StudentHealthRecord $record): string => strtolower((string) $record->student_name))
             ->values();
 
-        $programDay = $this->resolveProgramDay($institutionId);
-
-        // One rule, one reading. The flag beside a learner is the one every
-        // feeding screen counts: the threshold reached AND the Feeding
-        // Coordinator's confirmation on record (FeedingAttendanceFlag) — read
-        // live, so this page and the coordinator's cannot disagree.
+        $cycle = FeedingProgramCycle::forInstitution($institutionId);
         $rule = FeedingAtRiskRule::forInstitution($institutionId);
-        $marksByRecord = FeedingBeneficiarySummary::marksByRecord($students);
+
         // Only the coordinator and the School Nurse see who is flagged. The
-        // Clinic Teacher reads this same page in their own rail, and for them
-        // the flag is not computed at all rather than computed and hidden.
+        // Clinic Teacher reads this same page, and for them the flag is not
+        // computed at all rather than computed and hidden.
         $showFlags = FeedingAttendanceFlag::visibleTo($activeRole);
         $flags = $showFlags ? FeedingAttendanceFlag::forRecords($students, $rule) : [];
+
+        // The coordinator's own five figures, from the class that decides them
+        // for the Beneficiaries tab and the Dashboard.
+        $summary = FeedingBeneficiarySummary::tally($students, $rule, $showFlags);
 
         // How many sessions a learner must have attended to clear a rate
         // threshold, over the feeding days the school has actually held. A run
         // of absences has no such figure, so it is only offered for a rate.
-        $sessionsHeld = $this->sessionsHeld($institutionId, StudentHealthRecord::currentSchoolYear());
+        $sessionsHeld = $this->sessionsHeld($institutionId, $schoolYear);
         $atRiskThresholdCount = $rule->isRateMode()
             ? (int) ceil($sessionsHeld * ($rule->thresholdPercent() / 100))
             : null;
 
+        $marksByRecord = FeedingBeneficiarySummary::marksByRecord($students);
+
         $studentRows = $students->map(function (StudentHealthRecord $record) use ($marksByRecord, $rule, $flags): array {
-            $currentWeight = (float) $record->weight;
-            // No invented baseline. A learner the adviser has not measured yet
-            // has no baseline weight or BMI, and the roster prints an em dash —
-            // guessing "current minus 0.7" would put a measurement that never
-            // happened on a child's health record, and show it as improvement.
-            $baselineWeight = $record->baseline_weight_kg !== null ? (float) $record->baseline_weight_kg : null;
-            $bmiCurrent = (float) $record->bmi_value;
-            $bmiBaseline = $record->baseline_bmi_value !== null ? (float) $record->baseline_bmi_value : null;
-            $resolvedStatus = $this->normalizeNutritionalStatus($record->nutritional_status, $bmiCurrent);
-
-            $trendClass = 't-stable';
-            $trendLabel = 'Stable';
-            $bmiClass = 'bmi-up';
-
-            $status = strtolower((string) $resolvedStatus);
-            $isAttendanceEligible = $this->isAttendanceEligible($resolvedStatus);
-            if (str_contains($status, 'normal')) {
-                $trendClass = 't-improving';
-                $trendLabel = 'Improving';
-            } elseif (str_contains($status, 'severe') || str_contains($status, 'wasted') || str_contains($status, 'underweight')) {
-                $trendClass = 't-regressing';
-                $trendLabel = 'Regressing';
-                $bmiClass = 'bmi-down';
-            }
-
             // Attendance is counted over the sessions the rule judged: present
             // out of confirmed. An unconfirmed mark votes neither way, and the
-            // 120-day cycle length is not a denominator — a learner is not 3%
-            // attended because the programme has 116 days left to run.
+            // cycle length is not a denominator — a learner is not 3% attended
+            // because the programme has 116 days left to run.
             $marks = $marksByRecord->get($record->id, []);
             $confirmedSessions = count(array_filter($marks, static fn ($mark) => $mark !== null));
             $attendanceCount = $rule->presentCount($marks);
             $attendancePercent = $rule->attendanceRate($marks);
-
             $details = is_array($record->student_details) ? $record->student_details : [];
+
+            // No invented baseline. A learner the adviser has not measured has
+            // no baseline weight, and the roster prints an em dash — guessing
+            // "current minus 0.7" would put a measurement that never happened
+            // on a child's record, and show it as improvement.
+            $baselineWeight = $this->measurement($record->baseline_weight_kg);
 
             return [
                 'id' => $record->id,
                 'student_name' => $record->student_name,
                 'section' => $record->section,
                 'grade_level' => $this->resolveGradeLevel((string) $record->section),
+                'section_name' => FeedingBeneficiarySummary::splitSection((string) $record->section)[1],
                 'gender' => $this->resolveGenderLabel((string) ($details['gender'] ?? '')),
-                'baseline_weight' => $baselineWeight === null ? null : number_format($baselineWeight, 1),
-                'current_weight' => number_format($currentWeight, 1),
-                'bmi_range' => $bmiBaseline === null
-                    ? number_format($bmiCurrent, 1)
-                    : number_format($bmiBaseline, 1).' - '.number_format($bmiCurrent, 1),
-                'bmi_class' => $bmiClass,
-                'bmi_value' => number_format($bmiCurrent, 1),
+                'baseline_status' => FeedingBeneficiarySummary::statusOf($record),
+                'endline_status' => $this->endlineStatus($record),
+                'baseline_weight' => $baselineWeight,
+                'current_weight' => $this->measurement($record->weight),
                 // Null, not 0: no confirmed session is not a turnout of nothing.
                 'attendance' => $confirmedSessions > 0
                     ? $attendanceCount.'/'.$confirmedSessions.' sessions'
@@ -177,39 +209,33 @@ class FeedingProgramController extends Controller
                 'attendance_count' => $attendanceCount,
                 'attendance_sessions' => $confirmedSessions,
                 'attendance_percent' => $attendancePercent === null ? null : (int) round($attendancePercent),
-                'nutritional_status' => $resolvedStatus,
-                'is_attendance_eligible' => $isAttendanceEligible,
+                'nutritional_status' => FeedingBeneficiarySummary::statusOf($record),
                 'is_at_risk' => (bool) ($flags[$record->id]['flagged'] ?? false),
                 'flagged_on' => $flags[$record->id]['confirmation']['date_label'] ?? null,
-                'trend_label' => $trendLabel,
-                'trend_class' => $trendClass,
             ];
         })->values();
-
-        $studentCount = $studentRows->count();
-        $improvingCount = $studentRows->where('trend_label', 'Improving')->count();
-        $totalPresentAttendance = (int) $studentRows->sum('attendance_count');
-        $totalConfirmedSessions = (int) $studentRows->sum('attendance_sessions');
-        $attendanceRate = $totalConfirmedSessions > 0
-            ? (int) round(($totalPresentAttendance / $totalConfirmedSessions) * 100)
-            : null;
 
         $atRiskStudents = $studentRows
             ->filter(fn (array $student): bool => (bool) ($student['is_at_risk'] ?? false))
             ->values();
 
-        $latestImport = SchemaCache::hasTable('attendance_imports')
-            ? AttendanceImport::latestForPeriod($institutionId)
-            : null;
+        // One read of every mark the roll carries: the roster's counts and the
+        // session panel are both derived from it.
+        $allMarks = $this->programMarks($studentRows->pluck('id')->all());
+        $sessions = $this->programSessions($allMarks, $studentRows->count());
 
-        return view('feedingcor-dashboard.feed-program', [
-            'isReadOnly' => $isReadOnly,
+        return [
+            'activeRole' => $activeRole,
+            'roleLabel' => AccountSettings::roleLabel($activeRole),
+            'programRouteName' => $programRoute,
+            'metricsRouteName' => $programRoute.'.metrics',
+            'schoolYear' => $schoolYear,
+            'schoolName' => (string) $request->session()->get('active_school_name', 'School'),
+            'generatedAt' => now(config('app.school_timezone'))->format('g:i A'),
             'programStats' => [
-                'enrolled_students' => $studentCount,
-                'program_day' => $programDay.'/'.FeedingProgramCycle::durationForInstitution($institutionId),
-                'avg_attendance' => $attendanceRate === null ? '—' : $attendanceRate.'%',
-                'improving_rate' => $studentCount > 0 ? (int) round(($improvingCount / $studentCount) * 100).'%' : '0%',
-                'improving_hint' => $improvingCount.' of '.$studentCount.' students',
+                'enrolled_students' => $studentRows->count(),
+                'program_day' => $cycle->day().'/'.$cycle->durationDays(),
+                'avg_attendance' => $summary['attendance_rate'] === null ? '—' : $summary['attendance_rate'].'%',
                 'at_risk_count' => $atRiskStudents->count(),
                 // The school's own threshold, never a constant: the System
                 // Admin sets it per school, and the flags beside it were
@@ -219,88 +245,178 @@ class FeedingProgramController extends Controller
                 'at_risk_threshold_count' => $atRiskThresholdCount,
                 'sessions_held' => $sessionsHeld,
             ],
+            'cycle' => [
+                'day' => $cycle->day(),
+                'duration' => $cycle->durationDays(),
+                'percent' => $cycle->percent(),
+                'started' => $cycle->hasStarted(),
+                'complete' => $cycle->isComplete(),
+                'days_remaining' => $cycle->daysRemaining(),
+                'start_date' => $cycle->startDateIso(),
+                'end_date' => $cycle->endDateIso(),
+            ],
+            'beneficiarySummary' => $summary,
+            'latestSession' => $sessions['latest'],
+            'recentSessions' => $sessions['recent'],
+            'nutritionProgress' => FeedingNutritionProgress::build(
+                $students,
+                fn (StudentHealthRecord $record): string => FeedingBeneficiarySummary::statusOf($record),
+                fn (StudentHealthRecord $record): string => $this->endlineStatus($record),
+            ),
             'students' => $studentRows,
             'atRiskStudents' => $atRiskStudents,
             'showFlags' => $showFlags,
             'gradeOptions' => $gradeOptions,
             'selectedGrade' => $selectedGrade,
-            'hasGradeFilter' => $gradeOptions->isNotEmpty(),
-            'scanningEnabled' => ! $isReadOnly
-                && config('feeding.scanning.enabled')
-                && AttendanceSheetScanner::isConfigured(),
-            'pendingReviewCount' => $this->pendingReviewCount($institutionId),
-            'attendanceRoster' => $this->buildAttendanceRoster($studentRows),
-            'latestImport' => $latestImport,
-        ]);
+            'attendanceRoster' => $this->buildAttendanceRoster($studentRows, $allMarks),
+        ];
+    }
+
+    /**
+     * A beneficiary's endline as the coordinator's progress panel reads it:
+     * '' when nobody has re-measured them, the retired "Underweight" already
+     * folded into Wasted, and anything above Normal on the one rung the scale
+     * keeps for it.
+     */
+    private function endlineStatus(StudentHealthRecord $record): string
+    {
+        $status = trim((string) $record->endline_nutritional_status);
+
+        if ($status === '') {
+            return '';
+        }
+
+        $normalized = FeedingBeneficiarySummary::normalize($status);
+
+        return $normalized === 'Overweight' ? FeedingNutritionProgress::ABOVE_NORMAL : $normalized;
+    }
+
+    /**
+     * Every mark these beneficiaries carry, grouped by learner, in date order.
+     *
+     * Fetched, never aggregated in SQL: a SUM(CASE WHEN is_present ...) folds
+     * an unconfirmed NULL into "absent", which attendance must never do.
+     *
+     * @param  list<int>  $recordIds
+     * @return Collection<int, Collection<int, FeedingAttendance>>
+     */
+    private function programMarks(array $recordIds): Collection
+    {
+        if ($recordIds === [] || ! SchemaCache::hasTable('feeding_attendances')) {
+            return collect();
+        }
+
+        return FeedingAttendance::query()
+            ->whereIn('student_health_record_id', $recordIds)
+            ->orderBy('session_date')
+            ->get(array_merge(
+                ['student_health_record_id', 'session_date', 'is_present'],
+                $this->hasReviewColumns() ? ['needs_review'] : [],
+                $this->hasExcusedColumn() ? ['is_excused'] : []
+            ))
+            ->groupBy('student_health_record_id');
+    }
+
+    /**
+     * The programme's recorded feeding days, as the session panel reads them:
+     * the latest one in full, and the last few as a turnout strip.
+     *
+     * Only sessions up to today on the school's clock — a sheet dated ahead
+     * is not a day anybody was fed yet. Turnout is present over confirmed
+     * marks, exactly as Attendance History counts a day; an excused absence
+     * and an unread scan are in neither half, and a day whose marks are all
+     * unconfirmed has no turnout at all rather than a zero.
+     *
+     * @param  Collection<int, Collection<int, FeedingAttendance>>  $marksByRecord
+     * @return array{latest: ?array<string, mixed>, recent: list<array<string, mixed>>}
+     */
+    private function programSessions(Collection $marksByRecord, int $expected): array
+    {
+        $today = FeedingAttendanceWindow::today();
+
+        $byDate = $marksByRecord
+            ->flatten(1)
+            ->filter(fn (FeedingAttendance $mark): bool => $mark->session_date !== null
+                && $mark->session_date->toDateString() <= $today)
+            ->groupBy(fn (FeedingAttendance $mark): string => $mark->session_date->toDateString())
+            ->sortKeys();
+
+        $days = $byDate->map(function (Collection $marks, string $date) use ($expected): array {
+            $states = $marks->map(fn (FeedingAttendance $mark): string => FeedingAttendanceMark::state($mark));
+            $present = $states->filter(fn (string $s): bool => $s === FeedingAttendanceMark::PRESENT)->count();
+            $absent = $states->filter(fn (string $s): bool => $s === FeedingAttendanceMark::ABSENT)->count();
+            $excused = $states->filter(fn (string $s): bool => $s === FeedingAttendanceMark::EXCUSED)->count();
+            $unconfirmed = $states->filter(fn (string $s): bool => $s === FeedingAttendanceMark::UNCONFIRMED)->count();
+            $confirmed = $present + $absent;
+
+            return [
+                'date' => $date,
+                'label' => Carbon::parse($date)->format('D, M j'),
+                'long_label' => Carbon::parse($date)->format('l, F j, Y'),
+                'present' => $present,
+                'absent' => $absent,
+                'excused' => $excused,
+                'unconfirmed' => $unconfirmed,
+                'not_marked' => max(0, $expected - $marks->count()),
+                'expected' => $expected,
+                'rate' => $confirmed > 0 ? (int) round(($present / $confirmed) * 100) : null,
+            ];
+        })->values();
+
+        return [
+            'latest' => $days->last(),
+            'recent' => $days->slice(-self::RECENT_SESSIONS)->values()->all(),
+        ];
     }
 
     /**
      * The one list of beneficiaries this page renders: every eligible learner
      * exactly once, carrying both their measurements and their attendance.
      *
-     * There used to be two tables — a beneficiaries table and an attendance
-     * table — so every learner was drawn twice, with grade, section and
-     * attendance repeated between them. One learner is one row.
-     *
      * A learner no sheet has covered yet still appears, with their attendance
      * figures left null for the view to render as "—". Absence from an
      * attendance sheet is not a fact about the learner, and dropping them from
-     * the list would hide a beneficiary the coordinator is responsible for.
+     * the list would hide a beneficiary the programme is responsible for.
      *
-     * Attendance is counted in PHP rather than with a SUM(CASE WHEN is_present
-     * ...): a NULL mark is one no human has confirmed, and it must stay out of
-     * both the numerator and the denominator (see FeedingAtRiskRule).
+     * Every recorded session counts here, including one dated ahead of today.
+     * This table reports what the uploaded sheets say about each learner, so
+     * it has to add up to the file the coordinator uploaded — a sheet covering
+     * three days that showed one absence read as the upload having failed.
+     * The at-risk flag is a separate question and keeps its own, stricter rule.
      *
      * @param  Collection<int, array<string, mixed>>  $studentRows
+     * @param  Collection<int, Collection<int, FeedingAttendance>>  $marksByRecord
      * @return Collection<int, array<string, mixed>>
      */
-    private function buildAttendanceRoster(Collection $studentRows): Collection
+    private function buildAttendanceRoster(Collection $studentRows, Collection $marksByRecord): Collection
     {
-        if ($studentRows->isEmpty()) {
-            return collect();
-        }
-
-        // Every recorded session counts here, including one dated ahead of
-        // today. This table reports what the uploaded sheets say about each
-        // learner, so it has to add up to the file the coordinator just
-        // uploaded — a sheet covering three days that showed one absence read
-        // as the upload having failed. The at-risk flag is a separate question
-        // and keeps its own, stricter rule: refreshAttendanceRiskFlags() still
-        // ignores sessions that have not happened, so nobody is flagged for
-        // missing a feeding day that is still in the future.
-        $marksByRecord = SchemaCache::hasTable('feeding_attendances')
-            ? FeedingAttendance::query()
-                ->whereIn('student_health_record_id', $studentRows->pluck('id')->all())
-                ->orderBy('session_date')
-                ->get(array_merge(
-                    ['student_health_record_id', 'session_date', 'is_present'],
-                    $this->hasReviewColumns() ? ['needs_review'] : [],
-                    $this->hasExcusedColumn() ? ['is_excused'] : []
-                ))
-                ->groupBy('student_health_record_id')
-            : collect();
-
         return $studentRows
             ->map(function (array $student) use ($marksByRecord): array {
-                // Null where the adviser has not measured a baseline yet, so
-                // the roster prints an em dash instead of a weight change
-                // against a reading nobody took.
-                $baselineWeight = $student['baseline_weight'] === null ? null : (float) $student['baseline_weight'];
-                $currentWeight = (float) ($student['current_weight'] ?? 0);
+                $baselineWeight = $student['baseline_weight'];
+                $currentWeight = $student['current_weight'];
 
                 $row = [
+                    'id' => $student['id'],
                     'student_name' => $student['student_name'],
                     'section' => $student['section'],
+                    'section_name' => $student['section_name'],
                     'grade_level' => $student['grade_level'],
                     'gender' => $student['gender'],
-                    'nutritional_status' => $student['nutritional_status'],
+                    'baseline_status' => $student['baseline_status'],
+                    'endline_status' => $student['endline_status'],
                     'baseline_weight' => $baselineWeight,
                     'current_weight' => $currentWeight,
-                    'weight_change' => $baselineWeight === null ? null : round($currentWeight - $baselineWeight, 1),
+                    // Null where the adviser has not measured a baseline yet,
+                    // so the roster prints an em dash instead of a weight
+                    // change against a reading nobody took.
+                    'weight_change' => $baselineWeight === null || $currentWeight === null
+                        ? null
+                        : round($currentWeight - $baselineWeight, 1),
                     'is_at_risk' => (bool) ($student['is_at_risk'] ?? false),
                     'sessions' => 0,
                     'present' => 0,
                     'absent' => 0,
+                    'excused' => 0,
                     'pending' => 0,
                     'rate' => null,
                     'last_session' => null,
@@ -316,19 +432,17 @@ class FeedingProgramController extends Controller
                 // marks do: neither says anything about whether this learner is
                 // turning up when the school expects them.
                 $states = $marks->map(fn ($mark): string => FeedingAttendanceMark::state($mark));
-                $pending = $states->filter(fn (string $state): bool => $state === FeedingAttendanceMark::UNCONFIRMED);
-                $present = $states->filter(fn (string $state): bool => $state === FeedingAttendanceMark::PRESENT);
-                $absent = $states->filter(fn (string $state): bool => $state === FeedingAttendanceMark::ABSENT);
-                $excused = $states->filter(fn (string $state): bool => $state === FeedingAttendanceMark::EXCUSED);
-                $confirmed = $present->count() + $absent->count();
+                $present = $states->filter(fn (string $state): bool => $state === FeedingAttendanceMark::PRESENT)->count();
+                $absent = $states->filter(fn (string $state): bool => $state === FeedingAttendanceMark::ABSENT)->count();
+                $confirmed = $present + $absent;
 
                 return array_merge($row, [
                     'sessions' => $marks->count(),
-                    'present' => $present->count(),
-                    'absent' => $absent->count(),
-                    'excused' => $excused->count(),
-                    'pending' => $pending->count(),
-                    'rate' => $confirmed > 0 ? (int) round(($present->count() / $confirmed) * 100) : null,
+                    'present' => $present,
+                    'absent' => $absent,
+                    'excused' => $states->filter(fn (string $state): bool => $state === FeedingAttendanceMark::EXCUSED)->count(),
+                    'pending' => $states->filter(fn (string $state): bool => $state === FeedingAttendanceMark::UNCONFIRMED)->count(),
+                    'rate' => $confirmed > 0 ? (int) round(($present / $confirmed) * 100) : null,
                     'last_session' => optional($marks->last())->session_date,
                 ]);
             })
@@ -1307,7 +1421,9 @@ class FeedingProgramController extends Controller
                     ->forCurrentSchoolYear($schoolYear ?: null)
                     ->select('id')
             ))
-            ->whereDate('session_date', '<=', now()->toDateString())
+            // Up to today on the school's clock, never the server's: before
+            // 8 AM in Davao the server is still on yesterday.
+            ->whereDate('session_date', '<=', FeedingAttendanceWindow::today())
             ->distinct()
             ->count('session_date');
     }
@@ -2100,39 +2216,6 @@ class FeedingProgramController extends Controller
             || $status === 'severely wasted'
             || $status === 'severly wasted'
             || $status === 'underweight';
-    }
-
-    private function normalizeNutritionalStatus(?string $nutritionalStatus, ?float $bmi): string
-    {
-        $status = trim((string) $nutritionalStatus);
-        $normalized = strtolower($status);
-
-        if (str_contains($normalized, 'severe')) {
-            return 'Severely Wasted';
-        }
-        if (str_contains($normalized, 'wast')) {
-            return 'Wasted';
-        }
-        // A record saved under the retired "Underweight" label is Wasted: the
-        // DepEd scale has no Underweight column, and the classifier no longer
-        // emits it (App\Support\BmiClassifier).
-        if (str_contains($normalized, 'underweight')) {
-            return 'Wasted';
-        }
-        if (str_contains($normalized, 'over')) {
-            return 'Overweight';
-        }
-
-        if ($bmi !== null) {
-            return BmiClassifier::fromBmi((float) $bmi);
-        }
-
-        return $status !== '' ? $status : 'Normal';
-    }
-
-    private function resolveProgramDay(?int $institutionId = null): int
-    {
-        return FeedingProgramCycle::forInstitution($institutionId)->day();
     }
 
     /**

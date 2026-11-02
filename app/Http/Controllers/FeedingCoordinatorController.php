@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\FeedingAttendance;
 use App\Models\StudentHealthRecord;
 use App\Support\BmiAssessmentReport;
+use App\Support\BmiReportInsight;
 use App\Support\ChangeStamp;
 use App\Support\ClassMasterlistTemplate;
 use App\Support\FeedingAtRiskRule;
@@ -61,6 +62,9 @@ class FeedingCoordinatorController extends Controller
 
         $letterhead = SchoolLetterhead::for($institutionId, (string) $request->session()->get('active_school_name', ''));
 
+        // The grid counted once for the whole school and once per section.
+        $bmiValueSets = $this->bmiValueSetsBySection($records);
+
         // The class advisers' blank CLASS MASTERLIST, for the nurse only: one
         // model drawn on the page and written to the download, so the two are
         // the same form.
@@ -77,7 +81,7 @@ class FeedingCoordinatorController extends Controller
             // learner an adviser enrols, or one the coordinator enrols, after
             // this paint moves it.
             'rosterStamp' => $rosterStamp,
-            'bmiValues' => BmiAssessmentReport::values($records),
+            'bmiValues' => $bmiValueSets[''],
             // The same grid, counted again over each section on its own. It is
             // precomputed rather than fetched per choice because every field it
             // reads is encrypted at rest: the counting has to happen in PHP
@@ -85,7 +89,12 @@ class FeedingCoordinatorController extends Controller
             // coordinator picks is drawn from the same reading as the grade —
             // one computation, so a section grid and its grade grid can never
             // disagree about the same children.
-            'bmiValueSets' => $this->bmiValueSetsBySection($records),
+            'bmiValueSets' => $bmiValueSets,
+            // What each of those grids shows, in a few sentences under its chart:
+            // written from the same value sets, so the words and the bars cannot
+            // describe different children, and keyed the same way so the Grade
+            // and Section filter swaps the insight with the figures.
+            'bmiInsights' => BmiReportInsight::forValueSets($bmiValueSets),
             'schoolYear' => StudentHealthRecord::currentSchoolYear(),
             'nurseName' => $this->resolveSchoolNurseName($institutionId, (string) $request->session()->get('active_school_name', '')),
             // The DepEd heading every form on this page opens under.

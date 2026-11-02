@@ -1,71 +1,224 @@
 /* ══════════════════════════════════════════════════════════════════════
-   Feeding Coordinator — Feeding Program
+   Nutritional Health Status — Feeding Programme (School Nurse, Clinic Teacher)
    Page-specific styles only. Tokens, shell, KPI cards, buttons, tables,
-   badges and alerts come from feeding-theme.css, loaded first.
+   badges and alerts come from lusog-theme.css, loaded first; the rail comes
+   from nurse-sidebar.css, loaded last.
 
-   This page is also served read-only to the School Nurse, which renders
-   its own legacy .sidebar rail instead of the shared .asb-sidebar and
-   does NOT load role-sidebar.css — so the rail and the content offset for
-   that variant live at the bottom of this file, scoped to `.sidebar ~`.
+   Chart colours are validated steps, never picked by eye:
+   - Baseline / Endline: the theme's --series-risk / --series-healthy pair
+     (ΔE 25.6 normal, 12.6 protan, both ≥ 3:1 on the card).
+   - Turnout (one series): #007C99, the neutral-information teal the Data
+     Visualization page uses for single-series counts — it clears the chroma
+     floor where the theme's --lg-info reads as grey.
+   Re-run the dataviz validator before changing either.
    ══════════════════════════════════════════════════════════════════════ */
 
+#fp-page {
+	--fp-count: #007C99;
+	--fp-baseline: var(--series-risk);
+	--fp-endline: var(--series-healthy);
+}
+
 .head-row { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
-.head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.head-actions { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.fp-grade-form { display: flex; flex-direction: column; gap: 4px; }
+.fp-grade-label { font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--lg-ink-soft); }
+.fp-grade-select { min-width: 190px; width: auto; }
 
-.school-filter-form { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
-.school-filter-label { font-size: .74rem; font-weight: 600; color: var(--lg-ink-soft); }
-.school-filter-select { min-width: 220px; width: auto; }
+.fp-alert { margin-top: 18px; }
+.card-sub { margin-top: 3px; font-size: .78rem; color: var(--lg-ink-soft); }
+.fp-sub { display: block; margin-top: 2px; font-size: .74rem; color: var(--lg-ink-soft); }
+.fp-empty { margin-top: 6px; }
 
-/* ── Program progress ─────────────────────────────────────────────
-   A 120-day cycle is a single measure with a known ceiling, so it is a
-   bar, not a chart: the fill is the days served, the marker is today. ── */
-.progress-card { margin-top: 20px; padding: var(--lg-pad-card); }
+/* A pane being redrawn dims for the moment the request takes, so a change
+   arriving is seen rather than snapping in. */
+.live-pane { transition: opacity .2s ease; }
+.live-pane.is-refreshing { opacity: .55; }
+
+/* ── The cycle ────────────────────────────────────────────────────────
+   The day, the bar and the four dates a nurse asks about, in one band. */
+.fp-cycle {
+	display: grid;
+	grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+	gap: 22px 32px;
+	align-items: center;
+	margin-top: 18px;
+	padding: 22px 24px;
+	background:
+		linear-gradient(120deg, var(--lg-mint) 0%, var(--lg-card) 62%);
+}
+.fp-eyebrow {
+	font-size: .66rem;
+	font-weight: 700;
+	letter-spacing: .09em;
+	text-transform: uppercase;
+	color: var(--lg-emerald-deep);
+}
+.fp-cycle-day { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 6px 0 14px; }
+.fp-cycle-day strong { font-size: 1.9rem; font-weight: 700; letter-spacing: -.02em; color: var(--lg-ink); line-height: 1.05; }
+.fp-cycle-day span { font-size: .86rem; color: var(--lg-ink-soft); }
 .prog-track {
 	width: 100%;
 	height: 12px;
 	border-radius: var(--lg-r-pill);
 	background: var(--lg-rail);
 	box-shadow: inset 0 0 0 1px var(--lg-border);
-	overflow: visible;
+	overflow: hidden;
+}
+.prog-fill { height: 100%; background: var(--lg-emerald); border-radius: var(--lg-r-pill); transition: width .4s ease; }
+.prog-labels { margin-top: 7px; display: flex; justify-content: space-between; gap: 8px; font-size: .74rem; color: var(--lg-ink-soft); }
+.prog-percent { font-weight: 600; color: var(--lg-ink); }
+.fp-cycle-facts {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1px;
+	margin: 0;
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-card);
+	overflow: hidden;
+	background: var(--lg-border);
+}
+.fp-cycle-facts > div { padding: 12px 14px; background: var(--lg-card); }
+.fp-cycle-facts dt { font-size: .64rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--lg-ink-soft); }
+.fp-cycle-facts dd { margin: 4px 0 0; font-size: .98rem; font-weight: 700; color: var(--lg-ink); }
+
+.fp-cards { margin-top: 18px; }
+
+/* ── Session and nutrition, side by side ───────────────────────────── */
+.fp-split {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 18px;
+	margin-top: 18px;
+}
+.fp-panel { padding: 20px 22px; display: flex; flex-direction: column; }
+.fp-panel .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+
+.fp-session-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.fp-session-rate { display: flex; flex-direction: column; gap: 2px; }
+.fp-session-value { font-size: 2rem; font-weight: 700; letter-spacing: -.02em; color: var(--lg-ink); line-height: 1; }
+.fp-session-caption { font-size: .78rem; color: var(--lg-ink-soft); }
+.fp-session-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.fp-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 4px 10px;
+	border-radius: var(--lg-r-pill);
+	border: 1px solid var(--lg-border);
+	background: var(--lg-page);
+	font-size: .74rem;
+	color: var(--lg-ink);
+}
+.fp-chip span { font-weight: 700; }
+.fp-chip.is-present { background: var(--lg-mint); border-color: #C4E4D0; color: var(--lg-success-ink); }
+.fp-chip.is-absent { background: var(--lg-danger-tint); border-color: #F2C9C9; color: var(--lg-danger-ink); }
+.fp-chip.is-excused { background: var(--lg-amber-tint); border-color: #EFDCB2; color: var(--lg-amber-ink); }
+.fp-chip.is-pending { background: var(--lg-info-tint); border-color: #C6DEE5; color: var(--lg-info-ink); }
+
+.fp-chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.fp-chart-title { font-size: .66rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--lg-ink-soft); }
+
+.fp-chart-key { font-size: .7rem; color: var(--lg-ink-soft); }
+
+/* A bar on its own track: the rail is the whole scale, the fill is the
+   value. Shared by both charts, so a bar reads the same way in each. */
+.fp-track {
 	position: relative;
+	display: block;
+	height: 10px;
+	border-radius: var(--lg-r-pill);
+	background: var(--lg-rail);
+	box-shadow: inset 0 0 0 1px var(--lg-border);
+	overflow: hidden;
 }
-.prog-fill { height: 100%; background: var(--lg-emerald); border-radius: var(--lg-r-pill); }
-.prog-marker {
-	position: absolute;
-	top: -4px;
-	width: 2px;
-	height: 20px;
-	background: var(--lg-emerald-deep);
-	transform: translateX(-1px);
-	border-radius: 1px;
+.fp-track-fill {
+	display: block;
+	height: 100%;
+	border-radius: var(--lg-r-pill);
+	transition: width .4s ease;
 }
-.prog-day { margin-top: 12px; font-size: .82rem; font-weight: 600; color: var(--lg-ink); font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
-.prog-labels { margin-top: 4px; display: flex; justify-content: space-between; font-size: .74rem; color: var(--lg-ink-soft); }
+.fp-track-fill.is-count { background: var(--fp-count); }
+.fp-track-fill.is-baseline { background: var(--fp-baseline); }
+.fp-track-fill.is-endline { background: var(--fp-endline); }
 
-/* ── Sections ─────────────────────────────────────────────────────── */
-.risk-section, .attendance-section { margin-top: 24px; }
-.attendance-section { padding: var(--lg-pad-card); }
-.risk-head, .attendance-head {
-	display: flex;
-	justify-content: space-between;
-	align-items: flex-end;
-	gap: 14px;
-	margin-bottom: 14px;
-	flex-wrap: wrap;
-}
-.risk-head .section-title, .attendance-head .section-title { margin-bottom: 0; }
-.risk-filters, .attendance-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.risk-filter { width: auto; min-width: 132px; }
-
-.roster-meta {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px 18px;
-	margin-bottom: 12px;
+/* Turnout: one row per session on a fixed 0–100% track. Each row prints
+   its date, rate and count as text in columns of their own, so nothing can
+   overlap however narrow the panel gets. */
+.fp-turnout { margin-top: 18px; }
+.fp-turnout-list { display: flex; flex-direction: column; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.fp-turnout-row {
+	display: grid;
+	grid-template-columns: 88px minmax(60px, 1fr) 42px 48px;
+	align-items: center;
+	gap: 10px;
 	font-size: .76rem;
+}
+.fp-turnout-date { color: var(--lg-ink-soft); white-space: nowrap; }
+.fp-turnout-value { font-weight: 700; color: var(--lg-ink); text-align: right; }
+.fp-turnout-count { color: var(--lg-ink-soft); text-align: right; white-space: nowrap; }
+.fp-turnout-row:first-child .fp-turnout-date { color: var(--lg-ink); font-weight: 600; }
+
+/* Baseline against endline: a small table of bars. One row per status,
+   one column per weighing, the weighing named in the column's heading, a
+   shared scale across both. */
+.fp-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+.fp-dot.is-baseline { background: var(--fp-baseline); }
+.fp-dot.is-endline { background: var(--fp-endline); }
+.fp-nut { display: flex; flex-direction: column; gap: 10px; }
+.fp-nut-row {
+	display: grid;
+	grid-template-columns: 112px minmax(0, 1fr);
+	align-items: center;
+	gap: 14px;
+}
+.fp-nut.has-endline .fp-nut-row { grid-template-columns: 112px minmax(0, 1fr) minmax(0, 1fr); }
+.fp-nut-head { padding-bottom: 6px; border-bottom: 1px solid var(--lg-border); }
+.fp-nut-head span {
+	font-size: .64rem;
+	font-weight: 700;
+	letter-spacing: .08em;
+	text-transform: uppercase;
 	color: var(--lg-ink-soft);
 }
-.roster-meta strong { color: var(--lg-ink); font-weight: 600; }
+.fp-nut-col { display: inline-flex; align-items: center; gap: 6px; }
+.fp-nut-label { font-size: .8rem; font-weight: 600; color: var(--lg-ink); }
+.fp-nut-cell { display: grid; grid-template-columns: minmax(0, 1fr) 30px; align-items: center; gap: 8px; }
+.fp-nut-figure { font-size: .76rem; font-weight: 700; color: var(--lg-ink); text-align: right; }
+
+/* The split's legend in two even columns: the auto-fit grid broke "Not yet
+   measured" across lines in a half-width panel. */
+.fp-panel .os-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.fp-table-view { margin-top: 16px; font-size: .78rem; }
+.fp-table-view summary { cursor: pointer; font-weight: 600; color: var(--lg-emerald-deep); width: max-content; }
+.fp-table-view summary:hover { color: var(--lg-emerald); }
+.fp-table-view table { width: 100%; margin-top: 8px; }
+
+/* ── The two lists ─────────────────────────────────────────────────── */
+.fp-table-section { margin-top: 20px; padding: 20px 22px 0; overflow: hidden; }
+.fp-table-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.fp-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fp-filter { width: auto; min-width: 140px; }
+/* The table runs to the card's edges rather than nesting a second frame. */
+.fp-table-card { border: none; box-shadow: none; border-radius: 0; margin: 0 -22px; }
+.fp-table-card th:first-child, .fp-table-card td:first-child { padding-left: 22px; }
+.fp-table-card th:last-child, .fp-table-card td:last-child { padding-right: 22px; }
+
+.fp-rate-cell { white-space: nowrap; }
+.fp-meter {
+	display: block;
+	width: 64px;
+	height: 4px;
+	margin: 5px 0 0 auto;
+	border-radius: var(--lg-r-pill);
+	background: var(--lg-rail);
+	overflow: hidden;
+}
+.fp-meter i { display: block; height: 100%; background: var(--fp-count); border-radius: var(--lg-r-pill); }
+
+.bmi-up { color: var(--lg-success-ink); font-weight: 600; }
+.bmi-down { color: var(--lg-danger-ink); font-weight: 600; }
+.muted { color: var(--lg-ink-soft); }
 /* An unconfirmed scan is neither present nor absent — it gets the
    monitoring colour, never the present or absent one. */
 .roster-pending {
@@ -79,213 +232,39 @@
 	font-weight: 600;
 	white-space: nowrap;
 }
-.attendance-empty { margin-top: 4px; }
-/* The roster table is already inside the attendance card, so it drops its
-   own frame and runs to the card's edges instead of nesting a second one. */
-.attendance-section { overflow: hidden; }
-.attendance-section .table-card { border: none; box-shadow: none; border-radius: 0; margin: 0 -20px -20px; }
-.attendance-section .table-card th:first-child,
-.attendance-section .table-card td:first-child { padding-left: 20px; }
-.attendance-section .table-card th:last-child,
-.attendance-section .table-card td:last-child { padding-right: 20px; }
 
-.bmi-up { color: var(--lg-success-ink); font-weight: 600; }
-.bmi-down { color: var(--lg-danger-ink); font-weight: 600; }
+.fp-updated { margin: 14px 2px 4px; font-size: .72rem; color: var(--lg-ink-soft); text-align: right; }
 
-.session-chip {
-	display: inline-flex;
-	align-items: center;
-	padding: 3px 9px;
-	border-radius: var(--lg-r-pill);
-	font-size: .66rem;
-	font-weight: 600;
-	line-height: 1.3;
+@media (max-width: 1100px) {
+	.fp-split { grid-template-columns: 1fr; }
 }
-.session-chip.present { background: var(--lg-mint); color: var(--lg-success-ink); }
-.session-chip.absent { background: var(--lg-danger-tint); color: var(--lg-danger-ink); }
-
-/* ── File pickers read as a drop target, not a bare "Choose File". ── */
-.dropzone {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	gap: 9px;
-	padding: 24px 16px;
-	text-align: center;
-	background: var(--lg-page);
-	border: 1.5px dashed var(--lg-border-strong);
-	border-radius: var(--lg-r-card);
-	cursor: pointer;
-	transition: border-color .15s ease, background .15s ease;
-}
-.dropzone:hover, .dropzone.is-dragging { border-color: var(--lg-emerald); background: var(--lg-mint); }
-.dropzone.is-filled { border-style: solid; border-color: var(--lg-emerald); background: var(--lg-mint); }
-.dropzone-input {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	padding: 0;
-	margin: -1px;
-	overflow: hidden;
-	clip: rect(0 0 0 0);
-	white-space: nowrap;
-	border: 0;
-}
-.dropzone-input:focus-visible + .dropzone-icon { outline: 2px solid var(--lg-emerald); outline-offset: 3px; border-radius: 4px; }
-.dropzone-icon { width: 28px; height: 28px; color: var(--lg-emerald); }
-.dropzone-text { font-size: .8rem; font-weight: 500; color: var(--lg-ink); word-break: break-word; }
-
-/* ── Modals ───────────────────────────────────────────────────────── */
-.modal-backdrop {
-	position: fixed;
-	inset: 0;
-	background: rgba(21, 40, 31, .48);
-	display: none;
-	align-items: flex-start;
-	justify-content: center;
-	z-index: 250;
-	padding: 16px;
-	overflow-y: auto;
-}
-.modal-backdrop.open { display: flex; }
-.modal-panel {
-	width: min(460px, 100%);
-	max-height: calc(100vh - 32px);
-	background: var(--lg-card);
-	border-radius: var(--lg-r-card);
-	box-shadow: 0 24px 64px rgba(21, 40, 31, .28);
-	overflow: hidden;
-	display: flex;
-	flex-direction: column;
-	margin: auto;
-}
-.modal-panel.attendance-modal-panel { width: min(980px, 96vw); }
-.modal-panel.encode-modal-panel { width: min(1200px, 96vw); }
-#encodeFormForm { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; }
-.modal-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--lg-border); }
-.modal-title { font-size: 1.02rem; font-weight: 600; letter-spacing: -.01em; color: var(--lg-ink); }
-.modal-close { border: none; background: none; font-size: 1.5rem; line-height: 1; color: var(--lg-ink-soft); cursor: pointer; padding: 0 4px; border-radius: 6px; }
-.modal-close:hover { color: var(--lg-ink); }
-.modal-body { padding: 20px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
-.modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--lg-border); background: var(--lg-card); }
-#encodeFormForm .modal-foot, #attendanceForm .modal-foot { position: sticky; bottom: 0; z-index: 2; }
-/* Separates the spreadsheet upload from the photo scan in the same modal. */
-.scan-divider { display: flex; align-items: center; gap: 12px; padding: 0 20px; color: var(--lg-ink-soft); font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; }
-.scan-divider::before, .scan-divider::after { content: ''; flex: 1; height: 1px; background: var(--lg-border); }
-
-.weight-item { margin-bottom: 16px; }
-.weight-item:last-child { margin-bottom: 0; }
-.weight-label { font-size: .84rem; font-weight: 600; color: var(--lg-ink); }
-.weight-label span { font-size: .76rem; font-weight: 400; color: var(--lg-ink-soft); }
-.weight-field-wrap { margin-top: 8px; display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
-.weight-input {
-	width: 100%;
-	font: inherit;
-	font-size: .82rem;
-	color: var(--lg-ink);
-	padding: 9px 12px;
-	border: 1px solid var(--lg-border);
-	border-radius: var(--lg-r-input);
-	background: var(--lg-card);
-}
-.weight-input:focus-visible { outline: none; border-color: var(--lg-emerald); box-shadow: var(--lg-focus); }
-.weight-unit { font-size: .78rem; color: var(--lg-ink-soft); }
-
-/* ── Encode grid (SBFP form templates inside the modal) ───────────── */
-.encode-help { font-size: .78rem; color: var(--lg-ink-soft); margin-bottom: 12px; }
-.encode-toolbar, .overview-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-.encode-toolbar-note, .overview-toolbar-note { font-size: .76rem; color: var(--lg-ink-soft); }
-.mode-toggle {
-	font: inherit;
-	border: 1px solid var(--lg-border);
-	background: var(--lg-card);
-	color: var(--lg-ink);
-	padding: 8px 12px;
-	border-radius: var(--lg-r-btn);
-	font-size: .74rem;
-	font-weight: 600;
-	cursor: pointer;
-}
-.mode-toggle:hover { background: var(--lg-mint); border-color: var(--lg-border-strong); }
-.form1-meta {
-	display: none;
-	grid-template-columns: 1fr 1fr;
-	gap: 12px 24px;
-	padding: 14px 16px;
-	margin-bottom: 12px;
-	border: 1px solid var(--lg-border);
-	border-radius: var(--lg-r-card);
-	background: var(--lg-page);
-}
-.form1-meta.active { display: grid; }
-.form1-meta-item { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; font-size: .76rem; color: var(--lg-ink); }
-.form1-meta-item label { font-weight: 600; white-space: nowrap; }
-.form1-meta-item input { width: 100%; font: inherit; border: none; border-bottom: 1px solid var(--lg-border-strong); padding: 6px 2px; background: transparent; font-size: .76rem; color: var(--lg-ink); }
-.form1-meta-item input:focus { outline: none; border-bottom-color: var(--lg-emerald); }
-
-.encode-grid-wrap { border: 1px solid var(--lg-border); border-radius: var(--lg-r-card); overflow: auto; background: var(--lg-card); max-height: 48vh; }
-.encode-grid { width: 100%; border-collapse: collapse; min-width: 980px; }
-.encode-grid th, .encode-grid td { border-bottom: 1px solid var(--lg-border); border-right: 1px solid var(--lg-border); padding: 8px; vertical-align: top; }
-.encode-grid th:last-child, .encode-grid td:last-child { border-right: none; }
-.encode-grid th { position: sticky; top: 0; z-index: 1; background: var(--lg-rail); font-size: .69rem; color: var(--lg-ink-soft); font-weight: 700; white-space: nowrap; }
-.encode-grid th.gov-head, .table-card th.gov-head { white-space: normal; text-align: center; line-height: 1.25; }
-.encode-grid th.gov-subhead, .table-card th.gov-subhead { font-size: .66rem; }
-.encode-grid td { background: var(--lg-card); }
-.encode-cell-input {
-	width: 100%;
-	min-width: 90px;
-	font: inherit;
-	padding: 8px 10px;
-	border: 1px solid var(--lg-border);
-	border-radius: var(--lg-r-input);
-	font-size: .76rem;
-	color: var(--lg-ink);
-}
-.encode-cell-input:focus-visible { outline: none; border-color: var(--lg-emerald); box-shadow: var(--lg-focus); }
-.encode-cell-input[readonly] { background: var(--lg-rail); color: var(--lg-ink); font-weight: 600; }
-.encode-row-actions { display: flex; justify-content: center; }
-.encode-inline-btn { font: inherit; border: 1px solid var(--lg-border); background: var(--lg-card); color: var(--lg-ink); padding: 6px 10px; border-radius: var(--lg-r-input); font-size: .7rem; font-weight: 600; cursor: pointer; }
-.encode-inline-btn:hover { background: var(--lg-mint); }
-.encode-add-row { margin-top: 12px; }
-.column-hidden { display: none; }
-
-/* Form cards rendered by the SBFP hub script. */
-.forms-grid { margin-top: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.form-card { background: var(--lg-card); border: 1px solid var(--lg-border); border-radius: var(--lg-r-card); padding: 18px; box-shadow: var(--lg-shadow); }
-.form-card:hover { box-shadow: var(--lg-shadow-lift); border-color: var(--lg-border-strong); }
-.form-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.form-code { font-size: .72rem; font-weight: 600; color: var(--lg-emerald); text-transform: uppercase; letter-spacing: .06em; }
-.form-title { margin-top: 4px; font-size: .98rem; font-weight: 600; color: var(--lg-ink); line-height: 1.25; }
-.form-desc { margin-top: 10px; font-size: .78rem; line-height: 1.5; color: var(--lg-ink-soft); min-height: 52px; }
-.form-actions { margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px; }
-.form-btn { font: inherit; border: 1px solid var(--lg-border); background: var(--lg-card); color: var(--lg-ink); padding: 8px 14px; border-radius: var(--lg-r-btn); font-size: .76rem; font-weight: 600; cursor: pointer; }
-.form-btn.primary { background: var(--lg-emerald); border-color: var(--lg-emerald); color: #fff; }
-.form-hint { margin-top: 10px; font-size: .76rem; color: var(--lg-ink-soft); }
 
 @media (max-width: 900px) {
 	.head-row { flex-direction: column; }
-	.school-filter-form { flex-direction: column; align-items: stretch; }
-	.school-filter-select { width: 100%; min-width: 0; }
-	.risk-filters, .attendance-actions { width: 100%; }
-	.risk-search, .risk-search input, .risk-filter { width: 100%; min-width: 0; }
-	.attendance-actions .btn { width: 100%; }
-	.table-card { overflow-x: auto; }
-	.table-card table { min-width: 800px; }
-	.encode-grid { min-width: 760px; }
-	.forms-grid, .form1-meta { grid-template-columns: 1fr; }
+	.head-actions { width: 100%; }
+	.fp-grade-form, .fp-grade-select { width: 100%; min-width: 0; }
+	.head-actions .btn { width: 100%; justify-content: center; }
+	.fp-cycle { grid-template-columns: 1fr; padding: 18px; }
+	.fp-filters, .fp-search, .fp-search input, .fp-filter { width: 100%; min-width: 0; }
+	.fp-table-card table { min-width: 760px; }
 }
 
-/* The School Nurse read-only variant's rail used to be restated here. It
-   now lives in css/nurse-sidebar.css, shared with every other nurse page,
-   and this template loads that sheet instead when $isReadOnly. */
+@media (max-width: 520px) {
+	/* The status takes its own line; its bars sit side by side under it. */
+	.fp-nut-row, .fp-nut.has-endline .fp-nut-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: 4px; }
+	.fp-nut-label { grid-column: 1 / -1; }
+	.fp-nut-head .fp-nut-label { display: none; }
+	.fp-nut:not(.has-endline) .fp-nut-row { grid-template-columns: minmax(0, 1fr); }
+	.fp-turnout-row { grid-template-columns: 76px minmax(40px, 1fr) 38px 44px; gap: 8px; }
+	.fp-panel .os-legend { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* ══ Print ═══════════════════════════════════════════════════════════
    The programme report on paper: a masthead saying whose programme and
-   which day, the four figures, and the two rolls. Everything that only
-   works with a cursor — filters, uploads, modals, the rail — is gone,
-   and the tables are unwrapped from their scrollers so no column is
-   clipped at the page edge. ══ */
+   which day, the figures, the two panels and both rolls. Everything that
+   only works with a cursor — filters, the rail, the table-view toggles —
+   is gone. The app shell is a fixed-height scrolling window, so every
+   container is reopened or the printer gets one screenful. ══ */
 
 .print-masthead { display: none; }
 
@@ -293,22 +272,18 @@
 	.asb-sidebar,
 	.sidebar,
 	.topbar,
+	.nh-tabs,
 	.head-actions,
-	.school-filter-form,
-	.risk-filters,
-	.attendance-actions,
-	.risk-search,
-	.risk-filter,
-	.modal-backdrop,
-	.flash,
-	#focusAtRiskBtn { display: none !important; }
+	.fp-filters,
+	.fp-alert .btn,
+	.fp-table-view,
+	.fp-updated,
+	.flash { display: none !important; }
 
+	html, body { height: auto !important; overflow: visible !important; background: #fff; }
 	.main { margin: 0 !important; height: auto !important; overflow: visible !important; opacity: 1 !important; transform: none !important; }
-	.content { padding: 0 !important; overflow: visible !important; }
-	html, body { height: auto; overflow: visible; background: #fff; }
+	.content { padding: 0 !important; height: auto !important; overflow: visible !important; }
 
-	/* Whose programme, which day, printed when — the sidebar and the clock
-	   carry this on screen and neither survives the page. */
 	.print-masthead {
 		display: block;
 		margin-bottom: 14px;
@@ -322,18 +297,19 @@
 	.page-title { font-size: 1.3rem; }
 	.page-sub { display: none; }
 
-	.kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 8px; }
+	.fp-cycle { background: none; grid-template-columns: 1.4fr 1fr; padding: 12px; }
+	.kpi-grid { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; gap: 8px; }
 	.kpi { padding: 10px 12px; break-inside: avoid; }
 	.kpi-value { font-size: 1.15rem; }
 	.kpi-icon { display: none; }
+	.fp-split { grid-template-columns: 1fr 1fr; gap: 10px; }
 
 	.card, .table-card { box-shadow: none; border-color: #999; break-inside: avoid; }
-	.progress-card, .risk-section, .attendance-section { margin-top: 14px; }
-	.attendance-section { overflow: visible; }
+	.fp-table-section { overflow: visible; break-inside: auto; }
 
 	/* Unwrapped: a scroller on paper is a column cut off at the margin. */
 	.table-scroll, .table-card { overflow: visible !important; }
-	.table-card table, .encode-grid { min-width: 0 !important; width: 100%; }
+	.fp-table-card table { min-width: 0 !important; width: 100%; }
 	table { width: 100%; font-size: .72rem; }
 	th, td { padding: 5px 6px; }
 	thead { display: table-header-group; }
@@ -347,10 +323,10 @@
 		border: 1px solid #666 !important;
 	}
 	.badge::before { display: none; }
+	.fp-chip { background: transparent !important; color: #000 !important; border-color: #666 !important; }
 
 	.prog-track { border: 1px solid #666; }
 	.prog-fill { background: #666 !important; }
-	.prog-marker { display: none; }
 
 	/* Rows a search or filter has hidden stay hidden: the printout is the
 	   list on screen, not a different one. */

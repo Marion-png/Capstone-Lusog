@@ -863,6 +863,60 @@ class FeedingAttendanceTabTest extends TestCase
         $this->assertStringContainsString('no feeding on weekends', $html);
     }
 
+    /**
+     * A day on the calendar opens what happened on it: who was present, who
+     * was absent and why, who nobody marked. The dialog reads a payload the
+     * calendar pane carries, built from the same marks as the grid's ticks.
+     */
+    #[Test]
+    public function a_calendar_day_opens_what_happened_on_it(): void
+    {
+        // A Wednesday morning in Davao, so the days before it are weekdays.
+        $this->travelTo(Carbon::parse('2026-10-28 09:00', 'Asia/Manila'));
+
+        $ana = $this->makeStudent(['student_name' => 'Abella, Ana']);
+        $ben = $this->makeStudent(['student_name' => 'Bautista, Ben']);
+        $this->mark($ana, '2026-10-26', true);
+        $this->mark($ben, '2026-10-26', false, false, 'Fever');
+        // Tuesday: only Ana is on the sheet — Ben is "not marked", never absent.
+        $this->mark($ana, '2026-10-27', true);
+
+        $html = $this->open('?view=calendar&date=2026-10-28')->assertOk()->getContent();
+
+        // A recorded weekday opens its dialog, and the dialog leads to its sheet.
+        $this->assertMatchesRegularExpression('~data-day-open="2026-10-26"[^>]*data-sheet-url="[^"]*date=2026-10-26~', $html);
+        // Today, unrecorded, still opens — to say nothing was recorded.
+        $this->assertStringContainsString('data-day-open="2026-10-28"', $html);
+        // A day still ahead and a weekend open nothing.
+        $this->assertStringNotContainsString('data-day-open="2026-10-29"', $html);
+        $this->assertStringNotContainsString('data-day-open="2026-10-24"', $html);
+        $this->assertStringContainsString('id="dayBackdrop"', $html);
+
+        $this->assertSame(1, preg_match('~<script type="application/json" data-calendar-detail>(.*?)</script>~s', $html, $match));
+        $detail = json_decode($match[1], true);
+
+        $this->assertSame('Abella, Ana', $detail['roster'][$ana->id]['n']);
+        $this->assertSame('Bautista, Ben', $detail['roster'][$ben->id]['n']);
+
+        $monday = $detail['days']['2026-10-26'];
+        $this->assertSame([$ana->id], $monday['present']);
+        $this->assertSame([[$ben->id, 'Fever']], $monday['absent']);
+        $this->assertSame(1, $monday['feeding_day']);
+        $this->assertSame('Monday, October 26, 2026', $monday['label']);
+
+        // Tuesday names Ana alone; the dialog works Ben out as "Not marked"
+        // from the roster rather than the payload inventing an absence.
+        $this->assertSame([$ana->id], $detail['days']['2026-10-27']['present']);
+        $this->assertSame([], $detail['days']['2026-10-27']['absent']);
+        $this->assertSame(2, $detail['days']['2026-10-27']['feeding_day']);
+
+        $this->assertArrayNotHasKey('2026-10-24', $detail['days']);
+        $this->assertArrayNotHasKey('2026-10-29', $detail['days']);
+
+        // The dialog belongs to the Calendar and is drawn nowhere else.
+        $this->assertStringNotContainsString('id="dayBackdrop"', $this->open('?view=sheet&date=2026-10-26')->getContent());
+    }
+
     /** The sheet's date is chosen from a picker that will not offer a weekend. */
     #[Test]
     public function the_date_pickers_lock_weekends(): void

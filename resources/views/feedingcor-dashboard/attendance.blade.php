@@ -423,6 +423,12 @@
 	@include('feedingcor-dashboard.partials.attendance-learner-modal')
 @endif
 
+{{-- The Calendar's own dialog: one day, as it happened, read from the month
+     the calendar pane carries. Drawn nowhere else. --}}
+@if ($view === 'calendar')
+	@include('feedingcor-dashboard.partials.attendance-day-modal')
+@endif
+
 <script>
 (() => {
 	const page = document.getElementById('fa-page');

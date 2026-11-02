@@ -38,7 +38,7 @@ class SemaphoreClient
 
     public function isConfigured(): bool
     {
-        return trim((string) config('services.semaphore.key', '')) !== '';
+        return $this->key() !== '';
     }
 
     public function isDryRun(): bool
@@ -162,6 +162,19 @@ class SemaphoreClient
     }
 
     /**
+     * Whether an account Semaphore reported can send at all: activated, with
+     * something to spend. A valid key on a Pending account, or on one with no
+     * credits, still has every message refused.
+     *
+     * @param  array{status?: string, credit_balance?: ?float}  $account
+     */
+    public static function canSend(array $account): bool
+    {
+        return strcasecmp(trim((string) ($account['status'] ?? '')), 'Active') === 0
+            && (float) ($account['credit_balance'] ?? 0) > 0;
+    }
+
+    /**
      * The gateway's word for a message, in this application's.
      *
      * Semaphore reports Queued / Pending while the message is on its way,
@@ -224,12 +237,27 @@ class SemaphoreClient
     private function failureFrom(Response $response): SmsGatewayFailure
     {
         $status = $response->status();
-        $reason = $this->reasonIn($response->json());
+        $reason = $this->reasonIn($response->json() ?? $response->body());
+        // A reply that echoes the key back must not carry it into the audit
+        // trail or onto the admin's screen.
+        if ($this->key() !== '') {
+            $reason = str_replace($this->key(), '[key]', $reason);
+        }
         $lower = strtolower($reason);
+        // The gateway's own words, kept beside ours: "the key was refused"
+        // alone cannot say whether the key is wrong, unactivated or for another
+        // account, and the admin has no other way to see the reply.
+        $said = ' (Semaphore said: HTTP '.$status.($reason !== '' ? ', "'.mb_substr($reason, 0, 160).'"' : '').')';
 
         return match (true) {
-            str_contains($lower, 'insufficient') || str_contains($lower, 'credit') || str_contains($lower, 'balance') => new SmsGatewayFailure('The SMS account has run out of credits. Top up the Semaphore account, then retry.', false, $status),
-            str_contains($lower, 'apikey') || str_contains($lower, 'api key') || in_array($status, [401, 403], true) => new SmsGatewayFailure('The Semaphore API key was refused. Check SEMAPHORE_API_KEY.', false, $status),
+            str_contains($lower, 'insufficient') || str_contains($lower, 'credit') || str_contains($lower, 'balance') => new SmsGatewayFailure('The SMS account has run out of credits. Top up the Semaphore account, then retry.'.$said, false, $status),
+            // A valid key on an account Semaphore has not activated yet is
+            // refused too, and calling that a wrong key sends the admin
+            // looking for a typo that is not there.
+            str_contains($lower, 'pending') || str_contains($lower, 'inactive') || str_contains($lower, 'not active')
+                || str_contains($lower, 'activat') || str_contains($lower, 'suspend') || str_contains($lower, 'verif') => new SmsGatewayFailure('The Semaphore account is not active yet, so messages are refused. Finish activating it on semaphore.co, then retry.'.$said, false, $status),
+            str_contains($lower, 'apikey') || str_contains($lower, 'api key') || $status === 401 => new SmsGatewayFailure('The Semaphore API key was refused. Check SEMAPHORE_API_KEY.'.$said, false, $status),
+            $status === 403 => new SmsGatewayFailure('Semaphore refused the request. Check on semaphore.co that the account is active and has credits.'.$said, false, $status),
             str_contains($lower, 'sendername') || str_contains($lower, 'sender name') => new SmsGatewayFailure('The sender name is not approved on the Semaphore account. Check SEMAPHORE_SENDER_NAME.', false, $status),
             $status === 429 => new SmsGatewayFailure('The SMS gateway is busy. Try again in a minute.', true, $status),
             $status >= 500 => new SmsGatewayFailure('The SMS gateway is unavailable at the moment. Try again shortly.', true, $status),
@@ -245,7 +273,8 @@ class SemaphoreClient
     private function reasonIn(mixed $body): string
     {
         if (is_string($body)) {
-            return trim($body);
+            // A proxy's HTML error page, flattened to its words.
+            return mb_substr(trim((string) preg_replace('/\s+/', ' ', strip_tags($body))), 0, 300);
         }
 
         if (! is_array($body)) {
@@ -262,9 +291,14 @@ class SemaphoreClient
         return mb_substr(implode(' ', array_unique($parts)), 0, 300);
     }
 
+    /**
+     * The key as Semaphore issued it. Quotes are stripped as well as spaces:
+     * a value pasted into a host's variable editor as "abc…" keeps its quotes,
+     * and the gateway refuses a key that carries them.
+     */
     private function key(): string
     {
-        return trim((string) config('services.semaphore.key', ''));
+        return trim((string) config('services.semaphore.key', ''), " \t\n\r\0\x0B\"'");
     }
 
     private function url(string $path): string

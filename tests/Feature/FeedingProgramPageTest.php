@@ -227,6 +227,84 @@ class FeedingProgramPageTest extends TestCase
         $response->assertSee('Test School');
     }
 
+    /**
+     * The page is live: it polls the school's stamp and re-reads its panels
+     * from an endpoint that renders the same partials the first paint used.
+     */
+    #[Test]
+    public function the_page_redraws_its_panels_from_the_metrics_endpoint(): void
+    {
+        $record = $this->makeStudent(['student_name' => 'Live Learner']);
+
+        $html = $this->page()->assertOk()->getContent();
+        $this->assertStringContainsString(route('workspace.pulse'), $html);
+        $this->assertStringContainsString(route('dashboard.school-nurse.feeding-program.metrics'), $html);
+
+        // A mark recorded after the page opened reaches the redrawn panels.
+        $this->mark($record, now()->subDay()->toDateString(), true);
+
+        $payload = $this->withSession($this->nurseSession())
+            ->getJson(route('dashboard.school-nurse.feeding-program.metrics'))
+            ->assertOk()
+            ->json();
+
+        $this->assertSame(['alert', 'cycle', 'cards', 'session', 'nutrition', 'risk', 'roster'], array_keys($payload['html']));
+        $this->assertStringContainsString('Live Learner', $payload['html']['roster']);
+        $this->assertStringContainsString('100%', $payload['html']['roster']);
+        $this->assertStringContainsString('Latest Feeding Session', $payload['html']['session']);
+        $this->assertStringContainsString('Total Beneficiaries', $payload['html']['cards']);
+    }
+
+    #[Test]
+    public function only_the_clinic_reads_the_metrics_and_the_teacher_gets_no_flag(): void
+    {
+        $record = $this->makeStudent(['student_name' => 'Flagged Learner']);
+        foreach (range(1, 10) as $offset) {
+            $this->mark($record, now()->subDays($offset)->toDateString(), $offset <= 5);
+        }
+        $this->confirmFlag($record);
+
+        $this->withSession($this->coordinatorSession())
+            ->getJson(route('dashboard.school-nurse.feeding-program.metrics'))
+            ->assertForbidden();
+
+        $nurse = $this->withSession($this->nurseSession())
+            ->getJson(route('dashboard.school-nurse.feeding-program.metrics'))
+            ->assertOk()
+            ->json('html');
+        $this->assertStringContainsString('1 beneficiary flagged for follow-up', $nurse['alert']);
+        $this->assertStringContainsString('Flagged Learner', $nurse['risk']);
+
+        $teacher = $this->withSession(['active_role' => 'clinic_teacher'] + $this->coordinatorSession())
+            ->getJson(route('dashboard.clinic-teacher.feeding-program.metrics'))
+            ->assertOk()
+            ->json('html');
+        $this->assertStringNotContainsString('flagged for follow-up', $teacher['alert']);
+        $this->assertSame('', trim($teacher['risk']));
+        $this->assertStringNotContainsString('At Risk', $teacher['cards']);
+    }
+
+    /** The programme covers Junior High alone, and the filter offers exactly that. */
+    #[Test]
+    public function the_grade_filter_offers_only_the_grades_the_programme_feeds(): void
+    {
+        $this->makeStudent(['student_name' => 'Grade Eight', 'section' => 'Grade 8 / Rosal']);
+        $this->makeStudent(['student_name' => 'Senior High', 'section' => 'Grade 11 / Stem']);
+
+        $response = $this->page()->assertOk();
+        $this->assertSame(['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10'], $response->viewData('gradeOptions')->all());
+        // Senior High is no beneficiary on any feeding screen. (The topbar
+        // learner search lists the whole school, so the roll is read rather
+        // than the page text.)
+        $this->assertSame(['Grade Eight'], $response->viewData('attendanceRoster')->pluck('student_name')->all());
+
+        $filtered = $this->withSession($this->nurseSession())
+            ->get('/dashboard/school-nurse/feeding-program?grade=Grade+8')
+            ->assertOk();
+        $this->assertSame('Grade 8', $filtered->viewData('selectedGrade'));
+        $this->assertSame(['Grade Eight'], $filtered->viewData('attendanceRoster')->pluck('student_name')->all());
+    }
+
     #[Test]
     public function nothing_in_the_feeding_program_ui_is_underlined(): void
     {

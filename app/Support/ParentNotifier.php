@@ -19,10 +19,13 @@ use Illuminate\Support\Collection;
  * to a parent. SemaphoreClient carries the message; nothing else in the
  * application composes one. Four rules hold:
  *
- *   1. **Only a parent who said yes.** The opt-in is on the parent's own
- *      Sulat-Pahibalo, with the number they gave and the language they chose.
- *      Their latest answered form decides, so a parent who answers next year's
- *      form without ticking the box has stopped the messages.
+ *   1. **The parent is reached automatically.** The guardian's contact number
+ *      on the learner's Sheet 1 (`student_details.telephone_no`, entered by
+ *      the class adviser) is where a text goes — the school already holds it,
+ *      so no parent has to answer anything first. A parent who gave a number
+ *      of their own on the Sulat-Pahibalo outranks it, with the language they
+ *      chose: they told the school where they want to be reached. A learner
+ *      with no mobile number on file is simply not texted.
  *   2. **No health information in a text.** A message sits unencrypted on a
  *      phone that may be shared, so it says that the child visited the clinic
  *      or missed feeding sessions, and asks the parent to contact the school.
@@ -43,15 +46,23 @@ class ParentNotifier
 
     public const OUTCOME_DISABLED = 'disabled';
 
-    public const OUTCOME_NOT_OPTED_IN = 'not_opted_in';
+    public const OUTCOME_NO_NUMBER = 'no_number';
 
     public const OUTCOME_INVALID_NUMBER = 'invalid_number';
+
+    /** Where a number came from, for the console and the audit trail. */
+    public const SOURCE_SHEET_ONE = 'sheet_one';
+
+    public const SOURCE_CONSENT_FORM = 'consent_form';
 
     public const OUTCOME_DUPLICATE = 'duplicate';
 
     public const OUTCOME_CAP_REACHED = 'cap_reached';
 
     public const LANGUAGES = ['en' => 'English', 'ceb' => 'Cebuano'];
+
+    /** The language of a text to a parent who never chose one — the letter's own default. */
+    private const DEFAULT_LANGUAGE = 'en';
 
     /** A run of absences older than this is history, not news, and is not texted. */
     private const NOTICE_FRESH_DAYS = 3;
@@ -62,8 +73,7 @@ class ParentNotifier
     public function isReady(): bool
     {
         return $this->client->isAvailable()
-            && SchemaCache::hasTable('sms_notifications')
-            && SchemaCache::hasColumn('health_consent_forms', 'sms_opt_in');
+            && SchemaCache::hasTable('sms_notifications');
     }
 
     /**
@@ -77,16 +87,16 @@ class ParentNotifier
             return ['outcome' => self::OUTCOME_DISABLED, 'last4' => null];
         }
 
-        $form = self::optInFor((string) $record->student_id, $record->institution_id);
+        $recipient = self::recipientFor($record);
 
-        if ($form === null) {
-            return ['outcome' => self::OUTCOME_NOT_OPTED_IN, 'last4' => null];
+        if ($recipient === null) {
+            return ['outcome' => self::OUTCOME_NO_NUMBER, 'last4' => null];
         }
 
         $at = Carbon::parse($visitedAt)->setTimezone(self::timezone());
         $today = now(self::timezone())->isSameDay($at);
 
-        $message = $this->compose(SmsNotification::EVENT_CLINIC_VISIT, (string) $form->sms_language, [
+        $message = $this->compose(SmsNotification::EVENT_CLINIC_VISIT, $recipient['language'], [
             'school' => self::schoolName($record->institution_id),
             'name' => self::firstName($record),
             'when' => $today ? $at->format('g:i A') : $at->format('M j, g:i A'),
@@ -94,7 +104,7 @@ class ParentNotifier
         ]);
 
         return $this->queue(
-            $form,
+            $recipient,
             $record,
             SmsNotification::EVENT_CLINIC_VISIT,
             'clinic_visit:'.$consultationId,
@@ -105,9 +115,10 @@ class ParentNotifier
     /**
      * Tell parents whose child has reached the school's attendance notice.
      *
-     * Called after every write to the feeding marks. It reads only the
-     * learners whose parents opted in — none, and it costs one query — and
-     * texts a parent once per run of absences, only while that run is recent.
+     * Called after every write to the feeding marks. It reads the enrolled
+     * learners with a number on file — the roster is the page's shared read,
+     * and the parents' own numbers are one more query — and texts a parent
+     * once per run of absences, only while that run is recent.
      *
      * @return int how many messages were queued
      */
@@ -119,16 +130,10 @@ class ParentNotifier
 
         $forms = self::optedInForms($institutionId);
 
-        if ($forms->isEmpty()) {
-            return 0;
-        }
-
-        $records = StudentHealthRecord::query()
-            ->where('institution_id', $institutionId)
-            ->forCurrentSchoolYear()
-            ->whereIn('student_id', $forms->keys()->all())
-            ->get()
+        $records = StudentHealthRecord::rosterFor($institutionId)
             ->filter(fn (StudentHealthRecord $r): bool => FeedingBeneficiarySummary::isEnrolled($r))
+            // Nobody to text is nobody to evaluate.
+            ->filter(fn (StudentHealthRecord $r): bool => self::resolveRecipient($r, $forms->get((string) $r->student_id)) !== null)
             ->values();
 
         if ($records->isEmpty()) {
@@ -157,16 +162,16 @@ class ParentNotifier
                 continue;
             }
 
-            $form = $forms->get((string) $record->student_id);
+            $recipient = self::resolveRecipient($record, $forms->get((string) $record->student_id));
 
-            $message = $this->compose(SmsNotification::EVENT_ATTENDANCE_NOTICE, (string) $form->sms_language, [
+            $message = $this->compose(SmsNotification::EVENT_ATTENDANCE_NOTICE, $recipient['language'], [
                 'school' => self::schoolName($institutionId),
                 'name' => self::firstName($record),
                 'days' => (int) $standing['run'],
             ]);
 
             $result = $this->queue(
-                $form,
+                $recipient,
                 $record,
                 SmsNotification::EVENT_ATTENDANCE_NOTICE,
                 'attendance_notice:'.$record->id.':'.$standing['run_started_on'],
@@ -214,6 +219,60 @@ class ParentNotifier
     }
 
     /**
+     * Where this learner's parent is texted, and in which language.
+     *
+     * Null when no number is on file at all; a `number` of null when one is
+     * on file but is not a mobile a text can reach.
+     *
+     * @return array{number: ?string, language: string, source: string}|null
+     */
+    public static function recipientFor(StudentHealthRecord $record): ?array
+    {
+        return self::resolveRecipient($record, self::optInFor((string) $record->student_id, $record->institution_id));
+    }
+
+    /**
+     * The one decision behind recipientFor(), given the parent's opted-in
+     * letter (or none), so a whole roll can be resolved from one read of the
+     * letters rather than one query per learner.
+     *
+     * A number the parent gave on their own letter outranks the one on
+     * Sheet 1 — they chose it. When it cannot be used, the Sheet 1 number is
+     * the fallback, because a typo on a form is not a reason to leave a family
+     * unreached when the school holds another number for them.
+     *
+     * @return array{number: ?string, language: string, source: string}|null
+     */
+    private static function resolveRecipient(StudentHealthRecord $record, ?HealthConsentForm $optedIn): ?array
+    {
+        $language = $optedIn !== null && array_key_exists((string) $optedIn->sms_language, self::LANGUAGES)
+            ? (string) $optedIn->sms_language
+            : self::DEFAULT_LANGUAGE;
+
+        $chosen = $optedIn !== null ? PhilippineMobileNumber::normalize((string) $optedIn->sms_number) : null;
+
+        if ($chosen !== null) {
+            return ['number' => $chosen, 'language' => $language, 'source' => self::SOURCE_CONSENT_FORM];
+        }
+
+        $details = is_array($record->student_details) ? $record->student_details : [];
+        $sheetOne = trim((string) ($details['telephone_no'] ?? ''));
+
+        if ($sheetOne === '') {
+            // A letter whose number cannot be used, and nothing on Sheet 1.
+            return $optedIn !== null
+                ? ['number' => null, 'language' => $language, 'source' => self::SOURCE_CONSENT_FORM]
+                : null;
+        }
+
+        return [
+            'number' => PhilippineMobileNumber::normalize($sheetOne),
+            'language' => $language,
+            'source' => self::SOURCE_SHEET_ONE,
+        ];
+    }
+
+    /**
      * The parent's latest answered Sulat-Pahibalo, if it says yes to texts.
      */
     public static function optInFor(string $lrn, ?int $institutionId): ?HealthConsentForm
@@ -240,6 +299,10 @@ class ParentNotifier
      */
     public static function optedInForms(int $institutionId): Collection
     {
+        if (! SchemaCache::hasColumn('health_consent_forms', 'sms_opt_in')) {
+            return collect();
+        }
+
         return HealthConsentForm::query()
             ->where('institution_id', $institutionId)
             ->whereIn('status', [HealthConsentForm::STATUS_SIGNED, HealthConsentForm::STATUS_REVIEWED])
@@ -259,8 +322,8 @@ class ParentNotifier
         return match ($result['outcome'] ?? null) {
             self::OUTCOME_QUEUED => ($dryRun ? 'A text message to the parent was simulated' : 'A text message is being sent to the parent')
                 .' ('.PhilippineMobileNumber::masked($result['last4'] ?? '').').',
-            self::OUTCOME_NOT_OPTED_IN => 'The parent has not opted in to text messages, so none was sent.',
-            self::OUTCOME_INVALID_NUMBER => 'The parent\'s number on the consent form is not a valid mobile number, so no text was sent.',
+            self::OUTCOME_NO_NUMBER => 'No contact number is on file for the parent or guardian (Sheet 1), so no text was sent.',
+            self::OUTCOME_INVALID_NUMBER => 'The parent\'s contact number on file is not a valid mobile number, so no text was sent.',
             self::OUTCOME_CAP_REACHED => 'The school\'s daily text message limit has been reached, so no text was sent.',
             default => null,
         };
@@ -297,11 +360,12 @@ class ParentNotifier
     /**
      * Write the message as a queued row and send it once the response is out.
      *
+     * @param  array{number: ?string, language: string, source: string}  $recipient
      * @return array{outcome: string, last4: ?string}
      */
-    private function queue(HealthConsentForm $form, StudentHealthRecord $record, string $event, string $dedupeKey, string $message): array
+    private function queue(array $recipient, StudentHealthRecord $record, string $event, string $dedupeKey, string $message): array
     {
-        $number = PhilippineMobileNumber::normalize((string) $form->sms_number);
+        $number = PhilippineMobileNumber::normalize((string) $recipient['number']);
 
         if ($number === null) {
             return ['outcome' => self::OUTCOME_INVALID_NUMBER, 'last4' => null];
@@ -328,7 +392,7 @@ class ParentNotifier
                 'recipient' => $number,
                 'recipient_last4' => $last4,
                 'message' => $message,
-                'language' => array_key_exists((string) $form->sms_language, self::LANGUAGES) ? (string) $form->sms_language : 'en',
+                'language' => $recipient['language'],
                 'status' => SmsNotification::STATUS_QUEUED,
                 'requested_by_name' => (string) session('active_name', ''),
                 'requested_by_role' => (string) session('active_role', ''),

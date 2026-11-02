@@ -609,6 +609,12 @@ class FeedingAttendanceController extends Controller
                 $filters
             ),
             'calendar' => $this->calendar($selectedDate, $byDate, $beneficiaries->count(), $institutionId),
+            // Who was present, absent, excused or not marked on each day of the
+            // calendar's month, for the dialog a day opens. Only the Calendar
+            // draws it, so only the Calendar pays for it.
+            'calendarDetail' => $view === 'calendar'
+                ? $this->calendarDetail($beneficiaries, $byDate, $sessionDates, $selectedDate, $institutionId)
+                : null,
             'exportRows' => $this->exportRows($beneficiaries, $byRecord),
         ];
     }
@@ -996,6 +1002,83 @@ class FeedingAttendanceController extends Controller
         }
 
         return ['label' => $month->format('F Y'), 'weeks' => $weeks];
+    }
+
+    /**
+     * What happened on each day of the calendar's month, for the dialog a day
+     * opens: who was present, who was absent and why, who was excused, whose
+     * scanned mark nobody has read yet — read off the very marks the grid's
+     * ticks were counted from, so the dialog and the cell cannot disagree.
+     *
+     * Learners travel once, in `roster`, and each day names them by record
+     * id, so a month of sessions does not repeat ninety names twenty times.
+     * Anybody on the roll a recorded day does not name is that day's "not
+     * marked" — worked out in the dialog from the roster, and never an
+     * absence.
+     *
+     * Weekends and closed days are left out: they are locked cells with
+     * nothing to open. So is a day that has not happened yet.
+     *
+     * @param  Collection<int, StudentHealthRecord>  $beneficiaries
+     * @param  Collection<string, Collection<int, array<string, mixed>>>  $byDate
+     * @param  list<string>  $sessionDates
+     * @return array{roster: array<int, array{n: string, g: string, s: string}>, days: array<string, array<string, mixed>>}
+     */
+    private function calendarDetail(Collection $beneficiaries, Collection $byDate, array $sessionDates, string $selectedDate, ?int $institutionId): array
+    {
+        $roster = [];
+        foreach ($beneficiaries as $record) {
+            [$grade, $section] = FeedingBeneficiarySummary::splitSection((string) $record->section);
+            $roster[$record->id] = [
+                'n' => (string) $record->student_name,
+                'g' => (string) preg_replace('/^grade\s*/i', '', $grade),
+                's' => $section,
+            ];
+        }
+
+        // A day's place in the programme, counted from the first recorded
+        // session — the same numbering Attendance History prints.
+        $feedingDay = array_flip($sessionDates);
+        $buckets = [
+            FeedingAttendanceMark::PRESENT => 'present',
+            FeedingAttendanceMark::ABSENT => 'absent',
+            FeedingAttendanceMark::EXCUSED => 'excused',
+            FeedingAttendanceMark::UNCONFIRMED => 'unconfirmed',
+        ];
+
+        $month = Carbon::parse($selectedDate)->startOfMonth();
+        $today = FeedingAttendanceWindow::today();
+        $days = [];
+
+        for ($cursor = $month->copy(); $cursor->month === $month->month; $cursor->addDay()) {
+            $date = $cursor->toDateString();
+
+            if ($cursor->isWeekend() || $date > $today || SchoolCalendar::closureOn($cursor, $institutionId) !== null) {
+                continue;
+            }
+
+            $day = ['present' => [], 'absent' => [], 'excused' => [], 'unconfirmed' => []];
+
+            foreach ($byDate->get($date, collect()) as $recordId => $mark) {
+                $bucket = $buckets[$mark['status']] ?? null;
+
+                if ($bucket === null || ! isset($roster[$recordId])) {
+                    continue;
+                }
+
+                // A reason travels with the two marks that carry one.
+                $day[$bucket][] = in_array($bucket, ['absent', 'excused'], true)
+                    ? [(int) $recordId, (string) $mark['remarks']]
+                    : (int) $recordId;
+            }
+
+            $days[$date] = $day + [
+                'label' => $cursor->format('l, F j, Y'),
+                'feeding_day' => isset($feedingDay[$date]) ? $feedingDay[$date] + 1 : null,
+            ];
+        }
+
+        return ['roster' => $roster, 'days' => $days];
     }
 
     /**

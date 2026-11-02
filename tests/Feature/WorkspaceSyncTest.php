@@ -230,6 +230,8 @@ class WorkspaceSyncTest extends TestCase
             'consultation log' => ['school_nurse', '/dashboard/consultation-log'],
             'medicine inventory' => ['school_nurse', '/dashboard/medicine-inventory'],
             'nurse data visualization' => ['school_nurse', '/dashboard/data-visualization'],
+            'nurse feeding programme' => ['school_nurse', '/dashboard/school-nurse/feeding-program'],
+            'clinic teacher feeding programme' => ['clinic_teacher', '/dashboard/clinic-teacher/feeding-program'],
             'clinic staff dashboard' => ['clinic_staff', '/dashboard/clinic-staff'],
             'clinic teacher dashboard' => ['clinic_teacher', '/dashboard/clinic-teacher'],
             'adviser consent forms' => ['class_adviser', '/dashboard/class-adviser/consent-forms'],

@@ -305,8 +305,14 @@ class SchoolCalendarTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertMatchesRegularExpression('~class="fa-cal-day is-closed is-locked[^"]*"[^>]*title="Test Holiday Day"~', $html);
+        $this->assertMatchesRegularExpression('~class="fa-cal-day is-closed is-locked[^"]*"[^>]*data-closure-name="Test Holiday Day"~', $html);
         $this->assertStringContainsString('<span class="fa-cal-tag">Holiday</span>', $html);
+        // Hovering or focusing the day names it: the tooltip carries the kind
+        // and the holiday itself, and the cell is reachable by keyboard.
+        $this->assertStringContainsString('<span class="fa-cal-tip-name">Test Holiday Day</span>', $html);
+        $this->assertMatchesRegularExpression('~class="fa-cal-day is-closed is-locked[^"]*"[^>]*tabindex="0"~', $html);
+        // Still locked: a closed day opens no dialog and no sheet.
+        $this->assertDoesNotMatchRegularExpression('~data-day-open="'.$today.'"~', $html);
     }
 
     #[Test]
