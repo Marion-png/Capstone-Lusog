@@ -56,7 +56,7 @@ class MlatWorkbook
     public const SHEET_TWO_COLUMNS = 6;
 
     /** The sheets by number, as the Print and Download menus name them. */
-    public const SHEETS = [1 => 'MLAT Sheet 1', 2 => 'MLAT Sheet 2'];
+    public const SHEETS = [1 => 'MLHAT 1', 2 => 'MLHAT 2'];
 
     /**
      * @return array{sheets: list<array{name: string, label: string, columns: int, widths: list<float>, orientation: string, rows: list<array{cells: list<string>, register: string, merge: bool, merges: list<array{0: int, 1: int}>, ruled: bool, wrap: bool}>}>, file_name: string, learner: string}
@@ -96,7 +96,7 @@ class MlatWorkbook
         }
 
         return [
-            'file_name' => preg_replace('/\.xlsx$/', '', $workbook['file_name']).'-Sheet-'.$sheet.'.xlsx',
+            'file_name' => preg_replace('/^MLAT-/', 'MLHAT-'.$sheet.'-', $workbook['file_name']),
             'learner' => $workbook['learner'],
             'sheets' => [$workbook['sheets'][$sheet - 1]],
         ];
@@ -232,7 +232,7 @@ class MlatWorkbook
         ));
 
         return [
-            'name' => 'Sheet 1',
+            'name' => self::SHEETS[1],
             'label' => self::SHEETS[1],
             'columns' => self::SHEET_ONE_COLUMNS,
             'widths' => [40, 34, 22, 26, 26, 14, 14, 16],
@@ -322,7 +322,7 @@ class MlatWorkbook
         $rows[] = self::row(['Examiner Signature / Name:', $sheet['summary']['examiner'], '', 'Date:', $sheet['summary']['date']]);
 
         return [
-            'name' => 'Sheet 2',
+            'name' => self::SHEETS[2],
             'label' => self::SHEETS[2],
             'columns' => self::SHEET_TWO_COLUMNS,
             'widths' => [34, 38, 34, 26, 26, 12],
@@ -370,17 +370,22 @@ class MlatWorkbook
         return self::row(['']);
     }
 
-    /** The form's tick box: a ballot box, ticked or empty. */
-    public const BOX_ON = '☑';
+    /**
+     * The form's tick box: brackets with a check mark, or empty. Not the ☑ / ☐
+     * ballot boxes — ☑ is an emoji character, and spreadsheet apps on iPads
+     * and tablets drew it as an empty box, so a ticked answer read as blank.
+     * Brackets and U+2713 (never emoji) are in every tablet's fonts.
+     */
+    public const BOX_ON = '[✓]';
 
-    public const BOX_OFF = '☐';
+    public const BOX_OFF = '[  ]';
 
     public static function box(bool $on): string
     {
         return $on ? self::BOX_ON : self::BOX_OFF;
     }
 
-    /** One option of the form with its box: "☑ Asthma". */
+    /** One option of the form with its box: "[✓] Asthma". */
     public static function checked(bool $on, string $label): string
     {
         return self::box($on).' '.$label;

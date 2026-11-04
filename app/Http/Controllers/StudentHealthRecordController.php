@@ -546,9 +546,6 @@ class StudentHealthRecordController extends Controller
             }
         }
 
-        // One count query for every matched visit, not one per visit.
-        $photoCounts = ConsultationVisibility::sharedPhotoCounts(array_column($matched, 1));
-
         $byLrn = collect();
         foreach ($matched as [$lrn, $consultation]) {
             // The class adviser gets the visit, not the clinical narrative:
@@ -557,11 +554,7 @@ class StudentHealthRecordController extends Controller
             // treating them. Stripped here, where the payload is built — a
             // value that reaches the browser has been disclosed whether or
             // not the template chose to print it.
-            $entry = ConsultationVisibility::present(
-                $consultation,
-                session('active_role'),
-                $photoCounts[(int) $consultation->id] ?? 0,
-            );
+            $entry = ConsultationVisibility::present($consultation, session('active_role'));
 
             $byLrn->put($lrn, $byLrn->get($lrn, collect())->push($entry));
         }

@@ -46,7 +46,7 @@ earlier name, LUSOG.
 
 | Role | What they do |
 |---|---|
-| **School Nurse** | Health records, examinations (MLAT Sheet 2), consultations, dispensing, medicine inventory, consent forms (read-only), data visualization |
+| **School Nurse** | Health records, examinations (MLHAT 2), consultations, dispensing, medicine inventory, consent forms (read-only), data visualization |
 | **Clinic Teacher** | A teacher covering the clinic: reads the nurse's screens, dispenses paracetamol only, never changes stock |
 | **Clinic Staff** | Consultation logging and medicine inventory |
 | **Class Adviser** | Enrols and measures their own class, health cards, consent forms, medical documents, closes the school year |

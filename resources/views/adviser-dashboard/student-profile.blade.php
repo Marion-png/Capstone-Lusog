@@ -287,7 +287,7 @@
 
                     <div class="sp-readonly-banner">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                        <span><b>Date and time, plus what the clinic shares:</b> consultation records are added by the school nurse or clinic staff. You can see that this learner attended the clinic and when, along with any note or photograph the clinic chose to share with you. The complaint, diagnosis and treatment are clinical information held by the clinic &mdash; ask the school nurse if there is something you need to act on.</span>
+                        <span><b>Date and time, plus what the clinic shares:</b> consultation records are added by the school nurse or clinic staff. You can see that this learner attended the clinic and when, along with any note the clinic chose to share with you. The complaint, diagnosis and treatment are clinical information held by the clinic &mdash; ask the school nurse if there is something you need to act on.</span>
                     </div>
 
                     <div class="sp-subhead">
@@ -773,48 +773,6 @@ const STUDENT_PROFILE_LRN = @json($lrn);
                 }));
 
                 card.appendChild(note);
-            }
-
-            // Photographs the school nurse deliberately shared for this
-            // visit — a cut or a graze the adviser needs to know about.
-            // Nothing loads unless the nurse shared something: the count
-            // comes from the server, and the endpoint checks again.
-            if (Number(visit.shared_photo_count) > 0 && visit.id) {
-                const shelf = document.createElement('div');
-                shelf.className = 'clog-photos';
-                shelf.appendChild(Object.assign(document.createElement('div'), {
-                    className: 'clog-photos-label',
-                    textContent: 'Photos shared by the school nurse',
-                }));
-
-                const strip = document.createElement('div');
-                strip.className = 'clog-photo-strip';
-                shelf.appendChild(strip);
-                card.appendChild(shelf);
-
-                fetch(@json(url('health-records/consultations')) + '/' + encodeURIComponent(visit.id) + '/photos',
-                    { headers: { Accept: 'application/json' } })
-                    .then((r) => (r.ok ? r.json() : null))
-                    .then((data) => {
-                        (data?.photos || []).forEach((photo) => {
-                            const link = document.createElement('a');
-                            link.href = photo.url;
-                            link.target = '_blank';
-                            link.rel = 'noopener';
-                            link.title = photo.caption || 'Photo shared by the school nurse';
-
-                            const img = document.createElement('img');
-                            img.src = photo.url;
-                            // Captions are typed by staff, so this is set as
-                            // text through the DOM, never interpolated.
-                            img.alt = photo.caption || 'Photo shared by the school nurse';
-                            img.loading = 'lazy';
-
-                            link.appendChild(img);
-                            strip.appendChild(link);
-                        });
-                    })
-                    .catch(() => {});
             }
 
             host.appendChild(card);

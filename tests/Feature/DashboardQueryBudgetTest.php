@@ -208,7 +208,7 @@ class DashboardQueryBudgetTest extends TestCase
     public static function clinicListPages(): array
     {
         return [
-            'class adviser dashboard (a photo count per visit)' => ['class_adviser', '/dashboard/class-adviser'],
+            'class adviser dashboard (clinic visits)' => ['class_adviser', '/dashboard/class-adviser'],
             'medicine inventory (a usage read per medicine)' => ['school_nurse', '/dashboard/medicine-inventory'],
             'consultation log' => ['school_nurse', '/dashboard/consultation-log'],
         ];
@@ -231,31 +231,6 @@ class DashboardQueryBudgetTest extends TestCase
         $large = count($this->readsFor($role, $url));
 
         $this->assertSame($small, $large, "{$url} issues a query per visit or medicine rather than a fixed set.");
-    }
-
-    /** Batching the counts must not move them between visits. */
-    #[Test]
-    public function the_adviser_sees_each_visits_own_shared_photo_count(): void
-    {
-        $learner = $this->classLearner();
-        [$withShared, $withNone, $withPrivate] = [
-            $this->visitFor($learner),
-            $this->visitFor($learner),
-            $this->visitFor($learner),
-        ];
-        $this->photoOn($withShared, true);
-        $this->photoOn($withShared, true);
-        $this->photoOn($withShared, false);
-        $this->photoOn($withPrivate, false);
-
-        $visits = collect($this->withSession($this->sessionFor('class_adviser'))
-            ->get('/dashboard/class-adviser')->assertOk()
-            ->viewData('rosterMeta')[$learner->student_id]['consultations'])
-            ->pluck('shared_photo_count', 'id');
-
-        $this->assertSame(2, $visits[$withShared->id]);
-        $this->assertSame(0, $visits[$withNone->id]);
-        $this->assertSame(0, $visits[$withPrivate->id], 'A photo the nurse did not share is never counted for the adviser.');
     }
 
     /** The log's figures are read in two queries now; each must still count its own visits. */
@@ -331,7 +306,7 @@ class DashboardQueryBudgetTest extends TestCase
         ]);
     }
 
-    private function photoOn(Consultation $visit, bool $shared): void
+    private function photoOn(Consultation $visit): void
     {
         ConsultationPhoto::create([
             'consultation_id' => $visit->id,
@@ -339,16 +314,15 @@ class DashboardQueryBudgetTest extends TestCase
             'file_path' => 'consultation-photos/'.$visit->id.'-'.uniqid().'.jpg',
             'file_original_name' => 'photo.jpg',
             'file_size' => 10,
-            'shared_with_adviser' => $shared,
         ]);
     }
 
-    /** Visits (each with a shared photo), medicines and dispenses — the rows the clinic pages list. */
+    /** Visits (each with a photo), medicines and dispenses — the rows the clinic pages list. */
     private function addClinicRows(StudentHealthRecord $learner, int $count): void
     {
         foreach (range(1, $count) as $i) {
             $visit = $this->visitFor($learner);
-            $this->photoOn($visit, true);
+            $this->photoOn($visit);
 
             $medicine = Medicine::create([
                 'institution_id' => $this->institution->id,

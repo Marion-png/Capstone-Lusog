@@ -11,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -19,13 +20,10 @@ use Tests\TestCase;
  * Photographs on a consultation — a cut, a rash, a swelling.
  *
  * The clinic takes them so an injury can be seen rather than described, and
- * the class adviser sees the ones the nurse chose to share.
- *
- * That last clause is the whole design. Consultation detail otherwise stops
- * at the clinic (ConsultationVisibility), and a photograph of a child's
- * injury is more revealing than the text beside it, not less — so a photo is
- * clinic-only until the nurse decides the teacher needs it, per photo, and
- * the decision is reversible.
+ * they stay in the clinic: the class adviser can neither list nor open one.
+ * Consultation detail stops at the clinic (ConsultationVisibility), and a
+ * photograph of a child's injury is more revealing than the text beside it,
+ * not less.
  */
 class ConsultationPhotoTest extends TestCase
 {
@@ -180,127 +178,64 @@ class ConsultationPhotoTest extends TestCase
         $this->assertSame(0, ConsultationPhoto::count());
     }
 
-    // ── Sharing is the nurse's decision ──────────────────────────────
+    // ── The class adviser sees none of them ──────────────────────────
 
-    /** The default is clinic-only. */
+    /**
+     * Not the list and not the image, even for their own learner — and even
+     * for a photo marked shared back when a photo could be shared.
+     */
     #[Test]
-    public function a_photo_is_not_shared_unless_the_nurse_says_so(): void
-    {
-        $this->upload($this->visit())->assertCreated();
-
-        $this->assertFalse(ConsultationPhoto::first()->shared_with_adviser);
-    }
-
-    #[Test]
-    public function the_nurse_can_share_at_upload_or_afterwards(): void
-    {
-        $visit = $this->visit();
-
-        $this->upload($visit, ['shared_with_adviser' => '1'])->assertCreated();
-        $this->assertTrue(ConsultationPhoto::first()->shared_with_adviser);
-
-        // …and take it back.
-        $photo = ConsultationPhoto::first();
-        $this->withSession($this->sessionFor('school_nurse'))
-            ->postJson(route('consultation-photos.share', $photo), ['shared_with_adviser' => false])
-            ->assertOk();
-
-        $this->assertFalse($photo->fresh()->shared_with_adviser);
-    }
-
-    // ── The adviser sees only what was shared ────────────────────────
-
-    #[Test]
-    public function the_adviser_sees_a_shared_photo(): void
+    public function the_adviser_can_neither_list_nor_open_a_photo(): void
     {
         $this->learner();
         $visit = $this->visit();
-        $this->upload($visit, ['shared_with_adviser' => '1', 'caption' => 'Graze to the knee'])->assertCreated();
+        $this->upload($visit, ['caption' => 'Graze to the knee'])->assertCreated();
+        ConsultationPhoto::query()->update(['shared_with_adviser' => true]);
 
-        $photos = $this->withSession($this->sessionFor('class_adviser'))
-            ->getJson(route('consultation-photos.index', $visit))
-            ->assertOk()
-            ->json('photos');
-
-        $this->assertCount(1, $photos);
-        $this->assertSame('Graze to the knee', $photos[0]['caption']);
-
-        // The image itself opens.
-        $photo = ConsultationPhoto::first();
         $this->withSession($this->sessionFor('class_adviser'))
-            ->get(route('consultation-photos.view', $photo))
-            ->assertOk();
+            ->getJson(route('consultation-photos.index', $visit))
+            ->assertForbidden();
+
+        $this->withSession($this->sessionFor('class_adviser'))
+            ->get(route('consultation-photos.view', ConsultationPhoto::first()))
+            ->assertForbidden();
     }
 
+    /** The adviser's profile no longer asks for photos, and the visit says nothing about any. */
     #[Test]
-    public function the_adviser_never_sees_an_unshared_photo(): void
+    public function the_advisers_profile_carries_no_photos(): void
     {
         $this->learner();
         $visit = $this->visit();
         $this->upload($visit)->assertCreated();
 
-        $photos = $this->withSession($this->sessionFor('class_adviser'))
-            ->getJson(route('consultation-photos.index', $visit))
+        $html = $this->withSession($this->sessionFor('class_adviser'))
+            ->get(route('dashboard.class-adviser.student-profile', '130000000001'))
             ->assertOk()
-            ->json('photos');
+            ->getContent();
 
-        $this->assertSame([], $photos);
-    }
+        $this->assertStringNotContainsString('shared_photo_count', $html);
+        $this->assertStringNotContainsString('Photos shared by the school nurse', $html);
+        $this->assertStringNotContainsString('clog-photo-strip', $html);
 
-    /**
-     * And cannot open one by guessing its id. The list hiding it is
-     * presentation; this is the guarantee.
-     */
-    #[Test]
-    public function the_adviser_cannot_open_an_unshared_photo_directly(): void
-    {
-        $this->learner();
-        $this->upload($this->visit())->assertCreated();
-
-        $this->withSession($this->sessionFor('class_adviser'))
-            ->get(route('consultation-photos.view', ConsultationPhoto::first()))
-            ->assertForbidden();
-    }
-
-    /**
-     * A shared photo does not drag the clinical narrative along with it. The
-     * adviser gets the picture and the nurse's caption, not the diagnosis.
-     */
-    #[Test]
-    public function a_shared_photo_carries_no_clinical_detail(): void
-    {
-        $this->learner();
-        $visit = $this->visit();
-        $this->upload($visit, ['shared_with_adviser' => '1'])->assertCreated();
-
-        $row = $this->withSession($this->sessionFor('class_adviser'))
-            ->getJson(route('consultation-photos.index', $visit))
+        $visits = $this->withSession($this->sessionFor('class_adviser'))
+            ->get('/dashboard/class-adviser')
             ->assertOk()
-            ->json('photos.0');
+            ->viewData('rosterMeta')['130000000001']['consultations'];
 
-        foreach (['uploaded_by', 'file_name', 'shared_with_adviser'] as $clinical) {
-            $this->assertArrayNotHasKey($clinical, $row);
-        }
+        $this->assertCount(1, $visits);
+        $this->assertArrayNotHasKey('shared_photo_count', $visits[0]);
     }
 
-    /** An adviser who does not hold this learner's class gets nothing. */
+    /** There is no sharing left to do: the endpoint and the upload field are gone. */
     #[Test]
-    public function another_advisers_class_is_refused(): void
+    public function a_photo_cannot_be_shared(): void
     {
-        $this->learner();
-        $visit = $this->visit();
-        $this->upload($visit, ['shared_with_adviser' => '1'])->assertCreated();
+        $this->assertFalse(Route::has('consultation-photos.share'));
 
-        $session = $this->sessionFor('class_adviser');
-        $session['assigned_section'] = 'Rizal';
+        $this->upload($this->visit(), ['shared_with_adviser' => '1'])->assertCreated();
 
-        $this->withSession($session)
-            ->getJson(route('consultation-photos.index', $visit))
-            ->assertForbidden();
-
-        $this->withSession($session)
-            ->get(route('consultation-photos.view', ConsultationPhoto::first()))
-            ->assertForbidden();
+        $this->assertFalse(ConsultationPhoto::first()->shared_with_adviser);
     }
 
     // ── Nobody else ──────────────────────────────────────────────────
@@ -310,7 +245,7 @@ class ConsultationPhotoTest extends TestCase
     {
         $this->learner();
         $visit = $this->visit();
-        $this->upload($visit, ['shared_with_adviser' => '1'])->assertCreated();
+        $this->upload($visit)->assertCreated();
 
         $head = [
             'active_role' => 'school_head',
@@ -324,7 +259,7 @@ class ConsultationPhotoTest extends TestCase
     }
 
     #[Test]
-    public function only_the_clinic_may_upload_share_or_remove(): void
+    public function only_the_clinic_may_upload_or_remove(): void
     {
         $this->learner();
         $visit = $this->visit();
@@ -335,16 +270,11 @@ class ConsultationPhotoTest extends TestCase
             $this->upload($visit, [], $role)->assertForbidden();
 
             $this->withSession($this->sessionFor($role))
-                ->postJson(route('consultation-photos.share', $photo), ['shared_with_adviser' => true])
-                ->assertForbidden();
-
-            $this->withSession($this->sessionFor($role))
                 ->deleteJson(route('consultation-photos.destroy', $photo))
                 ->assertForbidden();
         }
 
         $this->assertSame(1, ConsultationPhoto::count());
-        $this->assertFalse($photo->fresh()->shared_with_adviser);
     }
 
     /** Another school's consultation is unreachable. */
@@ -395,7 +325,8 @@ class ConsultationPhotoTest extends TestCase
 
         $this->assertStringContainsString('id="cphotoBackdrop"', $html);
         $this->assertStringContainsString('data-photos-open=', $html);
-        $this->assertStringContainsString("Share with the learner's class adviser", $html);
+        $this->assertStringNotContainsString("Share with the learner's class adviser", $html);
+        $this->assertStringNotContainsString('cphotoDetailShare', $html);
     }
 
     /**
@@ -463,7 +394,6 @@ class ConsultationPhotoTest extends TestCase
         $this->assertSame($this->school->id, $photos[0]->institution_id);
         $this->assertSame('Graze to the left knee', $photos[0]->caption);
         $this->assertSame('Nurse Cruz', $photos[0]->uploaded_by_name);
-        $this->assertFalse($photos[0]->shared_with_adviser, 'Not shared unless the nurse says so.');
 
         // Encrypted on disk, exactly as an upload through the dialog is.
         $this->assertStringStartsWith('eyJ', Storage::disk('local')->get($photos[0]->file_path));
@@ -655,7 +585,7 @@ class ConsultationPhotoTest extends TestCase
     {
         $this->learner();
         $visit = $this->visit();
-        $this->upload($visit, ['shared_with_adviser' => '1', 'caption' => 'Original'])->assertCreated();
+        $this->upload($visit, ['caption' => 'Original'])->assertCreated();
         $photo = ConsultationPhoto::firstOrFail();
 
         foreach (['class_adviser', 'school_head', 'feeding_coor'] as $role) {
@@ -673,18 +603,14 @@ class ConsultationPhotoTest extends TestCase
         $this->assertSame('Original', $photo->fresh()->caption);
     }
 
-    /**
-     * The clinic reads the visit's own Notes / comments beside the photos. An
-     * adviser reading a shared photo through the same endpoint does not: a
-     * visit note is clinical text, and a shared photo is not a way round that.
-     */
+    /** The clinic reads the visit's own Notes / comments beside the photos; the adviser reads neither. */
     #[Test]
     public function the_visit_notes_come_with_the_photos_for_the_clinic_only(): void
     {
         $this->learner();
         $visit = $this->visit();
         $visit->update(['notes' => 'Advised rest; recheck dressing tomorrow.']);
-        $this->upload($visit, ['shared_with_adviser' => '1'])->assertCreated();
+        $this->upload($visit)->assertCreated();
 
         $this->withSession($this->sessionFor('school_nurse'))
             ->getJson(route('consultation-photos.index', $visit))
@@ -694,10 +620,8 @@ class ConsultationPhotoTest extends TestCase
 
         $adviser = $this->withSession($this->sessionFor('class_adviser'))
             ->getJson(route('consultation-photos.index', $visit))
-            ->assertOk();
+            ->assertForbidden();
 
-        $this->assertCount(1, $adviser->json('photos'));
-        $this->assertArrayNotHasKey('visit', $adviser->json());
         $this->assertStringNotContainsString('Advised rest', $adviser->getContent());
     }
 
@@ -731,7 +655,7 @@ class ConsultationPhotoTest extends TestCase
         $this->assertStringContainsString('enctype="multipart/form-data"', $log);
         $this->assertStringContainsString('name="photos[]"', $log);
         $this->assertStringContainsString('name="photo_caption"', $log);
-        $this->assertStringContainsString('name="photo_shared_with_adviser"', $log);
+        $this->assertStringNotContainsString('name="photo_shared_with_adviser"', $log);
 
         $profile = $this->withSession($this->sessionFor('school_nurse'))
             ->get(route('dashboard.student-health-records'))

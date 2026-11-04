@@ -954,17 +954,14 @@ Route::get('/health-records/allergy-check', [StudentAllergyController::class, 'c
     ->name('student-allergies.check');
 
 // Photographs attached to a consultation — a cut, a rash, a swelling, so an
-// injury can be seen rather than described. The clinic takes them; the class
-// adviser sees only the ones the nurse chose to share, because consultation
-// detail otherwise stops at the clinic. Enforced in the controller.
+// injury can be seen rather than described. The clinic takes them and only
+// the clinic sees them — never the class adviser. Enforced in the controller.
 Route::get('/health-records/consultations/{consultation}/photos', [ConsultationPhotoController::class, 'index'])
     ->whereNumber('consultation')->name('consultation-photos.index');
 Route::post('/health-records/consultations/{consultation}/photos', [ConsultationPhotoController::class, 'store'])
     ->whereNumber('consultation')->name('consultation-photos.store');
 Route::get('/health-records/consultation-photos/{photo}', [ConsultationPhotoController::class, 'view'])
     ->whereNumber('photo')->name('consultation-photos.view');
-Route::post('/health-records/consultation-photos/{photo}/share', [ConsultationPhotoController::class, 'share'])
-    ->whereNumber('photo')->name('consultation-photos.share');
 Route::post('/health-records/consultation-photos/{photo}/caption', [ConsultationPhotoController::class, 'caption'])
     ->whereNumber('photo')->name('consultation-photos.caption');
 Route::delete('/health-records/consultation-photos/{photo}', [ConsultationPhotoController::class, 'destroy'])

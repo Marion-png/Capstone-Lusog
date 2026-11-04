@@ -2,16 +2,13 @@
     Photographs on a consultation — the clinic's dialog.
 
     A cut, a rash, a swelling: taken so an injury can be seen rather than
-    described. Sharing with the learner's class adviser is a decision the
-    nurse makes per photo, and the default is not shared — consultation
-    detail otherwise stops at the clinic (App\Support\ConsultationVisibility),
-    and a photograph of a child's injury is more revealing than the text
-    beside it, not less.
+    described. The photos stay in the clinic — the class adviser never sees
+    them (App\Http\Controllers\ConsultationPhotoController).
 
     The photo is the dialog. It takes the whole left of the panel (the top on
     a phone); beside it sit the comment on the photo being looked at, every
     photo on the visit with its own comment, and — out of the photo's way —
-    sharing, removing and adding.
+    removing and adding.
 
     Opened by any control carrying data-photos-open="<consultation id>".
     Carries its own sheet: it is opened from the Consultation Log and from a
@@ -89,10 +86,6 @@
                         </div>
                     </div>
                     <div class="cphoto-meta" id="cphotoDetailMeta"></div>
-                    <label class="cphoto-share">
-                        <input type="checkbox" id="cphotoDetailShare">
-                        <span>Shared with class adviser</span>
-                    </label>
                     <div class="cphoto-detail-actions">
                         <a class="cphoto-link" id="cphotoOpenFull" href="#" target="_blank" rel="noopener">Open full size</a>
                         <button type="button" class="cphoto-remove" id="cphotoDetailRemove">Remove photo</button>
@@ -117,10 +110,6 @@
                             <span>What it shows (optional)</span>
                             <input type="text" id="cphotoCaption" maxlength="500" placeholder="e.g. Graze to the left knee, cleaned and dressed" autocomplete="off">
                         </label>
-                        <label class="cphoto-check">
-                            <input type="checkbox" id="cphotoShare">
-                            <span>Share with the learner's class adviser</span>
-                        </label>
                         <div class="cphoto-error" id="cphotoError" hidden></div>
                         <button type="button" class="btn btn-primary" id="cphotoUpload">Upload Photo</button>
                     </div>
@@ -128,7 +117,7 @@
 
                 <div class="cphoto-privacy">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                    <span>Photos stay in the clinic unless you share them. Share one only when the learner's class adviser needs to know about the injury.</span>
+                    <span>Photos stay in the clinic.</span>
                 </div>
             </div>
         </div>

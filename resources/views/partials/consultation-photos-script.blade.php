@@ -13,7 +13,6 @@
     const sub = document.getElementById('cphotoSub');
     const fileInput = document.getElementById('cphotoFile');
     const captionInput = document.getElementById('cphotoCaption');
-    const shareInput = document.getElementById('cphotoShare');
     const uploadBtn = document.getElementById('cphotoUpload');
     const errorBox = document.getElementById('cphotoError');
     const addPanel = document.getElementById('cphotoAdd');
@@ -36,7 +35,6 @@
     const detail = document.getElementById('cphotoDetail');
     const comment = document.getElementById('cphotoStageCaption');
     const detailMeta = document.getElementById('cphotoDetailMeta');
-    const detailShare = document.getElementById('cphotoDetailShare');
     const detailRemove = document.getElementById('cphotoDetailRemove');
     const openFull = document.getElementById('cphotoOpenFull');
     const allPanel = document.getElementById('cphotoAll');
@@ -176,7 +174,6 @@
         }
         if (editBtn) editBtn.textContent = photo.caption ? 'Edit comment' : 'Add comment';
         if (detailMeta) detailMeta.textContent = metaOf(photo);
-        if (detailShare) detailShare.checked = Boolean(photo.shared_with_adviser);
         if (openFull) openFull.href = photo.url;
     };
 
@@ -205,7 +202,7 @@
         }
         if (!stageImg) return;
 
-        // Already on the stage and drawn (a re-render after sharing, say):
+        // Already on the stage and drawn (a re-render after a comment, say):
         // leave it rather than flashing the loading state.
         if (!bustCache && stageImg.getAttribute('src') === photo.url && stageImg.complete && stageImg.naturalWidth > 0) {
             stageState('image');
@@ -320,7 +317,6 @@
             if (!photo.caption) note.classList.add('is-uncommented');
             text.appendChild(note);
             text.appendChild(el('span', 'cphoto-item-meta', metaOf(photo)));
-            if (photo.shared_with_adviser) text.appendChild(el('span', 'cphoto-item-shared', 'Shared with adviser'));
             thumb.appendChild(text);
 
             list.appendChild(thumb);
@@ -371,7 +367,6 @@
         showError('');
         if (fileInput) fileInput.value = '';
         if (captionInput) captionInput.value = '';
-        if (shareInput) shareInput.checked = false;
         if (addPanel) addPanel.open = false;
         if (sub) sub.textContent = student ? 'Photos for ' + student : '';
         list.textContent = '';
@@ -468,7 +463,6 @@
         const body = new FormData();
         body.append('photo', file);
         body.append('caption', captionInput?.value ?? '');
-        body.append('shared_with_adviser', shareInput?.checked ? '1' : '0');
 
         try {
             const response = await fetch(indexUrl(id), {
@@ -489,7 +483,6 @@
             if (id !== consultationId) return;
             fileInput.value = '';
             captionInput.value = '';
-            shareInput.checked = false;
             if (addPanel) addPanel.open = false;
             // The photo just uploaded goes straight onto the stage.
             render(data.photos, data.photo?.id ?? null);
@@ -497,30 +490,6 @@
             showError('The photo could not be uploaded.');
         } finally {
             uploadBtn.disabled = false;
-        }
-    });
-
-    // Sharing is its own decision, reversible, and made about the photo on
-    // screen: a nurse who realises a teacher needs to know should not have to
-    // re-upload, and one who shared by mistake must be able to take it back.
-    detailShare?.addEventListener('change', async () => {
-        if (currentId === null) return;
-        const wanted = detailShare.checked;
-
-        try {
-            const response = await fetch(photoUrl(currentId) + '/share', {
-                method: 'POST',
-                headers: {
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': token,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ shared_with_adviser: wanted }),
-            });
-            if (!response.ok) { detailShare.checked = !wanted; return; }
-            render((await response.json()).photos);
-        } catch (_) {
-            detailShare.checked = !wanted;
         }
     });
 

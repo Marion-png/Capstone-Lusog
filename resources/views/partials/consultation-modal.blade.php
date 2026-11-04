@@ -304,7 +304,7 @@
                         {{-- A note is clinical text and stops at the clinic, like the
                              complaint and the treatment. This is the one way it
                              reaches the class adviser, and it is the nurse's
-                             decision — the same one a shared photograph is. --}}
+                             decision. --}}
                         <div class="bmodal-field cm-photo-share">
                             <label class="cm-photo-check">
                                 <input type="checkbox" name="notes_shared_with_adviser" value="1" @checked(old('notes_shared_with_adviser'))>
@@ -319,10 +319,8 @@
                      recorded — a cut, a rash, a swelling, seen rather than
                      described. Same limits and same storage as the Photos
                      dialog on the log, so one taken now and one added later
-                     are the same record. Not shared with the class adviser
-                     unless the nurse ticks it: the adviser sees no other
-                     consultation detail, and a photo of a child's injury must
-                     not become the back door. --}}
+                     are the same record. They stay in the clinic: the class
+                     adviser never sees a consultation photo. --}}
                 @if (\App\Support\SchemaCache::hasTable('consultation_photos'))
                     <div class="bmodal-field" id="cm_photos_field">
                         <label for="cm_photos">Photos of the injury <span class="bmodal-optional">(optional)</span></label>
@@ -337,19 +335,10 @@
                             <div class="bmodal-error">{{ $errors->consultation->first('photos') ?: $errors->consultation->first('photos.*') }}</div>
                         @endif
                     </div>
-                    <div class="bmodal-grid" id="cm_photo_meta" hidden>
-                        <div class="bmodal-field">
-                            <label for="cm_photo_caption">What the photos show <span class="bmodal-optional">(optional)</span></label>
-                            <input id="cm_photo_caption" type="text" name="photo_caption" maxlength="500"
-                                   value="{{ old('photo_caption') }}" placeholder="e.g. Graze to the left knee, cleaned and dressed" autocomplete="off">
-                        </div>
-                        <div class="bmodal-field cm-photo-share">
-                            <label class="cm-photo-check">
-                                <input type="checkbox" name="photo_shared_with_adviser" value="1" @checked(old('photo_shared_with_adviser'))>
-                                <span>Share with the learner's class adviser</span>
-                            </label>
-                            <div class="bmodal-hint">Photos stay in the clinic unless shared.</div>
-                        </div>
+                    <div class="bmodal-field" id="cm_photo_meta" hidden>
+                        <label for="cm_photo_caption">What the photos show <span class="bmodal-optional">(optional)</span></label>
+                        <input id="cm_photo_caption" type="text" name="photo_caption" maxlength="500"
+                               value="{{ old('photo_caption') }}" placeholder="e.g. Graze to the left knee, cleaned and dressed" autocomplete="off">
                     </div>
                 @endif
             </div>
@@ -477,7 +466,7 @@
 
 <script>
 // Photos of the injury: name what was chosen, show it, and reveal the caption
-// and sharing controls only once there is a photo for them to describe.
+// only once there is a photo for it to describe.
 (() => {
     const input = document.getElementById('cm_photos');
     const label = document.getElementById('cm_photos_label');

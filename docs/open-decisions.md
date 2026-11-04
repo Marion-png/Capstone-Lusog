@@ -44,8 +44,8 @@ information.
 nothing clinical:
 
 - `ConsultationVisibility::DETAIL_ROLES` is `['school_nurse', 'clinic_staff']`.
-- For every other role, `present()` returns the timestamp, the consultation id
-  and the shared-photo count — the `condition`, `treatment_given`, `status`
+- For every other role, `present()` returns the timestamp and the consultation
+  id (plus a note the nurse chose to share) — the `condition`, `treatment_given`, `status`
   and `grade_section` keys are never in the array at all, so no template can
   print them by accident.
 - The adviser's Consultation Log tab shows date and time under a notice that
@@ -58,11 +58,13 @@ default, not a ruling.
 
 ### One partial bridge already exists
 
-The nurse can photograph an injury during a consultation and **share that
-photo with the class adviser per photo** (`ConsultationPhoto`,
-`shared_with_adviser`, default off). That was built for a different request,
-but it happens to give the nurse a deliberate way to tell a teacher about
-something the teacher needs to act on, without opening the whole record.
+The nurse can **share one visit's note with the class adviser**
+(`consultations.notes_shared_with_adviser`, default off). It gives the nurse a
+deliberate way to tell a teacher about something the teacher needs to act on,
+without opening the whole record.
+
+Consultation photographs used to be shareable the same way, per photo. That
+was removed on 2026-11-04: the adviser no longer sees any consultation photo.
 
 It may or may not be enough to satisfy the nurse's concern. That is part of
 what needs deciding.
@@ -90,8 +92,8 @@ rather than a hunt through templates.
   minimum-necessary still the rule?
 - If advisers get more than date and time, is it *everything*, or a middle
   position — for example the complaint but not the treatment?
-- Is the nurse's per-photo sharing enough to cover "the teacher needs to know
-  about this one"?
+- Is the nurse's per-visit note sharing enough to cover "the teacher needs to
+  know about this one"?
 - Does the answer differ for an injury sustained at school (which the adviser
   may have witnessed and may have filed an incident report about) versus an
   illness the learner arrived with?

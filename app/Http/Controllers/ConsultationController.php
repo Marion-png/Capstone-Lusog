@@ -206,7 +206,6 @@ class ConsultationController extends Controller
                 'max:'.ConsultationPhoto::MAX_KILOBYTES,
             ],
             'photo_caption' => ['nullable', 'string', 'max:500'],
-            'photo_shared_with_adviser' => ['nullable', 'boolean'],
             // The learner chosen off the roll, whose allergies the dispense is
             // checked against (App\Support\AllergyCheck), and what the nurse
             // answered to the check.
@@ -340,9 +339,8 @@ class ConsultationController extends Controller
             // Photographs attached at the point of recording. Written through
             // the model and EncryptedFileStorage exactly as the Photos dialog
             // writes them, so a photo taken now and one added later are the
-            // same record. Not shared with the adviser unless the nurse says
-            // so — the adviser sees no other consultation detail, and a photo
-            // of a child's injury must not become the back door.
+            // same record. They stay in the clinic: the class adviser never
+            // sees a consultation photo.
             if ($photos !== [] && SchemaCache::hasTable('consultation_photos')) {
                 foreach ($photos as $file) {
                     ConsultationPhoto::create([
@@ -352,7 +350,6 @@ class ConsultationController extends Controller
                         'file_original_name' => $file->getClientOriginalName(),
                         'file_size' => $file->getSize(),
                         'caption' => $validated['photo_caption'] ?? null,
-                        'shared_with_adviser' => (bool) ($validated['photo_shared_with_adviser'] ?? false),
                         'uploaded_by_name' => (string) $request->session()->get('active_name', ''),
                         'uploaded_by_role' => (string) $request->session()->get('active_role', ''),
                     ]);

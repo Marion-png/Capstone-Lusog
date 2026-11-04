@@ -4,10 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Consultation;
 use App\Models\ConsultationPhoto;
-use App\Models\StudentHealthRecord;
-use App\Support\ConsultationVisibility;
 use App\Support\EncryptedFileStorage;
-use App\Support\LearnerPlacement;
 use App\Support\SchemaCache;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,12 +13,11 @@ use Illuminate\Http\Response;
 /**
  * Photographs attached to a consultation — a cut, a rash, a swelling.
  *
- * The clinic takes them so an injury can be seen rather than described. The
- * class adviser sees the ones the nurse chose to share, and only those:
- * consultation detail otherwise stops at the clinic (ConsultationVisibility),
- * and a photograph of a child's injury is more revealing than the text it
- * sits beside, not less. So sharing is a decision the nurse makes per photo,
- * and the default is not shared.
+ * The clinic takes them so an injury can be seen rather than described, and
+ * they stay in the clinic: the class adviser cannot list or open any of them.
+ * Consultation detail stops at the clinic (ConsultationVisibility), and a
+ * photograph of a child's injury is more revealing than the text it sits
+ * beside, not less.
  *
  * Files go through EncryptedFileStorage, so nothing readable lands on disk.
  * The served Content-Type is derived from the stored name, whose extension
@@ -34,31 +30,19 @@ class ConsultationPhotoController extends Controller
 
     public function index(Request $request, Consultation $consultation): JsonResponse
     {
-        if (! $this->sameSchool($request, $consultation)) {
+        if (! $this->isClinic($request) || ! $this->sameSchool($request, $consultation)) {
             return response()->json(['message' => 'Forbidden.'], 403);
         }
-
-        $role = (string) $request->session()->get('active_role');
-
-        if (! $this->mayRead($request, $consultation, $role)) {
-            return response()->json(['message' => 'Forbidden.'], 403);
-        }
-
-        $payload = ['photos' => $this->listFor($consultation, $role)];
 
         // The visit's own Notes / comments, so the clinic reads the photos
-        // and what was written about the visit side by side. Clinical text:
-        // it goes to the desks that may see consultation detail and nobody
-        // else — an adviser reading shared photos through this endpoint gets
-        // the photos and nothing more.
-        if (ConsultationVisibility::maySeeDetails($role)) {
-            $payload['visit'] = [
+        // and what was written about the visit side by side.
+        return response()->json([
+            'photos' => $this->listFor($consultation),
+            'visit' => [
                 'notes' => (string) $consultation->notes,
                 'notes_shared_with_adviser' => (bool) $consultation->notes_shared_with_adviser,
-            ];
-        }
-
-        return response()->json($payload);
+            ],
+        ]);
     }
 
     public function store(Request $request, Consultation $consultation): JsonResponse
@@ -80,7 +64,6 @@ class ConsultationPhotoController extends Controller
                 'max:'.ConsultationPhoto::MAX_KILOBYTES,
             ],
             'caption' => ['nullable', 'string', 'max:500'],
-            'shared_with_adviser' => ['nullable', 'boolean'],
         ]);
 
         $file = $validated['photo'];
@@ -94,41 +77,14 @@ class ConsultationPhotoController extends Controller
             'file_original_name' => $file->getClientOriginalName(),
             'file_size' => $file->getSize(),
             'caption' => $validated['caption'] ?? null,
-            // Not shared unless the nurse says so. The adviser sees no other
-            // consultation detail, so a photo must not become the back door.
-            'shared_with_adviser' => (bool) ($validated['shared_with_adviser'] ?? false),
             'uploaded_by_name' => (string) $request->session()->get('active_name', ''),
             'uploaded_by_role' => (string) $request->session()->get('active_role', ''),
         ]);
 
         return response()->json([
-            'photo' => $this->present($photo, (string) $request->session()->get('active_role')),
-            'photos' => $this->listFor($consultation, (string) $request->session()->get('active_role')),
+            'photo' => $this->present($photo),
+            'photos' => $this->listFor($consultation),
         ], 201);
-    }
-
-    /**
-     * Change whether the learner's class adviser may see this photo.
-     *
-     * Its own endpoint because it is its own decision: a nurse who realises a
-     * teacher needs to know about an injury should not have to re-upload, and
-     * one who shared by mistake must be able to take it back.
-     */
-    public function share(Request $request, ConsultationPhoto $photo): JsonResponse
-    {
-        if (! $this->isClinic($request) || ! $this->photoInSchool($request, $photo)) {
-            return response()->json(['message' => 'Only the clinic may share a photo.'], 403);
-        }
-
-        $validated = $request->validate([
-            'shared_with_adviser' => ['required', 'boolean'],
-        ]);
-
-        $photo->update(['shared_with_adviser' => (bool) $validated['shared_with_adviser']]);
-
-        return response()->json([
-            'photos' => $this->listFor($photo->consultation, (string) $request->session()->get('active_role')),
-        ]);
     }
 
     /**
@@ -156,25 +112,15 @@ class ConsultationPhotoController extends Controller
         $photo->update(['caption' => $caption !== '' ? $caption : null]);
 
         return response()->json([
-            'photos' => $this->listFor($photo->consultation, (string) $request->session()->get('active_role')),
+            'photos' => $this->listFor($photo->consultation),
         ]);
     }
 
-    /** The image itself. */
+    /** The image itself — the clinic's alone. A photo id off the wire decides nothing. */
     public function view(Request $request, ConsultationPhoto $photo): Response
     {
-        if (! $this->photoInSchool($request, $photo)) {
+        if (! $this->isClinic($request) || ! $this->photoInSchool($request, $photo)) {
             abort(403);
-        }
-
-        $role = (string) $request->session()->get('active_role');
-
-        // The adviser may open a shared photo and nothing else. Checked here,
-        // not only in the list: a photo id off the wire decides nothing.
-        if (! $this->isClinic($request)) {
-            if (! $this->adviserHoldsLearner($request, $photo->consultation) || ! $photo->shared_with_adviser) {
-                abort(403);
-            }
         }
 
         return EncryptedFileStorage::response(
@@ -198,7 +144,7 @@ class ConsultationPhotoController extends Controller
         $photo->delete();
 
         return response()->json([
-            'photos' => $this->listFor($consultation, (string) $request->session()->get('active_role')),
+            'photos' => $this->listFor($consultation),
         ]);
     }
 
@@ -223,63 +169,10 @@ class ConsultationPhotoController extends Controller
         return $institutionId && (string) $photo->institution_id === (string) $institutionId;
     }
 
-    private function mayRead(Request $request, Consultation $consultation, string $role): bool
-    {
-        if ($this->isClinic($request)) {
-            return true;
-        }
-
-        return $role === 'class_adviser' && $this->adviserHoldsLearner($request, $consultation);
-    }
-
-    /**
-     * The consultation must belong to a learner in this adviser's own class.
-     *
-     * The clinic log records a free-text name rather than an LRN, so this is
-     * the same best-effort match the student profile uses — the adviser only
-     * ever reaches it from that learner's own page.
-     */
-    private function adviserHoldsLearner(Request $request, ?Consultation $consultation): bool
-    {
-        if ($consultation === null || ! $this->sameSchool($request, $consultation)) {
-            return false;
-        }
-
-        $grade = trim((string) $request->session()->get('assigned_grade_level', ''));
-        $section = trim((string) $request->session()->get('assigned_section', ''));
-
-        if ($grade === '' || $section === '') {
-            return false;
-        }
-
-        $name = $this->nameKey((string) $consultation->student_name);
-
-        if ($name === '') {
-            return false;
-        }
-
-        return StudentHealthRecord::query()
-            ->where('institution_id', $request->session()->get('active_institution_id'))
-            ->where('school_year', StudentHealthRecord::currentSchoolYear())
-            ->get()
-            ->contains(function (StudentHealthRecord $record) use ($name, $grade, $section): bool {
-                // Section is plain, the learner's name is not — so the section
-                // narrows in SQL terms and the name is compared here.
-                return strcasecmp(trim((string) $record->section), trim($grade.' / '.$section)) === 0
-                    && LearnerPlacement::isOpen($record)
-                    && $this->nameKey((string) $record->student_name) === $name;
-            });
-    }
-
-    private function nameKey(string $name): string
-    {
-        return preg_replace('/[^a-z]/', '', strtolower($name)) ?? '';
-    }
-
     // ── Presentation ─────────────────────────────────────────────────
 
     /** @return list<array<string, mixed>> */
-    private function listFor(?Consultation $consultation, string $role): array
+    private function listFor(?Consultation $consultation): array
     {
         if ($consultation === null || ! SchemaCache::hasTable('consultation_photos')) {
             return [];
@@ -287,34 +180,22 @@ class ConsultationPhotoController extends Controller
 
         return ConsultationPhoto::query()
             ->where('consultation_id', $consultation->id)
-            ->when(
-                ! ConsultationVisibility::maySeeDetails($role),
-                fn ($q) => $q->sharedWithAdviser(),
-            )
             ->orderByDesc('id')
             ->get()
-            ->map(fn (ConsultationPhoto $photo) => $this->present($photo, $role))
+            ->map(fn (ConsultationPhoto $photo) => $this->present($photo))
             ->all();
     }
 
     /** @return array<string, mixed> */
-    private function present(ConsultationPhoto $photo, string $role): array
+    private function present(ConsultationPhoto $photo): array
     {
-        $row = [
+        return [
             'id' => $photo->id,
             'url' => route('consultation-photos.view', $photo),
             'caption' => (string) $photo->caption,
             'taken_label' => $photo->created_at?->format('M j, Y \a\t g:i A'),
-        ];
-
-        if (! ConsultationVisibility::maySeeDetails($role)) {
-            return $row;
-        }
-
-        return $row + [
             'file_name' => (string) $photo->file_original_name,
             'file_size' => $photo->file_size,
-            'shared_with_adviser' => (bool) $photo->shared_with_adviser,
             'uploaded_by' => (string) $photo->uploaded_by_name,
         ];
     }

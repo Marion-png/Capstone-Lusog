@@ -133,7 +133,7 @@ class MlatExportTest extends TestCase
         $workbook = MlatWorkbook::build($this->learner(), 'San Antonio National High School');
         $sheet = $workbook['sheets'][0];
 
-        $this->assertSame('Sheet 1', $sheet['name']);
+        $this->assertSame('MLHAT 1', $sheet['name']);
         $this->assertSame('MLAT-Pedro-Penduko.xlsx', $workbook['file_name']);
 
         // Title and subtitle are full-width bands.
@@ -160,21 +160,21 @@ class MlatExportTest extends TestCase
         $this->assertSame(['Date of Birth:', '2011-08-20', 'Age: 14', 'School:', 'San Antonio National High School'], $this->rowStarting($sheet, 'Date of Birth'));
         // Every tick box has a column of its own, so none of them depends on
         // the cell beside it being empty to be seen.
-        $this->assertSame(['Sex:', '☑ Male', '☐ Female', 'Date of Assessment:', '2026-08-02'], $this->rowStarting($sheet, 'Sex:'));
+        $this->assertSame(['Sex:', '[✓] Male', '[  ] Female', 'Date of Assessment:', '2026-08-02'], $this->rowStarting($sheet, 'Sex:'));
         $this->assertSame(['Assessed by (Name/Title):', 'Nurse Joy / School Nurse'], $this->rowStarting($sheet, 'Assessed by'));
 
         // B. Medical history — ticked where the record says so, detail beside it.
-        $this->assertSame('☑ Asthma', $this->rowStarting($sheet, '☑ Asthma')[0]);
-        $this->assertSame('☑ Allergies: Peanuts', $this->rowStarting($sheet, '☑ Asthma')[3]);
-        $this->assertSame('☐ Diabetes', $this->rowStarting($sheet, '☐ Diabetes')[0]);
-        $this->assertSame('☐ Heart Condition', $this->rowStarting($sheet, '☐ Diabetes')[3]);
-        $this->assertSame('☐ Hospitalization/Surgery', $this->rowStarting($sheet, '☐ Frequent Infections')[3]);
+        $this->assertSame('[✓] Asthma', $this->rowStarting($sheet, '[✓] Asthma')[0]);
+        $this->assertSame('[✓] Allergies: Peanuts', $this->rowStarting($sheet, '[✓] Asthma')[3]);
+        $this->assertSame('[  ] Diabetes', $this->rowStarting($sheet, '[  ] Diabetes')[0]);
+        $this->assertSame('[  ] Heart Condition', $this->rowStarting($sheet, '[  ] Diabetes')[3]);
+        $this->assertSame('[  ] Hospitalization/Surgery', $this->rowStarting($sheet, '[  ] Frequent Infections')[3]);
         $this->assertSame(['Current Medications: Salbutamol', '', '', 'Other Conditions: None'], $this->rowStarting($sheet, 'Current Medications'));
 
         // C. Family history on one line, as the form has it — a box to a column.
         $this->assertSame(
-            ['☐ Hypertension', '☑ Diabetes', '☐ Heart Disease', '☐ Cancer', '☐ Mental Health Conditions'],
-            $this->rowStarting($sheet, '☐ Hypertension')
+            ['[  ] Hypertension', '[✓] Diabetes', '[  ] Heart Disease', '[  ] Cancer', '[  ] Mental Health Conditions'],
+            $this->rowStarting($sheet, '[  ] Hypertension')
         );
         $this->assertSame('Genetic/Hereditary Disorders: None', $this->rowStarting($sheet, 'Genetic')[0]);
 
@@ -207,7 +207,7 @@ class MlatExportTest extends TestCase
     {
         $sheet = MlatWorkbook::build($this->learner())['sheets'][1];
 
-        $this->assertSame('Sheet 2', $sheet['name']);
+        $this->assertSame('MLHAT 2', $sheet['name']);
         $this->assertSame([MlatWorkbook::SHEET_TWO], $sheet['rows'][1]['cells']);
 
         $bands = array_values(array_map(
@@ -279,7 +279,7 @@ class MlatExportTest extends TestCase
 
         $this->assertSame('Penduko, Pedro', $this->rowStarting($sheet, 'Name of Learner')[1]);
         $this->assertSame('', $this->rowStarting($sheet, 'Date of Birth')[1]);
-        $this->assertSame(['☐ Male', '☐ Female'], array_slice($this->rowStarting($sheet, 'Sex:'), 1, 2));
+        $this->assertSame(['[  ] Male', '[  ] Female'], array_slice($this->rowStarting($sheet, 'Sex:'), 1, 2));
         $this->assertSame(['Endline Input', '', '', '', '', '', '', ''], $this->rowStarting($sheet, 'Endline Input'));
         $this->assertSame('Current Medications: None', $this->rowStarting($sheet, 'Current Medications')[0]);
     }
@@ -348,11 +348,11 @@ class MlatExportTest extends TestCase
         $reader->close();
         @unlink($path);
 
-        $this->assertSame(['Sheet 1', 'Sheet 2'], array_keys($sheets));
-        $this->assertSame(MlatWorkbook::TITLE, $sheets['Sheet 1'][0][0]);
-        $this->assertSame(MlatWorkbook::SHEET_TWO, $sheets['Sheet 2'][1][0]);
+        $this->assertSame(['MLHAT 1', 'MLHAT 2'], array_keys($sheets));
+        $this->assertSame(MlatWorkbook::TITLE, $sheets['MLHAT 1'][0][0]);
+        $this->assertSame(MlatWorkbook::SHEET_TWO, $sheets['MLHAT 2'][1][0]);
 
-        $flat = implode("\n", array_map(fn ($r) => implode('|', $r), $sheets['Sheet 1']));
+        $flat = implode("\n", array_map(fn ($r) => implode('|', $r), $sheets['MLHAT 1']));
         $this->assertStringContainsString('Pedro Penduko', $flat);
         $this->assertStringContainsString('15.56 (Severely Wasted)', $flat);
         $this->assertStringContainsString('E. VITAL SIGNS & ANTHROPOMETRICS', $flat);
@@ -372,7 +372,7 @@ class MlatExportTest extends TestCase
             ->get(route('dashboard.student-health-records'))
             ->assertOk()
             ->assertSee('id="profileMlatMenus"', false)
-            ->assertSeeInOrder(['Print', 'MLAT Sheet 1', 'MLAT Sheet 2', 'Download', 'MLAT Sheet 1', 'MLAT Sheet 2']);
+            ->assertSeeInOrder(['Print', 'MLHAT 1', 'MLHAT 2', 'Download', 'MLHAT 1', 'MLHAT 2']);
         foreach ([1, 2] as $sheet) {
             $nurse->assertSee(route('student-mlat.print', ['lrn' => '__LRN__', 'sheet' => $sheet]), false);
             $nurse->assertSee(route('student-mlat.download', ['lrn' => '__LRN__', 'sheet' => $sheet]), false);
@@ -384,7 +384,7 @@ class MlatExportTest extends TestCase
             ->get(route('dashboard.class-adviser.student-profile', '109876543201'))
             ->assertOk()
             ->assertSee('id="vpMlatMenus"', false)
-            ->assertSeeInOrder(['Print', 'MLAT Sheet 1', 'MLAT Sheet 2', 'Download', 'MLAT Sheet 1', 'MLAT Sheet 2']);
+            ->assertSeeInOrder(['Print', 'MLHAT 1', 'MLHAT 2', 'Download', 'MLHAT 1', 'MLHAT 2']);
         foreach ([1, 2] as $sheet) {
             $adviser->assertSee(route('student-mlat.print', ['lrn' => '109876543201', 'sheet' => $sheet]), false);
             $adviser->assertSee(route('student-mlat.download', ['lrn' => '109876543201', 'sheet' => $sheet]), false);
@@ -482,20 +482,20 @@ class MlatExportTest extends TestCase
         $one = $this->withSession($this->sessionFor('school_nurse'))
             ->get(route('student-mlat.download', ['lrn' => '109876543201', 'sheet' => 1]))
             ->assertOk();
-        $this->assertStringContainsString('MLAT-Pedro-Penduko-Sheet-1.xlsx', (string) $one->headers->get('Content-Disposition'));
+        $this->assertStringContainsString('MLHAT-1-Pedro-Penduko.xlsx', (string) $one->headers->get('Content-Disposition'));
         [$sheets, $xml] = $this->readWorkbook($one->getFile()->getContent());
-        $this->assertSame(['Sheet 1'], array_keys($sheets));
-        $this->assertSame(MlatWorkbook::SHEET_ONE, $sheets['Sheet 1'][1][0]);
+        $this->assertSame(['MLHAT 1'], array_keys($sheets));
+        $this->assertSame(MlatWorkbook::SHEET_ONE, $sheets['MLHAT 1'][1][0]);
         $this->assertStringContainsString('<col min="1" max="1" width="40"', $xml);
         $this->assertStringContainsString('orientation="landscape"', $xml);
 
         $two = $this->withSession($this->sessionFor('school_nurse'))
             ->get(route('student-mlat.download', ['lrn' => '109876543201', 'sheet' => 2]))
             ->assertOk();
-        $this->assertStringContainsString('MLAT-Pedro-Penduko-Sheet-2.xlsx', (string) $two->headers->get('Content-Disposition'));
+        $this->assertStringContainsString('MLHAT-2-Pedro-Penduko.xlsx', (string) $two->headers->get('Content-Disposition'));
         [$sheets, $xml] = $this->readWorkbook($two->getFile()->getContent());
-        $this->assertSame(['Sheet 2'], array_keys($sheets));
-        $this->assertSame(MlatWorkbook::SHEET_TWO, $sheets['Sheet 2'][1][0]);
+        $this->assertSame(['MLHAT 2'], array_keys($sheets));
+        $this->assertSame(MlatWorkbook::SHEET_TWO, $sheets['MLHAT 2'][1][0]);
 
         // Its own columns — it used to be written in Sheet 1's.
         $this->assertStringContainsString('<col min="1" max="1" width="34"', $xml);
@@ -512,7 +512,7 @@ class MlatExportTest extends TestCase
         $this->assertStringContainsString('<mergeCell ref="B'.$summaryRow.':F'.$summaryRow.'"/>', $xml);
 
         $this->assertTrue(
-            AuditLog::query()->where('action', 'downloaded')->get()->contains(fn ($log) => str_contains((string) $log->description, 'MLAT Sheet 2')),
+            AuditLog::query()->where('action', 'downloaded')->get()->contains(fn ($log) => str_contains((string) $log->description, 'MLHAT 2')),
             'The audit trail says which sheet left the school.'
         );
     }
@@ -548,7 +548,7 @@ class MlatExportTest extends TestCase
         $one = $this->withSession($this->sessionFor('school_nurse'))
             ->get(route('student-mlat.print', ['lrn' => '109876543201', 'sheet' => 1]))
             ->assertOk()
-            ->assertSee('data-mlat-sheet="MLAT Sheet 1"', false)
+            ->assertSee('data-mlat-sheet="MLHAT 1"', false)
             ->assertSee('size: landscape', false)
             ->assertSee(MlatWorkbook::TITLE)
             ->assertSee(MlatWorkbook::SHEET_ONE)
@@ -560,7 +560,7 @@ class MlatExportTest extends TestCase
         $two = $this->withSession($this->sessionFor('school_nurse'))
             ->get(route('student-mlat.print', ['lrn' => '109876543201', 'sheet' => 2]))
             ->assertOk()
-            ->assertSee('data-mlat-sheet="MLAT Sheet 2"', false)
+            ->assertSee('data-mlat-sheet="MLHAT 2"', false)
             ->assertSee('size: portrait', false)
             ->assertSee(MlatWorkbook::SHEET_TWO)
             ->assertDontSee(MlatWorkbook::SHEET_ONE)

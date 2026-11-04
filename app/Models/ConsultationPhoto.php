@@ -4,17 +4,17 @@ namespace App\Models;
 
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * A photograph taken at the clinic during a consultation.
  *
- * The clinic sees every photo on a consultation. The class adviser sees only
- * the ones the nurse deliberately shared — consultation detail otherwise
- * stops at the clinic (App\Support\ConsultationVisibility), and a photograph
- * of an injury is more revealing than the text it sits beside, not less.
+ * The clinic sees every photo on a consultation, and nobody else does — the
+ * class adviser included. Consultation detail stops at the clinic
+ * (App\Support\ConsultationVisibility), and a photograph of an injury is more
+ * revealing than the text it sits beside, not less. `shared_with_adviser` is
+ * a column left from when a photo could be shared; nothing reads it.
  */
 class ConsultationPhoto extends Model
 {
@@ -55,11 +55,5 @@ class ConsultationPhoto extends Model
     public function consultation(): BelongsTo
     {
         return $this->belongsTo(Consultation::class);
-    }
-
-    /** @param  Builder<self>  $query */
-    public function scopeSharedWithAdviser(Builder $query): Builder
-    {
-        return $query->where('shared_with_adviser', true);
     }
 }

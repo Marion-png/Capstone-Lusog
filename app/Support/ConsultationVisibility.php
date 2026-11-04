@@ -3,7 +3,6 @@
 namespace App\Support;
 
 use App\Models\Consultation;
-use App\Models\ConsultationPhoto;
 
 /**
  * Who may see what a learner came to the clinic for.
@@ -74,21 +73,17 @@ class ConsultationVisibility
     /**
      * One visit, as the given role may see it.
      *
-     * A caller presenting many visits passes each one's shared-photo count
-     * from `sharedPhotoCounts()`, so the list costs one count query rather
-     * than one per visit.
+     * Consultation photographs are never part of it: they stay in the clinic
+     * (ConsultationPhotoController), so nothing here tells the adviser one
+     * exists.
      *
      * @return array<string, mixed>
      */
-    public static function present(Consultation $consultation, ?string $role, ?int $sharedPhotoCount = null): array
+    public static function present(Consultation $consultation, ?string $role): array
     {
         // The visit itself — that it happened, and when. Never redacted: this
-        // is the part a class adviser is entitled to.
-        //
-        // The id rides along because it is not clinical: it is what the photo
-        // endpoints are keyed by, and the adviser's tab needs it to fetch the
-        // photographs the nurse deliberately shared. Those endpoints do their
-        // own checking — an id here grants nothing on its own.
+        // is the part a class adviser is entitled to. The id is not clinical
+        // and grants nothing on its own.
         $visit = [
             'id' => $consultation->id,
             'consulted_at' => $consultation->consulted_at?->toDateTimeString(),
@@ -96,15 +91,13 @@ class ConsultationVisibility
             'time' => $consultation->consulted_at?->format('g:i A'),
             'consulted_at_label' => $consultation->consulted_at?->format('M j, Y \a\t g:i A'),
             'details_visible' => self::maySeeDetails($role),
-            'shared_photo_count' => $sharedPhotoCount ?? self::sharedPhotoCount($consultation),
         ];
 
         if (! self::maySeeDetails($role)) {
             // One thing the clinic may hand over deliberately: the note on
-            // this visit, when the nurse marked it shared. It is the same
-            // decision a shared photograph is — per visit, taken by the
-            // person who wrote it, reversible — and it is the only clinical
-            // text that ever reaches this role. An unshared note is absent
+            // this visit, when the nurse marked it shared — per visit, taken
+            // by the person who wrote it, reversible — and it is the only
+            // clinical text that ever reaches this role. An unshared note is absent
             // from the payload, not blanked in the view: a value that reaches
             // the browser has been disclosed whether or not a template prints
             // it.
@@ -143,58 +136,6 @@ class ConsultationVisibility
     }
 
     /**
-     * How many photographs on this visit the nurse shared with the adviser.
-     *
-     * Zero for a visit with none, and zero before the table exists — a count
-     * is not clinical detail, it is what tells the adviser's tab whether to
-     * offer anything at all.
-     */
-    public static function sharedPhotoCount(Consultation $consultation): int
-    {
-        if (! SchemaCache::hasTable('consultation_photos')) {
-            return 0;
-        }
-
-        return ConsultationPhoto::query()
-            ->where('consultation_id', $consultation->id)
-            ->sharedWithAdviser()
-            ->count();
-    }
-
-    /**
-     * Shared-photo counts for many visits in one query, keyed by consultation
-     * id. A visit with no shared photograph reads 0.
-     *
-     * @param  iterable<Consultation>  $consultations
-     * @return array<int, int>
-     */
-    public static function sharedPhotoCounts(iterable $consultations): array
-    {
-        $counts = [];
-        foreach ($consultations as $consultation) {
-            $counts[(int) $consultation->id] = 0;
-        }
-
-        if ($counts === [] || ! SchemaCache::hasTable('consultation_photos')) {
-            return $counts;
-        }
-
-        $shared = ConsultationPhoto::query()
-            ->whereIn('consultation_id', array_keys($counts))
-            ->sharedWithAdviser()
-            ->groupBy('consultation_id')
-            ->selectRaw('consultation_id, count(*) as shared')
-            ->toBase()
-            ->get();
-
-        foreach ($shared as $row) {
-            $counts[(int) $row->consultation_id] = (int) $row->shared;
-        }
-
-        return $counts;
-    }
-
-    /**
      * A learner's visits, as the given role may see them.
      *
      * @param  iterable<Consultation>  $consultations
@@ -202,12 +143,10 @@ class ConsultationVisibility
      */
     public static function presentMany(iterable $consultations, ?string $role): array
     {
-        $consultations = is_array($consultations) ? $consultations : iterator_to_array($consultations, false);
-        $counts = self::sharedPhotoCounts($consultations);
         $rows = [];
 
         foreach ($consultations as $consultation) {
-            $rows[] = self::present($consultation, $role, $counts[(int) $consultation->id] ?? 0);
+            $rows[] = self::present($consultation, $role);
         }
 
         return $rows;

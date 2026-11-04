@@ -379,7 +379,7 @@ class SchoolYearTransitionTest extends TestCase
     }
 
     /**
-     * Every answer on MLAT Sheet 1 travels with a promoted learner: each box in
+     * Every answer on MLHAT 1 travels with a promoted learner: each box in
      * B. Medical History and C. Family History, every line written beside them,
      * and D. General Appearance. The test above carries one allergy through the
      * master list; this carries the whole sheet through Add to my section by
@@ -429,10 +429,10 @@ class SchoolYearTransitionTest extends TestCase
 
         foreach ([
             'Grade 8 - MASIPAG',
-            '☑ Asthma', '☑ Diabetes', '☑ Seizure Disorder', '☑ Frequent Infections', '☑ Heart Condition', '☑ Tuberculosis',
-            '☑ Allergies: Shrimp', '☑ Hospitalization/Surgery: Tonsillectomy 2021',
+            '[✓] Asthma', '[✓] Diabetes', '[✓] Seizure Disorder', '[✓] Frequent Infections', '[✓] Heart Condition', '[✓] Tuberculosis',
+            '[✓] Allergies: Shrimp', '[✓] Hospitalization/Surgery: Tonsillectomy 2021',
             'Current Medications: Cetirizine', 'Other Conditions: Eczema',
-            '☑ Hypertension', '☑ Heart Disease', '☑ Cancer', '☑ Mental Health Conditions',
+            '[✓] Hypertension', '[✓] Heart Disease', '[✓] Cancer', '[✓] Mental Health Conditions',
             'Genetic/Hereditary Disorders: G6PD deficiency',
             'Other — Lethargic', 'Poor — Limps on the left', 'Needs Attention',
         ] as $line) {
