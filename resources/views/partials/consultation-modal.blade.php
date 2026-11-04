@@ -93,7 +93,7 @@
                     <div>
                         <label for="cm_consulted_at">Date and time</label>
                         <input id="cm_consulted_at" type="datetime-local" name="consulted_at"
-                               value="{{ old('consulted_at', now()->format('Y-m-d\TH:i')) }}" required>
+                               value="{{ old('consulted_at', \App\Support\SchoolClock::now()->format('Y-m-d\TH:i')) }}" required>
                         @if ($errors->consultation->has('consulted_at'))
                             <div class="bmodal-error">{{ $errors->consultation->first('consulted_at') }}</div>
                         @endif

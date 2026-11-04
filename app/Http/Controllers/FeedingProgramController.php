@@ -20,6 +20,7 @@ use App\Support\FeedingNutritionProgress;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
 use App\Support\SchoolCalendar;
+use App\Support\SchoolClock;
 use App\Support\UploadReadFailure;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -76,8 +77,12 @@ class FeedingProgramController extends Controller
      * flag, the same baseline-to-endline progress — so the two desks report
      * one programme. It writes nothing.
      */
-    public function index(Request $request): View
+    public function index(Request $request): View|RedirectResponse
     {
+        if (! array_key_exists((string) $request->session()->get('active_role', ''), self::PROGRAM_READERS)) {
+            return redirect()->route('login')->with('error', 'Only the School Nurse and the Clinic Teacher can open this report.');
+        }
+
         return view('feedingcor-dashboard.feed-program', $this->programReading($request));
     }
 
@@ -680,7 +685,7 @@ class FeedingProgramController extends Controller
             // Optional: the sheet's own column headers are the source of truth
             // for dates. This only anchors a partial header ("8", "Oct 8") and
             // stands in for a single column whose header cannot be read.
-            'session_date' => ['nullable', 'date', 'before_or_equal:today'],
+            'session_date' => ['nullable', 'date', 'before_or_equal:'.SchoolClock::today()],
             'grade' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -850,7 +855,7 @@ class FeedingProgramController extends Controller
     private function normalizeScannedSessions(array $result, array $roster): array
     {
         $rosterIds = array_column($roster, 'id');
-        $today = now()->toDateString();
+        $today = SchoolClock::today();
         $sessions = [];
         $seen = [];
 
@@ -884,8 +889,12 @@ class FeedingProgramController extends Controller
     }
 
     /** The queue of scanned marks no human has confirmed yet. */
-    public function attendanceReviewQueue(Request $request): View
+    public function attendanceReviewQueue(Request $request): View|RedirectResponse
     {
+        if (! $this->isFeedingCoordinator($request)) {
+            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can review attendance.');
+        }
+
         $institutionId = $request->session()->get('active_institution_id');
 
         $pending = collect();
@@ -1054,7 +1063,7 @@ class FeedingProgramController extends Controller
         $sessions = SchemaCache::hasTable('feeding_attendances')
             ? FeedingAttendance::query()
                 ->where('student_health_record_id', $learner->id)
-                ->whereDate('session_date', '<=', now()->toDateString())
+                ->whereDate('session_date', '<=', SchoolClock::today())
                 ->orderByDesc('session_date')
                 ->get($columns)
             : collect();
@@ -1155,7 +1164,7 @@ class FeedingProgramController extends Controller
         $sessions = SchemaCache::hasTable('feeding_attendances')
             ? FeedingAttendance::query()
                 ->where('student_health_record_id', $learner->id)
-                ->whereDate('session_date', '<=', now()->toDateString())
+                ->whereDate('session_date', '<=', SchoolClock::today())
                 ->orderBy('session_date')
                 ->get($columns)
             : collect();
@@ -1183,7 +1192,7 @@ class FeedingProgramController extends Controller
         // The same reading the roster badges from: flagged only once the
         // coordinator has confirmed the record, and never by a rule alone.
         $flag = FeedingAttendanceFlag::forRecords(collect([$learner]), $rule)[$learner->id];
-        $atRisk = $enrolled && $qualified && $flag['flagged'];
+        $atRisk = FeedingBeneficiarySummary::isBeneficiary($learner) && $flag['flagged'];
 
         // A learner's height, weight and BMI live on the baseline columns once
         // the adviser has taken the measurement; before that the only reading
@@ -1336,7 +1345,7 @@ class FeedingProgramController extends Controller
                     ->forCurrentSchoolYear((string) $learner->school_year ?: null)
                     ->select('id')
             ))
-            ->whereDate('session_date', '<=', now()->toDateString())
+            ->whereDate('session_date', '<=', SchoolClock::today())
             ->distinct()
             ->orderByDesc('session_date')
             ->pluck('session_date');
@@ -2200,8 +2209,7 @@ class FeedingProgramController extends Controller
      */
     private function isEnrolledBeneficiary(StudentHealthRecord $record): bool
     {
-        return FeedingBeneficiarySummary::isEnrolled($record)
-            && $this->isAttendanceEligible($record->nutritional_status);
+        return FeedingBeneficiarySummary::isBeneficiary($record);
     }
 
     private function isAttendanceEligible(?string $nutritionalStatus): bool

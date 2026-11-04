@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
+use App\Support\SchoolClock;
 use App\Support\SchoolHeadHealthOverview;
 use App\Support\SchoolHeadOverview;
 use App\Support\SchoolPulse;
@@ -57,7 +58,7 @@ class SchoolHeadInventoryController extends Controller
 
         $writer->addRow(Row::fromValues(['MEDICINE INVENTORY — OVERVIEW']));
         $writer->addRow(Row::fromValues([(string) $data['schoolName']]));
-        $writer->addRow(Row::fromValues(['Generated '.now()->format('Y-m-d')]));
+        $writer->addRow(Row::fromValues(['Generated '.SchoolClock::today()]));
         $writer->addRow(Row::fromValues([]));
         $writer->addRow(Row::fromValues(['NO.', 'MEDICINE', 'STOCK', 'UNIT', 'REORDER AT', 'STATUS']));
 

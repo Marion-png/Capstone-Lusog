@@ -1,6 +1,6 @@
 {{--
-	The class advisers' blank CLASS MASTERLIST, drawn on the School Nurse's
-	Forms & Templates page.
+	The class advisers' blank CLASS MASTERLIST, drawn on the School Nurse's and
+	the Clinic Teacher's Forms & Templates page.
 
 	Every row comes from App\Support\ClassMasterlistTemplate::printRows(), the
 	same model the .xlsx download is written from, so the sheet on screen and
@@ -10,7 +10,8 @@
 	A line the form has no value for — the school's address, the class, the
 	adviser's name — prints as a rule to write on, never an invented value.
 
-	Expects: $rows (printRows()), $widths (the model's column widths).
+	Expects: $rows (printRows()), $widths (the model's column widths),
+	$downloadUrl (the template's download under the reader's own path).
 --}}
 @php
 	$cmTotalWidth = max(1, array_sum($widths));
@@ -24,7 +25,7 @@
 	<div class="sheet-tools">
 		<div class="sheet-status">The blank form class advisers fill in and upload to enrol their class.</div>
 		<div class="sheet-btns">
-			<a href="{{ route('dashboard.school-nurse.forms.class-masterlist') }}" class="btn btn-primary">Download Template (.xlsx)</a>
+			<a href="{{ $downloadUrl }}" class="btn btn-primary">Download Template (.xlsx)</a>
 			<button type="button" class="btn btn-ghost" id="printClassMasterlistBtn">Print Form</button>
 		</div>
 	</div>

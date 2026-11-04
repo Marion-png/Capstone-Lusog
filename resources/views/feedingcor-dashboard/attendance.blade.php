@@ -100,7 +100,7 @@
 		<div class="print-masthead" aria-hidden="true">
 			<h2>SBFP Feeding Attendance</h2>
 			<p>{{ $schoolName }} &middot; S.Y. {{ $schoolYear }} &middot; Feeding Day {{ $programDay }} of {{ $programDuration }}</p>
-			<p>Session: {{ $selectedDateLabel }} &middot; Printed {{ now()->format('F j, Y') }}</p>
+			<p>Session: {{ $selectedDateLabel }} &middot; Printed {{ \App\Support\SchoolClock::now()->format('F j, Y') }}</p>
 		</div>
 
 		<section class="kpi-grid cols-5 live-pane" id="fa-cards">

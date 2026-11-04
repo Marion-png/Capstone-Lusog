@@ -6,6 +6,7 @@ use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\SchemaCache;
+use App\Support\SchoolClock;
 use App\Support\Sheet2Review;
 use App\Support\StudentRosterSync;
 use Carbon\Carbon;
@@ -236,6 +237,11 @@ class NurseController extends Controller
             return $redirect;
         }
 
+        // A learner's link can outlive the session it was rendered in: a nurse
+        // signs back in and reloads the tab, and the working copy is empty until
+        // something rebuilds it from the database.
+        StudentRosterSync::syncToSession($request);
+
         $records = $request->session()->get('school_health_card_records', []);
 
         if (! isset($records[$index])) {
@@ -288,10 +294,21 @@ class NurseController extends Controller
             return $redirect;
         }
 
+        StudentRosterSync::syncToSession($request);
+
         $records = $request->session()->get('school_health_card_records', []);
 
         if (! isset($records[$index])) {
             abort(404);
+        }
+
+        // The URL carries a position in this session's roster, not a learner.
+        // The form says who it was opened for, and a medical record never lands
+        // on any other child, however the roster has moved since.
+        $openedFor = trim((string) $request->input('lrn', ''));
+        if ($openedFor !== '' && $openedFor !== (string) ($records[$index]['lrn'] ?? '')) {
+            return redirect()->to($this->returnTo($request))
+                ->with('error', 'That form is out of date, so nothing was saved. Open the learner\'s record again.');
         }
 
         // Gate: block if deworming is being marked "given" but no valid consent is on file
@@ -335,12 +352,12 @@ class NurseController extends Controller
         }
 
         $examDateInput = (string) $request->input('date_of_examination', '');
-        $examDate = now()->toDateString();
+        $examDate = SchoolClock::today();
         if ($examDateInput !== '') {
             try {
                 $examDate = Carbon::parse($examDateInput)->toDateString();
             } catch (\Throwable $_) {
-                $examDate = now()->toDateString();
+                $examDate = SchoolClock::today();
             }
         }
 
@@ -430,16 +447,29 @@ class NurseController extends Controller
                     $endlineBmi = round(((float) $endlineWeight) / ($heightMeters * $heightMeters), 2);
                 }
 
-                $studentRecord->update([
+                $changes = [
                     'examination' => $records[$index]['examination'],
                     'attendance_by_month' => $attendanceByMonth,
-                    'weight' => is_numeric($endlineWeight) ? (float) $endlineWeight : $studentRecord->weight,
-                    'endline_height_cm' => is_numeric($endlineHeight) ? (float) $endlineHeight : $studentRecord->endline_height_cm,
-                    'endline_weight_kg' => is_numeric($endlineWeight) ? (float) $endlineWeight : $studentRecord->endline_weight_kg,
-                    'endline_bmi_value' => $endlineBmi ?? $studentRecord->endline_bmi_value,
-                    'endline_nutritional_status' => $lockedBmiStatus !== '' ? $lockedBmiStatus : $studentRecord->endline_nutritional_status,
-                    'endline_recorded_at' => $examDate,
-                ]);
+                ];
+
+                // An examination is not a weighing. This form no longer asks for
+                // a height or a weight, and stamping the endline columns anyway
+                // recorded a closing weigh-in nobody took: the baseline status
+                // copied across and counted on the Final BMI grid as a learner
+                // re-measured with no change. Only an older form that still posts
+                // the figures has measured anything.
+                if (is_numeric($endlineHeight) || is_numeric($endlineWeight)) {
+                    $changes += [
+                        'weight' => is_numeric($endlineWeight) ? (float) $endlineWeight : $studentRecord->weight,
+                        'endline_height_cm' => is_numeric($endlineHeight) ? (float) $endlineHeight : $studentRecord->endline_height_cm,
+                        'endline_weight_kg' => is_numeric($endlineWeight) ? (float) $endlineWeight : $studentRecord->endline_weight_kg,
+                        'endline_bmi_value' => $endlineBmi ?? $studentRecord->endline_bmi_value,
+                        'endline_nutritional_status' => $lockedBmiStatus !== '' ? $lockedBmiStatus : $studentRecord->endline_nutritional_status,
+                        'endline_recorded_at' => $examDate,
+                    ];
+                }
+
+                $studentRecord->update($changes);
             }
         }
 

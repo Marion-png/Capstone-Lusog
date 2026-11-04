@@ -160,13 +160,28 @@ final class FeedingBeneficiarySummary
     }
 
     /**
-     * A beneficiary: qualified by the measurement AND enrolled by the
-     * coordinator. A qualified learner nobody has enrolled is on the waiting
-     * list, not on the feeding line, and is counted by none of these figures.
+     * A beneficiary: qualified by a measurement AND enrolled by the coordinator.
+     * A qualified learner nobody has enrolled is on the waiting list, not on the
+     * feeding line, and is counted by none of these figures.
+     *
+     * Qualified at either weighing, because the endline overwrites
+     * nutritional_status. A learner re-measured as Normal no longer qualifies on
+     * their current reading, but they were fed all the same and are who the
+     * programme's outcome figures exist to count, and leaving the programme is
+     * the coordinator's decision, never a measurement's. isEligible() keeps
+     * reading the current status, because that answers a different question:
+     * whether somebody may be given a place now.
+     *
+     * A baseline correction moves both columns together, so a learner corrected
+     * to Normal before any endline does stop being a beneficiary: they never
+     * qualified.
      */
     public static function isBeneficiary(StudentHealthRecord $record): bool
     {
-        return self::isEnrolled($record) && self::isEligible($record);
+        return self::isEnrolled($record)
+            && self::coversGrade($record)
+            && (self::qualifies((string) $record->baseline_nutritional_status)
+                || self::qualifies((string) $record->nutritional_status));
     }
 
     /**
@@ -310,7 +325,7 @@ final class FeedingBeneficiarySummary
 
         return FeedingAttendance::query()
             ->whereIn('student_health_record_id', $ids)
-            ->whereDate('session_date', '<=', now()->toDateString())
+            ->whereDate('session_date', '<=', SchoolClock::today())
             ->orderBy('session_date')
             ->get(array_merge(
                 ['student_health_record_id', 'session_date', 'is_present'],
@@ -421,18 +436,16 @@ final class FeedingBeneficiarySummary
         // encrypted or lookup values, so all three are applied in PHP.
         $records = self::scopeToSex(self::scopeToSection($records, $filters), (string) ($filters['sex'] ?? ''));
 
-        $qualified = $records
-            ->filter(fn (StudentHealthRecord $record): bool => self::isEligible($record))
-            ->values();
-
-        $beneficiaries = $qualified
-            ->filter(fn (StudentHealthRecord $record): bool => self::isEnrolled($record))
+        $beneficiaries = $records
+            ->filter(fn (StudentHealthRecord $record): bool => self::isBeneficiary($record))
             ->values();
 
         return self::tally($beneficiaries, FeedingAtRiskRule::forInstitution($institutionId))
             // Qualified by the measurement, not yet enrolled by the coordinator:
             // the waiting list, and not a beneficiary until someone acts on it.
-            + ['pending' => $qualified->count() - $beneficiaries->count()];
+            + ['pending' => $records
+                ->filter(fn (StudentHealthRecord $record): bool => self::isEligible($record) && ! self::isEnrolled($record))
+                ->count()];
     }
 
     /**

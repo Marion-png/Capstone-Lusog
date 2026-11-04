@@ -7,6 +7,7 @@ use App\Models\StudentHealthCondition;
 use App\Models\StudentHealthRecord;
 use App\Support\EncryptedFileStorage;
 use App\Support\LearnerPlacement;
+use App\Support\SchoolClock;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,7 +33,7 @@ class MedicalCertificateController extends Controller
             'condition_name' => ['required', 'string', 'max:255'],
             'certificate' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
             'doctor_clinic' => ['nullable', 'string', 'max:255'],
-            'diagnosis_date' => ['nullable', 'date', 'before_or_equal:today'],
+            'diagnosis_date' => ['nullable', 'date', 'before_or_equal:'.SchoolClock::today()],
         ]);
 
         $advisedGrade = (string) $request->session()->get('assigned_grade_level', '');

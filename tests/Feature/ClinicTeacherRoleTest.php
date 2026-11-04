@@ -9,6 +9,7 @@ use App\Models\MedicineDispense;
 use App\Models\StudentHealthRecord;
 use App\Support\DispensingRights;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -482,6 +483,42 @@ class ClinicTeacherRoleTest extends TestCase
         ])
             ->get(route('dashboard.clinic-teacher'))
             ->assertRedirect(route('dashboard.class-adviser'));
+    }
+
+    /**
+     * Health Assessment is on this role's rail, and it used to draw the nurse's
+     * rail in return, whose Forms & Templates link sent the teacher to sign in.
+     */
+    #[Test]
+    public function health_assessment_keeps_this_roles_own_rail(): void
+    {
+        $this->withSession($this->sessionFor('clinic_teacher'))
+            ->get(route('nurse.index'))
+            ->assertOk()
+            ->assertSee(route('dashboard.clinic-teacher'), false)
+            ->assertDontSee(route('dashboard.school-nurse.forms'), false);
+    }
+
+    /** No rail carries a menu item that goes nowhere. */
+    #[Test]
+    #[DataProvider('clinicRoles')]
+    public function no_rail_link_goes_nowhere(string $role, string $page): void
+    {
+        $this->withSession($this->sessionFor($role))
+            ->get(route($page))
+            ->assertOk()
+            ->assertDontSee('class="sb-link " href="#"', false)
+            ->assertDontSee('Generate Reports');
+    }
+
+    /** @return array<string, array{0: string, 1: string}> */
+    public static function clinicRoles(): array
+    {
+        return [
+            'nurse' => ['school_nurse', 'dashboard.school-nurse'],
+            'nurse on the deworming page' => ['school_nurse', 'dashboard.school-nurse.deworming'],
+            'clinic teacher' => ['clinic_teacher', 'dashboard.clinic-teacher'],
+        ];
     }
 
     /**

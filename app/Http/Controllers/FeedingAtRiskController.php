@@ -14,6 +14,7 @@ use App\Support\FeedingAttendanceWindow;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
+use App\Support\SchoolClock;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -325,7 +326,7 @@ class FeedingAtRiskController extends Controller
             'record_id' => ['required', 'integer'],
             // A follow-up is something that happened, so it cannot be dated
             // into the future.
-            'followed_up_on' => ['required', 'date', 'before_or_equal:'.now()->toDateString()],
+            'followed_up_on' => ['required', 'date', 'before_or_equal:'.SchoolClock::today()],
             'status' => ['required', 'string', 'in:'.implode(',', array_keys(FeedingFollowUp::STATUSES))],
             'reason' => ['nullable', 'string', 'max:500'],
             'action_taken' => ['nullable', 'string', 'max:500'],
@@ -445,7 +446,7 @@ class FeedingAtRiskController extends Controller
             'schoolYear' => $schoolYear,
             'schoolName' => $request->session()->get('active_school_name', 'School'),
             'todayLabel' => now()->format('F j, Y'),
-            'today' => now()->toDateString(),
+            'today' => SchoolClock::today(),
             'programDay' => $cycle->day(),
             'programDuration' => $cycle->durationDays(),
             'daysRemaining' => $cycle->daysRemaining(),
@@ -679,7 +680,7 @@ class FeedingAtRiskController extends Controller
 
         return FeedingAttendance::query()
             ->whereIn('student_health_record_id', $beneficiaries->pluck('id'))
-            ->whereDate('session_date', '<=', now()->toDateString())
+            ->whereDate('session_date', '<=', SchoolClock::today())
             ->orderBy('session_date')
             ->get($columns)
             ->map(fn (FeedingAttendance $row): array => [

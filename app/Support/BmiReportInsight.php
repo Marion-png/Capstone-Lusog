@@ -19,6 +19,11 @@ namespace App\Support;
  */
 final class BmiReportInsight
 {
+    /** Who a value set counted, as its sentences name them. */
+    public const LEARNER = 'learner';
+
+    public const BENEFICIARY = 'beneficiary';
+
     /**
      * Every insight the forms page can show, keyed the way the page looks up
      * its value sets: [set key][phase][grid key] => sentences.
@@ -28,9 +33,10 @@ final class BmiReportInsight
      * one the page reads it for.
      *
      * @param  array<string, array<string, int|string>>  $valueSets  from bmiValueSetsBySection()
+     * @param  self::LEARNER|self::BENEFICIARY  $noun  who those sets counted
      * @return array<string, array<string, array<string, list<string>>>>
      */
-    public static function forValueSets(array $valueSets): array
+    public static function forValueSets(array $valueSets, string $noun = self::LEARNER): array
     {
         $insights = [];
 
@@ -56,7 +62,8 @@ final class BmiReportInsight
                         $values,
                         $phase,
                         $gridKey,
-                        self::scopeLabel($setKey, $gridKey)
+                        self::scopeLabel($setKey, $gridKey),
+                        $noun
                     );
                 }
             }
@@ -84,27 +91,29 @@ final class BmiReportInsight
      * What one grid's chart shows, in a few plain sentences.
      *
      * @param  array<string, int|string>  $values  one value set
+     * @param  self::LEARNER|self::BENEFICIARY  $noun  who that set counted
      * @return list<string>
      */
-    public static function sentences(array $values, string $phase, string $gridKey, string $scope): array
+    public static function sentences(array $values, string $phase, string $gridKey, string $scope, string $noun = self::LEARNER): array
     {
         $isEndline = $phase === 'endline';
         $prefix = BmiAssessmentReport::prefixFor($phase).'_'.$gridKey;
         $at = fn (string $sex, string $col): int => (int) ($values[$prefix.'_'.$sex.'_'.$col] ?? 0);
         $where = self::where($scope);
+        $plural = self::plural($noun);
 
         $measured = $at('total', 'nst');
 
         if ($measured === 0) {
             return [$isEndline
-                ? 'No learner '.$where.' has been re-measured at endline yet, so there is nothing to compare against the baseline.'
-                : 'No learner '.$where.' has a baseline BMI-for-age on file yet, so there is nothing to read in this chart.'];
+                ? 'No '.$noun.' '.$where.' has been re-measured at endline yet, so there is nothing to compare against the baseline.'
+                : 'No '.$noun.' '.$where.' has a baseline BMI-for-age on file yet, so there is nothing to read in this chart.'];
         }
 
         $sentences = [];
 
         // Who the chart counts.
-        $sentences[] = self::learners($measured).' '.$where.' '.($measured === 1 ? 'has' : 'have').' '
+        $sentences[] = self::counted($measured, $noun).' '.$where.' '.($measured === 1 ? 'has' : 'have').' '
             .($isEndline ? 'an endline' : 'a baseline').' BMI-for-age on file — '
             .$at('male', 'nst').' male and '.$at('female', 'nst').' female.';
 
@@ -116,8 +125,8 @@ final class BmiReportInsight
         $largest = max($groups);
         $leaders = array_keys(array_filter($groups, fn (int $n): bool => $n === $largest));
         $sentences[] = count($leaders) === 1
-            ? $leaders[0].' is the largest group, with '.self::learners($largest).' ('.self::share($largest, $measured).').'
-            : self::listOf($leaders).' are tied as the largest groups, with '.self::learners($largest).' each ('.self::share($largest, $measured).').';
+            ? $leaders[0].' is the largest group, with '.self::counted($largest, $noun).' ('.self::share($largest, $measured).').'
+            : self::listOf($leaders).' are tied as the largest groups, with '.self::counted($largest, $noun).' each ('.self::share($largest, $measured).').';
 
         // Wasting — the reading the feeding programme qualifies on.
         $severe = $at('total', 'sw');
@@ -126,18 +135,18 @@ final class BmiReportInsight
         if ($wasting > 0) {
             $femaleWasting = $at('female', 'sw') + $at('female', 'w');
             $maleWasting = $at('male', 'sw') + $at('male', 'w');
-            $sentences[] = self::learners($wasting).' ('.self::share($wasting, $measured).') '
+            $sentences[] = self::counted($wasting, $noun).' ('.self::share($wasting, $measured).') '
                 .($wasting === 1 ? 'is' : 'are').' severely wasted or wasted — '
                 .$severe.' severely wasted and '.$wasted.' wasted; '
                 .$femaleWasting.' female and '.$maleWasting.' male.';
         } else {
-            $sentences[] = 'No learner '.$where.' is severely wasted or wasted.';
+            $sentences[] = 'No '.$noun.' '.$where.' is severely wasted or wasted.';
         }
 
         // Above the normal range.
         $above = $at('total', 'ow') + $at('total', 'ob');
         if ($above > 0) {
-            $sentences[] = self::learners($above).' ('.self::share($above, $measured).') '
+            $sentences[] = self::counted($above, $noun).' ('.self::share($above, $measured).') '
                 .($above === 1 ? 'is' : 'are').' overweight or obese.';
         }
 
@@ -146,15 +155,15 @@ final class BmiReportInsight
         $stunted = $at('total', 'ss') + $at('total', 'st');
         $tall = $at('total', 't');
         if ($classified === 0) {
-            $sentences[] = 'No height-for-age classification is on file for '.($measured === 1 ? 'this learner' : 'these learners').'.';
+            $sentences[] = 'No height-for-age classification is on file for '.($measured === 1 ? 'this '.$noun : 'these '.$plural).'.';
         } elseif ($stunted > 0) {
-            $sentences[] = 'By height-for-age, '.$stunted.' of '.self::learners($classified).' classified ('.self::share($stunted, $classified).') '
+            $sentences[] = 'By height-for-age, '.$stunted.' of '.self::counted($classified, $noun).' classified ('.self::share($stunted, $classified).') '
                 .($stunted === 1 ? 'is' : 'are').' stunted or severely stunted'
                 .($tall > 0 ? ', and '.$tall.' '.($tall === 1 ? 'is' : 'are').' tall' : '').'.';
         } elseif ($classified === 1) {
-            $sentences[] = 'By height-for-age, the one learner classified is '.($tall > 0 ? 'tall' : 'not stunted').'.';
+            $sentences[] = 'By height-for-age, the one '.$noun.' classified is '.($tall > 0 ? 'tall' : 'not stunted').'.';
         } else {
-            $sentences[] = 'By height-for-age, none of the '.self::learners($classified).' classified is stunted'
+            $sentences[] = 'By height-for-age, none of the '.self::counted($classified, $noun).' classified is stunted'
                 .($tall > 0 ? '; '.$tall.' '.($tall === 1 ? 'is' : 'are').' tall' : '').'.';
         }
 
@@ -167,13 +176,13 @@ final class BmiReportInsight
             if ($baseMeasured > 0) {
                 $baseWasting = $baseAt('sw') + $baseAt('w');
                 $change = $wasting - $baseWasting;
-                $sentences[] = 'Against the baseline, severely wasted and wasted learners went from '
+                $sentences[] = 'Against the baseline, severely wasted and wasted '.$plural.' went from '
                     .$baseWasting.' to '.$wasting
                     .($change === 0 ? ' — no change' : ' — '.abs($change).' '.($change < 0 ? 'fewer' : 'more')).'.';
 
                 if ($measured < $baseMeasured) {
                     $sentences[] = 'The endline covers '.$measured.' of the '.$baseMeasured
-                        .' learners weighed at baseline, so the comparison is not yet complete.';
+                        .' '.($baseMeasured === 1 ? $noun : $plural).' weighed at baseline, so the comparison is not yet complete.';
                 }
             }
         }
@@ -187,9 +196,14 @@ final class BmiReportInsight
         return $scope === 'All Grade Levels' ? 'across all grade levels' : 'in '.$scope;
     }
 
-    private static function learners(int $n): string
+    private static function counted(int $n, string $noun): string
     {
-        return $n.' '.($n === 1 ? 'learner' : 'learners');
+        return $n.' '.($n === 1 ? $noun : self::plural($noun));
+    }
+
+    private static function plural(string $noun): string
+    {
+        return $noun === self::BENEFICIARY ? 'beneficiaries' : 'learners';
     }
 
     /**

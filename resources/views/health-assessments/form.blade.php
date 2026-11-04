@@ -54,7 +54,7 @@
                 <div class="ha-grid" style="margin-top:14px;">
                     <div>
                         <label class="ha-label">Date of Assessment</label>
-                        <input type="date" name="date_of_assessment" class="ha-input" value="{{ old('date_of_assessment', $a?->date_of_assessment?->format('Y-m-d') ?? now()->format('Y-m-d')) }}">
+                        <input type="date" name="date_of_assessment" class="ha-input" value="{{ old('date_of_assessment', $a?->date_of_assessment?->format('Y-m-d') ?? \App\Support\SchoolClock::now()->format('Y-m-d')) }}">
                     </div>
                     <div>
                         <label class="ha-label">Assessed by (Name/Title)</label>

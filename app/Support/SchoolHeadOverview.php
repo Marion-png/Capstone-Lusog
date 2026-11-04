@@ -779,7 +779,7 @@ final class SchoolHeadOverview
 
         $rows = FeedingAttendance::query()
             ->whereIn('student_health_record_id', $records->pluck('id'))
-            ->whereDate('session_date', '<=', now()->toDateString())
+            ->whereDate('session_date', '<=', SchoolClock::today())
             ->orderBy('session_date')
             ->get($columns);
 

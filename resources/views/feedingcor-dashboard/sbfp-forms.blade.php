@@ -1,18 +1,26 @@
 ﻿<!DOCTYPE html>
 {{--
-	One page, two readers. The Feeding Coordinator reads it as their
-	Nutritional Health Status Report tab; the School Nurse reads it as Forms &
-	Templates, in their own rail, with every form but the narrative report and
-	with the class advisers' blank Class Masterlist added. Same controller, same
-	reading — never a second copy that could print different figures.
+	One page, three readers. The Feeding Coordinator reads it as their
+	Nutritional Health Status Report tab; the School Nurse and the Clinic Teacher
+	read it as Forms & Templates, each in their own rail, with every form but the
+	narrative report and with the class advisers' blank Class Masterlist added.
+	Same controller, same reading — never a second copy that could print
+	different figures.
 --}}
-@php $forNurse = $forNurse ?? false; @endphp
+@php
+	$forClinic = $forClinic ?? false;
+	$forClinicTeacher = $forClinicTeacher ?? false;
+	// Each clinic reader stays under their own path: EnsureActiveSession seeds a
+	// demo session for whichever role a URL belongs to.
+	$clinicRole = $forClinicTeacher ? 'Clinic Teacher' : 'School Nurse';
+	$clinicFormsRoute = $forClinicTeacher ? 'dashboard.clinic-teacher.forms' : 'dashboard.school-nurse.forms';
+@endphp
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="csrf-token" content="{{ csrf_token() }}">
-	<title>{{ $forNurse ? 'Forms & Templates - School Nurse - SIGLA' : 'Nutritional Health Status Report - Feeding Coordinator - SIGLA' }}</title>
+	<title>{{ $forClinic ? 'Forms & Templates - '.$clinicRole.' - SIGLA' : 'Nutritional Health Status Report - Feeding Coordinator - SIGLA' }}</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="icon" type="image/png" href="{{ asset('images/sigla-mark.png') }}">
@@ -24,7 +32,7 @@
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
 	{{-- The reader's own rail sheet, last, as every LUSOG page orders it. --}}
-	@if ($forNurse)
+	@if ($forClinic)
 		<style>{!! file_get_contents(resource_path('css/nurse-sidebar.css')) !!}</style>
 	@else
 		<style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
@@ -32,16 +40,16 @@
 	<style id="printPageStyle">@page{size:A4 portrait;margin:10mm}</style>
 </head>
 <body>
-@if ($forNurse)
-	@include('partials.nurse-lusog-sidebar', ['active' => 'forms'])
+@if ($forClinic)
+	@include('partials.clinic-rail', ['active' => 'forms'])
 @else
 	@include('partials.feedingcor-sidebar', ['active' => 'forms'])
 @endif
 
 <div class="main">
-	@if ($forNurse)
+	@if ($forClinic)
 		<header class="topbar">
-			<div class="topbar-bc"><span>School Nurse</span><span class="bc-sep">&rsaquo;</span><span>Forms &amp; Templates</span></div>
+			<div class="topbar-bc"><span>{{ $clinicRole }}</span><span class="bc-sep">&rsaquo;</span><span>Forms &amp; Templates</span></div>
 
 			@include('partials.nurse-learner-search')
 			<div class="topbar-spacer"></div>
@@ -57,7 +65,7 @@
 
 	<div class="content">
 		<div class="page-header">
-			@if ($forNurse)
+			@if ($forClinic)
 				<h1 class="page-title">Forms &amp; <span>Templates</span></h1>
 				<p class="page-sub">The Feeding Coordinator's SBFP forms and the class advisers' Class Masterlist, filled from the same records. Select a template to view, print or download it.</p>
 			@else
@@ -68,7 +76,7 @@
 
 		<section class="selector-wrap">
 			<div class="selector-grid">
-				<div>
+				<div class="selector-wide">
 					<label class="selector-label" for="formTemplateSelect">Form Template</label>
 					<select id="formTemplateSelect" class="select selector-input" aria-label="Select SBFP form template">
 						<option value="">Choose a form...</option>
@@ -88,9 +96,9 @@
 							<option value="feeding-masterlist">Feeding Program - Masterlist of Qualified Recipients</option>
 						</optgroup>
 						{{-- The narrative report is the coordinator's own account of
-						     the programme, so the nurse's copy of this page leaves it
-						     out; the nurse gets the advisers' class masterlist instead. --}}
-						@if ($forNurse)
+						     the programme, so the clinic's copy of this page leaves it
+						     out; the clinic gets the advisers' class masterlist instead. --}}
+						@if ($forClinic)
 							<optgroup label="Class Adviser (blank template)">
 								<option value="class-masterlist">Class Masterlist</option>
 							</optgroup>
@@ -107,6 +115,13 @@
 						<option value="baseline">Baseline</option>
 						<option value="endline">Endline</option>
 						<option value="both">Both Baseline and Endline</option>
+					</select>
+				</div>
+				<div id="reportPopulationField">
+					<label class="selector-label" for="reportPopulationSelect">Learners</label>
+					<select id="reportPopulationSelect" class="select selector-input" aria-label="Select which learners the report counts">
+						<option value="all">All Learners</option>
+						<option value="beneficiaries">Only Beneficiaries</option>
 					</select>
 				</div>
 				<div id="gradeLevelField">
@@ -246,9 +261,9 @@
 			</div>
 		</section>
 
-		{{-- Not in the document at all for the nurse: a hidden panel would
+		{{-- Not in the document at all for the clinic: a hidden panel would
 		     still carry the coordinator's drafted report in its markup. --}}
-		@unless ($forNurse)
+		@unless ($forClinic)
 		<section class="sheet-wrap form-panel" id="narrativePanel" data-template="feeding-narrative">
 			<div class="sheet-tools">
 				<div class="sheet-status" id="narrativeDraftStatus">Draft not saved yet.</div>
@@ -301,10 +316,11 @@
 		</section>
 		@endunless
 
-		@if ($forNurse && $classMasterlist !== null)
+		@if ($forClinic && $classMasterlist !== null)
 			@include('feedingcor-dashboard.partials.class-masterlist-sheet', [
 				'rows' => $classMasterlistRows,
 				'widths' => $classMasterlist['widths'],
+				'downloadUrl' => route($clinicFormsRoute.'.class-masterlist'),
 			])
 		@endif
 
@@ -446,6 +462,8 @@
 	const sectionSelect = document.getElementById('sectionSelect');
 	const reportPhaseSelect = document.getElementById('reportPhaseSelect');
 	const reportPhaseField = document.getElementById('reportPhaseField');
+	const reportPopulationSelect = document.getElementById('reportPopulationSelect');
+	const reportPopulationField = document.getElementById('reportPopulationField');
 	const gradeLevelField = document.getElementById('gradeLevelField');
 	const sectionField = document.getElementById('sectionField');
 	const emptyStatePanel = document.getElementById('emptyStatePanel');
@@ -456,15 +474,16 @@
 	// Each grade's own sections, so Section only ever offers what the chosen
 	// grade actually runs.
 	let sectionsByGrade = @json((object) ($sectionsByGrade ?? []));
-	// The DepEd grid, counted server-side once for the whole school ('') and
-	// once per section. Every field behind it is encrypted at rest, so the
-	// counting cannot happen in SQL and must not happen twice — the grid, the
-	// chart and the table view are all read from these same numbers.
-	const bmiValueSets = @json($bmiValueSets ?? []);
-	// What each of those grids shows, in sentences, keyed exactly as the value
-	// sets are: [set]['baseline'|'endline'][grid]. Written on the server from
-	// the same numbers, so the insight and the bars cannot disagree.
-	const bmiInsights = @json($bmiInsights ?? []);
+	// The DepEd grid for each population the Learners control offers ('all',
+	// 'beneficiaries'), counted server-side once for the whole school ('') and
+	// once per section (`values`). Every field behind it is encrypted at rest,
+	// so the counting cannot happen in SQL and must not happen twice — the grid,
+	// the chart and the table view are all read from these same numbers.
+	// `insights` is what each of those grids shows, in sentences, keyed exactly
+	// as the value sets are: [set]['baseline'|'endline'][grid]. Written on the
+	// server from the same numbers, so the insight and the bars cannot disagree.
+	// Re-read by the live refresh below, so an enrolment reaches the report.
+	let bmiReports = @json($bmiReports ?? []);
 	const gradeLevels = @json(\App\Support\FeedingBeneficiarySummary::GRADE_LEVELS);
 	// The chart's eleven columns and three rows, read from the one place that
 	// declares them, so the picture and the grid can never fall out of step.
@@ -576,15 +595,29 @@
 	const printPageStyle = document.getElementById('printPageStyle');
 	const landscapeTemplates = ['bmi-report'];
 
-	// ── The three filters, read in one place ──────────────────────────────
+	// ── The four filters, read in one place ───────────────────────────────
 	// Grade and Section are scope: they decide which grid is on screen and
 	// which children it counted. "Nutritional Report" decides which weighing
-	// is reported — baseline, endline, or both side by side.
+	// is reported — baseline, endline, or both side by side. "Learners" decides
+	// whether the report counts the whole roll or the beneficiaries alone.
 	const currentScope = () => ({
 		grade: String(gradeLevelSelect ? gradeLevelSelect.value : ''),
 		section: String(sectionSelect ? sectionSelect.value : ''),
 		phase: String(reportPhaseSelect ? reportPhaseSelect.value : 'baseline'),
+		population: String(reportPopulationSelect ? reportPopulationSelect.value : 'all'),
 	});
+
+	const reportFor = (scope) => bmiReports[scope.population] || bmiReports.all || {};
+
+	// The control's own wording when the report is narrowed to beneficiaries.
+	// Blank for All Learners, which is what the form counts unless it says so.
+	const populationLabel = (scope) => {
+		if (scope.population !== 'beneficiaries' || !reportPopulationSelect) {
+			return '';
+		}
+		const chosen = reportPopulationSelect.options[reportPopulationSelect.selectedIndex];
+		return chosen ? chosen.textContent.trim() : '';
+	};
 
 	// "Grade 7" -> "g7"; nothing (All Grade Levels) -> the OVERALL grid.
 	const gradeKeyFor = (grade) => {
@@ -599,13 +632,14 @@
 	// wider reads the whole-school set, whose per-grade grids are already the
 	// grade's own figures.
 	const valuesFor = (scope) => {
+		const sets = reportFor(scope).values || {};
 		if (scope.grade && scope.section) {
 			const key = `${scope.grade} / ${scope.section}`;
-			if (bmiValueSets[key]) {
-				return bmiValueSets[key];
+			if (sets[key]) {
+				return sets[key];
 			}
 		}
-		return bmiValueSets[''] || {};
+		return sets[''] || {};
 	};
 
 	const scopeLabel = (scope) => {
@@ -618,18 +652,21 @@
 	// section on its own, anything wider from the whole school — and the
 	// chosen grade's grid, or OVERALL when no grade is chosen.
 	const insightFor = (scope, phase) => {
+		const insights = reportFor(scope).insights || {};
 		const sectionKey = scope.grade && scope.section ? `${scope.grade} / ${scope.section}` : '';
-		const set = (sectionKey && bmiInsights[sectionKey]) ? bmiInsights[sectionKey] : (bmiInsights[''] || {});
+		const set = (sectionKey && insights[sectionKey]) ? insights[sectionKey] : (insights[''] || {});
 		return ((set[phase] || {})[gradeKeyFor(scope.grade)]) || [];
 	};
 
-	// What the insight names: the grade, the grade and section, or the whole
-	// school — never "All Sections", which would read as a section.
+	// What the insight names: who it counted when that is narrowed, then the
+	// grade, the grade and section, or the whole school — never "All Sections",
+	// which would read as a section.
 	const insightScope = (scope) => {
-		if (!scope.grade) {
-			return 'All Grade Levels';
-		}
-		return scope.section ? `${scope.grade} · ${scope.section}` : scope.grade;
+		const where = !scope.grade
+			? 'All Grade Levels'
+			: (scope.section ? `${scope.grade} · ${scope.section}` : scope.grade);
+		const population = populationLabel(scope);
+		return population ? `${population} · ${where}` : where;
 	};
 
 	const autoGrowNarrative = (textarea) => {
@@ -665,10 +702,13 @@
 		});
 		emptyStatePanel.style.display = anyActive ? 'none' : '';
 
-		// The report control only answers a question the BMI report asks.
-		if (reportPhaseField) {
-			reportPhaseField.style.display = selected === 'bmi-report' ? '' : 'none';
-		}
+		// The report's two controls only answer questions the BMI report asks:
+		// the master lists name the enrolled roll whatever Learners is set to.
+		[reportPhaseField, reportPopulationField].forEach((field) => {
+			if (field) {
+				field.style.display = selected === 'bmi-report' ? '' : 'none';
+			}
+		});
 
 		// The class masterlist is a blank form an adviser fills in for their own
 		// class, so the roster's grade and section have nothing to narrow on it.
@@ -714,8 +754,15 @@
 		});
 
 		// The scope printed on the form itself, so a filed copy says which
-		// children it counted. Blank when nothing is narrowed.
+		// children it counted. Blank when nothing is narrowed. Only the report's
+		// own sheets name the population: the master lists never count anybody
+		// but the enrolled roll, whatever the control is set to.
+		const population = populationLabel(scope);
 		document.querySelectorAll('[data-scope-line]').forEach((node) => {
+			if (population && node.closest('[data-template="bmi-report"]')) {
+				node.textContent = `${population} · ${label}`;
+				return;
+			}
 			node.textContent = (scope.grade || scope.section) ? label : '';
 		});
 
@@ -1113,6 +1160,10 @@
 		reportPhaseSelect.addEventListener('change', syncSelectedTemplate);
 	}
 
+	if (reportPopulationSelect) {
+		reportPopulationSelect.addEventListener('change', applyFilters);
+	}
+
 	document.querySelectorAll('.narrative-textarea').forEach((textarea) => {
 		textarea.addEventListener('input', () => autoGrowNarrative(textarea));
 	});
@@ -1123,14 +1174,15 @@
 	// A class masterlist an adviser uploads, or a learner the coordinator
 	// enrols on the Dashboard or the Beneficiaries tab, moves the coordinator's
 	// pulse (a stamp, no personal information). Only then is the roster re-read
-	// and both master lists redrawn from it, so the forms follow the roster
-	// without a reload. Checked again the moment the tab is looked at.
+	// and the BMI report and both master lists redrawn from it, so the forms
+	// follow the roster without a reload. Checked again the moment the tab is
+	// looked at.
 	//
 	// Each reader polls the pulse its own screens already read, and re-reads
 	// the roster under its own path; the server stamps the roster with that
 	// same pulse, so the two are always compared like with like.
-	const pulseUrl = @json($forNurse ? route('workspace.pulse') : route('dashboard.feedingcor.metrics.pulse'));
-	const rosterUrl = @json($forNurse ? route('dashboard.school-nurse.forms.roster') : route('dashboard.feedingcor-sbfp-forms.roster'));
+	const pulseUrl = @json($forClinic ? route('workspace.pulse') : route('dashboard.feedingcor.metrics.pulse'));
+	const rosterUrl = @json($forClinic ? route($clinicFormsRoute.'.roster') : route('dashboard.feedingcor-sbfp-forms.roster'));
 	let rosterStamp = @json($rosterStamp ?? '');
 	let rosterChecking = false;
 
@@ -1183,8 +1235,10 @@
 			rosterStamp = roster.stamp || pulse.stamp;
 			studentsByGrade = roster.studentsByGrade || {};
 			sectionsByGrade = roster.sectionsByGrade || {};
+			bmiReports = roster.bmiReports || bmiReports;
 			syncGradeOptions();
 			syncSectionOptions(sectionSelect ? sectionSelect.value : '');
+			paintReports();
 			const scope = currentScope();
 			masterlists.forEach((list) => list.fill(scope));
 		} catch (_error) {
@@ -1215,7 +1269,7 @@
      it — same id, same script — on every refresh. The listeners are delegated
      from the document, so marks the refresh brings in are covered anyway. --}}
 @include('partials.chart-tooltip')
-@if ($forNurse)
+@if ($forClinic)
 	@include('partials.nurse-page-transition')
 @else
 	@include('partials.role-page-transition')

@@ -36,12 +36,6 @@
                 ? ($assignedGradeLevel . ' / ' . $assignedSection)
                 : 'Not Assigned';
         @endphp
-        @if (session('success'))
-            <div class="toast-success" id="successToast" role="status" aria-live="polite">
-                <span>{{ session('success') }}</span>
-                <button type="button" class="toast-close" id="toastClose" aria-label="Close">x</button>
-            </div>
-        @endif
         @if ($errors->any())
             <div class="flash flash-err">{{ $errors->first() }}</div>
         @endif
@@ -142,8 +136,8 @@
             $chartBaselineValues = [];
             $chartEndlineValues = [];
 
-            $baselineMonthLabel = now()->subMonthNoOverflow()->format('M');
-            $endlineMonthLabel = now()->format('M');
+            $baselineMonthLabel = \App\Support\SchoolClock::now()->subMonthNoOverflow()->format('M');
+            $endlineMonthLabel = \App\Support\SchoolClock::now()->format('M');
 
             if ($wastedRows->isEmpty()) {
                 $chartParticipationLabels = ['No Data'];
@@ -174,7 +168,7 @@
 
         <section id="prototype-dashboard-panel" class="section-panel {{ $adviserTab === 'saved' || $adviserTab === 'form' ? '' : 'active' }}" style="margin-top:12px;">
             @php
-                $greetHour = (int) now()->format('G');
+                $greetHour = (int) \App\Support\SchoolClock::now()->format('G');
                 $greeting = $greetHour < 12 ? 'Good morning' : ($greetHour < 18 ? 'Good afternoon' : 'Good evening');
                 $ov = $overview;
             @endphp

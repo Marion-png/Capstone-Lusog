@@ -469,11 +469,11 @@
                             <label for="receiveExpiry">Expiry date on the box</label>
                             {{-- Already-expired stock is refused: the count is a count
                                  of usable medicine. --}}
-                            <input class="input" id="receiveExpiry" name="expiry_date" type="date" min="{{ now()->addDay()->toDateString() }}">
+                            <input class="input" id="receiveExpiry" name="expiry_date" type="date" min="{{ \App\Support\SchoolClock::now()->addDay()->toDateString() }}">
                         </div>
                         <div class="field">
                             <label for="receiveDate">Date received</label>
-                            <input class="input" id="receiveDate" name="received_at" type="date" value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}">
+                            <input class="input" id="receiveDate" name="received_at" type="date" value="{{ \App\Support\SchoolClock::now()->toDateString() }}" max="{{ \App\Support\SchoolClock::now()->toDateString() }}">
                         </div>
                         <div class="field">
                             <label for="receiveSource">Source</label>

@@ -31,7 +31,7 @@ Baseline and Endline <span>Comparison</span>
     </article>
     <article class="card stat" style="border-left-color:#1F8A4C;">
         <div class="label">Improvement Rate</div>
-        <div class="num">{{ number_format($summary['improvement_rate'], 1) }}%</div>
+        <div class="num">{{ is_null($summary['improvement_rate']) ? '—' : number_format($summary['improvement_rate'], 1).'%' }}</div>
         <div class="hint">Across all tracked learners</div>
     </article>
 </section>

@@ -800,6 +800,9 @@ Route::get('/dashboard/nutricor-atrisk', [NutritionCoordinatorController::class,
 Route::get('/dashboard/nutricor-reports', [NutritionCoordinatorController::class, 'reports'])
     ->name('dashboard.nutricor-reports');
 
+Route::get('/dashboard/nutricor-reports/print/{report}', [NutritionCoordinatorController::class, 'printReport'])
+    ->name('dashboard.nutricor-reports.print');
+
 Route::get('/dashboard/nutricor-comparison', [NutritionCoordinatorController::class, 'comparison'])
     ->name('dashboard.nutricor-comparison');
 
@@ -923,6 +926,8 @@ Route::get('/health-records/students/{lrn}/incidents', [StudentIncidentReportCon
     ->name('student-incidents.index');
 Route::post('/health-records/students/{lrn}/incidents', [StudentIncidentReportController::class, 'store'])
     ->name('student-incidents.store');
+Route::post('/health-records/students/{lrn}/incidents/{id}', [StudentIncidentReportController::class, 'update'])
+    ->whereNumber('id')->name('student-incidents.update');
 Route::delete('/health-records/students/{lrn}/incidents/{id}', [StudentIncidentReportController::class, 'destroy'])
     ->whereNumber('id')->name('student-incidents.destroy');
 
@@ -1048,6 +1053,10 @@ Route::get('/dashboard/school-head/consent-forms/{form}', [HealthConsentFormCont
     ->whereNumber('form')->name('consent-forms.head-show');
 Route::get('/dashboard/consent-forms/{form}/print', [HealthConsentFormController::class, 'print'])
     ->whereNumber('form')->name('consent-forms.print');
+// Under the head's own path, for the reason consent-forms.head-paper-image is:
+// a demo head on a shared URL is re-seeded as another role before the page runs.
+Route::get('/dashboard/school-head/consent-forms/{form}/print', [HealthConsentFormController::class, 'headPrint'])
+    ->whereNumber('form')->name('consent-forms.head-print');
 Route::get('/consent/{token}', [HealthConsentFormController::class, 'parentShow'])
     ->name('consent-forms.parent');
 Route::post('/consent/{token}', [HealthConsentFormController::class, 'parentSubmit'])
@@ -1200,6 +1209,16 @@ Route::get('/dashboard/clinic-teacher/feeding-program', [FeedingProgramControlle
 
 Route::get('/dashboard/clinic-teacher/feeding-program/metrics', [FeedingProgramController::class, 'programMetrics'])
     ->name('dashboard.clinic-teacher.feeding-program.metrics');
+
+// The nurse's Forms & Templates, under this role's own path.
+Route::get('/dashboard/clinic-teacher/forms', [FeedingCoordinatorController::class, 'sbfpForms'])
+    ->name('dashboard.clinic-teacher.forms');
+
+Route::get('/dashboard/clinic-teacher/forms/roster', [FeedingCoordinatorController::class, 'sbfpFormsRoster'])
+    ->name('dashboard.clinic-teacher.forms.roster');
+
+Route::get('/dashboard/clinic-teacher/forms/class-masterlist', [AdviserController::class, 'importTemplate'])
+    ->name('dashboard.clinic-teacher.forms.class-masterlist');
 
 // Every archived learner and every learner waiting for a section, read only —
 // the School Nurse's list under their path, the Clinic Teacher's under theirs.
@@ -1719,7 +1738,10 @@ Route::post('/logout', function (Request $request) {
 
     Auth::logout();
 
-    $request->session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name', 'assigned_school_year', 'active_role', 'active_name', 'active_username', 'active_school_name', 'active_institution_id']);
+    // The whole session goes, not only who was signed in: it holds the school's
+    // roster (school_health_card_records), names and addresses included, and the
+    // next person on a shared computer must not inherit it.
+    $request->session()->invalidate();
     $request->session()->regenerateToken();
 
     return redirect()->route('login');
@@ -1790,6 +1812,11 @@ Route::post('/login', function (Request $request) {
     $account = $candidates->first();
     $role = (string) ($account['role'] ?? '');
 
+    // A sign-in starts a new session. Nothing the last person left in this
+    // browser (a roster, a school, an assignment) carries over to this one, and
+    // a session id somebody planted before signing in is worth nothing after.
+    $request->session()->invalidate();
+
     if (in_array($role, AccountSettings::TEACHER_ROLES, true)) {
         $request->session()->put('assigned_grade_level', $account['assigned_grade_level'] ?? null);
         $request->session()->put('assigned_section', $account['assigned_section'] ?? null);
@@ -1843,10 +1870,13 @@ Route::post('/admin-login', function (Request $request) {
             ->with('error', 'Invalid System Admin credentials.');
     }
 
+    // Same as the school sign-in. It also keeps this unscoped role from carrying
+    // the school id of whoever last used this browser.
+    $request->session()->invalidate();
+
     $request->session()->put('active_role', 'system_admin');
     $request->session()->put('active_name', 'System Admin');
     $request->session()->put('active_username', $validated['username']);
-    $request->session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_year']);
 
     AuditTrail::record('login', null, null, 'System Admin logged in');
 

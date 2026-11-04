@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\HealthConsentForm;
 use App\Models\StudentHealthRecord;
+use App\Support\SchoolClock;
 use App\Support\SchoolHeadHealthOverview;
 use App\Support\SchoolHeadOverview;
 use App\Support\SchoolPulse;
@@ -76,7 +77,7 @@ class SchoolHeadConsentController extends Controller
         $writer->addRow(Row::fromValues(['HEALTH SERVICES CONSENT — COMPLIANCE']));
         $writer->addRow(Row::fromValues([(string) $data['schoolName']]));
         $writer->addRow(Row::fromValues(['S.Y. '.$data['schoolYear']]));
-        $writer->addRow(Row::fromValues(['Generated '.now()->format('Y-m-d')]));
+        $writer->addRow(Row::fromValues(['Generated '.SchoolClock::today()]));
         $writer->addRow(Row::fromValues([]));
 
         $writer->addRow(Row::fromValues(['GRADE', 'SECTION', 'ON ROLL', 'VALID', 'MISSING', 'COMPLETION']));

@@ -10,6 +10,7 @@ use App\Support\MedicineCatalogue;
 use App\Support\MedicineUsage;
 use App\Support\RxNormService;
 use App\Support\SchemaCache;
+use App\Support\SchoolClock;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -332,8 +333,8 @@ class MedicineInventoryController extends Controller
             'quantity' => ['required', 'integer', 'min:1', 'max:100000'],
             // Already-expired stock has no business on the shelf; refusing it
             // here is what keeps the count a count of usable medicine.
-            'expiry_date' => ['nullable', 'date', 'after:today'],
-            'received_at' => ['nullable', 'date', 'before_or_equal:today'],
+            'expiry_date' => ['nullable', 'date', 'after:'.SchoolClock::today()],
+            'received_at' => ['nullable', 'date', 'before_or_equal:'.SchoolClock::today()],
             'source' => ['nullable', 'string', 'max:120'],
             'notes' => ['nullable', 'string', 'max:255'],
         ]);

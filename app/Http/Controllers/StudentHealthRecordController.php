@@ -26,6 +26,7 @@ use App\Support\PriorityHealthRule;
 use App\Support\ProfileCompletionRule;
 use App\Support\RequestMemo;
 use App\Support\SchemaCache;
+use App\Support\SchoolClock;
 use App\Support\Sheet2Review;
 use App\Support\StudentDataCompleteness;
 use App\Support\StudentMedicalDocuments;
@@ -1458,7 +1459,7 @@ class StudentHealthRecordController extends Controller
 
         $bmi = $this->computeBmi((float) $validated['height_cm'], (float) $validated['weight_kg']);
         $status = $this->classifyStatus($bmi, (int) $validated['age']);
-        $recordedAt = $validated['recorded_at'] ?? now()->toDateString();
+        $recordedAt = $validated['recorded_at'] ?? SchoolClock::today();
 
         $institutionId = $request->session()->get('active_institution_id');
 
@@ -1556,7 +1557,7 @@ class StudentHealthRecordController extends Controller
 
         $bmi = $this->computeBmi((float) $validated['height_cm'], (float) $validated['weight_kg']);
         $status = $this->classifyStatus($bmi, (int) $validated['age']);
-        $recordedAt = $validated['recorded_at'] ?? now()->toDateString();
+        $recordedAt = $validated['recorded_at'] ?? SchoolClock::today();
 
         $record->update([
             'weight' => (float) $validated['weight_kg'],
@@ -1588,8 +1589,12 @@ class StudentHealthRecordController extends Controller
         return $normalize($name).'|'.$normalize($section);
     }
 
-    public function feedingHealthRecords(Request $request): View
+    public function feedingHealthRecords(Request $request): View|RedirectResponse
     {
+        if ($request->session()->get('active_role') !== 'feeding_coor') {
+            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can open the beneficiary list.');
+        }
+
         $records = collect();
         $schoolYears = collect();
         $institutionId = $request->session()->get('active_institution_id');
@@ -1641,7 +1646,7 @@ class StudentHealthRecordController extends Controller
         if ($records->isNotEmpty() && SchemaCache::hasTable('feeding_attendances')) {
             $todayMarks = FeedingAttendance::query()
                 ->whereIn('student_health_record_id', $records->pluck('id'))
-                ->whereDate('session_date', now()->toDateString())
+                ->whereDate('session_date', SchoolClock::today())
                 ->get(array_merge(
                     ['student_health_record_id', 'is_present', 'needs_review'],
                     SchemaCache::hasColumn('feeding_attendances', 'is_excused') ? ['is_excused'] : []
@@ -1758,8 +1763,11 @@ class StudentHealthRecordController extends Controller
                 // session-fallback row has none, so it can only be read.
                 'id' => $id,
                 'segment' => match (true) {
-                    $qualified && $enrolled => 'beneficiary',
-                    $qualified => 'pending',
+                    // The one test, not qualified-and-enrolled read off the
+                    // current status: a learner whose endline came back Normal
+                    // no longer qualifies and is still on the programme.
+                    $record instanceof StudentHealthRecord && FeedingBeneficiarySummary::isBeneficiary($record) => 'beneficiary',
+                    $qualified && ! $enrolled => 'pending',
                     default => 'other',
                 },
                 'at_risk' => (bool) ($standings[$id]['at_risk'] ?? false),

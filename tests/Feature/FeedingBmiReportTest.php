@@ -490,6 +490,132 @@ class FeedingBmiReportTest extends TestCase
         $this->assertStringContainsString(e('4 learners across all grade levels have a baseline BMI-for-age on file — 2 male and 2 female.'), $html);
     }
 
+    /**
+     * The report's Learners control: the whole roll, or the beneficiaries
+     * alone. Somebody measured Wasted that nobody enrolled is waiting, a learner
+     * taken off the line has left it, and neither is a beneficiary.
+     */
+    #[Test]
+    public function the_report_counts_all_learners_or_only_the_beneficiaries(): void
+    {
+        $this->makeStudent('Grade 7 / Matiyaga', 'Male', 'Wasted', 'Stunted', ['feeding_enrolled_at' => now()]);
+        $this->makeStudent('Grade 7 / Matiyaga', 'Female', 'Wasted', 'Stunted');
+        $this->makeStudent('Grade 7 / Matiyaga', 'Male', 'Normal', 'Normal Height-for-Age');
+        $this->makeStudent('Grade 8 / Rosal', 'Female', 'Wasted', 'Stunted', [
+            'feeding_enrolled_at' => now()->subWeek(),
+            'feeding_removed_at' => now(),
+        ]);
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms')
+            ->assertOk();
+
+        $reports = $response->viewData('bmiReports');
+
+        $this->assertSame(4, $reports['all']['values']['']['bmib_overall_total_nst']);
+        $this->assertSame(1, $reports['beneficiaries']['values']['']['bmib_overall_total_nst']);
+        $this->assertSame(1, $reports['beneficiaries']['values']['']['bmib_g7_male_w']);
+        $this->assertSame('', $reports['beneficiaries']['values']['']['bmib_g7_female_w']);
+        $this->assertSame(0, $reports['beneficiaries']['values']['']['bmib_g8_total_nst']);
+
+        // The first paint is All Learners, the same figures as before the control.
+        $this->assertSame($response->viewData('bmiValues'), $reports['all']['values']['']);
+        $this->assertSame($response->viewData('bmiValueSets'), $reports['all']['values']);
+        $this->assertSame($response->viewData('bmiInsights'), $reports['all']['insights']);
+
+        // Offered in that order, so a form opens on the whole roll.
+        $this->assertMatchesRegularExpression(
+            '/id="reportPopulationSelect".*?<option value="all">All Learners<\/option>\s*<option value="beneficiaries">Only Beneficiaries<\/option>/s',
+            $response->getContent()
+        );
+    }
+
+    /**
+     * A section nobody in it is enrolled from still has its own empty grid. The
+     * page falls back to the whole school for a section with no set, which
+     * would print every beneficiary under this one section's name.
+     */
+    #[Test]
+    public function a_section_with_no_beneficiaries_reports_nobody_rather_than_the_school(): void
+    {
+        $this->makeStudent('Grade 7 / Matiyaga', 'Male', 'Wasted', 'Stunted', ['feeding_enrolled_at' => now()]);
+        $this->makeStudent('Grade 7 / Masigla', 'Female', 'Wasted', 'Stunted');
+
+        $reports = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms')
+            ->assertOk()
+            ->viewData('bmiReports');
+
+        $this->assertSame(array_keys($reports['all']['values']), array_keys($reports['beneficiaries']['values']));
+        $this->assertSame(0, $reports['beneficiaries']['values']['Grade 7 / Masigla']['bmib_g7_total_nst']);
+        $this->assertSame(1, $reports['all']['values']['Grade 7 / Masigla']['bmib_g7_total_nst']);
+        $this->assertSame(
+            ['No beneficiary in Grade 7 · Masigla has a baseline BMI-for-age on file yet, so there is nothing to read in this chart.'],
+            $reports['beneficiaries']['insights']['Grade 7 / Masigla']['baseline']['g7']
+        );
+    }
+
+    /**
+     * The endline overwrites nutritional_status, so a beneficiary who recovers
+     * no longer qualifies on their current reading. They were still fed, and
+     * they are who the Final grid exists to report.
+     */
+    #[Test]
+    public function a_beneficiary_re_measured_as_normal_stays_on_both_grids(): void
+    {
+        $this->makeStudent('Grade 9 / Adelfa', 'Male', 'Wasted', 'Stunted', [
+            'feeding_enrolled_at' => now(),
+            'nutritional_status' => 'Normal',
+            'endline_nutritional_status' => 'Normal',
+            'endline_height_cm' => 140,
+            'endline_age' => 13,
+        ]);
+        $this->makeStudent('Grade 9 / Adelfa', 'Female', 'Wasted', 'Stunted', ['feeding_enrolled_at' => now()]);
+
+        $report = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms')
+            ->assertOk()
+            ->viewData('bmiReports')['beneficiaries'];
+
+        $this->assertSame(1, $report['values']['']['bmib_g9_male_w'], 'They were enrolled on this baseline.');
+        $this->assertSame(1, $report['values']['']['bmif_g9_male_n'], 'And this is the closing reading the grid exists to report.');
+        $this->assertSame(2, $report['values']['']['bmib_g9_total_nst']);
+
+        // The words follow the population, and the comparison reads across it.
+        $endline = implode(' ', $report['insights']['']['endline']['g9']);
+        $this->assertStringContainsString('1 beneficiary in Grade 9 has an endline BMI-for-age on file', $endline);
+        $this->assertStringContainsString('Against the baseline, severely wasted and wasted beneficiaries went from 2 to 0 — 2 fewer.', $endline);
+        $this->assertStringContainsString('The endline covers 1 of the 2 beneficiaries weighed at baseline, so the comparison is not yet complete.', $endline);
+        $this->assertStringNotContainsString('learner', $endline);
+    }
+
+    /**
+     * An enrolment reaches an open report the way it reaches the master lists
+     * beside it, or the same page would report two sizes for one programme.
+     */
+    #[Test]
+    public function an_enrolment_reaches_the_open_report(): void
+    {
+        $learner = $this->makeStudent('Grade 7 / Matiyaga', 'Male', 'Wasted', 'Stunted');
+
+        $before = $this->withSession($this->coordinatorSession())
+            ->getJson(route('dashboard.feedingcor-sbfp-forms.roster'))
+            ->assertOk();
+
+        $this->assertSame(0, $before->json('bmiReports.beneficiaries.values')['']['bmib_g7_total_nst']);
+        $this->assertSame(1, $before->json('bmiReports.all.values')['']['bmib_g7_total_nst']);
+
+        $this->withSession($this->coordinatorSession())
+            ->postJson(route('feedingcor-program.enrollment.store'), ['record_ids' => [$learner->id]])
+            ->assertOk();
+
+        $after = $this->withSession($this->coordinatorSession())
+            ->getJson(route('dashboard.feedingcor-sbfp-forms.roster'))
+            ->assertOk();
+
+        $this->assertSame(1, $after->json('bmiReports.beneficiaries.values')['']['bmib_g7_total_nst']);
+    }
+
     /** The endline is read against the baseline of the same scope, and says when it is partial. */
     #[Test]
     public function the_endline_insight_compares_with_the_baseline(): void

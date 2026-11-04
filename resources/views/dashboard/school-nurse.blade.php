@@ -30,7 +30,7 @@
         $nurseName = session('active_name', $cdRoleLabel);
         $schoolName = session('active_school_name', 'No school assigned');
         $schoolYear = \App\Models\StudentHealthRecord::currentSchoolYear();
-        $greetHour = (int) now()->format('G');
+        $greetHour = (int) \App\Support\SchoolClock::now()->format('G');
         $greeting = $greetHour < 12 ? 'Good morning' : ($greetHour < 18 ? 'Good afternoon' : 'Good evening');
     @endphp
 
@@ -44,6 +44,13 @@
     </header>
 
     <div class="content">
+        @if (session('success'))
+            <div class="flash ok">{{ session('success') }}</div>
+        @endif
+        @if (session('error'))
+            <div class="flash err">{{ session('error') }}</div>
+        @endif
+
         <div class="page-header">
             <div class="card-head" style="margin-bottom:0">
                 <div>
@@ -125,7 +132,7 @@
                 {{-- A calendar, not a Today / Week / Month bucket: the nurse
                      picks the day and reads that day's visits. Cleared, it
                      shows every date. --}}
-                <input type="date" class="input" id="consultDateFilter" max="{{ now()->toDateString() }}" aria-label="Filter consultations by date">
+                <input type="date" class="input" id="consultDateFilter" max="{{ \App\Support\SchoolClock::today() }}" aria-label="Filter consultations by date">
             </div>
             {{-- Grade, section and gender are read per visit by
                  ClinicDashboard::consultationFilters(): the first two off the

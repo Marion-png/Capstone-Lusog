@@ -306,6 +306,9 @@ class ConsentFormScanner
 
         $images = array_map(fn (UploadedFile $image): array => $this->imagePart($image), [$photo, ...$closeups]);
 
+        // The three attempts below, each with its own timeout.
+        LongRequest::allow(3 * max(30, (int) config('services.gemini.timeout', 120)) + 30);
+
         try {
             $response = Http::withHeaders([
                 // The key travels in a header rather than the query string:

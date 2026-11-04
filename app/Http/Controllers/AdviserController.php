@@ -13,6 +13,7 @@ use App\Support\MasterlistSheetScanner;
 use App\Support\MedicineAllergies;
 use App\Support\PostureGait;
 use App\Support\SchemaCache;
+use App\Support\SchoolClock;
 use App\Support\SchoolYearTransition;
 use App\Support\StudentImportSheet;
 use App\Support\StudentRosterSync;
@@ -80,13 +81,27 @@ class AdviserController extends Controller
         'examiner_name', 'examiner_date',
     ];
 
-    public function create(): View
+    /**
+     * Enrolling writes a learner's record, and only a class adviser has a class
+     * to write it to. For anybody else applyAssignedClass() has nothing to apply,
+     * so a posted grade and section would decide the record instead.
+     */
+    private function adviserOnly(Request $request): void
     {
+        abort_unless((string) $request->session()->get('active_role') === 'class_adviser', 403);
+    }
+
+    public function create(Request $request): View
+    {
+        $this->adviserOnly($request);
+
         return view('adviser.create');
     }
 
     public function store(Request $request): RedirectResponse
     {
+        $this->adviserOnly($request);
+
         $request->merge($this->normaliseEnrolmentInput($request->all()));
 
         $validated = $request->validate($this->enrolmentRules());
@@ -220,6 +235,8 @@ class AdviserController extends Controller
      */
     public function import(Request $request, MasterlistSheetScanner $scanner): RedirectResponse
     {
+        $this->adviserOnly($request);
+
         // One picker takes the masterlist in whichever form the adviser has it:
         // the workbook, or a photograph of the paper one. The photo formats are
         // accepted only where the reader is configured, so an upload can never
@@ -449,6 +466,8 @@ class AdviserController extends Controller
      */
     public function confirmImport(Request $request): RedirectResponse
     {
+        $this->adviserOnly($request);
+
         $preview = $request->session()->get(self::PREVIEW_KEY);
 
         if (! is_array($preview)
@@ -491,6 +510,8 @@ class AdviserController extends Controller
     /** Cancel a preview: nothing was written, so nothing is undone. */
     public function cancelImport(Request $request): RedirectResponse
     {
+        $this->adviserOnly($request);
+
         $request->session()->forget(self::PREVIEW_KEY);
 
         return redirect()->route('dashboard.class-adviser', ['tab' => 'form']);
@@ -503,6 +524,8 @@ class AdviserController extends Controller
      */
     public function addToSection(Request $request): RedirectResponse
     {
+        $this->adviserOnly($request);
+
         $validated = $request->validate([
             'add_lrn' => ['required', 'string', 'max:50'],
             'add_last_name' => ['nullable', 'string', 'max:255'],
@@ -1398,7 +1421,7 @@ class AdviserController extends Controller
             'baseline_weight_kg' => $weightKg,
             'baseline_bmi_value' => $bmi,
             'baseline_nutritional_status' => $nutritionalStatusBmiForAge,
-            'baseline_recorded_at' => now()->toDateString(),
+            'baseline_recorded_at' => SchoolClock::today(),
         ];
 
         if (SchemaCache::hasColumn('student_health_records', 'school_name')) {

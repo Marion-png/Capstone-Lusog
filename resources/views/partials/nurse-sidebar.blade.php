@@ -129,10 +129,6 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             <span>Data Visualization</span>
         </a>
-        <a href="#" class="nsb-item {{ $active === 'reports' ? 'active' : '' }}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            <span>Generate Reports</span>
-        </a>
 
         <div class="nsb-label">System</div>
         <a href="{{ route('settings') }}" class="nsb-item {{ $active === 'settings' ? 'active' : '' }}">

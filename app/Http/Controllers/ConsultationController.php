@@ -17,6 +17,7 @@ use App\Support\EncryptedFileStorage;
 use App\Support\LearnerSearchIndex;
 use App\Support\MedicineBatches;
 use App\Support\SchemaCache;
+use App\Support\SchoolClock;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -48,8 +49,8 @@ class ConsultationController extends Controller
         // consulted_at and status are plain columns, so they may be counted in
         // SQL; ranges rather than date functions keep the one statement valid
         // on both Postgres and SQLite.
-        $monthStart = now()->startOfMonth();
-        $weekStart = now()->startOfWeek();
+        $monthStart = SchoolClock::now()->startOfMonth();
+        $weekStart = SchoolClock::now()->startOfWeek();
         $weekEnd = $weekStart->copy()->addWeek();
 
         $totals = $baseQuery()->toBase()
@@ -89,8 +90,8 @@ class ConsultationController extends Controller
 
         // condition is encrypted at rest, so grouping happens in PHP after decryption.
         $topConditionStats = $baseQuery()
-            ->whereMonth('consulted_at', now()->month)
-            ->whereYear('consulted_at', now()->year)
+            ->whereMonth('consulted_at', SchoolClock::now()->month)
+            ->whereYear('consulted_at', SchoolClock::now()->year)
             ->pluck('condition')
             ->map(fn ($condition) => strtolower((string) $condition))
             ->filter()
@@ -119,7 +120,7 @@ class ConsultationController extends Controller
                 'total' => (int) $totals->total,
                 'month' => (int) $totals->month,
                 'week' => (int) $thisWeek->sum(),
-                'today' => (int) $thisWeek->get(now()->toDateString(), 0),
+                'today' => (int) $thisWeek->get(SchoolClock::today(), 0),
                 'referrals' => (int) $totals->referrals,
             ],
             'topConditionStats' => $topConditionStats,

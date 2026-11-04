@@ -97,7 +97,7 @@ class ClinicDashboard
 
         return Consultation::query()
             ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-            ->whereDate('consulted_at', now()->toDateString())
+            ->whereDate('consulted_at', SchoolClock::today())
             ->count();
     }
 
@@ -287,8 +287,8 @@ class ClinicDashboard
         // one "condition" per row.
         return Consultation::query()
             ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-            ->whereMonth('consulted_at', now()->month)
-            ->whereYear('consulted_at', now()->year)
+            ->whereMonth('consulted_at', SchoolClock::now()->month)
+            ->whereYear('consulted_at', SchoolClock::now()->year)
             ->get()
             ->groupBy(fn (Consultation $c) => strtolower(trim((string) $c->condition)))
             ->reject(fn ($group, $name) => $name === '')

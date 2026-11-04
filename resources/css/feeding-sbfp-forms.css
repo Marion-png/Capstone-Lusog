@@ -22,6 +22,7 @@
 	box-shadow: var(--lg-shadow);
 }
 .selector-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; }
+.selector-wide { grid-column: 1 / -1; }
 .selector-label { display: block; font-size: .7rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--lg-ink-soft); margin-bottom: 6px; }
 .selector-input { width: 100%; }
 .selector-note { margin-top: 14px; font-size: .78rem; color: var(--lg-ink-soft); }

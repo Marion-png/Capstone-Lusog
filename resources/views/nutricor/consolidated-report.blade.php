@@ -14,7 +14,7 @@
         {{ $schoolName ?? '(All schools)' }}
         &nbsp;|&nbsp;
         <strong style="color:var(--text-2);">As of:</strong>
-        {{ now()->format('F j, Y, g:i A') }}
+        {{ \App\Support\SchoolClock::now()->format('F j, Y, g:i A') }}
     </div>
     <a href="{{ route('dashboard.nutricor-consolidated') }}"
        class="btn" style="font-size:.72rem;padding:6px 10px;">

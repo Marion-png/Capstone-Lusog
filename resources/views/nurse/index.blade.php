@@ -19,7 +19,8 @@
     <style>{!! file_get_contents(resource_path('css/nurse-sidebar.css')) !!}</style>
 </head>
 <body>
-@include('partials.nurse-lusog-sidebar', ['active' => 'queue'])
+{{-- Clinic Teachers and Clinic Staff read this page too, each on their own rail. --}}
+@include('partials.clinic-rail', ['active' => 'queue'])
 
 <div class="main">
     @php

@@ -18,9 +18,9 @@ use Tests\TestCase;
  *
  * It is the Feeding Coordinator's SBFP forms page — the BMI reports and both
  * master lists — read in the nurse's own rail, without the narrative report,
- * and with the class advisers' blank Class Masterlist added. One controller
- * renders both desks' copies, so the figures on a form cannot differ between
- * them.
+ * and with the class advisers' blank Class Masterlist added. The Clinic Teacher
+ * reads the nurse's copy in their own rail. One controller renders every desk's
+ * copy, so the figures on a form cannot differ between them.
  */
 class NurseFormsAndTemplatesTest extends TestCase
 {
@@ -56,6 +56,16 @@ class NurseFormsAndTemplatesTest extends TestCase
             'active_school_name' => 'Test School',
             'active_institution_id' => $this->institution->id,
         ];
+    }
+
+    /** @return array<string, mixed> */
+    private function clinicTeacherSession(): array
+    {
+        return array_merge($this->nurseSession(), [
+            'active_role' => 'clinic_teacher',
+            'active_name' => 'Teacher Lim',
+            'active_username' => 'teacher.lim',
+        ]);
     }
 
     private function learner(string $name, string $section, string $gender, string $status): StudentHealthRecord
@@ -144,17 +154,82 @@ class NurseFormsAndTemplatesTest extends TestCase
     }
 
     #[Test]
-    public function both_desks_print_the_same_figures(): void
+    public function every_desk_prints_the_same_figures(): void
     {
-        $this->learner('Reyes, Ana', 'Grade 7 / Matiyaga', 'Female', 'Wasted');
+        $this->learner('Reyes, Ana', 'Grade 7 / Matiyaga', 'Female', 'Wasted')
+            ->update(['feeding_enrolled_at' => now()]);
         $this->learner('Gomez, Jose', 'Grade 8 / Dalton', 'Male', 'Severely Wasted');
 
         $nurse = $this->withSession($this->nurseSession())->get(route('dashboard.school-nurse.forms'))->assertOk();
+        $teacher = $this->withSession($this->clinicTeacherSession())->get(route('dashboard.clinic-teacher.forms'))->assertOk();
         $coordinator = $this->withSession($this->coordinatorSession())->get('/dashboard/feedingcor-sbfp-forms')->assertOk();
 
-        foreach (['bmiValues', 'bmiValueSets', 'studentsByGrade', 'sectionsByGrade'] as $key) {
-            $this->assertSame($coordinator->viewData($key), $nurse->viewData($key), "{$key} differs between the two desks.");
+        foreach (['bmiValues', 'bmiValueSets', 'bmiReports', 'studentsByGrade', 'sectionsByGrade'] as $key) {
+            $this->assertSame($coordinator->viewData($key), $nurse->viewData($key), "{$key} differs between the coordinator and the nurse.");
+            $this->assertSame($coordinator->viewData($key), $teacher->viewData($key), "{$key} differs between the coordinator and the clinic teacher.");
         }
+
+        // The control is on all three, over figures that really do differ.
+        foreach ([$coordinator, $nurse, $teacher] as $desk) {
+            $desk->assertSee('id="reportPopulationSelect"', false);
+        }
+        $this->assertSame(2, $coordinator->viewData('bmiReports')['all']['values']['']['bmib_overall_total_nst']);
+        $this->assertSame(1, $coordinator->viewData('bmiReports')['beneficiaries']['values']['']['bmib_overall_total_nst']);
+    }
+
+    #[Test]
+    public function the_clinic_teacher_reads_the_nurses_copy_in_their_own_rail(): void
+    {
+        $html = $this->withSession($this->clinicTeacherSession())
+            ->get(route('dashboard.clinic-teacher.forms'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('href="'.route('dashboard.clinic-teacher.forms').'" class="sb-link active"', $html);
+        $this->assertStringNotContainsString('href="'.route('dashboard.school-nurse.forms').'"', $html);
+        $this->assertStringContainsString('<span>Clinic Teacher</span>', $html);
+        $this->assertStringContainsString('Forms &amp; <span>Templates</span>', $html);
+        $this->assertSame(1, substr_count($html, '<aside'));
+
+        // The same forms as the nurse's copy, and no narrative report.
+        foreach (['bmi-report', 'feeding-beneficiaries', 'feeding-masterlist', 'class-masterlist'] as $template) {
+            $this->assertStringContainsString('data-template="'.$template.'"', $html);
+        }
+        $this->assertStringNotContainsString('data-template="feeding-narrative"', $html);
+
+        // Its live roster and its download stay on this role's own path.
+        $this->assertStringContainsString(json_encode(route('workspace.pulse')), $html);
+        $this->assertStringContainsString(json_encode(route('dashboard.clinic-teacher.forms.roster')), $html);
+        $this->assertStringContainsString('href="'.route('dashboard.clinic-teacher.forms.class-masterlist').'"', $html);
+        $this->assertStringNotContainsString(route('dashboard.school-nurse.forms.roster'), $html);
+    }
+
+    #[Test]
+    public function the_clinic_teacher_downloads_the_class_masterlist_from_their_own_path(): void
+    {
+        if (! ClassMasterlistWorkbook::available()) {
+            $this->markTestSkipped('OpenSpout is not installed on this machine (composer.lock pins it to PHP 8.4).');
+        }
+
+        $this->withSession($this->clinicTeacherSession())
+            ->get(route('dashboard.clinic-teacher.forms.class-masterlist'))
+            ->assertOk()
+            ->assertDownload('CLASS-MASTERLIST-'.StudentHealthRecord::currentSchoolYear().'.xlsx');
+    }
+
+    #[Test]
+    public function the_clinic_teachers_roster_is_stamped_with_the_pulse_it_polls(): void
+    {
+        $this->learner('Reyes, Ana', 'Grade 7 / Matiyaga', 'Female', 'Wasted');
+
+        $roster = $this->withSession($this->clinicTeacherSession())
+            ->getJson(route('dashboard.clinic-teacher.forms.roster'))
+            ->assertOk();
+
+        $this->assertSame(
+            $roster->json('stamp'),
+            $this->withSession($this->clinicTeacherSession())->getJson(route('workspace.pulse'))->json('stamp'),
+        );
     }
 
     #[Test]

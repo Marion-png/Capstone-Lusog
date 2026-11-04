@@ -44,6 +44,12 @@ class StudentIncidentReport extends Model
      * and a clinic teacher can chart what happened, but not remove what the
      * nurse charted.
      *
+     * **Editing is narrower than filing too.** It changes what a signed note
+     * says, so it is the school nurse's and the clinic teacher's, on any report
+     * on the learner's profile. Clinic staff file but do not edit. The signature
+     * stands, an edit stamp says who changed it, and the audit trail holds the
+     * old and new values.
+     *
      * Declared here rather than on the controller so the endpoints and the two
      * profiles that render the panel read one list. A view that decides for
      * itself who may write is a view that eventually disagrees with the
@@ -55,6 +61,9 @@ class StudentIncidentReport extends Model
     public const WRITE_ROLES = ['school_nurse', 'clinic_staff', 'clinic_teacher'];
 
     /** @var list<string> */
+    public const EDIT_ROLES = ['school_nurse', 'clinic_teacher'];
+
+    /** @var list<string> */
     public const WITHDRAW_ROLES = ['school_nurse'];
 
     /** @var list<string> */
@@ -63,6 +72,11 @@ class StudentIncidentReport extends Model
     public static function canFile(?string $role): bool
     {
         return in_array((string) $role, self::WRITE_ROLES, true);
+    }
+
+    public static function canEdit(?string $role): bool
+    {
+        return in_array((string) $role, self::EDIT_ROLES, true);
     }
 
     public static function canWithdraw(?string $role): bool
@@ -98,6 +112,16 @@ class StudentIncidentReport extends Model
     {
         return SchemaCache::hasColumn('student_incident_reports', 'occurred_time')
             && SchemaCache::hasColumn('student_incident_reports', 'focus');
+    }
+
+    /**
+     * Whether the edit stamp's columns are on this database yet. Guarded like
+     * the others: until the migration runs, an edit still saves and is still
+     * audited, and the sheet simply does not say who made it.
+     */
+    public static function supportsEditStamp(): bool
+    {
+        return SchemaCache::hasColumn('student_incident_reports', 'edited_at');
     }
 
     /**
@@ -148,10 +172,14 @@ class StudentIncidentReport extends Model
         'reported_by_name',
         'reported_by_role',
         'guardian_notified',
+        'edited_by_name',
+        'edited_by_role',
+        'edited_at',
     ];
 
     protected $casts = [
         'occurred_at' => 'date',
+        'edited_at' => 'datetime',
         'guardian_notified' => 'boolean',
         'focus' => EncryptedString::class,
         'location' => EncryptedString::class,
@@ -160,6 +188,7 @@ class StudentIncidentReport extends Model
         'response' => EncryptedString::class,
         'witnesses' => EncryptedString::class,
         'reported_by_name' => EncryptedString::class,
+        'edited_by_name' => EncryptedString::class,
     ];
 
     /** @param  Builder<self>  $query */

@@ -109,7 +109,7 @@ class FeedingHealthRecordFilterTest extends TestCase
         // Exactly the shape that duplicated every learner on this page: the row
         // is in the database, and the adviser's session roster carries a working
         // copy of the same learner.
-        $record = $this->makeStudent('Nailes, Stephen C.', 'Grade 11 / BSIT - 4B');
+        $record = $this->makeStudent('Nailes, Stephen C.', 'Grade 10 / BSIT - 4B');
 
         $session = $this->coordinatorSession() + [
             'school_health_card_records' => [$this->rosterRow($record, 'Nailes', 'Stephen', 'Cruz')],
@@ -118,6 +118,25 @@ class FeedingHealthRecordFilterTest extends TestCase
         // Both copies render the same learner under the same name — which is
         // exactly why the page drew the row twice.
         $this->assertSame(1, $this->rowsNaming('Nailes, Stephen C.', $session));
+    }
+
+    /**
+     * The default view is always the Total Beneficiaries card. The programme is
+     * Junior High only, so somebody enrolled in Senior High is on neither: the
+     * table used to list them under a card that did not count them.
+     */
+    #[Test]
+    public function a_senior_high_learner_is_neither_listed_nor_counted_as_a_beneficiary(): void
+    {
+        $this->makeStudent('Senior, Stephen', 'Grade 11 / Stem');
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-health-records')
+            ->assertOk();
+
+        $this->assertSame(0, $response->viewData('beneficiarySummary')['beneficiaries']);
+        $this->assertSame(0, $response->viewData('segmentCounts')['all']);
+        $this->assertSame(0, $this->rowsNaming('Senior, Stephen', $this->coordinatorSession()));
     }
 
     #[Test]

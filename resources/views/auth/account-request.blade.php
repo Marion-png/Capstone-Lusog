@@ -533,13 +533,17 @@
                 return;
             }
 
+            // The list can arrive after somebody has already chosen, on a slow
+            // connection, and redrawing it must not quietly undo their choice.
+            const chosenGrade = gradeSelect.value || oldGrade;
+
             gradeSelect.innerHTML = '<option value="" selected disabled>Select grade level</option>';
 
             grades.forEach(function (grade) {
                 const opt = document.createElement('option');
                 opt.value = grade;
                 opt.textContent = grade;
-                if (grade === oldGrade) opt.selected = true;
+                if (grade === chosenGrade) opt.selected = true;
                 gradeSelect.appendChild(opt);
             });
 
@@ -549,6 +553,7 @@
 
         function renderSections() {
             const names = sectionCatalog[gradeSelect.value] || [];
+            const chosenSection = sectionSelect.value || oldSection;
 
             sectionSelect.innerHTML = names.length
                 ? '<option value="" selected disabled>Select section</option>'
@@ -558,7 +563,7 @@
                 const opt = document.createElement('option');
                 opt.value = name;
                 opt.textContent = name;
-                if (name === oldSection) opt.selected = true;
+                if (name === chosenSection) opt.selected = true;
                 sectionSelect.appendChild(opt);
             });
 

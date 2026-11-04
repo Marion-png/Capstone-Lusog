@@ -105,7 +105,10 @@ class FeedingEnrollmentController extends Controller
 
         return response()->json([
             'rows' => $rows,
-            'enrolled' => $qualified->count() - $waiting->count(),
+            // Counted on its own rather than as qualified minus waiting: a learner
+            // whose endline came back Normal no longer qualifies and still holds
+            // their place.
+            'enrolled' => $records->filter(fn (StudentHealthRecord $r): bool => FeedingBeneficiarySummary::isBeneficiary($r))->count(),
             'waiting' => $waiting->count(),
             'weigh_in' => $weighIn?->format('j F Y'),
             'grades' => collect($rows)->pluck('grade')->filter()->unique()->sort(SORT_NATURAL)->values()->all(),

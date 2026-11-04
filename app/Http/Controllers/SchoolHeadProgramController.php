@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\SchoolClock;
 use App\Support\SchoolHeadOverview;
 use App\Support\SchoolPulse;
 use Illuminate\Http\RedirectResponse;
@@ -63,7 +64,7 @@ class SchoolHeadProgramController extends Controller
     private function buildGrid(SchoolHeadOverview $overview): array
     {
         $sessions = collect($overview->sessions())->keyBy('day');
-        $today = now()->toDateString();
+        $today = SchoolClock::today();
         $cells = [];
 
         for ($day = 1; $day <= $overview->cycle->durationDays(); $day++) {

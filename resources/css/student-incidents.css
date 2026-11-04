@@ -45,6 +45,11 @@
 .incident-flag{font-size:.68rem;font-weight:600;color:var(--lg-emerald-deep,#126B3A);background:var(--lg-mint,#E7F5EC);padding:3px 9px;border-radius:999px}
 .incident-remove{margin-left:auto;border:none;background:none;font:inherit;font-size:.74rem;font-weight:600;color:var(--muted,#6B7C72);cursor:pointer;padding:3px 7px;border-radius:6px}
 .incident-remove:hover{background:#FCECEC;color:#b91c1c}
+/* Edit sits at the row's far end, with Withdraw after it when there is one. */
+.incident-edit{margin-left:auto;border:none;background:none;font:inherit;font-size:.74rem;font-weight:600;color:var(--lg-emerald-deep,#126B3A);cursor:pointer;padding:3px 7px;border-radius:6px}
+.incident-edit:hover{background:var(--lg-mint,#E7F5EC)}
+.incident-edit+.incident-remove{margin-left:0}
+.incident-form-title{margin:0 0 4px;font-size:.84rem;font-weight:700;color:var(--lg-ink,#1F2D25)}
 .incident-desc{margin:0;font-size:.84rem;line-height:1.5;color:var(--lg-ink,#1F2D25);white-space:pre-line}
 .incident-facts{margin-top:9px;padding-top:9px;border-top:1px dashed var(--lg-border,#DCE8E0);display:grid;gap:4px}
 .incident-facts div{display:flex;gap:7px;font-size:.77rem}
@@ -114,6 +119,7 @@
 .fdar-signature{margin-top:9px;padding-top:7px;border-top:1px dashed var(--lg-border,#DCE8E0);display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.74rem}
 .fdar-signature-name{font-style:italic;color:var(--lg-ink,#1F2D25)}
 .fdar-signature-time{color:var(--lg-ink-soft,#6B7C72)}
+.fdar-signature-edited{flex-basis:100%;color:var(--lg-ink-soft,#6B7C72)}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
 .incident-readonly{margin:4px 0}

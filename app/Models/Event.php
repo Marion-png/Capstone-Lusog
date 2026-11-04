@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\SchoolClock;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -43,7 +44,7 @@ class Event extends Model
     /** Today and later, soonest first. */
     public function scopeUpcoming(Builder $query): Builder
     {
-        return $query->whereDate('event_date', '>=', now()->toDateString())->orderBy('event_date');
+        return $query->whereDate('event_date', '>=', SchoolClock::today())->orderBy('event_date');
     }
 
     public static function canCreate(?string $role): bool

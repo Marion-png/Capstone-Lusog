@@ -8,6 +8,7 @@ use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\MasterlistSheet;
 use App\Support\NutritionalHealthStatus;
+use App\Support\SchoolClock;
 use App\Support\SchoolHeadOverview;
 use App\Support\SchoolLetterhead;
 use App\Support\StudentRecordPurge;
@@ -128,7 +129,7 @@ class SchoolHeadMasterlistController extends Controller
         $writer->addRow(Row::fromValues(['LEARNER MASTERLIST']));
         $writer->addRow(Row::fromValues([(string) $data['schoolName']]));
         $writer->addRow(Row::fromValues(['S.Y. '.$data['schoolYear']]));
-        $writer->addRow(Row::fromValues(['Generated '.now()->format('Y-m-d')]));
+        $writer->addRow(Row::fromValues(['Generated '.SchoolClock::today()]));
         $writer->addRow(Row::fromValues([]));
 
         $writer->addRow(Row::fromValues([

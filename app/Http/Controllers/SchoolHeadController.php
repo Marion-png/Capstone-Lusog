@@ -6,6 +6,7 @@ use App\Models\StudentHealthRecord;
 use App\Support\FeedingAttendanceWindow;
 use App\Support\FeedingProgramCycle;
 use App\Support\SchemaCache;
+use App\Support\SchoolClock;
 use App\Support\SchoolHeadHealthOverview;
 use App\Support\SchoolHeadOverview;
 use App\Support\SchoolPulse;
@@ -13,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
 /**
@@ -44,8 +46,12 @@ class SchoolHeadController extends Controller
     /** Consent completion under this share is named on the queue. */
     private const CONSENT_TARGET_PERCENT = 95.0;
 
-    public function index(Request $request): View
+    public function index(Request $request): View|RedirectResponse
     {
+        if (! $this->isSchoolHead($request)) {
+            return redirect()->route('login')->with('error', 'Only the School Head can open this dashboard.');
+        }
+
         return view('schoolhead-dashboard.school-head', [
             // Seeded so the page's first pulse compares against what it was
             // rendered from, instead of rebuilding metrics it already has.
@@ -232,7 +238,7 @@ class SchoolHeadController extends Controller
     {
         $baseline = $overview->statusCounts('baseline', $overview->beneficiaries);
         $sessions = $overview->sessions();
-        $today = now()->toDateString();
+        $today = SchoolClock::today();
 
         $todaySession = collect($sessions)->firstWhere('date', $today);
         $latest = $sessions === [] ? null : $sessions[count($sessions) - 1];

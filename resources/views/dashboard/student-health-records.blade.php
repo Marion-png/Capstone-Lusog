@@ -100,6 +100,14 @@
     </header>
 
     <div class="content">
+        {{-- Fill Medical Record and New Consultation both return here. --}}
+        @if (session('success'))
+            <div class="flash ok">{{ session('success') }}</div>
+        @endif
+        @if (session('error'))
+            <div class="flash err">{{ session('error') }}</div>
+        @endif
+
         {{-- ── List view ─────────────────────────────────────────────── --}}
         <div id="recordsListView">
             <div class="page-header">

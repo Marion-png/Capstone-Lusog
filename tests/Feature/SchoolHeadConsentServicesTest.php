@@ -264,6 +264,46 @@ class SchoolHeadConsentServicesTest extends TestCase
         $this->assertNotSame(200, $response->getStatusCode());
     }
 
+    /**
+     * The page offers Print. It used to link the shared print route, which
+     * refuses the head and threw them out to the sign-in page.
+     */
+    #[Test]
+    public function the_head_can_print_the_form_they_opened(): void
+    {
+        $learner = $this->learner('Dela Cruz, Juan', '100000000001');
+        $form = $this->consentFor($learner, ['deworming']);
+
+        $this->withSession($this->headSession())
+            ->get(route('consent-forms.head-show', $form->id))
+            ->assertOk()
+            ->assertSee(route('consent-forms.head-print', $form->id), false)
+            ->assertDontSee(route('consent-forms.print', $form->id), false);
+
+        $this->withSession($this->headSession())
+            ->get(route('consent-forms.head-print', $form->id))
+            ->assertOk()
+            ->assertSee('Dela Cruz, Juan');
+    }
+
+    /** Printing has the limits reading has. */
+    #[Test]
+    public function the_head_cannot_print_an_unsigned_form_or_another_schools(): void
+    {
+        $learner = $this->learner('Dela Cruz, Juan', '100000000001');
+        $form = $this->consentFor($learner, ['deworming']);
+
+        $form->update(['status' => HealthConsentForm::STATUS_SENT]);
+        $this->withSession($this->headSession())
+            ->get(route('consent-forms.head-print', $form->id))
+            ->assertRedirect(route('dashboard.school-head.consent'));
+
+        $form->update(['status' => HealthConsentForm::STATUS_SIGNED, 'institution_id' => $this->otherSchool->id]);
+        $this->withSession($this->headSession())
+            ->get(route('consent-forms.head-print', $form->id))
+            ->assertNotFound();
+    }
+
     /** Only the School Head reaches this page. */
     #[Test]
     public function other_roles_cannot_open_the_heads_form_view(): void

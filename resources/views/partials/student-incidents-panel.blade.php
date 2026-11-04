@@ -22,6 +22,7 @@
     use App\Models\StudentIncidentReport;
 
     $incidentCanFile = StudentIncidentReport::canFile(session('active_role'));
+    $incidentCanEdit = StudentIncidentReport::canEdit(session('active_role'));
     $incidentCanWithdraw = StudentIncidentReport::canWithdraw(session('active_role'));
     $studentIncidentsCss = resource_path('css/student-incidents.css');
 @endphp
@@ -70,6 +71,9 @@
             @csrf
 
             @php $incidentChartColumns = StudentIncidentReport::supportsChartColumns(); @endphp
+
+            {{-- Filing and editing are one form; only an edit carries a title. --}}
+            <h5 class="incident-form-title" id="incidentFormTitle" hidden>Edit Incident Report</h5>
 
             {{-- ── F-DAR ─────────────────────────────────────────────────────
                  The form is laid out as the sheet it files: Date/Time, then
@@ -212,5 +216,5 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
         Incident History
     </div>
-    <div id="vpIncidentsList" data-can-withdraw="{{ $incidentCanWithdraw ? '1' : '0' }}"></div>
+    <div id="vpIncidentsList" data-can-edit="{{ $incidentCanEdit ? '1' : '0' }}" data-can-withdraw="{{ $incidentCanWithdraw ? '1' : '0' }}"></div>
 </section>

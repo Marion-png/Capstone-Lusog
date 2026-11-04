@@ -33,7 +33,7 @@
                 <div class="grid">
                     <div class="field">
                         <label for="consulted_at">Date and Time</label>
-                        <input id="consulted_at" type="datetime-local" name="consulted_at" value="{{ old('consulted_at', now()->format('Y-m-d\\TH:i')) }}" required>
+                        <input id="consulted_at" type="datetime-local" name="consulted_at" value="{{ old('consulted_at', \App\Support\SchoolClock::now()->format('Y-m-d\\TH:i')) }}" required>
                         @error('consulted_at', 'consultation') <div class="err">{{ $message }}</div> @enderror
                     </div>
                     {{-- A search over the school's roll: typing lists matching

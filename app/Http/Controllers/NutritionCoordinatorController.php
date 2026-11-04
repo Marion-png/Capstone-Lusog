@@ -2,8 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FeedingAttendance;
 use App\Models\StudentHealthRecord;
+use App\Support\FeedingAttendanceMark;
+use App\Support\FeedingBeneficiarySummary;
+use App\Support\NutritionalHealthStatus;
 use App\Support\SchemaCache;
+use App\Support\SchoolLetterhead;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
@@ -22,8 +28,20 @@ class NutritionCoordinatorController extends Controller
         'overweight' => 'Overweight',
     ];
 
+    /** The documents the Report Center prints, by the key in their URL. */
+    public const REPORTS = [
+        'annex-a' => 'Annex A: Master List of Beneficiaries',
+        'annex-b' => 'Annex B: Summary by Grade Level and Nutritional Status',
+        'terminal' => 'Terminal Report',
+        'monthly' => 'Monthly Report',
+        'analytics' => 'Analytics Report',
+        'at-risk' => 'At-Risk Report',
+    ];
+
     public function dashboard(): View
     {
+        $this->guard();
+
         $records = $this->records();
         $summary = $this->summary($records);
 
@@ -37,6 +55,8 @@ class NutritionCoordinatorController extends Controller
 
     public function beneficiaries(): View
     {
+        $this->guard();
+
         $records = $this->records();
 
         return view('nutricor.beneficiaries', [
@@ -46,6 +66,8 @@ class NutritionCoordinatorController extends Controller
 
     public function analytics(): View
     {
+        $this->guard();
+
         $records = $this->records();
 
         return view('nutricor.analytics', [
@@ -56,12 +78,10 @@ class NutritionCoordinatorController extends Controller
 
     public function atRisk(): View
     {
+        $this->guard();
+
         $records = $this->records();
-        $riskRows = $records
-            ->map(fn (StudentHealthRecord $record): array => $this->riskRow($record))
-            ->filter(fn (array $row): bool => $row['risk'] !== 'Low')
-            ->sortBy(fn (array $row): int => ['High' => 0, 'Medium' => 1][$row['risk']] ?? 2)
-            ->values();
+        $riskRows = $this->riskRows($records);
 
         return view('nutricor.atrisk', [
             'riskRows' => $riskRows,
@@ -75,6 +95,8 @@ class NutritionCoordinatorController extends Controller
 
     public function reports(): View
     {
+        $this->guard();
+
         $records = $this->records();
 
         return view('nutricor.reports', [
@@ -86,6 +108,8 @@ class NutritionCoordinatorController extends Controller
 
     public function comparison(): View
     {
+        $this->guard();
+
         $records = $this->records();
 
         return view('nutricor.comparison', [
@@ -94,17 +118,56 @@ class NutritionCoordinatorController extends Controller
         ]);
     }
 
+    /**
+     * One document from the Report Center, laid out for paper. As everywhere else
+     * in this app, a PDF is the browser's print dialog saving the page.
+     */
+    public function printReport(string $report): View
+    {
+        $this->guard();
+
+        abort_unless(array_key_exists($report, self::REPORTS), 404);
+
+        $records = $this->records();
+        $institutionId = session('active_institution_id');
+
+        return view('nutricor.report-print', [
+            'report' => $report,
+            'title' => self::REPORTS[$report],
+            'schoolYear' => StudentHealthRecord::currentSchoolYear(),
+            'letterhead' => SchoolLetterhead::for($institutionId ? (int) $institutionId : null, (string) session('active_school_name', '')),
+            'seals' => SchoolLetterhead::seals(),
+            'labels' => self::STATUS_LABELS,
+            'summary' => $this->summary($records),
+            'data' => match ($report) {
+                'annex-a' => $this->beneficiaryRows($records),
+                'annex-b' => $this->gradeSummary($records),
+                'terminal' => $this->comparisonRows($records),
+                'monthly' => $this->monthlyRows($records),
+                'analytics' => $this->sectionSummary($records),
+                'at-risk' => $this->riskRows($records),
+            },
+        ]);
+    }
+
+    /** Every page here is the Nutrition Coordinator's, and names the whole school's learners. */
+    private function guard(): void
+    {
+        abort_unless(session('active_role') === 'nutricor', 403);
+    }
+
     private function records(): Collection
     {
-        if (! SchemaCache::hasTable('student_health_records')) {
+        $institutionId = session('active_institution_id');
+
+        // No school means no learners, never every school's.
+        if (! $institutionId || ! SchemaCache::hasTable('student_health_records')) {
             return collect();
         }
 
-        $institutionId = session('active_institution_id');
-
         // student_name is encrypted at rest, so the final sort happens in PHP.
         return StudentHealthRecord::query()
-            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+            ->where('institution_id', $institutionId)
             ->forCurrentSchoolYear()
             ->get()
             ->sortBy([
@@ -140,7 +203,7 @@ class NutritionCoordinatorController extends Controller
             }
         }
 
-        $trackedTotal = max(1, $trackedRows->count());
+        $trackedTotal = $trackedRows->count();
 
         return [
             'total_population' => $records->count(),
@@ -152,7 +215,8 @@ class NutritionCoordinatorController extends Controller
             'priority_2' => $baselineCounts['wasted'],
             'at_risk' => $baselineCounts['severely_wasted'] + $baselineCounts['wasted'],
             'tracked_total' => $trackedRows->count(),
-            'improvement_rate' => round(($movement['improved'] / $trackedTotal) * 100, 1),
+            // Nobody measured twice is no rate at all, never 0%.
+            'improvement_rate' => $trackedTotal > 0 ? round(($movement['improved'] / $trackedTotal) * 100, 1) : null,
             ...$movement,
         ];
     }
@@ -199,6 +263,102 @@ class NutritionCoordinatorController extends Controller
             ->filter(fn (StudentHealthRecord $record): bool => in_array($this->statusKey((string) ($record->baseline_nutritional_status ?: $record->nutritional_status)), $keys, true))
             ->take(8)
             ->values();
+    }
+
+    private function riskRows(Collection $records): Collection
+    {
+        return $records
+            ->map(fn (StudentHealthRecord $record): array => $this->riskRow($record))
+            ->filter(fn (array $row): bool => $row['risk'] !== 'Low')
+            ->sortBy(fn (array $row): int => ['High' => 0, 'Medium' => 1][$row['risk']] ?? 2)
+            ->values();
+    }
+
+    /** Annex A: the enrolled roll with each learner's baseline reading. */
+    private function beneficiaryRows(Collection $records): Collection
+    {
+        return $records
+            ->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isBeneficiary($record))
+            ->map(function (StudentHealthRecord $record): array {
+                $baseline = NutritionalHealthStatus::forRecord($record)['baseline'];
+
+                return [
+                    'name' => (string) $record->student_name,
+                    'section' => (string) $record->section,
+                    'sex' => FeedingBeneficiarySummary::sexOf($record),
+                    'height_cm' => $baseline['height_cm'],
+                    'weight_kg' => $baseline['weight_kg'],
+                    'bmi' => $baseline['bmi'],
+                    'bmi_status' => $baseline['bmi_status'],
+                    'hfa_status' => $baseline['hfa_status'],
+                ];
+            })
+            ->values();
+    }
+
+    /** Annex B: each grade's learners by status, at both weighings. */
+    private function gradeSummary(Collection $records): Collection
+    {
+        return $records
+            ->groupBy(fn (StudentHealthRecord $record): string => trim(explode(' / ', (string) $record->section)[0]) ?: 'Unassigned')
+            ->sortKeys(SORT_NATURAL)
+            ->map(fn (Collection $rows, string $grade): array => [
+                'grade' => $grade,
+                'total' => $rows->count(),
+                'baseline' => $this->statusCounts($rows, 'baseline'),
+                'endline' => $this->statusCounts($rows, 'endline'),
+            ])
+            ->values();
+    }
+
+    /**
+     * The Monthly Report: weighings taken and feeding sessions held, month by
+     * month. A confirmed mark is the only kind counted, so the rate is empty for
+     * a month with no confirmed attendance rather than 0%.
+     */
+    private function monthlyRows(Collection $records): Collection
+    {
+        $months = [];
+        $month = function (string $key) use (&$months): void {
+            $months[$key] ??= ['baseline' => 0, 'endline' => 0, 'sessions' => [], 'present' => 0, 'confirmed' => 0];
+        };
+
+        foreach ($records as $record) {
+            foreach (['baseline' => $record->baseline_recorded_at, 'endline' => $record->endline_recorded_at] as $phase => $date) {
+                if ($date !== null) {
+                    $key = Carbon::parse($date)->format('Y-m');
+                    $month($key);
+                    $months[$key][$phase]++;
+                }
+            }
+        }
+
+        $marks = $records->isEmpty() ? collect() : FeedingAttendance::query()
+            ->whereIn('student_health_record_id', $records->pluck('id'))
+            ->get(['session_date', 'is_present', 'is_excused', 'needs_review']);
+
+        foreach ($marks as $mark) {
+            $date = Carbon::parse($mark->session_date);
+            $key = $date->format('Y-m');
+            $month($key);
+            $months[$key]['sessions'][$date->toDateString()] = true;
+
+            $reading = FeedingAttendanceMark::forRule($mark);
+            if ($reading !== null) {
+                $months[$key]['confirmed']++;
+                $months[$key]['present'] += $reading ? 1 : 0;
+            }
+        }
+
+        ksort($months);
+
+        return collect($months)->map(fn (array $row, string $key): array => [
+            'month' => Carbon::createFromFormat('Y-m-d', $key.'-01')->format('F Y'),
+            'baseline' => $row['baseline'],
+            'endline' => $row['endline'],
+            'sessions' => count($row['sessions']),
+            'rate' => $row['confirmed'] > 0 ? round($row['present'] / $row['confirmed'] * 100, 1) : null,
+        ])->values();
     }
 
     private function riskRow(StudentHealthRecord $record): array

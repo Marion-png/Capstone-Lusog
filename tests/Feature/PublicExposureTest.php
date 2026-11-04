@@ -66,7 +66,7 @@ class PublicExposureTest extends TestCase
 
         $this->assertMatchesRegularExpression('/^php\.ini$/m', (string) file_get_contents(base_path('.railwayignore')));
         $this->assertStringContainsString('php_ini upload_max_filesize 12M', $caddyfile);
-        $this->assertStringContainsString('php_ini post_max_size 16M', $caddyfile);
+        $this->assertStringContainsString('php_ini post_max_size 32M', $caddyfile);
     }
 
     #[Test]

@@ -38,6 +38,10 @@
 	<div class="content">
 		<div class="content-inner">
 
+		@if (session('error'))
+			<div class="flash err">{{ session('error') }}</div>
+		@endif
+
 		<div class="page-header sh-header">
 			<div class="sh-headline">
 				<div class="sh-title-row">

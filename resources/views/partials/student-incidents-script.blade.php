@@ -23,6 +23,7 @@ window.StudentIncidents = (() => {
     const cancelBtn = document.getElementById('incidentCancel');
     const submitBtn = document.getElementById('incidentSubmit');
     const errorBox = document.getElementById('incidentError');
+    const formTitle = document.getElementById('incidentFormTitle');
     const countLabel = document.getElementById('vpIncidentsCount');
     const tabBadge = document.getElementById('vpIncidentsTabBadge');
     const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -44,9 +45,15 @@ window.StudentIncidents = (() => {
     // list; until it has answered, the panel is whatever the page rendered.
     let canFile = !!form;
 
-    // Withdrawing is narrower than filing — the nurse's alone — so it is its
-    // own answer, read the same way.
+    // Editing and withdrawing are each narrower than filing, so each is its own
+    // answer, read the same way.
+    let canEdit = list.dataset.canEdit === '1';
     let canWithdraw = list.dataset.canWithdraw === '1';
+
+    // The reports on screen by id, for the form to be filled from, and which
+    // one the form is editing. Null means it is filing a new one.
+    const shown = new Map();
+    let editingId = null;
 
     const setOpen = (open) => {
         if (!form) return;
@@ -59,6 +66,53 @@ window.StudentIncidents = (() => {
         if (!errorBox) return;
         errorBox.textContent = message;
         errorBox.hidden = message === '';
+    };
+
+    const setEditing = (id) => {
+        editingId = id;
+        if (formTitle) formTitle.hidden = id === null;
+        if (submitBtn) submitBtn.textContent = id === null ? 'Save Report' : 'Save Changes';
+    };
+
+    // Back to a closed, empty form that files a new report.
+    const closeForm = () => {
+        if (!form) return;
+        form.reset();
+        showError('');
+        setEditing(null);
+        setOpen(false);
+    };
+
+    // The form is opened on one report's own values. A field the page did not
+    // draw (a database not yet migrated) is passed over.
+    const startEdit = (report) => {
+        if (!form) return;
+        form.reset();
+        showError('');
+
+        const fields = {
+            incidentDate: report.occurred_at,
+            incidentTime: report.occurred_time,
+            incidentCategory: report.category,
+            incidentFocus: report.focus,
+            incidentDescription: report.description,
+            incidentAction: report.action_taken,
+            incidentResponse: report.response,
+            incidentSeverity: report.severity,
+            incidentLocation: report.location,
+            incidentWitnesses: report.witnesses,
+        };
+        Object.entries(fields).forEach(([id, value]) => {
+            const field = document.getElementById(id);
+            if (field) field.value = value ?? '';
+        });
+
+        const notified = document.getElementById('incidentNotified');
+        if (notified) notified.checked = !!report.guardian_notified;
+
+        setEditing(report.id);
+        setOpen(true);
+        form.scrollIntoView({ block: 'start' });
     };
 
     const el = (tag, className, text) => {
@@ -126,6 +180,12 @@ window.StudentIncidents = (() => {
             const sig = el('div', 'fdar-signature');
             if (signer) sig.appendChild(el('span', 'fdar-signature-name', '— ' + signer));
             if (report.filed_label) sig.appendChild(el('span', 'fdar-signature-time', 'Filed ' + report.filed_label));
+            // The signature stands through an edit, so whoever changed the note
+            // is named beside it rather than leaving their words under it.
+            if (report.edited_label) {
+                const editor = [report.edited_by, report.edited_by_title].filter(Boolean).join(', ');
+                sig.appendChild(el('span', 'fdar-signature-edited', 'Edited ' + report.edited_label + (editor ? ' by ' + editor : '')));
+            }
             notes.appendChild(sig);
         }
         row.appendChild(notes);
@@ -151,6 +211,15 @@ window.StudentIncidents = (() => {
 
         if (report.guardian_notified) {
             head.appendChild(el('span', 'incident-flag', 'Guardian informed'));
+        }
+
+        // Correcting a report is the nurse's and the clinic teacher's. Anyone
+        // else gets no button, and the endpoint refuses them regardless.
+        if (canEdit && form) {
+            const edit = el('button', 'incident-edit', 'Edit');
+            edit.type = 'button';
+            edit.dataset.edit = report.id;
+            head.appendChild(edit);
         }
 
         // Withdrawing is for a report filed by mistake, and it is the
@@ -187,6 +256,12 @@ window.StudentIncidents = (() => {
     const render = (reports) => {
         list.textContent = '';
 
+        shown.clear();
+        reports.forEach((report) => shown.set(String(report.id), report));
+
+        // The report being edited was withdrawn: there is nothing left to save to.
+        if (editingId !== null && !shown.has(String(editingId))) closeForm();
+
         const count = reports.length;
         if (countLabel) countLabel.textContent = count === 1 ? '1 report' : count + ' reports';
         if (tabBadge) tabBadge.textContent = String(count);
@@ -200,7 +275,13 @@ window.StudentIncidents = (() => {
     };
 
     const load = async (lrn) => {
-        if (lrn !== undefined && lrn !== null) currentLrn = String(lrn || '');
+        if (lrn !== undefined && lrn !== null) {
+            const next = String(lrn || '');
+            // The nurse's dialog serves whichever row was opened, so a form left
+            // open on one child must not be saved against the next.
+            if (next !== currentLrn) closeForm();
+            currentLrn = next;
+        }
         if (currentLrn === '') return;
 
         try {
@@ -218,6 +299,10 @@ window.StudentIncidents = (() => {
                 }
             }
 
+            if (typeof data.can_edit === 'boolean') {
+                canEdit = data.can_edit;
+            }
+
             if (typeof data.can_withdraw === 'boolean') {
                 canWithdraw = data.can_withdraw;
             }
@@ -229,8 +314,8 @@ window.StudentIncidents = (() => {
     };
 
     if (form) {
-        newBtn?.addEventListener('click', () => { showError(''); setOpen(true); });
-        cancelBtn?.addEventListener('click', () => { form.reset(); showError(''); setOpen(false); });
+        newBtn?.addEventListener('click', () => { showError(''); setEditing(null); setOpen(true); });
+        cancelBtn?.addEventListener('click', closeForm);
 
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -238,7 +323,11 @@ window.StudentIncidents = (() => {
             if (submitBtn) submitBtn.disabled = true;
 
             try {
-                const response = await fetch(urlFor('store', currentLrn), {
+                const target = editingId === null
+                    ? urlFor('store', currentLrn)
+                    : urlFor('index', currentLrn) + '/' + editingId;
+
+                const response = await fetch(target, {
                     method: 'POST',
                     headers: { Accept: 'application/json', 'X-CSRF-TOKEN': token },
                     body: new FormData(form),
@@ -257,9 +346,8 @@ window.StudentIncidents = (() => {
                 }
 
                 const data = await response.json();
+                closeForm();
                 render(Array.isArray(data.reports) ? data.reports : []);
-                form.reset();
-                setOpen(false);
             } catch (_) {
                 showError('The report could not be saved. Please try again.');
             } finally {
@@ -269,6 +357,13 @@ window.StudentIncidents = (() => {
     }
 
     list.addEventListener('click', async (event) => {
+        const editButton = event.target.closest('[data-edit]');
+        if (editButton) {
+            const report = shown.get(editButton.dataset.edit);
+            if (report && canEdit) startEdit(report);
+            return;
+        }
+
         const button = event.target.closest('[data-remove]');
         if (!button || !canWithdraw || currentLrn === '') return;
 

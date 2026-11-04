@@ -816,6 +816,27 @@ class HealthConsentFormController extends Controller
         return view('consent-forms.print', ['form' => $form]);
     }
 
+    /**
+     * The same print view for the School Head, who reads a signed letter on
+     * headShow() and is offered Print there. The same limits as that page: their
+     * own school, and only a form a parent has actually returned.
+     */
+    public function headPrint(Request $request, HealthConsentForm $form)
+    {
+        if ($redirect = $this->requireRole($request, ['school_head'])) {
+            return $redirect;
+        }
+
+        $this->assertSameInstitution($request, $form);
+
+        if (! in_array($form->status, [HealthConsentForm::STATUS_SIGNED, HealthConsentForm::STATUS_REVIEWED], true)) {
+            return redirect()->route('dashboard.school-head.consent')
+                ->with('error', 'That form has not been signed by a parent or guardian yet.');
+        }
+
+        return view('consent-forms.print', ['form' => $form]);
+    }
+
     /** Students of the adviser's assigned class, normalized for this module. */
     private function assignedStudents(Request $request)
     {

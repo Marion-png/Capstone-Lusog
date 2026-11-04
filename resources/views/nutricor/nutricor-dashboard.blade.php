@@ -47,7 +47,7 @@ Nutritional Coordinator <span>Dashboard</span>
 
 <section class="summary">
     <h3>Division Submission Snapshot</h3>
-    <p>Baseline records: {{ number_format($summary['baseline_total']) }} | Endline records: {{ number_format($summary['endline_total']) }} | Improvement rate: {{ number_format($summary['improvement_rate'], 1) }}%</p>
+    <p>Baseline records: {{ number_format($summary['baseline_total']) }} | Endline records: {{ number_format($summary['endline_total']) }} | Improvement rate: {{ is_null($summary['improvement_rate']) ? '—' : number_format($summary['improvement_rate'], 1).'%' }}</p>
 </section>
 
 <section class="grid-2">

@@ -87,7 +87,7 @@
                     </div>
                 </div>
                 <div class="kpi-value">{{ number_format($stats['month'] ?? 0) }}</div>
-                <div class="kpi-hint">{{ now()->format('F Y') }}</div>
+                <div class="kpi-hint">{{ \App\Support\SchoolClock::now()->format('F Y') }}</div>
             </div>
 
             <div class="card kpi accent-info">
@@ -109,7 +109,7 @@
                     </div>
                 </div>
                 <div class="kpi-value">{{ number_format($stats['today'] ?? 0) }}</div>
-                <div class="kpi-hint">{{ now()->format('M j') }}</div>
+                <div class="kpi-hint">{{ \App\Support\SchoolClock::now()->format('M j') }}</div>
             </div>
 
             <div class="card kpi accent-orange">

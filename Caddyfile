@@ -29,9 +29,10 @@
 		# The root php.ini never reaches the deployment (.railwayignore), so the
 		# upload limits it sets have to be set here. A phone's photo of a signed
 		# form is several megabytes, and PHP's own default refuses a file over 2M
-		# before the application sees it.
+		# before the application sees it. One consent scan posts the photo, an upright
+		# copy and four close-ups together, so the post limit is well past one file's.
 		php_ini upload_max_filesize 12M
-		php_ini post_max_size 16M
+		php_ini post_max_size 32M
 
 		{$FRANKENPHP_CONFIG}
 	}

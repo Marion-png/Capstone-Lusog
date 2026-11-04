@@ -57,7 +57,7 @@
 --}}
 <style>
     .ann-board { background: #fff; border: 1px solid var(--ann-border, #DCE8E0); border-radius: var(--ann-radius, 12px); box-shadow: var(--ann-shadow, 0 1px 4px rgba(5,46,22,.06)); margin-bottom: 18px; }
-    .ann-board-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--ann-border, #DCE8E0); }
+    .ann-board-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--ann-border, #DCE8E0); }
     .ann-board-head svg { width: 17px; height: 17px; color: var(--ann-icon, #1F8A4C); flex-shrink: 0; }
     .ann-board-title { font-size: .82rem; font-weight: 700; color: var(--ann-title, #1F2D25); letter-spacing: .01em; }
     .ann-board-sub { font-size: .72rem; color: var(--ann-sub, #6B7C72); margin-left: 4px; }

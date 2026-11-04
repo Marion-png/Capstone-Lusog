@@ -72,6 +72,8 @@ class AttendanceSheetScanner
 
         $client = $this->client ?? new Client(apiKey: (string) config('services.anthropic.key'));
 
+        LongRequest::allow(300);
+
         $message = $client->messages->create(
             model: (string) config('services.anthropic.model', 'claude-opus-5'),
             maxTokens: 16000,

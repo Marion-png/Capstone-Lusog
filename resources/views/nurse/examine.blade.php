@@ -197,6 +197,8 @@
             @csrf
             {{-- Where the save lands: the page this form was opened from. --}}
             <input type="hidden" name="return_to" value="{{ $backTo }}">
+            {{-- Whose record this is, so the save can refuse any other child. --}}
+            <input type="hidden" name="lrn" value="{{ $record['lrn'] ?? '' }}">
 
             {{-- Vital signs are recorded on the learner's profile (the Vital
                  Signs panel), and height, weight and nutritional status are the
@@ -214,7 +216,7 @@
             <div class="form-grid">
                 <div class="field">
                     <label>Date of Examination</label>
-                    <input type="date" name="date_of_examination" value="{{ $exam['date_of_examination'] ?? '' }}" max="{{ now()->toDateString() }}">
+                    <input type="date" name="date_of_examination" value="{{ $exam['date_of_examination'] ?? '' }}" max="{{ \App\Support\SchoolClock::now()->toDateString() }}">
                 </div>
             </div>
 
@@ -329,7 +331,7 @@
                 </div>
                 <div class="field">
                     <label>Date Record Reviewed</label>
-                    <input type="date" name="immunization_reviewed_at" value="{{ $s2('immunization', 'reviewed_at') }}" max="{{ now()->toDateString() }}">
+                    <input type="date" name="immunization_reviewed_at" value="{{ $s2('immunization', 'reviewed_at') }}" max="{{ \App\Support\SchoolClock::now()->toDateString() }}">
                 </div>
             </div>
 

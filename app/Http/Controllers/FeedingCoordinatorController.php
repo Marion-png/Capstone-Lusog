@@ -32,22 +32,25 @@ use Illuminate\View\View;
 class FeedingCoordinatorController extends Controller
 {
     /**
-     * Who may open the SBFP forms page. The School Nurse reads it as their
-     * Forms & Templates tab — every form but the narrative report, which is
-     * the coordinator's own account of the programme — in their own rail,
-     * from this one controller, so the two desks can never print different
-     * figures on the same form.
+     * Who may open the SBFP forms page. The School Nurse and the Clinic Teacher
+     * read it as their Forms & Templates tab — every form but the narrative
+     * report, which is the coordinator's own account of the programme — each
+     * in their own rail, from this one controller, so no two desks can print
+     * different figures on the same form.
      */
-    public const FORM_READERS = ['feeding_coor', 'school_nurse'];
+    public const FORM_READERS = ['feeding_coor', 'school_nurse', 'clinic_teacher'];
+
+    /** The readers who get the clinic's copy of that page. */
+    private const CLINIC_FORM_READERS = ['school_nurse', 'clinic_teacher'];
 
     public function sbfpForms(Request $request): View|RedirectResponse
     {
         if (! $this->readsForms($request)) {
             return redirect()->route('login')
-                ->with('error', 'Only the Feeding Coordinator and the School Nurse can open the SBFP forms.');
+                ->with('error', 'Only the Feeding Coordinator, the School Nurse and the Clinic Teacher can open the SBFP forms.');
         }
 
-        $forNurse = $this->readsAsNurse($request);
+        $forClinic = $this->readsAsClinic($request);
         $institutionId = $request->session()->get('active_institution_id');
 
         // Stamped before the roster is read, so an enrolment landing between
@@ -62,16 +65,19 @@ class FeedingCoordinatorController extends Controller
 
         $letterhead = SchoolLetterhead::for($institutionId, (string) $request->session()->get('active_school_name', ''));
 
-        // The grid counted once for the whole school and once per section.
-        $bmiValueSets = $this->bmiValueSetsBySection($records);
+        // The grid counted for each population the report offers, each once for
+        // the whole school and once per section.
+        $bmiReports = $this->bmiReports($records);
+        $bmiValueSets = $bmiReports['all']['values'];
 
-        // The class advisers' blank CLASS MASTERLIST, for the nurse only: one
-        // model drawn on the page and written to the download, so the two are
-        // the same form.
-        $classMasterlist = $forNurse ? ClassMasterlistTemplate::forSession($request->session()) : null;
+        // The class advisers' blank CLASS MASTERLIST, for the clinic's readers
+        // only: one model drawn on the page and written to the download, so the
+        // two are the same form.
+        $classMasterlist = $forClinic ? ClassMasterlistTemplate::forSession($request->session()) : null;
 
         return view('feedingcor-dashboard.sbfp-forms', [
-            'forNurse' => $forNurse,
+            'forClinic' => $forClinic,
+            'forClinicTeacher' => $request->session()->get('active_role') === 'clinic_teacher',
             'classMasterlist' => $classMasterlist,
             'classMasterlistRows' => $classMasterlist !== null ? ClassMasterlistTemplate::printRows($classMasterlist) : [],
             'studentsByGrade' => $studentsByGrade,
@@ -94,7 +100,10 @@ class FeedingCoordinatorController extends Controller
             // written from the same value sets, so the words and the bars cannot
             // describe different children, and keyed the same way so the Grade
             // and Section filter swaps the insight with the figures.
-            'bmiInsights' => BmiReportInsight::forValueSets($bmiValueSets),
+            'bmiInsights' => $bmiReports['all']['insights'],
+            // Both of those again for each population, for the page's filter:
+            // what the first paint above shows is All Learners.
+            'bmiReports' => $bmiReports,
             'schoolYear' => StudentHealthRecord::currentSchoolYear(),
             'nurseName' => $this->resolveSchoolNurseName($institutionId, (string) $request->session()->get('active_school_name', '')),
             // The DepEd heading every form on this page opens under.
@@ -111,9 +120,9 @@ class FeedingCoordinatorController extends Controller
             // that silently described one grade would be read as describing
             // all of them.
             //
-            // Not drafted at all for the nurse, whose page carries no
-            // narrative report.
-            'narrative' => $forNurse ? [] : FeedingReportNarrative::build(
+            // Not drafted at all for the clinic's readers, whose page carries
+            // no narrative report.
+            'narrative' => $forClinic ? [] : FeedingReportNarrative::build(
                 $unfilteredRecords,
                 (string) ($letterhead['school'] ?? $request->session()->get('active_school_name', '')),
                 StudentHealthRecord::currentSchoolYear(),
@@ -128,15 +137,15 @@ class FeedingCoordinatorController extends Controller
         return in_array((string) $request->session()->get('active_role', ''), self::FORM_READERS, true);
     }
 
-    private function readsAsNurse(Request $request): bool
+    private function readsAsClinic(Request $request): bool
     {
-        return $request->session()->get('active_role') === 'school_nurse';
+        return in_array((string) $request->session()->get('active_role', ''), self::CLINIC_FORM_READERS, true);
     }
 
     /**
      * The stamp the forms page's live roster compares against — the one its
-     * reader's pulse serves. The coordinator polls their own pulse; the nurse
-     * polls the school-wide one every nurse screen already reads
+     * reader's pulse serves. The coordinator polls their own pulse; the clinic's
+     * readers poll the school-wide one their screens already read
      * (`workspace.pulse`), because the coordinator's lives under
      * /dashboard/feedingcor, where a demo session would be re-seeded as the
      * coordinator. Two kinds of stamp must never be compared with each other,
@@ -146,7 +155,7 @@ class FeedingCoordinatorController extends Controller
     {
         $institutionId = $request->session()->get('active_institution_id');
 
-        return $this->readsAsNurse($request)
+        return $this->readsAsClinic($request)
             ? SchoolPulse::stamp($institutionId ? (int) $institutionId : null)
             : $this->metricsStamp($institutionId);
     }
@@ -244,10 +253,11 @@ class FeedingCoordinatorController extends Controller
     }
 
     /**
-     * The SBFP Forms roster for the live refresh, re-read when the
-     * coordinator's pulse moves. A learner the coordinator enrols reaches both
-     * master lists this way, without a reload — the same grouping and the same
-     * masterlistsFor() the first paint used.
+     * The SBFP Forms roster for the live refresh, re-read when the reader's
+     * pulse moves. A learner the coordinator enrols reaches both master lists
+     * and the BMI report's Only Beneficiaries figures this way, without a
+     * reload — the same grouping, the same masterlistsFor() and the same
+     * bmiReports() the first paint used.
      */
     public function sbfpFormsRoster(Request $request): JsonResponse
     {
@@ -257,25 +267,58 @@ class FeedingCoordinatorController extends Controller
 
         $institutionId = $request->session()->get('active_institution_id');
         $stamp = $this->formsStamp($request);
-        [, $studentsByGrade, $sectionsByGrade] = $this->sbfpRoster($institutionId);
+        [$records, $studentsByGrade, $sectionsByGrade] = $this->sbfpRoster($institutionId);
 
         return response()->json([
             'stamp' => $stamp,
             'studentsByGrade' => (object) $studentsByGrade,
             'sectionsByGrade' => (object) $sectionsByGrade,
+            'bmiReports' => $this->bmiReports($records),
         ]);
+    }
+
+    /**
+     * The BMI report for each population its Learners control offers: the grid
+     * and the insight under it, computed here so the page only swaps between
+     * them. Every field behind them is encrypted, so the counting has to happen
+     * in PHP whichever population is on screen.
+     *
+     * @param  Collection<int, StudentHealthRecord>  $records
+     * @return array{all: array{values: array<string, array<string, int|string>>, insights: array<string, mixed>}, beneficiaries: array{values: array<string, array<string, int|string>>, insights: array<string, mixed>}}
+     */
+    private function bmiReports(Collection $records): array
+    {
+        $all = $this->bmiValueSetsBySection($records);
+        $beneficiaries = $this->bmiValueSetsBySection($records, onlyBeneficiaries: true);
+
+        return [
+            'all' => ['values' => $all, 'insights' => BmiReportInsight::forValueSets($all)],
+            'beneficiaries' => [
+                'values' => $beneficiaries,
+                'insights' => BmiReportInsight::forValueSets($beneficiaries, BmiReportInsight::BENEFICIARY),
+            ],
+        ];
     }
 
     /**
      * The BMI grid computed once per section, keyed by the section string the
      * roster stores ("Grade 7 / Matiyaga"), with '' holding the whole school.
      *
+     * The sections are read off the whole roll even when only beneficiaries are
+     * counted. A section with none still gets its own empty grid: the page reads
+     * the whole school when a section has no set, so leaving it out would print
+     * every beneficiary in the school under that one section's name.
+     *
      * @param  Collection<int, StudentHealthRecord>  $records
      * @return array<string, array<string, int|string>>
      */
-    private function bmiValueSetsBySection(Collection $records): array
+    private function bmiValueSetsBySection(Collection $records, bool $onlyBeneficiaries = false): array
     {
-        $sets = ['' => BmiAssessmentReport::values($records)];
+        $counted = fn (Collection $group): Collection => $onlyBeneficiaries
+            ? $group->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isBeneficiary($record))
+            : $group;
+
+        $sets = ['' => BmiAssessmentReport::values($counted($records))];
 
         foreach ($records->groupBy(fn (StudentHealthRecord $record): string => trim((string) $record->section)) as $key => $group) {
             // A learner with no section on file has no section grid to sit in.
@@ -283,7 +326,7 @@ class FeedingCoordinatorController extends Controller
                 continue;
             }
 
-            $sets[(string) $key] = BmiAssessmentReport::values($group);
+            $sets[(string) $key] = BmiAssessmentReport::values($counted($group));
         }
 
         return $sets;
@@ -322,8 +365,12 @@ class FeedingCoordinatorController extends Controller
         return FeedingBeneficiarySummary::normalize($status);
     }
 
-    public function dashboard(Request $request): View
+    public function dashboard(Request $request): View|RedirectResponse
     {
+        if (! $this->isCoordinator($request)) {
+            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can open this dashboard.');
+        }
+
         $institutionId = $request->session()->get('active_institution_id');
 
         return view(
@@ -609,20 +656,19 @@ class FeedingCoordinatorController extends Controller
         $programDay = $cycle->day();
 
         // nutritional_status is encrypted at rest and the grade lives inside
-        // the section string, so eligibility is decided in PHP after fetch —
-        // the same one test every other feeding screen applies, status plus a
-        // grade the programme covers.
-        $qualified = $students
-            ->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isEligible($record))
-            ->values();
-
+        // the section string, so both of these are decided in PHP after fetch.
+        //
         // Qualifying and being enrolled are two different facts: the adviser's
         // measurement decides the first, the coordinator's decision the second.
-        // Only enrolled learners are beneficiaries; the rest are waiting.
-        $allBeneficiaries = $qualified
-            ->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isEnrolled($record))
+        // Only enrolled learners are beneficiaries; those who qualify today and
+        // hold no place are waiting.
+        $allBeneficiaries = $students
+            ->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isBeneficiary($record))
             ->values();
-        $awaitingEnrollment = $qualified->count() - $allBeneficiaries->count();
+        $awaitingEnrollment = $students
+            ->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isEligible($record)
+                && ! FeedingBeneficiarySummary::isEnrolled($record))
+            ->count();
 
         // Grade, section and sex scope every panel; the two status filters
         // narrow the attendance roll alone (see buildTodayAttendance), so the

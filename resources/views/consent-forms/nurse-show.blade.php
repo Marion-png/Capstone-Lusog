@@ -50,8 +50,10 @@
                             : route('consent-forms.paper.image', $form) }}"
                        target="_blank" rel="noopener" class="cf-btn cf-btn-outline">View Signed Paper Form</a>
                 @endif
-                <a href="{{ route('consent-forms.print', $form) }}" target="_blank" class="cf-btn cf-btn-ghost">Print / Export PDF</a>
-                <span style="font-size:.76rem; color:var(--muted);">Consent information is read-only for the School Nurse.</span>
+                <a href="{{ session('active_role') === 'school_head'
+                        ? route('consent-forms.head-print', $form)
+                        : route('consent-forms.print', $form) }}" target="_blank" class="cf-btn cf-btn-ghost">Print / Export PDF</a>
+                <span style="font-size:.76rem; color:var(--muted);">Consent information is read-only.</span>
             </div>
             @if ($form->paper_form_path)
                 <p style="font-size:.78rem; color:var(--muted); margin-top:10px;">

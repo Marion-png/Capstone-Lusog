@@ -12,14 +12,14 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Incident reports on a learner's student profile: list, file, withdraw.
+ * Incident reports on a learner's student profile: list, file, edit, withdraw.
  *
  * **The clinic writes; the adviser reads.** The report is charted in FDAR —
  * Focus / Data / Action / Response — which is clinical documentation: reading
  * what happened to a learner, recording what was done and whether it worked is
  * the clinic's assessment to make — the nurse's, or the clinic teacher's while
- * they cover. Withdrawing one stays the nurse's. Clinic staff read the same
- * reports on the clinic's profile, read-only. The class adviser sees them on
+ * they cover. Those two also edit a report; withdrawing one stays the nurse's.
+ * Clinic staff file and read, and do neither. The class adviser sees them on
  * their own profile, read-only, because an incident involving a learner in
  * their class is something they have to know about.
  *
@@ -47,8 +47,9 @@ class StudentIncidentReportController extends Controller
             'reports' => $this->listFor($request, $lrn),
             // The panel draws its write controls from these rather than from a
             // role check of its own, so the form and the endpoints cannot
-            // disagree about who may file or withdraw.
+            // disagree about who may file, edit or withdraw.
             'can_file' => $this->mayWrite($request, $lrn),
+            'can_edit' => $this->mayEdit($request, $lrn),
             'can_withdraw' => $this->mayWithdraw($request, $lrn),
         ]);
     }
@@ -63,6 +64,97 @@ class StudentIncidentReportController extends Controller
             return response()->json(['message' => 'Incident reports are not available.'], 503);
         }
 
+        // Written through the model, never a raw insert: the casts are what
+        // keep the description, the action taken and the staff name encrypted.
+        $report = StudentIncidentReport::create($this->chartFrom($request) + [
+            'institution_id' => $request->session()->get('active_institution_id'),
+            'student_lrn' => $lrn,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            // Attribution is the app's, not the form's — a filer cannot sign
+            // somebody else's name to a report about a child.
+            'reported_by_name' => (string) $request->session()->get('active_name', ''),
+            'reported_by_role' => (string) $request->session()->get('active_role', ''),
+        ]);
+
+        return response()->json([
+            'report' => $this->present($report),
+            'reports' => $this->listFor($request, $lrn),
+        ], 201);
+    }
+
+    /**
+     * Correcting a report: the school nurse's and the clinic teacher's.
+     *
+     * Hard-scoped like a withdrawal: the row must belong to this school AND to
+     * the learner in the URL. Only the chart changes. Who filed it, the learner,
+     * the school and the school year are never read off this request, so the
+     * signature stands; the edit stamp says who changed it, and the Auditable
+     * trait keeps the old and new values.
+     */
+    public function update(Request $request, string $lrn, int $id): JsonResponse
+    {
+        if (! $this->mayEdit($request, $lrn)) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        if (! SchemaCache::hasTable('student_incident_reports')) {
+            return response()->json(['message' => 'Incident reports are not available.'], 503);
+        }
+
+        $report = StudentIncidentReport::query()
+            ->forLearner($lrn, $request->session()->get('active_institution_id'))
+            ->find($id);
+
+        if ($report === null) {
+            return response()->json(['message' => 'Not found.'], 404);
+        }
+
+        // A value is assigned only when it differs. These columns encrypt on
+        // write, so every assignment is new ciphertext: the audit entry would
+        // name fields nobody changed, and a save that changed nothing would
+        // stamp the note as edited.
+        foreach ($this->chartFrom($request) as $field => $value) {
+            if ($this->chartValue($report, $field) !== (string) $value) {
+                $report->{$field} = $value;
+            }
+        }
+
+        if ($report->isDirty()) {
+            if (StudentIncidentReport::supportsEditStamp()) {
+                $report->edited_by_name = (string) $request->session()->get('active_name', '');
+                $report->edited_by_role = (string) $request->session()->get('active_role', '');
+                $report->edited_at = now();
+            }
+
+            $report->save();
+        }
+
+        return response()->json([
+            'report' => $this->present($report),
+            'reports' => $this->listFor($request, $lrn),
+        ]);
+    }
+
+    /** A chart field as a form would post it, so the two can be compared. */
+    private function chartValue(StudentIncidentReport $report, string $field): string
+    {
+        return match ($field) {
+            'occurred_at' => (string) $report->occurred_at?->toDateString(),
+            // The form carries minutes; a time column may read back with seconds.
+            'occurred_time' => substr((string) $report->occurred_time, 0, 5),
+            'guardian_notified' => (string) (bool) $report->guardian_notified,
+            default => (string) $report->{$field},
+        };
+    }
+
+    /**
+     * The chart as a form posted it, validated: everything a report says, and
+     * nothing about who wrote it. Filing and editing are held to the same rules.
+     *
+     * @return array<string, mixed>
+     */
+    private function chartFrom(Request $request): array
+    {
         // "Today" and "now" are the school's, not the server's: the date and
         // time on the form are what the clinic's clock read, and the server
         // keeps UTC — eight hours behind Davao.
@@ -126,12 +218,7 @@ class StudentIncidentReportController extends Controller
             ]
             : [];
 
-        // Written through the model, never a raw insert: the casts are what
-        // keep the description, the action taken and the staff name encrypted.
-        $report = StudentIncidentReport::create($response + $chart + [
-            'institution_id' => $request->session()->get('active_institution_id'),
-            'student_lrn' => $lrn,
-            'school_year' => StudentHealthRecord::currentSchoolYear(),
+        return $response + $chart + [
             'occurred_at' => $validated['occurred_at'],
             'category' => $validated['category'],
             'severity' => $validated['severity'],
@@ -140,16 +227,7 @@ class StudentIncidentReportController extends Controller
             'action_taken' => $validated['action_taken'] ?? null,
             'witnesses' => $validated['witnesses'] ?? null,
             'guardian_notified' => (bool) ($validated['guardian_notified'] ?? false),
-            // Attribution is the app's, not the form's — a filer cannot sign
-            // somebody else's name to a report about a child.
-            'reported_by_name' => (string) $request->session()->get('active_name', ''),
-            'reported_by_role' => (string) $request->session()->get('active_role', ''),
-        ]);
-
-        return response()->json([
-            'report' => $this->present($report),
-            'reports' => $this->listFor($request, $lrn),
-        ], 201);
+        ];
     }
 
     /**
@@ -253,6 +331,13 @@ class StudentIncidentReportController extends Controller
             && $this->mayRead($request, $lrn);
     }
 
+    /** Who may edit one: the nurse or the clinic teacher, on a learner they may read. */
+    private function mayEdit(Request $request, string $lrn): bool
+    {
+        return StudentIncidentReport::canEdit((string) $request->session()->get('active_role'))
+            && $this->mayRead($request, $lrn);
+    }
+
     /** Who may withdraw one: the nurse, on a learner they may read. */
     private function mayWithdraw(Request $request, string $lrn): bool
     {
@@ -282,6 +367,7 @@ class StudentIncidentReportController extends Controller
     private function present(StudentIncidentReport $report): array
     {
         $chart = StudentIncidentReport::supportsChartColumns();
+        $stamp = StudentIncidentReport::supportsEditStamp() && $report->edited_at !== null;
 
         return [
             'id' => $report->id,
@@ -309,15 +395,25 @@ class StudentIncidentReportController extends Controller
             // The signature under the note: who charted it and as what. The
             // sheet is signed by the nurse, so the role is printed as a title.
             'reported_by' => (string) $report->reported_by_name,
-            'reported_by_title' => match ((string) $report->reported_by_role) {
-                'school_nurse' => 'School Nurse',
-                'clinic_teacher' => 'Clinic Teacher',
-                'clinic_staff' => 'Clinic Staff',
-                'class_adviser' => 'Class Adviser',
-                default => '',
-            },
+            'reported_by_title' => $this->staffTitle((string) $report->reported_by_role),
             // Stored in UTC; shown on the school's clock, like the time charted.
             'filed_label' => $report->created_at?->copy()->setTimezone((string) config('app.school_timezone'))->format('d M Y, g:i A'),
+            // The signature stands through an edit, so whoever changed the note
+            // is named beside it rather than leaving their words under it.
+            'edited_by' => $stamp ? (string) $report->edited_by_name : '',
+            'edited_by_title' => $stamp ? $this->staffTitle((string) $report->edited_by_role) : '',
+            'edited_label' => $stamp ? $report->edited_at->copy()->setTimezone((string) config('app.school_timezone'))->format('d M Y, g:i A') : '',
         ];
+    }
+
+    private function staffTitle(string $role): string
+    {
+        return match ($role) {
+            'school_nurse' => 'School Nurse',
+            'clinic_teacher' => 'Clinic Teacher',
+            'clinic_staff' => 'Clinic Staff',
+            'class_adviser' => 'Class Adviser',
+            default => '',
+        };
     }
 }

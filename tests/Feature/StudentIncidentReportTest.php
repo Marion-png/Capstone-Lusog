@@ -6,9 +6,12 @@ use App\Models\AuditLog;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Models\StudentIncidentReport;
+use App\Support\SchemaCache;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -454,6 +457,289 @@ class StudentIncidentReportTest extends TestCase
         $this->assertStringContainsString('File an Incident Report', $html);
         $this->assertStringContainsString('data-can-withdraw="0"', $html);
         $this->assertStringContainsString('Withdrawing a report is the school nurse\'s.', $html);
+    }
+
+    // ── Editing ─────────────────────────────────────────────────────────────
+
+    private function edit(int $id, array $overrides = [], ?array $session = null, string $lrn = '900000000001')
+    {
+        return $this->withSession($session ?? $this->nurseSession())
+            ->postJson(route('student-incidents.update', ['lrn' => $lrn, 'id' => $id]), $this->payload($overrides));
+    }
+
+    private function filedReport(?array $session = null): StudentIncidentReport
+    {
+        $this->learner();
+        $this->file([], $session)->assertCreated();
+
+        return StudentIncidentReport::query()->latest('id')->firstOrFail();
+    }
+
+    #[Test]
+    public function the_nurse_can_edit_every_part_of_the_chart(): void
+    {
+        $report = $this->filedReport();
+
+        $this->edit($report->id, [
+            'occurred_at' => now()->subDays(3)->toDateString(),
+            'occurred_time' => '08:45',
+            'category' => 'illness',
+            'severity' => 'serious',
+            'focus' => 'Fainting at flag ceremony',
+            'description' => 'Corrected: fainted during the flag ceremony.',
+            'action_taken' => 'Corrected: laid flat, legs raised.',
+            'response' => 'Corrected: alert after five minutes.',
+            'location' => 'Quadrangle',
+            'witnesses' => 'Corrected witness',
+            'guardian_notified' => '0',
+        ])
+            ->assertOk()
+            ->assertJsonPath('report.description', 'Corrected: fainted during the flag ceremony.')
+            ->assertJsonPath('reports.0.focus', 'Fainting at flag ceremony');
+
+        $report->refresh();
+
+        $this->assertSame(now()->subDays(3)->toDateString(), $report->occurred_at->toDateString());
+        $this->assertSame('08:45', substr((string) $report->occurred_time, 0, 5));
+        $this->assertSame('illness', $report->category);
+        $this->assertSame('serious', $report->severity);
+        $this->assertSame('Corrected: laid flat, legs raised.', $report->action_taken);
+        $this->assertSame('Corrected: alert after five minutes.', $report->response);
+        $this->assertSame('Quadrangle', $report->location);
+        $this->assertSame('Corrected witness', $report->witnesses);
+        $this->assertFalse($report->guardian_notified);
+        $this->assertSame(1, StudentIncidentReport::count(), 'An edit is never a second report.');
+    }
+
+    /**
+     * Any report on the profile, the nurse's included. The signature stands, and
+     * the stamp says who changed it, so a teacher's words never read as the nurse's.
+     */
+    #[Test]
+    public function the_clinic_teacher_can_edit_the_nurses_report_and_is_named_for_it(): void
+    {
+        $report = $this->filedReport();
+
+        $this->edit($report->id, ['description' => 'Corrected by the teacher.'], $this->clinicTeacherSession())
+            ->assertOk()
+            ->assertJsonPath('report.description', 'Corrected by the teacher.')
+            ->assertJsonPath('report.reported_by', 'Nurse Reyes')
+            ->assertJsonPath('report.reported_by_title', 'School Nurse')
+            ->assertJsonPath('report.edited_by', 'Teacher Lim')
+            ->assertJsonPath('report.edited_by_title', 'Clinic Teacher');
+
+        $this->assertNotSame('', $this->edit($report->id, ['description' => 'Corrected by the teacher.'], $this->clinicTeacherSession())->json('report.edited_label'));
+    }
+
+    #[Test]
+    public function the_nurse_can_edit_the_clinic_teachers_report(): void
+    {
+        $report = $this->filedReport($this->clinicTeacherSession());
+
+        $this->edit($report->id, ['description' => 'Corrected by the nurse.'])
+            ->assertOk()
+            ->assertJsonPath('report.reported_by', 'Teacher Lim')
+            ->assertJsonPath('report.edited_by', 'Nurse Reyes');
+    }
+
+    #[Test]
+    public function no_other_role_can_edit(): void
+    {
+        $report = $this->filedReport();
+        $before = $report->description;
+
+        $sessions = [
+            $this->clinicStaffSession(),
+            $this->adviserSession(),
+        ];
+
+        foreach (['school_head', 'feeding_coor', 'nutricor'] as $role) {
+            $sessions[] = ['active_role' => $role, 'active_name' => 'Other', 'active_school_name' => 'Sta. Ana NHS', 'active_institution_id' => $this->school->id];
+        }
+
+        foreach ($sessions as $session) {
+            $this->edit($report->id, ['description' => 'Should not land.'], $session)->assertForbidden();
+            $this->assertSame($before, $report->fresh()->description, $session['active_role'].' changed a report.');
+        }
+    }
+
+    /** The panel is told, by the server, who gets the button. */
+    #[Test]
+    public function the_list_says_who_may_edit(): void
+    {
+        $this->learner();
+
+        foreach ([
+            [$this->nurseSession(), true],
+            [$this->clinicTeacherSession(), true],
+            [$this->clinicStaffSession(), false],
+            [$this->adviserSession(), false],
+        ] as [$session, $expected]) {
+            $this->withSession($session)
+                ->getJson(route('student-incidents.index', '900000000001'))
+                ->assertOk()
+                ->assertJsonPath('can_edit', $expected);
+        }
+    }
+
+    #[Test]
+    public function the_panel_draws_edit_for_the_nurse_and_the_clinic_teacher_only(): void
+    {
+        $this->learner();
+
+        foreach ([
+            [$this->nurseSession(), '1'],
+            [$this->clinicTeacherSession(), '1'],
+            [$this->clinicStaffSession(), '0'],
+        ] as [$session, $flag]) {
+            $this->withSession($session)
+                ->get(route('dashboard.student-health-records'))
+                ->assertOk()
+                ->assertSee('data-can-edit="'.$flag.'"', false);
+        }
+    }
+
+    /** An edit is held to the rules filing is. */
+    #[Test]
+    public function an_edit_cannot_break_the_chart(): void
+    {
+        $report = $this->filedReport();
+        $before = $report->description;
+
+        $this->edit($report->id, ['description' => ''])->assertUnprocessable()->assertJsonValidationErrors('description');
+        $this->edit($report->id, ['occurred_at' => now()->addDays(2)->toDateString()])->assertUnprocessable()->assertJsonValidationErrors('occurred_at');
+        $this->edit($report->id, ['category' => 'nonsense'])->assertUnprocessable()->assertJsonValidationErrors('category');
+
+        $this->assertSame($before, $report->fresh()->description);
+    }
+
+    /** Who filed it, the learner and the school are never read off the request. */
+    #[Test]
+    public function an_edit_cannot_move_or_resign_a_report(): void
+    {
+        $report = $this->filedReport();
+
+        $this->edit($report->id, [
+            'reported_by_name' => 'Somebody Else',
+            'reported_by_role' => 'class_adviser',
+            'student_lrn' => '900000000099',
+            'institution_id' => 999,
+            'school_year' => '1999-2000',
+            'description' => 'Corrected.',
+        ])->assertOk();
+
+        $report->refresh();
+
+        $this->assertSame('Nurse Reyes', $report->reported_by_name);
+        $this->assertSame('school_nurse', $report->reported_by_role);
+        $this->assertSame('900000000001', $report->student_lrn);
+        $this->assertSame($this->school->id, $report->institution_id);
+        $this->assertSame(StudentHealthRecord::currentSchoolYear(), $report->school_year);
+    }
+
+    #[Test]
+    public function a_report_of_another_learner_or_school_cannot_be_edited(): void
+    {
+        $report = $this->filedReport();
+        $this->learner('900000000002');
+
+        // Another learner in the URL.
+        $this->edit($report->id, ['description' => 'Wrong learner.'], null, '900000000002')->assertNotFound();
+
+        // Another school's nurse, whose own school holds this learner too.
+        $other = Institution::create(['name' => 'Other NHS', 'status' => 'active']);
+        StudentHealthRecord::create([
+            'institution_id' => $other->id, 'student_id' => '900000000001', 'student_name' => 'Cruz, Juan',
+            'school_name' => 'Other NHS', 'section' => 'Grade 10 / Dalton', 'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'weight' => '40', 'bmi_value' => '18', 'nutritional_status' => 'Normal',
+        ]);
+
+        $this->edit($report->id, ['description' => 'Wrong school.'], $this->nurseSession(['active_institution_id' => $other->id]))->assertNotFound();
+
+        $this->assertStringNotContainsString('Wrong', (string) $report->fresh()->description);
+    }
+
+    #[Test]
+    public function an_edit_is_audited_with_the_old_and_new_values(): void
+    {
+        $report = $this->filedReport();
+        $baseline = (int) AuditLog::max('id');
+        $before = $report->description;
+
+        $this->edit($report->id, ['description' => 'Corrected description.'], $this->clinicTeacherSession())->assertOk();
+
+        $entry = AuditLog::query()
+            ->where('id', '>', $baseline)
+            ->where('subject_type', 'StudentIncidentReport')
+            ->where('subject_id', $report->id)
+            ->where('action', 'updated')
+            ->firstOrFail();
+
+        $this->assertSame('clinic_teacher', $entry->actor_role);
+        $this->assertSame('Teacher Lim', $entry->actor_name);
+        $this->assertSame($before, $entry->details['changes']['description']['from']);
+        $this->assertSame('Corrected description.', $entry->details['changes']['description']['to']);
+        $this->assertArrayNotHasKey('severity', $entry->details['changes'], 'A field nobody changed is not named.');
+        $this->assertArrayNotHasKey('action_taken', $entry->details['changes'], 'A field nobody changed is not named.');
+    }
+
+    /** Saving without changing anything is not an edit. */
+    #[Test]
+    public function saving_nothing_new_stamps_nothing(): void
+    {
+        $report = $this->filedReport();
+        $baseline = (int) AuditLog::max('id');
+
+        $this->edit($report->id)->assertOk()->assertJsonPath('report.edited_label', '');
+
+        $this->assertNull($report->fresh()->edited_at);
+        $this->assertSame(0, AuditLog::query()
+            ->where('id', '>', $baseline)
+            ->where('subject_type', 'StudentIncidentReport')
+            ->where('action', 'updated')
+            ->count());
+    }
+
+    #[Test]
+    public function what_an_edit_writes_is_encrypted_at_rest(): void
+    {
+        $report = $this->filedReport();
+
+        $this->edit($report->id, ['description' => 'Secret corrected note.'], $this->clinicTeacherSession())->assertOk();
+
+        $row = DB::table('student_incident_reports')->where('id', $report->id)->first();
+
+        $this->assertStringNotContainsString('Secret corrected note.', (string) $row->description);
+        $this->assertStringNotContainsString('Teacher Lim', (string) $row->edited_by_name);
+    }
+
+    /** Until the migration runs an edit still saves; the sheet just names nobody. */
+    #[Test]
+    public function an_edit_saves_before_the_stamp_columns_are_migrated(): void
+    {
+        $report = $this->filedReport();
+
+        Schema::table('student_incident_reports', function (Blueprint $table) {
+            $table->dropColumn(['edited_by_name', 'edited_by_role', 'edited_at']);
+        });
+        SchemaCache::flush();
+
+        $this->edit($report->id, ['description' => 'Corrected before the migration.'])
+            ->assertOk()
+            ->assertJsonPath('report.description', 'Corrected before the migration.')
+            ->assertJsonPath('report.edited_label', '');
+    }
+
+    #[Test]
+    public function an_edit_route_is_refused_for_the_school_heads_session(): void
+    {
+        $report = $this->filedReport();
+
+        $this->withSession(['active_role' => 'school_head', 'active_name' => 'Principal', 'active_institution_id' => $this->school->id])
+            ->postJson(route('student-incidents.update', ['lrn' => '900000000001', 'id' => $report->id]), $this->payload(['description' => 'No.']))
+            ->assertForbidden();
+
+        $this->assertNotSame('No.', $report->fresh()->description);
     }
 
     // ── Clinic staff ────────────────────────────────────────────────────────
