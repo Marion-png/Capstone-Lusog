@@ -26,6 +26,8 @@
     @php
         $schoolName = session('active_school_name', 'No school assigned');
         $schoolYear = \App\Models\StudentHealthRecord::currentSchoolYear();
+        $canEditVisits = in_array(session('active_role'), \App\Models\Consultation::EDIT_ROLES, true);
+        $logColumns = $canEditVisits ? 10 : 9;
     @endphp
 
     <header class="topbar">
@@ -180,6 +182,9 @@
                             <th>Status</th>
                             <th>Recorded By</th>
                             <th>Photos</th>
+                            @if ($canEditVisits)
+                                <th>Action</th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody id="consultationRows">
@@ -240,14 +245,17 @@
                                         </span>
                                     @endif
                                 </td>
+                                @if ($canEditVisits)
+                                    <td>@include('partials.consultation-edit-button')</td>
+                                @endif
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="9" class="table-empty">No consultations yet. Use New Consultation to add the first entry.</td>
+                                <td colspan="{{ $logColumns }}" class="table-empty">No consultations yet. Use New Consultation to add the first entry.</td>
                             </tr>
                         @endforelse
                         <tr id="logNoMatch" hidden>
-                            <td colspan="9" class="table-empty">No consultations match your search.</td>
+                            <td colspan="{{ $logColumns }}" class="table-empty">No consultations match your search.</td>
                         </tr>
                     </tbody>
                 </table>

@@ -12,6 +12,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Sleep;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -104,6 +105,20 @@ class ConsentFormScanTest extends TestCase
                 ]],
             ], 200),
         ]);
+    }
+
+    /**
+     * A JPEG header claiming the given size, with words in a comment so two
+     * files can be told apart. Nothing here decodes the pixels; the reader only
+     * asks how big the image says it is.
+     */
+    private static function tinyJpeg(string $words, int $width = 1, int $height = 1): string
+    {
+        $pixel = base64_decode('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==');
+        $frame = strpos($pixel, "\xFF\xC0");
+        $pixel = substr_replace($pixel, pack('nn', $height, $width), $frame + 5, 4);
+
+        return substr($pixel, 0, 2)."\xFF\xFE".pack('n', strlen($words) + 2).$words.substr($pixel, 2);
     }
 
     /**
@@ -1682,6 +1697,163 @@ class ConsentFormScanTest extends TestCase
         });
     }
 
+    /**
+     * On a sideways photo the reader put ticks confidently on the wrong rows,
+     * and each one is a medical authorisation. So a sheet it says is not upright
+     * proposes nothing, and says how far to turn the photo.
+     */
+    #[Test]
+    #[DataProvider('sheetsNotUpright')]
+    public function a_sheet_not_upright_proposes_nothing_and_says_how_far_to_turn_it(string $orientation, int $turn): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft(['checkup' => 'yes', 'dental' => 'yes'], [
+            'sheet_orientation' => $orientation,
+            'consent_boxes' => $this->boxes(HealthConsentForm::CONSENT_ALL),
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+        ]));
+
+        $this->assertSame($turn, $draft['turn']);
+        $this->assertTrue($draft['unreadable']);
+        $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['consent_choice']);
+        $this->assertSame([], ConsentPaperCopy::tickedServices($draft['services']));
+        $this->assertNull(ConsentPaperCopy::fromDraft($draft));
+        $this->assertStringContainsString('upright', $draft['note']);
+    }
+
+    /** @return array<string, array{string, int}> */
+    public static function sheetsNotUpright(): array
+    {
+        return [
+            'top towards the left of the image' => ['top_points_left', 90],
+            'upside down' => ['upside_down', 180],
+            'top towards the right of the image' => ['top_points_right', 270],
+        ];
+    }
+
+    /** Only a sheet it says is not upright is held back. */
+    #[Test]
+    #[DataProvider('sheetsReadAsTheyAre')]
+    public function any_other_answer_about_the_way_it_lies_changes_nothing(mixed $orientation): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft(['checkup' => 'yes'], [
+            'sheet_orientation' => $orientation,
+            'consent_boxes' => $this->boxes(HealthConsentForm::CONSENT_ALL),
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+        ]));
+
+        $this->assertSame(0, $draft['turn']);
+        $this->assertFalse($draft['unreadable']);
+        $this->assertSame(HealthConsentForm::CONSENT_ALL, $draft['consent_choice']);
+    }
+
+    /** @return array<string, array{mixed}> */
+    public static function sheetsReadAsTheyAre(): array
+    {
+        return [
+            'upright' => ['upright'],
+            'off the list' => ['diagonal'],
+            'not said' => [null],
+        ];
+    }
+
+    #[Test]
+    public function the_reader_is_asked_which_way_the_sheet_lies_before_anything_else(): void
+    {
+        $this->fakeGemini($this->draft());
+
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        Http::assertSent(function (ClientRequest $request): bool {
+            $schema = $request->data()['generationConfig']['responseSchema'];
+
+            return array_key_first($schema['properties']) === 'sheet_orientation'
+                && $schema['propertyOrdering'][0] === 'sheet_orientation'
+                && in_array('sheet_orientation', $schema['required'], true)
+                && $schema['properties']['sheet_orientation']['enum'] === array_keys(ConsentFormScanner::TURN_TO_UPRIGHT)
+                && str_contains($request->data()['system_instruction']['parts'][0]['text'], 'WHICH WAY THE SHEET LIES');
+        });
+    }
+
+    /**
+     * A sideways sheet the reader calls upright: the size is measured, so the
+     * service rows are held back whatever it says, and the rest of the reading
+     * stands for the adviser to check.
+     */
+    #[Test]
+    public function a_photo_wider_than_it_is_tall_proposes_no_service_rows(): void
+    {
+        $this->fakeGemini($this->draft(['checkup' => 'yes', 'iron' => 'yes'], [
+            'sheet_orientation' => 'upright',
+            'consent_boxes' => $this->boxes(HealthConsentForm::CONSENT_ALL),
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+        ]));
+
+        $response = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), [
+                'photo' => $this->jpeg(),
+                'sheet' => UploadedFile::fake()->createWithContent('sheet.jpg', self::tinyJpeg('wide', 1920, 1080)),
+            ], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $this->assertSame(HealthConsentForm::CONSENT_ALL, $response->json('draft.consent_choice'));
+        $this->assertSame(0, $response->json('draft.turn'));
+        $this->assertSame([], $response->json('ticked_services'));
+        $this->assertSame(ConsentFormScanner::UNCLEAR, $response->json('draft.services.checkup'));
+        $this->assertTrue($response->json('draft.needs_review'));
+        $this->assertStringContainsString('wider than it is tall', $response->json('draft.warnings.0'));
+    }
+
+    /** The same reading off a photo taller than it is wide keeps its rows. */
+    #[Test]
+    public function a_photo_taller_than_it_is_wide_keeps_its_service_rows(): void
+    {
+        $this->fakeGemini($this->draft(['checkup' => 'yes', 'iron' => 'yes'], [
+            'sheet_orientation' => 'upright',
+            'consent_boxes' => $this->boxes(HealthConsentForm::CONSENT_ALL),
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+        ]));
+
+        $response = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), [
+                'photo' => $this->jpeg(),
+                'sheet' => UploadedFile::fake()->createWithContent('sheet.jpg', self::tinyJpeg('tall', 1080, 1920)),
+            ], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $this->assertSame(['checkup', 'iron'], $response->json('ticked_services'));
+        $this->assertSame([], $response->json('draft.warnings'));
+    }
+
+    /**
+     * The reader is sent the upright copy the page drew. The file being filed,
+     * and the token that ties a reading to it, stay the adviser's own photo.
+     */
+    #[Test]
+    public function the_upright_copy_is_read_and_the_photo_is_what_the_reading_is_tied_to(): void
+    {
+        $this->fakeGemini($this->draft());
+
+        $photo = UploadedFile::fake()->createWithContent('form.jpg', self::tinyJpeg('the photo'));
+        $sheet = UploadedFile::fake()->createWithContent('sheet.jpg', self::tinyJpeg('the upright copy'));
+        $photoHash = hash_file('sha256', $photo->getRealPath());
+
+        $response = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $photo, 'sheet' => $sheet], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        Http::assertSent(function (ClientRequest $request): bool {
+            $parts = $request->data()['contents'][0]['parts'];
+            $sent = base64_decode((string) ($parts[0]['inline_data']['data'] ?? ''));
+
+            return str_contains($sent, 'the upright copy') && ! str_contains($sent, 'the photo');
+        });
+
+        $token = json_decode(Crypt::decryptString($response->json('scan_token')), true);
+        $this->assertSame($photoHash, $token['photo_hash']);
+    }
+
     /** A caller with no close-ups is read as one image, and not told of any. */
     #[Test]
     public function a_sheet_with_no_close_ups_is_read_as_one_image(): void
@@ -1732,7 +1904,9 @@ class ConsentFormScanTest extends TestCase
 
         $html = $this->withSession($this->adviserSession())->get(route('consent-forms.index'))->assertOk()->getContent();
         $this->assertSame(1, substr_count($html, 'window.consentPhotoCloseups = window.consentPhotoCloseups'));
-        $this->assertStringContainsString('await window.consentPhotoCloseups(file, body);', $html);
+        $this->assertStringContainsString('await window.consentPhotoCloseups(file, body, turn);', $html);
+        // A sheet that lay sideways is turned and read once more.
+        $this->assertStringContainsString('await ask(data.draft.turn)', $html);
 
         config()->set('services.gemini.key', '');
 

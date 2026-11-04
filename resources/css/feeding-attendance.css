@@ -273,7 +273,6 @@
 /* The sheet's standing, and the one action it offers when the day is open. */
 .fa-sheet-standing { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: wrap; }
 /* A learner nobody wrote down. Never styled as an absence. */
-.fa-unmarked { font-size: .78rem; color: var(--lg-ink-soft); }
 
 /* ── One beneficiary's attendance history ───────────────────────────
    What the roll's counts cannot say: 1 of 4 — which four, and what was

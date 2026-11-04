@@ -130,6 +130,31 @@ class ConsultationMedicines
         return ['name' => $name, 'role' => $name !== '' && $role !== '' ? AccountSettings::roleLabel($role) : ''];
     }
 
+    /**
+     * What the consultation dialog needs to open on a recorded visit. It rides
+     * the Edit button, which only the roles in Consultation::EDIT_ROLES are
+     * drawn, so it reaches nobody who could not already read the visit.
+     *
+     * @return array<string, mixed>
+     */
+    public static function forEditing(array $byVisit, Consultation $consultation): array
+    {
+        return [
+            'id' => (int) $consultation->id,
+            'url' => route('consultations.update', $consultation->id),
+            'consulted_at' => $consultation->consulted_at?->format('Y-m-d\TH:i') ?? '',
+            'status' => (string) $consultation->status,
+            'name' => (string) $consultation->student_name,
+            'section' => (string) $consultation->grade_section,
+            'condition_id' => $consultation->condition_id,
+            'condition' => (string) $consultation->condition,
+            'treatment' => (string) $consultation->treatment_given,
+            'notes' => (string) $consultation->notes,
+            'notes_shared' => (bool) $consultation->notes_shared_with_adviser,
+            'medicine' => self::line($byVisit, (int) $consultation->id),
+        ];
+    }
+
     /** The visit's medicines as one line, or '' when nothing was given. */
     public static function line(array $byVisit, int $consultationId): string
     {

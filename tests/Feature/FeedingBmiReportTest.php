@@ -631,15 +631,15 @@ class FeedingBmiReportTest extends TestCase
         $response->assertSee('value="feeding-masterlist"', false);
         $response->assertSee('value="feeding-beneficiaries"', false);
 
-        // Two panels under two titles: the enrolled roll under the title the
-        // export files it under, the advisers' roll under its own.
+        // Two panels under two titles: the title the export files the enrolled
+        // roll under, and the Master List of Beneficiaries under its own.
         $response->assertSee('id="masterlistPanel"', false);
         $response->assertSee('id="beneficiariesPanel"', false);
         $response->assertSee(FeedingMasterlistExportController::LISTS['beneficiaries'][0], false);
-        $response->assertSee(FeedingMasterlistExportController::ADVISER_ROLL_TITLE, false);
+        $response->assertSee(FeedingMasterlistExportController::BENEFICIARY_LIST_TITLE, false);
         $this->assertNotSame(
             FeedingMasterlistExportController::LISTS['beneficiaries'][0],
-            FeedingMasterlistExportController::ADVISER_ROLL_TITLE
+            FeedingMasterlistExportController::BENEFICIARY_LIST_TITLE
         );
 
         // Their drafts are keyed apart, so saving one never overwrites the
@@ -651,15 +651,11 @@ class FeedingBmiReportTest extends TestCase
     }
 
     /**
-     * Who is written on which list is decided by who enrolled the learner.
-     *
-     * The Master List of Beneficiaries is every learner the class advisers
-     * enrolled — including one uploaded on a class masterlist that nobody has
-     * measured yet. The Masterlist of Qualified Recipients names a learner
-     * only once the Feeding Coordinator has enrolled them: qualifying on a
-     * measurement is not enough, and a learner taken off the programme is no
-     * longer a recipient. The page is Junior High only, so a Senior High
-     * learner is on neither.
+     * Both lists name a learner only once the Feeding Coordinator has enrolled
+     * them. A class adviser's upload puts a learner on the roster and on
+     * neither list, qualifying on a measurement is not enough, and a learner
+     * taken off the programme is no longer on them. The page is Junior High
+     * only, so a Senior High learner is on neither.
      */
     #[Test]
     public function each_master_list_names_the_learners_it_should(): void
@@ -703,23 +699,21 @@ class FeedingBmiReportTest extends TestCase
             ->mapWithKeys(fn (array $row): array => [$row['name'] => $row['lists']])
             ->all();
 
-        $everyone = ['feeding-beneficiaries'];
         $both = ['feeding-beneficiaries', 'feeding-masterlist'];
 
-        $this->assertSame($everyone, $lists['Uploaded Learner'], 'Uploaded by the adviser, unmeasured: a beneficiary-list learner.');
-        $this->assertSame($everyone, $lists['Waiting Learner'], 'Qualified but not enrolled by the coordinator: not a recipient yet.');
+        $this->assertSame([], $lists['Uploaded Learner'], 'Uploaded by the adviser, unmeasured: on neither list.');
+        $this->assertSame([], $lists['Waiting Learner'], 'Qualified but not enrolled by the coordinator: on neither list yet.');
         $this->assertSame($both, $lists['Enrolled Learner'], 'Enrolled by the coordinator: on both lists.');
-        $this->assertSame($everyone, $lists['Removed Learner'], 'Taken off the programme: no longer a recipient.');
-        $this->assertSame($everyone, $lists['Normal Learner']);
+        $this->assertSame([], $lists['Removed Learner'], 'Taken off the programme: no longer on either list.');
+        $this->assertSame([], $lists['Normal Learner']);
         $this->assertArrayNotHasKey('Senior High Learner', $lists, 'The page is Junior High only.');
     }
 
     /**
      * Both lists follow the roster while the page is open. A learner an
-     * adviser enrols moves the pulse the page polls and arrives on the Master
-     * List of Beneficiaries; enrolling them through the coordinator's one
-     * enrolment endpoint moves it again and adds them to the Masterlist of
-     * Qualified Recipients.
+     * adviser enrols moves the pulse the page polls and is on neither list;
+     * enrolling them through the coordinator's one enrolment endpoint moves it
+     * again and adds them to both.
      */
     #[Test]
     public function new_enrolments_reach_the_open_master_lists(): void
@@ -741,7 +735,7 @@ class FeedingBmiReportTest extends TestCase
         $this->assertNotSame($paintedStamp, $afterAdviser->json('stamp'), "The adviser's enrolment moves the stamp the page polls.");
         $row = $afterAdviser->json('studentsByGrade')['Grade 7'][0];
         $this->assertSame('Newly Enrolled', $row['name']);
-        $this->assertSame(['feeding-beneficiaries'], $row['lists']);
+        $this->assertSame([], $row['lists']);
 
         $this->travel(1)->seconds();
         $this->withSession($this->coordinatorSession())

@@ -361,7 +361,7 @@
 												<span class="badge badge-monitor">Unconfirmed</span>
 											@else
 												{{-- Never an absence: nobody wrote this learner down. --}}
-												<span class="fa-unmarked">Not recorded</span>
+												<span class="badge badge-neutral">{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }}</span>
 											@endif
 										</td>
 										<td><span class="fa-remark-read">{{ $row['remarks'] !== '' ? $row['remarks'] : '—' }}</span></td>
@@ -385,7 +385,7 @@
 							<span class="badge badge-normal">Present <span data-tally="present">{{ $tally['present'] }}</span></span>
 							<span class="badge badge-critical">Absent <span data-tally="absent">{{ $tally['absent'] }}</span></span>
 							<span class="badge badge-monitor">Excused <span data-tally="excused">{{ $tally['excused'] }}</span></span>
-							<span class="badge badge-neutral">Not recorded <span data-tally="none">{{ $tally['unmarked'] }}</span></span>
+							<span class="badge badge-neutral">{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }} <span data-tally="none">{{ $tally['unmarked'] }}</span></span>
 						</div>
 					</div>
 				@endif

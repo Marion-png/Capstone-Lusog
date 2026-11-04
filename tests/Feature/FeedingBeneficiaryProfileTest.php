@@ -266,7 +266,7 @@ class FeedingBeneficiaryProfileTest extends TestCase
     }
 
     #[Test]
-    public function a_day_the_school_fed_but_no_sheet_covered_reads_as_not_marked(): void
+    public function a_day_the_school_fed_but_no_sheet_covered_reads_as_not_recorded(): void
     {
         $record = $this->makeStudent();
         $other = $this->makeStudent(['student_name' => 'Second Learner']);
@@ -280,7 +280,7 @@ class FeedingBeneficiaryProfileTest extends TestCase
         // The calendar is the school's, so the gap is visible — and it is
         // never drawn as an absence.
         $response->assertSee('Aug 11');
-        $response->assertSee('Not marked');
+        $response->assertSee('Not Recorded');
         // One confirmed session, one attended: the unmarked day is in neither
         // side of the fraction.
         $response->assertSee('1 / 1');

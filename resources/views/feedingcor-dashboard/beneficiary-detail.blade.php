@@ -90,7 +90,7 @@
 		'absent' => ['badge-critical', '✕', 'Absent'],
 		'excused' => ['badge-monitor', 'E', 'Excused'],
 		'unconfirmed' => ['badge-neutral', '?', 'Unconfirmed'],
-		'unmarked' => ['badge-neutral', '–', 'Not marked'],
+		'unmarked' => ['badge-neutral', '–', \App\Support\FeedingAttendanceMark::NOT_RECORDED],
 	];
 @endphp
 
@@ -357,9 +357,9 @@
 				@endif
 			</section>
 
-			{{-- Every feeding day the school held, newest month first. A day no
-			     sheet covered this learner reads "Not marked" — never an
-			     absence.
+			{{-- Every feeding day the school has been through, newest month
+			     first. A day nobody recorded this learner reads Not Recorded —
+			     never an absence.
 
 			     **This record reads; it does not write.** The Correct column
 			     that posted three marks to `beneficiary.attendance.correct` is

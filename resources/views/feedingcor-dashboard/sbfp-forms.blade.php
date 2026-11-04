@@ -371,11 +371,11 @@
 			</div>
 		</section>
 
-		{{-- The Master List of Beneficiaries: every learner the class advisers
-		     have enrolled, one by one or by uploading their class masterlist -
-		     measured or not. The same sheet as the list above, with its own
-		     draft and its own field prefix (mlb_), so saving one never
-		     overwrites the other.
+		{{-- The Master List of Beneficiaries: the learners the Feeding
+		     Coordinator has enrolled, never the whole roster a class adviser
+		     uploaded. The same sheet as the list above, with its own draft and
+		     its own field prefix (mlb_), so saving one never overwrites the
+		     other.
 
 		     Neither list's rows can be typed into. They are the roster, redrawn
 		     whenever it moves (the page polls the coordinator's pulse), as many
@@ -396,7 +396,7 @@
 				<div class="form-sheet-inner">
 					<div class="report-head">
 						@include('feedingcor-dashboard.partials.form-letterhead', ['addressField' => 'mlb_school_address'])
-						<div class="report-title-lines">{{ \App\Http\Controllers\FeedingMasterlistExportController::ADVISER_ROLL_TITLE }}</div>
+						<div class="report-title-lines">{{ \App\Http\Controllers\FeedingMasterlistExportController::BENEFICIARY_LIST_TITLE }}</div>
 						<div class="report-sy">S.Y. <input type="text" class="inline-line-input" data-field="mlb_school_year" value="{{ $schoolYear }}" aria-label="School year"></div>
 						<div class="report-scope" data-scope-line></div>
 					</div>
@@ -832,13 +832,11 @@
 
 	// --- The two master lists: read off the roster, never typed ---
 	//
-	// The school keeps two master lists, and they are two documents. The
-	// Master List of Beneficiaries is every learner the class advisers have
-	// enrolled, one by one or by uploading their class masterlist; the
-	// Masterlist of Qualified Recipients names a learner only once the Feeding
-	// Coordinator has enrolled them. Which list a learner is written on is the
-	// server's decision (`lists` on each roster row), so this module only draws
-	// what it is told — same sheet, same rows, same draft mechanics, one copy.
+	// The school keeps two master lists, and they are two documents. Each names
+	// a learner only once the Feeding Coordinator has enrolled them. Which list
+	// a learner is written on is the server's decision (`lists` on each roster
+	// row), so this module only draws what it is told — same sheet, same rows,
+	// same draft mechanics, one copy.
 	//
 	// The rows are the roster and nothing else: plain text, redrawn on every
 	// open, filter change and roster refresh, and as many as the list needs —
@@ -1009,7 +1007,7 @@
 	};
 
 	const masterlists = [
-		// Every learner the class advisers have enrolled.
+		// The learners the Feeding Coordinator has enrolled.
 		initMasterlist({
 			template: 'feeding-beneficiaries',
 			tbodyId: 'mlbTbody',
@@ -1019,8 +1017,8 @@
 			printId: 'printMlbBtn',
 			storageKey: 'feeding_masterlist_beneficiaries_draft_v1',
 			fieldPrefix: 'mlb_',
-			loadedLabel: 'student(s)',
-			emptyLabel: 'No students enrolled by the class advisers for',
+			loadedLabel: 'enrolled beneficiary(ies)',
+			emptyLabel: 'No students enrolled by the Feeding Coordinator for',
 		}),
 		// Only the learners the Feeding Coordinator has enrolled.
 		initMasterlist({

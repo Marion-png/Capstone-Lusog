@@ -13,6 +13,12 @@ class Consultation extends Model
     use Auditable;
     use HasFactory;
 
+    /**
+     * Who may change a visit after it was saved. Read by the endpoint and by
+     * the pages that draw the Edit button, so the two cannot disagree.
+     */
+    public const EDIT_ROLES = ['clinic_staff'];
+
     protected $fillable = [
         'institution_id',
         'consulted_at',

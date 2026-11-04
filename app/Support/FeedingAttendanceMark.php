@@ -44,6 +44,14 @@ final class FeedingAttendanceMark
     /** No row at all — a session no sheet covered this learner on. */
     public const NOT_MARKED = 'not_marked';
 
+    /**
+     * What a learner reads for a day with no mark on file. It is a missing
+     * record, never an absence, and it is the one word every screen prints for
+     * it: this state used to read Not marked, Not recorded, Unmarked and a dash
+     * depending on where you looked.
+     */
+    public const NOT_RECORDED = 'Not Recorded';
+
     /** The three answers a coordinator may record for a learner on a session. */
     public const RECORDABLE = [self::PRESENT, self::ABSENT, self::EXCUSED];
 
@@ -95,7 +103,7 @@ final class FeedingAttendanceMark
             self::ABSENT => 'Absent',
             self::EXCUSED => 'Excused',
             self::UNCONFIRMED => 'Unconfirmed',
-            default => 'Not marked',
+            default => self::NOT_RECORDED,
         };
     }
 

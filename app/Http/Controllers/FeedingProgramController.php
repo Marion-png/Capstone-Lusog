@@ -1310,14 +1310,14 @@ class FeedingProgramController extends Controller
     }
 
     /**
-     * Every feeding day the school has held, grouped by month with this
+     * Every feeding day the school has been through, grouped by month with this
      * learner's mark on each.
      *
-     * The calendar is the school's, not the learner's: a day the school fed but
-     * no sheet covered this child appears as **unmarked**, never as an absence,
-     * which is the only way a coordinator can see a gap and correct it. That is
-     * also why the rows carry their date — the correction endpoint is keyed by
-     * learner and date, so a missing mark is as correctable as a wrong one.
+     * The calendar is the school's, not the learner's: a day no sheet covered
+     * this child, or that ended with nothing recorded for anybody, appears as
+     * **Not Recorded**, never as an absence. That is the only way a coordinator
+     * can see a gap. A past year's record lists the sessions recorded that year,
+     * since the cycle read here is this year's.
      *
      * @param  Collection<int, FeedingAttendance>  $sessions  this learner's marks, oldest first
      * @return list<array{label: string, rows: list<array<string, mixed>>}>
@@ -1343,11 +1343,16 @@ class FeedingProgramController extends Controller
 
         $marks = $sessions->keyBy(fn (FeedingAttendance $row): string => optional($row->session_date)->toDateString());
 
+        $recorded = $dates->map(fn ($date): string => ($date instanceof Carbon ? $date : Carbon::parse((string) $date))->toDateString());
+
+        $due = (string) $learner->school_year === StudentHealthRecord::currentSchoolYear()
+            ? FeedingProgramCycle::forInstitution($institutionId)->dueDates($recorded)
+            : $recorded->sort()->values()->all();
+
         $months = [];
 
-        foreach ($dates as $date) {
-            $day = $date instanceof Carbon ? $date : Carbon::parse((string) $date);
-            $key = $day->toDateString();
+        foreach (array_reverse($due) as $key) {
+            $day = Carbon::parse($key);
             $row = $marks->get($key);
 
             $months[$day->format('F Y')][] = [

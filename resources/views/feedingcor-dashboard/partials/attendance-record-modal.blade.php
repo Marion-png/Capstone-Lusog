@@ -182,7 +182,7 @@
 											<span class="badge {{ $raMarks[$row['status']][0] }}">{{ $raMarks[$row['status']][1] }}</span>
 										@else
 											{{-- Nobody wrote this learner down. Never an absence. --}}
-											<span class="ra-unmarked">Not marked</span>
+											<span class="badge badge-neutral">{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }}</span>
 										@endif
 									</td>
 									<td>
@@ -213,7 +213,7 @@
 						<span class="badge badge-normal">Present <span data-record-tally="present">0</span></span>
 						<span class="badge badge-critical">Absent <span data-record-tally="absent">0</span></span>
 						<span class="badge badge-monitor">Excused <span data-record-tally="excused">0</span></span>
-						<span class="badge badge-neutral">Unmarked <span data-record-tally="none">{{ count($recordRows) }}</span></span>
+						<span class="badge badge-neutral">{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }} <span data-record-tally="none">{{ count($recordRows) }}</span></span>
 					</div>
 					<div class="modal-actions">
 						<button type="button" class="btn btn-ghost" data-record-close>Cancel</button>
@@ -233,7 +233,7 @@
 							<span class="badge badge-monitor">Unconfirmed {{ $raTally['unconfirmed'] }}</span>
 						@endif
 						@if ($raTally['unmarked'] > 0)
-							<span class="badge badge-neutral">Not marked {{ $raTally['unmarked'] }}</span>
+							<span class="badge badge-neutral">{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }} {{ $raTally['unmarked'] }}</span>
 						@endif
 					</div>
 					<div class="modal-actions">

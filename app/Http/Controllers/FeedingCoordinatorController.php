@@ -153,9 +153,9 @@ class FeedingCoordinatorController extends Controller
 
     /**
      * The roster behind the SBFP Forms page, read once and grouped by grade:
-     * the page paints from it and the Master List of Beneficiaries' live
-     * refresh re-reads it, so the form a coordinator has open and the one a
-     * reload would draw can never name different children.
+     * the page paints from it and the master lists' live refresh re-reads it,
+     * so the form a coordinator has open and the one a reload would draw can
+     * never name different children.
      *
      * @return array{0: Collection<int, StudentHealthRecord>, 1: array<string, list<array<string, mixed>>>, 2: array<string, list<string>>}
      */
@@ -229,12 +229,10 @@ class FeedingCoordinatorController extends Controller
      * on, keyed by the page's template ids. Decided here, once, so the page
      * only draws what it is told and the rule can be tested without a browser.
      *
-     * The Master List of Beneficiaries is every learner the class advisers
-     * have enrolled — one by one or by uploading their class masterlist — so
-     * it is this roster, whole, measured or not. The Masterlist of Qualified
-     * Recipients names a learner only once the Feeding Coordinator has
-     * enrolled them: isBeneficiary(), qualified AND enrolled AND not removed,
-     * the same test every other coordinator screen counts with.
+     * Both name a learner only once the Feeding Coordinator has enrolled them:
+     * isBeneficiary(), qualified AND enrolled AND not removed, the same test
+     * every other coordinator screen counts with. A class adviser's enrolment
+     * puts a learner on the roster, never on either list.
      *
      * @return list<string>
      */
@@ -242,16 +240,14 @@ class FeedingCoordinatorController extends Controller
     {
         return FeedingBeneficiarySummary::isBeneficiary($record)
             ? ['feeding-beneficiaries', 'feeding-masterlist']
-            : ['feeding-beneficiaries'];
+            : [];
     }
 
     /**
      * The SBFP Forms roster for the live refresh, re-read when the
-     * coordinator's pulse moves. A class masterlist an adviser uploads reaches
-     * the Master List of Beneficiaries this way, and a learner the coordinator
-     * enrols reaches the Masterlist of Qualified Recipients, both without a
-     * reload — the same grouping and the same masterlistsFor() the first paint
-     * used.
+     * coordinator's pulse moves. A learner the coordinator enrols reaches both
+     * master lists this way, without a reload — the same grouping and the same
+     * masterlistsFor() the first paint used.
      */
     public function sbfpFormsRoster(Request $request): JsonResponse
     {
@@ -754,7 +750,7 @@ class FeedingCoordinatorController extends Controller
                 ['value' => 'present', 'label' => 'Present'],
                 ['value' => 'absent', 'label' => 'Absent'],
                 ['value' => 'excused', 'label' => 'Excused'],
-                ['value' => 'unmarked', 'label' => 'Unmarked'],
+                ['value' => 'unmarked', 'label' => FeedingAttendanceMark::NOT_RECORDED],
             ],
         ];
     }

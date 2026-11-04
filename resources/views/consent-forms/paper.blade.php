@@ -283,17 +283,26 @@
             body.append('lrn', @json((string) $form->student_lrn));
 
             try {
-                await window.consentPhotoCloseups(file, body);
+                const ask = async (turn) => {
+                    await window.consentPhotoCloseups(file, body, turn);
 
-                const response = await fetch(@json(route('consent-forms.scan')), {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
-                        Accept: 'application/json',
-                    },
-                    body,
-                });
-                const data = await response.json();
+                    const reply = await fetch(@json(route('consent-forms.scan')), {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                            Accept: 'application/json',
+                        },
+                        body,
+                    });
+
+                    return { response: reply, data: await reply.json() };
+                };
+
+                // A sheet that lay sideways is turned and read once more.
+                let { response, data } = await ask(0);
+                if (response.ok && data.draft?.turn) {
+                    ({ response, data } = await ask(data.draft.turn));
+                }
 
                 if (!response.ok) {
                     scanState.textContent = data.message || 'The form could not be read. Fill it in from the paper.';

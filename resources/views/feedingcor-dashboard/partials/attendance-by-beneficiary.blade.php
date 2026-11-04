@@ -9,8 +9,8 @@
      Five columns, five different facts, and none of them folded into another:
      Present and Absent are what a human confirmed, Excused is the school's own
      buffer (an absence it accepted, which the at-risk rule never counts against
-     the learner), "Not marked" is the feeding days no sheet covered this learner
-     on (a filing gap, never an absence), and Rate is Present over the
+     the learner), Not Recorded is the days nobody recorded this learner on (a
+     filing gap, never an absence), and Rate is Present over the
      unexcused confirmed sessions alone.
 
      The rate printed beside a learner, the state beside it and the flag it
@@ -25,7 +25,7 @@
 
      That filter also decides which of the two count columns is drawn: ask for
      absences and you read a table of absences, rather than hunting the right
-     column in a table of both. "Not marked", Rate and Status never move — they
+     column in a table of both. Not Recorded, Rate and Status never move — they
      answer the same question whichever way the filter is set. --}}
 @php
 	$sessionMarks = [
@@ -38,13 +38,12 @@
 	$mark = $filters['status'] ?? '';
 	$query = trim((string) ($filters['q'] ?? ''));
 
-	// The school's own feeding days, newest first, with the label each is
-	// printed under. The history dialog walks this list rather than the
-	// learner's marks, so a day the school fed but no sheet covered this child
-	// reads "Not marked" instead of vanishing — the only way a coordinator can
-	// see a gap. Formatted here so the dialog and the roll date a session the
-	// same way.
-	$sessionIndex = collect($sessionDates)
+	// The days a learner should have a mark for, newest first, with the label
+	// each is printed under. The history dialog walks this list rather than the
+	// learner's marks, so a day nobody recorded this child reads Not Recorded
+	// instead of vanishing — the only way a coordinator can see a gap. Formatted
+	// here so the dialog and the roll date a session the same way.
+	$sessionIndex = collect($dueDates)
 		->sortDesc()
 		->values()
 		->map(fn (string $date): array => [
@@ -56,7 +55,7 @@
 	$showAbsent = $mark === '' || $mark === 'absent';
 	$showExcused = $mark === '' || $mark === 'excused';
 
-	// Student, Grade, Section, Gender, Session, Not marked, Rate, Status, plus
+	// Student, Grade, Section, Gender, Session, Not Recorded, Rate, Status, plus
 	// whichever of Present / Absent / Excused the filter left standing.
 	$columnCount = 8 + (int) $showPresent + (int) $showAbsent + (int) $showExcused;
 @endphp
@@ -80,7 +79,7 @@
 					@if ($showPresent)<th class="num">Present</th>@endif
 					@if ($showAbsent)<th class="num">Absent</th>@endif
 					@if ($showExcused)<th class="num">Excused</th>@endif
-					<th class="num">Not marked</th>
+					<th class="num">{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }}</th>
 					<th class="num">Rate</th>
 					<th>Status</th>
 				</tr>
@@ -126,7 +125,7 @@
 								@endif
 							@else
 								{{-- Nobody wrote this learner down for that day. Never an absence. --}}
-								<span class="fa-unmarked">Not marked</span>
+								<span class="badge badge-neutral">{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }}</span>
 							@endif
 						</td>
 						@if ($showPresent)<td class="num tnum">{{ $row['present'] }}</td>@endif

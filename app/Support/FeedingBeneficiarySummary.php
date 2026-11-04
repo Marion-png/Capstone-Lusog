@@ -489,6 +489,9 @@ final class FeedingBeneficiarySummary
 
             $standings[$record->id] = [
                 'rate' => $rate === null ? null : (int) round($rate),
+                // How many marks of any kind are on file, so a learner with no
+                // rate can be told apart from one nobody has recorded yet.
+                'marks' => count($marks),
                 'at_risk' => (bool) ($flag['flagged'] ?? false),
                 'state' => (string) ($flag['state'] ?? FeedingAttendanceFlag::ON_TRACK),
             ];

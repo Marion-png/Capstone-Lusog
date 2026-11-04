@@ -840,18 +840,27 @@
             body.append('lrn', lrn);
 
             try {
-                await window.consentPhotoCloseups(file, body);
+                const ask = async (turn) => {
+                    await window.consentPhotoCloseups(file, body, turn);
 
-                const response = await fetch(@json(route('consent-forms.scan')), {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
-                        Accept: 'application/json',
-                    },
-                    body,
-                    signal: readRequest.signal,
-                });
-                const data = await response.json().catch(() => ({}));
+                    const reply = await fetch(@json(route('consent-forms.scan')), {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                            Accept: 'application/json',
+                        },
+                        body,
+                        signal: readRequest.signal,
+                    });
+
+                    return { response: reply, data: await reply.json().catch(() => ({})) };
+                };
+
+                // A sheet that lay sideways is turned and read once more.
+                let { response, data } = await ask(0);
+                if (response.ok && data.draft?.turn) {
+                    ({ response, data } = await ask(data.draft.turn));
+                }
 
                 // The adviser swapped the photo or the learner, or chose the
                 // answer themselves, while it was being read.

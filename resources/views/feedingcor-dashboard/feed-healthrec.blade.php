@@ -398,7 +398,15 @@
                                     <td>{{ $record->sex !== '' ? substr($record->sex, 0, 1) : '—' }}</td>
                                     <td><span class="badge {{ $statusBadge($baselineStatus) }}">{{ $baselineStatus ?: 'Not set' }}</span></td>
                                     {{-- No confirmed session is not a 0% turnout. --}}
-                                    <td class="num" data-value="{{ $rate ?? '' }}">{{ ! is_null($rate) ? $rate.'%' : '—' }}</td>
+                                    <td class="num" data-value="{{ $rate ?? '' }}">
+                                        @if (! is_null($rate))
+                                            {{ $rate }}%
+                                        @elseif ($record->attendance_not_recorded ?? false)
+                                            <span class="badge badge-neutral">{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }}</span>
+                                        @else
+                                            —
+                                        @endif
+                                    </td>
                                     <td>
                                         {{-- The warning glyph replaces the badge's
                                              own dot rather than joining it. --}}

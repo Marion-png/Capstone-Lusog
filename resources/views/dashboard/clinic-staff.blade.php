@@ -28,6 +28,7 @@
         $stats = $stats ?? [];
         $consultations = $consultations ?? collect();
         $medicines = $medicines ?? collect();
+        $canEditVisits = in_array(session('active_role'), \App\Models\Consultation::EDIT_ROLES, true);
     @endphp
 
     <header class="topbar">
@@ -38,6 +39,10 @@
     </header>
 
     <div class="content">
+        @if (session('success'))
+            <div class="flash ok">{{ session('success') }}</div>
+        @endif
+
         <div class="page-header">
             <div class="page-eyebrow">Operations Workspace</div>
             <h1 class="page-title">Clinic Staff <span>Operations Hub</span></h1>
@@ -114,6 +119,9 @@
                                 <th>Medicine Given</th>
                                 <th>Recorded By</th>
                                 <th>Status</th>
+                                @if ($canEditVisits)
+                                    <th>Action</th>
+                                @endif
                             </tr>
                         </thead>
                         <tbody>
@@ -133,10 +141,13 @@
                                             <span class="badge badge-normal">Encoded</span>
                                         @endif
                                     </td>
+                                    @if ($canEditVisits)
+                                        <td>@include('partials.consultation-edit-button')</td>
+                                    @endif
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="table-empty">No consultations recorded yet.</td>
+                                    <td colspan="{{ $canEditVisits ? 7 : 6 }}" class="table-empty">No consultations recorded yet.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -216,6 +227,9 @@
     </div>
 </div>
 
+@if ($canEditVisits)
+    @include('partials.consultation-modal', ['learnerIndex' => []])
+@endif
 @include('partials.nurse-page-transition')
 @include('partials.workspace-live')
 </body>

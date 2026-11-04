@@ -99,7 +99,7 @@
         <dl class="sh-attendance-counts">
             <div><dt>Present</dt><dd>{{ $row['present'] }}</dd></div>
             <div><dt>Absent</dt><dd>{{ $row['absent'] }}</dd></div>
-            <div><dt>Not marked</dt><dd>{{ $row['not_marked'] }}</dd></div>
+            <div><dt>{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }}</dt><dd>{{ $row['not_marked'] }}</dd></div>
         </dl>
 
         {{-- A follow-up flag is the coordinator's and the School Nurse's to

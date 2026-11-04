@@ -40,7 +40,7 @@ use Illuminate\Support\Collection;
  *
  * 2. **An unconfirmed mark votes neither way.** NULL/needs-review marks are
  *    excluded from both the numerator and the denominator of every rate, and a
- *    feeding day no sheet covered for a learner is "not marked", never an
+ *    feeding day nobody recorded a learner on is "Not Recorded", never an
  *    absence — the same rule FeedingAtRiskRule applies, applied to the same
  *    marks, so a rate printed here is the rate that decided the flag.
  */
@@ -270,7 +270,11 @@ final class SchoolHeadOverview
             return $this->standings;
         }
 
-        $totalSessions = $this->daysCompleted();
+        // The days each learner should have a mark for. A past year's cycle is
+        // not the one held here, so that year counts its recorded sessions.
+        $totalSessions = $this->schoolYear === StudentHealthRecord::currentSchoolYear()
+            ? count($this->cycle->dueDates($this->sessionDates))
+            : $this->daysCompleted();
         $standings = [];
         // The other half of a flag: what the Feeding Coordinator confirmed.
         // One read for the whole roll.
@@ -299,7 +303,7 @@ final class SchoolHeadOverview
                 'present' => $present,
                 'absent' => $confirmed - $present,
                 'confirmed' => $confirmed,
-                // Feeding days no sheet covered this learner. Reported on its
+                // Feeding days nobody recorded this learner on. Reported on its
                 // own so "1 of 4" can be read for what it is — never counted as
                 // an absence.
                 'not_marked' => max(0, $totalSessions - count($marks)),

@@ -263,7 +263,9 @@ class ConsentPaperFormTest extends TestCase
             ->getContent();
 
         $this->assertSame(1, substr_count($html, 'window.consentPhotoCloseups = window.consentPhotoCloseups'));
-        $this->assertStringContainsString('await window.consentPhotoCloseups(file, body);', $html);
+        $this->assertStringContainsString('await window.consentPhotoCloseups(file, body, turn);', $html);
+        // A sheet that lay sideways is turned and read once more.
+        $this->assertStringContainsString('await ask(data.draft.turn)', $html);
     }
 
     // ── Who may reach it ─────────────────────────────────────────────

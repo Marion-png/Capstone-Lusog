@@ -121,7 +121,6 @@
    vanishes leaves nothing to press and nothing to read. ── */
 .ra-modal-notice { margin: 0 20px 14px; }
 /* A learner nobody wrote down. Never styled as an absence. */
-.ra-unmarked { font-size: .78rem; color: var(--lg-ink-soft); }
 .ra-remark-read { font-size: .78rem; color: var(--lg-ink-soft); }
 
 @media (max-width: 620px) {

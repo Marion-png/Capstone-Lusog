@@ -4,9 +4,10 @@
 
      A day with no session is simply a day: blank, not an absence. Clicking a
      weekday that has happened opens what happened on it — who was present,
-     who was absent and why, who was excused, who nobody marked — in the day
+     who was absent and why, who was excused, who nobody recorded — in the day
      dialog (partials/attendance-day-modal), with the way to that day's sheet
-     at its foot. A day still ahead has nothing to report and opens nothing.
+     at its foot. A day that ended with nothing recorded says so on its cell.
+     A day still ahead has nothing to report and opens nothing.
 
      Saturdays and Sundays are locked: nobody is fed on a weekend, so there is
      no sheet worth opening, and a click there only ever led to a notice. They
@@ -58,6 +59,8 @@
 					// A day the dialog can open: a weekday that has happened and
 					// that the school did not close.
 					$opens = $calendarDays !== null && isset($calendarDays[$day['date']]);
+					$dayListed = $opens && ($calendarDays[$day['date']]['listed'] ?? false);
+					$dayMissed = $dayListed && $day['state'] === 'none' && ! $day['is_today'];
 				@endphp
 				@if (! $day['in_month'])
 					<div class="fa-cal-day is-outside" role="gridcell" aria-hidden="true"></div>
@@ -94,12 +97,14 @@
 						class="fa-cal-day is-open {{ $dayClass }} {{ $day['is_today'] ? 'is-today' : '' }} {{ $day['is_selected'] ? 'is-selected' : '' }}"
 						role="gridcell"
 						data-day-open="{{ $day['date'] }}"
-						@if ($day['state'] !== 'none') data-sheet-url="{{ $pageUrl(['view' => 'sheet', 'date' => $day['date']]) }}" @endif
+						@if ($day['state'] !== 'none' || $dayListed) data-sheet-url="{{ $pageUrl(['view' => 'sheet', 'date' => $day['date']]) }}" @endif
 						aria-haspopup="dialog"
 						aria-label="{{ \Carbon\Carbon::parse($day['date'])->format('l, F j') }} — {{ $day['state'] === 'none' ? 'no attendance recorded' : $day['recorded'].' recorded' }}">
 						<span class="fa-cal-num">{{ $day['day'] }}</span>
 						@if ($day['state'] !== 'none')
 							<span class="fa-cal-mark">{{ $glyph }}</span>
+						@elseif ($dayMissed)
+							<span class="fa-cal-tag">{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }}</span>
 						@endif
 					</button>
 				@else

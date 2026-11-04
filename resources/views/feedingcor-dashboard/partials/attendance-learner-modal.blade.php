@@ -10,7 +10,7 @@
      Every figure it prints is the row's own, carried on the button that opened
      it, so the dialog and the row are one render and cannot disagree. The
      history walks **the school's feeding days**, not the learner's marks, so a
-     session no sheet covered this child reads "Not marked" — never an absence,
+     day nobody recorded this child reads Not Recorded — never an absence,
      and never silently missing.
 
      Anatomy is the shared one (`.modal-backdrop` / `.modal-panel` / `-head` /
@@ -43,7 +43,7 @@
 				<span class="al-figure-value" data-learner-figure="excused">0</span>
 			</div>
 			<div class="al-figure">
-				<span class="al-figure-label">Not marked</span>
+				<span class="al-figure-label">{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }}</span>
 				<span class="al-figure-value" data-learner-figure="notMarked">0</span>
 			</div>
 			<div class="al-figure">
@@ -167,8 +167,8 @@
 				// never an absence — the difference between a follow-up and a
 				// paperwork job.
 				const none = document.createElement('span');
-				none.className = 'fa-unmarked';
-				none.textContent = 'Not marked';
+				none.className = 'badge badge-neutral';
+				none.textContent = @json(\App\Support\FeedingAttendanceMark::NOT_RECORDED);
 				state.appendChild(none);
 			}
 			tr.appendChild(state);

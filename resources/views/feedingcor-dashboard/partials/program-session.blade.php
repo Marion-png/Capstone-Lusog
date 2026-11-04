@@ -33,7 +33,7 @@
 			<li class="fp-chip is-present"><span class="tnum">{{ $fpLatest['present'] }}</span> Present</li>
 			<li class="fp-chip is-absent"><span class="tnum">{{ $fpLatest['absent'] }}</span> Absent</li>
 			<li class="fp-chip is-excused"><span class="tnum">{{ $fpLatest['excused'] }}</span> Excused</li>
-			<li class="fp-chip is-unmarked"><span class="tnum">{{ $fpLatest['not_marked'] }}</span> Not marked</li>
+			<li class="fp-chip is-unmarked"><span class="tnum">{{ $fpLatest['not_marked'] }}</span> {{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }}</li>
 			@if ($fpLatest['unconfirmed'] > 0)
 				<li class="fp-chip is-pending"><span class="tnum">{{ $fpLatest['unconfirmed'] }}</span> Awaiting review</li>
 			@endif
@@ -78,7 +78,7 @@
 							<th class="num">Present</th>
 							<th class="num">Absent</th>
 							<th class="num">Excused</th>
-							<th class="num">Not marked</th>
+							<th class="num">{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }}</th>
 							<th class="num">Turnout</th>
 						</tr>
 					</thead>

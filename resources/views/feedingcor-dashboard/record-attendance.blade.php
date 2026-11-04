@@ -135,7 +135,7 @@
 												'excused' => 'badge-monitor',
 												default => 'badge-neutral',
 											} }}">
-												{{ $row['mark'] === '' ? 'Not recorded' : ucfirst($row['mark']) }}
+												{{ $row['mark'] === '' ? \App\Support\FeedingAttendanceMark::NOT_RECORDED : ucfirst($row['mark']) }}
 											</span>
 										@else
 											<div class="ra-toggle" role="group" aria-label="Attendance for {{ $row['name'] }}">
@@ -189,7 +189,7 @@
 						<span class="badge badge-normal">Present <span data-tally="present">0</span></span>
 						<span class="badge badge-critical">Absent <span data-tally="absent">0</span></span>
 						<span class="badge badge-monitor">Excused <span data-tally="excused">0</span></span>
-						<span class="badge badge-neutral">Unmarked <span data-tally="none">{{ $rows->count() }}</span></span>
+						<span class="badge badge-neutral">{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }} <span data-tally="none">{{ $rows->count() }}</span></span>
 					</div>
 					<div class="ra-actions">
 						<a class="btn btn-ghost" href="{{ route('dashboard.feedingcor-dashboard') }}">Cancel</a>

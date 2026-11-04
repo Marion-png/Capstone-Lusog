@@ -160,6 +160,48 @@ class FeedingProgramCycle
         return $days - SchoolCalendar::closedWeekdaysBetween($start, $end, $institutionId);
     }
 
+    /**
+     * The dates a beneficiary's attendance should be on file for: every session
+     * anybody recorded, and every feeding day since the first of them that ended
+     * with nothing recorded at all.
+     *
+     * A day's attendance can only be entered on that day
+     * (FeedingAttendanceWindow), so a day that ended unrecorded stays that way
+     * and every learner reads Not Recorded for it. Today joins the list only
+     * once somebody has marked it: until it ends, nothing has been missed. A
+     * school with no session yet has no dates here, whatever the consultation
+     * fallback says its start date is.
+     *
+     * This is what the record shows and nothing more. It is never an absence,
+     * and the at-risk rule reads marks, not this list.
+     *
+     * @param  iterable<string>  $recorded  Y-m-d dates with at least one mark
+     * @return list<string> oldest first
+     */
+    public function dueDates(iterable $recorded): array
+    {
+        $dates = [];
+
+        foreach ($recorded as $date) {
+            $dates[(string) $date] = true;
+        }
+
+        if ($dates !== [] && $this->startDate !== null) {
+            $yesterday = Carbon::parse(FeedingAttendanceWindow::today())->subDay()->toDateString();
+            $last = min((string) $this->endDateIso(), $yesterday);
+
+            for ($cursor = $this->startDate->copy(); $cursor->toDateString() <= $last; $cursor->addDay()) {
+                if (self::isFeedingDay($cursor, $this->institutionId)) {
+                    $dates[$cursor->toDateString()] = true;
+                }
+            }
+        }
+
+        ksort($dates);
+
+        return array_keys($dates);
+    }
+
     public function daysRemaining(): int
     {
         return max(0, $this->durationDays - $this->day());

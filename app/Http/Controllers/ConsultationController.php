@@ -178,18 +178,7 @@ class ConsultationController extends Controller
         // Named bag: the form is now also a dialog, and a dialog whose save
         // failed has to re-open itself to show why. Its own bag keeps that
         // from re-opening whatever other dialog shares the page.
-        $validated = $request->validateWithBag('consultation', [
-            'consulted_at' => ['required', 'date'],
-            'student_name' => ['required', 'string', 'max:255'],
-            'grade_section' => ['required', 'string', 'max:255'],
-            'condition_id' => ['nullable', 'integer', 'exists:conditions,id'],
-            'condition' => ['nullable', 'string', 'max:255'],
-            'treatment_given' => ['nullable', 'string', 'max:1000'],
-            // A note on the visit — what the profile's Clinic Notes tab used
-            // to take separately. It rides the consultation it is about.
-            'notes' => ['nullable', 'string', 'max:2000'],
-            'notes_shared_with_adviser' => ['nullable', 'boolean'],
-            'status' => ['required', 'in:treated,referred'],
+        $validated = $request->validateWithBag('consultation', $this->visitRules() + [
             // Optional: a medicine handed over during the visit. Recording it
             // here draws the stock down in the same transaction, so what the
             // clinic gave out and what the inventory says cannot drift apart.
@@ -216,35 +205,10 @@ class ConsultationController extends Controller
 
         $photos = array_values(array_filter((array) $request->file('photos', [])));
 
-        // Ensure at least one condition source is provided
-        $conditionId = $validated['condition_id'] ?? null;
-        $conditionText = $validated['condition'] ?? null;
+        [$conditionId, $conditionName, $conditionProblem] = $this->resolveCondition($validated);
 
-        if (! $conditionId && ! $conditionText) {
-            return back()
-                ->withErrors(['condition_id' => 'Please select or enter a condition.'], 'consultation')
-                ->withInput();
-        }
-
-        // If condition_id is provided, fetch the condition name
-        $conditionName = $conditionText;
-        if ($conditionId) {
-            $condition = Condition::find($conditionId);
-            if ($condition) {
-                // "Others" is the catalogue's catch-all. Storing that word
-                // would throw away what the nurse actually recorded, and the
-                // top-conditions report groups on this text — so an unusual
-                // case would read as "others" forever. Keep the detail.
-                $isCatchAll = strcasecmp($condition->name, 'Others') === 0;
-
-                if ($isCatchAll && ($conditionText === null || trim($conditionText) === '')) {
-                    return back()
-                        ->withErrors(['condition' => 'Please describe the condition.'], 'consultation')
-                        ->withInput();
-                }
-
-                $conditionName = $isCatchAll ? trim((string) $conditionText) : $condition->name;
-            }
+        if ($conditionProblem !== []) {
+            return back()->withErrors($conditionProblem, 'consultation')->withInput();
         }
 
         $institutionId = $request->session()->get('active_institution_id');
@@ -302,19 +266,7 @@ class ConsultationController extends Controller
         $photoCount = 0;
 
         DB::transaction(function () use ($validated, $conditionName, $conditionId, $institutionId, $medicineId, $quantity, $photos, $request, $activeRole, $allergyCheck, $lrn, $staffName, &$dispensed, &$photoCount) {
-            // The note travels only where its column has been migrated, so an
-            // older database still records the visit. Whether the clinic
-            // shared it with the class adviser rides with it — a note nobody
-            // wrote is never 'shared', so the flag follows the text.
-            $noteText = trim((string) ($validated['notes'] ?? '')) ?: null;
-            $note = SchemaCache::hasColumn('consultations', 'notes')
-                ? ['notes' => $noteText]
-                : [];
-
-            if (SchemaCache::hasColumn('consultations', 'notes_shared_with_adviser')) {
-                $note['notes_shared_with_adviser'] = $noteText !== null
-                    && (bool) ($validated['notes_shared_with_adviser'] ?? false);
-            }
+            $note = $this->noteColumns($validated);
 
             // Who recorded the visit, kept on it as a dispense keeps who
             // handed the medicine over.
@@ -459,6 +411,172 @@ class ConsultationController extends Controller
         return redirect()
             ->to($this->returnTo($request))
             ->with('success', $message);
+    }
+
+    /**
+     * A correction to a recorded visit, from the Edit button on the Consultation
+     * Log or the Clinic Staff dashboard.
+     *
+     * The medicine handed over is not part of it. That is a stock movement with
+     * an allergy check behind it, so it stands as it was recorded, and for the
+     * same reason a visit with a dispense on it keeps its learner: moving the
+     * medicine to another child's name would skip the check on that child. Who
+     * recorded the visit stands too; the change goes in the audit trail with its
+     * old and new values, under whoever made it.
+     */
+    public function update(Request $request, int $consultation): RedirectResponse
+    {
+        if (! in_array((string) $request->session()->get('active_role', ''), Consultation::EDIT_ROLES, true)) {
+            abort(403, 'This role cannot edit a consultation.');
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+
+        $visit = Consultation::query()
+            ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+            ->find($consultation);
+
+        abort_if($visit === null, 404);
+
+        $validated = $request->validateWithBag('consultation', $this->visitRules());
+
+        [$conditionId, $conditionName, $conditionProblem] = $this->resolveCondition($validated);
+
+        if ($conditionProblem !== []) {
+            return back()->withErrors($conditionProblem, 'consultation')->withInput();
+        }
+
+        DB::transaction(function () use ($visit, $validated, $conditionId, $conditionName): void {
+            $dispenses = SchemaCache::hasColumn('medicine_dispenses', 'consultation_id')
+                ? MedicineDispense::query()->where('consultation_id', $visit->id)->get()
+                : collect();
+
+            $conditionChanged = (string) $visit->condition !== (string) $conditionName;
+
+            $attributes = $this->noteColumns($validated) + [
+                'condition' => $conditionName,
+                'condition_id' => $conditionId,
+                'treatment_given' => $validated['treatment_given'] ?? null,
+                'status' => $validated['status'],
+            ];
+
+            if ($dispenses->isEmpty()) {
+                $attributes['student_name'] = $validated['student_name'];
+                $attributes['grade_section'] = $validated['grade_section'];
+            }
+
+            // A value is assigned only when it differs. These columns encrypt on
+            // write, so every assignment is new ciphertext, and the audit entry
+            // would name fields nobody changed.
+            foreach ($attributes as $field => $value) {
+                if ((string) $visit->{$field} !== (string) $value) {
+                    $visit->{$field} = $value;
+                }
+            }
+
+            // The form carries minutes. A time nobody moved keeps its seconds.
+            if ($visit->consulted_at?->format('Y-m-d H:i') !== Carbon::parse($validated['consulted_at'])->format('Y-m-d H:i')) {
+                $visit->consulted_at = $validated['consulted_at'];
+            }
+
+            $visit->save();
+
+            // The dispense records why the medicine was given, which is this
+            // visit's condition.
+            if ($conditionChanged) {
+                foreach ($dispenses as $dispense) {
+                    $dispense->reason = $conditionName;
+                    $dispense->save();
+                }
+            }
+        });
+
+        return redirect()
+            ->to($this->returnTo($request))
+            ->with('success', 'Consultation updated.');
+    }
+
+    /**
+     * The fields a visit is made of, the same whether it is being recorded or
+     * corrected.
+     *
+     * @return array<string, list<string>>
+     */
+    private function visitRules(): array
+    {
+        return [
+            'consulted_at' => ['required', 'date'],
+            'student_name' => ['required', 'string', 'max:255'],
+            'grade_section' => ['required', 'string', 'max:255'],
+            'condition_id' => ['nullable', 'integer', 'exists:conditions,id'],
+            'condition' => ['nullable', 'string', 'max:255'],
+            'treatment_given' => ['nullable', 'string', 'max:1000'],
+            // A note on the visit — what the profile's Clinic Notes tab used
+            // to take separately. It rides the consultation it is about.
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'notes_shared_with_adviser' => ['nullable', 'boolean'],
+            'status' => ['required', 'in:treated,referred'],
+        ];
+    }
+
+    /**
+     * The condition a form names, as the id and the words to store, or the
+     * error to send back when it names none.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array{0: mixed, 1: ?string, 2: array<string, string>}
+     */
+    private function resolveCondition(array $validated): array
+    {
+        $conditionId = $validated['condition_id'] ?? null;
+        $conditionText = $validated['condition'] ?? null;
+
+        if (! $conditionId && ! $conditionText) {
+            return [null, null, ['condition_id' => 'Please select or enter a condition.']];
+        }
+
+        $conditionName = $conditionText;
+        $condition = $conditionId ? Condition::find($conditionId) : null;
+
+        if ($condition) {
+            // "Others" is the catalogue's catch-all. Storing that word would
+            // throw away what the nurse actually recorded, and the
+            // top-conditions report groups on this text — so an unusual case
+            // would read as "others" forever. Keep the detail.
+            $isCatchAll = strcasecmp($condition->name, 'Others') === 0;
+
+            if ($isCatchAll && ($conditionText === null || trim($conditionText) === '')) {
+                return [null, null, ['condition' => 'Please describe the condition.']];
+            }
+
+            $conditionName = $isCatchAll ? trim((string) $conditionText) : $condition->name;
+        }
+
+        return [$conditionId, $conditionName, []];
+    }
+
+    /**
+     * The note travels only where its column has been migrated, so an older
+     * database still records the visit. Whether the clinic shared it with the
+     * class adviser rides with it — a note nobody wrote is never 'shared', so
+     * the flag follows the text.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function noteColumns(array $validated): array
+    {
+        $noteText = trim((string) ($validated['notes'] ?? '')) ?: null;
+        $note = SchemaCache::hasColumn('consultations', 'notes')
+            ? ['notes' => $noteText]
+            : [];
+
+        if (SchemaCache::hasColumn('consultations', 'notes_shared_with_adviser')) {
+            $note['notes_shared_with_adviser'] = $noteText !== null
+                && (bool) ($validated['notes_shared_with_adviser'] ?? false);
+        }
+
+        return $note;
     }
 
     /**

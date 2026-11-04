@@ -29,7 +29,7 @@
 			<span class="badge badge-normal">Present <span data-confirm-tally="present">0</span></span>
 			<span class="badge badge-critical">Absent <span data-confirm-tally="absent">0</span></span>
 			<span class="badge badge-monitor">Excused <span data-confirm-tally="excused">0</span></span>
-			<span class="badge badge-neutral">Unmarked <span data-confirm-tally="none">0</span></span>
+			<span class="badge badge-neutral">{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }} <span data-confirm-tally="none">0</span></span>
 		</div>
 
 		<div class="modal-body">

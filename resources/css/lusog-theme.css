@@ -412,6 +412,9 @@ html, body {
 .btn-warn { background: var(--lg-amber-tint); border-color: #EBD3A0; color: var(--lg-amber-ink); }
 .btn-warn:hover { background: #FBEACB; }
 .btn[disabled], .btn.disabled { opacity: .5; cursor: not-allowed; }
+/* A button inside a table row, sized to the row rather than the page. */
+.btn.btn-row { padding: 5px 10px; font-size: .75rem; }
+.btn.btn-row svg { width: 13px; height: 13px; }
 
 /* ══ Inputs ═════════════════════════════════════════════════════════ */
 

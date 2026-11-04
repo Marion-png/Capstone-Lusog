@@ -4,11 +4,11 @@
      almost always the last one. Clicking a date opens that day's sheet.
 
      This view carries no toolbar: every row is the whole enrolled roll's tally
-     for that day, and no filter narrows the list or the columns. "Not marked"
+     for that day, and no filter narrows the list or the columns. Not Recorded
      is the filing gap and is its own figure, Rate is present over confirmed
      marks, and Recorded says how much of the session exists. --}}
 @php
-	// Date, Feeding Day, Present, Absent, Excused, Not marked, Rate, Recorded.
+	// Date, Feeding Day, Present, Absent, Excused, Not Recorded, Rate, Recorded.
 	$columnCount = 8;
 @endphp
 
@@ -29,7 +29,7 @@
 					     never added to the absences: the difference between "did
 					     not come" and "nobody wrote it down" is the difference
 					     between a follow-up and a filing job. --}}
-					<th class="num">Not marked</th>
+					<th class="num">{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }}</th>
 					<th class="num">Rate</th>
 					<th>Recorded</th>
 				</tr>
@@ -53,6 +53,8 @@
 						<td>
 							@if ($session['complete'])
 								<span class="badge badge-normal">Complete</span>
+							@elseif ($session['recorded'] === 0)
+								<span class="badge badge-neutral">{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }}</span>
 							@else
 								<span class="badge badge-monitor">{{ $session['recorded'] }} of {{ $session['expected'] }}</span>
 							@endif

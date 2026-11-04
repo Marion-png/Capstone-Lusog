@@ -54,7 +54,7 @@
 		<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></div>
 	</div>
 	<div class="kpi-value">{{ $t['absent'] }}</div>
-	<div class="kpi-hint">{{ $t['unmarked'] > 0 ? $t['unmarked'].' not yet recorded' : 'All beneficiaries recorded' }}</div>
+	<div class="kpi-hint">{{ $t['unmarked'] > 0 ? $t['unmarked'].' '.\App\Support\FeedingAttendanceMark::NOT_RECORDED : 'All beneficiaries recorded' }}</div>
 </article>
 
 <article class="card kpi {{ $rateAccent }}">

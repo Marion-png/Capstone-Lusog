@@ -34,9 +34,12 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  * The rows come from the client as an ordered list of record ids — exactly the
  * rows the coordinator had on screen after filtering, searching and sorting, in
  * that order. They are re-read and re-scoped to the coordinator's own school
- * here, because ids off the wire decide nothing on their own. With no ids (a
- * browser with JS off) the export falls back to this school's whole enrolled
- * roll for the year on screen, so the button is never a dead end.
+ * here, because ids off the wire decide nothing on their own, and only an
+ * enrolled learner is written: the Beneficiaries tab's All Students view has
+ * the whole school on screen, and this document is the enrolled roll whichever
+ * view it was asked for from. With no ids (a browser with JS off) the export
+ * falls back to this school's whole enrolled roll for the year on screen, so
+ * the button is never a dead end.
  *
  * **Three lists, not one, because the school keeps three.** The coordinator was
  * explicit that the master list of learners the measurement *qualifies* and the
@@ -69,10 +72,7 @@ class FeedingMasterlistExportController extends Controller
      * The enrolled roll — what Export Masterlist writes — carries the title of
      * the school's own template word for word, which is also the heading the
      * SBFP Forms page prints over the same learners and the attendance sheet
-     * prints over their attendance. It used to export as "Master List of
-     * Beneficiaries", the heading the SBFP Forms page gives a different roll
-     * (every learner the class advisers enrolled, ADVISER_ROLL_TITLE), so the
-     * workbook and the form of the same name listed different children.
+     * prints over their attendance.
      */
     public const LISTS = [
         'beneficiaries' => [
@@ -92,10 +92,10 @@ class FeedingMasterlistExportController extends Controller
     ];
 
     /**
-     * The SBFP Forms page's other roll: every learner the class advisers
-     * enrolled, measured or not. This endpoint never writes it.
+     * The heading of the SBFP Forms page's other template. It lists the same
+     * learners as the enrolled roll: the ones the Feeding Coordinator enrolled.
      */
-    public const ADVISER_ROLL_TITLE = 'Master List of Beneficiaries';
+    public const BENEFICIARY_LIST_TITLE = 'Master List of Beneficiaries';
 
     public function __invoke(Request $request): BinaryFileResponse|RedirectResponse
     {
@@ -243,9 +243,12 @@ class FeedingMasterlistExportController extends Controller
                 ]);
         } else {
             // The client's order is the order on screen, which is the order the
-            // coordinator chose — so it is preserved rather than re-sorted.
+            // coordinator chose — so it is preserved rather than re-sorted. The
+            // ids choose among the enrolled, never beyond them.
             $position = array_flip($requested->all());
-            $records = $records->sortBy(fn (StudentHealthRecord $record): int => $position[$record->id] ?? PHP_INT_MAX);
+            $records = $records
+                ->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isBeneficiary($record))
+                ->sortBy(fn (StudentHealthRecord $record): int => $position[$record->id] ?? PHP_INT_MAX);
         }
 
         return $records

@@ -320,14 +320,44 @@ class FeedingBeneficiaryCardsTest extends TestCase
         // The Beneficiaries tab exports the enrolled roll under the school's
         // own template title. The candidate list of every qualified learner is
         // a separate document under its own title (?list=qualified), and the
-        // advisers' roll (ADVISER_ROLL_TITLE) is a different list again.
+        // Master List of Beneficiaries (BENEFICIARY_LIST_TITLE) is its own form.
         $this->assertStringContainsString(FeedingMasterlistExportController::LISTS['beneficiaries'][0], $sheet);
-        $this->assertStringNotContainsString(FeedingMasterlistExportController::ADVISER_ROLL_TITLE, $sheet);
+        $this->assertStringNotContainsString(FeedingMasterlistExportController::BENEFICIARY_LIST_TITLE, $sheet);
         $this->assertStringContainsString('TEST SCHOOL', $sheet);
         $this->assertStringContainsString('Maria Clara Santos', $sheet);
         $this->assertStringContainsString('Sampaguita', $sheet);
         $this->assertStringContainsString('Prepared by:', $sheet);
         $this->assertStringContainsString('Noted by:', $sheet);
+    }
+
+    /**
+     * The All Students view has the whole school on screen, and its ids reach
+     * the export and the print. The enrolled roll is still all they write.
+     */
+    #[Test]
+    public function the_masterlist_writes_enrolled_learners_only_whatever_ids_are_sent(): void
+    {
+        $enrolled = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', name: 'Enrolled Learner');
+        $waiting = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', enrolled: false, name: 'Waiting Learner');
+        $normal = $this->makeStudent('Grade 7 / Sampaguita', 'Normal', enrolled: false, name: 'Normal Learner');
+        $ids = [$waiting->id, $enrolled->id, $normal->id];
+
+        $sheet = $this->readSheetXml($this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-health-records/masterlist', ['record_ids' => $ids, 'scoped' => '1'])
+            ->assertOk()
+            ->streamedContent());
+
+        $this->assertStringContainsString('Enrolled Learner', $sheet);
+        $this->assertStringNotContainsString('Waiting Learner', $sheet);
+        $this->assertStringNotContainsString('Normal Learner', $sheet);
+
+        $paper = $this->withSession($this->coordinatorSession())
+            ->get(route('dashboard.feedingcor-health-records.masterlist.print', ['scoped' => 1, 'ids' => implode(',', $ids)]))
+            ->assertOk();
+
+        $paper->assertSee('Enrolled Learner');
+        $paper->assertDontSee('Waiting Learner');
+        $paper->assertDontSee('Normal Learner');
     }
 
     /**

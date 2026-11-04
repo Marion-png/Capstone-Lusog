@@ -1766,6 +1766,9 @@ class StudentHealthRecordController extends Controller
                 // NULL, not 0: a learner no confirmed session has covered has
                 // no turnout to report, which the table prints as an em dash.
                 'attendance_rate' => $standings[$id]['rate'] ?? null,
+                // A beneficiary nobody has recorded on any day, which the
+                // Attendance column says rather than leaving a dash.
+                'attendance_not_recorded' => isset($standings[$id]) && $standings[$id]['marks'] === 0,
                 'sex' => $sex,
                 'attendance_today' => match ($todayMarks->get($id ?? -1, FeedingAttendanceMark::NOT_MARKED)) {
                     FeedingAttendanceMark::PRESENT => 'present',
@@ -1932,7 +1935,7 @@ class StudentHealthRecordController extends Controller
                     'present' => 'Present today',
                     'absent' => 'Absent today',
                     'excused' => 'Excused today',
-                    'unmarked' => 'Unmarked today',
+                    'unmarked' => FeedingAttendanceMark::NOT_RECORDED.' today',
                 ],
                 'beneficiary' => [
                     'enrolled' => 'Enrolled',

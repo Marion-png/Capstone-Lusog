@@ -15,6 +15,12 @@
     The standalone page (dashboard.consultation-create) is still there and
     still works — this does not replace it, so an existing bookmark or a
     direct link keeps behaving.
+
+    It is also where a recorded visit is corrected: a trigger carrying
+    data-consult-edit (ConsultationMedicines::forEditing) opens it on that visit,
+    posting to consultations.update. The medicine and the photographs belong to
+    recording a visit, so they step aside, and the medicine given is shown
+    read-only.
 --}}
 @php
     use App\Models\Condition;
@@ -44,8 +50,13 @@
     // types a name or an LRN and chooses the learner, and the grade and
     // section come off the record rather than being typed against it. Names
     // are encrypted at rest, so the index is embedded and searched in the
-    // browser.
-    $consultLearnerIndex = \App\Support\LearnerSearchIndex::fromSession(request());
+    // browser. A page that only corrects visits passes an empty one, and the
+    // whole school's names stay off it.
+    $consultLearnerIndex = $learnerIndex ?? \App\Support\LearnerSearchIndex::fromSession(request());
+
+    // A correction that failed validation comes back here carrying the visit
+    // it was for, and has to reopen as that correction.
+    $consultEditingId = (int) old('consultation_id', 0);
 
 @endphp
 
@@ -54,8 +65,12 @@
 <div class="bmodal" id="consultModal" role="dialog" aria-modal="true" aria-labelledby="consultModalTitle"
      @if ($errors->consultation->any()) data-bmodal-autoopen @endif>
     <div class="bmodal-panel bmodal-panel-wide">
-        <form method="POST" action="{{ route('consultations.store') }}" enctype="multipart/form-data">
+        <form method="POST"
+              action="{{ $consultEditingId > 0 ? route('consultations.update', $consultEditingId) : route('consultations.store') }}"
+              data-store-action="{{ route('consultations.store') }}"
+              enctype="multipart/form-data">
             @csrf
+            <input type="hidden" name="consultation_id" id="cm_consultation_id" value="{{ $consultEditingId > 0 ? $consultEditingId : '' }}">
             {{-- Where the save comes back to: the page the dialog was opened
                  on, not always the Consultation Log. A profile sets it to
                  itself with the learner open, so the nurse lands back on the
@@ -66,7 +81,7 @@
                 <div>
                     <div class="bmodal-eyebrow">Consultation</div>
                     <div class="bmodal-title" id="consultModalTitle">New consultation</div>
-                    <div class="bmodal-sub">Record a clinic visit and the treatment given.</div>
+                    <div class="bmodal-sub" id="consultModalSub">Record a clinic visit and the treatment given.</div>
                 </div>
                 <button type="button" class="bmodal-close" data-bmodal-close aria-label="Close">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -236,6 +251,12 @@
                     @endif
                 </div>
 
+                <div class="bmodal-field" id="cm_given_field" hidden>
+                    <label for="cm_given_value">Medicine given</label>
+                    <input id="cm_given_value" type="text" readonly tabindex="-1">
+                </div>
+
+                <div data-cm-new-only>
                 @if ($consultMayDispense)
                     {{-- Optional. Choosing one deducts it from stock when the
                          consultation saves — one action, one transaction, so a
@@ -277,6 +298,7 @@
                     @endif
                     <div class="bmodal-hint cm-dispense-hint">Deducted from inventory when this consultation is saved.</div>
                 @endif
+                </div>
 
                 <div class="bmodal-field cm-recommendations">
                     <label for="cm_treatment_given">Recommendations <span class="bmodal-optional">(optional)</span></label>
@@ -321,6 +343,7 @@
                      dialog on the log, so one taken now and one added later
                      are the same record. They stay in the clinic: the class
                      adviser never sees a consultation photo. --}}
+                <div data-cm-new-only>
                 @if (\App\Support\SchemaCache::hasTable('consultation_photos'))
                     <div class="bmodal-field" id="cm_photos_field">
                         <label for="cm_photos">Photos of the injury <span class="bmodal-optional">(optional)</span></label>
@@ -341,11 +364,12 @@
                                value="{{ old('photo_caption') }}" placeholder="e.g. Graze to the left knee, cleaned and dressed" autocomplete="off">
                     </div>
                 @endif
+                </div>
             </div>
 
             <div class="bmodal-foot">
                 <button type="button" class="bmodal-btn bmodal-btn-ghost" data-bmodal-close>Cancel</button>
-                <button type="submit" class="bmodal-btn bmodal-btn-primary">Save consultation</button>
+                <button type="submit" class="bmodal-btn bmodal-btn-primary" id="cm_save">Save consultation</button>
             </div>
         </form>
     </div>
@@ -388,6 +412,13 @@
         color: var(--lg-amber-ink, #7A5A16);
     }
     #consultModal select option:disabled { color: #8A9A91; }
+
+    /* Correcting a recorded visit: what only recording one takes steps aside,
+       and the note about a locked field is about a different lock. */
+    #consultModal [data-cm-new-only][hidden],
+    #consultModal #cm_given_field[hidden],
+    #consultModal #consultModalSub[hidden] { display: none; }
+    #consultModal.is-editing .bmodal-note { display: none; }
 
     /* The medicine field sits in the shared grid, which has no bottom margin
        of its own; the lines under it close the group before Recommendations. */
@@ -762,8 +793,18 @@
         forLearner(nameField.value, restoredLrn);
     }
 
+    // The condition field, reached from outside its own block below.
+    let conditionField = {
+        set(id, text) {
+            const field = document.getElementById('cm_condition_id');
+            if (field) field.value = text;
+        },
+        reset() {},
+    };
+
     // Called by the profile's "New Consultation" button.
     window.openConsultationFor = (name, section, lrn) => {
+        leaveEdit();
         if (nameField) nameField.value = name || '';
         if (sectionField) sectionField.value = section || '';
 
@@ -776,7 +817,7 @@
         // was just filled in.
         window.__consultPrefilled = true;
 
-        const trigger = document.querySelector('[data-bmodal-open="consultModal"]');
+        const trigger = document.querySelector('[data-bmodal-open="consultModal"]:not([data-consult-edit])');
         if (trigger) {
             trigger.click();
             return;
@@ -838,6 +879,40 @@
         // every time rather than moving up and down the list as the nurse
         // types. Excluding it here is what stops it appearing twice.
         const otherCondition = conditions.find((c) => String(c.id) === catchAll) || null;
+
+        const firstAnswer = hidden.value;
+
+        conditionField = {
+            // A recorded visit's condition: the catalogue entry it was filed
+            // under or whose name it carries, or its own words under "Others".
+            // At a school with no "Others" a condition off the catalogue is left
+            // for choosing, since a typed name nobody picked cannot be saved.
+            set(id, text) {
+                const named = String(text || '').trim().toLowerCase();
+                const listed = conditions.find((c) => String(c.id) === String(id ?? ''))
+                    || conditions.find((c) => c.name.toLowerCase() === named)
+                    || null;
+
+                if (listed && String(listed.id) !== catchAll) {
+                    hidden.value = listed.id;
+                    search.value = listed.name;
+                    syncOther();
+                } else if (otherCondition) {
+                    hidden.value = catchAll;
+                    search.value = otherCondition.name;
+                    syncOther();
+                    otherInput.value = text;
+                } else {
+                    hidden.value = '';
+                    search.value = text;
+                    syncOther();
+                }
+            },
+            reset() {
+                hidden.value = firstAnswer;
+                syncOther();
+            },
+        };
 
         // Built from DOM nodes, never innerHTML: these names come out of the
         // database and a template string would run any markup inside one.
@@ -1127,10 +1202,112 @@
         });
     }
 
+    // ── Correcting a recorded visit ──────────────────────────────────
+    const modal = document.getElementById('consultModal');
+    const form = modal ? modal.querySelector('form') : null;
+    const editId = document.getElementById('cm_consultation_id');
+    const title = document.getElementById('consultModalTitle');
+    const sub = document.getElementById('consultModalSub');
+    const save = document.getElementById('cm_save');
+    const givenField = document.getElementById('cm_given_field');
+    const givenValue = document.getElementById('cm_given_value');
+    const medicine = document.getElementById('cm_medicine_id');
+    const newOnly = modal ? Array.from(modal.querySelectorAll('[data-cm-new-only]')) : [];
+    const newTitle = title ? title.textContent : '';
+    const newSave = save ? save.textContent : '';
+
+    let editing = false;
+    // Reopened by a failed save, so the form's defaults are that save's values.
+    let reopened = false;
+
+    const showEditing = (visit) => {
+        editing = true;
+        modal.classList.add('is-editing');
+        title.textContent = 'Edit consultation';
+        sub.hidden = true;
+        save.textContent = 'Save changes';
+        newOnly.forEach((block) => { block.hidden = true; });
+
+        const given = String(visit.medicine || '');
+        givenValue.value = given;
+        givenField.hidden = given === '';
+
+        // A dispense was checked against this learner and is filed under them,
+        // so the visit stays theirs. The server holds this too.
+        lockLearner(given !== '' ? visit.name : '', given !== '' ? visit.section : '');
+    };
+
+    function leaveEdit() {
+        if (!editing) return;
+
+        if (reopened) {
+            window.location.assign(window.location.href);
+            return;
+        }
+
+        editing = false;
+        modal.classList.remove('is-editing');
+        form.reset();
+        form.action = form.dataset.storeAction;
+        editId.value = '';
+        title.textContent = newTitle;
+        sub.hidden = false;
+        save.textContent = newSave;
+        givenValue.value = '';
+        givenField.hidden = true;
+        newOnly.forEach((block) => { block.hidden = false; });
+        conditionField.reset();
+        lockLearner('', '');
+        forLearner('', '');
+        if (medicine) medicine.dispatchEvent(new Event('change'));
+    }
+
+    const openEdit = (visit) => {
+        form.action = visit.url;
+        editId.value = visit.id;
+        document.getElementById('cm_consulted_at').value = visit.consulted_at;
+        document.getElementById('cm_status').value = visit.status;
+        if (nameField) nameField.value = visit.name;
+        if (sectionField) sectionField.value = visit.section;
+        forLearner('', '');
+        conditionField.set(visit.condition_id, visit.condition);
+        document.getElementById('cm_treatment_given').value = visit.treatment;
+        const notes = document.getElementById('cm_notes');
+        if (notes) notes.value = visit.notes;
+        const shared = form.querySelector('[name="notes_shared_with_adviser"]');
+        if (shared) shared.checked = visit.notes_shared;
+        showEditing(visit);
+    };
+
+    if (modal && form) {
+        // However the dialog closes, the next one opened is a new consultation,
+        // and a form left holding this visit would hold back the page's reload.
+        let wasOpen = false;
+
+        new MutationObserver(() => {
+            const isOpen = modal.classList.contains('open');
+            if (editing && wasOpen && !isOpen) leaveEdit();
+            wasOpen = isOpen;
+        }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+
+        if (editId.value !== '') {
+            const trigger = document.querySelector('[data-consult-edit-id="' + editId.value + '"]');
+            reopened = true;
+            showEditing(trigger ? JSON.parse(trigger.dataset.consultEdit) : {});
+        }
+    }
+
     // A trigger may carry the learner on itself.
     document.addEventListener('click', (event) => {
         const trigger = event.target.closest('[data-bmodal-open="consultModal"]');
         if (!trigger) return;
+
+        if (trigger.dataset.consultEdit !== undefined) {
+            openEdit(JSON.parse(trigger.dataset.consultEdit));
+            return;
+        }
+
+        leaveEdit();
 
         const carriesLearner = trigger.dataset.consultName !== undefined
             || trigger.dataset.consultSection !== undefined;

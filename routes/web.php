@@ -454,6 +454,10 @@ Route::get('/dashboard/consultation-log/new', [ConsultationController::class, 'c
 Route::post('/dashboard/consultation-log', [ConsultationController::class, 'store'])
     ->name('consultations.store');
 
+Route::post('/dashboard/consultation-log/{consultation}', [ConsultationController::class, 'update'])
+    ->whereNumber('consultation')
+    ->name('consultations.update');
+
 // API: list active institutions for registration dropdown
 // The account-request form's school list is this endpoint's only consumer, and
 // registration is limited to one school — so it returns that one school rather

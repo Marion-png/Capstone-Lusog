@@ -456,7 +456,7 @@
 							<div class="sh-fact"><dt>Absent</dt><dd>{{ $row['absent'] }}</dd></div>
 							{{-- Feeding days no sheet covered this learner. Named on
 							     its own, never counted as an absence. --}}
-							<div class="sh-fact"><dt>Not marked</dt><dd>{{ $row['not_marked'] }}</dd></div>
+							<div class="sh-fact"><dt>{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }}</dt><dd>{{ $row['not_marked'] }}</dd></div>
 							@if ($showFlags)
 								<div class="sh-fact"><dt>Standing</dt><dd>{{ $row['attendance_label'] }}</dd></div>
 							@endif

@@ -409,6 +409,11 @@ class FeedingAttendanceController extends Controller
         $allMarks = $this->marksFor($allBeneficiaries);
         $allByDate = $allMarks->groupBy('date')->map(fn (Collection $rows) => $rows->keyBy('record_id'));
 
+        // Every date a learner should have a mark for, a day nobody recorded
+        // included. Read off the whole roll: narrowing to one section must not
+        // change which days the school was due to record.
+        $dueDates = $cycle->dueDates($allMarks->pluck('date')->unique());
+
         // The school's date, not the server's: it decides which session is open.
         $today = FeedingAttendanceWindow::today();
         $selectedDate = $this->resolveDate(
@@ -482,7 +487,7 @@ class FeedingAttendanceController extends Controller
             && $withinWindow
             && $allBeneficiaries->isNotEmpty();
 
-        $standings = $this->standings($beneficiaries, $byRecord, $rule, count($sessionDates));
+        $standings = $this->standings($beneficiaries, $byRecord, $rule, count($dueDates));
         // Flagged learners only: the threshold reached AND the record confirmed
         // by the coordinator. Those awaiting confirmation and those under an
         // attendance notice are reported as their own figures, never added.
@@ -535,8 +540,9 @@ class FeedingAttendanceController extends Controller
             'programDuration' => $cycle->durationDays(),
             'window' => $window,
             'sessionDates' => $sessionDates,
-            'previousDate' => $this->stepDate($selectedDate, $sessionDates, $window, -1, $institutionId),
-            'nextDate' => $this->stepDate($selectedDate, $sessionDates, $window, 1, $institutionId),
+            'dueDates' => $dueDates,
+            'previousDate' => $this->stepDate($selectedDate, $dueDates, $window, -1, $institutionId),
+            'nextDate' => $this->stepDate($selectedDate, $dueDates, $window, 1, $institutionId),
             // The weekdays the school is closed, for the date picker to lock
             // beside the weekends.
             'closedDates' => SchoolCalendar::pickerDates($institutionId),
@@ -600,7 +606,7 @@ class FeedingAttendanceController extends Controller
                 'minimumObservationDays' => $rule->minimumObservationDays(),
                 'observationRule' => $rule->describeObservation(),
             ],
-            'history' => $this->history($beneficiaries, $byDate, $sessionDates),
+            'history' => $this->history($beneficiaries, $byDate, $dueDates),
             'beneficiaryRows' => $this->beneficiaryRows(
                 $beneficiaries,
                 $standings,
@@ -609,11 +615,11 @@ class FeedingAttendanceController extends Controller
                 $filters
             ),
             'calendar' => $this->calendar($selectedDate, $byDate, $beneficiaries->count(), $institutionId),
-            // Who was present, absent, excused or not marked on each day of the
+            // Who was present, absent, excused or not recorded on each day of the
             // calendar's month, for the dialog a day opens. Only the Calendar
             // draws it, so only the Calendar pays for it.
             'calendarDetail' => $view === 'calendar'
-                ? $this->calendarDetail($beneficiaries, $byDate, $sessionDates, $selectedDate, $institutionId)
+                ? $this->calendarDetail($beneficiaries, $byDate, $dueDates, $selectedDate, $institutionId)
                 : null,
             'exportRows' => $this->exportRows($beneficiaries, $byRecord),
         ];
@@ -705,15 +711,15 @@ class FeedingAttendanceController extends Controller
      * that decided their flag, and the badge beside it is the one state the
      * rule put them in.
      *
-     * `not_marked` is the school's feeding days minus the days this learner was
-     * marked on at all. It is reported as its own figure and never folded into
-     * absences: a session no sheet covered them for is a missing record, and
-     * the difference between "did not come" and "nobody wrote it down" is the
-     * difference between a follow-up and a filing job.
+     * `not_marked` (printed as Not Recorded) is the days a learner should have
+     * a mark for, minus the days they have one. It is reported as its own
+     * figure and never folded into absences: a day nobody wrote them down on is
+     * a missing record, and the difference between "did not come" and "nobody
+     * wrote it down" is the difference between a follow-up and a filing job.
      *
      * @param  Collection<int, StudentHealthRecord>  $beneficiaries
      * @param  Collection<int, Collection<int, array<string, mixed>>>  $byRecord
-     * @param  int  $sessionCount  feeding days the school recorded at all
+     * @param  int  $sessionCount  FeedingProgramCycle::dueDates(), counted
      * @return array<int, array{present: int, absent: int, confirmed: int, unconfirmed: int, not_marked: int, rate: ?float, at_risk: bool, status: string, sessions_needed: int}>
      */
     private function standings(Collection $beneficiaries, Collection $byRecord, FeedingAtRiskRule $rule, int $sessionCount): array
@@ -780,7 +786,8 @@ class FeedingAttendanceController extends Controller
     }
 
     /**
-     * One row per feeding day: what the school recorded that session.
+     * One row per feeding day: what the school recorded that session, and a row
+     * of Not Recorded for a day that ended with nothing on file.
      *
      * The view carries no toolbar (UNFILTERED_VIEWS), so $beneficiaries and
      * $byDate arrive as the whole enrolled roll and every row is the school's
@@ -788,15 +795,15 @@ class FeedingAttendanceController extends Controller
      *
      * @param  Collection<int, StudentHealthRecord>  $beneficiaries
      * @param  Collection<string, Collection<int, array<string, mixed>>>  $byDate
-     * @param  list<string>  $sessionDates
+     * @param  list<string>  $dueDates
      * @return list<array<string, mixed>>
      */
-    private function history(Collection $beneficiaries, Collection $byDate, array $sessionDates): array
+    private function history(Collection $beneficiaries, Collection $byDate, array $dueDates): array
     {
         $expected = $beneficiaries->count();
         $history = [];
 
-        foreach ($sessionDates as $index => $date) {
+        foreach ($dueDates as $index => $date) {
             $rows = $byDate->get($date, collect());
             $present = $rows->where('status', FeedingAttendanceMark::PRESENT)->count();
             $absent = $rows->where('status', FeedingAttendanceMark::ABSENT)->count();
@@ -814,8 +821,9 @@ class FeedingAttendanceController extends Controller
                 'absent' => $absent,
                 'excused' => $excused,
                 'unconfirmed' => $unconfirmed,
-                // Feeding days nobody wrote this population down on. Its own
-                // figure, never added to the absences.
+                // Learners nobody wrote down that day: the whole roll on a day
+                // nothing was recorded. Its own figure, never added to the
+                // absences.
                 'unmarked' => max(0, $expected - $rows->count()),
                 'recorded' => $rows->count(),
                 'expected' => $expected,
@@ -908,10 +916,9 @@ class FeedingAttendanceController extends Controller
                     // Every mark this learner carries, keyed by session date —
                     // what the history dialog reads when the row is opened. It
                     // is the same reading the counts beside it came from, so
-                    // the dialog and the row can never disagree; the school's
-                    // feeding days the learner has no mark on are filled in
-                    // from `sessionDates`, as "Not marked" and never an
-                    // absence.
+                    // the dialog and the row can never disagree; the days the
+                    // learner has no mark on are filled in from `dueDates`, as
+                    // Not Recorded and never an absence.
                     'marks' => $byRecord->get($record->id, collect())
                         ->mapWithKeys(fn (array $mark): array => [$mark['date'] => [
                             'status' => $mark['status'],
@@ -1012,19 +1019,20 @@ class FeedingAttendanceController extends Controller
      *
      * Learners travel once, in `roster`, and each day names them by record
      * id, so a month of sessions does not repeat ninety names twenty times.
-     * Anybody on the roll a recorded day does not name is that day's "not
-     * marked" — worked out in the dialog from the roster, and never an
-     * absence.
+     * Anybody on the roll a day does not name is Not Recorded for it, worked
+     * out in the dialog from the roster and never an absence. `listed` says
+     * whether the day is one they should have a mark for: a day before the
+     * programme's first session is not.
      *
      * Weekends and closed days are left out: they are locked cells with
      * nothing to open. So is a day that has not happened yet.
      *
      * @param  Collection<int, StudentHealthRecord>  $beneficiaries
      * @param  Collection<string, Collection<int, array<string, mixed>>>  $byDate
-     * @param  list<string>  $sessionDates
+     * @param  list<string>  $dueDates
      * @return array{roster: array<int, array{n: string, g: string, s: string}>, days: array<string, array<string, mixed>>}
      */
-    private function calendarDetail(Collection $beneficiaries, Collection $byDate, array $sessionDates, string $selectedDate, ?int $institutionId): array
+    private function calendarDetail(Collection $beneficiaries, Collection $byDate, array $dueDates, string $selectedDate, ?int $institutionId): array
     {
         $roster = [];
         foreach ($beneficiaries as $record) {
@@ -1038,7 +1046,7 @@ class FeedingAttendanceController extends Controller
 
         // A day's place in the programme, counted from the first recorded
         // session — the same numbering Attendance History prints.
-        $feedingDay = array_flip($sessionDates);
+        $feedingDay = array_flip($dueDates);
         $buckets = [
             FeedingAttendanceMark::PRESENT => 'present',
             FeedingAttendanceMark::ABSENT => 'absent',
@@ -1075,6 +1083,7 @@ class FeedingAttendanceController extends Controller
             $days[$date] = $day + [
                 'label' => $cursor->format('l, F j, Y'),
                 'feeding_day' => isset($feedingDay[$date]) ? $feedingDay[$date] + 1 : null,
+                'listed' => isset($feedingDay[$date]) || $date === $today,
             ];
         }
 
@@ -1162,17 +1171,17 @@ class FeedingAttendanceController extends Controller
 
     /**
      * The previous or next day the coordinator can move to: the neighbouring
-     * recorded session if there is one, else the neighbouring calendar day
-     * while it stays inside the programme window.
+     * due date if there is one, else the neighbouring calendar day while it
+     * stays inside the programme window.
      *
-     * @param  list<string>  $sessionDates
+     * @param  list<string>  $dueDates
      * @param  array{start: ?string, end: string}  $window
      */
-    private function stepDate(string $selectedDate, array $sessionDates, array $window, int $direction, ?int $institutionId = null): ?string
+    private function stepDate(string $selectedDate, array $dueDates, array $window, int $direction, ?int $institutionId = null): ?string
     {
         $neighbours = $direction < 0
-            ? array_values(array_filter($sessionDates, fn (string $date): bool => $date < $selectedDate))
-            : array_values(array_filter($sessionDates, fn (string $date): bool => $date > $selectedDate));
+            ? array_values(array_filter($dueDates, fn (string $date): bool => $date < $selectedDate))
+            : array_values(array_filter($dueDates, fn (string $date): bool => $date > $selectedDate));
 
         if ($neighbours !== []) {
             return $direction < 0 ? end($neighbours) : $neighbours[0];

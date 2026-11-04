@@ -57,6 +57,9 @@ class ConsentFormScanController extends Controller
             // says, and a phone hands over a JPEG when the page does not ask
             // for HEIC.
             'photo' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.self::MAX_KILOBYTES],
+            // That same photo as the page shows it, upright, and what the reader
+            // is sent in its place. `photo` stays the file being filed.
+            'sheet' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.self::MAX_KILOBYTES],
             // Parts of that same photo cut by the page (consent-forms._photo-closeups),
             // for the detail one image cannot carry. They are read and not kept.
             'closeups' => ['nullable', 'array', 'max:'.self::MAX_CLOSEUPS],
@@ -68,7 +71,7 @@ class ConsentFormScanController extends Controller
         ]);
 
         try {
-            $draft = $scanner->scan($validated['photo'], array_values($validated['closeups'] ?? []));
+            $draft = $scanner->scan($validated['sheet'] ?? $validated['photo'], array_values($validated['closeups'] ?? []));
         } catch (UploadReadFailure $e) {
             // Written for the adviser — busy, unreachable, a photo the reader
             // would not process — so it is shown as it is. The cause underneath

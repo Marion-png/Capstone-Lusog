@@ -2,18 +2,20 @@
 	$today = $todayAttendance ?? ['expected' => 0, 'present' => 0, 'absent' => 0, 'excused' => 0, 'unconfirmed' => 0, 'unrecorded' => 0, 'percent' => 0.0, 'recorded' => false, 'filtered' => false, 'rows' => [], 'date_label' => ''];
 	// Present and Absent are the two decisions a recorded session produces.
 	// A scanned mark nobody has read, and a learner today's sheet never
-	// covered, are neither — they render as a dash, never as an absence.
+	// covered, are neither, and each says so on the row. Never an absence.
 	$marks = [
 		'present' => ['badge-normal', 'Present'],
 		'absent' => ['badge-critical', 'Absent'],
 		'excused' => ['badge-monitor', 'Excused'],
+		'unconfirmed' => ['badge-neutral', 'Unconfirmed'],
+		'unrecorded' => ['badge-neutral', \App\Support\FeedingAttendanceMark::NOT_RECORDED],
 	];
 @endphp
 
 @php
 	// Today's roll, split five ways. Present and Absent are always named —
 	// they are the two answers a recorded session gives — and the other three
-	// only when someone is in them. Unmarked is a learner no sheet covered,
+	// only when someone is in them. Not Recorded is a learner no sheet covered,
 	// never an absence, so it is drawn as a hatched gap rather than a colour.
 	$expected = max(0, (int) $today['expected']);
 	$split = [
@@ -21,7 +23,7 @@
 		['key' => 'absent', 'label' => 'Absent', 'count' => (int) $today['absent'], 'always' => true],
 		['key' => 'excused', 'label' => 'Excused', 'count' => (int) $today['excused'], 'always' => false],
 		['key' => 'unconfirmed', 'label' => 'Unconfirmed', 'count' => (int) $today['unconfirmed'], 'always' => false],
-		['key' => 'unmarked', 'label' => 'Unmarked', 'count' => (int) $today['unrecorded'], 'always' => false],
+		['key' => 'unmarked', 'label' => \App\Support\FeedingAttendanceMark::NOT_RECORDED, 'count' => (int) $today['unrecorded'], 'always' => false],
 	];
 	$shown = array_values(array_filter($split, fn (array $part): bool => $part['always'] || $part['count'] > 0));
 	$meterLabel = implode(', ', array_map(fn (array $part): string => $part['label'].' '.$part['count'], $shown)).' of '.$expected;
@@ -80,11 +82,7 @@
 					<td>{{ $row['grade'] }}</td>
 					<td>{{ $row['section'] ?: '—' }}</td>
 					<td>
-						@isset ($marks[$row['status']])
-							<span class="badge {{ $marks[$row['status']][0] }}">{{ $marks[$row['status']][1] }}</span>
-						@else
-							<span class="att-none">—</span>
-						@endisset
+						<span class="badge {{ $marks[$row['status']][0] }}">{{ $marks[$row['status']][1] }}</span>
 					</td>
 					<td class="att-remark">{{ $row['remarks'] !== '' ? $row['remarks'] : '—' }}</td>
 				</tr>

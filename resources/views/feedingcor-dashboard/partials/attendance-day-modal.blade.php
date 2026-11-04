@@ -11,8 +11,10 @@
      calendar pane carries — the same marks the grid's ticks were counted
      from — so the dialog and the cell that opened it cannot disagree, and the
      live refresh that redraws the month replaces both together. A learner on
-     the roll that a recorded day does not name is "Not marked": a filing gap,
-     never an absence.
+     the roll that a day does not name is Not Recorded: a filing gap, never an
+     absence. That holds for a day nobody recorded at all, so every learner on
+     the roll reads it there. A day before the programme's first session is not
+     one they should have a mark for, and lists nobody.
 
      The figures are also the filter: pressing Absent lists the absences.
      Anatomy is the shared one (`.modal-backdrop` / `.modal-panel` / `-head` /
@@ -34,7 +36,7 @@
 				'present' => 'Present',
 				'absent' => 'Absent',
 				'excused' => 'Excused',
-				'unmarked' => 'Not marked',
+				'unmarked' => \App\Support\FeedingAttendanceMark::NOT_RECORDED,
 			] as $key => $label)
 				<button type="button" class="ad-figure is-{{ $key }}" data-day-filter="{{ $key }}" aria-pressed="{{ $key === 'all' ? 'true' : 'false' }}">
 					<span class="ad-figure-label">{{ $label }}</span>
@@ -111,7 +113,7 @@
 		absent: ['badge-critical', 'Absent'],
 		excused: ['badge-monitor', 'Excused'],
 		unconfirmed: ['badge-neutral', 'Unconfirmed'],
-		unmarked: ['', 'Not marked'],
+		unmarked: ['badge-neutral', @json(\App\Support\FeedingAttendanceMark::NOT_RECORDED)],
 	};
 	const ORDER = Object.keys(MARKS);
 
@@ -154,13 +156,7 @@
 			const state = document.createElement('td');
 			const [badge, label] = MARKS[row.state];
 			const chip = document.createElement('span');
-			if (badge) {
-				chip.className = 'badge ' + badge;
-			} else {
-				// A day no sheet covered this learner on: a filing gap, never
-				// an absence.
-				chip.className = 'fa-unmarked';
-			}
+			chip.className = 'badge ' + badge;
 			chip.textContent = label;
 			state.appendChild(chip);
 			tr.appendChild(state);
@@ -214,10 +210,10 @@
 
 		const recorded = rows.length;
 
-		// Everybody on the roll the day does not name — but only on a day
-		// that was recorded at all. On a day nobody recorded, ninety rows of
-		// "Not marked" would bury the one thing worth saying.
-		if (recorded > 0) {
+		// Everybody on the roll the day does not name, on any day they should
+		// have a mark for. A day before the programme's first session is not
+		// one of those.
+		if (recorded > 0 || day.listed) {
 			Object.keys(roster).forEach((id) => {
 				if (!named.has(id)) add(id, 'unmarked');
 			});
@@ -232,15 +228,17 @@
 
 		eyebrow.textContent = day.feeding_day ? 'Feeding Day ' + day.feeding_day : 'Feeding Day';
 		title.textContent = day.label;
-		sub.textContent = recorded > 0
+		const listed = rows.length > 0;
+
+		sub.textContent = listed
 			? recorded + ' of ' + expected + ' ' + (expected === 1 ? 'beneficiary' : 'beneficiaries') + ' marked'
 			: expected + ' ' + (expected === 1 ? 'beneficiary' : 'beneficiaries') + ' on the roll';
 
-		figure('all').textContent = recorded > 0 ? String(rows.length) : '0';
+		figure('all').textContent = String(rows.length);
 		figure('present').textContent = String(present);
 		figure('absent').textContent = String(absent);
 		figure('excused').textContent = String(count('excused'));
-		figure('unmarked').textContent = recorded > 0 ? String(count('unmarked')) : '—';
+		figure('unmarked').textContent = listed ? String(count('unmarked')) : '—';
 		// Present over confirmed marks: an excused absence and an unread scan
 		// are in neither half, exactly as Attendance History counts a day.
 		figure('rate').textContent = (present + absent) > 0 ? Math.round((present / (present + absent)) * 100) + '%' : '—';
@@ -250,11 +248,11 @@
 			? unconfirmed + ' scanned ' + (unconfirmed === 1 ? 'mark is' : 'marks are') + ' still awaiting review'
 			: '';
 
-		empty.hidden = recorded > 0;
-		empty.textContent = recorded > 0 ? '' : 'No attendance was recorded on this day.';
-		tools.hidden = recorded === 0;
-		tableWrap.hidden = recorded === 0;
-		filters.forEach((button) => { button.disabled = recorded === 0; });
+		empty.hidden = listed;
+		empty.textContent = listed ? '' : 'No attendance was recorded on this day.';
+		tools.hidden = !listed;
+		tableWrap.hidden = !listed;
+		filters.forEach((button) => { button.disabled = !listed; });
 
 		if (button.dataset.sheetUrl) {
 			sheetLink.href = button.dataset.sheetUrl;

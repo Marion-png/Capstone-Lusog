@@ -146,9 +146,9 @@ class FeedingAttendanceTabTest extends TestCase
         $response = $this->open()->assertOk();
 
         // One present, nobody absent, one still to record. The learner nobody
-        // wrote down reads "Not recorded" on their row — never "Absent".
-        $response->assertSee('Not recorded');
-        $response->assertSee('1 not yet recorded');
+        // wrote down reads "Not Recorded" on their row — never "Absent".
+        $response->assertSee('Not Recorded');
+        $response->assertSee('1 Not Recorded');
         $response->assertSee('Attendance incomplete');
     }
 
@@ -248,7 +248,7 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertSee('Sick');
         $response->assertSee('has been recorded');
         $response->assertSee('until the end of the day');
-        $response->assertSee('Not recorded');
+        $response->assertSee('Not Recorded');
         $this->assertTrue($response->viewData('recordEditing'));
 
         // The sheet itself carries no control, for either learner.
@@ -496,7 +496,7 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertSee('<th class="num">Present</th>', false);
         $response->assertSee('<th class="num">Absent</th>', false);
         $response->assertSee('<th class="num">Excused</th>', false);
-        $response->assertSee('<th class="num">Not marked</th>', false);
+        $response->assertSee('<th class="num">Not Recorded</th>', false);
         $response->assertSee('<th class="num">Rate</th>', false);
     }
 
@@ -586,7 +586,7 @@ class FeedingAttendanceTabTest extends TestCase
             $present->assertDontSee('<th class="num">Absent</th>', false);
 
             // The filing gap and the rate answer the same question either way.
-            $absent->assertSee('<th class="num">Not marked</th>', false);
+            $absent->assertSee('<th class="num">Not Recorded</th>', false);
             $absent->assertSee('<th class="num">Rate</th>', false);
         }
     }
@@ -904,7 +904,7 @@ class FeedingAttendanceTabTest extends TestCase
         $this->assertSame(1, $monday['feeding_day']);
         $this->assertSame('Monday, October 26, 2026', $monday['label']);
 
-        // Tuesday names Ana alone; the dialog works Ben out as "Not marked"
+        // Tuesday names Ana alone; the dialog works Ben out as "Not Recorded"
         // from the roster rather than the payload inventing an absence.
         $this->assertSame([$ana->id], $detail['days']['2026-10-27']['present']);
         $this->assertSame([], $detail['days']['2026-10-27']['absent']);
@@ -1189,7 +1189,7 @@ class FeedingAttendanceTabTest extends TestCase
         // read without it is indistinguishable from one nobody explained.
         $response->assertSee('Fever');
         // The school's feeding days, so a session no sheet covered this learner
-        // on can read "Not marked" rather than vanishing.
+        // on can read "Not Recorded" rather than vanishing.
         $response->assertSee('data-session-dates', false);
         $response->assertSee($today, false);
 
