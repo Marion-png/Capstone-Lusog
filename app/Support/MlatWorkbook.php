@@ -371,12 +371,16 @@ class MlatWorkbook
     }
 
     /**
-     * The form's tick box: brackets with a check mark, or empty. Not the ☑ / ☐
-     * ballot boxes — ☑ is an emoji character, and spreadsheet apps on iPads
-     * and tablets drew it as an empty box, so a ticked answer read as blank.
-     * Brackets and U+2713 (never emoji) are in every tablet's fonts.
+     * The form's tick box: brackets with a check mark, or empty.
+     *
+     * The mark is U+221A, the one the printed form itself asks for ("tsek (√)"),
+     * because it is in the font these cells are written in (Arial) and in every
+     * other common text font. A spreadsheet app only has to draw it, not find it. The
+     * ☑ / ☐ ballot boxes and ✓ (U+2713) are not in those fonts: Excel borrows
+     * them from another font, while WPS Office and tablet apps may draw nothing,
+     * so a ticked answer read as blank.
      */
-    public const BOX_ON = '[✓]';
+    public const BOX_ON = '[√]';
 
     public const BOX_OFF = '[  ]';
 
@@ -385,7 +389,7 @@ class MlatWorkbook
         return $on ? self::BOX_ON : self::BOX_OFF;
     }
 
-    /** One option of the form with its box: "[✓] Asthma". */
+    /** One option of the form with its box: "[√] Asthma". */
     public static function checked(bool $on, string $label): string
     {
         return self::box($on).' '.$label;

@@ -136,6 +136,9 @@
     </form>
 </div>
 
+@if ($scannerReady)
+    @include('consent-forms._photo-closeups')
+@endif
 <script>
 (() => {
     const picker = document.getElementById('paperFile');
@@ -280,6 +283,8 @@
             body.append('lrn', @json((string) $form->student_lrn));
 
             try {
+                await window.consentPhotoCloseups(file, body);
+
                 const response = await fetch(@json(route('consent-forms.scan')), {
                     method: 'POST',
                     headers: {

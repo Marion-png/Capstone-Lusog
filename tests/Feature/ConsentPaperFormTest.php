@@ -251,6 +251,21 @@ class ConsentPaperFormTest extends TestCase
         $this->assertNull($form->refresh()->consent_choice);
     }
 
+    /** The paper recorder reads a photo the way the upload dialog does. */
+    #[Test]
+    public function the_recorder_sends_close_ups_when_a_reader_is_set_up(): void
+    {
+        config()->set('services.gemini.key', 'test-key');
+
+        $html = $this->withSession($this->adviserSession())
+            ->get(route('consent-forms.paper', $this->form()))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertSame(1, substr_count($html, 'window.consentPhotoCloseups = window.consentPhotoCloseups'));
+        $this->assertStringContainsString('await window.consentPhotoCloseups(file, body);', $html);
+    }
+
     // ── Who may reach it ─────────────────────────────────────────────
 
     #[Test]

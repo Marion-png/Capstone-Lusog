@@ -15,23 +15,26 @@ final class ConsentPhotoSummary
         $written = $draft['written'] ?? [];
         $exceptions = trim((string) ($written['consent_exceptions']['text'] ?? ''));
         $excluded = $choice === HealthConsentForm::CONSENT_SPECIFIC
-            ? self::excludedServices($written['consent_exceptions'] ?? [], $draft['field_notes']['consent_exceptions'] ?? null)
+            ? ConsentPaperCopy::exceptedServices($written['consent_exceptions'] ?? [], $draft['field_notes']['consent_exceptions'] ?? null)
             : [];
+        // The reading of the rows the upload dialog files, so this summary and
+        // the list beside it cannot count different services.
         $services = $draft['services'] ?? [];
-        $offered = array_keys(array_filter($services, fn ($value) => $value === ConsentFormScanner::TICKED));
+        $listed = ConsentPaperCopy::tickedServices($services);
+        $unsettled = ConsentPaperCopy::unsettledServices($services);
+        $refused = $choice === HealthConsentForm::CONSENT_DENY;
 
         foreach (HealthConsentForm::PLANNED_SERVICES as $key => $label) {
-            $parent = HealthConsentForm::parentService($key);
             $gradeOnly = ConsentStanding::GRADE_ONLY_SERVICES[$key] ?? null;
 
             if ($gradeOnly !== null && $grade !== $gradeOnly) {
                 $group = 'not_applicable';
             } elseif ($unreadable) {
                 $group = 'unclear';
-            } elseif (! HealthConsentForm::coversService($offered, $key)) {
-                $knownEmpty = ($services[$key] ?? null) === ConsentFormScanner::NOT_TICKED
-                    && ($parent === null || ($services[$parent] ?? null) === ConsentFormScanner::NOT_TICKED);
-                $group = $knownEmpty ? 'not_offered' : 'unclear';
+            } elseif (! $refused && in_array($key, $unsettled, true)) {
+                $group = 'unclear';
+            } elseif (! $refused && ! in_array($key, $listed, true)) {
+                $group = 'not_offered';
             } else {
                 $group = match ($choice) {
                     HealthConsentForm::CONSENT_ALL => 'consented',
@@ -65,6 +68,24 @@ final class ConsentPhotoSummary
         }
         foreach ($draft['unclear'] ?? [] as $field) {
             $warnings[] = 'Check: '.$field.'.';
+        }
+        // A marked heading over empty rows names the service but not which part
+        // of it. Grade-aware, so a Grade 8 form is not sent back to the paper
+        // over a row that class is never given.
+        foreach (HealthConsentForm::SERVICES as $heading => $service) {
+            $rows = array_filter(
+                array_keys($service['children']),
+                fn (string $row): bool => (ConsentStanding::GRADE_ONLY_SERVICES[$row] ?? $grade) === $grade,
+            );
+
+            if (! $unreadable
+                && ($services[$heading] ?? null) === ConsentFormScanner::TICKED
+                && $rows !== []
+                && array_diff($rows, $unsettled) === []
+                && array_filter($rows, fn (string $row): bool => ($services[$row] ?? null) === ConsentFormScanner::UNCLEAR) === []
+            ) {
+                $warnings[] = '"'.HealthConsentForm::SERVICE_NAMES[$heading].'" is ticked, but none of the rows under it is.';
+            }
         }
         if (empty($draft['signature_present'])) {
             $warnings[] = 'No parent or guardian signature was found. Check the signed form.';
@@ -129,52 +150,5 @@ final class ConsentPhotoSummary
         }
 
         return ConsentFormScanner::saysSomething($text) ? $text : $empty;
-    }
-
-    /**
-     * Only an explicit list of service names can be grouped automatically.
-     * A sentence, an unfamiliar term or uncertain handwriting stays for review.
-     *
-     * @return list<string>|null
-     */
-    private static function excludedServices(array $entry, ?string $fieldNote): ?array
-    {
-        if (empty($entry['readable']) || empty($entry['confident']) || $fieldNote) {
-            return null;
-        }
-
-        $aliases = [];
-        foreach (HealthConsentForm::PLANNED_SERVICES as $key => $label) {
-            $aliases[self::normalize($label)] = $key;
-            $aliases[self::normalize(HealthConsentForm::serviceName($key))] = $key;
-            $aliases[self::normalize(HealthConsentForm::SERVICE_NAMES[$key])] = $key;
-        }
-        $aliases += [
-            'check up' => 'checkup', 'checkup' => 'checkup',
-            'dental' => 'dental', 'deworming' => 'deworming', 'pag purga' => 'deworming',
-            'bitok' => 'deworming_worms', 'worms bitok' => 'deworming_worms',
-            'tas' => 'tas', 'iron' => 'iron', 'vitamin a supplementation' => 'vitamin_a',
-            'immunization' => 'immunization', 'bakuna' => 'immunization',
-        ];
-        $whole = self::normalize((string) ($entry['text'] ?? ''));
-        if (isset($aliases[$whole])) {
-            return [$aliases[$whole]];
-        }
-        $parts = preg_split('/[,;\n]+|\s+(?:and|ug)\s+|\s*&\s*/iu', (string) ($entry['text'] ?? ''));
-        $excluded = [];
-        foreach ($parts as $part) {
-            $name = self::normalize($part);
-            if ($name === '' || ! isset($aliases[$name])) {
-                return null;
-            }
-            $excluded[] = $aliases[$name];
-        }
-
-        return $excluded !== [] ? array_values(array_unique($excluded)) : null;
-    }
-
-    private static function normalize(string $text): string
-    {
-        return trim((string) preg_replace('/[^a-z0-9]+/', ' ', strtolower($text)));
     }
 }

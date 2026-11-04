@@ -64,7 +64,7 @@ final class ConsentPaperCopy
             // checks is the reading that is filed.
             'services' => self::tickedServices($services),
             'exceptions' => $choice === HealthConsentForm::CONSENT_SPECIFIC ? trim((string) ($written['consent_exceptions']['text'] ?? '')) : '',
-            'excluded' => null,
+            'excluded' => $choice === HealthConsentForm::CONSENT_SPECIFIC ? self::exceptedFromDraft($draft) : null,
         ] : null;
 
         return self::copy(
@@ -74,42 +74,186 @@ final class ConsentPaperCopy
             fn (string $line): string => (string) ($written[$line]['text'] ?? ''),
             $answer,
             $grade,
+            self::unsettledServices($services),
         );
     }
 
     /**
-     * The services the letter lists that a read paper ticks, as an upload
-     * stores them: each sub-item read off its own box, and a ticked heading
-     * (Pag Purga, Immunization) covering its sub-items only when none of them
-     * is ticked on its own — a parent who ticks the heading and one sub-item
-     * has chosen that sub-item. The upload dialog posts exactly this list.
+     * The services a read paper marks, as an upload stores them: a row counts
+     * when its own box is ticked, and for no other reason. The upload dialog
+     * posts exactly this list.
+     *
+     * A ticked heading (Pag Purga, Immunization) is not a tick on the rows under
+     * it. It used to cover them when none was ticked, which put an authorisation
+     * on boxes the paper shows empty — and a reader that missed the small
+     * sub-item boxes under a heading it did see approved all of them at once.
+     * See unsettledServices() for what such a row reads as instead.
      *
      * @param  array<string, mixed>  $boxes  every box of the letter's list, as the reader reported it
      * @return list<string> keys of HealthConsentForm::PLANNED_SERVICES
      */
     public static function tickedServices(array $boxes): array
     {
-        $ticked = fn (string $key): bool => ($boxes[$key] ?? null) === self::TICKED;
-        $keys = array_keys(HealthConsentForm::PLANNED_SERVICES);
+        return array_values(array_filter(
+            array_keys(HealthConsentForm::PLANNED_SERVICES),
+            fn (string $key): bool => ($boxes[$key] ?? null) === self::TICKED,
+        ));
+    }
 
-        return array_values(array_filter($keys, function (string $key) use ($ticked, $keys): bool {
-            if ($ticked($key)) {
+    /**
+     * The rows a person has to settle from the paper: a box the reader could
+     * not make out, and the rows under a heading that is marked (or might be)
+     * when none of them is ticked — the paper says the service, not which.
+     *
+     * @param  array<string, mixed>  $boxes  every box of the letter's list, as the reader reported it
+     * @return list<string> keys of HealthConsentForm::PLANNED_SERVICES
+     */
+    public static function unsettledServices(array $boxes): array
+    {
+        $ticked = self::tickedServices($boxes);
+
+        return array_values(array_filter(array_keys(HealthConsentForm::PLANNED_SERVICES), function (string $key) use ($boxes, $ticked): bool {
+            if (in_array($key, $ticked, true)) {
+                return false;
+            }
+
+            if (($boxes[$key] ?? self::EMPTY) === self::UNCLEAR) {
                 return true;
             }
 
             $parent = HealthConsentForm::parentService($key);
-            if ($parent === null || ! $ticked($parent)) {
-                return false;
-            }
 
-            foreach ($keys as $other) {
-                if (HealthConsentForm::parentService($other) === $parent && $ticked($other)) {
-                    return false;
-                }
-            }
-
-            return true;
+            return $parent !== null
+                && ($boxes[$parent] ?? self::EMPTY) !== self::EMPTY
+                && array_intersect(array_keys(HealthConsentForm::SERVICES[$parent]['children']), $ticked) === [];
         }));
+    }
+
+    /**
+     * What the confirmation step starts from, for each answer an agreed form
+     * can be filed under. `approved` is pre-ticked; `check` is left unticked
+     * and flagged. Every doubt lands on "not approved": an adviser can tick a
+     * row they can see on the paper, but a tick nobody looked at is an
+     * authorisation nobody gave.
+     *
+     * "Yes, except" whose exceptions cannot be named as services proposes
+     * nothing at all, since any row on the paper might be the one left out.
+     *
+     * @param  array<string, mixed>  $draft  ConsentFormScanner::interpret(), after checkLearner()
+     * @return array{full: array{approved: list<string>, check: list<string>}, partial: array{approved: list<string>, check: list<string>}}
+     */
+    public static function proposal(array $draft): array
+    {
+        $boxes = (array) ($draft['services'] ?? []);
+        $listed = self::tickedServices($boxes);
+        $unsettled = self::unsettledServices($boxes);
+        $excepted = self::exceptedFromDraft($draft);
+
+        $kept = fn (array $keys): array => array_values(array_filter(
+            $keys,
+            fn (string $key): bool => ! HealthConsentForm::coversService($excepted ?? [], $key),
+        ));
+
+        return [
+            'full' => ['approved' => $listed, 'check' => $unsettled],
+            'partial' => $excepted === null
+                ? [
+                    'approved' => [],
+                    'check' => array_values(array_intersect(array_keys(HealthConsentForm::PLANNED_SERVICES), [...$listed, ...$unsettled])),
+                ]
+                : ['approved' => $kept($listed), 'check' => $kept($unsettled)],
+        ];
+    }
+
+    /**
+     * The services a parent's "gawas lamang niini" line names, or null when
+     * that cannot be said for certain. Only an explicit list of service names
+     * counts: a sentence, an unfamiliar word or a reading the reader was unsure
+     * of stays for a person, because reading "no deworming" as a list is how a
+     * refusal becomes a consent.
+     *
+     * @param  array<string, mixed>  $entry  the written line, as the reader reported it
+     * @return list<string>|null keys of HealthConsentForm::SERVICES and their sub-items
+     */
+    public static function exceptedServices(array $entry, ?string $fieldNote = null): ?array
+    {
+        if (empty($entry['readable']) || empty($entry['confident']) || $fieldNote) {
+            return null;
+        }
+
+        $text = (string) ($entry['text'] ?? '');
+        $names = self::exceptionNames();
+
+        // The whole line may be one service's name, with an "ug" of its own
+        // ("Check Up sa Dentist ug Ibot sa Ngipon").
+        if (isset($names[self::plainWords($text)])) {
+            return [$names[self::plainWords($text)]];
+        }
+
+        $excepted = [];
+
+        foreach ((array) preg_split('/[,;\/\n]+|\s+(?:and|ug|og|at)\s+|\s*&\s*/iu', $text) as $part) {
+            $name = self::plainWords((string) $part);
+
+            if ($name === '' || ! isset($names[$name])) {
+                return null;
+            }
+
+            $excepted[] = $names[$name];
+        }
+
+        return $excepted !== [] ? array_values(array_unique($excepted)) : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $draft
+     * @return list<string>|null
+     */
+    private static function exceptedFromDraft(array $draft): ?array
+    {
+        return self::exceptedServices(
+            (array) ($draft['written']['consent_exceptions'] ?? []),
+            $draft['field_notes']['consent_exceptions'] ?? null,
+        );
+    }
+
+    /**
+     * The names a parent writes a service by, in the catalogue's words and the
+     * letter's, in English and Cebuano.
+     *
+     * @return array<string, string>
+     */
+    private static function exceptionNames(): array
+    {
+        $names = [];
+
+        foreach (array_keys(HealthConsentForm::PLANNED_SERVICES) as $key) {
+            foreach ([
+                HealthConsentForm::PLANNED_SERVICES[$key],
+                HealthConsentForm::serviceName($key),
+                HealthConsentForm::SERVICE_NAMES[$key],
+                HealthConsentForm::serviceLabels()[$key],
+            ] as $name) {
+                $names[self::plainWords($name)] = $key;
+            }
+        }
+
+        return $names + [
+            'check up' => 'checkup', 'checkup' => 'checkup', 'eksaminasyon' => 'checkup', 'examination' => 'checkup',
+            'dental' => 'dental', 'dentist' => 'dental', 'ngipon' => 'dental', 'ibot' => 'dental', 'ibot sa ngipon' => 'dental', 'bunot' => 'dental', 'tooth extraction' => 'dental',
+            'deworming' => 'deworming', 'purga' => 'deworming', 'pag purga' => 'deworming', 'pagpurga' => 'deworming',
+            'bitok' => 'deworming_worms', 'pag bitok' => 'deworming_worms', 'worms' => 'deworming_worms', 'worms bitok' => 'deworming_worms', 'bulate' => 'deworming_worms',
+            'schisto' => 'deworming_schistosomiasis',
+            'tas' => 'tas', 'transmission assessment survey' => 'tas',
+            'iron' => 'iron', 'iron supplementation' => 'iron', 'pula nga dugo' => 'iron',
+            'vitamin a' => 'vitamin_a', 'vitamin a supplementation' => 'vitamin_a', 'bitamina a' => 'vitamin_a', 'bitamina' => 'vitamin_a',
+            'immunization' => 'immunization', 'bakuna' => 'immunization', 'vaccine' => 'immunization', 'vaccination' => 'immunization', 'mr' => 'immunization', 'td' => 'immunization', 'mr td' => 'immunization',
+        ];
+    }
+
+    private static function plainWords(string $text): string
+    {
+        return trim((string) preg_replace('/[^a-z0-9]+/', ' ', strtolower($text)));
     }
 
     /**
@@ -203,9 +347,10 @@ final class ConsentPaperCopy
      * @param  callable(string): (bool|string)  $box
      * @param  callable(string): string  $line
      * @param  array<string, mixed>|null  $answer  ConsentStanding::answer()'s shape
+     * @param  list<string>  $unsettled  rows a reader could not settle; a saved form has none
      * @return array<string, array<string, string>>
      */
-    private static function copy(callable $service, callable $consent, callable $box, callable $line, ?array $answer, ?int $grade): array
+    private static function copy(callable $service, callable $consent, callable $box, callable $line, ?array $answer, ?int $grade, array $unsettled = []): array
     {
         $state = fn (bool|string $value): string => is_bool($value) ? ($value ? self::TICKED : self::EMPTY) : $value;
 
@@ -216,7 +361,7 @@ final class ConsentPaperCopy
         }
 
         foreach (array_keys(HealthConsentForm::PLANNED_SERVICES) as $key) {
-            $copy['standings'][$key] = self::standing($key, $copy['services'], $answer, $grade);
+            $copy['standings'][$key] = self::standing($key, $copy['services'], $answer, $grade, $unsettled);
         }
 
         foreach (array_keys(HealthConsentForm::CONSENT_TEXT) as $choice) {
@@ -237,13 +382,15 @@ final class ConsentPaperCopy
     /**
      * Where the learner stands for one service: ConsentStanding's own rule
      * whenever the paper and the answer can say, and UNCLEAR when the paper
-     * has to be read instead — a box nobody could make out, or a service the
-     * letter lists on a form whose answer is not known yet.
+     * has to be read instead — a row nobody could settle, or a service the
+     * letter lists on a form whose answer is not known yet. A refusal needs no
+     * box read: it declines every service on the sheet.
      *
      * @param  array<string, string>  $services  every box of the letter's list
      * @param  array<string, mixed>|null  $answer
+     * @param  list<string>  $unsettled
      */
-    private static function standing(string $key, array $services, ?array $answer, ?int $grade): string
+    private static function standing(string $key, array $services, ?array $answer, ?int $grade, array $unsettled): string
     {
         $onlyGrade = ConsentStanding::GRADE_ONLY_SERVICES[$key] ?? null;
 
@@ -251,14 +398,14 @@ final class ConsentPaperCopy
             return ConsentStanding::SERVICE_NOT_APPLICABLE;
         }
 
+        if (in_array($key, $unsettled, true) && ($answer['choice'] ?? null) !== HealthConsentForm::CONSENT_DENY) {
+            return self::UNCLEAR;
+        }
+
         $parent = HealthConsentForm::parentService($key);
         $own = $services[$key] ?? self::EMPTY;
         $heading = $parent !== null ? ($services[$parent] ?? self::EMPTY) : self::EMPTY;
         $listed = $own === self::TICKED || $heading === self::TICKED;
-
-        if (! $listed && ($own === self::UNCLEAR || $heading === self::UNCLEAR)) {
-            return self::UNCLEAR;
-        }
 
         if ($answer === null) {
             return $listed ? self::UNCLEAR : ConsentStanding::SERVICE_NOT_ON_FORM;

@@ -73,7 +73,10 @@ The application adds its own headers to every response it sends
 
 - **The root `php.ini` is a Windows config** (`extension_dir` on `C:\`).
   Railpack picks up a root `php.ini`, and this one stopped every extension,
-  OpenSSL included, from loading. `.railwayignore` keeps it out of the upload.
+  OpenSSL included, from loading. `.railwayignore` keeps it out of the upload,
+  so nothing in it reaches the deployment. The upload limits it sets are stated
+  in the root `Caddyfile` instead (`php_ini upload_max_filesize` and
+  `post_max_size`), since PHP's own default refuses a phone's photo.
 - **`storage/framework/views` must exist** or `view:cache` fails, so
   `.railwayignore` excludes the *contents* of the storage directories and keeps
   their placeholder `.gitignore` files.

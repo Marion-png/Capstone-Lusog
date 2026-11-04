@@ -54,6 +54,21 @@ class PublicExposureTest extends TestCase
         $this->assertStringContainsString('root * {{.RAILPACK_PHP_ROOT_DIR}}', $caddyfile);
     }
 
+    /**
+     * The root php.ini is kept out of the deployment, so its upload limits do
+     * not get there. Left to PHP's default of 2M, a phone's photo of a signed
+     * form is refused before the application sees it.
+     */
+    #[Test]
+    public function the_deployment_states_its_own_upload_limits(): void
+    {
+        $caddyfile = (string) file_get_contents(base_path('Caddyfile'));
+
+        $this->assertMatchesRegularExpression('/^php\.ini$/m', (string) file_get_contents(base_path('.railwayignore')));
+        $this->assertStringContainsString('php_ini upload_max_filesize 12M', $caddyfile);
+        $this->assertStringContainsString('php_ini post_max_size 16M', $caddyfile);
+    }
+
     #[Test]
     public function every_response_carries_the_browser_protections(): void
     {

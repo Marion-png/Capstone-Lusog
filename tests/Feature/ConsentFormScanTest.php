@@ -73,7 +73,7 @@ class ConsentFormScanTest extends TestCase
         {
             public function __construct(private readonly array $draft) {}
 
-            public function scan(UploadedFile $photo): array
+            public function scan(UploadedFile $photo, array $closeups = []): array
             {
                 return $this->draft;
             }
@@ -86,7 +86,7 @@ class ConsentFormScanTest extends TestCase
         {
             public function __construct(private readonly string $message) {}
 
-            public function scan(UploadedFile $photo): array
+            public function scan(UploadedFile $photo, array $closeups = []): array
             {
                 throw new RuntimeException($this->message);
             }
@@ -1393,11 +1393,10 @@ class ConsentFormScanTest extends TestCase
         $this->assertStringContainsString('lang="ceb"', $html);
 
         // Each service by its printed name, with the standing the reading
-        // gives it: "gawas lamang niini" leaves the listed ones to be checked
-        // against the parent's exceptions, and a box nobody could make out is
-        // read off the paper.
+        // gives it: "gawas lamang niini: Bakuna" does not touch Pag Bitok, and
+        // a box nobody could make out is read off the paper.
         $this->assertStringContainsString('<span class="pcopy-group-label" lang="ceb">'.e(HealthConsentForm::SERVICES['deworming']['label']).'</span>', $html);
-        $this->assertService($html, 'Pag Bitok / Worms', 'check_exceptions', 'Check the exceptions');
+        $this->assertService($html, 'Pag Bitok / Worms', 'consented', 'Consented');
         // Pag Purga is ticked with only Pag Bitok under it, so Filariasis was
         // not chosen — as the upload files it (ConsentPaperCopy::tickedServices).
         $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_filariasis'], 'not_on_form', 'Not consented');
@@ -1447,12 +1446,339 @@ class ConsentFormScanTest extends TestCase
         $this->assertService($html, 'Pag Bitok / Worms', 'consented', 'Consented');
         $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_schistosomiasis'], 'not_on_form', 'Not consented');
         $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_filariasis'], 'not_on_form', 'Not consented');
+    }
 
-        // A heading ticked alone still covers every sub-item under it.
-        $this->assertSame(
-            ['deworming_worms', 'deworming_schistosomiasis', 'deworming_filariasis'],
-            ConsentPaperCopy::tickedServices(['deworming' => ConsentFormScanner::TICKED]),
-        );
+    /**
+     * Pag Purga ticked over three empty boxes names the service but not which
+     * part of it. It used to approve all three, so a reader that missed the
+     * small sub-item boxes approved everything under a heading it did see.
+     */
+    #[Test]
+    public function a_heading_ticked_alone_approves_none_of_the_rows_under_it(): void
+    {
+        $this->learner('130000000001', 'Juan', 'Dela Cruz');
+
+        $this->fakeGemini($this->draft([
+            'dental' => ConsentFormScanner::TICKED,
+            'deworming' => ConsentFormScanner::TICKED,
+        ], ['consent_choice' => HealthConsentForm::CONSENT_ALL]));
+
+        $response = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg(), 'lrn' => '130000000001'], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $rows = ['deworming_worms', 'deworming_schistosomiasis', 'deworming_filariasis'];
+
+        $this->assertSame(['dental'], $response->json('ticked_services'));
+        $this->assertSame(['dental'], $response->json('service_proposal.full.approved'));
+        $this->assertSame($rows, $response->json('service_proposal.full.check'));
+
+        $html = (string) $response->json('copy_html');
+        $this->assertService($html, HealthConsentForm::SERVICES['dental']['label'], 'consented', 'Consented');
+        foreach ($rows as $row) {
+            $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children'][$row], 'unclear', '?');
+        }
+
+        $this->assertContains('"Deworming" is ticked, but none of the rows under it is.', $response->json('summary.warnings'));
+        $this->assertFalse($response->json('summary.complete'));
+    }
+
+    /** One unreadable sub-item must not approve the sub-items read as empty. */
+    #[Test]
+    public function an_unclear_sub_item_does_not_approve_its_empty_neighbours(): void
+    {
+        $boxes = [
+            'deworming' => ConsentFormScanner::TICKED,
+            'deworming_worms' => ConsentFormScanner::UNCLEAR,
+            'deworming_schistosomiasis' => ConsentFormScanner::NOT_TICKED,
+            'deworming_filariasis' => ConsentFormScanner::NOT_TICKED,
+        ];
+
+        $this->assertSame([], ConsentPaperCopy::tickedServices($boxes));
+        $this->assertSame(['deworming_worms', 'deworming_schistosomiasis', 'deworming_filariasis'], ConsentPaperCopy::unsettledServices($boxes));
+    }
+
+    /** A sub-item ticked under an unticked heading is a tick on that sub-item. */
+    #[Test]
+    public function a_sub_item_counts_on_its_own_box_alone(): void
+    {
+        $boxes = [
+            'checkup' => ConsentFormScanner::TICKED,
+            'immunization' => ConsentFormScanner::NOT_TICKED,
+            'immunization_grade7' => ConsentFormScanner::TICKED,
+            'iron' => ConsentFormScanner::NOT_TICKED,
+        ];
+
+        $this->assertSame(['checkup', 'immunization_grade7'], ConsentPaperCopy::tickedServices($boxes));
+        $this->assertSame([], ConsentPaperCopy::unsettledServices($boxes));
+    }
+
+    /**
+     * The services a parent wrote after "gawas lamang niini" start unticked:
+     * the confirmation used to list them Approved, and the reading beside it
+     * left every row at "check the exceptions" although the line was plain.
+     */
+    #[Test]
+    public function the_services_the_parent_excepted_are_not_proposed_as_approved(): void
+    {
+        $this->learner('130000000001', 'Juan', 'Dela Cruz');
+
+        $this->fakeGemini($this->draft([
+            'checkup' => ConsentFormScanner::TICKED,
+            'dental' => ConsentFormScanner::TICKED,
+            'iron' => ConsentFormScanner::TICKED,
+            'vitamin_a' => ConsentFormScanner::TICKED,
+        ], [
+            'consent_choice' => HealthConsentForm::CONSENT_SPECIFIC,
+            'written' => ['consent_exceptions' => ['text' => 'Ibot sa ngipon, Iron', 'readable' => true, 'confident' => true]],
+        ]));
+
+        $response = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg(), 'lrn' => '130000000001'], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $this->assertSame(['checkup', 'vitamin_a'], $response->json('service_proposal.partial.approved'));
+        $this->assertSame([], $response->json('service_proposal.partial.check'));
+        // Filed by hand as a full consent instead, the line no longer applies.
+        $this->assertSame(['checkup', 'dental', 'iron', 'vitamin_a'], $response->json('service_proposal.full.approved'));
+
+        $html = (string) $response->json('copy_html');
+        $this->assertService($html, HealthConsentForm::SERVICES['checkup']['label'], 'consented', 'Consented');
+        $this->assertService($html, HealthConsentForm::SERVICES['dental']['label'], 'declined', 'Declined');
+        $this->assertService($html, HealthConsentForm::SERVICES['iron']['label'], 'declined', 'Declined');
+    }
+
+    /**
+     * Exceptions nobody can name as services could be any row, so nothing is
+     * proposed as approved and every row on the paper goes to the adviser.
+     */
+    #[Test]
+    #[DataProvider('unnamedExceptions')]
+    public function exceptions_that_cannot_be_named_propose_no_approval(array $line): void
+    {
+        $boxes = array_fill_keys(array_keys(ConsentFormScanner::serviceKeys()), ConsentFormScanner::NOT_TICKED);
+        $boxes['checkup'] = ConsentFormScanner::TICKED;
+        $boxes['iron'] = ConsentFormScanner::TICKED;
+
+        $proposal = ConsentPaperCopy::proposal([
+            'consent_choice' => HealthConsentForm::CONSENT_SPECIFIC,
+            'services' => $boxes,
+            'written' => ['consent_exceptions' => $line],
+        ]);
+
+        $this->assertSame([], $proposal['partial']['approved']);
+        $this->assertSame(['checkup', 'iron'], $proposal['partial']['check']);
+    }
+
+    /** @return array<string, array{0: array<string, mixed>}> */
+    public static function unnamedExceptions(): array
+    {
+        return [
+            'a word that names no service' => [['text' => 'kanang tambal', 'readable' => true, 'confident' => true]],
+            'a sentence' => [['text' => 'No deworming', 'readable' => true, 'confident' => true]],
+            'one named, one not' => [['text' => 'Bakuna ug uban pa', 'readable' => true, 'confident' => true]],
+            'an unsure reading' => [['text' => 'Iron', 'readable' => true, 'confident' => false]],
+            'nothing written' => [['text' => '', 'readable' => true, 'confident' => false]],
+            'written but unreadable' => [['text' => 'Unreadable', 'readable' => false, 'confident' => false]],
+        ];
+    }
+
+    /**
+     * A sheet with nothing ticked in its list used to come up with every
+     * service Approved, beside a reading that said none of them was.
+     */
+    #[Test]
+    public function a_sheet_with_nothing_ticked_proposes_no_approval(): void
+    {
+        $this->learner('130000000001', 'Juan', 'Dela Cruz');
+
+        $this->fakeGemini($this->draft([], ['consent_choice' => HealthConsentForm::CONSENT_ALL]));
+
+        $response = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg(), 'lrn' => '130000000001'], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $this->assertSame([], $response->json('ticked_services'));
+        $this->assertSame(['approved' => [], 'check' => []], $response->json('service_proposal.full'));
+        $this->assertFalse($response->json('summary.complete'));
+    }
+
+    /** Nothing to propose from another child's sheet, or one that cannot be read. */
+    #[Test]
+    public function an_unusable_sheet_proposes_nothing(): void
+    {
+        $this->learner('130000000001', 'Juan', 'Dela Cruz');
+
+        $this->fakeGemini($this->draft(['checkup' => ConsentFormScanner::TICKED], [
+            'student_name' => ['text' => 'SANTOS, PEDRO', 'readable' => true, 'confident' => true],
+        ]));
+
+        $this->assertNull($this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg(), 'lrn' => '130000000001'], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->json('service_proposal'));
+    }
+
+    /**
+     * The service rows sit about 1% of the sheet's height apart, so the photo
+     * goes at the most detail it can have and the reader says what is in each
+     * box before it answers.
+     */
+    #[Test]
+    public function the_photo_is_read_in_full_detail_and_described_before_it_is_judged(): void
+    {
+        config(['services.gemini.media_resolution' => 'MEDIA_RESOLUTION_ULTRA_HIGH']);
+        $this->fakeGemini($this->draft());
+
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        Http::assertSent(function (ClientRequest $request): bool {
+            $body = $request->data();
+            $order = $body['generationConfig']['responseSchema']['propertyOrdering'] ?? [];
+            $before = fn (string $a, string $b): bool => array_search($a, $order, true) < array_search($b, $order, true);
+
+            return ($body['contents'][0]['parts'][0]['media_resolution']['level'] ?? null) === 'MEDIA_RESOLUTION_ULTRA_HIGH'
+                && $before('services_marks_seen', 'services_evidence')
+                && $before('services_evidence', 'services')
+                && $before('consent_evidence', 'consent_boxes')
+                && $before('allergy_evidence', 'allergy_boxes');
+        });
+    }
+
+    /**
+     * One image gets the same tokens whatever its size, so the page cuts
+     * close-ups and each travels with its own allowance. They are what lets the
+     * reader tell a tick's tail from a tick on the row above.
+     */
+    #[Test]
+    public function close_ups_travel_with_the_whole_sheet(): void
+    {
+        config(['services.gemini.media_resolution' => 'MEDIA_RESOLUTION_ULTRA_HIGH']);
+        $this->fakeGemini($this->draft());
+
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), [
+                'photo' => $this->jpeg(),
+                'closeups' => [$this->jpeg(), $this->jpeg(), $this->jpeg(), $this->jpeg()],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonMissingPath('closeups');
+
+        Http::assertSent(function (ClientRequest $request): bool {
+            $parts = $request->data()['contents'][0]['parts'];
+            $images = array_filter($parts, fn (array $part): bool => isset($part['inline_data']));
+            $sharp = array_filter($images, fn (array $part): bool => ($part['media_resolution']['level'] ?? null) === 'MEDIA_RESOLUTION_ULTRA_HIGH');
+            // Line-wrapping in the prompt is layout, not wording.
+            $prompt = (string) preg_replace('/\s+/', ' ', (string) ($parts[array_key_last($parts)]['text'] ?? ''));
+
+            return count($parts) === 6
+                && count($images) === 5
+                && count($sharp) === 5
+                && str_contains($prompt, 'The first image is the whole sheet')
+                // Seeing one tick twice must not be counted as two.
+                && str_contains($prompt, 'a mark seen in two images is one mark');
+        });
+    }
+
+    /** A caller with no close-ups is read as one image, and not told of any. */
+    #[Test]
+    public function a_sheet_with_no_close_ups_is_read_as_one_image(): void
+    {
+        $this->fakeGemini($this->draft());
+
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        Http::assertSent(function (ClientRequest $request): bool {
+            $parts = $request->data()['contents'][0]['parts'];
+
+            return count($parts) === 2 && ! str_contains((string) $parts[1]['text'], 'close-ups');
+        });
+    }
+
+    /** The page cuts four, and only pictures go to the reader. */
+    #[Test]
+    public function close_ups_are_limited_and_must_be_pictures(): void
+    {
+        $this->fakeGemini($this->draft());
+
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), [
+                'photo' => $this->jpeg(),
+                'closeups' => array_map(fn (): UploadedFile => $this->jpeg(), range(1, 5)),
+            ], ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('closeups');
+
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), [
+                'photo' => $this->jpeg(),
+                'closeups' => [UploadedFile::fake()->create('notes.pdf', 10, 'application/pdf')],
+            ], ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('closeups.0');
+
+        Http::assertNothingSent();
+    }
+
+    /** The upload dialog cuts them wherever it offers the reader, and not otherwise. */
+    #[Test]
+    public function the_upload_dialog_sends_close_ups_when_a_reader_is_set_up(): void
+    {
+        $this->learner('130000000001', 'Juan', 'Dela Cruz');
+
+        $html = $this->withSession($this->adviserSession())->get(route('consent-forms.index'))->assertOk()->getContent();
+        $this->assertSame(1, substr_count($html, 'window.consentPhotoCloseups = window.consentPhotoCloseups'));
+        $this->assertStringContainsString('await window.consentPhotoCloseups(file, body);', $html);
+
+        config()->set('services.gemini.key', '');
+
+        $without = $this->withSession($this->adviserSession())->get(route('consent-forms.index'))->assertOk()->getContent();
+        $this->assertStringNotContainsString('window.consentPhotoCloseups = window.consentPhotoCloseups', $without);
+    }
+
+    /** A blank setting is how a model that refuses the level is got back. */
+    #[Test]
+    public function the_resolution_can_be_left_to_the_model(): void
+    {
+        config(['services.gemini.media_resolution' => '']);
+        $this->fakeGemini($this->draft());
+
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        Http::assertSent(fn (ClientRequest $request): bool => ! isset($request->data()['contents'][0]['parts'][0]['media_resolution']));
+    }
+
+    /**
+     * The count is what catches a tick given to the wrong row or to two rows.
+     * It cannot say which row, so the rows stand and the adviser is told.
+     */
+    #[Test]
+    public function a_count_of_marks_that_disagrees_with_the_rows_is_said(): void
+    {
+        $boxes = ['checkup' => ConsentFormScanner::TICKED, 'dental' => ConsentFormScanner::TICKED];
+        $choice = ['consent_choice' => HealthConsentForm::CONSENT_ALL];
+
+        $agrees = ConsentFormScanner::interpret($this->draft($boxes, $choice + ['services_marks_seen' => 2]));
+        $this->assertSame([], $agrees['warnings']);
+        $this->assertFalse($agrees['needs_review']);
+
+        $disagrees = ConsentFormScanner::interpret($this->draft($boxes, $choice + ['services_marks_seen' => 3]));
+        $this->assertSame(['The reader saw 3 marks in the service list but placed 2 — check the rows against the paper.'], $disagrees['warnings']);
+        $this->assertTrue($disagrees['needs_review']);
+        $this->assertSame(ConsentFormScanner::TICKED, $disagrees['services']['checkup']);
+
+        // Rows it could not settle are named already, and are expected not to add up.
+        $unsure = ConsentFormScanner::interpret($this->draft($boxes + ['iron' => ConsentFormScanner::UNCLEAR], $choice + ['services_marks_seen' => 3]));
+        $this->assertSame([], $unsure['warnings']);
+
+        // A reader that gave no count is not accused of a wrong one.
+        $this->assertSame([], ConsentFormScanner::interpret($this->draft($boxes, $choice))['warnings']);
     }
 
     /** Another child's sheet, or one nothing could be read off, draws nothing. */

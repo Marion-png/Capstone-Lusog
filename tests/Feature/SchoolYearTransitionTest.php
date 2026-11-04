@@ -429,10 +429,10 @@ class SchoolYearTransitionTest extends TestCase
 
         foreach ([
             'Grade 8 - MASIPAG',
-            '[✓] Asthma', '[✓] Diabetes', '[✓] Seizure Disorder', '[✓] Frequent Infections', '[✓] Heart Condition', '[✓] Tuberculosis',
-            '[✓] Allergies: Shrimp', '[✓] Hospitalization/Surgery: Tonsillectomy 2021',
+            '[√] Asthma', '[√] Diabetes', '[√] Seizure Disorder', '[√] Frequent Infections', '[√] Heart Condition', '[√] Tuberculosis',
+            '[√] Allergies: Shrimp', '[√] Hospitalization/Surgery: Tonsillectomy 2021',
             'Current Medications: Cetirizine', 'Other Conditions: Eczema',
-            '[✓] Hypertension', '[✓] Heart Disease', '[✓] Cancer', '[✓] Mental Health Conditions',
+            '[√] Hypertension', '[√] Heart Disease', '[√] Cancer', '[√] Mental Health Conditions',
             'Genetic/Hereditary Disorders: G6PD deficiency',
             'Other — Lethargic', 'Poor — Limps on the left', 'Needs Attention',
         ] as $line) {

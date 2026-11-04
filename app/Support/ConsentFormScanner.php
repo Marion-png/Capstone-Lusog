@@ -44,8 +44,8 @@ use Throwable;
  * 4. **The model reports the boxes; the server decides the consent.** Whether
  *    the parent agreed is the one answer on the sheet that matters most, and
  *    it lives in three boxes of its own under "TIMAAN SA PAGDAWAT…" — not in
- *    the service list at the top, which the school ticked before printing. So
- *    the model is asked to describe each of the three boxes, then what is in
+ *    the service list at the top, which says what the sheet covers. So the
+ *    model is asked to describe each of the three boxes, then what is in
  *    it, and `decideConsent()` rules on the answers: exactly one ticked and
  *    the other two clearly empty is an answer; none, two, or any box it could
  *    not make out is UNCLEAR, with the reason — and what the model saw — said
@@ -200,13 +200,40 @@ class ConsentFormScanner
      *     note: string
      * }
      */
-    public function scan(UploadedFile $photo): array
+    public function scan(UploadedFile $photo, array $closeups = []): array
     {
         if (! $this->isAvailable()) {
             throw new RuntimeException('Consent scanning is not configured. Set GEMINI_API_KEY.');
         }
 
-        return self::interpret($this->decode($this->ask($photo)));
+        return self::interpret($this->decode($this->ask($photo, $closeups)));
+    }
+
+    /**
+     * One image for the request, at the most detail it can have.
+     *
+     * A model gives one image the same number of tokens whatever its size, and
+     * this sheet's service rows sit about 1% of its height apart. At the default
+     * a tick lands on the wrong row, which is a medical authorisation on the
+     * wrong service.
+     *
+     * @return array<string, mixed>
+     */
+    private function imagePart(UploadedFile $image): array
+    {
+        $contents = @file_get_contents((string) $image->getRealPath());
+
+        if ($contents === false || $contents === '') {
+            throw new UploadReadFailure('The photograph could not be opened. Choose it again.');
+        }
+
+        return [
+            'inline_data' => [
+                'mime_type' => $this->mediaType($image),
+                'data' => base64_encode($contents),
+            ],
+            ...$this->mediaResolution(),
+        ];
     }
 
     /**
@@ -214,18 +241,19 @@ class ConsentFormScanner
      * pinned. Built the way MasterlistSheetScanner::ask() is, so the two
      * readers fail, retry and report alike.
      *
+     * The whole sheet always goes first. Close-ups of it follow, each with its
+     * own allowance of tokens, because they are what makes a tick's tail tell
+     * apart from a tick.
+     *
+     * @param  list<UploadedFile>  $closeups
      * @return array<string, mixed>
      */
-    private function ask(UploadedFile $photo): array
+    private function ask(UploadedFile $photo, array $closeups = []): array
     {
         $endpoint = rtrim((string) config('services.gemini.endpoint', 'https://generativelanguage.googleapis.com/v1beta'), '/');
         $model = (string) config('services.gemini.model', 'gemini-3.5-flash');
 
-        $contents = @file_get_contents((string) $photo->getRealPath());
-
-        if ($contents === false || $contents === '') {
-            throw new UploadReadFailure('The photograph could not be opened. Choose it again.');
-        }
+        $images = array_map(fn (UploadedFile $image): array => $this->imagePart($image), [$photo, ...$closeups]);
 
         try {
             $response = Http::withHeaders([
@@ -253,13 +281,8 @@ class ConsentFormScanner
                     'contents' => [[
                         'role' => 'user',
                         'parts' => [
-                            [
-                                'inline_data' => [
-                                    'mime_type' => $this->mediaType($photo),
-                                    'data' => base64_encode($contents),
-                                ],
-                            ],
-                            ['text' => $this->userPrompt()],
+                            ...$images,
+                            ['text' => $this->userPrompt($closeups !== [])],
                         ],
                     ]],
                     'generationConfig' => [
@@ -374,10 +397,11 @@ class ConsentFormScanner
         Guardian" (Dear parent / guardian). It lists the health services the
         school will give ("Ang mga serbisyong panglawas nga ihatag o ipahigayon
         mao ang mga musunod" — the health services to be given are these), each
-        with a box. Those boxes were ticked BY THE SCHOOL before the letter was
-        printed, to say which services this letter covers. They are NOT the
-        parent's answer. A fully ticked service list says nothing about whether
-        the parent agreed. The letter ends "Daghang Salamat. Matinahuron," over
+        with a box. Marks in those boxes say which services this sheet covers:
+        any combination of rows may be marked, on any sheet, including none at
+        all. They are NOT the parent's answer to the consent question. A fully
+        ticked service list says nothing about whether the parent agreed. The
+        letter ends "Daghang Salamat. Matinahuron," over
         "(Pangalan ug Pirma Sa Principal / School Head)" — that name and
         signature are the school head's, never the parent's.
 
@@ -482,11 +506,41 @@ class ConsentFormScanner
         are worse than "unclear".
 
         THE SERVICE LIST at the top. You are given the exact services the letter
-        offers. Answer only about those, by key; never invent one. Read the row
-        labels, not just the positions of the marks — the sub-items under "Pag
-        Purga" (deworming) and "Immunization / Bakuna" are indented beneath
-        their parent item; check that a mark belongs to the row you think it
-        does.
+        offers. Answer only about those, by key; never invent one. Each mark here
+        decides which medical service a child is given, and the rows are packed
+        so tightly that this is the hardest part of the sheet. Read it slowly,
+        one row at a time, from the top:
+          - Find each row by its printed words, never by counting down. Its box
+            is the one immediately to the left of those words, on the same line.
+            The sub-items under "Pag Purga" and "Immunization / Bakuna" are
+            indented, so their boxes sit further right than the others.
+          - Every tick belongs to exactly one row: the row its bottom point is
+            in. The rows are so close that the long upstroke of a tick nearly
+            always runs across the box of the row ABOVE it. A box with only that
+            stroke passing through it, and no bottom point inside, is "no". So
+            when you see a tick, first ask whose bottom point it is, then give
+            it to that row and to no other.
+          - Each box answers for itself alone. A ticked heading does not tick
+            its sub-items, and a ticked sub-item does not tick its heading.
+            Never fill a gap because the rows around it are ticked, and never
+            assume a pattern: unticked rows between ticked ones are normal, and
+            a sheet where nothing here is ticked is normal too.
+          - "Immunization / Bakuna" has one sub-item row. Some printings give it
+            two boxes on one line, one before "Grade 7" and one before "MR, Td":
+            answer "yes" for immunization_grade7 if either of them is marked,
+            and count the two as one mark.
+        First count the separate pen marks you can see in the whole list and
+        report it in services_marks_seen. Then, for every row, say in
+        services_evidence what is in that row's box, in a few plain words —
+        "tick, bottom point inside", "empty outline", "only the upstroke of the
+        tick from the row below". Then answer services. The number of "yes"
+        answers must equal the number of marks you counted; if it does not, look
+        again at the rows you were least sure of before you answer. A row you
+        still cannot settle is "unclear".
+
+        Treat the allergy and illness boxes the same way, row by row, saying in
+        allergy_evidence what is in each box before you answer allergy_boxes. A
+        tick in a box counts even when nothing is written on its line.
 
         THE HANDWRITTEN BLANKS. For each blank, transcribe exactly what is
         written and say whether you are confident you read it correctly. There
@@ -570,8 +624,18 @@ class ConsentFormScanner
         PROMPT;
     }
 
-    private function userPrompt(): string
+    private function userPrompt(bool $hasCloseups = false): string
     {
+        $closeups = $hasCloseups ? <<<'PROMPT'
+        The first image is the whole sheet. The images after it are close-ups of
+        parts of that same sheet, in order, overlapping each other. They are one
+        sheet, not several: a mark seen in two images is one mark. Judge every box
+        from the close-up where you can see it most sharply, and use the whole
+        sheet to tell which row is which.
+
+
+        PROMPT : '';
+
         $list = function (array $entries): string {
             $lines = [];
             foreach ($entries as $key => $label) {
@@ -586,7 +650,7 @@ class ConsentFormScanner
         $services = $list(self::serviceKeys());
         $written = $list(self::WRITTEN_FIELDS);
 
-        return <<<PROMPT
+        return $closeups.<<<PROMPT
         Read the attached photograph of a Sulat-Pahibalo.
 
         The parent's three consent boxes, in the bottom half — first describe
@@ -595,13 +659,14 @@ class ConsentFormScanner
 
         {$boxes}
 
-        The allergy and illness boxes, below them — "yes", "no" or "unclear" for
-        each:
+        The allergy and illness boxes, below them — first describe what you see
+        in each, then "yes", "no" or "unclear" for each:
 
         {$allergy}
 
-        The services in the letter's list at the top (ticked by the school, not
-        the parent) — "yes", "no" or "unclear" for every one:
+        The services in the letter's list at the top — count the marks, describe
+        what you see in each row's box, then "yes", "no" or "unclear" for every
+        one:
 
         {$services}
 
@@ -667,6 +732,16 @@ class ConsentFormScanner
             'propertyOrdering' => ['text', 'readable', 'confident'],
         ];
 
+        // Words about each box, ordered before the verdicts so the model looks
+        // before it answers. They decide nothing: only the verdicts are ruled on.
+        $evidence = fn (array $keys, string $description): array => [
+            'type' => 'OBJECT',
+            'description' => $description,
+            'properties' => array_map(fn (string $label): array => ['type' => 'STRING', 'description' => $label], $keys),
+            'required' => array_keys($keys),
+            'propertyOrdering' => array_keys($keys),
+        ];
+
         $written = [];
         foreach (self::WRITTEN_FIELDS as $key => $label) {
             $written[$key] = $reading($label.' — empty text if the blank is empty.');
@@ -678,17 +753,15 @@ class ConsentFormScanner
                 'description' => 'True only when this is the Sulat-Pahibalo parental consent form.',
             ],
             'student_name' => $reading('The learner\'s name on the "PANGALAN SA ESTUDYANTE" line.'),
-            'services' => $answers(self::serviceKeys(), 'One answer per service in the letter\'s list (ticked by the school).'),
-            // Ordered before the verdicts so the model looks before it answers.
-            // The words are shown to the adviser beside an unclear answer and
-            // decide nothing: the boxes alone are ruled on.
-            'consent_evidence' => [
-                'type' => 'OBJECT',
-                'description' => 'What you see in each of the parent\'s three consent boxes, in a few plain words, written before you answer consent_boxes.',
-                'properties' => array_map(fn (string $label): array => ['type' => 'STRING', 'description' => $label], self::CONSENT_BOXES),
-                'required' => array_keys(self::CONSENT_BOXES),
-                'propertyOrdering' => array_keys(self::CONSENT_BOXES),
+            'services_marks_seen' => [
+                'type' => 'INTEGER',
+                'description' => 'How many separate pen marks you can see in the whole service list, counted before you read the rows.',
             ],
+            'services_evidence' => $evidence(self::serviceKeys(), 'What you see in each row\'s box in the service list, in a few plain words, written before you answer services.'),
+            'services' => $answers(self::serviceKeys(), 'One answer per row of the letter\'s service list, each row judged on its own box.'),
+            // The words about these three are also shown to the adviser beside
+            // an unclear answer.
+            'consent_evidence' => $evidence(self::CONSENT_BOXES, 'What you see in each of the parent\'s three consent boxes, in a few plain words, written before you answer consent_boxes.'),
             'consent_boxes' => $answers(self::CONSENT_BOXES, 'What is in each of the parent\'s three consent boxes, read separately.'),
             'consent_choice' => [
                 'type' => 'STRING',
@@ -701,6 +774,7 @@ class ConsentFormScanner
                 ],
                 'description' => 'Your summary of the three consent boxes: the one ticked box, or unclear.',
             ],
+            'allergy_evidence' => $evidence(self::ALLERGY_BOXES, 'What you see in each box of the allergy and illness section, in a few plain words, written before you answer allergy_boxes.'),
             'allergy_boxes' => $answers(self::ALLERGY_BOXES, 'What is in each box of the allergy and illness section.'),
             'written' => [
                 'type' => 'OBJECT',
@@ -813,6 +887,7 @@ class ConsentFormScanner
         if (! $unreadable) {
             self::checkConsentLines($choice, $written, $fieldNotes, $unclear);
             self::checkAllergyBoxes($payload, $written, $fieldNotes, $warnings, $unclear);
+            self::checkMarkCount($payload, $services, $warnings);
         }
 
         $student = self::reading($payload['student_name'] ?? null, $unreadable);
@@ -1200,6 +1275,33 @@ class ConsentFormScanner
     }
 
     /**
+     * The reader's count of pen marks in the service list against the rows it
+     * placed them on. A tick given to the wrong row, or to two rows, is the
+     * mistake this list invites, and it is the one the count can catch: which
+     * row is wrong cannot be told from here, so the rows stand as read and the
+     * adviser is sent to the paper. Rows it already called unclear are expected
+     * not to add up, and are named on their own.
+     *
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, string>  $services
+     * @param  list<string>  $warnings
+     */
+    private static function checkMarkCount(array $payload, array $services, array &$warnings): void
+    {
+        $seen = $payload['services_marks_seen'] ?? null;
+
+        if (! is_numeric($seen) || in_array(self::UNCLEAR, $services, true)) {
+            return;
+        }
+
+        $placed = count(array_keys($services, self::TICKED, true));
+
+        if ((int) $seen !== $placed) {
+            $warnings[] = 'The reader saw '.(int) $seen.' marks in the service list but placed '.$placed.' — check the rows against the paper.';
+        }
+    }
+
+    /**
      * One handwritten reading, in the three states the review screen keeps
      * apart: empty, read (sure or not), and written but unreadable.
      *
@@ -1309,6 +1411,21 @@ class ConsentFormScanner
         return is_array($decoded)
             ? $decoded
             : ['unreadable' => true, 'note' => 'The reader returned no usable answer.'];
+    }
+
+    /**
+     * The resolution setting for the image part. It is a setting rather than a
+     * constant because it is per-model: a model that refuses the level answers
+     * 400, and blanking GEMINI_MEDIA_RESOLUTION gets the reader back without a
+     * code change.
+     *
+     * @return array<string, array{level: string}>
+     */
+    private function mediaResolution(): array
+    {
+        $level = trim((string) config('services.gemini.media_resolution', ''));
+
+        return $level !== '' ? ['media_resolution' => ['level' => $level]] : [];
     }
 
     /** The type the file actually is, from its bytes, among those Gemini reads. */

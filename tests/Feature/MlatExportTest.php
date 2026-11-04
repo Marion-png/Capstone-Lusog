@@ -160,12 +160,12 @@ class MlatExportTest extends TestCase
         $this->assertSame(['Date of Birth:', '2011-08-20', 'Age: 14', 'School:', 'San Antonio National High School'], $this->rowStarting($sheet, 'Date of Birth'));
         // Every tick box has a column of its own, so none of them depends on
         // the cell beside it being empty to be seen.
-        $this->assertSame(['Sex:', '[✓] Male', '[  ] Female', 'Date of Assessment:', '2026-08-02'], $this->rowStarting($sheet, 'Sex:'));
+        $this->assertSame(['Sex:', '[√] Male', '[  ] Female', 'Date of Assessment:', '2026-08-02'], $this->rowStarting($sheet, 'Sex:'));
         $this->assertSame(['Assessed by (Name/Title):', 'Nurse Joy / School Nurse'], $this->rowStarting($sheet, 'Assessed by'));
 
         // B. Medical history — ticked where the record says so, detail beside it.
-        $this->assertSame('[✓] Asthma', $this->rowStarting($sheet, '[✓] Asthma')[0]);
-        $this->assertSame('[✓] Allergies: Peanuts', $this->rowStarting($sheet, '[✓] Asthma')[3]);
+        $this->assertSame('[√] Asthma', $this->rowStarting($sheet, '[√] Asthma')[0]);
+        $this->assertSame('[√] Allergies: Peanuts', $this->rowStarting($sheet, '[√] Asthma')[3]);
         $this->assertSame('[  ] Diabetes', $this->rowStarting($sheet, '[  ] Diabetes')[0]);
         $this->assertSame('[  ] Heart Condition', $this->rowStarting($sheet, '[  ] Diabetes')[3]);
         $this->assertSame('[  ] Hospitalization/Surgery', $this->rowStarting($sheet, '[  ] Frequent Infections')[3]);
@@ -173,7 +173,7 @@ class MlatExportTest extends TestCase
 
         // C. Family history on one line, as the form has it — a box to a column.
         $this->assertSame(
-            ['[  ] Hypertension', '[✓] Diabetes', '[  ] Heart Disease', '[  ] Cancer', '[  ] Mental Health Conditions'],
+            ['[  ] Hypertension', '[√] Diabetes', '[  ] Heart Disease', '[  ] Cancer', '[  ] Mental Health Conditions'],
             $this->rowStarting($sheet, '[  ] Hypertension')
         );
         $this->assertSame('Genetic/Hereditary Disorders: None', $this->rowStarting($sheet, 'Genetic')[0]);
@@ -463,6 +463,42 @@ class MlatExportTest extends TestCase
         @unlink($path);
 
         return [$sheets, $xml];
+    }
+
+    /**
+     * A tick the workbook's font does not carry is one a spreadsheet app has to
+     * borrow from another font. Excel does; WPS Office and tablet apps may draw
+     * nothing, and a ticked "Asthma" reads as blank. So its tick is √, which is
+     * in both fonts the file names (Arial on its cells, Calibri as the writer's
+     * unused default), never ✓ or a ballot box, which are in neither.
+     */
+    #[Test]
+    public function the_tick_is_in_the_font_the_workbook_names(): void
+    {
+        if (! class_exists(XlsxWriter::class)) {
+            $this->markTestSkipped('OpenSpout is not installed on this machine (composer.lock pins it to PHP 8.4).');
+        }
+
+        $this->learner();
+
+        $download = $this->withSession($this->sessionFor('school_nurse'))
+            ->get(route('student-mlat.download', ['lrn' => '109876543201']))
+            ->assertOk();
+
+        $path = tempnam(sys_get_temp_dir(), 'mlat-font-').'.xlsx';
+        file_put_contents($path, $download->getFile()->getContent());
+        $zip = new \ZipArchive;
+        $zip->open($path);
+        $styles = (string) $zip->getFromName('xl/styles.xml');
+        $text = (string) $zip->getFromName('xl/sharedStrings.xml').$zip->getFromName('xl/worksheets/sheet1.xml').$zip->getFromName('xl/worksheets/sheet2.xml');
+        $zip->close();
+        @unlink($path);
+
+        preg_match_all('/<name val="([^"]+)"/', $styles, $fonts);
+        $this->assertEqualsCanonicalizing(['Arial', 'Calibri'], array_values(array_unique($fonts[1])));
+
+        $this->assertStringContainsString('[√] Asthma', $text);
+        $this->assertSame(0, preg_match('/[\x{2600}-\x{27BF}]/u', $text), 'No dingbat or ballot box in the file.');
     }
 
     /** Each sheet downloads on its own, named for the sheet, in its own columns. */

@@ -26,6 +26,12 @@
 		# The code in the container never changes after the build, so opcache
 		# need not check every file's timestamp on every request.
 		php_ini opcache.validate_timestamps 0
+		# The root php.ini never reaches the deployment (.railwayignore), so the
+		# upload limits it sets have to be set here. A phone's photo of a signed
+		# form is several megabytes, and PHP's own default refuses a file over 2M
+		# before the application sees it.
+		php_ini upload_max_filesize 12M
+		php_ini post_max_size 16M
 
 		{$FRANKENPHP_CONFIG}
 	}

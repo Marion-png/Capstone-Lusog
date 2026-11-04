@@ -37,6 +37,9 @@ class ConsentFormScanController extends Controller
     /** A phone photo of one sheet of paper. */
     private const MAX_KILOBYTES = 8192;
 
+    /** The page cuts four bands; a request carrying more was not made by it. */
+    private const MAX_CLOSEUPS = 4;
+
     public function scan(Request $request, ConsentFormScanner $scanner): JsonResponse
     {
         if (! in_array((string) $request->session()->get('active_role'), self::SCAN_ROLES, true)) {
@@ -54,6 +57,10 @@ class ConsentFormScanController extends Controller
             // says, and a phone hands over a JPEG when the page does not ask
             // for HEIC.
             'photo' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.self::MAX_KILOBYTES],
+            // Parts of that same photo cut by the page (consent-forms._photo-closeups),
+            // for the detail one image cannot carry. They are read and not kept.
+            'closeups' => ['nullable', 'array', 'max:'.self::MAX_CLOSEUPS],
+            'closeups.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.self::MAX_KILOBYTES],
             // The learner the form is being recorded for, so the name on the
             // sheet can be checked against them. Optional: without it the
             // draft is returned unchecked.
@@ -61,7 +68,7 @@ class ConsentFormScanController extends Controller
         ]);
 
         try {
-            $draft = $scanner->scan($validated['photo']);
+            $draft = $scanner->scan($validated['photo'], array_values($validated['closeups'] ?? []));
         } catch (UploadReadFailure $e) {
             // Written for the adviser — busy, unreachable, a photo the reader
             // would not process — so it is shown as it is. The cause underneath
@@ -111,6 +118,9 @@ class ConsentFormScanController extends Controller
             // same list the copy above judged each service by. Nothing for a
             // photo that could not be read or another child's sheet.
             'ticked_services' => $copy !== null ? ConsentPaperCopy::tickedServices((array) ($draft['services'] ?? [])) : [],
+            // What the confirmation step starts from, for whichever answer the
+            // adviser files. Null with nothing read, so it starts from nothing.
+            'service_proposal' => $copy !== null ? ConsentPaperCopy::proposal($draft) : null,
             'summary' => ConsentPhotoSummary::fromDraft($draft, $learner['grade'] ?? null),
             // The upload can retain this reading without trusting JSON posted
             // by the browser or making another model call.

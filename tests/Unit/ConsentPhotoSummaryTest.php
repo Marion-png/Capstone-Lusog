@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Models\HealthConsentForm;
 use App\Support\ConsentFormScanner;
+use App\Support\ConsentPaperCopy;
 use App\Support\ConsentPhotoSummary;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -63,6 +64,56 @@ class ConsentPhotoSummaryTest extends TestCase
 
         $draft['written']['consent_exceptions'] = ['text' => 'Deworming', 'readable' => true, 'confident' => false];
         $this->assertCount(8, ConsentPhotoSummary::fromDraft($draft, 8)['groups']['unclear']);
+    }
+
+    #[Test]
+    public function exceptions_are_recognised_as_parents_write_them(): void
+    {
+        foreach ([
+            'Ibot sa ngipon' => ['dental'],
+            'dentist' => ['dental'],
+            'Bakuna' => ['immunization'],
+            'MR/Td' => ['immunization'],
+            'Purga' => ['deworming'],
+            'Bitok' => ['deworming_worms'],
+            'Bitamina A' => ['vitamin_a'],
+            'Eksaminasyon' => ['checkup'],
+            'Iron ug Vitamin A' => ['iron', 'vitamin_a'],
+            'TAS, schistosomiasis' => ['tas', 'deworming_schistosomiasis'],
+            'Check Up sa Dentist ug Ibot sa Ngipon / Paghatag ug tambal kon gikinahanglan' => ['dental'],
+        ] as $text => $expected) {
+            $this->assertSame(
+                $expected,
+                ConsentPaperCopy::exceptedServices(['text' => $text, 'readable' => true, 'confident' => true]),
+                $text,
+            );
+        }
+    }
+
+    #[Test]
+    public function a_refusal_declines_every_row_whatever_its_box_reads(): void
+    {
+        $draft = $this->draft(HealthConsentForm::CONSENT_DENY);
+        $draft['services']['dental'] = 'no';
+        $draft['services']['iron'] = 'unclear';
+
+        $summary = ConsentPhotoSummary::fromDraft($draft, 8);
+
+        $this->assertCount(8, $summary['groups']['declined']);
+        $this->assertSame([], $summary['groups']['unclear']);
+        $this->assertSame([], $summary['groups']['not_offered']);
+    }
+
+    #[Test]
+    public function a_heading_over_a_row_this_grade_is_never_given_raises_nothing(): void
+    {
+        $draft = $this->draft();
+        $draft['services']['immunization_grade7'] = 'no';
+
+        $warning = '"Immunization" is ticked, but none of the rows under it is.';
+
+        $this->assertNotContains($warning, ConsentPhotoSummary::fromDraft($draft, 8)['warnings']);
+        $this->assertContains($warning, ConsentPhotoSummary::fromDraft($draft, 7)['warnings']);
     }
 
     #[Test]

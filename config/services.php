@@ -61,6 +61,9 @@ return [
     'gemini' => [
         'key' => env('GEMINI_API_KEY'),
         'model' => env('GEMINI_MODEL', 'gemini-3.5-flash'),
+        // Detail given to a photographed consent form. Blank uses the model's
+        // default, for a model that refuses this level.
+        'media_resolution' => env('GEMINI_MEDIA_RESOLUTION', 'MEDIA_RESOLUTION_ULTRA_HIGH'),
         'endpoint' => env('GEMINI_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta'),
         'timeout' => (int) env('GEMINI_TIMEOUT', 120),
         'max_upload_kb' => (int) env('GEMINI_MAX_UPLOAD_KB', 10240),

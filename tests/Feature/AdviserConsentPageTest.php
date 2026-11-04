@@ -864,6 +864,12 @@ class AdviserConsentPageTest extends TestCase
         $this->assertStringContainsString('name="services_confirmed" id="pcServicesConfirmed" value="0"', $html);
         $this->assertStringContainsString('id="vpConsentServices" hidden', $html);
 
+        // It starts from what was read off the paper and from nothing when
+        // nobody read it, so a row is never ticked for no reason.
+        $this->assertStringContainsString('approvedChoice = new Set(proposed().approved', $html);
+        $this->assertStringNotContainsString('approvedChoice = new Set(letterServices())', $html);
+        $this->assertStringContainsString('id="pcConfirmAll" hidden', $html);
+
         // The confirmation lists this class's services: no Grade 7 MR/Td here.
         $this->assertSame(1, preg_match('/const confirmServices = (\[.*?\]);/', $html, $m));
         $listed = json_decode($m[1], true);

@@ -89,7 +89,7 @@ class ConsentPhotoUploadTest extends TestCase
                 return true;
             }
 
-            public function scan(UploadedFile $photo): array
+            public function scan(UploadedFile $photo, array $closeups = []): array
             {
                 $this->reads++;
 

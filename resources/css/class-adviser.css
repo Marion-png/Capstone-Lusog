@@ -462,6 +462,12 @@ label.pcc-line:hover{background:#f7faf8}
 .pcc-row.is-denied .pcc-state{background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B)}
 .pcc-row.is-denied div.pcc-line .pcc-box{border-color:transparent;background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B);border-radius:50%}
 .pcc-row.is-denied div.pcc-line .pcc-box::after{content:"\2715"}
+.pcc-row.is-check .pcc-state{background:var(--lg-amber-tint,#FDF4E2);color:var(--lg-amber-ink,#8A5A06)}
+.pcc-row.is-check .pcc-box{border-color:var(--lg-amber-ink,#8A5A06)}
+.pcc-services-head .pcc-tally{margin-left:auto}
+.pcc-mark-all{flex-shrink:0;padding:2px 8px;border:0;border-radius:6px;background:none;font:inherit;font-size:.72rem;font-weight:700;color:var(--lg-emerald,#1F8A4C);cursor:pointer;transition:background .15s ease}
+.pcc-mark-all:hover{background:var(--lg-mint,#E7F5EC)}
+.pcc-mark-all:focus-visible{outline:2px solid var(--lg-emerald,#1F8A4C);outline-offset:1px}
 .pcc-row.is-pending .pcc-state{background:#f1f5f9;color:#475569}
 .pcc-row.is-pending .pcc-box{border-style:dashed;border-radius:50%}
 .pcc-modal #pcConfirmSubmit:disabled{opacity:.55;cursor:not-allowed}

@@ -273,6 +273,7 @@
             <div class="pcc-services-head">
                 <h4>Health Services</h4>
                 <span class="pcc-tally" id="pcConfirmTally"></span>
+                <button type="button" class="pcc-mark-all" id="pcConfirmAll" hidden>Mark all</button>
             </div>
             <ul class="pcc-list" id="pcConfirmList"></ul>
             <div class="confirm-actions">
@@ -283,6 +284,7 @@
     </div>
 </div>
 @if ($scannerReady)
+    @include('consent-forms._photo-closeups')
     {{-- The photo at full size. Outside the upload form, so nothing in it
          can submit that form. --}}
     <dialog class="pc-photo-dialog" id="pcPhotoDialog" aria-label="Uploaded consent form">
@@ -426,26 +428,32 @@
     };
 
     // The services ticked in the letter's list. The reader fills them with
-    // the list the server read off the paper (ConsentPaperCopy::tickedServices);
-    // with none the upload reads as the program it is filed for.
+    // the list the server read off the paper (ConsentPaperCopy::tickedServices),
+    // and with what the confirmation should start from for each answer
+    // (ConsentPaperCopy::proposal); with none the upload reads as the program
+    // it is filed for.
     const servicesBox = document.getElementById('pcServices');
     let readServices = [];
-    const setServices = (keys) => {
+    let proposal = null;
+    const setServices = (keys, proposed = null) => {
         readServices = keys.slice();
+        proposal = proposed;
         writeKeys(servicesBox, 'services[]', keys);
     };
 
     // ── Confirming what the form approves ───────────────────────────
     // Every service the letter can carry, each approved or not. On an agreed
-    // form the adviser marks them, starting from the services the reader
-    // found ticked on the paper (or all of them); the marks are what is filed:
-    // `services` the approved ones, and on a partial consent the rest of the
-    // letter's list as `excepted_services`. The server reads them with
-    // ConsentStanding, exactly as the learner's Consent tab will show them.
+    // form the adviser marks them, starting from what the server read off the
+    // paper and from nothing when nobody has read it: a row is only ever ticked
+    // for a reason. The marks are what is filed: `services` the approved ones,
+    // and on a partial consent the rest of the letter's list as
+    // `excepted_services`. The server reads them with ConsentStanding, exactly
+    // as the learner's Consent tab will show them.
     const confirmModal = document.getElementById('pcConfirmModal');
     const confirmList = document.getElementById('pcConfirmList');
     const confirmTally = document.getElementById('pcConfirmTally');
     const confirmSubmit = document.getElementById('pcConfirmSubmit');
+    const confirmAll = document.getElementById('pcConfirmAll');
     const exceptedBox = document.getElementById('pcExcepted');
     const servicesConfirmed = document.getElementById('pcServicesConfirmed');
     const confirmServices = @json($confirmServices);
@@ -456,11 +464,15 @@
     let approvedChoice = null;
 
     const isAgreed = () => answerSelect.value === 'full' || answerSelect.value === 'partial';
-    // The services the letter lists: what the reader saw ticked, or — with
-    // no reading — every one, as the printed letter carries them all.
+    // What the reading proposes for the answer on screen. Nothing without one.
+    const proposed = () => proposal?.[answerSelect.value] || { approved: [], check: [] };
+    // The services the letter lists: every row the reader found marked or
+    // could not settle, or — with no reading — every one, as the printed
+    // letter carries them all.
     const letterServices = () => {
-        const read = readServices.filter((key) => serviceKeys.includes(key));
-        return read.length ? read : serviceKeys.slice();
+        if (!proposal) return serviceKeys.slice();
+        const onLetter = [...readServices, ...proposal.full.check];
+        return serviceKeys.filter((key) => onLetter.includes(key));
     };
 
     const learnerName = () => {
@@ -471,10 +483,10 @@
     };
 
     const paintRow = (row, state) => {
-        row.classList.remove('is-approved', 'is-denied', 'is-pending');
+        row.classList.remove('is-approved', 'is-denied', 'is-pending', 'is-check');
         row.classList.add('is-' + state);
         const label = row.querySelector('.pcc-state');
-        if (label) label.textContent = { approved: 'Approved', denied: 'Not approved', pending: 'Pending' }[state];
+        if (label) label.textContent = { approved: 'Approved', denied: 'Not approved', pending: 'Pending', check: 'Check the paper' }[state];
     };
 
     const syncTally = () => {
@@ -484,11 +496,14 @@
             confirmTally.textContent = approved + ' approved · ' + (total - approved) + ' not approved';
             // An agreed form that approves nothing is not one the server takes.
             confirmSubmit.disabled = approved === 0;
+            confirmAll.hidden = false;
+            confirmAll.textContent = approved === total ? 'Clear all' : 'Mark all';
         } else {
             confirmTally.textContent = answerSelect.value === 'refused'
                 ? '0 approved · ' + total + ' not approved'
                 : total + ' pending';
             confirmSubmit.disabled = false;
+            confirmAll.hidden = true;
         }
     };
 
@@ -521,7 +536,8 @@
                 syncTally();
             });
             wrap.append(input, box, name, state);
-            paintRow(row, input.checked ? 'approved' : 'denied');
+            // A row the reading could not settle says so until somebody decides.
+            paintRow(row, input.checked ? 'approved' : (proposed().check.includes(service.key) ? 'check' : 'denied'));
         } else {
             wrap.append(box, name, state);
             paintRow(row, answerSelect.value === 'refused' ? 'denied' : 'pending');
@@ -530,25 +546,9 @@
         return row;
     };
 
-    const openConfirm = () => {
-        if (!confirmModal) return;
-        if (isAgreed() && approvedChoice === null) approvedChoice = new Set(letterServices());
-
-        document.getElementById('pcConfirmLearner').textContent = learnerName();
-        const answer = document.getElementById('pcConfirmAnswer');
-        answer.className = 'pcc-answer ' + (answerKinds[answerSelect.value] || 'is-none');
-        answer.textContent = answerSelect.options[answerSelect.selectedIndex]?.text || '';
-        document.getElementById('pcConfirmFile').textContent = consentFile?.files?.[0]?.name || '';
-
-        // What the parent wrote under their box, as the form carries it.
-        const note = { partial: ['Exceptions', 'pc_partial_exception'], refused: ['Reason given', 'pc_refused_reason'] }[answerSelect.value];
-        const noteText = note ? (document.getElementById(note[1])?.value || '').trim() : '';
-        document.getElementById('pcConfirmNoteRow').hidden = noteText === '';
-        document.getElementById('pcConfirmNoteLabel').textContent = note ? note[0] : '';
-        document.getElementById('pcConfirmNote').textContent = noteText;
-
-        // A heading the paper indents its sub-items under (Pag Purga,
-        // Immunization) heads them here too.
+    // A heading the paper indents its sub-items under (Pag Purga, Immunization)
+    // heads them here too.
+    const renderRows = () => {
         const rows = [];
         let group = null;
         confirmServices.forEach((service) => {
@@ -564,6 +564,33 @@
         });
         confirmList.replaceChildren(...rows);
         syncTally();
+    };
+
+    confirmAll?.addEventListener('click', () => {
+        approvedChoice = new Set(approvedChoice.size === serviceKeys.length ? [] : serviceKeys);
+        renderRows();
+    });
+
+    const openConfirm = () => {
+        if (!confirmModal) return;
+        if (isAgreed() && approvedChoice === null) {
+            approvedChoice = new Set(proposed().approved.filter((key) => serviceKeys.includes(key)));
+        }
+
+        document.getElementById('pcConfirmLearner').textContent = learnerName();
+        const answer = document.getElementById('pcConfirmAnswer');
+        answer.className = 'pcc-answer ' + (answerKinds[answerSelect.value] || 'is-none');
+        answer.textContent = answerSelect.options[answerSelect.selectedIndex]?.text || '';
+        document.getElementById('pcConfirmFile').textContent = consentFile?.files?.[0]?.name || '';
+
+        // What the parent wrote under their box, as the form carries it.
+        const note = { partial: ['Exceptions', 'pc_partial_exception'], refused: ['Reason given', 'pc_refused_reason'] }[answerSelect.value];
+        const noteText = note ? (document.getElementById(note[1])?.value || '').trim() : '';
+        document.getElementById('pcConfirmNoteRow').hidden = noteText === '';
+        document.getElementById('pcConfirmNoteLabel').textContent = note ? note[0] : '';
+        document.getElementById('pcConfirmNote').textContent = noteText;
+
+        renderRows();
 
         confirmModal.classList.add('open');
         confirmModal.setAttribute('aria-hidden', 'false');
@@ -736,8 +763,8 @@
     };
     let filledFromScan = false;
 
-    const fillFromReading = (draft, services) => {
-        setServices(Array.isArray(services) ? services : []);
+    const fillFromReading = (draft, services, proposed) => {
+        setServices(Array.isArray(services) ? services : [], proposed || null);
 
         Object.entries(writtenFields).forEach(([from, to]) => {
             const input = uploadForm.querySelector('[name="' + to + '"]');
@@ -813,6 +840,8 @@
             body.append('lrn', lrn);
 
             try {
+                await window.consentPhotoCloseups(file, body);
+
                 const response = await fetch(@json(route('consent-forms.scan')), {
                     method: 'POST',
                     headers: {
@@ -846,7 +875,7 @@
                 // off, fills nothing in.
                 clearReading();
                 if (!draft.unreadable && !draft.learner_mismatch) {
-                    fillFromReading(draft, data.ticked_services);
+                    fillFromReading(draft, data.ticked_services, data.service_proposal);
                 }
                 showReview(file, data);
 
