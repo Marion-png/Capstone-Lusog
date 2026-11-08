@@ -39,6 +39,7 @@
              and leave the network in the test path. -->
         <env name="ANTHROPIC_API_KEY" value=""/>
         <env name="GEMINI_API_KEY" value=""/>
+        <env name="GEMINI_TEXT_MODEL" value=""/>
         <env name="CALENDARIFIC_API_KEY" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>

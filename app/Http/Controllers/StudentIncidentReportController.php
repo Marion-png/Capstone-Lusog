@@ -4,8 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
 use App\Models\StudentIncidentReport;
+use App\Support\AuditTrail;
+use App\Support\BmiClassifier;
+use App\Support\ClinicalProofreader;
+use App\Support\FeedingBeneficiarySummary;
+use App\Support\IncidentPhysicalExam;
 use App\Support\LearnerPlacement;
+use App\Support\ProofreadUnavailable;
 use App\Support\SchemaCache;
+use App\Support\SchoolLetterhead;
+use App\Support\SchoolSignatories;
+use Carbon\CarbonImmutable;
+use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -114,7 +124,7 @@ class StudentIncidentReportController extends Controller
         // name fields nobody changed, and a save that changed nothing would
         // stamp the note as edited.
         foreach ($this->chartFrom($request) as $field => $value) {
-            if ($this->chartValue($report, $field) !== (string) $value) {
+            if (! $this->unchanged($report, $field, $value)) {
                 $report->{$field} = $value;
             }
         }
@@ -133,6 +143,17 @@ class StudentIncidentReportController extends Controller
             'report' => $this->present($report),
             'reports' => $this->listFor($request, $lrn),
         ]);
+    }
+
+    /** Whether a posted chart field says what the report already says. */
+    private function unchanged(StudentIncidentReport $report, string $field, mixed $value): bool
+    {
+        // The examination is one section, compared as its stored shape.
+        if ($field === 'physical_exam') {
+            return IncidentPhysicalExam::fromInput($report->physical_exam) === $value;
+        }
+
+        return $this->chartValue($report, $field) === (string) $value;
     }
 
     /** A chart field as a form would post it, so the two can be compared. */
@@ -189,7 +210,11 @@ class StudentIncidentReportController extends Controller
             'response' => ['nullable', 'string', 'max:2000'],
             'witnesses' => ['nullable', 'string', 'max:500'],
             'guardian_notified' => ['nullable', 'boolean'],
-        ]);
+            // The physical examination under Data: the vital signs taken, the
+            // level of consciousness, the pain score, the body part affected
+            // and the findings. Every reading is optional — one nobody took is
+            // left blank, never refused and never invented.
+        ] + IncidentPhysicalExam::rules(), [], IncidentPhysicalExam::attributes());
 
         // The Response is dropped where the column has not been migrated yet,
         // so an un-migrated machine charts F, D and A rather than failing the
@@ -218,7 +243,11 @@ class StudentIncidentReportController extends Controller
             ]
             : [];
 
-        return $response + $chart + [
+        $exam = StudentIncidentReport::supportsPhysicalExam()
+            ? ['physical_exam' => IncidentPhysicalExam::fromInput($validated['exam'] ?? null)]
+            : [];
+
+        return $response + $chart + $exam + [
             'occurred_at' => $validated['occurred_at'],
             'category' => $validated['category'],
             'severity' => $validated['severity'],
@@ -262,6 +291,257 @@ class StudentIncidentReportController extends Controller
         $report->delete();
 
         return response()->json(['reports' => $this->listFor($request, $lrn)]);
+    }
+
+    /**
+     * The text fields the grammar and terms check reads, as the form names
+     * them: what each is called for the model, and the limit its column holds.
+     * Witnesses and the place are left out — they are names and places, not
+     * clinical wording.
+     *
+     * @var array<string, array{label: string, max: int}>
+     */
+    public const PROOFREAD_FIELDS = [
+        'focus' => ['label' => 'Focus (the concern being charted)', 'max' => 255],
+        'description' => ['label' => 'Data (what was observed and what the learner reported)', 'max' => 2000],
+        'exam_body_site' => ['label' => 'Body part affected', 'max' => IncidentPhysicalExam::BODY_SITE_MAX],
+        'exam_findings' => ['label' => 'Physical examination findings', 'max' => IncidentPhysicalExam::FINDINGS_MAX],
+        'action_taken' => ['label' => 'Action (what was done)', 'max' => 2000],
+        'response' => ['label' => 'Response (how the learner responded)', 'max' => 2000],
+    ];
+
+    /**
+     * An AI check of the report's grammar and terms, before it is saved.
+     *
+     * Open to whoever may chart on this learner, and it writes nothing: the
+     * suggestions go back to the form, where the nurse accepts or dismisses
+     * each one, and the report is saved through store()/update() as typed.
+     * The learner's names, the witnesses' and the nurse's own are masked
+     * before the text leaves the server (ClinicalProofreader). The audit entry
+     * names which fields were sent, never what they said.
+     */
+    public function proofread(Request $request, string $lrn): JsonResponse
+    {
+        if (! $this->mayWrite($request, $lrn)) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+
+        if (! ClinicalProofreader::isConfigured()) {
+            return response()->json(['message' => 'The grammar and terms check is not set up on this server.'], 503);
+        }
+
+        $rules = ['fields' => ['required', 'array'], 'witnesses' => ['nullable', 'string', 'max:500']];
+        foreach (self::PROOFREAD_FIELDS as $key => $field) {
+            $rules['fields.'.$key] = ['nullable', 'string', 'max:'.$field['max']];
+        }
+        $validated = $request->validate($rules);
+
+        $fields = [];
+        foreach (self::PROOFREAD_FIELDS as $key => $field) {
+            $text = trim((string) ($validated['fields'][$key] ?? ''));
+            if ($text !== '') {
+                $fields[$key] = ['label' => $field['label'], 'text' => $text];
+            }
+        }
+
+        if ($fields === []) {
+            return response()->json(['suggestions' => (object) [], 'checked' => []]);
+        }
+
+        $record = StudentHealthRecord::currentForStudent($lrn, $request->session()->get('active_institution_id'));
+        $details = is_array($record?->student_details) ? $record->student_details : [];
+
+        $names = array_filter([
+            (string) ($details['first_name'] ?? ''),
+            (string) ($details['middle_name'] ?? ''),
+            (string) ($details['last_name'] ?? ''),
+            (string) $record?->student_name,
+            (string) ($validated['witnesses'] ?? ''),
+            (string) $request->session()->get('active_name', ''),
+        ]);
+
+        try {
+            $suggestions = (new ClinicalProofreader)->proofread($fields, array_values($names));
+        } catch (ProofreadUnavailable $e) {
+            return response()->json(['message' => $e->getMessage()], 503);
+        }
+
+        // A correction that would not fit the column is no correction.
+        $suggestions = array_filter(
+            $suggestions,
+            fn (array $suggestion, string $key): bool => mb_strlen($suggestion['suggested']) <= self::PROOFREAD_FIELDS[$key]['max'],
+            ARRAY_FILTER_USE_BOTH
+        );
+
+        AuditTrail::record(
+            'proofread',
+            'StudentHealthRecord',
+            $record?->id,
+            'Checked the grammar and terms of an incident report for LRN '.$lrn,
+            ['fields' => array_keys($fields), 'suggested' => array_keys($suggestions)]
+        );
+
+        return response()->json([
+            'suggestions' => (object) $suggestions,
+            'checked' => array_keys($fields),
+        ]);
+    }
+
+    /**
+     * One filed report on the school's Incident Report form, to print and
+     * sign: the letterhead, the learner, the incident, the physical
+     * examination, the F-DAR chart, and the four signatories.
+     *
+     * Everyone who may read the report may print it — the adviser signs it
+     * too. Scoped like a withdrawal (this school, this learner) and recorded
+     * on the audit trail.
+     */
+    public function printReport(Request $request, string $lrn, int $id): View
+    {
+        abort_unless($this->mayRead($request, $lrn), 403);
+        abort_unless(SchemaCache::hasTable('student_incident_reports'), 404);
+
+        $report = StudentIncidentReport::query()
+            ->forLearner($lrn, $request->session()->get('active_institution_id'))
+            ->find($id);
+
+        abort_if($report === null, 404);
+
+        AuditTrail::record(
+            'printed',
+            'StudentIncidentReport',
+            (int) $report->id,
+            'Printed the incident report of '.$report->occurred_at?->toDateString().' for LRN '.$lrn
+        );
+
+        return view('dashboard.incident-report-print', $this->sheet($request, $lrn, $report));
+    }
+
+    /**
+     * The same form with nothing charted on it, for an incident written up by
+     * hand first. The learner's own lines and the signatories are filled in;
+     * everything about the incident is a ruled line. The clinic's, since it
+     * is the clinic that charts.
+     */
+    public function printBlank(Request $request, string $lrn): View
+    {
+        abort_unless($this->mayWrite($request, $lrn), 403);
+
+        $sheet = $this->sheet($request, $lrn, null);
+
+        AuditTrail::record(
+            'printed',
+            'StudentHealthRecord',
+            $sheet['recordId'],
+            'Printed a blank incident report form for LRN '.$lrn
+        );
+
+        return view('dashboard.incident-report-print', $sheet);
+    }
+
+    /**
+     * Everything the printed form carries.
+     *
+     * @return array<string, mixed>
+     */
+    private function sheet(Request $request, string $lrn, ?StudentIncidentReport $report): array
+    {
+        $institutionId = (int) $request->session()->get('active_institution_id') ?: null;
+        $schoolName = (string) $request->session()->get('active_school_name', '');
+
+        // The learner as they were placed the year the incident happened, or
+        // as they are now where that year's row is gone.
+        $record = ($report ? StudentHealthRecord::currentForStudent($lrn, $institutionId, (string) $report->school_year) : null)
+            ?? StudentHealthRecord::currentForStudent($lrn, $institutionId);
+
+        $details = is_array($record?->student_details) ? $record->student_details : [];
+        [$grade, $section] = FeedingBeneficiarySummary::splitSection((string) $record?->section);
+        $grade = $grade === 'Unassigned' ? '' : $grade;
+        $section = $section === 'Unassigned' ? '' : $section;
+
+        $letterhead = SchoolLetterhead::for($institutionId, $schoolName);
+
+        // Prepared by the clinic nurse: the nurse who charted it, or the
+        // school's nurse where a clinic teacher or clinic staff charted it —
+        // their own name stays on the chart's signature below.
+        $nurse = $report !== null && $report->reported_by_role === 'school_nurse' && trim((string) $report->reported_by_name) !== ''
+            ? (string) $report->reported_by_name
+            : SchoolSignatories::preparedBy($institutionId, $schoolName);
+
+        $names = [
+            'nurse' => $nurse,
+            'adviser' => SchoolSignatories::classAdviser($institutionId, $grade, $section),
+            // Nobody holds a curriculum head's account: a line to sign on,
+            // never an invented name.
+            'curriculum_head' => '',
+            'principal' => SchoolSignatories::notedBy($institutionId, $schoolName),
+        ];
+
+        $signatories = [];
+        foreach (StudentIncidentReport::SIGNATORIES as $key => $signatory) {
+            $signatories[] = $signatory + ['name' => $names[$key] ?? ''];
+        }
+
+        $occurred = $report?->occurred_at ? CarbonImmutable::parse($report->occurred_at->toDateString()) : null;
+
+        return [
+            'report' => $report !== null ? $this->present($report) : null,
+            'recordId' => $record?->id,
+            'schoolYear' => (string) ($report?->school_year ?: ($record?->school_year ?: StudentHealthRecord::currentSchoolYear())),
+            'letterhead' => $letterhead,
+            'masthead' => SchoolLetterhead::masthead($letterhead),
+            'seals' => SchoolLetterhead::seals(),
+            'learner' => [
+                'name' => $this->learnerName($record, $details),
+                'lrn' => $lrn,
+                'grade' => $grade,
+                'section' => $section,
+                'sex' => $record ? FeedingBeneficiarySummary::sexOf($record) : '',
+                'age' => $this->ageOn($details, $occurred),
+                'guardian' => trim((string) ($details['parent_guardian'] ?? '')),
+            ],
+            'categories' => StudentIncidentReport::CATEGORIES,
+            'severities' => StudentIncidentReport::SEVERITIES,
+            'consciousness' => IncidentPhysicalExam::CONSCIOUSNESS,
+            'vitals' => IncidentPhysicalExam::VITALS,
+            'signatories' => $signatories,
+        ];
+    }
+
+    /** "Cruz, Juan P." — surname first, as a school form lists a learner. */
+    private function learnerName(?StudentHealthRecord $record, array $details): string
+    {
+        $first = trim((string) ($details['first_name'] ?? ''));
+        $middle = trim((string) ($details['middle_name'] ?? ''));
+        $last = trim((string) ($details['last_name'] ?? ''));
+
+        if ($first === '' && $last === '') {
+            return trim((string) $record?->student_name);
+        }
+
+        $initial = $middle !== '' ? ' '.mb_strtoupper(mb_substr($middle, 0, 1)).'.' : '';
+
+        return trim($last.', '.$first.$initial, ', ');
+    }
+
+    /**
+     * Completed years on the day of the incident, from the birth date on the
+     * learner's card; the card's own age where it holds no birth date; blank
+     * where it holds neither.
+     */
+    private function ageOn(array $details, ?CarbonImmutable $on): string
+    {
+        $birth = BmiClassifier::birthDateFrom($details);
+
+        if ($birth !== null) {
+            $years = $birth->diffInYears($on ?? CarbonImmutable::parse((string) now((string) config('app.school_timezone'))->toDateString()));
+
+            return $years >= 0 ? (string) (int) floor($years) : '';
+        }
+
+        $age = trim((string) ($details['age'] ?? ''));
+
+        return is_numeric($age) ? (string) (int) $age : '';
     }
 
     /**
@@ -368,6 +648,7 @@ class StudentIncidentReportController extends Controller
     {
         $chart = StudentIncidentReport::supportsChartColumns();
         $stamp = StudentIncidentReport::supportsEditStamp() && $report->edited_at !== null;
+        $exam = StudentIncidentReport::supportsPhysicalExam();
 
         return [
             'id' => $report->id,
@@ -390,6 +671,10 @@ class StudentIncidentReportController extends Controller
             'description' => (string) $report->description,
             'action_taken' => (string) $report->action_taken,
             'response' => StudentIncidentReport::supportsResponse() ? (string) $report->response : '',
+            // The physical examination under Data: every key for the form to
+            // be filled from, and what was recorded for the list to read back.
+            'physical_exam' => IncidentPhysicalExam::read($exam ? $report->physical_exam : null),
+            'exam_summary' => IncidentPhysicalExam::summary($exam ? $report->physical_exam : null),
             'witnesses' => (string) $report->witnesses,
             'guardian_notified' => (bool) $report->guardian_notified,
             // The signature under the note: who charted it and as what. The

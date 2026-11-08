@@ -123,5 +123,78 @@
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
 .incident-readonly{margin:4px 0}
+.incident-history[hidden]{display:none}
 
-@media (max-width:640px){.incident-form-grid{grid-template-columns:1fr}}
+/* File / Print Blank Form, side by side; wrap on a narrow profile. */
+.incident-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
+.incident-actions[hidden]{display:none}
+
+/* Print sits first at the row's far end; Edit and Withdraw follow it. */
+.incident-print{margin-left:auto;display:inline-flex;align-items:center;gap:5px;border:none;background:none;font:inherit;font-size:.74rem;font-weight:600;color:var(--lg-info-ink,#0F6E62);cursor:pointer;padding:3px 7px;border-radius:6px}
+.incident-print svg{width:13px;height:13px}
+.incident-print:hover{background:var(--lg-mint,#E7F5EC)}
+.incident-print:disabled{opacity:.55;cursor:progress}
+.incident-print+.incident-edit,
+.incident-print+.incident-remove{margin-left:0}
+
+/* ── Physical examination, under Data ──
+   The vital signs as one row of compact fields, each with its unit inside
+   the box, then the four answers that are not a reading. */
+.fdar-exam{margin:10px 0 0;padding:10px 12px 12px;border:1px solid var(--lg-border,#DCE8E0);border-radius:10px;background:var(--lg-page,#F8FBF9);min-width:0}
+.fdar-exam legend{padding:0 6px;font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--lg-emerald-deep,#126B3A)}
+.fdar-vitals{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px}
+.fdar-vital{display:block;min-width:0;margin:0}
+.fdar-body .fdar-vital-label{display:block;font-size:.7rem;font-weight:600;color:var(--lg-ink-soft,#6B7C72);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fdar-vital-field{position:relative;display:block}
+.fdar-body .fdar-vital-field input{padding-right:52px;font-variant-numeric:tabular-nums}
+/* "breaths/min" is the longest unit; its box keeps the figure clear of it. */
+.fdar-body .fdar-vital-field input[name="exam[respiratory_rate]"]{padding-right:76px}
+.fdar-vital-field em{position:absolute;right:9px;top:50%;transform:translateY(-50%);font-style:normal;font-size:.68rem;color:var(--lg-ink-soft,#6B7C72);pointer-events:none;white-space:nowrap}
+.fdar-exam-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;margin-top:10px}
+.fdar-exam-field{min-width:0}
+.fdar-exam-field.is-full{grid-column:1/-1}
+.fdar-body .fdar-exam-field label{font-size:.7rem;font-weight:600;color:var(--lg-ink-soft,#6B7C72);margin-bottom:3px}
+
+/* The examination read back under the Data line. */
+.fdar-exam-read{margin:7px 0 0 0;padding:7px 9px;border-radius:8px;background:var(--lg-page,#F4F8F6);display:grid;gap:5px}
+.fdar-exam-read-head{font-size:.66rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--lg-ink-soft,#6B7C72)}
+.fdar-exam-vitals{display:flex;flex-wrap:wrap;gap:5px}
+.fdar-exam-chip{display:inline-flex;align-items:baseline;gap:4px;padding:2px 8px;border-radius:999px;background:#fff;border:1px solid var(--lg-border,#DCE8E0);font-size:.74rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+.fdar-exam-chip b{font-size:.66rem;font-weight:700;color:var(--lg-emerald-deep,#126B3A)}
+.fdar-exam-line{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px;font-size:.78rem}
+.fdar-exam-line span{color:var(--lg-ink-soft,#6B7C72);white-space:nowrap}
+.fdar-exam-line p{margin:0;white-space:pre-line;overflow-wrap:anywhere}
+
+/* ── AI grammar and terms check ── */
+.incident-form-foot .incident-ai{margin-right:auto;display:inline-flex;align-items:center;gap:6px}
+.incident-ai svg{width:15px;height:15px;color:var(--lg-emerald,#1F8A4C)}
+.incident-ai:disabled{opacity:.65;cursor:progress}
+.incident-proof{margin-top:12px;border:1px solid var(--lg-border,#DCE8E0);border-radius:10px;background:#fff;overflow:hidden}
+.incident-proof[hidden]{display:none}
+.incident-proof-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:9px 12px;background:var(--lg-mint,#E7F5EC)}
+.incident-proof-title{margin-right:auto;font-size:.78rem;font-weight:700;color:var(--lg-emerald-deep,#126B3A)}
+.incident-proof-item{padding:10px 12px;border-top:1px solid var(--lg-border,#DCE8E0)}
+.incident-proof-item-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:5px}
+.incident-proof-field{margin-right:auto;font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--lg-ink-soft,#6B7C72)}
+.incident-proof-btn{border:1px solid var(--lg-border,#DCE8E0);background:#fff;font:inherit;font-size:.72rem;font-weight:600;color:var(--lg-ink,#1F2D25);cursor:pointer;padding:4px 10px;border-radius:999px}
+.incident-proof-btn:hover{background:var(--lg-rail,#EEF4F0)}
+.incident-proof-btn.is-primary{background:var(--lg-emerald,#1F8A4C);border-color:var(--lg-emerald,#1F8A4C);color:#fff}
+.incident-proof-btn.is-primary:hover{background:var(--lg-emerald-deep,#126B3A)}
+.incident-proof-diff{margin:0;font-size:.82rem;line-height:1.55;color:var(--lg-ink,#1F2D25);white-space:pre-line;overflow-wrap:anywhere}
+/* Removed words struck through, added words tinted — never underlined. */
+.incident-proof-diff del{color:#b91c1c;background:#FCECEC;text-decoration:line-through;border-radius:3px;margin-right:2px}
+.incident-proof-diff ins{color:var(--lg-emerald-deep,#126B3A);background:var(--lg-mint,#DDF2E5);text-decoration:none;font-weight:600;border-radius:3px}
+
+@media (max-width:640px){
+    .incident-form-grid,
+    .fdar-exam-grid{grid-template-columns:1fr}
+    .incident-form-foot{flex-wrap:wrap}
+    .incident-form-foot .incident-ai{flex-basis:100%;justify-content:center}
+}
+
+/* Print, Edit and Withdraw travel as one group, so on a narrow profile they
+   wrap together rather than splitting across two lines. */
+.incident-card-tools{margin-left:auto;display:inline-flex;flex-wrap:wrap;align-items:center;gap:2px}
+.incident-card-tools .incident-print,
+.incident-card-tools .incident-edit,
+.incident-card-tools .incident-remove{margin-left:0}

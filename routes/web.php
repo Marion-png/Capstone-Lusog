@@ -930,6 +930,16 @@ Route::post('/health-records/students/{lrn}/incidents/{id}', [StudentIncidentRep
     ->whereNumber('id')->name('student-incidents.update');
 Route::delete('/health-records/students/{lrn}/incidents/{id}', [StudentIncidentReportController::class, 'destroy'])
     ->whereNumber('id')->name('student-incidents.destroy');
+// The AI grammar and terms check: writes nothing, and is throttled because
+// every check spends the Gemini key's free daily allowance.
+Route::post('/health-records/students/{lrn}/incidents/proofread', [StudentIncidentReportController::class, 'proofread'])
+    ->middleware('throttle:12,1')->name('student-incidents.proofread');
+// The school's Incident Report form, to print and sign: one filed report, or
+// the form blank for an incident written up by hand.
+Route::get('/health-records/students/{lrn}/incidents/{id}/print', [StudentIncidentReportController::class, 'printReport'])
+    ->whereNumber('id')->name('student-incidents.print');
+Route::get('/health-records/students/{lrn}/incidents/blank-form', [StudentIncidentReportController::class, 'printBlank'])
+    ->name('student-incidents.blank');
 
 // Vital signs (temperature, pulse, blood pressure). The school nurse is the
 // only role that may write one — the class adviser measures height and weight

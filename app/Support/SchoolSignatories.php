@@ -33,6 +33,31 @@ final class SchoolSignatories
     }
 
     /**
+     * The class adviser of one section, who signs a form about a learner in
+     * it — the incident report. Matched on the account's own assignment,
+     * without regard to case or spacing, because that is how the adviser's
+     * scope reads it; empty where nobody holds the class.
+     */
+    public static function classAdviser(?int $institutionId, string $grade, string $section): string
+    {
+        $norm = static fn (string $value): string => mb_strtolower((string) preg_replace('/\s+/u', ' ', trim($value)));
+
+        if (! $institutionId || $norm($grade) === '' || $norm($section) === '' || ! SchemaCache::hasTable('accounts')) {
+            return '';
+        }
+
+        $adviser = DB::table('accounts')
+            ->where('role', 'class_adviser')
+            ->where('institution_id', $institutionId)
+            ->orderBy('id')
+            ->get(['name', 'assigned_grade_level', 'assigned_section'])
+            ->first(fn (object $account): bool => $norm((string) $account->assigned_grade_level) === $norm($grade)
+                && $norm((string) $account->assigned_section) === $norm($section));
+
+        return (string) ($adviser->name ?? '');
+    }
+
+    /**
      * The first account holding a role at this school.
      *
      * Scoped by institution first, because that is the boundary every other

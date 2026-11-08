@@ -61,6 +61,10 @@ return [
     'gemini' => [
         'key' => env('GEMINI_API_KEY'),
         'model' => env('GEMINI_MODEL', 'gemini-3.5-flash'),
+        // The model the incident report's grammar and terms check asks
+        // (App\Support\ClinicalProofreader). Blank uses the model above; set it
+        // to keep the check off the daily free allowance the photo readers spend.
+        'text_model' => env('GEMINI_TEXT_MODEL'),
         // Detail given to a photographed consent form. Blank uses the model's
         // default, for a model that refuses this level.
         'media_resolution' => env('GEMINI_MEDIA_RESOLUTION', 'MEDIA_RESOLUTION_ULTRA_HIGH'),

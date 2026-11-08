@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedArray;
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
 use App\Support\SchemaCache;
@@ -14,6 +15,9 @@ use Illuminate\Database\Eloquent\Model;
  *
  * Focus / Data / Action / Response, in that order: the category is the focus,
  * the description the data, then what was done and how the learner responded.
+ * The physical examination taken at the time is the objective half of the
+ * Data (`physical_exam`, App\Support\IncidentPhysicalExam), and the report
+ * prints on the school's form for four signatures (SIGNATORIES).
  * Severity, location, witnesses and whether the guardian was told sit outside
  * the chart — they are not FDAR, but they are what makes a report findable and
  * followable afterwards.
@@ -68,6 +72,22 @@ class StudentIncidentReport extends Model
 
     /** @var list<string> */
     public const READ_ROLES = ['school_nurse', 'clinic_teacher', 'clinic_staff', 'class_adviser'];
+
+    /**
+     * Who signs the printed Incident Report, in the order the form sets them:
+     * the clinic nurse who prepared it, the learner's class adviser, the
+     * curriculum head and the school principal. The names are filled from the
+     * accounts the app holds; one it does not hold — no account is a
+     * curriculum head — prints as a line to sign on.
+     *
+     * @var array<string, array{label: string, title: string}>
+     */
+    public const SIGNATORIES = [
+        'nurse' => ['label' => 'Prepared by', 'title' => 'Clinic Nurse'],
+        'adviser' => ['label' => 'Noted by', 'title' => 'Class Adviser'],
+        'curriculum_head' => ['label' => 'Reviewed by', 'title' => 'Curriculum Head'],
+        'principal' => ['label' => 'Approved by', 'title' => 'School Principal'],
+    ];
 
     public static function canFile(?string $role): bool
     {
@@ -125,6 +145,17 @@ class StudentIncidentReport extends Model
     }
 
     /**
+     * Whether the physical examination column is on this database yet
+     * (App\Support\IncidentPhysicalExam). Guarded like the others: until the
+     * migration runs, the form draws no examination section and a report still
+     * files with its F-DAR chart.
+     */
+    public static function supportsPhysicalExam(): bool
+    {
+        return SchemaCache::hasColumn('student_incident_reports', 'physical_exam');
+    }
+
+    /**
      * What kind of incident. A fixed catalogue rather than free text: the
      * list is filtered by it, and a report filed under a category nobody
      * recognises is a report nobody finds. It is the kind; the F-DAR Focus
@@ -175,6 +206,7 @@ class StudentIncidentReport extends Model
         'edited_by_name',
         'edited_by_role',
         'edited_at',
+        'physical_exam',
     ];
 
     protected $casts = [
@@ -189,6 +221,9 @@ class StudentIncidentReport extends Model
         'witnesses' => EncryptedString::class,
         'reported_by_name' => EncryptedString::class,
         'edited_by_name' => EncryptedString::class,
+        // The vital signs, consciousness, pain, site and findings — health
+        // information about a child, kept as one encrypted section.
+        'physical_exam' => EncryptedArray::class,
     ];
 
     /** @param  Builder<self>  $query */
