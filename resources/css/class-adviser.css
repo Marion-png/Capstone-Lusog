@@ -375,18 +375,130 @@ tbody tr:hover td{background:#f7fbf8}
 .pc-read .btn{font-size:.76rem;padding:7px 11px}
 .pc-read .btn:disabled{opacity:.55;cursor:not-allowed}
 .pc-read-state{font-size:.72rem;color:var(--muted);line-height:1.4}
-/* Once read: the photo beside its reading, laid out as View Details lays out
-   a filed form (the .pc-view-* rules below). */
-.pc-review{margin:14px 0 16px;padding:18px;background:#fff;border:1px solid var(--border);border-radius:12px}
-.pc-review .pc-view-grid{gap:24px}
-.pc-review .pc-view-flash{margin-bottom:12px}
+/* Student and school year share a row, so the dialog opens shorter. */
+.pc-row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px;align-items:start}
+@media (max-width:620px){.pc-row2{grid-template-columns:1fr}}
+
+/* Once read, the dialog is two panes of one fixed height: the photo on the
+   left, which stays put, and the whole form on the right, which scrolls with
+   Cancel / Upload held at its foot. Each pane scrolls on its own, so neither
+   the photo nor the reading pushes the dialog past the screen. */
+.pc-modal.is-reviewing .confirm-modal{width:min(1200px,96vw);height:min(92vh,1000px);max-height:none;display:flex;flex-direction:column;overflow:hidden}
+.pc-modal.is-reviewing #uploadConsentForm{flex:1;min-height:0;display:flex;flex-direction:column}
+.pc-modal.is-reviewing .pc-upload-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);padding:0}
+.pc-modal.is-reviewing .pc-upload-main{min-height:0;overflow:auto;overscroll-behavior:contain;padding:16px 20px 0}
+.pc-modal.is-reviewing .pc-upload-main .confirm-actions{position:sticky;bottom:0;z-index:2;margin:16px -20px 0;padding:12px 20px 14px;background:var(--card,#fff);border-top:1px solid var(--border)}
+.pc-photo-pane{display:flex;flex-direction:column;min-height:0;padding:14px 16px 16px;background:#F3F6F4;border-right:1px solid var(--border)}
+.pc-photo-pane .pc-view-section-head{margin-bottom:10px}
+.pc-photo-pane h4{font-size:.8rem;font-weight:700;color:var(--text)}
+.pc-photo-tools{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.pc-zoom{display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid #c7d8cf;border-radius:8px;background:#fff;color:#285640;cursor:pointer;transition:background .15s ease}
+.pc-zoom svg{width:14px;height:14px}
+.pc-zoom:hover:not(:disabled){background:var(--g100)}
+.pc-zoom:disabled{opacity:.4;cursor:not-allowed}
+.pc-zoom:focus-visible{outline:2px solid var(--g700);outline-offset:1px}
+.pc-zoom-level{min-width:38px;text-align:center;font-size:.72rem;font-weight:600;color:var(--muted);font-variant-numeric:var(--lg-figures,tabular-nums lining-nums)}
+.pc-pane-photo{flex:1;min-height:0;margin:0;overflow:auto;overscroll-behavior:contain;border:1px solid var(--border);border-radius:10px;background:#E6ECE8}
+.pc-pane-photo img{display:block;width:100%;max-width:none;height:auto}
+
+/* The reading, under the read button: a status line, then the sheet folded
+   to one line per section (consent-copy.css draws the rows). */
+.pc-review{margin:10px 0 14px}
+.pc-review-title{font-size:.8rem;font-weight:700;color:var(--text);margin-bottom:8px}
+.pc-review .pc-view-flash{margin-bottom:10px;padding:8px 11px;font-size:.76rem}
 .pc-view-flash.has-list{display:block;line-height:1.45}
-.pc-review-checks{margin:6px 0 0;padding-left:18px;font-weight:500}
-.pc-review-checks li+li{margin-top:3px}
-@media (max-width:760px){.pc-review{padding:14px}.pc-review .pc-view-grid{gap:18px}}
+.pc-checks-head{margin:0}
+/* One row per thing to check: the field as the form names it, then what to
+   do. Each row opens that part of the reading and of the photo. */
+.pc-review-checks{list-style:none;margin:6px -4px -2px;padding:0;display:grid;gap:1px}
+.pc-check{position:relative;display:block;width:100%;padding:6px 26px 6px 8px;border:0;border-radius:6px;background:transparent;font:inherit;font-size:.75rem;line-height:1.4;color:inherit;text-align:left;cursor:pointer;transition:background .15s ease}
+.pc-check:hover{background:rgba(255,255,255,.7)}
+.pc-check:focus-visible{outline:2px solid currentColor;outline-offset:-2px}
+.pc-check::after{content:"\203A";position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:1.05rem;font-weight:700;opacity:.55}
+.pc-check b{display:block;font-weight:700}
+.pc-check span{display:block;font-weight:500}
+.pc-review .pcopy{font-size:.78rem}
+.pc-review .pcopy-section{padding:0}
+.pc-fold > summary{list-style:none;display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;padding:9px 12px;cursor:pointer;user-select:none;transition:background .15s ease}
+.pc-fold > summary::-webkit-details-marker{display:none}
+.pc-fold > summary::before{content:"";flex-shrink:0;width:6px;height:6px;margin:0 2px 0 1px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);transition:transform .15s ease}
+.pc-fold[open] > summary::before{transform:rotate(45deg)}
+.pc-fold > summary:hover{background:#F7FAF8}
+.pc-fold > summary:focus-visible{outline:2px solid var(--g700);outline-offset:-2px}
+.pc-fold.needs-check > summary{background:#FFFBF3}
+.pc-fold-title{display:flex;align-items:center;gap:8px;font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--lg-ink-soft,#5B6B62)}
+.pc-fold-title .pcopy-head-icon{width:22px;height:22px}
+.pc-fold-tally{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px;margin-left:auto}
+.pc-review .pc-fold-chip{min-width:0;margin:0;padding:2px 8px;font-size:.66rem}
+.pc-fold-body{padding:2px 12px 12px}
+.pc-review .pcopy-title,.pc-review .pcopy-lead,.pc-review .pcopy-foot{display:none}
+.pc-review .pcopy-rows{gap:4px}
+.pc-review .pcopy-row{padding:6px 9px;gap:4px 8px}
+.pc-review .pcopy-label{flex-basis:180px;gap:8px}
+.pc-review .pcopy-mark{width:16px;height:16px;margin-top:1px}
+.pc-review .pcopy-mark svg{width:9px;height:9px}
+.pc-review .pcopy-std{min-width:0;padding:2px 9px;font-size:.66rem}
+.pc-review .pcopy-group-label{margin:2px 0 4px;font-size:.76rem}
+.pc-review .pcopy-group > .pcopy-rows{margin-left:6px;padding-left:10px}
+.pc-review .pcopy-written{margin-top:4px;padding:4px 8px;font-size:.76rem}
+
+/* On a narrow screen the panes stack and the dialog scrolls as one; the
+   photo keeps a frame of its own height above the form. */
+@media (max-width:900px){
+    .pc-modal.is-reviewing .confirm-modal{height:auto;max-height:92vh;display:block;overflow:auto}
+    .pc-modal.is-reviewing #uploadConsentForm,.pc-modal.is-reviewing .pc-upload-body{display:block}
+    .pc-modal.is-reviewing .pc-upload-main{overflow:visible;padding:16px 16px 0}
+    .pc-modal.is-reviewing .pc-upload-main .confirm-actions{margin:16px -16px 0;padding:12px 16px 14px}
+    .pc-photo-pane{border-right:0;border-bottom:1px solid var(--border)}
+    .pc-pane-photo{flex:none;height:min(46vh,380px)}
+}
 .pc-confirm{display:flex;align-items:flex-start;gap:8px;margin-top:4px;padding:9px 11px;font-size:.76rem;font-weight:600;color:var(--text);background:var(--g100);border:1.5px solid var(--g300);border-radius:10px;cursor:pointer}
 .pc-confirm[hidden]{display:none}
 .pc-confirm input{accent-color:var(--g700);margin-top:2px;flex-shrink:0}
+/* The tick sits on its own line above Cancel / Upload Consent: step three,
+   then step four. */
+.pc-actions{flex-wrap:wrap;align-items:center}
+.pc-actions .pc-confirm{flex:1 1 100%;margin:0 0 2px}
+.pc-field-label{display:block;font-size:.79rem;font-weight:700;color:var(--text);margin-bottom:5px}
+
+/* Each health service, Consented or Excluded: in the reading's Services
+   section once a photo is read, under the parent's answer otherwise. Green
+   is Consented and nothing else; coral is Excluded; amber is a row the
+   reading could not settle, which waits on the adviser. */
+.pc-svc-head{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;margin-bottom:6px}
+.pc-svc-tally{font-size:.72rem;font-weight:600;color:var(--muted);font-variant-numeric:var(--lg-figures,tabular-nums lining-nums)}
+.pc-svc-all{margin-left:auto;flex-shrink:0;padding:3px 8px;border:0;border-radius:6px;background:none;font:inherit;font-size:.72rem;font-weight:700;color:var(--lg-emerald,#1F8A4C);cursor:pointer;transition:background .15s ease}
+.pc-svc-all[hidden]{display:none}
+.pc-svc-all:hover{background:var(--lg-mint,#E7F5EC)}
+.pc-svc-all:focus-visible{outline:2px solid var(--lg-emerald,#1F8A4C);outline-offset:1px}
+.pc-svc-error{margin:0 0 8px;padding:7px 10px;border-radius:8px;background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B);font-size:.74rem;font-weight:600;line-height:1.4}
+.pc-svc-error[hidden]{display:none}
+.pc-svc-list{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.pc-svc-group{margin:4px 0 0 2px;font-size:.76rem;font-weight:600;color:var(--text);line-height:1.4}
+.pc-svc-group > span{display:block}
+.pc-svc-group-note{margin-top:4px;padding:5px 8px;border-radius:7px;background:var(--lg-amber-tint,#FDF4E2);color:var(--lg-amber-ink,#8A5A06);font-size:.7rem;font-weight:600;line-height:1.4}
+.pc-svc-group-note[hidden]{display:none}
+.pc-svc-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 6px 6px 10px;background:var(--lg-page,#F6F9F7);border:1px solid transparent;border-radius:8px;transition:background .15s ease,border-color .15s ease}
+.pc-svc-row.is-child{margin-left:8px}
+.pc-svc-name{flex:1 1 170px;min-width:0;font-size:.78rem;font-weight:500;line-height:1.4;color:var(--text);overflow-wrap:break-word}
+.pc-svc-flag{display:block;margin-top:2px;font-size:.68rem;font-weight:700;color:var(--lg-amber-ink,#8A5A06)}
+.pc-svc-flag[hidden]{display:none}
+.pc-svc-row.is-consented{background:#fff;border-color:var(--lg-border-strong,#C5D3CA);box-shadow:inset 3px 0 0 var(--lg-emerald,#1F8A4C)}
+.pc-svc-row.is-excluded .pc-svc-name,.pc-svc-row.is-declined .pc-svc-name,.pc-svc-row.is-pending .pc-svc-name{color:var(--muted)}
+.pc-svc-row.is-check{background:#FFFBF3;border-color:#F0DDB0}
+.pc-svc-seg{display:inline-flex;flex-shrink:0;margin-left:auto;padding:2px;gap:2px;border-radius:999px;background:#fff;border:1px solid var(--border)}
+.pc-svc-opt{padding:4px 11px;border:0;border-radius:999px;background:none;font:inherit;font-size:.68rem;font-weight:700;line-height:1.3;color:var(--muted);white-space:nowrap;cursor:pointer;transition:background .15s ease,color .15s ease}
+.pc-svc-opt:hover{background:#F1F5F2;color:var(--text)}
+.pc-svc-opt:focus-visible{outline:2px solid var(--g700);outline-offset:1px}
+.pc-svc-opt[data-choice="consented"][aria-pressed="true"]{background:var(--lg-mint,#E7F5EC);color:var(--lg-success-ink,#14653C);box-shadow:inset 0 0 0 1px #9FD3B4}
+.pc-svc-opt[data-choice="excluded"][aria-pressed="true"]{background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B);box-shadow:inset 0 0 0 1px #EBB5B5}
+.pc-svc-row.is-check .pc-svc-seg{border-color:#E8C77E}
+.pc-svc-state{flex-shrink:0;margin-left:auto;padding:2px 9px;border-radius:999px;font-size:.66rem;font-weight:700;white-space:nowrap}
+.pc-svc-row.is-declined .pc-svc-state{background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B)}
+.pc-svc-row.is-pending .pc-svc-state{background:#EDF1EF;color:#4A5A52}
+.pc-review .pc-svc{padding-top:2px}
+/* In the reading the folded line already counts them, as chips. */
+.pc-review .pc-svc-tally{display:none}
 
 .pc-choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
 .pc-choice{display:flex;align-items:flex-start;gap:8px;padding:11px 12px;background:#f7faf8;border:2px solid var(--border);border-radius:10px;cursor:pointer;transition:border-color .18s ease,background .18s ease}
@@ -403,6 +515,12 @@ tbody tr:hover td{background:#f7fbf8}
 .pc-drop p{font-size:.79rem;color:var(--muted)}
 .pc-drop-hint{font-size:.72rem;margin-top:2px}
 .pc-drop-file{font-size:.79rem;font-weight:700;color:var(--g700);word-break:break-all}
+/* A chosen file: one line, its name, its size, and Change. */
+.pc-drop.has-file{min-height:0;padding:9px 12px;place-items:stretch;border-style:solid;border-width:1.5px;border-color:var(--g300);background:#F7FAF8}
+.pc-drop.has-file > div{display:flex;align-items:center;gap:10px;text-align:left}
+.pc-drop.has-file .pc-drop-file{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;word-break:normal}
+.pc-drop-size{flex-shrink:0;font-size:.72rem;color:var(--muted);font-variant-numeric:var(--lg-figures,tabular-nums lining-nums)}
+.pc-drop-change{flex-shrink:0;padding:3px 10px;border-radius:6px;background:var(--g100);font-size:.74rem;font-weight:700;color:var(--g700)}
 
 /* The rest of the paper, on the upload dialog: the lines the parent writes in. */
 .pc-fieldset{border:none;padding:0;min-width:0}
@@ -422,9 +540,9 @@ tbody tr:hover td{background:#f7fbf8}
 .pc-modal .confirm-title small{font-size:.74rem;font-weight:500;color:var(--muted)}
 .pc-modal .confirm-close{color:var(--muted);font-size:1.2rem}
 .pc-modal .confirm-close:hover{color:var(--red)}
-/* The confirmation Upload Consent opens, above the upload dialog: the
-   answer, then every health service as a row that reads approved or not.
-   On an agreed form each row is a checkbox the adviser can change. */
+/* The read-only summary Upload Consent opens, above the upload dialog: the
+   answer, every health service as it was marked, and the allergy and illness
+   lines. Nothing in it is a control; Back to Edit is where changes are made. */
 .pcc-overlay{z-index:1600}
 .pcc-modal{width:min(640px,96vw)}
 .pcc-summary{margin:0 0 18px;border:1px solid var(--border);border-radius:10px;overflow:hidden}
@@ -445,33 +563,28 @@ tbody tr:hover td{background:#f7fbf8}
 /* A heading the paper indents its sub-items under (Pag Purga, Immunization). */
 .pcc-group{padding:9px 12px 7px;background:#f7faf8;font-size:.76rem;font-weight:600;color:var(--muted);line-height:1.4}
 .pcc-row.is-child .pcc-line{padding-left:28px}
-.pcc-line{position:relative;display:flex;align-items:center;gap:11px;padding:10px 12px;font-size:.8rem;color:var(--text);transition:background .15s ease}
-label.pcc-line{cursor:pointer}
-label.pcc-line:hover{background:#f7faf8}
-.pcc-line input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
-.pcc-box{display:grid;place-items:center;flex-shrink:0;width:18px;height:18px;border-radius:5px;border:1.5px solid var(--lg-border-strong,#C7DCCE);background:#fff;font-size:.62rem;font-weight:800;line-height:1;transition:background .15s ease,border-color .15s ease}
-.pcc-line input:focus-visible + .pcc-box{outline:2px solid var(--lg-emerald,#1F8A4C);outline-offset:2px}
+.pcc-group > span{display:block}
+.pcc-line{display:flex;align-items:center;gap:11px;padding:10px 12px;font-size:.8rem;color:var(--text)}
+.pcc-box{display:grid;place-items:center;flex-shrink:0;width:18px;height:18px;border-radius:50%;border:1.5px solid var(--lg-border-strong,#C7DCCE);background:#fff;font-size:.62rem;font-weight:800;line-height:1}
 .pcc-name{flex:1;min-width:0;line-height:1.4}
 .pcc-state{flex-shrink:0;padding:2px 9px;border-radius:999px;font-size:.68rem;font-weight:700;white-space:nowrap}
-.pcc-row.is-approved .pcc-box{background:var(--lg-emerald,#1F8A4C);border-color:var(--lg-emerald,#1F8A4C)}
-.pcc-row.is-approved .pcc-box::after{content:"";width:8px;height:4px;margin-top:-2px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg)}
-.pcc-row.is-approved .pcc-state{background:var(--lg-mint,#E7F5EC);color:var(--lg-success-ink,#14653C)}
-.pcc-row.is-denied .pcc-name{color:var(--muted)}
-.pcc-row.is-denied .pcc-state{background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B)}
-.pcc-row.is-denied div.pcc-line .pcc-box{border-color:transparent;background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B);border-radius:50%}
-.pcc-row.is-denied div.pcc-line .pcc-box::after{content:"\2715"}
-.pcc-row.is-check .pcc-state{background:var(--lg-amber-tint,#FDF4E2);color:var(--lg-amber-ink,#8A5A06)}
-.pcc-row.is-check .pcc-box{border-color:var(--lg-amber-ink,#8A5A06)}
-.pcc-services-head .pcc-tally{margin-left:auto}
-.pcc-mark-all{flex-shrink:0;padding:2px 8px;border:0;border-radius:6px;background:none;font:inherit;font-size:.72rem;font-weight:700;color:var(--lg-emerald,#1F8A4C);cursor:pointer;transition:background .15s ease}
-.pcc-mark-all:hover{background:var(--lg-mint,#E7F5EC)}
-.pcc-mark-all:focus-visible{outline:2px solid var(--lg-emerald,#1F8A4C);outline-offset:1px}
+.pcc-row.is-consented .pcc-box{background:var(--lg-emerald,#1F8A4C);border-color:var(--lg-emerald,#1F8A4C)}
+.pcc-row.is-consented .pcc-box::after{content:"";width:8px;height:4px;margin-top:-2px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg)}
+.pcc-row.is-consented .pcc-state{background:var(--lg-mint,#E7F5EC);color:var(--lg-success-ink,#14653C)}
+.pcc-row.is-excluded .pcc-name,.pcc-row.is-declined .pcc-name,.pcc-row.is-pending .pcc-name{color:var(--muted)}
+.pcc-row.is-excluded .pcc-state,.pcc-row.is-declined .pcc-state{background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B)}
+.pcc-row.is-excluded .pcc-box,.pcc-row.is-declined .pcc-box{border-color:transparent;background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B)}
+.pcc-row.is-excluded .pcc-box::after,.pcc-row.is-declined .pcc-box::after{content:"\2715"}
 .pcc-row.is-pending .pcc-state{background:#f1f5f9;color:#475569}
-.pcc-row.is-pending .pcc-box{border-style:dashed;border-radius:50%}
+.pcc-row.is-pending .pcc-box{border-style:dashed}
+.pcc-services-head .pcc-tally{margin-left:auto}
+.pcc-list + .pcc-services-head{margin-top:18px}
+.pcc-health{margin-bottom:0}
+.pcc-health dd.is-empty{color:var(--muted);font-weight:500}
 .pcc-modal #pcConfirmSubmit:disabled{opacity:.55;cursor:not-allowed}
 @media (max-width:520px){.pcc-summary > div{grid-template-columns:1fr;gap:2px}.pcc-line{padding:10px}}
 /* The uploaded sheet and its reading stay together while the adviser reviews. */
-.pc-review-modal,.pc-modal.is-reviewing .confirm-modal{width:min(1040px,96vw)}
+.pc-review-modal{width:min(1040px,96vw)}
 .pc-review-modal .confirm-head{padding:20px 24px;border-bottom:0}
 .pc-review-modal .confirm-body{padding:0 24px 22px}
 .pc-detail-title h2,.pc-scan-review-head h2{font-size:1.14rem;font-weight:700;color:var(--text)}

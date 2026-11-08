@@ -59,9 +59,9 @@ class ParentalConsentFormController extends Controller
             // it was filed for, exactly as every upload did before.
             'services' => ['nullable', 'array'],
             'services.*' => ['string', Rule::in(array_keys(HealthConsentForm::PLANNED_SERVICES))],
-            // The dialog's confirmation step, where the adviser marks which
-            // services the form approves. With it, `services` is the approved
-            // list and a partial consent's excepted services are recorded, so
+            // The services the adviser marked Consented or Excluded in the
+            // dialog, then confirmed on its summary. With it, `services` is the
+            // Consented list and a partial consent's excepted services are recorded, so
             // each service reads approved or not approved instead of "check the
             // exceptions". Without it the upload reads as it always did.
             'services_confirmed' => ['nullable', 'boolean'],
@@ -238,17 +238,10 @@ class ParentalConsentFormController extends Controller
         // is looked up in RxNorm.
         MedicineAllergies::syncLater($record->institution_id, $record->student_id, (string) $request->session()->get('active_name', ''));
 
-        $typeLabel = match ($validated['consent_type'] ?? null) {
-            'full' => 'Full consent',
-            'partial' => 'Partial consent',
-            'refused' => 'Declined consent',
-            // No answer was recorded with the document, and the message says
-            // what actually happened rather than implying a consent was given.
-            default => 'Signed form',
-        };
-
+        // The last step of the upload flow, the same words whatever the answer:
+        // the form is on file, and the Consent tab says what it approves.
         return back()
-            ->with('consent_success', "{$typeLabel} filed successfully for SY {$schoolYear}.")
+            ->with('consent_success', 'Consent saved successfully.')
             ->with('consent_detail_lrn', $validated['lrn']);
     }
 

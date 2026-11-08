@@ -279,6 +279,7 @@ class ConsentAnswerCaptureTest extends TestCase
         $this->assertStringNotContainsString('id="pcReadAnswer"', $html);
         $this->assertStringNotContainsString('name="answer_confirmed"', $html);
         $this->assertStringNotContainsString('id="pcReview"', $html);
+        $this->assertStringNotContainsString('id="pcPhotoPane"', $html);
         $this->assertStringNotContainsString('id="pcPhotoDialog"', $html);
 
         $this->swap(ConsentFormScanner::class, new class extends ConsentFormScanner
@@ -298,13 +299,29 @@ class ConsentAnswerCaptureTest extends TestCase
         $this->assertStringContainsString('name="answer_from_scan"', $html);
         $this->assertStringContainsString('name="answer_confirmed"', $html);
 
-        // What it reads is laid out as View Details lays out a filed form:
-        // the photo beside the reading, with the photo at full size a click
-        // away — in a dialog outside the upload form, so it cannot submit it.
+        // The tick is the last thing before Upload Consent: the adviser checks
+        // the reading, ticks it, then uploads.
+        $tick = strpos($html, 'I checked this answer against the signed form.');
+        $this->assertNotFalse($tick);
+        $this->assertGreaterThan(strpos($html, 'id="pc_notes"'), $tick);
+        $this->assertLessThan(strpos($html, 'id="uploadConsentCancel"'), $tick);
+
+        // What it reads is checked against the photo, so the photo sits in a
+        // pane of its own beside the whole form — hidden until something is
+        // read — with zoom, and the photo at full size a click away in a
+        // dialog outside the upload form, so it cannot submit it.
         $this->assertStringContainsString('<div class="pc-review" id="pcReview" hidden>', $html);
+        $this->assertStringContainsString('<aside class="pc-photo-pane" id="pcPhotoPane" hidden>', $html);
         $this->assertStringContainsString('Uploaded form &middot; SY '.ParentalConsentForm::currentSchoolYear(), $html);
         $this->assertStringContainsString('Read from the uploaded photo', $html);
         $this->assertStringContainsString('id="pcReviewEnlarge"', $html);
+        $this->assertStringContainsString('id="pcZoomIn"', $html);
+        $this->assertStringContainsString('id="pcZoomOut"', $html);
+        // The pane opens the dialog's body, ahead of the fields it is held
+        // against, and every field of the form follows it.
+        $pane = strpos($html, 'id="pcPhotoPane"');
+        $this->assertLessThan(strpos($html, 'id="pc_lrn"'), $pane);
+        $this->assertGreaterThan(strpos($html, 'id="uploadConsentForm"'), $pane);
         $formEnd = strpos($html, '</form>', (int) strpos($html, 'id="uploadConsentForm"'));
         $this->assertGreaterThan($formEnd, strpos($html, 'id="pcPhotoDialog"'));
     }

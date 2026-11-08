@@ -8,6 +8,8 @@ use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Support\ConsentFormScanner;
 use App\Support\ConsentPaperCopy;
+use App\Support\ConsentPhotoSummary;
+use App\Support\LearnerAllergies;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request as ClientRequest;
@@ -1106,7 +1108,10 @@ class ConsentFormScanTest extends TestCase
     /**
      * A ticked "Tambal/Medicines" over an empty line says the child reacts to
      * some medicine. Read from the line alone it would be saved as no medicine
-     * allergy — the opposite — so it is put in front of the adviser instead.
+     * allergy — the opposite. It used to be put back to the adviser as a
+     * question; it is a clear answer instead — the child has one and the parent
+     * did not name it — so the box is kept, it is read as "Not specified", and
+     * nothing on the form is flagged over it.
      */
     #[Test]
     public function a_ticked_allergy_box_over_an_empty_line_is_never_read_as_no_allergy(): void
@@ -1118,9 +1123,13 @@ class ConsentFormScanTest extends TestCase
         ]));
 
         $this->assertSame(ConsentFormScanner::TICKED, $draft['written']['allergy_medicine']['box']);
-        $this->assertArrayHasKey('allergy_medicine', $draft['field_notes']);
-        $this->assertContains(ConsentFormScanner::WRITTEN_FIELDS['allergy_medicine'], $draft['unclear']);
-        $this->assertTrue($draft['needs_review']);
+        $this->assertArrayNotHasKey('allergy_medicine', $draft['field_notes']);
+        $this->assertNotContains(ConsentFormScanner::WRITTEN_FIELDS['allergy_medicine'], $draft['unclear']);
+        $this->assertFalse($draft['needs_review']);
+
+        $summary = ConsentPhotoSummary::fromDraft($draft, 8);
+        $this->assertSame('Medicine: '.LearnerAllergies::NOT_SPECIFIED, $summary['allergies']);
+        $this->assertSame([], $summary['checks']);
 
         // The ticked kind names it, so the heading box needs no warning of its own.
         $this->assertSame([], $draft['warnings']);
@@ -1166,25 +1175,40 @@ class ConsentFormScanTest extends TestCase
         $this->assertTrue($draft['needs_review']);
     }
 
-    /** The heading box ticked with no allergy named anywhere under it. */
+    /**
+     * "Kon adunay Allergy ang bata…" ticked with none of the three boxes under
+     * it ticked: one of them must be, as a box under Pag Purga must be. Said
+     * even when a line has writing on it — the box is how the form says which
+     * kind — and not once a box under it is ticked.
+     */
     #[Test]
-    public function an_allergy_heading_with_nothing_named_is_a_warning(): void
+    public function an_allergy_heading_with_no_box_ticked_under_it_says_one_must_be(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $notice = 'Ticked, but none of the boxes under it is. At least one must be ticked: Pagkaon/Food; Tambal/Medicines; Nahatag nga Bakuna/Previous Immunization. Ask the parent which, and write it on its line.';
+        $checks = fn (array $draft): array => array_column(ConsentPhotoSummary::fromDraft($draft, 8)['checks'], 'message', 'subject');
+
+        $bare = ConsentFormScanner::interpret($this->draft([], [
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'allergy_boxes' => $this->allergyBoxes(['allergy' => 'yes']),
         ]));
+        $this->assertCount(1, $bare['warnings']);
+        $this->assertTrue($bare['needs_review']);
+        $this->assertSame($notice, $checks($bare)['Kon adunay Allergy ang bata'] ?? null);
 
-        $this->assertCount(1, $draft['warnings']);
-        $this->assertTrue($draft['needs_review']);
-
-        $named = ConsentFormScanner::interpret($this->draft([], [
+        $written = ConsentFormScanner::interpret($this->draft([], [
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'allergy_boxes' => $this->allergyBoxes(['allergy' => 'yes']),
             'written' => ['allergy_food' => ['text' => 'Itlog', 'confident' => true, 'readable' => true]],
         ]));
+        $this->assertSame($notice, $checks($written)['Kon adunay Allergy ang bata'] ?? null);
 
-        $this->assertSame([], $named['warnings']);
+        $ticked = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'allergy_boxes' => $this->allergyBoxes(['allergy' => 'yes', 'allergy_food' => 'yes']),
+            'written' => ['allergy_food' => ['text' => 'Itlog', 'confident' => true, 'readable' => true]],
+        ]));
+        $this->assertSame([], $ticked['warnings']);
+        $this->assertArrayNotHasKey('Kon adunay Allergy ang bata', $checks($ticked));
     }
 
     /** A box the reader left out is unclear, never "no" — the same rule as everywhere. */
@@ -1465,11 +1489,13 @@ class ConsentFormScanTest extends TestCase
 
     /**
      * Pag Purga ticked over three empty boxes names the service but not which
-     * part of it. It used to approve all three, so a reader that missed the
-     * small sub-item boxes approved everything under a heading it did see.
+     * part of it, so a box under it must be ticked — and the adviser is told so
+     * in those words. The rows are not approved on the heading's account: that
+     * was tried, and a reader that missed a small sub-item tick under a heading
+     * it did see approved all three at once.
      */
     #[Test]
-    public function a_heading_ticked_alone_approves_none_of_the_rows_under_it(): void
+    public function a_heading_ticked_alone_says_a_box_under_it_must_be_ticked(): void
     {
         $this->learner('130000000001', 'Juan', 'Dela Cruz');
 
@@ -1494,8 +1520,27 @@ class ConsentFormScanTest extends TestCase
             $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children'][$row], 'unclear', '?');
         }
 
-        $this->assertContains('"Deworming" is ticked, but none of the rows under it is.', $response->json('summary.warnings'));
+        $this->assertContains([
+            'section' => 'services',
+            'subject' => 'Pag Purga / Pagpainom ug Tambal sa',
+            'message' => 'Ticked, but none of the boxes under it is. At least one must be ticked: Pag Bitok / Worms; Schistosomiasis; Filariasis. Mark the ones that apply from the paper.',
+        ], $response->json('summary.checks'));
         $this->assertFalse($response->json('summary.complete'));
+    }
+
+    /** A heading the reader was unsure of covers nothing: its rows are still the paper's to settle. */
+    #[Test]
+    public function an_unclear_heading_covers_none_of_its_rows(): void
+    {
+        $boxes = [
+            'deworming' => ConsentFormScanner::UNCLEAR,
+            'deworming_worms' => ConsentFormScanner::NOT_TICKED,
+            'deworming_schistosomiasis' => ConsentFormScanner::NOT_TICKED,
+            'deworming_filariasis' => ConsentFormScanner::NOT_TICKED,
+        ];
+
+        $this->assertSame([], ConsentPaperCopy::tickedServices($boxes));
+        $this->assertSame(['deworming_worms', 'deworming_schistosomiasis', 'deworming_filariasis'], ConsentPaperCopy::unsettledServices($boxes));
     }
 
     /** One unreadable sub-item must not approve the sub-items read as empty. */
@@ -1694,6 +1739,119 @@ class ConsentFormScanTest extends TestCase
                 && str_contains($prompt, 'The first image is the whole sheet')
                 // Seeing one tick twice must not be counted as two.
                 && str_contains($prompt, 'a mark seen in two images is one mark');
+        });
+    }
+
+    /**
+     * A shadow over the photo made a box in it read "?", or read as shaded in.
+     * The page now divides the light out of the close-ups, and the reader is
+     * told so — but only when the page says it did, and only about close-ups
+     * that were sent: a reader told a shadow had gone from images still
+     * carrying it would read the shadow as a mark.
+     *
+     * @return array<string, array{0: array<string, mixed>, 1: bool}>
+     */
+    public static function closeupLighting(): array
+    {
+        return [
+            'evened close-ups' => [['lighting' => 'even', 'closeups' => 4], true],
+            'close-ups as taken' => [['closeups' => 4], false],
+            'evened, but no close-ups sent' => [['lighting' => 'even', 'closeups' => 0], false],
+        ];
+    }
+
+    /** @param  array<string, mixed>  $post */
+    #[Test]
+    #[DataProvider('closeupLighting')]
+    public function the_reader_is_told_the_close_ups_are_evenly_lit_only_when_they_are(array $post, bool $told): void
+    {
+        $this->fakeGemini($this->draft());
+
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), array_filter([
+                'photo' => $this->jpeg(),
+                'closeups' => $post['closeups'] > 0 ? array_map(fn (): UploadedFile => $this->jpeg(), range(1, $post['closeups'])) : [],
+                'lighting' => $post['lighting'] ?? null,
+            ]), ['Accept' => 'application/json'])
+            ->assertOk();
+
+        Http::assertSent(function (ClientRequest $request) use ($told): bool {
+            $parts = $request->data()['contents'][0]['parts'];
+            $prompt = (string) preg_replace('/\s+/', ' ', (string) ($parts[array_key_last($parts)]['text'] ?? ''));
+
+            return $told === str_contains($prompt, 'In the close-ups the light has been evened out');
+        });
+    }
+
+    /** Only the page's own word is taken. */
+    #[Test]
+    public function an_unknown_lighting_value_is_refused(): void
+    {
+        $this->fakeGemini($this->draft());
+
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), [
+                'photo' => $this->jpeg(),
+                'closeups' => [$this->jpeg()],
+                'lighting' => 'bright',
+            ], ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('lighting');
+
+        Http::assertNothingSent();
+    }
+
+    /**
+     * The parent's line reads "Pangalan ug Pirma" — name and signature — and
+     * many parents sign it by writing their name in capitals. The reader called
+     * that "a hand-printed name without a handwritten signature", so a properly
+     * signed form was flagged as unsigned. The parent's own handwriting there is
+     * a signature; only an empty line or typed text is not.
+     */
+    #[Test]
+    public function a_name_the_parent_wrote_by_hand_is_their_signature(): void
+    {
+        $this->fakeGemini($this->draft());
+
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        Http::assertSent(function (ClientRequest $request): bool {
+            $data = $request->data();
+            $system = (string) preg_replace('/\s+/', ' ', (string) ($data['system_instruction']['parts'][0]['text'] ?? ''));
+            $field = (string) ($data['generationConfig']['responseSchema']['properties']['signature_present']['description'] ?? '');
+
+            return str_contains($system, 'a signature, initials, or their name written by hand, in joined-up writing or in separate capital letters alike')
+                && str_contains($system, 'false when that line is empty, or carries only typed or machine-printed text')
+                && ! str_contains($system, 'A printed or typed name alone is not a signature')
+                && str_contains($field, 'their name written by hand');
+        });
+    }
+
+    /**
+     * Many parents shade a box in rather than tick it, and seldom fill it edge
+     * to edge. The reader used to be told a "partly shaded" box was unclear, so
+     * exactly those boxes came back "?". A shaded box is a mark; a shadow is
+     * not; and how to tell them apart is spelled out.
+     */
+    #[Test]
+    public function a_shaded_box_is_read_as_a_mark_and_a_shadow_is_not(): void
+    {
+        $this->fakeGemini($this->draft());
+
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        Http::assertSent(function (ClientRequest $request): bool {
+            $system = (string) preg_replace('/\s+/', ' ', (string) ($request->data()['system_instruction']['parts'][0]['text'] ?? ''));
+
+            return str_contains($system, 'A shaded box is "yes" exactly as a tick is, however much or little of the box the shading covers.')
+                && str_contains($system, 'A shaded box is never a reason for "unclear"')
+                && str_contains($system, 'SHADING AND SHADOWS ARE DIFFERENT THINGS')
+                && str_contains($system, 'A box inside a shadow whose inside is no darker than the shadowed paper just outside it is empty: "no".')
+                && ! str_contains($system, 'partly shaded');
         });
     }
 

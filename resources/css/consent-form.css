@@ -179,6 +179,9 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
 .doc-service .doc-box { width: 15px; height: 15px; border: 1.6px solid #111; flex-shrink: 0; margin-top: 2px; display: grid; place-items: center; font-size: 12px; font-weight: 700; line-height: 1; }
 .doc-service input[type="checkbox"] { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--g700); flex-shrink: 0; cursor: pointer; }
 .doc-service label { cursor: pointer; }
+/* A heading ticked with none of its rows: one must be ticked too. */
+.doc-rows-required { margin: 2px 0 6px 40px; padding: 6px 10px; font-family: 'DM Sans', sans-serif; border-radius: 7px; background: #FDF4E2; color: #8A5A06; font-size: .76rem; font-weight: 600; line-height: 1.4; }
+.doc-rows-required[hidden] { display: none; }
 
 .doc-sign-block { margin-top: 22px; display: flex; justify-content: flex-end; }
 .doc-sign-block .doc-sign-inner { text-align: center; min-width: 260px; }
@@ -233,6 +236,7 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
     .doc-header { padding: 0; }
     .doc-services { margin-left: 8px; }
     .doc-service.doc-child { margin-left: 24px; }
+    .doc-rows-required { margin-left: 24px; }
     .doc-consent-options { margin-left: 4px; }
     .doc-consent-option.doc-allergy-child { margin-left: 20px; }
     .doc-attach-note { margin-left: 20px; }

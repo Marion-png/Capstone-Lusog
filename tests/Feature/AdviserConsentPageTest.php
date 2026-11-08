@@ -849,8 +849,13 @@ class AdviserConsentPageTest extends TestCase
         $this->assertNull($this->profileConsentServices());
     }
 
+    /**
+     * The services are marked in the dialog — in the reading beside the photo,
+     * or under the answer with no reading — and Upload Consent opens a
+     * summary of them that changes nothing: Back to Edit or Confirm & Upload.
+     */
     /** @test */
-    public function upload_consent_opens_a_confirmation_of_the_services_first(): void
+    public function upload_consent_opens_a_read_only_summary_of_the_marked_services(): void
     {
         $this->enrol();
 
@@ -860,17 +865,31 @@ class AdviserConsentPageTest extends TestCase
             ->getContent();
 
         $this->assertSame(1, substr_count($html, 'id="pcConfirmModal"'));
-        $this->assertStringContainsString('Confirm &amp; Upload', $html);
         $this->assertStringContainsString('name="services_confirmed" id="pcServicesConfirmed" value="0"', $html);
         $this->assertStringContainsString('id="vpConsentServices" hidden', $html);
 
-        // It starts from what was read off the paper and from nothing when
-        // nobody read it, so a row is never ticked for no reason.
-        $this->assertStringContainsString('approvedChoice = new Set(proposed().approved', $html);
-        $this->assertStringNotContainsString('approvedChoice = new Set(letterServices())', $html);
-        $this->assertStringContainsString('id="pcConfirmAll" hidden', $html);
+        // The marks are made in the dialog, not in the summary.
+        $this->assertStringContainsString('<div class="pc-field" id="pcServicesField" hidden>', $html);
+        $this->assertLessThan(strpos($html, 'id="uploadConsentCancel"'), strpos($html, 'id="pcServicesField"'));
 
-        // The confirmation lists this class's services: no Grade 7 MR/Td here.
+        // The summary is a reading: no field, no checkbox, no Mark all —
+        // only Back to Edit and Confirm & Upload.
+        $start = strpos($html, 'id="pcConfirmModal"');
+        $summary = substr($html, $start, strpos($html, '<script>', $start) - $start);
+        $this->assertStringNotContainsString('<input', $summary);
+        $this->assertStringNotContainsString('<select', $summary);
+        $this->assertStringNotContainsString('<textarea', $summary);
+        $this->assertStringNotContainsString('pcConfirmAll', $summary);
+        $this->assertStringContainsString('data-confirm-back>Back to Edit</button>', $summary);
+        $this->assertStringContainsString('id="pcConfirmSubmit">Confirm &amp; Upload</button>', $summary);
+        $this->assertStringContainsString('id="pcConfirmHealth"', $summary);
+
+        // A row starts from what was read off the paper, and Excluded when
+        // nobody read it, so a service is never Consented for no reason.
+        $this->assertStringContainsString("if (reading.approved.includes(key)) return 'consented';", $html);
+        $this->assertStringContainsString("if (reading.check.includes(key)) return 'check';", $html);
+
+        // The summary lists this class's services: no Grade 7 MR/Td here.
         $this->assertSame(1, preg_match('/const confirmServices = (\[.*?\]);/', $html, $m));
         $listed = json_decode($m[1], true);
         $keys = array_column($listed, 'key');
@@ -1176,7 +1195,7 @@ class AdviserConsentPageTest extends TestCase
 
         // Back on the profile, with the confirmation and the Consent tab open.
         $this->assertStringContainsString('id="vpTabConsent"', $html);
-        $this->assertStringContainsString('Full consent filed successfully for SY '.ParentalConsentForm::currentSchoolYear().'.', $html);
+        $this->assertStringContainsString('<div class="flash flash-ok">Consent saved successfully.</div>', $html);
         $this->assertStringContainsString("} else if (true) {\n        showProfileTab('vpTabConsent');", $html);
         $this->assertSame('sulat-pahibalo.pdf', $this->profileMeta($html)['consent_detail']['file_name']);
     }

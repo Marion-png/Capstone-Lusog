@@ -36,10 +36,14 @@ use Throwable;
  *    keys. It cannot return a service the form does not have, and it is never
  *    asked to identify anybody from a signature — only whether one is present.
  *
- * 3. **"Unclear" is a first-class answer.** A box that is smudged, half-shaded
- *    or ambiguous comes back UNCLEAR rather than being guessed either way, and
+ * 3. **"Unclear" is a first-class answer.** A box that is smudged, hidden or
+ *    ambiguous comes back UNCLEAR rather than being guessed either way, and
  *    the adviser is shown exactly those. Anything the model omits is unclear
- *    too: a missing answer is not a "no".
+ *    too: a missing answer is not a "no". A box the parent *shaded in* is not
+ *    ambiguous — it is a mark, however much of the box it fills — and a
+ *    shadow over the photo is not a mark: the page evens the light out of the
+ *    close-ups so the two cannot be confused, and the prompt says how they
+ *    differ.
  *
  * 4. **The model reports the boxes; the server decides the consent.** Whether
  *    the parent agreed is the one answer on the sheet that matters most, and
@@ -160,6 +164,13 @@ class ConsentFormScanner
     private const ALLERGY_KINDS = ['allergy_food', 'allergy_medicine', 'prev_immunization'];
 
     /**
+     * Whether the close-ups of this read had their light evened out by the page
+     * (consent-forms._photo-closeups), which the reader is then told. Set per
+     * read by withEvenLighting(); off unless the page says so.
+     */
+    private bool $evenLighting = false;
+
+    /**
      * How a parent says "nothing to write here" — in Cebuano, English or
      * Filipino — once punctuation is taken out ("N/A" reads "n a", "wala'y"
      * reads "wala y"). Parents write it on every line that does not apply to
@@ -177,6 +188,19 @@ class ConsentFormScanner
     public static function isConfigured(): bool
     {
         return filled(config('services.gemini.key'));
+    }
+
+    /**
+     * Whether the close-ups sent with the next read are evenly lit. A shadow
+     * over the photo is the commonest reason a box read "?": once the page has
+     * divided the light out of the close-ups, the reader can be told that a
+     * dark box in them is ink, not shade.
+     */
+    public function withEvenLighting(bool $even = true): static
+    {
+        $this->evenLighting = $even;
+
+        return $this;
     }
 
     /**
@@ -527,31 +551,60 @@ class ConsentFormScanner
 
         READING A TICK BOX
           - "yes": a deliberate mark in or on the box — a check (√ ✓), an X, a
-            cross, a dot pressed in, a filled or shaded box (shading done with
-            quick pen or pencil strokes included), a circle around the box. A
-            mark just beside the box that is clearly on its row and meant for it
+            cross, a dot pressed in, a circle around the box, or the box SHADED
+            IN. Many parents shade a box instead of ticking it, and they shade
+            it any way they like: coloured in solid, scribbled over, hatched
+            with quick lines, filled only in part, done lightly in pencil, or
+            spilling over the outline. A shaded box is "yes" exactly as a tick
+            is, however much or little of the box the shading covers. A mark
+            just beside the box that is clearly on its row and meant for it
             also counts.
-          - Compare the boxes of one group with each other — the three consent
-            boxes, the allergy boxes. A marked box is visibly darker than its
-            neighbours, or carries a mark they do not. A shadow, a fold, the
-            paper's grain or a dark photograph darkens every box in a group
-            alike, and that is not a mark. If every box in a group looks equally
-            dark and you cannot tell them apart, answer "unclear" for each.
+          - "no": the box is empty — only its printed outline, with the same
+            paper inside it as just outside it. The printed outlines are thick
+            and the boxes of neighbouring rows sit close together, often
+            touching, so a column of empty boxes can look dark at a glance:
+            judge each box by its inside, never by its outline.
+          - Every row has its own box. Before saying a box is marked, make sure
+            the mark is inside THAT box's own outline and not in the box above
+            or below it. A mark in one row says nothing about the next: rows
+            marked one after another and rows left empty between marked ones
+            are both normal.
+          - "unclear": you cannot tell. Keep it for a real doubt: a mark that
+            could belong to either of two rows; a faint grey patch you cannot
+            tell from dirt, a fold, a stain or a mark rubbed out; a box cut off
+            by the edge of the photo, or covered by glare, a finger, or a shadow
+            so deep that you cannot see inside it at all. A shaded box is never
+            a reason for "unclear", and neither is a shadow you can still see
+            through.
+          - SHADING AND SHADOWS ARE DIFFERENT THINGS. Shading is put on the
+            paper by a hand: it is made of pen or pencil strokes, it sits in or
+            over the box, and it stops at or near the box's outline. A shadow falls on the photograph: it is
+            soft-edged, it darkens the printed words, the lines and the paper
+            around a box just as much as the inside of the box, and it does not
+            stop at the outline. A fold, the paper's grain or a dark photograph
+            darken everything alike in the same way. So judge every box against
+            the paper immediately around it — never against a box lying in
+            different light. A box inside a shadow whose inside is no darker
+            than the shadowed paper just outside it is empty: "no". A box whose
+            inside is clearly darker than the paper just outside it, in light or
+            in shadow, is marked: "yes".
+          - Compare the boxes of one group with each other too — the three
+            consent boxes, the allergy boxes — but only once each one has been
+            judged against its own surroundings: a marked box carries ink or
+            pencil its neighbours do not.
           - Judge a check mark by where its bottom point — the corner of the
             "√", where the pen turned — sits. A hurried tick's long upstroke
             often runs out of its own box and across the box above it. A box
             crossed only by the tail of another row's tick is NOT ticked. If you
             cannot tell which box a tick's bottom point is in, answer "unclear"
-            for both boxes.
-          - "no": the box is clearly empty.
-          - "unclear": you cannot tell. Use it when a mark is smudged, faint,
-            partly shaded, sits between two rows, is cut off by the edge of the
-            photo, is hidden by glare, a shadow or a finger, or when you cannot
-            be certain which row it belongs to.
+            for both boxes. A shaded box belongs to the row whose box it fills.
           - A mark that has been crossed out, scribbled over or erased is not a
             tick. If the parent changed their answer, the box with the mark that
             still stands is the answer; if you cannot tell which mark stands,
-            answer "unclear" for every box involved.
+            answer "unclear" for every box involved. Shading INSIDE a box is a
+            mark, not a crossing-out: a box is crossed out only when a mark
+            already in it has been struck through or scribbled away beside
+            another box that now carries the answer.
           - The printed outline of an empty box is not a tick.
 
         THE CONSENT BOXES are the most important thing on the sheet. Find the
@@ -559,10 +612,12 @@ class ConsentFormScanner
         the parent's answer. Judge each box on its own, and never assume the
         first one: it is the answer parents give most often, which is exactly
         why it must not be the one you expect. Before you answer consent_boxes,
-        say in consent_evidence what you see in each box, in a few plain words —
-        "dark shaded square", "empty outline", "check mark, bottom point
-        inside", "only the tail of the tick from the box above", "glare covers
-        it". Then report each of the three separately, by its key. Report what
+        say in consent_evidence what you see inside each box, in a few plain
+        words — "shaded in with pen", "half shaded in pencil", "empty outline",
+        "in shadow, empty inside", "check mark, bottom point inside", "only the
+        tail of the tick from the box above", "glare covers it". Then report
+        each of
+        the three separately, by its key. Report what
         is in each box, not what you think the parent meant. If two boxes are
         marked, report both as "yes". If none is marked, report all three as
         "no". Never decide the consent from the service list at the top, from
@@ -597,11 +652,14 @@ class ConsentFormScanner
             two boxes on one line, one before "Grade 7" and one before "MR, Td":
             answer "yes" for immunization_grade7 if either of them is marked,
             and count the two as one mark.
-        First count the separate pen marks you can see in the whole list and
-        report it in services_marks_seen. Then, for every row, say in
-        services_evidence what is in that row's box, in a few plain words —
-        "tick, bottom point inside", "empty outline", "only the upstroke of the
-        tick from the row below". Then answer services. The number of "yes"
+        First count the separate marks you can see in the whole list — ticks,
+        crosses and boxes shaded in, in pen or in pencil — and report it in
+        services_marks_seen. A box shaded in, however lightly, is one mark.
+        Then, for every row, look inside that row's own box and say in
+        services_evidence what is there, in a few plain words — "tick, bottom
+        point inside", "shaded in", "empty outline", "in shadow, empty inside",
+        "only the upstroke of the tick from the row below". Then answer
+        services. The number of "yes"
         answers must equal the number of marks you counted; if it does not, look
         again at the rows you were least sure of before you answer. A row you
         still cannot settle is "unclear".
@@ -671,11 +729,16 @@ class ConsentFormScanner
             GINIKANAN / GUARDIAN" line. If the two name different people, report
             the one at the signature line and say so in the note.
 
-        THE SIGNATURE. signature_present is true only if a handwritten signature
-        or handwritten initials are visible at the parent's signature line. A
-        printed or typed name alone is not a signature, and the school head's
-        signature in the letter does not count. You are never asked to identify
-        a person from a signature or handwriting, and you must not attempt to.
+        THE SIGNATURE. The line is captioned "Pangalan ug Pirma" — name AND
+        signature — and many parents sign it by writing their name. So
+        signature_present is true when the parent's own handwriting is at the
+        parent's signature line: a signature, initials, or their name written by
+        hand, in joined-up writing or in separate capital letters alike. It is
+        false when that line is empty, or carries only typed or machine-printed
+        text. The school head's signature in the letter does not count. Do not
+        mention in the note that a name was written in capitals rather than
+        joined up: that is a signature here. You are never asked to identify a
+        person from a signature or handwriting, and you must not attempt to.
 
         THE DOCUMENT. is_sulat_pahibalo is true only if this is the Sulat-Pahibalo
         consent form described above. If it is any other document, set it to
@@ -703,6 +766,22 @@ class ConsentFormScanner
 
 
         PROMPT : '';
+
+        // Said only when the page evened the light out, so the reader is never
+        // told a shadow has gone from close-ups that still carry it.
+        if ($hasCloseups && $this->evenLighting) {
+            $closeups .= <<<'PROMPT'
+            The whole sheet is the photograph as it was taken. In the close-ups the
+            light has been evened out: the paper is white all across them, and any
+            shadow that lay over the photograph has been lifted off. So where a box
+            looks dark in the whole sheet only because a shadow lies over it, its
+            inside is as white as the paper around it in the close-up, and it is
+            empty. Decide whether each box is marked from the close-ups, by what
+            is inside it.
+
+
+            PROMPT;
+        }
 
         $list = function (array $entries): string {
             $lines = [];
@@ -744,7 +823,8 @@ class ConsentFormScanner
 
         Also report the learner's name, the parent or guardian's name, whether
         the parent's signature is present, whether this is the Sulat-Pahibalo,
-        and anything the adviser should check by eye.
+        and, in the note, anything else the adviser should check by eye that
+        your answers do not already say.
         PROMPT;
     }
 
@@ -829,7 +909,7 @@ class ConsentFormScanner
             'student_name' => $reading('The learner\'s name on the "PANGALAN SA ESTUDYANTE" line.'),
             'services_marks_seen' => [
                 'type' => 'INTEGER',
-                'description' => 'How many separate pen marks you can see in the whole service list, counted before you read the rows.',
+                'description' => 'How many separate marks — ticks, crosses and boxes shaded in, in pen or pencil — you can see in the whole service list, counted before you read the rows.',
             ],
             'services_evidence' => $evidence(self::serviceKeys(), 'What you see in each row\'s box in the service list, in a few plain words, written before you answer services.'),
             'services' => $answers(self::serviceKeys(), 'One answer per row of the letter\'s service list, each row judged on its own box.'),
@@ -860,12 +940,12 @@ class ConsentFormScanner
             'parent_guardian_name' => $reading('The parent or guardian\'s name at the signature line, or on the header line when the signature line has none.'),
             'signature_present' => [
                 'type' => 'BOOLEAN',
-                'description' => 'True only when a handwritten signature or initials are at the parent\'s signature line.',
+                'description' => 'True when the parent\'s own handwriting is at the parent\'s signature line — a signature, initials, or their name written by hand. False when the line is empty or holds only typed or machine-printed text.',
             ],
             'unreadable' => ['type' => 'BOOLEAN'],
             'note' => [
                 'type' => 'STRING',
-                'description' => 'Anything the adviser should check by eye, in one or two short sentences. Empty if nothing.',
+                'description' => 'Anything else the adviser should check by eye that the answers above do not already say, in one or two short sentences. Never repeat what the answers already report — an unclear box, an empty line, a missing signature. Empty if nothing.',
             ],
         ];
 
@@ -1298,12 +1378,13 @@ class ConsentFormScanner
     /**
      * The allergy and illness boxes against the lines beside them.
      *
-     * A box ticked over an empty line (or a line reading "wala") is the one
-     * case where reading the line alone would save the opposite of what the
-     * parent said — "no medicine allergy" for a child whose parent ticked
-     * that they have one. A box nobody could make out over an empty line is
-     * the same question asked less certainly. A line with writing on it is an
-     * answer whatever its box says: parents often write without ticking.
+     * A box ticked over an empty line is an answer — the child has one, and
+     * the parent did not name it — so the entry keeps its `box` and is filed
+     * as ticked, which every reader of it shows as "Not specified" rather than
+     * as nothing. A box ticked over a line reading "wala" is the one that says
+     * two things at once, and goes to the adviser; so does a box nobody could
+     * make out over an empty line. A line with writing on it is an answer
+     * whatever its box says: parents often write without ticking.
      *
      * @param  array<string, mixed>  $payload
      * @param  array<string, array{text: string, confident: bool, readable: bool, box?: string}>  $written
@@ -1329,10 +1410,15 @@ class ConsentFormScanner
                 continue;
             }
 
-            if ($box === self::TICKED) {
-                $fieldNotes[$key] = $entry['text'] === ''
-                    ? 'The box beside this line is ticked but nothing is written on it — ask the parent what it is.'
-                    : 'The box beside this line is ticked but the line reads "'.$entry['text'].'" — ask the parent which is right.';
+            if ($box === self::TICKED && $entry['text'] === '') {
+                // A clear answer, not a doubt: the child has one, and the
+                // parent did not say which. It is filed as ticked and read
+                // everywhere as LearnerAllergies::NOT_SPECIFIED — which the
+                // clinic's allergy check treats with caution — so nothing is
+                // lost by not sending the adviser back to the paper over it.
+                continue;
+            } elseif ($box === self::TICKED) {
+                $fieldNotes[$key] = 'The box beside this line is ticked but the line reads "'.$entry['text'].'" — ask the parent which is right.';
                 $unclear[] = self::WRITTEN_FIELDS[$key];
             } elseif ($box === self::UNCLEAR) {
                 $fieldNotes[$key] = 'Could not tell whether the box beside this line is ticked — check the paper.';
@@ -1341,6 +1427,20 @@ class ConsentFormScanner
         }
 
         $heading = self::answer($boxes['allergy'] ?? null);
+        $kindBoxes = array_map(fn (string $kind): ?string => $written[$kind]['box'] ?? null, self::ALLERGY_KINDS);
+
+        // Ticked, with none of the three boxes under it ticked: one of them
+        // must be, as a box under Pag Purga must be (ConsentPhotoSummary says
+        // so to the adviser). A kind the reader could not make out is already
+        // named on its own line.
+        if ($heading === self::TICKED) {
+            if (! in_array(self::TICKED, $kindBoxes, true) && ! in_array(self::UNCLEAR, $kindBoxes, true)) {
+                $warnings[] = 'The allergy box is ticked but none of the boxes under it is — one of them must be ticked.';
+                $unclear[] = 'Allergy';
+            }
+
+            return;
+        }
 
         $named = false;
         foreach (self::ALLERGY_KINDS as $kind) {
@@ -1354,14 +1454,12 @@ class ConsentFormScanner
             return;
         }
 
-        $warnings[] = $heading === self::TICKED
-            ? 'The allergy box is ticked but no allergy is named — ask the parent what the child is allergic to.'
-            : 'Could not tell whether the allergy box is ticked — check the paper.';
+        $warnings[] = 'Could not tell whether the allergy box is ticked — check the paper.';
         $unclear[] = 'Allergy';
     }
 
     /**
-     * The reader's count of pen marks in the service list against the rows it
+     * The reader's count of marks (ticks and shaded boxes, pen or pencil) in the service list against the rows it
      * placed them on. A tick given to the wrong row, or to two rows, is the
      * mistake this list invites, and it is the one the count can catch: which
      * row is wrong cannot be told from here, so the rows stand as read and the

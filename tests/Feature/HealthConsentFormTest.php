@@ -139,6 +139,51 @@ class HealthConsentFormTest extends TestCase
             ->assertRedirect(route('login'));
     }
 
+    /**
+     * Pag Purga or Immunization ticked with none of the boxes under it: the
+     * heading names the service and its rows say which, so one must be ticked.
+     * The letter is not sent, the adviser is told which heading and why, and
+     * what they ticked is kept on the draft.
+     */
+    #[Test]
+    public function a_heading_ticked_without_a_box_under_it_is_not_sent(): void
+    {
+        $form = $this->createDraft();
+
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.send', $form), ['services' => ['checkup', 'deworming']])
+            ->assertRedirect(route('consent-forms.show', $form))
+            ->assertSessionHas('error', '"Pag Purga / Pagpainom ug Tambal sa": Ticked, but none of the boxes under it is. At least one must be ticked: Pag Bitok / Worms; Schistosomiasis; Filariasis.');
+
+        $form->refresh();
+        $this->assertSame(HealthConsentForm::STATUS_DRAFT, $form->status);
+        $this->assertSame(['checkup', 'deworming'], $form->services);
+        $this->assertSame(['deworming'], HealthConsentForm::headingsWithoutRows(['deworming', 'immunization', 'immunization_grade7']));
+        $this->assertSame([], HealthConsentForm::headingsWithoutRows(['deworming', 'deworming_worms']));
+
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.send', $form), ['services' => ['checkup', 'deworming', 'deworming_worms']]);
+        $this->assertSame(HealthConsentForm::STATUS_SENT, $form->fresh()->status);
+    }
+
+    /** The letter's edit view says it beside the heading, shown while it applies. */
+    #[Test]
+    public function the_letter_shows_which_heading_needs_a_box_ticked_under_it(): void
+    {
+        $form = $this->createDraft();
+        $form->update(['services' => ['deworming']]);
+
+        $html = $this->withSession($this->adviserSession())
+            ->get(route('consent-forms.show', $form))
+            ->assertOk()
+            ->getContent();
+
+        // Pag Purga is ticked alone, so its notice is shown; Immunization is not.
+        $this->assertMatchesRegularExpression('/data-rows-required="deworming" role="status"\s*>\s*Ticked, but none of the boxes under it is\./', $html);
+        $this->assertMatchesRegularExpression('/data-rows-required="immunization" role="status"\s+hidden\s*>/', $html);
+        $this->assertStringContainsString('data-heading-row="deworming"', $html);
+    }
+
     #[Test]
     public function sending_requires_at_least_one_service(): void
     {

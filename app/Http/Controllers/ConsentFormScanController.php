@@ -64,14 +64,21 @@ class ConsentFormScanController extends Controller
             // for the detail one image cannot carry. They are read and not kept.
             'closeups' => ['nullable', 'array', 'max:'.self::MAX_CLOSEUPS],
             'closeups.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:'.self::MAX_KILOBYTES],
+            // Whether the page evened the light out of those close-ups. Only
+            // ever widens what the reader is told, about images the page cut.
+            'lighting' => ['nullable', 'string', 'in:even'],
             // The learner the form is being recorded for, so the name on the
             // sheet can be checked against them. Optional: without it the
             // draft is returned unchecked.
             'lrn' => ['nullable', 'string', 'max:32'],
         ]);
 
+        $closeups = array_values($validated['closeups'] ?? []);
+
         try {
-            $draft = $scanner->scan($validated['sheet'] ?? $validated['photo'], array_values($validated['closeups'] ?? []));
+            $draft = $scanner
+                ->withEvenLighting(($validated['lighting'] ?? null) === 'even' && $closeups !== [])
+                ->scan($validated['sheet'] ?? $validated['photo'], $closeups);
         } catch (UploadReadFailure $e) {
             // Written for the adviser — busy, unreachable, a photo the reader
             // would not process — so it is shown as it is. The cause underneath
@@ -121,8 +128,9 @@ class ConsentFormScanController extends Controller
             // same list the copy above judged each service by. Nothing for a
             // photo that could not be read or another child's sheet.
             'ticked_services' => $copy !== null ? ConsentPaperCopy::tickedServices((array) ($draft['services'] ?? [])) : [],
-            // What the confirmation step starts from, for whichever answer the
-            // adviser files. Null with nothing read, so it starts from nothing.
+            // Where each service starts in the dialog (Consented, Excluded or
+            // to check), for whichever answer the adviser files. Null with
+            // nothing read, so every service starts Excluded.
             'service_proposal' => $copy !== null ? ConsentPaperCopy::proposal($draft) : null,
             'summary' => ConsentPhotoSummary::fromDraft($draft, $learner['grade'] ?? null),
             // The upload can retain this reading without trusting JSON posted

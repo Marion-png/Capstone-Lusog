@@ -197,20 +197,22 @@
     // Filling the form in is all the reader does. Every field stays editable,
     // nothing is submitted, and anything it was unsure of is named on the
     // field itself rather than in a summary the eye slides past.
-    const apply = (draft) => {
+    // The checks a field on this page cannot carry — the sheet as a whole, the
+    // service list, the allergy heading box, the signature — named once each,
+    // from the same list the upload dialog shows (ConsentPhotoSummary). The
+    // rest are said on their own fields below.
+    const ownField = ['Services the parent excepted', 'Reason for refusing', 'Food allergy', 'Medicine allergy', 'Previous immunization', 'Other illnesses', 'Parent or guardian\'s name', 'Parent\'s answer'];
+    const apply = (draft, checks = []) => {
         flags.textContent = '';
         flags.hidden = true;
         form.querySelectorAll('[data-flag-for]').forEach((el) => setFlag(el.dataset.flagFor, ''));
 
         const fieldNotes = draft.field_notes || {};
-        const notes = [];
         // Another child's sheet fills nothing in: its answers are not this
         // learner's, however clearly they were read.
-        if (draft.learner_mismatch) notes.push(draft.consent_reason);
-        else if (draft.unreadable) notes.push('The photograph could not be read. Fill the answers in from the paper.');
-        if (!draft.learner_mismatch && !draft.signature_present) notes.push('No signature was found in the signature area — check the paper before saving.');
-        (draft.warnings || []).forEach((warning) => notes.push(warning));
-        if (draft.note) notes.push(draft.note);
+        const notes = checks
+            .filter((check) => check && !ownField.includes(check.subject))
+            .map((check) => check.subject + ': ' + check.message);
 
         if (draft.unreadable || draft.learner_mismatch) {
             // A guess left over from an earlier reading must not survive a
@@ -232,7 +234,10 @@
 
             Object.entries(draft.written || {}).forEach(([field, entry]) => {
                 if (!entry) return;
-                setValue(field, entry.text || '');
+                // A box ticked with nothing written beside it: the parent said
+                // yes and named nothing, which is saved as "Not specified"
+                // rather than as a blank that reads "none".
+                setValue(field, entry.text || (entry.box === 'yes' ? @json(\App\Support\LearnerAllergies::NOT_SPECIFIED) : ''));
 
                 // Three states, three things to say. "Unreadable" is in the
                 // field rather than leaving it blank, because a blank field is
@@ -311,7 +316,7 @@
                 }
 
                 const draft = data.draft || {};
-                apply(draft);
+                apply(draft, Array.isArray(data.summary?.checks) ? data.summary.checks : []);
                 showCopy(data.copy_html);
                 scanState.textContent = draft.unreadable || draft.learner_mismatch
                     ? 'Nothing was filled in — see the notes.'

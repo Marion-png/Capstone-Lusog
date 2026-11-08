@@ -77,10 +77,18 @@
                     <span>{{ $service['label'] }}</span>
                 @endif
             </div>
+            {{-- A heading names the service and its rows say which, so a
+                 heading ticked on its own says that a row under it must be
+                 ticked too. Send refuses it (HealthConsentForm::headingsWithoutRows). --}}
+            @if ($editServices && $service['children'] !== [])
+                <p class="doc-rows-required no-print" data-rows-required="{{ $key }}" role="status" @if (! in_array($key, HealthConsentForm::headingsWithoutRows($form->services ?? []), true)) hidden @endif>
+                    {{ HealthConsentForm::rowsRequiredNotice($key) }}
+                </p>
+            @endif
             @foreach ($service['children'] as $childKey => $childLabel)
                 <div class="doc-service doc-child">
                     @if ($editServices)
-                        <input type="checkbox" id="svc-{{ $childKey }}" name="services[]" value="{{ $childKey }}" @checked($form->hasService($childKey))>
+                        <input type="checkbox" id="svc-{{ $childKey }}" name="services[]" value="{{ $childKey }}" data-heading-row="{{ $key }}" @checked($form->hasService($childKey))>
                         <label for="svc-{{ $childKey }}">{{ $childLabel }}</label>
                     @else
                         <span class="doc-box">{!! $form->hasService($childKey) ? '&#10003;' : '' !!}</span>
@@ -247,3 +255,42 @@
         </div>
     </div>
 </div>
+@if ($editServices)
+    <script>
+    (() => {
+        // Each heading's notice follows its boxes: shown while the heading is
+        // ticked and none of its rows is. Send is stopped here with the notice
+        // in view; the server refuses it as well (HealthConsentFormController::send).
+        const notices = Array.from(document.querySelectorAll('[data-rows-required]'));
+        if (notices.length === 0) return;
+
+        const missing = () => notices.filter((notice) => {
+            const heading = notice.dataset.rowsRequired;
+            const ticked = document.getElementById('svc-' + heading)?.checked;
+            const rows = Array.from(document.querySelectorAll('[data-heading-row="' + heading + '"]'));
+            return ticked && !rows.some((row) => row.checked);
+        });
+
+        const sync = () => {
+            const open = missing();
+            notices.forEach((notice) => { notice.hidden = !open.includes(notice); });
+            return open;
+        };
+
+        document.querySelectorAll('.doc-services input[type="checkbox"]').forEach((box) => box.addEventListener('change', sync));
+        sync();
+
+        // Caught before the button's own "Send this form?" prompt, so the
+        // adviser is not asked to confirm a send that will not happen.
+        document.addEventListener('click', (event) => {
+            const send = event.target.closest?.('button[formaction$="/send"]');
+            if (!send) return;
+            const open = sync();
+            if (open.length === 0) return;
+            event.preventDefault();
+            event.stopPropagation();
+            open[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }, true);
+    })();
+    </script>
+@endif

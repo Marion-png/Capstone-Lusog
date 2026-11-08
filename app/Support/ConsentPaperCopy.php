@@ -84,10 +84,13 @@ final class ConsentPaperCopy
      * posts exactly this list.
      *
      * A ticked heading (Pag Purga, Immunization) is not a tick on the rows under
-     * it. It used to cover them when none was ticked, which put an authorisation
-     * on boxes the paper shows empty — and a reader that missed the small
-     * sub-item boxes under a heading it did see approved all of them at once.
-     * See unsettledServices() for what such a row reads as instead.
+     * it: the heading names the service, the rows say which, and a heading on
+     * its own is a form that is not finished. The rows read as unsettled (see
+     * unsettledServices()), and the adviser is told in so many words that a box
+     * under the heading must be ticked (HealthConsentForm::rowsRequiredNotice,
+     * through ConsentPhotoSummary). Covering them silently was tried once, and
+     * a reader that missed a small sub-item tick under a heading it did see
+     * approved all three rows at once.
      *
      * @param  array<string, mixed>  $boxes  every box of the letter's list, as the reader reported it
      * @return list<string> keys of HealthConsentForm::PLANNED_SERVICES
@@ -103,7 +106,7 @@ final class ConsentPaperCopy
     /**
      * The rows a person has to settle from the paper: a box the reader could
      * not make out, and the rows under a heading that is marked (or might be)
-     * when none of them is ticked — the paper says the service, not which.
+     * when none of them is ticked — the paper names the service, not which.
      *
      * @param  array<string, mixed>  $boxes  every box of the letter's list, as the reader reported it
      * @return list<string> keys of HealthConsentForm::PLANNED_SERVICES
@@ -130,11 +133,12 @@ final class ConsentPaperCopy
     }
 
     /**
-     * What the confirmation step starts from, for each answer an agreed form
-     * can be filed under. `approved` is pre-ticked; `check` is left unticked
-     * and flagged. Every doubt lands on "not approved": an adviser can tick a
-     * row they can see on the paper, but a tick nobody looked at is an
-     * authorisation nobody gave.
+     * Where each service starts in the upload dialog, for each answer an agreed
+     * form can be filed under. `approved` starts Consented; `check` waits on
+     * the adviser to choose Consented or Excluded; every other row starts
+     * Excluded. Every doubt lands on "not approved": an adviser can mark a row
+     * Consented they can see on the paper, but a consent nobody looked at is
+     * an authorisation nobody gave.
      *
      * "Yes, except" whose exceptions cannot be named as services proposes
      * nothing at all, since any row on the paper might be the one left out.

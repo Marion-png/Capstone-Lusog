@@ -385,6 +385,21 @@ class HealthConsentFormController extends Controller
                 ->with('error', 'Select at least one health service before sending.');
         }
 
+        // A heading names the service and its rows say which: a letter with
+        // Pag Purga ticked and none of its rows is not finished. The adviser's
+        // ticks are kept on the draft so nothing they marked is lost.
+        $unfinished = HealthConsentForm::headingsWithoutRows($services);
+        if ($unfinished !== []) {
+            $form->services = $services;
+            $form->save();
+
+            return redirect()->route('consent-forms.show', $form)
+                ->with('error', implode(' ', array_map(
+                    fn (string $heading): string => '"'.HealthConsentForm::headingName($heading).'": '.HealthConsentForm::rowsRequiredNotice($heading),
+                    $unfinished,
+                )));
+        }
+
         $form->services = $services;
         $form->status = HealthConsentForm::STATUS_SENT;
         $form->token = $form->token ?: Str::random(40);

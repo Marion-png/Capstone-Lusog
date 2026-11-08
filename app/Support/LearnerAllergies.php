@@ -146,7 +146,12 @@ class LearnerAllergies
     private static function add(array &$found, string $kind, bool $ticked, string $text, string $source, string $sourceKey): void
     {
         $text = trim((string) preg_replace('/\s+/u', ' ', $text));
-        $says = $text !== '' && ConsentFormScanner::saysSomething($text);
+        // "Not specified" written into a field is the ticked box with nothing
+        // named, said in words (the consent forms fill it in that way), so it
+        // is the same entry as one, not an allergy called "Not specified".
+        $unspecified = strcasecmp($text, self::NOT_SPECIFIED) === 0;
+        $ticked = $ticked || $unspecified;
+        $says = $text !== '' && ! $unspecified && ConsentFormScanner::saysSomething($text);
 
         if (! $says && ! $ticked) {
             return;
