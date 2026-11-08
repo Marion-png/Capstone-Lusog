@@ -1266,6 +1266,7 @@
     </div>
 </div>
 
+@include('partials.who-growth-script')
 <script>
 const dashboardNutritionLabels = @json($chartNutritionLabels);
 const dashboardNutritionValues = @json($chartNutritionValues);
@@ -1528,8 +1529,9 @@ window.switchAdviserTab = (targetId) => {
     const bmiOut = document.getElementById('bmiDisplay');
     const bmiAgeOut = document.getElementById('nutriStatusDisplay');
     const hfaOut = document.getElementById('hfaDisplay');
+    const genderInput = document.getElementById('gender');
 
-    if (!heightInput || !weightInput || !birthDate || !heightCmHidden || !heightSquaredOut || !bmiOut || !bmiAgeOut || !hfaOut) {
+    if (!heightInput || !weightInput || !birthDate || !heightCmHidden || !heightSquaredOut || !bmiOut || !bmiAgeOut || !hfaOut || !window.WhoGrowth) {
         return;
     }
 
@@ -1538,62 +1540,29 @@ window.switchAdviserTab = (targetId) => {
         return Number.isFinite(num) ? num : null;
     };
 
-    const getAge = () => {
-        if (!birthDate.value) {
+    // Age in months on today's weigh-in, from the date of birth: the WHO 2007
+    // reference is read by sex and month, never by completed years.
+    const getAgeInMonths = () => {
+        const parts = (birthDate.value || '').split('-').map(Number);
+        if (parts.length !== 3 || parts.some((n) => !n)) {
             return null;
         }
 
-        const date = new Date(birthDate.value);
-        if (Number.isNaN(date.getTime())) {
-            return null;
-        }
-
-        const today = new Date();
-        let age = today.getFullYear() - date.getFullYear();
-        const monthDiff = today.getMonth() - date.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < date.getDate())) {
-            age -= 1;
-        }
-
-        return age >= 0 ? age : null;
-    };
-
-    const classifyBmiForAge = (bmi, age) => {
-        if (bmi === null || age === null) {
-            return 'Not enough data';
-        }
-
-        // Mirrors App\Support\BmiClassifier: the 17.0–18.5 band is Wasted,
-        // not "Underweight" — the DepEd scale has no such column.
-        if (bmi < 16.0) return 'Severely Wasted';
-        if (bmi < 18.5) return 'Wasted';
-        if (bmi < 25.0) return 'Normal';
-        if (bmi < 30.0) return 'Overweight';
-        return 'Obese';
-    };
-
-    const classifyHeightForAge = (heightM, age) => {
-        if (heightM === null || age === null) {
-            return 'Not enough data';
-        }
-
-        if (heightM < 1.20) return 'Severely Stunted';
-        if (heightM < 1.30) return 'Stunted';
-        if (heightM > 1.70) return 'Tall';
-        return 'Normal';
+        return window.WhoGrowth.ageInMonths(new Date(parts[0], parts[1] - 1, parts[2]));
     };
 
     const recalc = () => {
         const heightM = toNum(heightInput.value);
         const weightKg = toNum(weightInput.value);
-        const age = getAge();
+        const age = getAgeInMonths();
+        const gender = genderInput ? genderInput.value : '';
 
         if (!heightM || !weightKg || heightM <= 0 || weightKg <= 0 || heightM > 2.5) {
             heightCmHidden.value = '';
             heightSquaredOut.textContent = '-';
             bmiOut.textContent = '-';
-            bmiAgeOut.textContent = 'Not enough data';
-            hfaOut.textContent = classifyHeightForAge(heightM, age);
+            bmiAgeOut.textContent = window.WhoGrowth.bmiForAge(null, age, gender);
+            hfaOut.textContent = window.WhoGrowth.heightForAge(heightM && heightM <= 2.5 ? heightM * 100 : null, age, gender);
             return;
         }
 
@@ -1605,14 +1574,17 @@ window.switchAdviserTab = (targetId) => {
 
         heightSquaredOut.textContent = heightSquared.toFixed(2);
         bmiOut.textContent = bmi.toFixed(2);
-        bmiAgeOut.textContent = classifyBmiForAge(bmi, age);
-        hfaOut.textContent = classifyHeightForAge(heightM, age);
+        bmiAgeOut.textContent = window.WhoGrowth.bmiForAge(bmi, age, gender);
+        hfaOut.textContent = window.WhoGrowth.heightForAge(heightCm, age, gender);
     };
 
     heightInput.addEventListener('input', recalc);
     weightInput.addEventListener('input', recalc);
     birthDate.addEventListener('input', recalc);
     birthDate.addEventListener('change', recalc);
+    if (genderInput) {
+        genderInput.addEventListener('change', recalc);
+    }
     recalc();
 })();
 

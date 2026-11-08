@@ -6,6 +6,7 @@ use App\Http\Controllers\NurseController;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Support\BmiAssessmentReport;
+use App\Support\BmiClassifier;
 use App\Support\NutritionalHealthStatus;
 use App\Support\Sheet2Review;
 use App\Support\StudentRosterSync;
@@ -863,7 +864,7 @@ class NurseHealthRecordsPageTest extends TestCase
             'baseline_recorded_at' => '2026-07-01',
             'student_details' => [
                 'lrn' => '130000000009', 'last_name' => 'Cruz', 'first_name' => 'Juan',
-                'grade_level' => 'Grade 10', 'section' => 'Dalton',
+                'grade_level' => 'Grade 10', 'section' => 'Dalton', 'gender' => 'Male',
                 'nutritional_status_height_for_age' => 'Normal',
             ],
         ]);
@@ -897,8 +898,11 @@ class NurseHealthRecordsPageTest extends TestCase
         $this->assertSame('157', $status['endline']['height_cm']);
         $this->assertSame('18.7', $status['endline']['bmi']);
         $this->assertSame('Normal', $status['endline']['bmi_status']);
+        // No birth date on this record, so its age is the posted 16 years,
+        // read at the middle of that year.
+        $this->assertNotSame('', $status['endline']['hfa_status']);
         $this->assertSame(
-            BmiAssessmentReport::classifyHeightForAge(157.0, 16),
+            BmiAssessmentReport::classifyHeightForAge(157.0, BmiClassifier::monthsFromYears(16), 'Male'),
             $status['endline']['hfa_status'],
             'Endline height-for-age is the DepEd grid\'s own classifier, never a second one.'
         );

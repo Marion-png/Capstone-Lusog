@@ -92,7 +92,9 @@ class AdviserStudentImportTest extends TestCase
     public function a_spreadsheet_enrols_every_valid_row(): void
     {
         $file = $this->csv([
-            '100000000001,Dela Cruz,Juan,Santos,2012-06-15,Davao City,Male,Maria Dela Cruz,"123 Mabini St., Davao City",09171234567,142,35.5',
+            // 142 cm, 31 kg: BMI 15.37, between −3 SD and −2 SD for a boy of
+            // 14 to 16 on the WHO 2007 reference — Wasted.
+            '100000000001,Dela Cruz,Juan,Santos,2012-06-15,Davao City,Male,Maria Dela Cruz,"123 Mabini St., Davao City",09171234567,142,31',
             '100000000002,Reyes,Ana,,2012-03-02,Davao City,Female,Jose Reyes,45 Rizal Ave,09181234567,1.38,28',
         ]);
 

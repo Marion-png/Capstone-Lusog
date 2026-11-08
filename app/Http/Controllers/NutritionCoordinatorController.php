@@ -430,7 +430,10 @@ class NutritionCoordinatorController extends Controller
         if (str_contains($normalized, 'wast')) {
             return 'wasted';
         }
-        if (str_contains($normalized, 'over')) {
+        // Obese (above +2 SD on the WHO 2007 reference) has no column of its
+        // own in these four-column reports, so it is counted with Overweight —
+        // as NutricorController counts it — and never falls through to Normal.
+        if (str_contains($normalized, 'over') || str_contains($normalized, 'obes')) {
             return 'overweight';
         }
 

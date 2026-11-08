@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Support\BmiAssessmentReport;
+use App\Support\BmiClassifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -931,7 +932,8 @@ class AdviserMyStudentsTest extends TestCase
     {
         $this->enrol();
 
-        StudentHealthRecord::where('student_id', '123456789012')->firstOrFail()->forceFill([
+        $record = StudentHealthRecord::where('student_id', '123456789012')->firstOrFail();
+        $record->forceFill([
             'baseline_height_cm' => 110, 'baseline_weight_kg' => 18.5, 'baseline_age' => 11,
             'baseline_bmi_value' => 15.3, 'baseline_nutritional_status' => 'Wasted',
             'baseline_recorded_at' => '2026-07-01',
@@ -971,7 +973,11 @@ class AdviserMyStudentsTest extends TestCase
         $this->assertSame('18.1', $nutrition['endline']['bmi']);
         $this->assertSame('Normal', $nutrition['endline']['bmi_status']);
         $this->assertSame(
-            BmiAssessmentReport::classifyHeightForAge(115.0, 12),
+            BmiAssessmentReport::classifyHeightForAge(
+                115.0,
+                BmiClassifier::ageAtMeasurement($record->student_details, $record->endline_recorded_at, 12),
+                (string) ($record->student_details['gender'] ?? '')
+            ),
             $nutrition['endline']['hfa_status'],
             'Endline height-for-age is the DepEd grid\'s own classifier.'
         );

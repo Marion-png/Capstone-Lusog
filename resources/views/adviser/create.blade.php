@@ -64,6 +64,14 @@
                             <input type="text" name="birth_year" placeholder="YYYY" required>
                         </div>
                         <div class="field">
+                            <label>Gender</label>
+                            <select name="gender" required>
+                                <option value="">Select Gender</option>
+                                <option>Male</option>
+                                <option>Female</option>
+                            </select>
+                        </div>
+                        <div class="field">
                             <label>Birthplace</label>
                             <input type="text" name="birthplace" required>
                         </div>
@@ -147,6 +155,7 @@
     </div>
 </div>
 
+@include('partials.who-growth-script')
 <script>
 (() => {
     const heightInput = document.querySelector('input[name="height_cm"]');
@@ -154,11 +163,12 @@
     const monthInput = document.querySelector('input[name="birth_month"]');
     const dayInput = document.querySelector('input[name="birth_day"]');
     const yearInput = document.querySelector('input[name="birth_year"]');
+    const genderInput = document.querySelector('select[name="gender"]');
     const bmiOut = document.getElementById('proto_bmi_value');
     const bmiAgeOut = document.getElementById('proto_nutritional_status_bmi_for_age');
     const hfaOut = document.getElementById('proto_nutritional_status_height_for_age');
 
-    if (!heightInput || !weightInput || !bmiOut || !bmiAgeOut || !hfaOut) {
+    if (!heightInput || !weightInput || !bmiOut || !bmiAgeOut || !hfaOut || !window.WhoGrowth) {
         return;
     }
 
@@ -167,56 +177,34 @@
         return Number.isFinite(num) ? num : null;
     };
 
-    const getAge = () => {
+    // Age in months on today's weigh-in: the WHO 2007 reference is read by
+    // sex and month, never by completed years.
+    const getAgeInMonths = () => {
         const month = Number(monthInput?.value);
         const day = Number(dayInput?.value);
         const year = Number(yearInput?.value);
         if (!month || !day || !year) return null;
-        const birth = new Date(year, month - 1, day);
-        if (Number.isNaN(birth.getTime())) return null;
-        const today = new Date();
-        let age = today.getFullYear() - birth.getFullYear();
-        const monthDiff = today.getMonth() - birth.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age -= 1;
-        return age >= 0 ? age : null;
-    };
-
-    const classifyBmiForAge = (bmi, age) => {
-        if (bmi === null || age === null) return 'Not enough data';
-        let severe = 13.0, wasted = 14.5, overweight = 21.0;
-        if (age <= 10) { severe = 12.8; wasted = 14.2; overweight = 20.5; }
-        else if (age >= 15) { severe = 13.5; wasted = 15.2; overweight = 22.5; }
-        if (bmi < severe) return 'Severely Wasted';
-        if (bmi < wasted) return 'Wasted';
-        if (bmi > overweight) return 'Overweight';
-        return 'Normal';
-    };
-
-    const classifyHeightForAge = (heightCm, age) => {
-        if (heightCm === null || age === null) return 'Not enough data';
-        const minNormal = 70 + (age * 5);
-        if (heightCm < (minNormal - 8)) return 'Severely Stunted';
-        if (heightCm < minNormal) return 'Stunted';
-        return 'Normal Height-for-Age';
+        return window.WhoGrowth.ageInMonths(new Date(year, month - 1, day));
     };
 
     const recalc = () => {
         const heightCm = toNum(heightInput.value);
         const weightKg = toNum(weightInput.value);
-        const age = getAge();
+        const age = getAgeInMonths();
+        const gender = genderInput ? genderInput.value : '';
         if (!heightCm || !weightKg || heightCm <= 0 || weightKg <= 0) {
             bmiOut.value = '';
-            bmiAgeOut.value = 'Not enough data';
-            hfaOut.value = classifyHeightForAge(heightCm, age);
+            bmiAgeOut.value = window.WhoGrowth.bmiForAge(null, age, gender);
+            hfaOut.value = window.WhoGrowth.heightForAge(heightCm, age, gender);
             return;
         }
         const bmi = weightKg / Math.pow(heightCm / 100, 2);
         bmiOut.value = bmi.toFixed(2);
-        bmiAgeOut.value = classifyBmiForAge(bmi, age);
-        hfaOut.value = classifyHeightForAge(heightCm, age);
+        bmiAgeOut.value = window.WhoGrowth.bmiForAge(bmi, age, gender);
+        hfaOut.value = window.WhoGrowth.heightForAge(heightCm, age, gender);
     };
 
-    [heightInput, weightInput, monthInput, dayInput, yearInput].forEach((node) => {
+    [heightInput, weightInput, monthInput, dayInput, yearInput, genderInput].forEach((node) => {
         if (!node) return;
         node.addEventListener('input', recalc);
         node.addEventListener('change', recalc);

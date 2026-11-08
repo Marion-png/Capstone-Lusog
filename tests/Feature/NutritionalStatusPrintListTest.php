@@ -283,7 +283,9 @@ class NutritionalStatusPrintListTest extends TestCase
             'student_name' => 'Measured Twice',
             'student_details' => ['gender' => 'Male', 'age' => 12, 'nutritional_status_height_for_age' => 'Severely Stunted'],
             'baseline_height_cm' => 120, 'baseline_weight_kg' => 25,
-            'endline_height_cm' => 140, 'endline_weight_kg' => 30, 'endline_age' => 13,
+            // Normal on the WHO 2007 boys' table at 13 (read at 13y6m with no
+            // birth date on file, where −2 SD is 144.5 cm).
+            'endline_height_cm' => 155, 'endline_weight_kg' => 30, 'endline_age' => 13,
         ]);
         $this->makeLearner([
             'student_name' => 'Baseline Only',

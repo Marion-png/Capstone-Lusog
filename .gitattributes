@@ -1,5 +1,10 @@
 * text=auto eol=lf
 
+# WHO's 2007 growth reference, kept byte for byte as WHO publishes it (CRLF
+# included) so it can be checked against the source; WhoGrowthReferenceTest
+# pins the checksums.
+/resources/data/who2007/*.txt -text
+
 *.blade.php diff=html
 *.css diff=css
 *.html diff=html

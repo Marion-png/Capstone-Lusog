@@ -227,10 +227,12 @@ class FeedingBmiReportTest extends TestCase
         $this->makeStudent('Grade 7 / Sampaguita', 'Male', 'Wasted', 'Stunted');
 
         // Endline recorded — appears in the Final grid; HFA recomputed from
-        // endline height/age (age 13 => normal height >= 135cm; 140cm is Normal).
+        // endline height/age on the WHO 2007 boys' table (13 years with no
+        // birth date on file is read at 13y6m, where −2 SD is 144.5 cm; 155 cm
+        // is Normal).
         $this->makeStudent('Grade 9 / Adelfa', 'Male', 'Wasted', 'Stunted', [
             'endline_nutritional_status' => 'Normal',
-            'endline_height_cm' => 140,
+            'endline_height_cm' => 155,
             'endline_age' => 13,
         ]);
 

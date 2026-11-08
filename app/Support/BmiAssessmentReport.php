@@ -31,9 +31,10 @@ use Illuminate\Support\Collection;
  *
  * Two shapes of the truth are deliberately kept:
  *
- * - The adviser's classifier emits "Underweight", which the DepEd sheet has no
- *   column for, so it is counted under Wasted — the same fold the coordinator's
- *   cards and the head's reports use.
+ * - A record saved under the retired "Underweight" label, which the DepEd
+ *   sheet has no column for, is counted under Wasted — the same fold the
+ *   coordinator's cards and the head's reports use. BmiClassifier reads the
+ *   WHO 2007 reference and fills every column, Obese and Tall included.
  * - A learner with no sex on file cannot sit in the MALE or FEMALE row, and a
  *   reading nobody took is counted nowhere. Neither is invented into a zero.
  */
@@ -118,8 +119,12 @@ final class BmiAssessmentReport
             if ($ns = self::nsColumn((string) $record->endline_nutritional_status)) {
                 $counts['bmif'][$gk][$sex][$ns]++;
             }
-            if ($record->endline_height_cm !== null && $record->endline_age !== null) {
-                $endlineHfa = self::classifyHeightForAge((float) $record->endline_height_cm, (int) $record->endline_age);
+            if ($record->endline_height_cm !== null) {
+                $endlineHfa = self::classifyHeightForAge(
+                    (float) $record->endline_height_cm,
+                    BmiClassifier::ageAtMeasurement($details, $record->endline_recorded_at, $record->endline_age),
+                    (string) ($details['gender'] ?? '')
+                );
                 if ($hfa = self::hfaColumn($endlineHfa)) {
                     $counts['bmif'][$gk][$sex][$hfa]++;
                 }
@@ -308,23 +313,16 @@ final class BmiAssessmentReport
     }
 
     /**
-     * Height-for-age at endline, which is not stored and so is recomputed.
-     * Mirrors AdviserController::classifyHeightForAge, which is what wrote the
-     * baseline classification.
+     * Height-for-age at endline, which is not stored and so is recomputed —
+     * through BmiClassifier, the classifier that wrote the baseline one, against
+     * the WHO 2007 reference for the learner's sex and age in months. '' where
+     * there is not enough to classify, so the grid counts it nowhere.
      */
-    public static function classifyHeightForAge(float $heightCm, int $age): string
+    public static function classifyHeightForAge(float $heightCm, ?float $ageInMonths, ?string $sex): string
     {
-        if ($heightCm <= 0 || $age <= 0) {
-            return '';
-        }
+        $status = BmiClassifier::heightForAge($heightCm, $ageInMonths, $sex);
 
-        $minNormalHeight = 70 + ($age * 5);
-
-        return match (true) {
-            $heightCm < ($minNormalHeight - 8) => 'Severely Stunted',
-            $heightCm < $minNormalHeight => 'Stunted',
-            default => 'Normal Height-for-Age',
-        };
+        return $status === BmiClassifier::NOT_ENOUGH_DATA ? '' : $status;
     }
 
     /**

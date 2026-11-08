@@ -1281,10 +1281,19 @@ class AdviserController extends Controller
         // none at all rather than the classifier's "Not enough data" — which
         // is a sentence about the record, not a nutritional status, and would
         // be counted as one by anything grouping on the column.
-        $nutritionalStatusBmiForAge = $bmi === null ? null : $this->classifyBmiForAge($bmi, $age);
+        //
+        // Read against the WHO 2007 reference for this learner's sex and age in
+        // months on the day of the weigh-in (baseline_recorded_at below), never
+        // against completed years or the adult cut-offs.
+        $ageInMonths = BmiClassifier::ageAtMeasurement(
+            ['birth_year' => $birthYear, 'birth_month' => $birthMonth, 'birth_day' => $birthDay],
+            SchoolClock::today()
+        );
+        $sex = $validated['gender'] ?? null;
+        $nutritionalStatusBmiForAge = $bmi === null ? null : BmiClassifier::bmiForAge($bmi, $ageInMonths, $sex);
         $nutritionalStatusHeightForAge = $heightCm === null
             ? null
-            : $this->classifyHeightForAge($heightCm, $age);
+            : BmiClassifier::heightForAge($heightCm, $ageInMonths, $sex);
 
         // Sheet 2 belongs to the School Nurse (invariant).
         //
@@ -1566,28 +1575,6 @@ class AdviserController extends Controller
         $heightMeters = $heightCm / 100;
 
         return round($weightKg / ($heightMeters * $heightMeters), 2);
-    }
-
-    private function classifyBmiForAge(?float $bmi, ?int $age): string
-    {
-        return BmiClassifier::bmiForAge($bmi, $age);
-    }
-
-    private function classifyHeightForAge(float $heightCm, ?int $age): string
-    {
-        if ($heightCm <= 0 || $age === null) {
-            return 'Not enough data';
-        }
-
-        $minNormalHeight = 70 + ($age * 5);
-        if ($heightCm < ($minNormalHeight - 8)) {
-            return 'Severely Stunted';
-        }
-        if ($heightCm < $minNormalHeight) {
-            return 'Stunted';
-        }
-
-        return 'Normal Height-for-Age';
     }
 
     private function buildStudentName(string $lastName, string $firstName, string $middleName): string

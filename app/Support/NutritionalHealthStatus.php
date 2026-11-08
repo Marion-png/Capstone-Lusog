@@ -22,8 +22,11 @@ use App\Models\StudentHealthRecord;
  * Classification is never re-implemented here: BMI-for-age is
  * `BmiClassifier::bmiForAge()` and height-for-age is
  * `BmiAssessmentReport::classifyHeightForAge()`, the same functions the DepEd
- * grids count with. A stored classification wins over a recomputed one — it is
- * what the adviser recorded at the time.
+ * grids count with, both read against the WHO 2007 reference for the learner's
+ * sex and age in months on the day of the weigh-in. A stored classification
+ * wins over a recomputed one — it is what the adviser recorded at the time
+ * (`nutrition:reclassify` brings ones stored under the old adult cut-offs up
+ * to date).
  */
 class NutritionalHealthStatus
 {
@@ -37,6 +40,7 @@ class NutritionalHealthStatus
     public static function forRecord(StudentHealthRecord $record): array
     {
         $details = is_array($record->student_details) ? $record->student_details : [];
+        $sex = isset($details['gender']) ? (string) $details['gender'] : null;
 
         $baseline = self::phase(
             height: $record->baseline_height_cm ?? ($details['height_cm'] ?? null),
@@ -47,6 +51,8 @@ class NutritionalHealthStatus
             storedBmiStatus: $record->baseline_nutritional_status ?: $record->nutritional_status,
             storedHfaStatus: $details['nutritional_status_height_for_age'] ?? null,
             recordedAt: $record->baseline_recorded_at?->toDateString(),
+            details: $details,
+            sex: $sex,
         );
 
         $endline = self::phase(
@@ -60,6 +66,8 @@ class NutritionalHealthStatus
             // does it, and left blank when either is missing.
             storedHfaStatus: null,
             recordedAt: $record->endline_recorded_at?->toDateString(),
+            details: $details,
+            sex: $sex,
         );
 
         return [
@@ -83,11 +91,17 @@ class NutritionalHealthStatus
         mixed $storedBmiStatus,
         mixed $storedHfaStatus,
         ?string $recordedAt,
+        array $details,
+        ?string $sex,
     ): array {
         $heightCm = self::number($height);
         $weightKg = self::number($weight);
         $years = self::number($age);
         $bmiValue = self::number($bmi);
+
+        // Both classifications read the learner's age in months on the day of
+        // this weigh-in, from the birth date on their record.
+        $ageInMonths = BmiClassifier::ageAtMeasurement($details, $recordedAt, $years);
 
         // A BMI nobody stored can still be computed from the pair that decides
         // it; one that needs a height or a weight that was never taken cannot.
@@ -98,12 +112,12 @@ class NutritionalHealthStatus
 
         $bmiStatus = trim((string) $storedBmiStatus);
         if ($bmiStatus === '' && $bmiValue !== null) {
-            $bmiStatus = BmiClassifier::bmiForAge($bmiValue, $years !== null ? (int) $years : null);
+            $bmiStatus = BmiClassifier::bmiForAge($bmiValue, $ageInMonths, $sex);
         }
 
         $hfaStatus = trim((string) $storedHfaStatus);
-        if ($hfaStatus === '' && $heightCm !== null && $years !== null) {
-            $hfaStatus = BmiAssessmentReport::classifyHeightForAge($heightCm, (int) $years);
+        if ($hfaStatus === '' && $heightCm !== null) {
+            $hfaStatus = BmiAssessmentReport::classifyHeightForAge($heightCm, $ageInMonths, $sex);
         }
 
         // Measured means somebody took a height or a weight. A classification

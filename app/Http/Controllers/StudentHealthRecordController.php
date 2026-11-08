@@ -43,17 +43,15 @@ class StudentHealthRecordController extends Controller
 {
     /**
      * The nutritional statuses the Beneficiaries filters offer, in scale order
-     * (worst first). This is what the app's own classifier emits — it never
-     * produces "Obese", so that label is deliberately absent rather than
-     * offered as a filter that can only ever return nothing. "Underweight" is
-     * absent too: the coordinator's screens fold it into Wasted exactly as the
-     * DepEd sheets do, so choosing Wasted here matches both spellings
-     * (`filterStatus()`) rather than offering a fifth label the cards never
-     * print.
+     * (worst first): the five BmiClassifier emits on the WHO 2007 reference,
+     * Obese (above +2 SD) included. "Underweight" is absent: the coordinator's
+     * screens fold that retired label into Wasted exactly as the DepEd sheets
+     * do, so choosing Wasted here matches both spellings (`filterStatus()`)
+     * rather than offering a label the cards never print.
      *
      * @var list<string>
      */
-    private const STATUS_OPTIONS = ['Severely Wasted', 'Wasted', 'Normal', 'Overweight'];
+    private const STATUS_OPTIONS = ['Severely Wasted', 'Wasted', 'Normal', 'Overweight', 'Obese'];
 
     /** @var list<string> */
     private const SEX_OPTIONS = ['Male', 'Female'];
@@ -1458,17 +1456,21 @@ class StudentHealthRecordController extends Controller
         ]);
 
         $bmi = $this->computeBmi((float) $validated['height_cm'], (float) $validated['weight_kg']);
-        $status = $this->classifyStatus($bmi, (int) $validated['age']);
         $recordedAt = $validated['recorded_at'] ?? SchoolClock::today();
 
         $institutionId = $request->session()->get('active_institution_id');
+        $existing = StudentHealthRecord::currentForStudent((string) $validated['student_id'], $institutionId ? (int) $institutionId : null);
+
+        // The form posts an age in years and nothing about sex, so both are
+        // read off the learner's own record: the birth date the adviser
+        // enrolled them with, the weigh-in date, and their sex.
+        $status = $this->classifyStatus($bmi, $existing, $recordedAt, $validated['age']);
 
         // A class adviser measures the learners in their own section. A
         // learner the school already holds under another class, waiting for a
         // section or archived, is placed by the school-year handover — this
         // form never creates a row for them.
         if ((string) $request->session()->get('active_role') === 'class_adviser') {
-            $existing = StudentHealthRecord::currentForStudent((string) $validated['student_id'], $institutionId ? (int) $institutionId : null);
             $assigned = AdviserClassScope::assignedClass($request);
 
             if ($existing !== null
@@ -1556,8 +1558,8 @@ class StudentHealthRecordController extends Controller
         ]);
 
         $bmi = $this->computeBmi((float) $validated['height_cm'], (float) $validated['weight_kg']);
-        $status = $this->classifyStatus($bmi, (int) $validated['age']);
         $recordedAt = $validated['recorded_at'] ?? SchoolClock::today();
+        $status = $this->classifyStatus($bmi, $record, $recordedAt, $validated['age']);
 
         $record->update([
             'weight' => (float) $validated['weight_kg'],
@@ -1987,9 +1989,21 @@ class StudentHealthRecordController extends Controller
         return round($weightKg / ($heightMeters * $heightMeters), 2);
     }
 
-    private function classifyStatus(float $bmi, int $age): string
+    /**
+     * BMI-for-age for a weigh-in, against the WHO 2007 reference for the
+     * learner's sex and their age in months on the day it was taken — from
+     * the birth date on their record, or the posted age in years where the
+     * record has none (BmiClassifier::ageAtMeasurement).
+     */
+    private function classifyStatus(float $bmi, ?StudentHealthRecord $record, mixed $recordedAt, mixed $ageInYears): string
     {
-        return BmiClassifier::bmiForAge($bmi, $age);
+        $details = is_array($record?->student_details) ? $record->student_details : [];
+
+        return BmiClassifier::bmiForAge(
+            $bmi,
+            BmiClassifier::ageAtMeasurement($details, $recordedAt, $ageInYears),
+            isset($details['gender']) ? (string) $details['gender'] : null
+        );
     }
 
     /**
