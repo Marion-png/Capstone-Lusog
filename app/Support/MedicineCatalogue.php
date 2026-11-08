@@ -59,6 +59,72 @@ class MedicineCatalogue
         return in_array(trim($name), self::names(), true);
     }
 
+    /**
+     * Words that name a clinic supply rather than a drug, for an item typed
+     * outside the list. Whole words only, so a medicine whose name merely
+     * contains one is not caught.
+     */
+    public const SUPPLY_WORDS = [
+        'gauze', 'bandage', 'bandages', 'cotton', 'tape', 'glove', 'gloves', 'mask', 'masks',
+        'syringe', 'syringes', 'tongue depressor', 'probe cover', 'ice pack', 'cold pack',
+    ];
+
+    /**
+     * Whether an item is a supply, not a medicine: on the list's supplies, or
+     * named as one. RxNorm has nothing to say about a roll of tape, so a
+     * supply is never looked up and its status reads "Not applicable".
+     *
+     * A drug read as a supply loses nothing at the dispense: the allergy check
+     * treats any item it could not match as one to check by hand.
+     */
+    public static function isSupply(string $name): bool
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return false;
+        }
+
+        $supplies = array_map('mb_strtolower', (array) config('medicines.supplies', []));
+        if (in_array(mb_strtolower($name), $supplies, true)) {
+            return true;
+        }
+
+        if (self::has($name)) {
+            return false;
+        }
+
+        $words = ' '.preg_replace('/[^a-z0-9]+/', ' ', mb_strtolower($name)).' ';
+
+        foreach (self::SUPPLY_WORDS as $word) {
+            if (str_contains($words, ' '.$word.' ')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The generic the list gives an item, where its name does not say it, or
+     * null to let the form read it off the name.
+     */
+    public static function genericFor(string $name): ?string
+    {
+        $generic = ((array) config('medicines.generic_names', []))[trim($name)] ?? null;
+
+        return is_string($generic) && trim($generic) !== '' ? trim($generic) : null;
+    }
+
+    /**
+     * The name an item is compared by: case, spacing and punctuation dropped,
+     * so "Paracetamol 500 mg Tablet" and "paracetamol 500mg tablet" are found
+     * to be one item.
+     */
+    public static function comparableName(string $name): string
+    {
+        return (string) preg_replace('/[^a-z0-9]+/', '', mb_strtolower(trim($name)));
+    }
+
     /** Whether this school may stock something the list does not carry. */
     public static function allowsOffCatalogue(): bool
     {

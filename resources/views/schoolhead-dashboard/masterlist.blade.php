@@ -285,7 +285,7 @@
 									<th class="num" data-sort="endlineWeight">Weight (kg)</th>
 									<th class="num" data-sort="endlineHeight">Height (cm)</th>
 									<th class="num" data-sort="endlineBmi">BMI</th>
-									<th data-sort="latest">Status</th>
+									<th data-sort="endline">Status</th>
 									<th data-sort="endlineHfa">Height-for-Age</th>
 								@endif
 								@if ($showMovement)<th data-sort="movement">Change</th>@endif
@@ -311,7 +311,7 @@
 								    data-height="{{ $row['height'] }}"
 								    data-bmi="{{ $row['bmi'] }}"
 								    data-baseline="{{ $shStatusLabel($row['baseline']) }}"
-								    data-latest="{{ $shStatusLabel($row['latest']) }}"
+								    data-endline="{{ $shStatusLabel($row['endline']) }}"
 								    data-baseline-hfa="{{ $row['baseline_hfa'] }}"
 								    data-endline-hfa="{{ $row['endline_hfa'] }}"
 								    data-movement="{{ SchoolHeadOverview::movementLabel($row['movement']) }}"
@@ -357,14 +357,14 @@
 											@endif
 										</td>
 									@endif
-									{{-- Endline. The status column stays the record's own
-									     `latest` reading, which is what the Latest filter
-									     above the table narrows on. --}}
+									{{-- Endline. Its status is the endline weighing's own, and
+									     "Not measured" until one was taken — never the
+									     baseline's or the record's standing in for it. --}}
 									@if ($showEndline)
 										<td class="num">{{ $row['endline_weight'] !== '' ? $row['endline_weight'] : '—' }}</td>
 										<td class="num">{{ $row['endline_height'] !== '' ? $row['endline_height'] : '—' }}</td>
 										<td class="num">{{ $row['endline_bmi'] !== '' ? $row['endline_bmi'] : '—' }}</td>
-										<td><span class="badge {{ $shStatusBadge($row['latest']) }}">{{ $shStatusLabel($row['latest']) }}</span></td>
+										<td><span class="badge {{ $shStatusBadge($row['endline']) }}">{{ $shStatusLabel($row['endline']) }}</span></td>
 										<td>
 											@if ($row['endline_hfa'] === '')
 												<span class="muted">&mdash;</span>
@@ -376,7 +376,7 @@
 									@if ($showMovement)
 										<td>
 											@if ($row['movement'] === 'unknown')
-												<span class="muted">&mdash;</span>
+												<span class="muted">{{ SchoolHeadOverview::movementLabel('unknown') }}</span>
 											@else
 												<span class="badge {{ $shMoveBadge($row['movement']) }}">{{ SchoolHeadOverview::movementLabel($row['movement']) }}</span>
 											@endif

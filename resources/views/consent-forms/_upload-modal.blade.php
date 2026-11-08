@@ -323,6 +323,7 @@
             <dl class="pcc-summary">
                 <div><dt>Parent's answer</dt><dd><span class="pcc-answer" id="pcConfirmAnswer"></span></dd></div>
                 <div><dt>Signed form</dt><dd id="pcConfirmFile"></dd></div>
+                <div id="pcConfirmDateRow" class="pcc-dated" hidden><dt>Form date</dt><dd id="pcConfirmDate"></dd></div>
                 <div id="pcConfirmNoteRow" hidden><dt id="pcConfirmNoteLabel"></dt><dd id="pcConfirmNote"></dd></div>
                 <div id="pcConfirmCertRow" hidden><dt>Medical certificate</dt><dd id="pcConfirmCert"></dd></div>
                 <div id="pcConfirmNotesRow" hidden><dt>Additional notes</dt><dd id="pcConfirmNotes"></dd></div>
@@ -868,6 +869,9 @@
         answer.className = 'pcc-answer ' + (answerKinds[answerSelect.value] || 'is-none');
         answer.textContent = answerSelect.options[answerSelect.selectedIndex]?.text || '';
         document.getElementById('pcConfirmFile').textContent = consentFile?.files?.[0]?.name || '';
+        // Said again before filing: the reading found this sheet dated in
+        // another school year.
+        setSummaryRow('pcConfirmDateRow', 'pcConfirmDate', datedOutside);
 
         // What the parent wrote under their box, as the form carries it.
         const note = { partial: ['Exceptions', 'pc_partial_exception'], refused: ['Reason given', 'pc_refused_reason'] }[answerSelect.value];
@@ -955,6 +959,9 @@
     let readVersion = 0;
     let readRequest = null;
     let photoUrl = null;
+    // What the reading said about a sheet dated in another school year, for
+    // the Confirm Upload summary; empty with no reading or no such date.
+    let datedOutside = '';
 
     // The line over the reading: complete, what to check, or why nothing
     // could be read. Written as text — the checks carry the reader's words.
@@ -1151,6 +1158,7 @@
         if (!review) return;
 
         if (!file || !data) {
+            datedOutside = '';
             review.hidden = true;
             if (photoPane) photoPane.hidden = true;
             uploadModal.classList.remove('is-reviewing');
@@ -1173,11 +1181,16 @@
         const summary = data.summary || {};
         const checks = (Array.isArray(summary.checks) ? summary.checks : [])
             .filter((item) => item && typeof item.message === 'string' && item.message.trim() !== '');
+        datedOutside = draft.date_outside_school_year ? (draft.date_warning || '') : '';
 
         if (draft.learner_mismatch) {
             setFlash('err', draft.consent_reason || 'The name on this form is another learner\'s.');
         } else if (draft.unreadable) {
             setFlash('err', checks[0]?.message || 'The photo could not be read. Choose the answer from the paper.');
+        } else if (datedOutside) {
+            // A sheet dated in another school year leads the reading: the
+            // adviser asks for a current form before anything else.
+            setFlash('err', datedOutside, checks.filter((item) => item.section !== 'sheet'));
         } else if (summary.complete) {
             setFlash('ok', '✓ All required fields completed');
         } else if (checks.length) {
@@ -1343,6 +1356,9 @@
             const body = new FormData();
             body.append('photo', file);
             body.append('lrn', lrn);
+            // The year this upload is filed under, so a sheet dated in
+            // another one is named.
+            body.append('school_year', @json((string) $schoolYear));
 
             try {
                 const ask = async (turn) => {

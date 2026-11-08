@@ -7,6 +7,18 @@
    ══════════════════════════════════════════════════════════════════════ */
 
 .forecast-card { padding: var(--lg-pad-card); margin-top: 20px; }
+/* The eyebrow and the item it is about on one line, wrapping under it on a
+   narrow screen. */
+.forecast-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 12px;
+}
+.forecast-pick { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.forecast-pick .select { max-width: 260px; min-width: 0; }
+.inv-duplicate-receive { margin-top: 12px; }
 .forecast-grid {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);

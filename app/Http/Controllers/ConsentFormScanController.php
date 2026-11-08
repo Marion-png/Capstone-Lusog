@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\HealthConsentForm;
+use App\Models\ParentalConsentForm;
 use App\Support\AdviserClassScope;
 use App\Support\AuditTrail;
 use App\Support\ConsentFormScanner;
@@ -11,6 +12,7 @@ use App\Support\ConsentPhotoSummary;
 use App\Support\LearnerPlacement;
 use App\Support\StudentRosterSync;
 use App\Support\UploadReadFailure;
+use App\Support\WorkingSchoolYear;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
@@ -71,7 +73,15 @@ class ConsentFormScanController extends Controller
             // sheet can be checked against them. Optional: without it the
             // draft is returned unchecked.
             'lrn' => ['nullable', 'string', 'max:32'],
+            // The school year the page is filing the form under, so a sheet
+            // dated in another one is named. Only ever raises a warning; the
+            // current year when the page does not say.
+            'school_year' => ['nullable', 'string', 'regex:/^\d{4}-\d{4}$/'],
         ]);
+
+        $schoolYear = WorkingSchoolYear::isSchoolYear((string) ($validated['school_year'] ?? ''))
+            ? (string) $validated['school_year']
+            : ParentalConsentForm::currentSchoolYear();
 
         $closeups = array_values($validated['closeups'] ?? []);
 
@@ -105,6 +115,10 @@ class ConsentFormScanController extends Controller
             $draft = ConsentFormScanner::checkLearner($draft, $learner['first_name'], $learner['last_name'], $learner['name']);
         }
 
+        // A sheet dated in another school year is named for the adviser to ask
+        // for a current one; the answer is still theirs to file.
+        $draft = ConsentFormScanner::checkSchoolYear($draft, $schoolYear);
+
         // The photograph carried a named child's health decisions past a
         // third-party model, so the read is recorded even though nothing was
         // written. The draft itself is not logged — it is not a record yet.
@@ -114,7 +128,8 @@ class ConsentFormScanController extends Controller
             null,
             'Scanned a photographed consent form to pre-fill the consent form'
                 .($draft['unreadable'] ? ' (unreadable)' : '')
-                .(($draft['learner_mismatch'] ?? false) ? ' (the name on the sheet is another learner\'s)' : ''),
+                .(($draft['learner_mismatch'] ?? false) ? ' (the name on the sheet is another learner\'s)' : '')
+                .(($draft['date_outside_school_year'] ?? false) ? ' (dated outside S.Y. '.$schoolYear.')' : ''),
         );
 
         $copy = ConsentPaperCopy::fromDraft($draft, $learner['grade'] ?? null);

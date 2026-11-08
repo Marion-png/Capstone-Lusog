@@ -229,7 +229,27 @@ final class SchoolHeadOverview
             ->values()
             ->all();
 
-        return in_array($current, $years, true) ? $years : array_merge([$current], $years);
+        if (! in_array($current, $years, true)) {
+            $years[] = $current;
+            rsort($years);
+        }
+
+        return $years;
+    }
+
+    /**
+     * The year a tab opens on when none is asked for: the current school
+     * year, never the newest one on record. A row filed under a year that has
+     * not started yet (the school-year testing aid can write one) is still on
+     * the list to choose, but it must not become what every reader sees first.
+     *
+     * @param  list<string>  $years  schoolYears(), which always holds the current year
+     */
+    public static function defaultYear(array $years): string
+    {
+        $current = StudentHealthRecord::currentSchoolYear();
+
+        return in_array($current, $years, true) ? $current : ($years[0] ?? $current);
     }
 
     /**

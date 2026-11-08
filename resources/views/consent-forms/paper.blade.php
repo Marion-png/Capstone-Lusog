@@ -286,6 +286,8 @@
             body.append('photo', file);
             // Whose form this is, so a classmate's sheet is caught.
             body.append('lrn', @json((string) $form->student_lrn));
+            // And the year it is for, so a sheet dated in another is named.
+            body.append('school_year', @json((string) $form->school_year));
 
             try {
                 const ask = async (turn) => {

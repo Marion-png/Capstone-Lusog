@@ -88,7 +88,9 @@
 					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></div>
 				</div>
 				<div class="kpi-value">{{ number_format($clinic['notes']) }}</div>
-				<div class="kpi-hint">{{ number_format($clinic['today']) }} {{ \Illuminate\Support\Str::plural('consultation', $clinic['today']) }} today</div>
+				{{-- The figure is the year's clinic notes, so its line says so;
+				     it used to print today's consultations under it. --}}
+				<div class="kpi-hint">Written in S.Y. {{ $schoolYear }}</div>
 			</article>
 		</section>
 

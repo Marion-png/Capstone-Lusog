@@ -68,7 +68,7 @@ class SchoolHeadReportsController extends Controller
 
         $schoolYear = trim((string) $request->query('school_year', ''));
         if (! in_array($schoolYear, $years, true)) {
-            $schoolYear = $years[0] ?? StudentHealthRecord::currentSchoolYear();
+            $schoolYear = SchoolHeadOverview::defaultYear($years);
         }
 
         $overview = SchoolHeadOverview::for($institutionId, $schoolYear);
@@ -115,7 +115,7 @@ class SchoolHeadReportsController extends Controller
 
         $schoolYear = trim((string) $request->query('school_year', ''));
         if (! in_array($schoolYear, $years, true)) {
-            $schoolYear = $years[0] ?? StudentHealthRecord::currentSchoolYear();
+            $schoolYear = SchoolHeadOverview::defaultYear($years);
         }
 
         $overview = SchoolHeadOverview::for($institutionId, $schoolYear);
@@ -257,7 +257,7 @@ class SchoolHeadReportsController extends Controller
 
         $schoolYear = trim((string) $request->query('school_year', ''));
         if (! in_array($schoolYear, $years, true)) {
-            $schoolYear = $years[0] ?? StudentHealthRecord::currentSchoolYear();
+            $schoolYear = SchoolHeadOverview::defaultYear($years);
         }
 
         $overview = SchoolHeadOverview::for($institutionId, $schoolYear);

@@ -53,6 +53,26 @@ class BmiForAgeClassificationTest extends TestCase
         $this->assertSame(BmiClassifier::NORMAL, BmiClassifier::bmiForAge(16.4, 14 * 12 + 7, 'Male'));
     }
 
+    /**
+     * The tester's report of 8 November 2026, all four learners as entered on
+     * Enroll Student and read on that day: 16.4 Normal, 15.22 Wasted, 23.7
+     * Overweight, and 18.1 Normal with height-for-age Stunted.
+     */
+    #[Test]
+    public function the_testers_four_learners_read_as_who_reads_them(): void
+    {
+        $on = '2026-11-08';
+        $age = fn (int $y, int $m, int $d): float => BmiClassifier::ageAtMeasurement(
+            ['birth_year' => $y, 'birth_month' => $m, 'birth_day' => $d], $on
+        );
+
+        $this->assertSame(BmiClassifier::NORMAL, BmiClassifier::bmiForAge(16.45, $age(2012, 3, 14), 'Male'));
+        $this->assertSame(BmiClassifier::WASTED, BmiClassifier::bmiForAge(15.22, $age(2011, 5, 9), 'Male'));
+        $this->assertSame(BmiClassifier::OVERWEIGHT, BmiClassifier::bmiForAge(23.74, $age(2014, 1, 20), 'Female'));
+        $this->assertSame(BmiClassifier::NORMAL, BmiClassifier::bmiForAge(18.07, $age(2012, 9, 5), 'Male'));
+        $this->assertSame(BmiClassifier::STUNTED, BmiClassifier::heightForAge(145.0, $age(2012, 9, 5), 'Male'));
+    }
+
     /** Andrea: 13 years 2 months, BMI 18.7 — Normal on either sex's table, as before. */
     #[Test]
     public function the_testers_third_learner_stays_normal(): void

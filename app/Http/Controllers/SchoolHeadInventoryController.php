@@ -92,7 +92,7 @@ class SchoolHeadInventoryController extends Controller
 
         $schoolYear = trim((string) $request->query('school_year', ''));
         if (! in_array($schoolYear, $years, true)) {
-            $schoolYear = $years[0] ?? StudentHealthRecord::currentSchoolYear();
+            $schoolYear = SchoolHeadOverview::defaultYear($years);
         }
 
         // The inventory is not a per-learner reading, so it needs no roster

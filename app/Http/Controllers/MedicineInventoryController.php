@@ -25,7 +25,9 @@ class MedicineInventoryController extends Controller
             return $redirect;
         }
 
-        return view('dashboard.medicine-create');
+        return view('dashboard.medicine-create', [
+            'stockedNames' => $this->stockedNames($request->session()->get('active_institution_id')),
+        ]);
     }
 
     public function index(Request $request): View|RedirectResponse
@@ -62,44 +64,17 @@ class MedicineInventoryController extends Controller
             && $shelf['next']['expiry'] !== null
             && $shelf['next']['expiry']->lte($warnBy))->count();
 
-        $forecastMedicine = $this->resolveForecastMedicine($medicines);
-        $forecastUnit = $forecastMedicine?->unit ?? 'doses';
-        $forecastStock = (int) ($forecastMedicine?->stock_quantity ?? 0);
-        $minimumThreshold = (int) ($forecastMedicine?->minimum_threshold ?? 20);
-
-        // Real consumption, read from the dispensing log. This used to be a
-        // generator that invented six months of "seasonal" figures from a
-        // hash of the medicine's name — a reorder quantity computed from
-        // numbers nobody dispensed is worse than none, because it looks
-        // like evidence. See App\Support\MedicineUsage.
-        $monthlyUsage = $forecastMedicine
-            ? MedicineUsage::monthlyFor((int) $forecastMedicine->id, $institutionId)
-            : [];
-
-        $usageSummary = $forecastMedicine
-            ? MedicineUsage::summaryFor((int) $forecastMedicine->id, $institutionId)
-            : ['this_month' => 0, 'average' => 0.0, 'total' => 0, 'months_of_history' => 0];
-
-        // No dispensing on record means no rate, and no rate means no
-        // recommendation. A target invented from an empty log would be the
-        // same mistake in a different shape.
-        $hasHistory = $usageSummary['months_of_history'] > 0;
-
-        $recent = collect($monthlyUsage)->slice(-3)->pluck('used');
-        $recentAverage = $recent->isEmpty() ? 0.0 : (float) $recent->avg();
-
-        // A 20% safety buffer on the recent rate, floored at the clinic's
-        // own reorder line so a quiet month cannot recommend running dry.
-        $recommendedForNextMonth = $hasHistory
-            ? max($minimumThreshold, (int) ceil($recentAverage * 1.2))
-            : 0;
-        $recommendedOrder = max(0, $recommendedForNextMonth - $forecastStock);
-
-        $peak = collect($monthlyUsage)->sortByDesc('used')->first();
-        $maxUsage = (int) ($peak['used'] ?? 0);
+        // The panel reads one item at a time: the one the reader picked, else
+        // the one nearest to running out.
+        $forecastMedicine = $this->resolveForecastMedicine($medicines, $request->query('forecast'));
 
         return view('dashboard.medicine-inventory', [
             'medicines' => $medicines,
+            // Read off the list already fetched: no second query.
+            'stockedNames' => $medicines
+                ->map(fn (Medicine $medicine): string => MedicineCatalogue::comparableName((string) $medicine->name))
+                ->values()
+                ->all(),
             'stats' => [
                 'total' => $medicines->count(),
                 'low' => $lowStockCount,
@@ -122,30 +97,124 @@ class MedicineInventoryController extends Controller
                 $m->id => MedicineUsage::summaryFor((int) $m->id, $institutionId),
             ]),
             'usage_months' => MedicineUsage::MONTHS,
-            'prediction' => [
-                'medicine_name' => $forecastMedicine?->name ?? 'Paracetamol',
-                'has_history' => $hasHistory,
-                'peak_month' => $peak['label'] ?? null,
-                'average' => $usageSummary['average'],
-                'this_month' => $usageSummary['this_month'],
-                'months_of_cover' => $forecastMedicine
-                    ? MedicineUsage::monthsOfCover($forecastMedicine, $institutionId)
-                    : null,
-                'unit' => $forecastUnit,
-                'current_stock' => $forecastStock,
-                'next_month' => now()->addMonth()->format('F'),
-                'recommended_doses' => $recommendedForNextMonth,
-                'recommended_order' => $recommendedOrder,
-                'monthly_usage' => $monthlyUsage,
-                'max_usage' => $maxUsage,
-            ],
+            'prediction' => $this->forecast($forecastMedicine, $institutionId),
         ]);
     }
 
-    private function resolveForecastMedicine($medicines): ?Medicine
+    /**
+     * The reorder forecast for one item.
+     *
+     * With dispensing on record the target is the recent rate plus a 20%
+     * safety buffer, never below the item's own reorder line. With none there
+     * is no rate to forecast from, but there is still a reorder line: an item
+     * below it needs at least the difference, and the panel says so rather
+     * than printing an em dash beside a Low Stock badge.
+     *
+     * @return array<string, mixed>
+     */
+    private function forecast(?Medicine $medicine, mixed $institutionId): array
+    {
+        $stock = (int) ($medicine?->stock_quantity ?? 0);
+        $minimumThreshold = (int) ($medicine?->minimum_threshold ?? 0);
+
+        // Real consumption, read from the dispensing log. This used to be a
+        // generator that invented six months of "seasonal" figures from a
+        // hash of the medicine's name — a reorder quantity computed from
+        // numbers nobody dispensed is worse than none, because it looks
+        // like evidence. See App\Support\MedicineUsage.
+        $monthlyUsage = $medicine
+            ? MedicineUsage::monthlyFor((int) $medicine->id, $institutionId)
+            : [];
+
+        $usageSummary = $medicine
+            ? MedicineUsage::summaryFor((int) $medicine->id, $institutionId)
+            : ['this_month' => 0, 'average' => 0.0, 'total' => 0, 'months_of_history' => 0];
+
+        // No dispensing on record means no rate. A target invented from an
+        // empty log would be the same mistake in a different shape, so the
+        // only target without history is the reorder line itself.
+        $hasHistory = $usageSummary['months_of_history'] > 0;
+
+        $recent = collect($monthlyUsage)->slice(-3)->pluck('used');
+        $recentAverage = $recent->isEmpty() ? 0.0 : (float) $recent->avg();
+
+        $target = $hasHistory
+            ? max($minimumThreshold, (int) ceil($recentAverage * 1.2))
+            : $minimumThreshold;
+
+        $peak = collect($monthlyUsage)->sortByDesc('used')->first();
+
+        return [
+            'medicine_id' => $medicine?->id,
+            'medicine_name' => $medicine?->name ?? 'Paracetamol',
+            'has_history' => $hasHistory,
+            'peak_month' => $peak['label'] ?? null,
+            'average' => $usageSummary['average'],
+            'this_month' => $usageSummary['this_month'],
+            'months_of_cover' => $medicine
+                ? MedicineUsage::monthsOfCover($medicine, $institutionId)
+                : null,
+            'unit' => $medicine?->unit ?? 'doses',
+            'current_stock' => $stock,
+            'minimum_threshold' => $minimumThreshold,
+            'next_month' => SchoolClock::now()->addMonthNoOverflow()->format('F'),
+            'recommended_doses' => $target,
+            'recommended_order' => max(0, $target - $stock),
+            'monthly_usage' => $monthlyUsage,
+            'max_usage' => (int) ($peak['used'] ?? 0),
+        ];
+    }
+
+    /**
+     * The item this school already stocks under a name, compared without
+     * regard to case, spacing or punctuation — or null.
+     */
+    private function stockedAs(mixed $institutionId, string $name): ?Medicine
+    {
+        $wanted = MedicineCatalogue::comparableName($name);
+        if ($wanted === '') {
+            return null;
+        }
+
+        return Medicine::query()
+            ->when($institutionId, fn ($query) => $query->where('institution_id', $institutionId))
+            ->get(['id', 'name'])
+            ->first(fn (Medicine $medicine): bool => MedicineCatalogue::comparableName((string) $medicine->name) === $wanted);
+    }
+
+    /**
+     * The names this school already stocks, as the Add Medicine form compares
+     * them, so a catalogue item already on the shelf is not offered again.
+     *
+     * @return list<string>
+     */
+    private function stockedNames(mixed $institutionId): array
+    {
+        return Medicine::query()
+            ->when($institutionId, fn ($query) => $query->where('institution_id', $institutionId))
+            ->pluck('name')
+            ->map(fn ($name): string => MedicineCatalogue::comparableName((string) $name))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The item the forecast panel reads: the one asked for, if it is on this
+     * school's list, else the one nearest to running out against its own
+     * reorder line.
+     */
+    private function resolveForecastMedicine($medicines, mixed $requested = null): ?Medicine
     {
         if ($medicines->isEmpty()) {
             return null;
+        }
+
+        if (is_scalar($requested) && ctype_digit((string) $requested)) {
+            $chosen = $medicines->firstWhere('id', (int) $requested);
+
+            if ($chosen !== null) {
+                return $chosen;
+            }
         }
 
         return $medicines
@@ -172,8 +241,30 @@ class MedicineInventoryController extends Controller
 
         $request->merge(['name' => $resolved['name']]);
 
+        // An item this school already stocks is added to through Receive
+        // Stock, never created twice: two rows for one medicine split its
+        // stock, its usage and its forecast in half. Compared without regard to
+        // case, spacing or punctuation, so a retyped name is caught too.
+        $institutionId = $request->session()->get('active_institution_id');
+        $existing = $this->stockedAs($institutionId, $resolved['name']);
+
+        if ($existing !== null) {
+            $request->session()->flash('duplicate_medicine_id', $existing->id);
+        }
+
+        // A supply is not a drug, so there is no generic name to ask RxNorm for.
+        $isSupply = MedicineCatalogue::isSupply($resolved['name']);
+
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255', 'unique:medicines,name'],
+            'name' => [
+                'bail', 'required', 'string', 'max:255',
+                function (string $attribute, mixed $value, \Closure $fail) use ($existing): void {
+                    if ($existing !== null) {
+                        $fail($existing->name.' is already in the inventory. Use Receive Stock to add to it.');
+                    }
+                },
+                'unique:medicines,name',
+            ],
             // A reason is required only when the medicine is off the list.
             // Refusing an off-list entry outright would not stop the practice,
             // it would only stop the stock record being true.
@@ -189,25 +280,25 @@ class MedicineInventoryController extends Controller
             'expiry_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:255'],
             // What RxNorm is asked for (App\Support\RxNormService): the
-            // generic, since a brand name is not in it.
-            ...(RxNormService::supported() ? ['generic_name' => RxNormService::nameRules()] : []),
+            // generic, since a brand name is not in it. A supply has none.
+            ...(RxNormService::supported() && ! $isSupply ? ['generic_name' => RxNormService::nameRules()] : []),
         ]);
 
         if (! Medicine::supportsExpiry()) {
             unset($validated['expiry_date']);
         }
 
-        $genericName = trim((string) ($validated['generic_name'] ?? ''));
+        $genericName = $isSupply ? '' : trim((string) ($validated['generic_name'] ?? ''));
         unset($validated['generic_name']);
 
         // The stock an item is created with is its first lot, at the date
         // typed for it, so the shelf can say which box goes first from the
         // first dispense on.
-        $medicine = DB::transaction(function () use ($validated, $resolved, $request): Medicine {
+        $medicine = DB::transaction(function () use ($validated, $resolved, $institutionId): Medicine {
             $medicine = Medicine::create([
                 ...$validated,
                 'off_catalogue' => $resolved['off_catalogue'],
-                'institution_id' => $request->session()->get('active_institution_id'),
+                'institution_id' => $institutionId,
             ]);
 
             if (MedicineBatches::supported()) {
@@ -249,6 +340,12 @@ class MedicineInventoryController extends Controller
             return redirect()
                 ->route('dashboard.medicine-inventory')
                 ->with('error', 'The allergy check is not available until the database has been updated.');
+        }
+
+        if (MedicineCatalogue::isSupply((string) $medicine->name)) {
+            return redirect()
+                ->route('dashboard.medicine-inventory')
+                ->with('error', $medicine->name.' is a supply, not a medicine, so it has no generic name to check.');
         }
 
         $validated = $request->validateWithBag('rxnorm', [

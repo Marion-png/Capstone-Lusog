@@ -82,6 +82,46 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Supplies
+    |--------------------------------------------------------------------------
+    |
+    | Items on the list that are not medicines. RxNorm names drugs, so a
+    | supply has no generic name to look up and its allergy-check status reads
+    | "Not applicable". An item typed outside the list is treated as a supply
+    | when its name says so (App\Support\MedicineCatalogue::isSupply).
+    |
+    */
+
+    'supplies' => [
+        'Sterile gauze pad',
+        'Adhesive bandage',
+        'Elastic bandage',
+        'Cotton balls',
+        'Micropore tape',
+        'Oral thermometer probe cover',
+        'Disposable gloves',
+        'Face mask',
+        'Ice pack',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Generic names
+    |--------------------------------------------------------------------------
+    |
+    | The generic RxNorm is asked for, where the list's own name does not say
+    | it. Every other item is looked up by its name without the strength or
+    | form ("Paracetamol 500mg tablet" → "Paracetamol"), and the nurse can
+    | always type their own.
+    |
+    */
+
+    'generic_names' => [
+        'Antifungal cream' => 'Clotrimazole',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Medicines outside the list
     |--------------------------------------------------------------------------
     |

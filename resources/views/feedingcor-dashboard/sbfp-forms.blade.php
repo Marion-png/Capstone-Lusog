@@ -3,7 +3,8 @@
 	One page, three readers. The Feeding Coordinator reads it as their
 	Nutritional Health Status Report tab; the School Nurse and the Clinic Teacher
 	read it as Forms & Templates, each in their own rail, with every form but the
-	narrative report and with the class advisers' blank Class Masterlist added.
+	narrative report. (The class advisers' blank Class Masterlist used to be
+	offered here too; it is the adviser's form alone.)
 	Same controller, same reading — never a second copy that could print
 	different figures.
 --}}
@@ -67,7 +68,7 @@
 		<div class="page-header">
 			@if ($forClinic)
 				<h1 class="page-title">Forms &amp; <span>Templates</span></h1>
-				<p class="page-sub">The Feeding Coordinator's SBFP forms and the class advisers' Class Masterlist, filled from the same records. Select a template to view, print or download it.</p>
+				<p class="page-sub">The Feeding Coordinator's SBFP forms, filled from the same records. Select a template to view or print it.</p>
 			@else
 				<h1 class="page-title">Nutritional Health Status <span>Report</span></h1>
 				<p class="page-sub">Select a form template, then encode the required fields in a clean sheet view.</p>
@@ -97,16 +98,12 @@
 						</optgroup>
 						{{-- The narrative report is the coordinator's own account of
 						     the programme, so the clinic's copy of this page leaves it
-						     out; the clinic gets the advisers' class masterlist instead. --}}
-						@if ($forClinic)
-							<optgroup label="Class Adviser (blank template)">
-								<option value="class-masterlist">Class Masterlist</option>
-							</optgroup>
-						@else
+						     out. --}}
+						@unless ($forClinic)
 							<optgroup label="Feeding Program (hand-encoded)">
 								<option value="feeding-narrative">Feeding Program - Narrative Report</option>
 							</optgroup>
-						@endif
+						@endunless
 					</select>
 				</div>
 				<div id="reportPhaseField">
@@ -315,14 +312,6 @@
 			</div>
 		</section>
 		@endunless
-
-		@if ($forClinic && $classMasterlist !== null)
-			@include('feedingcor-dashboard.partials.class-masterlist-sheet', [
-				'rows' => $classMasterlistRows,
-				'widths' => $classMasterlist['widths'],
-				'downloadUrl' => route($clinicFormsRoute.'.class-masterlist'),
-			])
-		@endif
 
 		{{-- The Masterlist of Qualified Recipients names a learner only once the
 		     Feeding Coordinator has enrolled them, on the Dashboard or the
@@ -710,14 +699,6 @@
 			}
 		});
 
-		// The class masterlist is a blank form an adviser fills in for their own
-		// class, so the roster's grade and section have nothing to narrow on it.
-		[gradeLevelField, sectionField].forEach((field) => {
-			if (field) {
-				field.style.display = selected === 'class-masterlist' ? 'none' : '';
-			}
-		});
-
 		if (printPageStyle) {
 			const orientation = landscapeTemplates.includes(selected) ? 'landscape' : 'portrait';
 			printPageStyle.textContent = `@page{size:A4 ${orientation};margin:10mm}`;
@@ -869,8 +850,7 @@
 
 	// BMI Baseline / Final reports are tabulated server-side and rendered
 	// read-only, so there is no client-side compute or draft here — only print.
-	// The nurse's blank class masterlist is the same: nothing to save, only print.
-	['printBmiBaselineBtn', 'printBmiFinalBtn', 'printClassMasterlistBtn'].forEach((id) => {
+	['printBmiBaselineBtn', 'printBmiFinalBtn'].forEach((id) => {
 		const btn = document.getElementById(id);
 		if (btn) {
 			btn.addEventListener('click', () => window.print());

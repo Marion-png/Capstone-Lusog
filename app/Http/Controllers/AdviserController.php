@@ -10,6 +10,7 @@ use App\Support\ClassMasterlistTemplate;
 use App\Support\ClassMasterlistWorkbook;
 use App\Support\LearnerPlacement;
 use App\Support\MasterlistSheetScanner;
+use App\Support\MeasurementPlausibility;
 use App\Support\MedicineAllergies;
 use App\Support\PostureGait;
 use App\Support\SchemaCache;
@@ -26,6 +27,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Throwable;
@@ -105,6 +107,13 @@ class AdviserController extends Controller
         $request->merge($this->normaliseEnrolmentInput($request->all()));
 
         $validated = $request->validate($this->enrolmentRules());
+
+        // A height and weight no learner of this age and sex could have is a
+        // typing slip, and it would be classified, counted and fed on.
+        if ($problems = $this->implausibleMeasurements($validated)) {
+            throw ValidationException::withMessages($problems);
+        }
+
         $this->applyAssignedClass($request, $validated);
 
         $existingRecord = $this->existingRecordFor($request, (string) $validated['lrn']);
@@ -375,6 +384,14 @@ class AdviserController extends Controller
             $validator = Validator::make($input, $this->importRules());
             if ($validator->fails()) {
                 $entries[] = $this->previewEntry($line, $lrn, $listName, LearnerPlacement::REJECTED, $validator->errors()->first());
+
+                continue;
+            }
+
+            // A sheet that does give a height and a weight is held to the same
+            // limits as the form.
+            if ($problems = $this->implausibleMeasurements($validator->validated())) {
+                $entries[] = $this->previewEntry($line, $lrn, $listName, LearnerPlacement::REJECTED, reset($problems));
 
                 continue;
             }
@@ -1038,8 +1055,8 @@ class AdviserController extends Controller
             return back()->with('error', 'The spreadsheet library is not installed on this server, so the template cannot be downloaded.');
         }
 
-        // The school nurse downloads the same form from their Forms &
-        // Templates page; forSession() heads it for whoever is reading.
+        // Headed with the session's own class (forSession()). It is the class
+        // adviser's form; the clinic's forms page no longer offers it.
         $template = ClassMasterlistTemplate::forSession($request->session());
 
         return response()
@@ -1557,6 +1574,27 @@ class AdviserController extends Controller
      * nobody has taken this reading. Casting them to 0.0 is what turns "not
      * measured" into a number the rest of the app will happily classify.
      */
+    /**
+     * The measurements a form or a sheet row gives, held against WHO's limits
+     * for the learner's age and sex on the day (MeasurementPlausibility).
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<string, string>
+     */
+    private function implausibleMeasurements(array $validated): array
+    {
+        return MeasurementPlausibility::problems(
+            $this->measurementOrNull($validated['height_cm'] ?? null),
+            $this->measurementOrNull($validated['weight_kg'] ?? null),
+            BmiClassifier::ageAtMeasurement([
+                'birth_year' => $validated['birth_year'] ?? null,
+                'birth_month' => $validated['birth_month'] ?? null,
+                'birth_day' => $validated['birth_day'] ?? null,
+            ], SchoolClock::today()),
+            isset($validated['gender']) ? (string) $validated['gender'] : null,
+        );
+    }
+
     private function measurementOrNull(mixed $value): ?float
     {
         if ($value === null || $value === '' || ! is_numeric($value)) {

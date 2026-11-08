@@ -2131,4 +2131,155 @@ class ConsentFormScanTest extends TestCase
         $this->assertNull(ConsentPaperCopy::fromDraft(ConsentFormScanner::interpret($this->draft([], ['unreadable' => true]))));
         $this->assertNotNull(ConsentPaperCopy::fromDraft(ConsentFormScanner::interpret($this->draft())));
     }
+
+    // ── The date on the sheet (testers' report #31) ─────────────────────
+
+    /** The PETSA line is read as words and, where certain, as a date. */
+    #[Test]
+    public function the_petsa_is_read_and_only_its_certain_parts_are_kept(): void
+    {
+        $read = fn (array $date): array => ConsentFormScanner::interpret($this->draft([], ['form_date' => $date]))['form_date'];
+
+        $this->assertSame(
+            ['text' => 'October 27, 2024', 'year' => 2024, 'month' => 10, 'day' => 27, 'readable' => true],
+            $read(['text' => 'October 27, 2024', 'year' => 2024, 'month' => 10, 'day' => 27, 'readable' => true])
+        );
+
+        // A part the reader could not be sure of is 0, and stays unknown.
+        $this->assertSame([2024, null, null], array_values(array_intersect_key(
+            $read(['text' => '05/06/2024', 'year' => 2024, 'month' => 0, 'day' => 0, 'readable' => true]),
+            array_flip(['year', 'month', 'day'])
+        )));
+
+        // A part no calendar has is dropped, never kept.
+        $this->assertNull($read(['text' => '', 'year' => 2024, 'month' => 13, 'day' => 1, 'readable' => true])['month']);
+        $this->assertNull($read(['text' => '', 'year' => 2025, 'month' => 2, 'day' => 30, 'readable' => true])['day']);
+        $this->assertNull($read(['text' => '', 'year' => 24, 'month' => 2, 'day' => 3, 'readable' => true])['year']);
+
+        // A reader that gave only the words is read from them, Cebuano months included.
+        $words = $read(['text' => 'Oktubre 27, 2024']);
+        $this->assertSame([2024, 10], [$words['year'], $words['month']]);
+
+        // An unreadable date, or none, is no date.
+        $this->assertFalse($read(['text' => '', 'year' => 0, 'month' => 0, 'day' => 0, 'readable' => false])['readable']);
+        $this->assertNull(ConsentFormScanner::interpret($this->draft())['form_date']['year']);
+    }
+
+    /**
+     * Whether a date falls in the school year a form is filed under: June to
+     * May, and a year read without its month only when no month could save it.
+     *
+     * @return array<string, array{0: array<string, mixed>, 1: string, 2: bool}>
+     */
+    public static function datesAndSchoolYears(): array
+    {
+        $date = fn (int $year, int $month = 0, int $day = 0): array => [
+            'text' => '', 'year' => $year, 'month' => $month, 'day' => $day, 'readable' => true,
+        ];
+
+        return [
+            'the testers\' sheet: 27 October 2024 under 2027-2028' => [$date(2024, 10, 27), '2027-2028', true],
+            'October of the same school year' => [$date(2027, 10, 27), '2027-2028', false],
+            'June, the first month of it' => [$date(2027, 6, 1), '2027-2028', false],
+            'May, the last month of it' => [$date(2028, 5, 31), '2027-2028', false],
+            'May before it began' => [$date(2027, 5, 31), '2027-2028', true],
+            'June after it ended' => [$date(2028, 6, 1), '2027-2028', true],
+            'a year far off, month unknown' => [$date(2024), '2027-2028', true],
+            'a year that could be either half' => [$date(2028), '2027-2028', false],
+            'no date at all' => [['text' => '', 'year' => null, 'month' => null, 'day' => null, 'readable' => true], '2027-2028', false],
+        ];
+    }
+
+    /** @param  array<string, mixed>  $formDate */
+    #[Test]
+    #[DataProvider('datesAndSchoolYears')]
+    public function a_sheet_dated_in_another_school_year_is_named(array $formDate, string $schoolYear, bool $outside): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([], ['form_date' => $formDate]));
+        $checked = ConsentFormScanner::checkSchoolYear($draft, $schoolYear);
+
+        $this->assertSame($outside, $checked['date_outside_school_year']);
+
+        if ($outside) {
+            $this->assertStringStartsWith(ConsentFormScanner::DATE_OUTSIDE_SCHOOL_YEAR, $checked['date_warning']);
+            $this->assertTrue($checked['needs_review']);
+        } else {
+            $this->assertSame('', $checked['date_warning']);
+        }
+
+        // It decides nothing about the answer on the sheet.
+        $this->assertSame($draft['consent_choice'], $checked['consent_choice']);
+        $this->assertSame($draft['services'], $checked['services']);
+    }
+
+    /** The upload dialog's reading leads with it, and says what the PETSA reads. */
+    #[Test]
+    public function the_reading_says_the_form_is_dated_outside_the_school_year(): void
+    {
+        $this->learner('130000000001', 'Juan', 'Dela Cruz');
+        $this->fakeGemini($this->draft(['checkup' => ConsentFormScanner::TICKED], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'form_date' => ['text' => 'October 27, 2024', 'year' => 2024, 'month' => 10, 'day' => 27, 'readable' => true],
+        ]));
+
+        $response = $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg(), 'lrn' => '130000000001', 'school_year' => '2027-2028'], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $this->assertTrue($response->json('draft.date_outside_school_year'));
+        $this->assertSame(
+            'This form is dated outside the selected school year. The PETSA reads "October 27, 2024", and this form is being filed for S.Y. 2027–2028. Ask the parent for a current form.',
+            $response->json('draft.date_warning')
+        );
+        $this->assertSame('Date (PETSA)', $response->json('summary.checks.0.subject'));
+        $this->assertFalse($response->json('summary.complete'));
+        // The answer is still read and proposed: the adviser decides.
+        $this->assertSame(HealthConsentForm::CONSENT_ALL, $response->json('draft.consent_choice'));
+
+        $this->assertTrue(AuditLog::query()->where('action', 'scanned')->latest('id')->first()
+            ->description !== null);
+    }
+
+    /** @return array<string, array{0: int, 1: bool}> */
+    public static function yearsAgainstTheCurrentOne(): array
+    {
+        return [
+            'dated two school years back' => [2024, true],
+            'dated this school year' => [2026, false],
+        ];
+    }
+
+    /** With no year sent, the form is held to the year an upload is filed under. */
+    #[Test]
+    #[DataProvider('yearsAgainstTheCurrentOne')]
+    public function without_a_year_the_current_one_is_used(int $year, bool $outside): void
+    {
+        $this->travelTo(now()->setDate(2026, 11, 9)->setTime(10, 0));
+        $this->learner('130000000001', 'Juan', 'Dela Cruz');
+
+        $this->fakeGemini($this->draft([], [
+            'form_date' => ['text' => 'October 27, '.$year, 'year' => $year, 'month' => 10, 'day' => 27, 'readable' => true],
+        ]));
+
+        $this->assertSame($outside, $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg(), 'lrn' => '130000000001'], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->json('draft.date_outside_school_year'));
+    }
+
+    /** Both pages that read a sheet say which year they are filing it under. */
+    #[Test]
+    public function both_reading_pages_send_their_school_year(): void
+    {
+        $this->learner('130000000001', 'Juan', 'Dela Cruz');
+
+        $page = $this->withSession($this->adviserSession())->get(route('consent-forms.index'))->assertOk()->getContent();
+        $this->assertStringContainsString("body.append('school_year', ".json_encode(HealthConsentForm::currentSchoolYear()).')', $page);
+        $this->assertStringContainsString('id="pcConfirmDateRow"', $page);
+
+        $this->assertStringContainsString(
+            "body.append('school_year', @json((string) \$form->school_year));",
+            (string) file_get_contents(resource_path('views/consent-forms/paper.blade.php'))
+        );
+    }
 }

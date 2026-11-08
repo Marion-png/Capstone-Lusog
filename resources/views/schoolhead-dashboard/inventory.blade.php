@@ -64,11 +64,14 @@
 		<section class="kpi-grid">
 			<article class="card kpi accent-brand">
 				<div class="kpi-top">
-					<div class="kpi-label">Medicines in Stock</div>
+					{{-- Good and approaching-the-line items: everything above its
+					     own reorder level. "In stock" read as "not out of stock",
+					     which a Low Stock item also is. --}}
+					<div class="kpi-label">Above Reorder Level</div>
 					<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg></div>
 				</div>
 				<div class="kpi-value">{{ number_format($inventory['good'] + $inventory['monitor']) }}</div>
-				<div class="kpi-hint">{{ number_format($inventory['tracked']) }} tracked</div>
+				<div class="kpi-hint">of {{ number_format($inventory['tracked']) }} tracked</div>
 			</article>
 			<article class="card kpi accent-orange">
 				<div class="kpi-top">

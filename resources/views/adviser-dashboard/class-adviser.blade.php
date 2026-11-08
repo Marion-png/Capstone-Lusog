@@ -1551,6 +1551,16 @@ window.switchAdviserTab = (targetId) => {
         return window.WhoGrowth.ageInMonths(new Date(parts[0], parts[1] - 1, parts[2]));
     };
 
+    // A height and weight no learner of this age and sex could have holds the
+    // form back with the server's own message (MeasurementPlausibility), and
+    // no status is previewed for it.
+    const flagImplausible = (heightCm, weightKg, age, gender) => {
+        const found = window.WhoGrowth.problems(heightCm, weightKg, age, gender);
+        heightInput.setCustomValidity(found.height);
+        weightInput.setCustomValidity(found.weight);
+        return found;
+    };
+
     const recalc = () => {
         const heightM = toNum(heightInput.value);
         const weightKg = toNum(weightInput.value);
@@ -1558,11 +1568,13 @@ window.switchAdviserTab = (targetId) => {
         const gender = genderInput ? genderInput.value : '';
 
         if (!heightM || !weightKg || heightM <= 0 || weightKg <= 0 || heightM > 2.5) {
+            const heightOnly = heightM && heightM > 0 && heightM <= 2.5 ? heightM * 100 : null;
+            const found = flagImplausible(heightOnly, null, age, gender);
             heightCmHidden.value = '';
             heightSquaredOut.textContent = '-';
             bmiOut.textContent = '-';
             bmiAgeOut.textContent = window.WhoGrowth.bmiForAge(null, age, gender);
-            hfaOut.textContent = window.WhoGrowth.heightForAge(heightM && heightM <= 2.5 ? heightM * 100 : null, age, gender);
+            hfaOut.textContent = found.height ? '-' : window.WhoGrowth.heightForAge(heightOnly, age, gender);
             return;
         }
 
@@ -1571,11 +1583,12 @@ window.switchAdviserTab = (targetId) => {
 
         const heightSquared = heightM * heightM;
         const bmi = weightKg / heightSquared;
+        const found = flagImplausible(heightCm, weightKg, age, gender);
 
         heightSquaredOut.textContent = heightSquared.toFixed(2);
         bmiOut.textContent = bmi.toFixed(2);
-        bmiAgeOut.textContent = window.WhoGrowth.bmiForAge(bmi, age, gender);
-        hfaOut.textContent = window.WhoGrowth.heightForAge(heightCm, age, gender);
+        bmiAgeOut.textContent = found.weight ? '-' : window.WhoGrowth.bmiForAge(bmi, age, gender);
+        hfaOut.textContent = found.height ? '-' : window.WhoGrowth.heightForAge(heightCm, age, gender);
     };
 
     heightInput.addEventListener('input', recalc);

@@ -550,6 +550,10 @@ tbody tr:hover td{background:#f7fbf8}
 .pcc-summary > div + div{border-top:1px solid var(--border)}
 .pcc-summary dt{font-size:.73rem;font-weight:600;color:var(--muted)}
 .pcc-summary dd{margin:0;font-size:.8rem;font-weight:600;color:var(--text);overflow-wrap:anywhere}
+/* A sheet dated in another school year: said in the danger tint, as the
+   reading's own line says it. */
+.pcc-summary > div.pcc-dated{background:var(--lg-danger-tint,#FCECEC)}
+.pcc-summary > div.pcc-dated dd{color:var(--lg-danger-ink,#A32B2B)}
 .pcc-answer{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.72rem;font-weight:700;line-height:1.4}
 .pcc-answer.is-full{background:var(--lg-mint,#E7F5EC);color:var(--lg-success-ink,#14653C)}
 .pcc-answer.is-partial{background:var(--lg-amber-tint,#FDF4E2);color:var(--lg-amber-ink,#8A5A06)}

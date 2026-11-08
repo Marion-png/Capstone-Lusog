@@ -115,7 +115,7 @@ class SchoolHeadController extends Controller
 
         $schoolYear = trim((string) $request->query('school_year', ''));
         if (! in_array($schoolYear, $years, true)) {
-            $schoolYear = $years[0] ?? StudentHealthRecord::currentSchoolYear();
+            $schoolYear = SchoolHeadOverview::defaultYear($years);
         }
 
         // The whole school first: the filter selects have to offer every grade

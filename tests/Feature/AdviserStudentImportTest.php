@@ -170,6 +170,28 @@ class AdviserStudentImportTest extends TestCase
     }
 
     /**
+     * A sheet that gives a height and a weight no learner could have is held
+     * to the form's limits (MeasurementPlausibility): that row is refused by
+     * its line, and the rest of the class is still enrolled.
+     */
+    #[Test]
+    public function a_row_with_an_impossible_measurement_is_refused_by_line(): void
+    {
+        $file = $this->csv([
+            '100000000001,Dela Cruz,Juan,,2012-06-15,Davao City,Male,Maria Dela Cruz,123 Mabini St.,09171234567,142,35.5',
+            '100000000002,Reyes,Ana,,2012-03-02,Davao City,Female,Jose Reyes,45 Rizal Ave,09181234567,187,8.8',
+        ]);
+
+        $this->import($file);
+
+        $report = session('import_report');
+        $this->assertSame(1, $report['created']);
+        $this->assertSame([3], array_column($report['errors'], 'line'));
+        $this->assertStringContainsString('not possible for this learner', $report['errors'][0]['message']);
+        $this->assertNull(StudentHealthRecord::where('student_id', '100000000002')->first());
+    }
+
+    /**
      * A learner already in the section is left as they are, and one in
      * another class is not added (the school-year handover: "Already added —
      * nothing", and an LRN active elsewhere needs checking).

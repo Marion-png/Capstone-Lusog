@@ -1162,9 +1162,6 @@ Route::get('/dashboard/school-nurse/forms', [FeedingCoordinatorController::class
 Route::get('/dashboard/school-nurse/forms/roster', [FeedingCoordinatorController::class, 'sbfpFormsRoster'])
     ->name('dashboard.school-nurse.forms.roster');
 
-Route::get('/dashboard/school-nurse/forms/class-masterlist', [AdviserController::class, 'importTemplate'])
-    ->name('dashboard.school-nurse.forms.class-masterlist');
-
 /*
  * Clinic Teacher.
  *
@@ -1226,9 +1223,6 @@ Route::get('/dashboard/clinic-teacher/forms', [FeedingCoordinatorController::cla
 
 Route::get('/dashboard/clinic-teacher/forms/roster', [FeedingCoordinatorController::class, 'sbfpFormsRoster'])
     ->name('dashboard.clinic-teacher.forms.roster');
-
-Route::get('/dashboard/clinic-teacher/forms/class-masterlist', [AdviserController::class, 'importTemplate'])
-    ->name('dashboard.clinic-teacher.forms.class-masterlist');
 
 // Every archived learner and every learner waiting for a section, read only —
 // the School Nurse's list under their path, the Clinic Teacher's under theirs.

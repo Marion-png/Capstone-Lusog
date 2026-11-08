@@ -7,7 +7,6 @@ use App\Models\StudentHealthRecord;
 use App\Support\BmiAssessmentReport;
 use App\Support\BmiReportInsight;
 use App\Support\ChangeStamp;
-use App\Support\ClassMasterlistTemplate;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingAttendanceMark;
@@ -70,16 +69,12 @@ class FeedingCoordinatorController extends Controller
         $bmiReports = $this->bmiReports($records);
         $bmiValueSets = $bmiReports['all']['values'];
 
-        // The class advisers' blank CLASS MASTERLIST, for the clinic's readers
-        // only: one model drawn on the page and written to the download, so the
-        // two are the same form.
-        $classMasterlist = $forClinic ? ClassMasterlistTemplate::forSession($request->session()) : null;
-
+        // The class advisers' blank CLASS MASTERLIST is theirs alone (it is
+        // downloaded from the adviser's own Enroll Student panel), so the
+        // clinic's copy of this page no longer offers it.
         return view('feedingcor-dashboard.sbfp-forms', [
             'forClinic' => $forClinic,
             'forClinicTeacher' => $request->session()->get('active_role') === 'clinic_teacher',
-            'classMasterlist' => $classMasterlist,
-            'classMasterlistRows' => $classMasterlist !== null ? ClassMasterlistTemplate::printRows($classMasterlist) : [],
             'studentsByGrade' => $studentsByGrade,
             'gradeOptions' => array_keys($studentsByGrade),
             'sectionsByGrade' => $sectionsByGrade,

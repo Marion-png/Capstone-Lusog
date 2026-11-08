@@ -192,11 +192,11 @@ class SchoolHeadReportExportTest extends TestCase
         $this->assertSame(2, $expected['bmib_g7_male_w']);
         $this->assertSame(1, $expected['bmib_g7_female_n']);
 
-        // Grade 7's MALE row: Severely Wasted blank, Wasted 2, total 2.
+        // Grade 7's MALE row: Severely Wasted 0, Wasted 2, total 2.
         $grade7 = array_slice($form, $this->indexOfGrid($form, 'GRADE 7 BMI'));
         $male = $this->rowStartingWith($grade7, 'MALE');
         $this->assertNotNull($male);
-        $this->assertSame('', $male[1]);           // Severely Wasted — nobody, so blank
+        $this->assertSame('0', $male[1]);          // Severely Wasted — nobody, so 0
         $this->assertSame('2', $male[2]);          // Wasted
         $this->assertSame('2', $male[6]);          // Nutritional status total
         $this->assertSame('2', $male[8]);          // Stunted

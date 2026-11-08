@@ -143,7 +143,21 @@
         <section class="card forecast-card">
             <div class="forecast-grid">
                 <div class="forecast-main">
-                    <div class="page-eyebrow">Predictive Reorder Module</div>
+                    <div class="forecast-head">
+                        <div class="page-eyebrow">Predictive Reorder Module</div>
+                        {{-- Any item's forecast, not only the one nearest to running
+                             out. A GET, so the choice survives a reload. --}}
+                        @if ($medicines->count() > 1)
+                            <form method="GET" action="{{ url()->current() }}" class="forecast-pick">
+                                <select class="select" id="forecastMedicine" name="forecast" aria-label="Medicine to forecast" onchange="this.form.submit()">
+                                    @foreach ($medicines as $forecastOption)
+                                        <option value="{{ $forecastOption->id }}" @selected($forecastOption->id === $prediction['medicine_id'])>{{ $forecastOption->name }}</option>
+                                    @endforeach
+                                </select>
+                                <noscript><button type="submit" class="btn btn-secondary btn-sm">Show</button></noscript>
+                            </form>
+                        @endif
+                    </div>
                     @if ($prediction['has_history'])
                         <h2 class="forecast-title">{{ $prediction['medicine_name'] }} is going out at about {{ $prediction['average'] }} {{ $prediction['unit'] }} a month.</h2>
                         {{-- Built as a string rather than with inline @if: a directive
@@ -165,8 +179,10 @@
                              invented from an empty log would read as evidence. --}}
                         <h2 class="forecast-title">Not enough dispensing history yet.</h2>
                         <p class="forecast-sub">
-                            No medicine has been dispensed in the last {{ $usage_months }} months, so there is no consumption rate to forecast from.
-                            Record a medicine on a consultation and this panel will fill in.
+                            {{ $prediction['medicine_name'] }} has not been dispensed in the last {{ $usage_months }} months, so there is no consumption rate to forecast from.
+                            @if ($prediction['recommended_order'] > 0)
+                                Reorder at least {{ $prediction['recommended_order'] }} {{ $prediction['unit'] }} to reach the minimum threshold.
+                            @endif
                         </p>
                     @endif
                     <div class="fc-stats">
@@ -180,11 +196,13 @@
                         </div>
                         <div class="fc-stat">
                             <div class="fc-stat-label">Target For {{ $prediction['next_month'] }}</div>
-                            <div class="fc-stat-value">{{ $prediction['has_history'] ? $prediction['recommended_doses'].' '.$prediction['unit'] : '—' }}</div>
+                            {{-- Without history the only target is the item's own
+                                 reorder line; with neither, there is nothing to say. --}}
+                            <div class="fc-stat-value">{{ $prediction['recommended_doses'] > 0 ? $prediction['recommended_doses'].' '.$prediction['unit'] : '—' }}</div>
                         </div>
                         <div class="fc-stat">
                             <div class="fc-stat-label">Recommended Order</div>
-                            <div class="fc-stat-value {{ $prediction['has_history'] && $prediction['recommended_order'] > 0 ? 'is-order' : '' }}">{{ $prediction['has_history'] ? $prediction['recommended_order'].' '.$prediction['unit'] : '—' }}</div>
+                            <div class="fc-stat-value {{ $prediction['recommended_order'] > 0 ? 'is-order' : '' }}">{{ $prediction['has_history'] || $prediction['recommended_order'] > 0 ? $prediction['recommended_order'].' '.$prediction['unit'] : '—' }}</div>
                         </div>
                     </div>
                 </div>
@@ -301,7 +319,13 @@
                         <tr>
                             <td>
                                 <strong>{{ $medicine->name }}</strong>
-                                @if ($invRx)
+                                @if ($invRx && \App\Support\MedicineCatalogue::isSupply((string) $medicine->name))
+                                    {{-- A supply is not a drug: RxNorm has nothing to say
+                                         about it, so there is no generic to set. --}}
+                                    <div class="inv-rx">
+                                        <span class="badge badge-neutral">Not applicable</span>
+                                    </div>
+                                @elseif ($invRx)
                                     @php
                                         [$rxLabel, $rxBadge] = match ($medicine->rx_status) {
                                             \App\Support\RxNormService::MATCHED => ['Matched', 'badge-normal'],
@@ -316,7 +340,7 @@
                                                     data-rx-url="{{ route('medicine-inventory.rxnorm', $medicine) }}"
                                                     data-rx-medicine="{{ $medicine->id }}"
                                                     data-medicine-name="{{ $medicine->name }}"
-                                                    data-generic-name="{{ $medicine->generic_name }}">{{ $medicine->generic_name ?: 'Generic name' }}</button>
+                                                    data-generic-name="{{ $medicine->generic_name }}">{{ $medicine->generic_name ?: 'Set generic name' }}</button>
                                         @elseif ($medicine->generic_name)
                                             <span>{{ $medicine->generic_name }}</span>
                                         @endif
@@ -550,6 +574,13 @@
             </div>
             <div class="inv-modal-body">
                 @include('partials.medicine-form-fields', ['gridClass' => 'inv-form-grid'])
+                {{-- Refused as already stocked: the way to add to it, one click away. --}}
+                @php $duplicateMedicine = session('duplicate_medicine_id') ? $medicines->firstWhere('id', (int) session('duplicate_medicine_id')) : null; @endphp
+                @if ($duplicateMedicine && $invMayReceive)
+                    <button type="button" class="btn btn-secondary btn-sm inv-duplicate-receive" data-duplicate-receive="{{ $duplicateMedicine->id }}">
+                        Receive Stock for {{ $duplicateMedicine->name }}
+                    </button>
+                @endif
             </div>
             <div class="inv-modal-foot">
                 <button type="button" class="btn btn-secondary" data-add-medicine-close>Cancel</button>
@@ -584,6 +615,14 @@
 
     backdrop.querySelectorAll('[data-add-medicine-close]').forEach((button) => button.addEventListener('click', close));
     backdrop.addEventListener('click', (event) => { if (event.target === backdrop) close(); });
+
+    // An item already on the shelf is received into: close this dialog and
+    // open that row's own Receive Stock.
+    backdrop.querySelector('[data-duplicate-receive]')?.addEventListener('click', (event) => {
+        const id = event.currentTarget.dataset.duplicateReceive;
+        close();
+        document.querySelector('[data-receive-open][data-medicine-id="' + id + '"]')?.click();
+    });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !backdrop.hidden) close(); });
 
     // A refused save comes back here, so the dialog reopens on the values the

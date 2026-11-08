@@ -5,11 +5,8 @@ namespace Tests\Feature;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Support\ClassMasterlistTemplate;
-use App\Support\ClassMasterlistWorkbook;
 use App\Support\SchoolPulse;
-use App\Support\StudentImportSheet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -17,9 +14,10 @@ use Tests\TestCase;
  * The School Nurse's Forms & Templates tab.
  *
  * It is the Feeding Coordinator's SBFP forms page — the BMI reports and both
- * master lists — read in the nurse's own rail, without the narrative report,
- * and with the class advisers' blank Class Masterlist added. The Clinic Teacher
- * reads the nurse's copy in their own rail. One controller renders every desk's
+ * master lists — read in the nurse's own rail, without the narrative report.
+ * The class advisers' blank Class Masterlist used to be offered here too; it is
+ * the adviser's form alone (tester's report, 8 November 2026, #26). The Clinic
+ * Teacher reads the nurse's copy in their own rail. One controller renders every desk's
  * copy, so the figures on a form cannot differ between them.
  */
 class NurseFormsAndTemplatesTest extends TestCase
@@ -111,10 +109,10 @@ class NurseFormsAndTemplatesTest extends TestCase
             ->get(route('dashboard.school-nurse.forms'))
             ->viewData('narrative'), 'No narrative is drafted for the nurse.');
 
-        // And the advisers' class masterlist is offered beside them.
-        $this->assertStringContainsString('value="class-masterlist"', $html);
-        $this->assertStringContainsString('data-template="class-masterlist"', $html);
-        $this->assertStringContainsString(route('dashboard.school-nurse.forms.class-masterlist'), $html);
+        // The advisers' class masterlist is theirs alone, and is not here.
+        $this->assertStringNotContainsString('value="class-masterlist"', $html);
+        $this->assertStringNotContainsString('data-template="class-masterlist"', $html);
+        $this->assertStringNotContainsString('Class Adviser (blank template)', $html);
     }
 
     #[Test]
@@ -192,29 +190,31 @@ class NurseFormsAndTemplatesTest extends TestCase
         $this->assertSame(1, substr_count($html, '<aside'));
 
         // The same forms as the nurse's copy, and no narrative report.
-        foreach (['bmi-report', 'feeding-beneficiaries', 'feeding-masterlist', 'class-masterlist'] as $template) {
+        foreach (['bmi-report', 'feeding-beneficiaries', 'feeding-masterlist'] as $template) {
             $this->assertStringContainsString('data-template="'.$template.'"', $html);
         }
         $this->assertStringNotContainsString('data-template="feeding-narrative"', $html);
+        $this->assertStringNotContainsString('data-template="class-masterlist"', $html);
 
-        // Its live roster and its download stay on this role's own path.
+        // Its live roster stays on this role's own path.
         $this->assertStringContainsString(json_encode(route('workspace.pulse')), $html);
         $this->assertStringContainsString(json_encode(route('dashboard.clinic-teacher.forms.roster')), $html);
-        $this->assertStringContainsString('href="'.route('dashboard.clinic-teacher.forms.class-masterlist').'"', $html);
         $this->assertStringNotContainsString(route('dashboard.school-nurse.forms.roster'), $html);
     }
 
     #[Test]
-    public function the_clinic_teacher_downloads_the_class_masterlist_from_their_own_path(): void
+    public function the_class_masterlist_is_the_advisers_alone(): void
     {
-        if (! ClassMasterlistWorkbook::available()) {
-            $this->markTestSkipped('OpenSpout is not installed on this machine (composer.lock pins it to PHP 8.4).');
-        }
+        // No clinic path serves it any more.
+        $this->assertFalse(app('router')->has('dashboard.school-nurse.forms.class-masterlist'));
+        $this->assertFalse(app('router')->has('dashboard.clinic-teacher.forms.class-masterlist'));
 
-        $this->withSession($this->clinicTeacherSession())
-            ->get(route('dashboard.clinic-teacher.forms.class-masterlist'))
-            ->assertOk()
-            ->assertDownload('CLASS-MASTERLIST-'.StudentHealthRecord::currentSchoolYear().'.xlsx');
+        foreach ([[$this->nurseSession(), 'dashboard.school-nurse.forms'], [$this->clinicTeacherSession(), 'dashboard.clinic-teacher.forms']] as [$session, $route]) {
+            $html = $this->withSession($session)->get(route($route))->assertOk()->getContent();
+
+            $this->assertStringNotContainsString(ClassMasterlistTemplate::TITLE, $html, $route);
+            $this->assertStringNotContainsString('cm-line', $html, $route);
+        }
     }
 
     #[Test]
@@ -230,51 +230,6 @@ class NurseFormsAndTemplatesTest extends TestCase
             $roster->json('stamp'),
             $this->withSession($this->clinicTeacherSession())->getJson(route('workspace.pulse'))->json('stamp'),
         );
-    }
-
-    #[Test]
-    public function the_class_masterlist_on_the_page_is_the_blank_form(): void
-    {
-        $html = $this->withSession($this->nurseSession())
-            ->get(route('dashboard.school-nurse.forms'))
-            ->assertOk()
-            ->getContent();
-
-        $this->assertStringContainsString(ClassMasterlistTemplate::TITLE, $html);
-        $this->assertStringContainsString(e(ClassMasterlistTemplate::NAME_CAPTION), $html);
-        $this->assertSame(2 * ClassMasterlistTemplate::BAND_ROWS, substr_count($html, '<tr class="cm-line">'));
-
-        // The nurse is not the class's adviser: the signature line is blank,
-        // never her own name over "ADVISER".
-        $this->assertStringNotContainsString('NURSE CRUZ', $html);
-        $this->assertStringContainsString('cm-signature', $html);
-    }
-
-    #[Test]
-    public function the_nurse_downloads_the_same_form_the_advisers_upload(): void
-    {
-        if (! ClassMasterlistWorkbook::available()) {
-            $this->markTestSkipped('OpenSpout is not installed on this machine (composer.lock pins it to PHP 8.4).');
-        }
-
-        $response = $this->withSession($this->nurseSession())
-            ->get(route('dashboard.school-nurse.forms.class-masterlist'))
-            ->assertOk()
-            // No class on the heading, so the file is named for the year alone.
-            ->assertDownload('CLASS-MASTERLIST-'.StudentHealthRecord::currentSchoolYear().'.xlsx');
-
-        $path = tempnam(sys_get_temp_dir(), 'nurse-masterlist-').'.xlsx';
-        file_put_contents($path, $response->streamedContent());
-
-        try {
-            $sheet = StudentImportSheet::read(new UploadedFile($path, 'CLASS-MASTERLIST.xlsx', null, null, true));
-
-            // The very form the import reads back: header found, nobody on it.
-            $this->assertSame([], $sheet['missing']);
-            $this->assertSame([], $sheet['rows']);
-        } finally {
-            @unlink($path);
-        }
     }
 
     #[Test]

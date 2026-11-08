@@ -96,6 +96,12 @@ class ConsentFormScanner
     public const UNREADABLE_TEXT = 'Unreadable';
 
     /**
+     * Said when the PETSA on a sheet falls in another school year than the one
+     * it is being filed for (checkSchoolYear()), in the words testers asked for.
+     */
+    public const DATE_OUTSIDE_SCHOOL_YEAR = 'This form is dated outside the selected school year.';
+
+    /**
      * The parent's three consent boxes, keyed by the answer each one gives,
      * with the opening words printed beside it on the Sulat-Pahibalo. The
      * first two begin with the same sentence, so the model is told the words
@@ -480,10 +486,22 @@ class ConsentFormScanner
           DIVISION: ................................ the schools division
           PANGALAN SA ISKWELAHAN: .................. name of the school
           ADDRESS SA ISKWELAHAN: ................... address of the school
-          PETSA: ................................... date
+          PETSA: ................................... the date of the letter
           PANGALAN SA ESTUDYANTE: .................. the learner's name
           PINUY-ANAN SA ESTUDYANTE: ................ the learner's home address
           PANGALAN SA GINIKANAN / GUARDIAN: ........ the parent's or guardian's name
+
+        THE DATE (PETSA). Report the date on the PETSA line in form_date. Copy
+        what is written there exactly into text. Then give year, month and day
+        as numbers, each only when you read it for certain, and 0 for any part
+        that is not written or cannot be made out. Never supply a part that is
+        not on the sheet: not today's date, not the current year, not a likely
+        one. A month may be written in English, Filipino or Cebuano (Enero,
+        Pebrero, Marso, Abril, Mayo, Hunyo, Hulyo, Agosto, Setyembre, Oktubre,
+        Nobyembre, Disyembre) or as a number. A date written in numbers is
+        usually month/day/year; when the first number is over 12 it is the day.
+        When either of the first two numbers could be the month, give the year
+        and leave month and day 0.
 
         THE LETTER (top half), from the school: "Tinahud namong Ginikanan /
         Guardian" (Dear parent / guardian). It lists the health services the
@@ -906,6 +924,35 @@ class ConsentFormScanner
                 'type' => 'BOOLEAN',
                 'description' => 'True only when this is the Sulat-Pahibalo parental consent form.',
             ],
+            // In the header's order: the PETSA line comes before the learner's name.
+            'form_date' => [
+                'type' => 'OBJECT',
+                'description' => 'The date on the "PETSA" line in the header.',
+                'properties' => [
+                    'text' => [
+                        'type' => 'STRING',
+                        'description' => 'Exactly what is written on the PETSA line. Empty when nothing is written.',
+                    ],
+                    'year' => [
+                        'type' => 'INTEGER',
+                        'description' => 'The four-digit year, or 0 when it is not written or cannot be read for certain.',
+                    ],
+                    'month' => [
+                        'type' => 'INTEGER',
+                        'description' => '1 to 12, or 0 when it is not written, cannot be read for certain, or a date in numbers does not say which number is the month.',
+                    ],
+                    'day' => [
+                        'type' => 'INTEGER',
+                        'description' => '1 to 31, or 0 when it is not written or cannot be read for certain.',
+                    ],
+                    'readable' => [
+                        'type' => 'BOOLEAN',
+                        'description' => 'False only when something is written there and cannot be made out.',
+                    ],
+                ],
+                'required' => ['text', 'year', 'month', 'day', 'readable'],
+                'propertyOrdering' => ['text', 'year', 'month', 'day', 'readable'],
+            ],
             'student_name' => $reading('The learner\'s name on the "PANGALAN SA ESTUDYANTE" line.'),
             'services_marks_seen' => [
                 'type' => 'INTEGER',
@@ -1094,6 +1141,12 @@ class ConsentFormScanner
             // The same, about the sheet as a whole rather than one field.
             'warnings' => $warnings,
             'student_name' => $student['readable'] ? $student['text'] : '',
+            // The PETSA line, as read: its words and whichever of year, month
+            // and day were read for certain. checkSchoolYear() rules on it once
+            // the controller knows which school year the form is filed under.
+            'form_date' => self::formDate($payload['form_date'] ?? null, $unreadable),
+            'date_outside_school_year' => false,
+            'date_warning' => '',
             'parent_guardian_name' => $parent['readable'] ? $parent['text'] : '',
             'signature_present' => $signature,
             // Filled in by checkLearner() once the controller knows whose form
@@ -1148,6 +1201,148 @@ class ConsentFormScanner
         }
 
         return $draft;
+    }
+
+    /**
+     * Whether the sheet is dated inside the school year it is being filed for.
+     *
+     * A consent answers for one school year: a parent who signed in October
+     * 2024 agreed to that year's services, not to a later year's. Testers
+     * filed a Sulat-Pahibalo dated 27 October 2024 under S.Y. 2027–2028 with
+     * no word said. So a sheet dated in another school year (June to May) is
+     * named, with what the PETSA reads, for the adviser to ask for a current
+     * form. It decides nothing: the answer is still the adviser's to file.
+     *
+     * Only a date read for certain is ruled on. A year with no month falls
+     * outside only when no month could put it inside; a date nobody could read,
+     * or none at all, raises nothing.
+     *
+     * @param  array<string, mixed>  $draft  what interpret() returned
+     * @param  string  $schoolYear  "2027-2028"
+     * @return array<string, mixed>
+     */
+    public static function checkSchoolYear(array $draft, string $schoolYear): array
+    {
+        $draft['date_outside_school_year'] = false;
+        $draft['date_warning'] = '';
+
+        if (! empty($draft['unreadable']) || ! empty($draft['learner_mismatch'])
+            || preg_match('/^(\d{4})-(\d{4})$/', $schoolYear, $m) !== 1 || (int) $m[2] !== (int) $m[1] + 1) {
+            return $draft;
+        }
+
+        $start = (int) $m[1];
+        $date = is_array($draft['form_date'] ?? null) ? $draft['form_date'] : [];
+        $year = is_int($date['year'] ?? null) ? $date['year'] : null;
+        $month = is_int($date['month'] ?? null) ? $date['month'] : null;
+
+        if ($year === null) {
+            return $draft;
+        }
+
+        // June to May: a month from June on belongs to the year that starts
+        // then, January to May to the one that started the June before.
+        $outside = $month !== null
+            ? ($month >= 6 ? $year : $year - 1) !== $start
+            : ! in_array($year, [$start, $start + 1], true);
+
+        if (! $outside) {
+            return $draft;
+        }
+
+        $read = trim((string) ($date['text'] ?? '')) ?: self::dateLabel($year, $month, $date['day'] ?? null);
+
+        $draft['date_outside_school_year'] = true;
+        $draft['date_warning'] = self::DATE_OUTSIDE_SCHOOL_YEAR.' The PETSA reads "'.$read.'", and this form is being filed for S.Y. '
+            .$start.'–'.($start + 1).'. Ask the parent for a current form.';
+        $draft['needs_review'] = true;
+
+        return $draft;
+    }
+
+    /**
+     * The PETSA line as read, its parts kept only where they are real.
+     *
+     * @return array{text: string, year: int|null, month: int|null, day: int|null, readable: bool}
+     */
+    private static function formDate(mixed $entry, bool $sheetUnreadable): array
+    {
+        $none = ['text' => '', 'year' => null, 'month' => null, 'day' => null, 'readable' => true];
+
+        if ($sheetUnreadable || ! is_array($entry)) {
+            return $none;
+        }
+
+        if (array_key_exists('readable', $entry) && self::flag($entry['readable']) === false) {
+            return ['readable' => false] + $none;
+        }
+
+        $text = self::tidy((string) ($entry['text'] ?? ''));
+        $part = fn (string $key, int $min, int $max): ?int => is_numeric($entry[$key] ?? null)
+            && (int) $entry[$key] >= $min && (int) $entry[$key] <= $max
+            && (float) $entry[$key] === (float) (int) $entry[$key]
+                ? (int) $entry[$key]
+                : null;
+
+        $year = $part('year', 1990, 2100);
+        $month = $part('month', 1, 12);
+
+        // Only a reader that gave no numbers at all is read from the words;
+        // a 0 it did give means it could not be sure, and stands.
+        if (! array_key_exists('year', $entry) && preg_match('/\b(19[9]\d|20\d{2})\b/', $text, $found) === 1) {
+            $year = (int) $found[1];
+        }
+        if (! array_key_exists('month', $entry)) {
+            $month = self::monthNamed($text);
+        }
+
+        $day = $month !== null ? $part('day', 1, 31) : null;
+        if ($day !== null && $year !== null && ! checkdate($month, $day, $year)) {
+            $day = null;
+        }
+
+        return ['text' => $text, 'year' => $year, 'month' => $month, 'day' => $day, 'readable' => true];
+    }
+
+    /** A month named in words, in English, Filipino or Cebuano, or null. */
+    private static function monthNamed(string $text): ?int
+    {
+        $words = ' '.preg_replace('/[^a-z]+/', ' ', strtolower(Str::ascii($text))).' ';
+
+        foreach ([
+            1 => ['january', 'jan', 'enero'],
+            2 => ['february', 'feb', 'pebrero', 'febrero'],
+            3 => ['march', 'mar', 'marso', 'marzo'],
+            4 => ['april', 'apr', 'abril'],
+            5 => ['may', 'mayo'],
+            6 => ['june', 'jun', 'hunyo', 'junio'],
+            7 => ['july', 'jul', 'hulyo', 'julio'],
+            8 => ['august', 'aug', 'agosto'],
+            9 => ['september', 'sept', 'sep', 'setyembre', 'septiyembre', 'setiembre', 'septiembre'],
+            10 => ['october', 'oct', 'oktubre', 'octubre'],
+            11 => ['november', 'nov', 'nobyembre', 'noviembre'],
+            12 => ['december', 'dec', 'disyembre', 'diciembre'],
+        ] as $month => $names) {
+            foreach ($names as $name) {
+                if (str_contains($words, ' '.$name.' ')) {
+                    return $month;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /** "October 27, 2024", "October 2024" or "2024", from the parts read. */
+    private static function dateLabel(int $year, ?int $month, mixed $day): string
+    {
+        if ($month === null) {
+            return (string) $year;
+        }
+
+        $name = date('F', mktime(0, 0, 0, $month, 1, 2000));
+
+        return is_int($day) ? $name.' '.$day.', '.$year : $name.' '.$year;
     }
 
     /**

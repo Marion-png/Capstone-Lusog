@@ -102,8 +102,9 @@ class FeedingBmiReportTest extends TestCase
         // Overall = sum across grades (3 in G7 + 1 in G8).
         $this->assertSame(4, $v['bmib_overall_total_nst']);
 
-        // Empty data cells render blank (not 0) so the sheet reads like the blank form.
-        $this->assertSame('', $v['bmib_g7_female_sw']);
+        // A cell nobody falls in prints 0, as the TOTAL beside it does (testers'
+        // report, 8 November 2026, #21).
+        $this->assertSame(0, $v['bmib_g7_female_sw']);
         $this->assertSame(0, $v['bmib_g7_total_ob']);   // TOTAL row still shows an integer
     }
 
@@ -517,7 +518,7 @@ class FeedingBmiReportTest extends TestCase
         $this->assertSame(4, $reports['all']['values']['']['bmib_overall_total_nst']);
         $this->assertSame(1, $reports['beneficiaries']['values']['']['bmib_overall_total_nst']);
         $this->assertSame(1, $reports['beneficiaries']['values']['']['bmib_g7_male_w']);
-        $this->assertSame('', $reports['beneficiaries']['values']['']['bmib_g7_female_w']);
+        $this->assertSame(0, $reports['beneficiaries']['values']['']['bmib_g7_female_w']);
         $this->assertSame(0, $reports['beneficiaries']['values']['']['bmib_g8_total_nst']);
 
         // The first paint is All Learners, the same figures as before the control.

@@ -26,6 +26,12 @@
         'hn' => \App\Support\BmiClassifier::NORMAL_HEIGHT,
         't' => \App\Support\BmiClassifier::TALL,
     ];
+    $whoGrowthLimits = [
+        'bmiZ' => \App\Support\MeasurementPlausibility::BMI_Z_LIMIT,
+        'heightZ' => \App\Support\MeasurementPlausibility::HEIGHT_Z_LIMIT,
+        'minBmi' => \App\Support\MeasurementPlausibility::MIN_BMI,
+        'maxBmi' => \App\Support\MeasurementPlausibility::MAX_BMI,
+    ];
 @endphp
 <script>
 window.WhoGrowth = window.WhoGrowth || (() => {
@@ -105,6 +111,46 @@ window.WhoGrowth = window.WhoGrowth || (() => {
         return LABEL.t;
     };
 
-    return { ageInMonths, bmiForAge, heightForAge };
+    // App\Support\MeasurementPlausibility, read again: WHO's flags for a
+    // reading no learner could have, with the server's own wording. The
+    // server refuses the same figures on save; this only says so sooner.
+    const LIMIT = @json($whoGrowthLimits);
+
+    const figure = (value) => String(Number(value.toFixed(2)));
+
+    const ageLabel = (months) => {
+        const whole = Math.floor(months);
+        const years = Math.floor(whole / 12);
+        const rest = whole % 12;
+        return years + (years === 1 ? ' year' : ' years') + (rest > 0 ? ' ' + rest + (rest === 1 ? ' month' : ' months') : '');
+    };
+
+    const problems = (heightCm, weightKg, age, gender) => {
+        const found = { height: '', weight: '' };
+        const h = heightCm > 0 ? heightCm : null;
+        const w = weightKg > 0 ? weightKg : null;
+
+        if (h !== null) {
+            const z = zScore(HEIGHT_FOR_AGE, gender, age, h);
+            if (z !== null && Math.abs(z) > LIMIT.heightZ) {
+                found.height = 'A height of ' + figure(h) + ' cm is not possible for a learner aged '
+                    + ageLabel(age) + '. Check the height and the date of birth.';
+            }
+        }
+
+        if (h !== null && w !== null) {
+            const bmi = w / Math.pow(h / 100, 2);
+            const z = zScore(BMI_FOR_AGE, gender, age, Math.round(bmi * 100) / 100);
+            const implausible = z !== null ? Math.abs(z) > LIMIT.bmiZ : (bmi < LIMIT.minBmi || bmi > LIMIT.maxBmi);
+            if (implausible) {
+                found.weight = 'A height of ' + figure(h) + ' cm and a weight of ' + figure(w) + ' kg give a BMI of '
+                    + bmi.toFixed(1) + ', which is not possible for this learner. Check both measurements.';
+            }
+        }
+
+        return found;
+    };
+
+    return { ageInMonths, bmiForAge, heightForAge, problems };
 })();
 </script>

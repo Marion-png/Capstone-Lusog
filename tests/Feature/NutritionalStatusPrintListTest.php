@@ -113,7 +113,7 @@ class NutritionalStatusPrintListTest extends TestCase
         $this->assertSame([
             'No.', 'LRN', '', 'Name', 'Grade', 'Section', 'Gender', 'Age',
             'Baseline Weight (kg)', 'Baseline Height (cm)', 'Baseline BMI', 'Baseline Status', 'Baseline Height-for-Age',
-            'Endline Weight (kg)', 'Endline Height (cm)', 'Endline BMI', 'Latest Status', 'Endline Height-for-Age', 'Change',
+            'Endline Weight (kg)', 'Endline Height (cm)', 'Endline BMI', 'Endline Status', 'Endline Height-for-Age', 'Change',
         ], $rows[$head]);
 
         $learner = $rows[$head + 1];
@@ -266,7 +266,7 @@ class NutritionalStatusPrintListTest extends TestCase
 
         $endline = $this->workbook($this->withSession($this->sessionFor())->get(self::HEAD_PRINT.'?weighing=endline')->assertOk())['rows'];
         $this->assertSame(
-            ['No.', 'LRN', '', 'Name', 'Grade', 'Section', 'Gender', 'Age', 'Endline Weight (kg)', 'Endline Height (cm)', 'Endline BMI', 'Latest Status', 'Endline Height-for-Age'],
+            ['No.', 'LRN', '', 'Name', 'Grade', 'Section', 'Gender', 'Age', 'Endline Weight (kg)', 'Endline Height (cm)', 'Endline BMI', 'Endline Status', 'Endline Height-for-Age'],
             $endline[$this->headerIndex($endline)]
         );
     }

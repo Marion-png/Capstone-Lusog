@@ -192,16 +192,21 @@
         const weightKg = toNum(weightInput.value);
         const age = getAgeInMonths();
         const gender = genderInput ? genderInput.value : '';
+        // A reading no learner could have holds the form back with the
+        // server's own message (MeasurementPlausibility).
+        const found = window.WhoGrowth.problems(heightCm, weightKg, age, gender);
+        heightInput.setCustomValidity(found.height);
+        weightInput.setCustomValidity(found.weight);
         if (!heightCm || !weightKg || heightCm <= 0 || weightKg <= 0) {
             bmiOut.value = '';
             bmiAgeOut.value = window.WhoGrowth.bmiForAge(null, age, gender);
-            hfaOut.value = window.WhoGrowth.heightForAge(heightCm, age, gender);
+            hfaOut.value = found.height ? '' : window.WhoGrowth.heightForAge(heightCm, age, gender);
             return;
         }
         const bmi = weightKg / Math.pow(heightCm / 100, 2);
         bmiOut.value = bmi.toFixed(2);
-        bmiAgeOut.value = window.WhoGrowth.bmiForAge(bmi, age, gender);
-        hfaOut.value = window.WhoGrowth.heightForAge(heightCm, age, gender);
+        bmiAgeOut.value = found.weight ? '' : window.WhoGrowth.bmiForAge(bmi, age, gender);
+        hfaOut.value = found.height ? '' : window.WhoGrowth.heightForAge(heightCm, age, gender);
     };
 
     [heightInput, weightInput, monthInput, dayInput, yearInput, genderInput].forEach((node) => {

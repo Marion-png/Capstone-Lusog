@@ -329,10 +329,11 @@ final class BmiAssessmentReport
      * One grid's counts as flat field values, with the two Total columns and
      * the TOTAL row summed.
      *
-     * An empty MALE/FEMALE cell stays blank, exactly as on the printed sheet —
-     * a form is written into by hand, and a grid of zeros reads as a count
-     * somebody took rather than a line nobody filled. The totals always print
-     * an integer, because a total of nothing is nothing.
+     * Every cell is a count and prints as one, zero included. A MALE or FEMALE
+     * cell used to be left blank at zero while the TOTAL beside it printed 0,
+     * so a row read as unfilled next to a total that said nobody — testers
+     * asked for 0 throughout, and a learner nobody measured is still counted
+     * nowhere rather than invented into a cell.
      *
      * @param  array<string, int|string>  $values
      * @param  array<string, array<string, int>>  $table
@@ -351,14 +352,14 @@ final class BmiAssessmentReport
                 $v = (int) ($table[$sex][$col] ?? 0);
                 $nst += $v;
                 $totals[$col] = ($totals[$col] ?? 0) + $v;
-                $values[$prefix.'_'.$sex.'_'.$col] = $v > 0 ? $v : '';
+                $values[$prefix.'_'.$sex.'_'.$col] = $v;
             }
 
             foreach ($hfaCols as $col) {
                 $v = (int) ($table[$sex][$col] ?? 0);
                 $hfat += $v;
                 $totals[$col] = ($totals[$col] ?? 0) + $v;
-                $values[$prefix.'_'.$sex.'_'.$col] = $v > 0 ? $v : '';
+                $values[$prefix.'_'.$sex.'_'.$col] = $v;
             }
 
             $values[$prefix.'_'.$sex.'_nst'] = $nst;

@@ -21,6 +21,7 @@ use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
 use App\Support\LearnerPlacement;
+use App\Support\MeasurementPlausibility;
 use App\Support\NutritionalHealthStatus;
 use App\Support\PriorityHealthRule;
 use App\Support\ProfileCompletionRule;
@@ -37,6 +38,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class StudentHealthRecordController extends Controller
@@ -1461,6 +1463,8 @@ class StudentHealthRecordController extends Controller
         $institutionId = $request->session()->get('active_institution_id');
         $existing = StudentHealthRecord::currentForStudent((string) $validated['student_id'], $institutionId ? (int) $institutionId : null);
 
+        $this->refuseImplausibleMeasurement($validated, $existing, $recordedAt);
+
         // The form posts an age in years and nothing about sex, so both are
         // read off the learner's own record: the birth date the adviser
         // enrolled them with, the weigh-in date, and their sex.
@@ -1559,6 +1563,7 @@ class StudentHealthRecordController extends Controller
 
         $bmi = $this->computeBmi((float) $validated['height_cm'], (float) $validated['weight_kg']);
         $recordedAt = $validated['recorded_at'] ?? SchoolClock::today();
+        $this->refuseImplausibleMeasurement($validated, $record, $recordedAt);
         $status = $this->classifyStatus($bmi, $record, $recordedAt, $validated['age']);
 
         $record->update([
@@ -1995,6 +2000,31 @@ class StudentHealthRecordController extends Controller
      * the birth date on their record, or the posted age in years where the
      * record has none (BmiClassifier::ageAtMeasurement).
      */
+    /**
+     * Refuse a height and weight no learner of this age and sex could have
+     * (MeasurementPlausibility), read with the same age and sex the status is
+     * classified with.
+     *
+     * @param  array<string, mixed>  $validated
+     *
+     * @throws ValidationException
+     */
+    private function refuseImplausibleMeasurement(array $validated, ?StudentHealthRecord $record, mixed $recordedAt): void
+    {
+        $details = is_array($record?->student_details) ? $record->student_details : [];
+
+        $problems = MeasurementPlausibility::problems(
+            (float) $validated['height_cm'],
+            (float) $validated['weight_kg'],
+            BmiClassifier::ageAtMeasurement($details, $recordedAt, $validated['age'] ?? null),
+            isset($details['gender']) ? (string) $details['gender'] : null,
+        );
+
+        if ($problems !== []) {
+            throw ValidationException::withMessages($problems);
+        }
+    }
+
     private function classifyStatus(float $bmi, ?StudentHealthRecord $record, mixed $recordedAt, mixed $ageInYears): string
     {
         $details = is_array($record?->student_details) ? $record->student_details : [];

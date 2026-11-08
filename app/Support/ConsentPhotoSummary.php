@@ -132,6 +132,13 @@ final class ConsentPhotoSummary
             return array_values($checks);
         }
 
+        // ── The header ─────────────────────────────────────────────────
+        // A sheet dated in another school year answers for that year, not
+        // this one; the PETSA is at the top of the paper, so it is said first.
+        if (! empty($draft['date_outside_school_year'])) {
+            $add('sheet', 'Date (PETSA)', (string) ($draft['date_warning'] ?? '') ?: ConsentFormScanner::DATE_OUTSIDE_SCHOOL_YEAR);
+        }
+
         $written = $draft['written'] ?? [];
         $fields = ConsentFormScanner::WRITTEN_FIELDS;
         $sectionOf = fn (string $field): string => in_array($field, ['consent_exceptions', 'refusal_reason'], true) ? 'consent' : 'allergies';

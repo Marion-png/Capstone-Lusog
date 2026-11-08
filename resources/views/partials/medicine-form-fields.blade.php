@@ -13,6 +13,10 @@
 @php
     $gridClass = $gridClass ?? 'grid';
     $offCatalogue = \App\Support\MedicineCatalogue::allowsOffCatalogue();
+    // What this school already stocks, compared as the server compares it
+    // (MedicineCatalogue::comparableName): an item already on the shelf is
+    // received into, never added a second time.
+    $stocked = array_flip($stockedNames ?? []);
 @endphp
 
 <div class="{{ $gridClass }}">
@@ -26,7 +30,10 @@
             @foreach (\App\Support\MedicineCatalogue::grouped() as $group => $items)
                 <optgroup label="{{ $group }}">
                     @foreach ($items as $item)
-                        <option value="{{ $item }}" @selected(old('catalogue_name') === $item)>{{ $item }}</option>
+                        @php $inStock = isset($stocked[\App\Support\MedicineCatalogue::comparableName($item)]); @endphp
+                        <option value="{{ $item }}" @selected(! $inStock && old('catalogue_name') === $item) @disabled($inStock)
+                                @if (\App\Support\MedicineCatalogue::isSupply($item)) data-supply @endif
+                                @if ($generic = \App\Support\MedicineCatalogue::genericFor($item)) data-generic="{{ $generic }}" @endif>{{ $item }}{{ $inStock ? ' (in inventory)' : '' }}</option>
                     @endforeach
                 </optgroup>
             @endforeach
@@ -64,7 +71,7 @@
          (App\Support\RxNormService). Filled from the name chosen above until
          the nurse types their own. --}}
     @if (\App\Support\RxNormService::supported())
-        <div class="field full">
+        <div class="field full" id="genericNameField">
             <label for="generic_name">Generic Name</label>
             <input class="input" id="generic_name" name="generic_name" type="text" maxlength="100" required
                    pattern="[A-Za-z0-9 .\/\-]{2,100}" value="{{ old('generic_name') }}" placeholder="e.g. Mefenamic Acid" autocomplete="off">
@@ -107,23 +114,48 @@
 <script>
 (() => {
     // "Paracetamol 500mg tablet" is looked up as "Paracetamol": the name
-    // without its strength or form. A generic the nurse typed is never
-    // overwritten.
+    // without its strength or form, or the generic the catalogue gives it
+    // (data-generic). A generic the nurse typed is never overwritten. A
+    // supply (data-supply) is not a drug and has no generic to ask for, so
+    // the field leaves the form while one is chosen.
     const select = document.getElementById('catalogue_name');
     const generic = document.getElementById('generic_name');
+    const field = document.getElementById('genericNameField');
+    const custom = document.getElementById('custom_name');
+    const other = @json(\App\Support\MedicineCatalogue::OTHER);
+    // MedicineCatalogue::isSupply, for a name typed outside the list.
+    const supplyWords = @json(\App\Support\MedicineCatalogue::SUPPLY_WORDS);
     if (!select || !generic) return;
 
     let automatic = generic.value === '';
     generic.addEventListener('input', () => { automatic = generic.value === ''; });
-    select.addEventListener('change', () => {
-        if (!automatic) return;
+
+    const typedSupply = () => {
+        const words = ' ' + (custom?.value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ') + ' ';
+        return supplyWords.some((word) => words.includes(' ' + word + ' '));
+    };
+
+    const sync = () => {
         const option = select.options[select.selectedIndex];
+        const supply = Boolean(option && option.hasAttribute('data-supply'))
+            || (select.value === other && typedSupply());
+        if (field) field.hidden = supply;
+        generic.required = !supply;
+        generic.disabled = supply;
+        return { option, supply };
+    };
+
+    select.addEventListener('change', () => {
+        const { option, supply } = sync();
+        if (!automatic || supply) return;
         generic.value = option && option.value !== '' && option.closest('optgroup')
-            ? option.value.split(/\s\d|\s\(/)[0]
+            ? (option.dataset.generic || option.value.split(/\s\d|\s\(/)[0]
                 .replace(/\s+(tablets?|capsules?|syrup|suspension|solution|cream|lotion|sachets?|drops)\b.*$/i, '')
-                .trim()
+                .trim())
             : '';
     });
+    custom?.addEventListener('input', sync);
+    sync();
 })();
 
 (() => {

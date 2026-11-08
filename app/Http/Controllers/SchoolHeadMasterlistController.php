@@ -136,7 +136,7 @@ class SchoolHeadMasterlistController extends Controller
             'NO.', 'LRN', 'NAME', 'GRADE & SECTION', 'SEX', 'AGE',
             'BASELINE WEIGHT (KG)', 'BASELINE HEIGHT (CM)', 'BASELINE BMI',
             'ENDLINE WEIGHT (KG)', 'ENDLINE HEIGHT (CM)', 'ENDLINE BMI',
-            'BASELINE STATUS', 'LATEST STATUS', 'CHANGE',
+            'BASELINE STATUS', 'ENDLINE STATUS', 'CHANGE',
             'BASELINE HEIGHT-FOR-AGE', 'ENDLINE HEIGHT-FOR-AGE',
             'BENEFICIARY', 'ATTENDANCE',
             ...($data['showFlags'] ? ['ATTENDANCE STANDING'] : []),
@@ -159,7 +159,7 @@ class SchoolHeadMasterlistController extends Controller
                 $row['endline_height'] !== '' ? $row['endline_height'] : '—',
                 $row['endline_bmi'] !== '' ? $row['endline_bmi'] : '—',
                 $row['baseline'] !== '' ? $row['baseline'] : SchoolHeadOverview::NOT_MEASURED,
-                $row['latest'] !== '' ? $row['latest'] : SchoolHeadOverview::NOT_MEASURED,
+                $row['endline'] !== '' ? $row['endline'] : SchoolHeadOverview::NOT_MEASURED,
                 SchoolHeadOverview::movementLabel($row['movement']),
                 $row['baseline_hfa'] !== '' ? $row['baseline_hfa'] : '—',
                 $row['endline_hfa'] !== '' ? $row['endline_hfa'] : '—',
@@ -225,9 +225,9 @@ class SchoolHeadMasterlistController extends Controller
             array_push($columns, 'Baseline Weight (kg)', 'Baseline Height (cm)', 'Baseline BMI', 'Baseline Status', 'Baseline Height-for-Age');
         }
         if ($showEndline) {
-            // The table prints the record's latest reading under its endline
-            // group; the file names that column for what it holds.
-            array_push($columns, 'Endline Weight (kg)', 'Endline Height (cm)', 'Endline BMI', 'Latest Status', 'Endline Height-for-Age');
+            // The endline status, as the table prints it: "Not measured" until
+            // an endline weighing exists.
+            array_push($columns, 'Endline Weight (kg)', 'Endline Height (cm)', 'Endline BMI', 'Endline Status', 'Endline Height-for-Age');
         }
         if ($showMovement) {
             $columns[] = 'Change';
@@ -249,10 +249,10 @@ class SchoolHeadMasterlistController extends Controller
                 array_push($line, $figure($row['baseline_weight']), $figure($row['baseline_height']), $figure($row['baseline_bmi']), $status($row['baseline']), $text($row['baseline_hfa']));
             }
             if ($showEndline) {
-                array_push($line, $figure($row['endline_weight']), $figure($row['endline_height']), $figure($row['endline_bmi']), $status($row['latest']), $text($row['endline_hfa']));
+                array_push($line, $figure($row['endline_weight']), $figure($row['endline_height']), $figure($row['endline_bmi']), $status($row['endline']), $text($row['endline_hfa']));
             }
             if ($showMovement) {
-                $line[] = $row['movement'] === 'unknown' ? '—' : SchoolHeadOverview::movementLabel($row['movement']);
+                $line[] = SchoolHeadOverview::movementLabel($row['movement']);
             }
 
             return $line;
@@ -367,7 +367,7 @@ class SchoolHeadMasterlistController extends Controller
 
         $schoolYear = trim((string) $request->query('school_year', ''));
         if (! in_array($schoolYear, $years, true)) {
-            $schoolYear = $years[0] ?? StudentHealthRecord::currentSchoolYear();
+            $schoolYear = SchoolHeadOverview::defaultYear($years);
         }
 
         $overview = SchoolHeadOverview::for($institutionId, $schoolYear);
@@ -428,8 +428,19 @@ class SchoolHeadMasterlistController extends Controller
     private function buildRow(StudentHealthRecord $record, array $standings, SchoolHeadOverview $overview, array $nearing = [], bool $showFlags = false): array
     {
         $details = is_array($record->student_details) ? $record->student_details : [];
+
+        // Height-for-age is read where the student profile reads it, so the
+        // list and the learner's own tab cannot classify one child two ways.
+        $growth = NutritionalHealthStatus::forRecord($record);
+
         $baseline = SchoolHeadOverview::phaseStatus($record, 'baseline');
-        $latest = SchoolHeadOverview::phaseStatus($record, 'latest');
+        $endline = $this->measuredEndline($record, $growth);
+        // The status at the learner's latest weighing: the endline once one
+        // was taken, else what the record carries. An endline status with no
+        // endline weighing behind it is a leftover, never the latest reading.
+        $latest = $endline !== ''
+            ? $endline
+            : (SchoolHeadOverview::toScale((string) $record->nutritional_status) ?: $baseline);
         $standing = $standings[$record->id] ?? null;
 
         $isBeneficiary = FeedingBeneficiarySummary::isBeneficiary($record);
@@ -451,10 +462,6 @@ class SchoolHeadMasterlistController extends Controller
         // close to its date, so the column stays blank for the whole school
         // in the ordinary case.
         $retention = $nearing[(string) $record->student_id] ?? null;
-
-        // Height-for-age is read where the student profile reads it, so the
-        // list and the learner's own tab cannot classify one child two ways.
-        $growth = NutritionalHealthStatus::forRecord($record);
 
         return [
             'id' => $record->id,
@@ -488,10 +495,13 @@ class SchoolHeadMasterlistController extends Controller
             // stored nowhere. A phase nobody measured is blank.
             'baseline_hfa' => $growth['baseline']['hfa_status'],
             'endline_hfa' => $growth['endline']['hfa_status'],
-            'endline' => SchoolHeadOverview::phaseStatus($record, 'endline'),
+            // Blank — read as "Not measured" — until an endline weighing exists,
+            // and Change compares the two weighings, so it has nothing to report
+            // until both were taken.
+            'endline' => $endline,
             'baseline' => $baseline,
             'latest' => $latest,
-            'movement' => SchoolHeadOverview::movement($baseline, $latest),
+            'movement' => SchoolHeadOverview::movement($baseline, $endline),
             'standing' => match (true) {
                 $isBeneficiary => 'beneficiary',
                 $isPending => 'pending',
@@ -521,6 +531,26 @@ class SchoolHeadMasterlistController extends Controller
             'enrolled_on' => $record->feeding_enrolled_at?->format('j F Y'),
             'marks' => count($overview->marksFor($record->id)),
         ];
+    }
+
+    /**
+     * The endline status, only when an endline weighing was taken.
+     *
+     * The old Fill Medical Record stamped an endline status on rows nobody
+     * re-weighed, and a status with no height or weight behind it is not a
+     * reading. Without a weighing this is '' and the row says "Not measured".
+     *
+     * @param  array<string, mixed>  $growth  NutritionalHealthStatus::forRecord()
+     */
+    private function measuredEndline(StudentHealthRecord $record, array $growth): string
+    {
+        if (! ($growth['endline']['measured'] ?? false)) {
+            return '';
+        }
+
+        $stored = SchoolHeadOverview::phaseStatus($record, 'endline');
+
+        return $stored !== '' ? $stored : SchoolHeadOverview::toScale((string) ($growth['endline']['bmi_status'] ?? ''));
     }
 
     /**
@@ -561,8 +591,10 @@ class SchoolHeadMasterlistController extends Controller
             ];
         }
 
+        // Only a weighing that was taken: a status stamped on the endline
+        // columns with no height or weight behind it is not an endline.
         $endlineStatus = SchoolHeadOverview::phaseStatus($record, 'endline');
-        if ($endlineStatus !== '' || $this->filled($record->endline_weight_kg)) {
+        if ($this->filled($record->endline_weight_kg) || $this->filled($record->endline_height_cm)) {
             $history[] = [
                 'phase' => 'Endline weighing',
                 'date' => $record->endline_recorded_at?->format('j F Y') ?? '—',
