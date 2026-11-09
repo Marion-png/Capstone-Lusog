@@ -7,6 +7,7 @@ use App\Models\Institution;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use App\Support\ConsentStanding;
+use App\Support\HealthServicesOffered;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -140,48 +141,56 @@ class HealthConsentFormTest extends TestCase
     }
 
     /**
-     * Pag Purga or Immunization ticked with none of the boxes under it: the
-     * heading names the service and its rows say which, so one must be ticked.
-     * The letter is not sent, the adviser is told which heading and why, and
-     * what they ticked is kept on the draft.
+     * Pag Purga ticked on its own is the deworming the school offers, so the
+     * letter is finished and is sent as it is.
      */
     #[Test]
-    public function a_heading_ticked_without_a_box_under_it_is_not_sent(): void
+    public function a_heading_ticked_on_its_own_is_sent(): void
     {
         $form = $this->createDraft();
 
         $this->withSession($this->adviserSession())
             ->post(route('consent-forms.send', $form), ['services' => ['checkup', 'deworming']])
             ->assertRedirect(route('consent-forms.show', $form))
-            ->assertSessionHas('error', '"Pag Purga / Pagpainom ug Tambal sa": Ticked, but none of the boxes under it is. At least one must be ticked: Pag Bitok / Worms; Schistosomiasis; Filariasis.');
+            ->assertSessionMissing('error');
 
         $form->refresh();
-        $this->assertSame(HealthConsentForm::STATUS_DRAFT, $form->status);
+        $this->assertSame(HealthConsentForm::STATUS_SENT, $form->status);
         $this->assertSame(['checkup', 'deworming'], $form->services);
-        $this->assertSame(['deworming'], HealthConsentForm::headingsWithoutRows(['deworming', 'immunization', 'immunization_grade7']));
-        $this->assertSame([], HealthConsentForm::headingsWithoutRows(['deworming', 'deworming_worms']));
-
-        $this->withSession($this->adviserSession())
-            ->post(route('consent-forms.send', $form), ['services' => ['checkup', 'deworming', 'deworming_worms']]);
-        $this->assertSame(HealthConsentForm::STATUS_SENT, $form->fresh()->status);
     }
 
-    /** The letter's edit view says it beside the heading, shown while it applies. */
+    /**
+     * A box the learner is never given — a service the school does not offer
+     * this school year, Iron for a boy — warns beside it while it is ticked.
+     * A warning, not a stop: no other box carries one.
+     */
     #[Test]
-    public function the_letter_shows_which_heading_needs_a_box_ticked_under_it(): void
+    public function the_letter_warns_beside_a_service_the_learner_is_never_given(): void
     {
+        $record = $this->makeRecord();
+        $record->update(['student_details' => ['gender' => 'Male']]);
+        HealthServicesOffered::save(
+            1,
+            HealthConsentForm::currentSchoolYear(),
+            array_values(array_diff(array_keys(HealthConsentForm::PLANNED_SERVICES), ['tas'])),
+            'Nurse Reyes',
+        );
+
         $form = $this->createDraft();
-        $form->update(['services' => ['deworming']]);
+        $form->update(['services' => ['checkup', 'tas']]);
 
         $html = $this->withSession($this->adviserSession())
             ->get(route('consent-forms.show', $form))
             ->assertOk()
             ->getContent();
 
-        // Pag Purga is ticked alone, so its notice is shown; Immunization is not.
-        $this->assertMatchesRegularExpression('/data-rows-required="deworming" role="status"\s*>\s*Ticked, but none of the boxes under it is\./', $html);
-        $this->assertMatchesRegularExpression('/data-rows-required="immunization" role="status"\s+hidden\s*>/', $html);
-        $this->assertStringContainsString('data-heading-row="deworming"', $html);
+        // TAS is ticked and the school does not offer it: said, and shown.
+        $this->assertMatchesRegularExpression('/data-service-conflict="tas" role="status"\s*>Shaded, but the school does not offer it this school year/', $html);
+        // Iron is for female learners only; not ticked, so its notice waits hidden.
+        $this->assertMatchesRegularExpression('/data-service-conflict="iron" role="status"\s+hidden\s*>Shaded, but it is given to female learners only/', $html);
+        $this->assertStringNotContainsString('data-service-conflict="checkup"', $html);
+        // The old "a box under it must be ticked" notice is gone.
+        $this->assertStringNotContainsString('data-rows-required', $html);
     }
 
     #[Test]

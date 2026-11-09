@@ -119,7 +119,7 @@
         <div>
             <div class="ml-sign-label">Noted by:</div>
             <div class="ml-sign-name"></div>
-            <div class="ml-sign-role">Principal</div>
+            <div class="ml-sign-role">{{ \App\Support\SchoolSignatories::HEAD_DESIGNATION }}</div>
         </div>
     </section>
 </main>

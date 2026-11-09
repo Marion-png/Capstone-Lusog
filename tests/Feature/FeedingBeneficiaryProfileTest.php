@@ -600,6 +600,82 @@ class FeedingBeneficiaryProfileTest extends TestCase
             ->assertRedirect(route('dashboard.feedingcor-health-records'));
     }
 
+    /** The school's first feeding session, this many calendar days ago. */
+    private function cycleStartedDaysAgo(StudentHealthRecord $record, int $days): void
+    {
+        FeedingAttendance::create([
+            'institution_id' => $this->institution->id,
+            'student_health_record_id' => $record->id,
+            'session_date' => now()->subDays($days)->toDateString(),
+            'is_present' => true,
+        ]);
+    }
+
+    private function postEndline(StudentHealthRecord $record, array $reading)
+    {
+        return $this->withSession($this->coordinatorSession())
+            ->from(route('feedingcor-program.beneficiary', $record->id))
+            ->post(route('feedingcor-program.beneficiary.endline', $record->id), $reading);
+    }
+
+    /**
+     * Edit Endline waits on the full feeding programme: the button is drawn
+     * disabled with the reason, and the endpoint refuses it regardless.
+     */
+    #[Test]
+    public function the_endline_cannot_be_edited_before_the_cycle_is_complete(): void
+    {
+        $record = $this->makeStudent();
+        $this->cycleStartedDaysAgo($record, 10);
+
+        $html = $this->openRecord($record)->assertOk()->getContent();
+
+        $this->assertMatchesRegularExpression('/<button[^>]*data-endline-open[^>]*disabled/', $html);
+        $this->assertStringContainsString('Endline can be edited once the 120-day feeding programme is complete', $html);
+        $this->assertStringNotContainsString('id="endlineBackdrop"', $html);
+
+        $this->postEndline($record, ['age' => 12, 'height_cm' => 121, 'weight_kg' => 22.4])
+            ->assertRedirect(route('feedingcor-program.beneficiary', $record->id))
+            ->assertSessionHas('error');
+
+        $this->assertNull($record->fresh()->endline_bmi_value);
+    }
+
+    /**
+     * Once the programme has run its 120 feeding days, the coordinator records
+     * or edits the endline on the learner's record, through the adviser's own
+     * endline write path: BMI and status are computed, never typed.
+     */
+    #[Test]
+    public function the_coordinator_edits_the_endline_once_the_cycle_is_complete(): void
+    {
+        $record = $this->makeStudent();
+        $this->cycleStartedDaysAgo($record, (int) ceil(120 / 5 * 7) + 7);
+
+        $html = $this->openRecord($record)->assertOk()->getContent();
+
+        $this->assertStringContainsString('id="endlineBackdrop"', $html);
+        $this->assertStringContainsString('action="'.route('feedingcor-program.beneficiary.endline', $record->id).'"', $html);
+        $this->assertDoesNotMatchRegularExpression('/<button[^>]*data-endline-open[^>]*disabled/', $html);
+        $this->assertStringContainsString('Record Endline', $html);
+
+        $this->postEndline($record, ['age' => 12, 'height_cm' => 121, 'weight_kg' => 22.4, 'recorded_at' => now()->toDateString()])
+            ->assertRedirect(route('feedingcor-program.beneficiary', $record->id))
+            ->assertSessionHas('success');
+
+        $fresh = $record->fresh();
+        $this->assertEqualsWithDelta(121, (float) $fresh->endline_height_cm, 0.01);
+        $this->assertEqualsWithDelta(22.4, (float) $fresh->endline_weight_kg, 0.01);
+        // 22.4 / 1.21^2 = 15.30, computed on the server.
+        $this->assertEqualsWithDelta(15.30, (float) $fresh->endline_bmi_value, 0.05);
+        $this->assertNotSame('', (string) $fresh->endline_nutritional_status);
+
+        // Edited again, the endline on file is replaced.
+        $this->postEndline($record, ['age' => 12, 'height_cm' => 122, 'weight_kg' => 23.5])->assertSessionHas('success');
+        $this->assertEqualsWithDelta(23.5, (float) $record->fresh()->endline_weight_kg, 0.01);
+        $this->openRecord($record)->assertOk()->assertSee('Edit Endline');
+    }
+
     #[Test]
     public function only_the_feeding_coordinator_may_open_it(): void
     {

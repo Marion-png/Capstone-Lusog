@@ -20,6 +20,12 @@ use Illuminate\Support\Facades\DB;
  */
 final class SchoolSignatories
 {
+    /**
+     * The school head's designation under "Noted by" on the nutritional
+     * health status forms and lists.
+     */
+    public const HEAD_DESIGNATION = 'Principal II';
+
     /** The school nurse, who prepares the nutritional assessment. */
     public static function preparedBy(?int $institutionId, string $schoolName): string
     {
@@ -30,6 +36,12 @@ final class SchoolSignatories
     public static function notedBy(?int $institutionId, string $schoolName): string
     {
         return self::nameFor('school_head', $institutionId, $schoolName);
+    }
+
+    /** The feeding coordinator, who prepares the beneficiaries' assessment. */
+    public static function feedingCoordinator(?int $institutionId, string $schoolName): string
+    {
+        return self::nameFor('feeding_coor', $institutionId, $schoolName);
     }
 
     /**

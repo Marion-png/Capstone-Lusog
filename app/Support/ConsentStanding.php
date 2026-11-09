@@ -85,9 +85,11 @@ final class ConsentStanding
     public const SERVICE_NO_FORM = 'no_form';
 
     /**
-     * The letter the parent answered did not ask about this service, so it was
-     * not consented to. Shown as "Not consented"; the key keeps its old name
-     * because it travels on filter links.
+     * The service was not offered: the adviser did not shade it at the top of
+     * the Sulat-Pahibalo, or the school does not offer it this school year
+     * (HealthServicesOffered). Consent is not asked for it, so it is never read
+     * as a refusal. Shown as "Not offered"; the key keeps its old name because
+     * it travels on filter links.
      */
     public const SERVICE_NOT_ON_FORM = 'not_on_form';
 
@@ -102,7 +104,7 @@ final class ConsentStanding
         self::SERVICE_DECLINED => 'Declined',
         self::SERVICE_CHECK_EXCEPTIONS => 'Check the exceptions',
         self::SERVICE_NO_FORM => 'No form yet',
-        self::SERVICE_NOT_ON_FORM => 'Not consented',
+        self::SERVICE_NOT_ON_FORM => 'Not offered',
         self::SERVICE_NOT_ENROLLED => 'Not enrolled that year',
         self::SERVICE_NOT_APPLICABLE => 'Not applicable',
     ];
@@ -129,6 +131,85 @@ final class ConsentStanding
         'immunization_grade7' => 7,
     ];
 
+    /**
+     * Services given to learners of one sex only, keyed to that sex as
+     * FeedingBeneficiarySummary::normalizeSex() spells it.
+     *
+     * @var array<string, string>
+     */
+    public const SEX_ONLY_SERVICES = [
+        'iron' => 'Female',
+    ];
+
+    /**
+     * Whether a service is given to this learner at all, by the rules that hold
+     * in every school: a grade-only service for its grade, a sex-only service
+     * for that sex. A learner whose sex is not on file is not ruled out by it —
+     * nothing is known either way.
+     */
+    public static function appliesTo(string $service, ?int $grade, ?string $sex = null): bool
+    {
+        $onlyGrade = self::GRADE_ONLY_SERVICES[$service] ?? null;
+
+        if ($onlyGrade !== null && $grade !== $onlyGrade) {
+            return false;
+        }
+
+        $onlySex = self::SEX_ONLY_SERVICES[$service] ?? null;
+
+        return $onlySex === null || (string) $sex === '' || $sex === $onlySex;
+    }
+
+    /**
+     * Why a service shaded on a learner's form is not given to them, or null
+     * when it is: a rule (appliesTo) or the school's Health Services Offered.
+     * The adviser shades the services the School Nurse said to offer, so a
+     * shading these rule out is said wherever it is read — the photographed
+     * form and the online letter — in the same words.
+     *
+     * @param  list<string>|null  $offered  HealthServicesOffered::for(); null when not known
+     */
+    public static function shadingConflict(string $service, ?int $grade, ?string $sex = null, ?array $offered = null): ?string
+    {
+        $onlyGrade = self::GRADE_ONLY_SERVICES[$service] ?? null;
+
+        if ($onlyGrade !== null && $grade !== $onlyGrade) {
+            return 'Shaded, but it is given to Grade '.$onlyGrade.' learners only and this learner is '
+                .($grade !== null ? 'in Grade '.$grade : 'not in Grade '.$onlyGrade).'. It is read as Not applicable.';
+        }
+
+        if (! self::appliesTo($service, $grade, $sex)) {
+            return 'Shaded, but it is given to '.strtolower(self::SEX_ONLY_SERVICES[$service]).' learners only and this learner is '
+                .strtolower((string) $sex).'. It is read as Not applicable.';
+        }
+
+        if (! HealthServicesOffered::isOffered($service, $offered)) {
+            return 'Shaded, but the school does not offer it this school year (Health Services Offered, in the School Nurse\'s Settings). It is read as Not offered.';
+        }
+
+        return null;
+    }
+
+    /**
+     * shadingConflict() for one box of the letter's list. A heading (Pag
+     * Purga, Immunization) conflicts only when no row under it is given to the
+     * learner, and then for the first row's reason.
+     *
+     * @param  list<string>|null  $offered
+     */
+    public static function boxConflict(string $box, ?int $grade, ?string $sex = null, ?array $offered = null): ?string
+    {
+        $rows = array_keys(HealthConsentForm::SERVICES[$box]['children'] ?? []);
+
+        if ($rows === []) {
+            return self::shadingConflict($box, $grade, $sex, $offered);
+        }
+
+        $conflicts = array_map(fn (string $row): ?string => self::shadingConflict($row, $grade, $sex, $offered), $rows);
+
+        return in_array(null, $conflicts, true) ? null : $conflicts[0];
+    }
+
     /** The standing one learner's consent is in. */
     public static function for(?HealthConsentForm $form, ?ParentalConsentForm $upload = null): string
     {
@@ -146,7 +227,7 @@ final class ConsentStanding
      * Null when nothing on file answers yet — a draft, a letter still out, or
      * a scan nobody has recorded the answer of.
      *
-     * @return array{source: string, choice: string, services: list<string>, exceptions: string, excluded: list<string>|null}|null
+     * @return array{source: string, choice: string, services: list<string>, listed: bool, exceptions: string, excluded: list<string>|null}|null
      */
     public static function answer(?HealthConsentForm $form, ?ParentalConsentForm $upload = null): ?array
     {
@@ -159,10 +240,15 @@ final class ConsentStanding
                 default => HealthConsentForm::CONSENT_ALL,
             };
 
+            $letterServices = array_values(array_filter((array) ($form->services ?? []), 'is_string'));
+
             return [
                 'source' => 'letter',
                 'choice' => $choice,
-                'services' => array_values(array_filter((array) ($form->services ?? []), 'is_string')),
+                'services' => $letterServices,
+                // Whether `services` is the list shaded at the top of the form,
+                // so a service missing from it was not offered.
+                'listed' => $letterServices !== [],
                 'exceptions' => $choice === HealthConsentForm::CONSENT_SPECIFIC ? trim((string) $form->consent_exceptions) : '',
                 // Which services "yes, except" left out, as services. Not
                 // recorded yet: the exceptions are the parent's handwriting.
@@ -206,6 +292,9 @@ final class ConsentStanding
                 'source' => 'upload',
                 'choice' => $choice,
                 'services' => $services !== [] ? $services : ($program !== false ? [$program] : []),
+                // An upload filed before the services were recorded names only
+                // its program, which is not the list on the paper.
+                'listed' => $services !== [],
                 'exceptions' => $choice === HealthConsentForm::CONSENT_SPECIFIC ? trim((string) $upload->partial_exception) : '',
                 'excluded' => $excluded,
             ];
@@ -219,13 +308,18 @@ final class ConsentStanding
      * the first that holds wins.
      *
      * @param  array<string, mixed>|null  $answer  what answer() returned
+     * @param  string|null  $sex  the learner's, for the services one sex alone is given
+     * @param  list<string>|null  $offered  HealthServicesOffered::for(); null when not known
      */
-    public static function forService(string $service, ?int $grade, bool $enrolled, ?array $answer): string
+    public static function forService(string $service, ?int $grade, bool $enrolled, ?array $answer, ?string $sex = null, ?array $offered = null): string
     {
-        $onlyGrade = self::GRADE_ONLY_SERVICES[$service] ?? null;
-
-        if ($onlyGrade !== null && $grade !== $onlyGrade) {
+        if (! self::appliesTo($service, $grade, $sex)) {
             return self::SERVICE_NOT_APPLICABLE;
+        }
+
+        // The school does not offer it this school year, so no form asks.
+        if (! HealthServicesOffered::isOffered($service, $offered)) {
+            return self::SERVICE_NOT_ON_FORM;
         }
 
         if (! $enrolled) {
@@ -236,11 +330,20 @@ final class ConsentStanding
             return self::SERVICE_NO_FORM;
         }
 
+        $covered = HealthConsentForm::coversService($answer['services'], $service);
+
+        // Not shaded at the top: not offered, whatever the parent answered —
+        // a refusal declines only what the form asked about. A list nobody
+        // recorded says nothing either way, so a refusal still declines all.
+        if (! $covered && ($answer['listed'] ?? ($answer['services'] !== []))) {
+            return self::SERVICE_NOT_ON_FORM;
+        }
+
         if ($answer['choice'] === HealthConsentForm::CONSENT_DENY) {
             return self::SERVICE_DECLINED;
         }
 
-        if (! HealthConsentForm::coversService($answer['services'], $service)) {
+        if (! $covered) {
             return self::SERVICE_NOT_ON_FORM;
         }
 

@@ -216,6 +216,13 @@
                                 <p class="sp-cs-quote" id="vpCsQuote"></p>
                                 <ul id="vpCsCheck"></ul>
                             </section>
+                            {{-- Not shaded at the top of the form, or not given by
+                                 the school this year: never asked, so never
+                                 refused. --}}
+                            <section class="sp-cs-col is-not-offered" id="vpCsNotOfferedCol" hidden>
+                                <h5>Not Offered <span class="sp-cs-count" id="vpCsNotOfferedCount">0</span></h5>
+                                <ul id="vpCsNotOffered"></ul>
+                            </section>
                         </div>
                     </div>
                     {{-- The uploaded form itself. It is served by the one audited
@@ -318,7 +325,11 @@
 {{-- The Consent Forms page's own upload dialog, with this learner fixed.
      The endpoint re-checks that they are in this adviser's class. --}}
 @include('consent-forms._upload-modal', [
-    'uploadLearner' => ['lrn' => $lrn, 'name' => $fullName],
+    'uploadLearner' => [
+        'lrn' => $lrn,
+        'name' => $fullName,
+        'sex' => \App\Support\FeedingBeneficiarySummary::normalizeSex((string) ($prototypeRecord['gender'] ?? '')),
+    ],
     'schoolYear' => $consentSchoolYear,
 ])
 
@@ -975,6 +986,10 @@ const STUDENT_PROFILE_LRN = @json($lrn);
                 fillList('vpCsCheck', 'vpCsCheckCount', toCheck);
                 const checkCol = document.getElementById('vpCsCheckCol');
                 if (checkCol) checkCol.hidden = toCheck.length === 0;
+                const notOffered = services.not_offered || [];
+                fillList('vpCsNotOffered', 'vpCsNotOfferedCount', notOffered);
+                const notOfferedCol = document.getElementById('vpCsNotOfferedCol');
+                if (notOfferedCol) notOfferedCol.hidden = notOffered.length === 0;
                 const quote = document.getElementById('vpCsQuote');
                 if (quote) quote.textContent = services.exceptions ? '“' + services.exceptions + '”' : '';
             }

@@ -115,6 +115,9 @@
 		@if (session('success'))
 			<div class="flash ok">{{ session('success') }}</div>
 		@endif
+		@if ($errors->any())
+			<div class="flash err">{{ $errors->first() }}</div>
+		@endif
 		<p class="flash err" id="bdError" hidden></p>
 
 		<div class="bd-header">
@@ -157,9 +160,9 @@
 				</div>
 			</div>
 
-			{{-- The acts a coordinator can take on one learner. Measurements are
-			     the class adviser's, so this record reports baseline and endline
-			     and never asks for them. --}}
+			{{-- The acts a coordinator can take on one learner. The baseline is
+			     the class adviser's; the endline the coordinator may edit, on
+			     the Endline tab, once the programme has run its full length. --}}
 			<div class="bd-actions">
 				@if ($standing['qualified'] && ! $standing['enrolled'])
 					<button type="button" class="btn btn-primary" id="bdEnroll">
@@ -403,14 +406,26 @@
 			@endforelse
 		</div>
 
-		{{-- ── Endline: the class adviser's closing measurement. Nothing
-		     measured is "Not yet recorded" — a real answer, not an empty
-		     card. ── --}}
+		{{-- ── Endline: the closing measurement. Nothing measured is "Not yet
+		     recorded" — a real answer, not an empty card. The coordinator may
+		     edit it once the feeding programme has run its full length; until
+		     then the button is drawn disabled with the reason, and the
+		     endpoint refuses it regardless. ── --}}
 		<div class="bd-panel" id="bd-endline" role="tabpanel" data-panel="endline" hidden>
 			<section class="card bd-card">
-				<p class="bd-card-title">Endline Nutritional Assessment</p>
+				<div class="bd-card-head">
+					<p class="bd-card-title">Endline Nutritional Assessment</p>
+					<button type="button" class="btn btn-secondary bd-endline-edit" data-endline-open
+						@disabled(! $endlineEdit['allowed']) @unless ($endlineEdit['allowed']) aria-describedby="bdEndlineNote" @endunless>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+						{{ $hasEndline ? 'Edit Endline' : 'Record Endline' }}
+					</button>
+				</div>
 				@if ($hasEndline && $endline['recorded_at'])
 					<p class="bd-card-sub">Measured {{ $endline['recorded_at'] }}</p>
+				@endif
+				@if (! $endlineEdit['allowed'])
+					<p class="bd-note bd-endline-note" id="bdEndlineNote">{{ $endlineEdit['note'] }}</p>
 				@endif
 				@if ($hasEndline)
 					<dl class="bd-facts">
@@ -469,6 +484,57 @@
 					<div class="modal-actions">
 						<button type="button" class="btn btn-ghost" data-remove-close>Cancel</button>
 						<button type="submit" class="btn btn-primary">Remove Beneficiary</button>
+					</div>
+				</footer>
+			</form>
+		</div>
+	</div>
+@endif
+
+@if ($endlineEdit['allowed'])
+	{{-- Edit Endline: the closing weigh-in, posted to the one endline write
+	     path the class adviser uses (StudentHealthRecordController::storeEndline)
+	     — the same validation, the same WHO classification, the same audit.
+	     BMI and status are computed on the server, never typed. --}}
+	@php $endlineFailed = $errors->hasAny(['age', 'height_cm', 'weight_kg', 'recorded_at']); @endphp
+	<div class="modal-backdrop{{ $endlineFailed ? ' open' : '' }}" id="endlineBackdrop" data-open-on-load="{{ $endlineFailed ? '1' : '0' }}">
+		<div class="modal-panel bd-remove-modal" role="dialog" aria-modal="true" aria-labelledby="endlineTitle">
+			<form method="POST" action="{{ $endlineEdit['url'] }}">
+				@csrf
+				<header class="modal-head">
+					<div>
+						<p class="modal-eyebrow">Beneficiary Record</p>
+						<h2 class="modal-title" id="endlineTitle">{{ $hasEndline ? 'Edit Endline' : 'Record Endline' }}</h2>
+						<p class="modal-sub">{{ $learner['name'] }} &middot; {{ $learner['grade'] }}{{ $learner['section'] !== '' ? ' — '.$learner['section'] : '' }}</p>
+					</div>
+					<button type="button" class="modal-close" data-endline-close aria-label="Close">&times;</button>
+				</header>
+				<div class="modal-body bd-endline-form">
+					<div class="bd-endline-field">
+						<label class="field-label" for="endlineDate">Date measured</label>
+						<input type="date" class="input" id="endlineDate" name="recorded_at" max="{{ $endlineEdit['today'] }}"
+							value="{{ old('recorded_at', $endlineEdit['recorded_at']) }}" required>
+					</div>
+					<div class="bd-endline-field">
+						<label class="field-label" for="endlineAge">Age (years)</label>
+						<input type="number" class="input" id="endlineAge" name="age" min="2" max="25" step="1"
+							value="{{ old('age', $endlineEdit['age']) }}" required>
+					</div>
+					<div class="bd-endline-field">
+						<label class="field-label" for="endlineHeight">Height (cm)</label>
+						<input type="number" class="input" id="endlineHeight" name="height_cm" min="50" max="250" step="0.1"
+							value="{{ old('height_cm', $endlineEdit['height_cm']) }}" required>
+					</div>
+					<div class="bd-endline-field">
+						<label class="field-label" for="endlineWeight">Weight (kg)</label>
+						<input type="number" class="input" id="endlineWeight" name="weight_kg" min="5" max="300" step="0.1"
+							value="{{ old('weight_kg', $endlineEdit['weight_kg']) }}" required>
+					</div>
+				</div>
+				<footer class="modal-foot">
+					<div class="modal-actions">
+						<button type="button" class="btn btn-ghost" data-endline-close>Cancel</button>
+						<button type="submit" class="btn btn-primary">Save Endline</button>
 					</div>
 				</footer>
 			</form>
@@ -537,6 +603,36 @@
 
 		document.addEventListener('keydown', (event) => {
 			if (event.key === 'Escape' && removeBackdrop.classList.contains('open')) setRemoveOpen(false);
+		});
+	}
+
+	// Edit Endline: one dialog, posted as a plain form so the page's own
+	// redirect and flash carry the result. A refused save reopens it on the
+	// Endline tab with what was typed.
+	const endlineBackdrop = document.getElementById('endlineBackdrop');
+	if (endlineBackdrop) {
+		const setEndlineOpen = (open) => {
+			endlineBackdrop.classList.toggle('open', open);
+			if (open) endlineBackdrop.querySelector('#endlineHeight')?.focus();
+		};
+
+		if (endlineBackdrop.dataset.openOnLoad === '1') {
+			show('endline', false);
+		}
+
+		document.addEventListener('click', (event) => {
+			if (event.target.closest('[data-endline-open]')) {
+				event.preventDefault();
+				setEndlineOpen(true);
+				return;
+			}
+			if (event.target.closest('[data-endline-close]') || event.target === endlineBackdrop) {
+				setEndlineOpen(false);
+			}
+		});
+
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape' && endlineBackdrop.classList.contains('open')) setEndlineOpen(false);
 		});
 	}
 

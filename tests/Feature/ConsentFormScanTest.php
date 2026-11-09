@@ -5,10 +5,12 @@ namespace Tests\Feature;
 use App\Models\AuditLog;
 use App\Models\HealthConsentForm;
 use App\Models\Institution;
+use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use App\Support\ConsentFormScanner;
 use App\Support\ConsentPaperCopy;
 use App\Support\ConsentPhotoSummary;
+use App\Support\HealthServicesOffered;
 use App\Support\LearnerAllergies;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
@@ -1108,10 +1110,9 @@ class ConsentFormScanTest extends TestCase
     /**
      * A ticked "Tambal/Medicines" over an empty line says the child reacts to
      * some medicine. Read from the line alone it would be saved as no medicine
-     * allergy — the opposite. It used to be put back to the adviser as a
-     * question; it is a clear answer instead — the child has one and the parent
-     * did not name it — so the box is kept, it is read as "Not specified", and
-     * nothing on the form is flagged over it.
+     * allergy — the opposite. So the box is kept and read as "Not specified",
+     * and the adviser is told the box is ticked with no details written, to
+     * check with the parent.
      */
     #[Test]
     public function a_ticked_allergy_box_over_an_empty_line_is_never_read_as_no_allergy(): void
@@ -1123,16 +1124,36 @@ class ConsentFormScanTest extends TestCase
         ]));
 
         $this->assertSame(ConsentFormScanner::TICKED, $draft['written']['allergy_medicine']['box']);
-        $this->assertArrayNotHasKey('allergy_medicine', $draft['field_notes']);
-        $this->assertNotContains(ConsentFormScanner::WRITTEN_FIELDS['allergy_medicine'], $draft['unclear']);
-        $this->assertFalse($draft['needs_review']);
+        $this->assertSame(ConsentFormScanner::BOX_TICKED_NO_DETAILS, $draft['field_notes']['allergy_medicine'] ?? null);
+        $this->assertTrue($draft['needs_review']);
 
         $summary = ConsentPhotoSummary::fromDraft($draft, 8);
         $this->assertSame('Medicine: '.LearnerAllergies::NOT_SPECIFIED, $summary['allergies']);
-        $this->assertSame([], $summary['checks']);
+        $this->assertSame([[
+            'section' => 'allergies',
+            'subject' => 'Medicine allergy',
+            'message' => 'Box ticked but no details written — check with the parent.',
+        ]], $summary['checks']);
+        $this->assertFalse($summary['complete']);
 
-        // The ticked kind names it, so the heading box needs no warning of its own.
+        // The ticked kind is said on its own line, so the heading box needs no warning of its own.
         $this->assertSame([], $draft['warnings']);
+    }
+
+    /** The illness box shaded over an empty line is asked about the same way. */
+    #[Test]
+    public function a_ticked_illness_box_over_an_empty_line_is_asked_about(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([], [
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'allergy_boxes' => $this->allergyBoxes(['other_illness' => 'yes']),
+        ]));
+
+        $this->assertSame(ConsentFormScanner::BOX_TICKED_NO_DETAILS, $draft['field_notes']['other_illness'] ?? null);
+        $this->assertContains(
+            ['section' => 'allergies', 'subject' => 'Other illnesses', 'message' => ConsentFormScanner::BOX_TICKED_NO_DETAILS],
+            ConsentPhotoSummary::fromDraft($draft, 8)['checks'],
+        );
     }
 
     #[Test]
@@ -1176,15 +1197,14 @@ class ConsentFormScanTest extends TestCase
     }
 
     /**
-     * "Kon adunay Allergy ang bata…" ticked with none of the three boxes under
-     * it ticked: one of them must be, as a box under Pag Purga must be. Said
-     * even when a line has writing on it — the box is how the form says which
-     * kind — and not once a box under it is ticked.
+     * "Kon adunay Allergy ang bata…" ticked with nothing ticked or written
+     * under it: the child has an allergy and the parent did not say which, so
+     * the adviser checks with the parent. Not once a line under it names one,
+     * nor once a box under it is ticked.
      */
     #[Test]
-    public function an_allergy_heading_with_no_box_ticked_under_it_says_one_must_be(): void
+    public function an_allergy_heading_with_no_details_under_it_is_asked_about(): void
     {
-        $notice = 'Ticked, but none of the boxes under it is. At least one must be ticked: Pagkaon/Food; Tambal/Medicines; Nahatag nga Bakuna/Previous Immunization. Ask the parent which, and write it on its line.';
         $checks = fn (array $draft): array => array_column(ConsentPhotoSummary::fromDraft($draft, 8)['checks'], 'message', 'subject');
 
         $bare = ConsentFormScanner::interpret($this->draft([], [
@@ -1193,14 +1213,15 @@ class ConsentFormScanTest extends TestCase
         ]));
         $this->assertCount(1, $bare['warnings']);
         $this->assertTrue($bare['needs_review']);
-        $this->assertSame($notice, $checks($bare)['Kon adunay Allergy ang bata'] ?? null);
+        $this->assertSame(ConsentFormScanner::BOX_TICKED_NO_DETAILS, $checks($bare)['Kon adunay Allergy ang bata'] ?? null);
 
         $written = ConsentFormScanner::interpret($this->draft([], [
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'allergy_boxes' => $this->allergyBoxes(['allergy' => 'yes']),
             'written' => ['allergy_food' => ['text' => 'Itlog', 'confident' => true, 'readable' => true]],
         ]));
-        $this->assertSame($notice, $checks($written)['Kon adunay Allergy ang bata'] ?? null);
+        $this->assertSame([], $written['warnings']);
+        $this->assertArrayNotHasKey('Kon adunay Allergy ang bata', $checks($written));
 
         $ticked = ConsentFormScanner::interpret($this->draft([], [
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
@@ -1438,8 +1459,8 @@ class ConsentFormScanTest extends TestCase
         $this->assertService($html, 'Pag Bitok / Worms', 'consented', 'Consented');
         // Pag Purga is ticked with only Pag Bitok under it, so Filariasis was
         // not chosen — as the upload files it (ConsentPaperCopy::tickedServices).
-        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_filariasis'], 'not_on_form', 'Not consented');
-        $this->assertService($html, HealthConsentForm::SERVICES['checkup']['label'], 'not_on_form', 'Not consented');
+        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_filariasis'], 'not_on_form', 'Not offered');
+        $this->assertService($html, HealthConsentForm::SERVICES['checkup']['label'], 'not_on_form', 'Not offered');
         $this->assertService($html, HealthConsentForm::SERVICES['vitamin_a']['label'], 'unclear', '?');
         $this->assertService($html, HealthConsentForm::SERVICES['immunization']['children']['immunization_grade7'], 'not_applicable', 'Not applicable');
         $this->assertStringNotContainsString('Check-up (Nurse or Doctor)', $html);
@@ -1483,19 +1504,18 @@ class ConsentFormScanTest extends TestCase
 
         $html = (string) $response->json('copy_html');
         $this->assertService($html, 'Pag Bitok / Worms', 'consented', 'Consented');
-        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_schistosomiasis'], 'not_on_form', 'Not consented');
-        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_filariasis'], 'not_on_form', 'Not consented');
+        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_schistosomiasis'], 'not_on_form', 'Not offered');
+        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_filariasis'], 'not_on_form', 'Not offered');
     }
 
     /**
-     * Pag Purga ticked over three empty boxes names the service but not which
-     * part of it, so a box under it must be ticked — and the adviser is told so
-     * in those words. The rows are not approved on the heading's account: that
-     * was tried, and a reader that missed a small sub-item tick under a heading
-     * it did see approved all three at once.
+     * Pag Purga shaded over three empty boxes is the deworming the school
+     * offers, with no box under it to tick and no warning. A school offering
+     * all three gets all three; at Sta. Ana, where the School Nurse switched
+     * Schistosomiasis and Filariasis off, it is Pag Bitok / Worms alone.
      */
     #[Test]
-    public function a_heading_ticked_alone_says_a_box_under_it_must_be_ticked(): void
+    public function a_heading_shaded_alone_is_the_rows_the_school_offers(): void
     {
         $this->learner('130000000001', 'Juan', 'Dela Cruz');
 
@@ -1504,28 +1524,40 @@ class ConsentFormScanTest extends TestCase
             'deworming' => ConsentFormScanner::TICKED,
         ], ['consent_choice' => HealthConsentForm::CONSENT_ALL]));
 
-        $response = $this->withSession($this->adviserSession())
+        $scan = fn () => $this->withSession($this->adviserSession())
             ->post(route('consent-forms.scan'), ['photo' => $this->jpeg(), 'lrn' => '130000000001'], ['Accept' => 'application/json'])
             ->assertOk();
 
         $rows = ['deworming_worms', 'deworming_schistosomiasis', 'deworming_filariasis'];
 
-        $this->assertSame(['dental'], $response->json('ticked_services'));
-        $this->assertSame(['dental'], $response->json('service_proposal.full.approved'));
-        $this->assertSame($rows, $response->json('service_proposal.full.check'));
+        $everything = $scan();
+        $this->assertSame(['dental', ...$rows], $everything->json('ticked_services'));
+        $this->assertSame(['dental', ...$rows], $everything->json('service_proposal.full.approved'));
+        $this->assertSame([], $everything->json('service_proposal.full.check'));
+        $this->assertSame([], array_values(array_filter(
+            $everything->json('summary.checks'),
+            fn (array $check): bool => str_starts_with($check['subject'], 'Pag Purga'),
+        )));
 
-        $html = (string) $response->json('copy_html');
-        $this->assertService($html, HealthConsentForm::SERVICES['dental']['label'], 'consented', 'Consented');
-        foreach ($rows as $row) {
-            $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children'][$row], 'unclear', '?');
+        HealthServicesOffered::save(
+            $this->school->id,
+            ParentalConsentForm::currentSchoolYear(),
+            array_values(array_diff(array_keys(HealthConsentForm::PLANNED_SERVICES), ['deworming_schistosomiasis', 'deworming_filariasis', 'tas'])),
+            'Test Nurse',
+        );
+
+        $staAna = $scan();
+        $this->assertSame(['dental', 'deworming_worms'], $staAna->json('ticked_services'));
+        $this->assertSame([], $staAna->json('service_proposal.full.check'));
+
+        $html = (string) $staAna->json('copy_html');
+        $this->assertService($html, 'Pag Bitok / Worms', 'consented', 'Consented');
+        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_schistosomiasis'], 'not_on_form', 'Not offered');
+        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_filariasis'], 'not_on_form', 'Not offered');
+        $this->assertService($html, HealthConsentForm::SERVICES['tas']['label'], 'not_on_form', 'Not offered');
+        foreach ($staAna->json('summary.checks') as $check) {
+            $this->assertStringNotContainsString('none of the boxes under it', $check['message']);
         }
-
-        $this->assertContains([
-            'section' => 'services',
-            'subject' => 'Pag Purga / Pagpainom ug Tambal sa',
-            'message' => 'Ticked, but none of the boxes under it is. At least one must be ticked: Pag Bitok / Worms; Schistosomiasis; Filariasis. Mark the ones that apply from the paper.',
-        ], $response->json('summary.checks'));
-        $this->assertFalse($response->json('summary.complete'));
     }
 
     /** A heading the reader was unsure of covers nothing: its rows are still the paper's to settle. */
@@ -1605,7 +1637,9 @@ class ConsentFormScanTest extends TestCase
         $html = (string) $response->json('copy_html');
         $this->assertService($html, HealthConsentForm::SERVICES['checkup']['label'], 'consented', 'Consented');
         $this->assertService($html, HealthConsentForm::SERVICES['dental']['label'], 'declined', 'Declined');
-        $this->assertService($html, HealthConsentForm::SERVICES['iron']['label'], 'declined', 'Declined');
+        // Iron is for female learners only, so for this boy it is Not
+        // applicable whatever the exceptions say.
+        $this->assertService($html, HealthConsentForm::SERVICES['iron']['label'], 'not_applicable', 'Not applicable');
     }
 
     /**
@@ -1659,7 +1693,7 @@ class ConsentFormScanTest extends TestCase
             ->assertOk();
 
         $this->assertSame([], $response->json('ticked_services'));
-        $this->assertSame(['approved' => [], 'check' => []], $response->json('service_proposal.full'));
+        $this->assertSame(['approved' => [], 'check' => [], 'excluded' => []], $response->json('service_proposal.full'));
         $this->assertFalse($response->json('summary.complete'));
     }
 

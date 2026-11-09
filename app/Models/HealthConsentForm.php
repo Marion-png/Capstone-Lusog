@@ -255,58 +255,10 @@ class HealthConsentForm extends Model
         ];
     }
 
-    /**
-     * The headings ticked with none of the rows under them ticked — Pag Purga
-     * with no Pag Bitok, Schistosomiasis or Filariasis; Immunization with no
-     * Grade 7 row. A heading names the service and its rows say which, so a
-     * heading on its own is a letter that is not finished: the rows under it
-     * must be ticked. Read by the letter's Send and, for a photographed form,
-     * by ConsentPhotoSummary, so both say it in the same words.
-     *
-     * @param  list<string>  $keys  the services ticked
-     * @return list<string> heading keys
-     */
-    public static function headingsWithoutRows(array $keys): array
-    {
-        $missing = [];
-
-        foreach (self::SERVICES as $heading => $service) {
-            if ($service['children'] !== []
-                && in_array($heading, $keys, true)
-                && array_intersect(array_keys($service['children']), $keys) === []
-            ) {
-                $missing[] = $heading;
-            }
-        }
-
-        return $missing;
-    }
-
     /** A heading as printed, without the colon that leads into its rows: "Pag Purga / Pagpainom ug Tambal sa". */
     public static function headingName(string $heading): string
     {
         return rtrim(trim((string) (self::SERVICES[$heading]['label'] ?? $heading)), ': ');
-    }
-
-    /**
-     * What to say about a heading ticked with nothing under it — one sentence,
-     * the same on the letter and on a photographed form.
-     *
-     * @param  list<string>|null  $rows  the rows to name (default: every row under it)
-     */
-    public static function rowsRequiredNotice(string $heading, ?array $rows = null): string
-    {
-        $rows ??= array_keys(self::SERVICES[$heading]['children'] ?? []);
-        // The "(sa mga lugar nga common / endemic …)" asides make a sentence
-        // too long to read; the rows are named by their printed words alone.
-        $names = array_map(
-            fn (string $row): string => trim((string) preg_replace('/\s*\(sa [^)]*\)/u', '', (string) (self::SERVICES[$heading]['children'][$row] ?? $row))),
-            $rows,
-        );
-
-        return count($names) === 1
-            ? 'Ticked, but the box under it ('.$names[0].') is not. It must be ticked too.'
-            : 'Ticked, but none of the boxes under it is. At least one must be ticked: '.implode('; ', $names).'.';
     }
 
     /** "Deworming", or "Deworming — worms" for a sub-item. */

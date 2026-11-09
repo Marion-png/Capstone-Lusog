@@ -12,6 +12,7 @@ use App\Support\ConsentPhotoSummary;
 use App\Support\ConsentStanding;
 use App\Support\EncryptedFileStorage;
 use App\Support\FeedingBeneficiarySummary;
+use App\Support\HealthServicesOffered;
 use App\Support\LearnerPlacement;
 use App\Support\MedicineAllergies;
 use App\Support\NurseConsentList;
@@ -63,7 +64,11 @@ class HealthConsentFormController extends Controller
 
         // One row per learner, combining the e-signature workflow with any
         // scanned Sulat-Pahibalo that was uploaded for them.
-        $rows = $students->map(function (array $student) use ($forms, $uploads, $request) {
+        // The services the school offers that year (the School Nurse's
+        // setting): one it does not give reads Not offered on every form.
+        $offered = HealthServicesOffered::for($institutionId ? (int) $institutionId : null, $schoolYear);
+
+        $rows = $students->map(function (array $student) use ($forms, $uploads, $request, $offered) {
             $form = $forms->get($student['lrn']);
             $upload = $uploads->get($student['lrn']);
             $scan = $upload?->scan_result;
@@ -72,6 +77,8 @@ class HealthConsentFormController extends Controller
             return [
                 'lrn' => $student['lrn'],
                 'name' => $student['name'],
+                // For the services one sex alone is given (Iron).
+                'sex' => $student['sex'] ?? '',
                 'class_label' => trim(($student['grade_level'] ?? '').' – '.($student['section'] ?? ''), ' –'),
                 'adviser' => (string) $request->session()->get('active_name', 'Class Adviser'),
                 'parent_guardian' => $student['parent_guardian'],
@@ -85,6 +92,9 @@ class HealthConsentFormController extends Controller
                     $form !== null && $form->status !== HealthConsentForm::STATUS_DRAFT ? $form : null,
                     $upload,
                     LearnerPlacement::gradeNumber($student['grade_level']),
+                    '',
+                    $student['sex'] ?? '',
+                    $offered,
                 ),
                 'status' => $this->deriveConsentStatus($form, $upload),
                 'dated_at' => $upload?->created_at?->toDateString()
@@ -92,7 +102,7 @@ class HealthConsentFormController extends Controller
                 'has_form_file' => ($upload !== null && $upload->file_path !== null) || $paperForm,
                 'file_is_image' => $paperForm || in_array(strtolower(pathinfo((string) $upload?->file_original_name, PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'webp'], true),
                 'photo_summary' => is_array($scan)
-                    ? ConsentPhotoSummary::fromDraft($scan, LearnerPlacement::gradeNumber((string) ($student['grade_level'] ?? '')))
+                    ? ConsentPhotoSummary::fromDraft($scan, LearnerPlacement::gradeNumber((string) ($student['grade_level'] ?? '')), $student['sex'] ?? '', $offered)
                     : null,
                 'uploaded_by' => $upload?->uploaded_by_name ?: ($paperForm ? $form->created_by_name : null),
                 'uploaded_on' => $upload?->created_at?->format('M j, Y') ?? ($paperForm ? $form->signed_at?->format('M j, Y') : null),
@@ -208,6 +218,7 @@ class HealthConsentFormController extends Controller
                     'name' => trim($name, ', ') !== '' ? $name : (string) $record->student_name,
                     'grade_level' => trim($grade),
                     'section' => trim($section),
+                    'sex' => FeedingBeneficiarySummary::sexOf($record),
                     'parent_guardian' => (string) ($details['parent_guardian'] ?? ''),
                     'address' => (string) ($details['address'] ?? ''),
                     'division' => (string) ($details['division'] ?? ''),
@@ -385,21 +396,8 @@ class HealthConsentFormController extends Controller
                 ->with('error', 'Select at least one health service before sending.');
         }
 
-        // A heading names the service and its rows say which: a letter with
-        // Pag Purga ticked and none of its rows is not finished. The adviser's
-        // ticks are kept on the draft so nothing they marked is lost.
-        $unfinished = HealthConsentForm::headingsWithoutRows($services);
-        if ($unfinished !== []) {
-            $form->services = $services;
-            $form->save();
-
-            return redirect()->route('consent-forms.show', $form)
-                ->with('error', implode(' ', array_map(
-                    fn (string $heading): string => '"'.HealthConsentForm::headingName($heading).'": '.HealthConsentForm::rowsRequiredNotice($heading),
-                    $unfinished,
-                )));
-        }
-
+        // A heading ticked on its own (Pag Purga) is the rows under it the
+        // school offers (HealthServicesOffered), so it is a finished letter.
         $form->services = $services;
         $form->status = HealthConsentForm::STATUS_SENT;
         $form->token = $form->token ?: Str::random(40);
@@ -869,6 +867,7 @@ class HealthConsentFormController extends Controller
                 'name' => trim(($row['last_name'] ?? '').', '.($row['first_name'] ?? '').' '.($row['middle_name'] ?? '')),
                 'grade_level' => (string) ($row['grade_level'] ?? ''),
                 'section' => (string) ($row['section'] ?? ''),
+                'sex' => FeedingBeneficiarySummary::normalizeSex((string) ($row['gender'] ?? '')),
                 'parent_guardian' => (string) ($row['parent_guardian'] ?? ''),
                 'address' => (string) ($row['address'] ?? ''),
                 'division' => (string) ($row['division'] ?? ''),

@@ -1271,6 +1271,14 @@ Route::get('/dashboard/feedingcor-program/beneficiary/{record}', [FeedingProgram
     ->whereNumber('record')
     ->name('feedingcor-program.beneficiary');
 
+// The coordinator's Edit Endline on that record — the class adviser's own
+// endline write path (one validation, one classification, one audit), under
+// the coordinator's path so a prototype session is not re-seeded as an adviser.
+// It refuses until the feeding programme has run its full length.
+Route::post('/dashboard/feedingcor-program/beneficiary/{record}/endline', [StudentHealthRecordController::class, 'storeEndline'])
+    ->whereNumber('record')
+    ->name('feedingcor-program.beneficiary.endline');
+
 // Correcting one learner's mark for one session. Keyed by learner and date, so
 // the same path fixes a wrong mark and fills one a sheet skipped; every
 // correction is attributed and audited with the value it replaced.
@@ -1737,6 +1745,12 @@ Route::post('/dashboard/settings/password', [SettingsController::class, 'updateP
 
 Route::post('/dashboard/settings/assignment', [SettingsController::class, 'updateAssignment'])
     ->name('settings.assignment');
+
+// The School Nurse's Health Services Offered, per school year: a service the
+// school does not give reads Not offered on every consent form.
+Route::post('/dashboard/settings/health-services', [SettingsController::class, 'updateHealthServices'])
+    ->name('settings.health-services');
+
 Route::post('/logout', function (Request $request) {
     AuditTrail::record('logout', null, null, 'Logged out');
 

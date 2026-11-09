@@ -101,6 +101,10 @@ class FeedingCoordinatorController extends Controller
             'bmiReports' => $bmiReports,
             'schoolYear' => StudentHealthRecord::currentSchoolYear(),
             'nurseName' => $this->resolveSchoolNurseName($institutionId, (string) $request->session()->get('active_school_name', '')),
+            // The BMI report counted over the beneficiaries alone is the
+            // coordinator's, attested by the clinic and noted by the head.
+            'coordinatorName' => SchoolSignatories::feedingCoordinator($institutionId, (string) $request->session()->get('active_school_name', '')),
+            'headName' => SchoolSignatories::notedBy($institutionId, (string) $request->session()->get('active_school_name', '')),
             // The DepEd heading every form on this page opens under.
             'letterhead' => $letterhead,
             'seals' => SchoolLetterhead::seals(),

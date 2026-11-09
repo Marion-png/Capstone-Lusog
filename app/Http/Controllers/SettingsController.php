@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\HealthConsentForm;
+use App\Models\HealthServiceSetting;
 use App\Models\InstitutionSection;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use App\Support\AccountPassword;
 use App\Support\AccountSettings;
 use App\Support\AuditTrail;
+use App\Support\HealthServicesOffered;
 use App\Support\RequestMemo;
 use App\Support\WorkingSchoolYear;
 use Illuminate\Http\Request;
@@ -53,7 +56,99 @@ class SettingsController extends Controller
             'assignmentCatalog' => $profile['can_change_assignment']
                 ? InstitutionSection::catalogFor($institutionId)
                 : [],
+            // The School Nurse's Health Services Offered; nobody else's page
+            // carries it.
+            'healthServices' => in_array($profile['role'], HealthServicesOffered::EDIT_ROLES, true) && $institutionId > 0
+                ? $this->healthServicesPanel($institutionId, (string) $request->query('services_year', ''))
+                : null,
         ]);
+    }
+
+    /**
+     * Save the school's Health Services Offered for one school year: the
+     * services the School Nurse switched on. Scoped to the nurse's own school,
+     * which the request never names; the year must be one the panel offers.
+     */
+    public function updateHealthServices(Request $request)
+    {
+        $role = (string) $request->session()->get('active_role', '');
+        $institutionId = (int) $request->session()->get('active_institution_id');
+
+        abort_unless(in_array($role, HealthServicesOffered::EDIT_ROLES, true) && $institutionId > 0, 403, 'Only the School Nurse can set the health services the school offers.');
+
+        if (! HealthServicesOffered::supported()) {
+            return redirect()->route('settings')->with('error', 'The database has not been updated for this setting yet.');
+        }
+
+        $validated = $request->validateWithBag('healthServices', [
+            'school_year' => ['required', Rule::in($this->healthServicesYears($institutionId))],
+            'offered' => ['nullable', 'array'],
+            'offered.*' => ['string', Rule::in(array_keys(HealthConsentForm::PLANNED_SERVICES))],
+        ], [
+            'school_year.in' => 'Choose a school year from the list.',
+        ]);
+
+        $schoolYear = (string) $validated['school_year'];
+
+        HealthServicesOffered::save(
+            $institutionId,
+            $schoolYear,
+            array_values(array_unique($validated['offered'] ?? [])),
+            (string) $request->session()->get('active_name', 'School Nurse'),
+        );
+
+        return redirect()->route('settings', ['services_year' => $schoolYear])
+            ->withFragment('health-services')
+            ->with('success', "Health services offered for S.Y. {$schoolYear} saved.");
+    }
+
+    /**
+     * What the Health Services Offered panel shows for one school year.
+     *
+     * @return array<string, mixed>
+     */
+    private function healthServicesPanel(int $institutionId, string $requested): array
+    {
+        $current = HealthConsentForm::currentSchoolYear();
+        $years = $this->healthServicesYears($institutionId);
+        $schoolYear = in_array($requested, $years, true) ? $requested : $current;
+        $setting = HealthServicesOffered::settingFor($institutionId, $schoolYear);
+
+        return [
+            'supported' => HealthServicesOffered::supported(),
+            'school_year' => $schoolYear,
+            'current_year' => $current,
+            'years' => $years,
+            'offered' => HealthServicesOffered::for($institutionId, $schoolYear),
+            // The year the setting on screen was saved for: another year when
+            // it was carried over, null when none was ever saved.
+            'saved_for' => $setting['school_year'] ?? null,
+        ];
+    }
+
+    /**
+     * The school years the setting can be saved for: the last one, this one
+     * and the next, and any year the school's records or settings name.
+     *
+     * @return list<string>
+     */
+    private function healthServicesYears(int $institutionId): array
+    {
+        $start = (int) explode('-', HealthConsentForm::currentSchoolYear())[0];
+        $years = [($start - 1).'-'.$start, $start.'-'.($start + 1), ($start + 1).'-'.($start + 2)];
+
+        if (HealthServicesOffered::supported()) {
+            $years = [...$years, ...HealthServiceSetting::query()
+                ->where('institution_id', $institutionId)
+                ->pluck('school_year')
+                ->map(fn ($year): string => (string) $year)
+                ->all()];
+        }
+
+        $years = array_values(array_unique(array_filter($years, fn (string $year): bool => WorkingSchoolYear::isSchoolYear($year))));
+        rsort($years);
+
+        return $years;
     }
 
     /**

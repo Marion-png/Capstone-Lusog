@@ -1200,6 +1200,21 @@ class FeedingProgramController extends Controller
         // fallback rather than showing a beneficiary with no measurement at all.
         $details = is_array($learner->student_details) ? $learner->student_details : [];
 
+        // Edit Endline: the closing weigh-in closes a baseline-to-endline
+        // comparison, so it opens only once the programme has run its full
+        // length and a baseline is on file. The same rule storeEndline()
+        // enforces on the write, so the button and the endpoint cannot differ.
+        $cycle = FeedingProgramCycle::forInstitution($institutionId ? (int) $institutionId : null);
+        $hasBaseline = $learner->baseline_bmi_value !== null;
+        $endlineNote = match (true) {
+            ! $cycle->isComplete() => 'Endline can be edited once the '.$cycle->durationDays().'-day feeding programme is complete — '
+                .($cycle->hasStarted()
+                    ? $cycle->daysRemaining().' feeding '.($cycle->daysRemaining() === 1 ? 'day remains' : 'days remain')
+                    : 'the programme has not started').'.',
+            ! $hasBaseline => 'Endline can be edited once the class adviser has recorded the baseline measurement.',
+            default => '',
+        };
+
         return view('feedingcor-dashboard.beneficiary-detail', [
             'learner' => [
                 'id' => $learner->id,
@@ -1237,6 +1252,18 @@ class FeedingProgramController extends Controller
                 'bmi' => $this->measurement($learner->endline_bmi_value),
                 'status' => trim((string) $learner->endline_nutritional_status),
                 'recorded_at' => $learner->endline_recorded_at?->format('F j, Y'),
+            ],
+            'endlineEdit' => [
+                'allowed' => $endlineNote === '',
+                'note' => $endlineNote,
+                'url' => route('feedingcor-program.beneficiary.endline', $learner->id),
+                // The form opens on what is on file: the endline being edited,
+                // or for a first endline the age the baseline was taken at.
+                'age' => $learner->endline_age ?? $learner->baseline_age,
+                'height_cm' => $this->measurement($learner->endline_height_cm),
+                'weight_kg' => $this->measurement($learner->endline_weight_kg),
+                'recorded_at' => $learner->endline_recorded_at?->format('Y-m-d') ?? SchoolClock::today(),
+                'today' => SchoolClock::today(),
             ],
             'program' => [
                 'enrolled_at' => $learner->feeding_enrolled_at?->format('F j, Y'),

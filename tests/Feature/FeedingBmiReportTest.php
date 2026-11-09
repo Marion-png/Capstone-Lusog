@@ -286,6 +286,47 @@ class FeedingBmiReportTest extends TestCase
     }
 
     /**
+     * The BMI report counted over Only Beneficiaries is the feeding
+     * programme's: signed by the Feeding Coordinator, the School Clinic
+     * Nurse/Teacher and the Principal II, with the school's own names on the
+     * lines. The block is drawn for both populations and the Learners control
+     * shows one; the head's designation on every form here is Principal II.
+     */
+    #[Test]
+    public function the_beneficiaries_bmi_report_is_signed_by_the_coordinator_the_clinic_and_the_principal(): void
+    {
+        foreach ([['Liza Coordinator', 'feedcor.liza', 'feeding_coor'], ['Nora Nurse', 'nurse.nora', 'school_nurse'], ['Hector Head', 'head.hector', 'school_head']] as [$name, $username, $role]) {
+            DB::table('accounts')->insert([
+                'name' => $name,
+                'username' => $username,
+                'role' => $role,
+                'institution_id' => $this->institution->id,
+                'school_name' => 'Test School',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $html = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-sbfp-forms')
+            ->assertOk()
+            ->getContent();
+
+        // One block per BMI panel (Baseline, Final), hidden until Only Beneficiaries is chosen.
+        $this->assertSame(2, substr_count($html, '<div class="foot-grid cols-3" data-foot-for="beneficiaries" hidden>'));
+        $this->assertSame(2, substr_count($html, '<div class="foot-grid cols-3" data-foot-for="all">'));
+
+        $start = strpos($html, 'data-foot-for="beneficiaries"');
+        $block = substr($html, $start, strpos($html, '</div>'."\n".'</div>', $start) - $start);
+        $this->assertMatchesRegularExpression('/value="Liza Coordinator"[^>]*>\s*<div class="foot-role">Feeding Coordinator<\/div>/', $block);
+        $this->assertMatchesRegularExpression('/value="Nora Nurse"[^>]*>\s*<div class="foot-role">School Clinic Nurse\/Teacher<\/div>/', $block);
+        $this->assertMatchesRegularExpression('/value="Hector Head"[^>]*>\s*<div class="foot-role">Principal II<\/div>/', $block);
+
+        $this->assertStringContainsString('placeholder="Principal II"', $html);
+        $this->assertStringNotContainsString('Principal III', $html);
+    }
+
+    /**
      * Every form on this page opens under the DepEd heading, and every form
      * reads it from one place — four copies of a letterhead are four chances
      * for the same school to be headed four different ways.

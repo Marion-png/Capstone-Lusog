@@ -15,41 +15,50 @@
     The flow, in order:
       1. The photo reader pre-fills the reading panel beside the photo.
       2. The adviser holds the reading against the signed form and corrects
-         it there: a service the parent consented to that the reader missed
-         is switched to Consented, one the parent excluded that the reader
-         included is switched to Excluded, and the allergy and illness lines
+         it there. Each service is one of three: **Consented** (shaded at the
+         top and agreed to), **Excluded** (shaded at the top and named after
+         "gawas lamang niini") or **Not offered** (not shaded at the top — the
+         adviser shades the services the School Nurse said to offer, and
+         consent is not asked for the rest). The allergy and illness lines
          are corrected in their own fields.
       3. They tick "I checked this answer against the signed form."
       4. Upload Consent opens a read-only Confirm Upload summary: Back to Edit
          returns to the dialog untouched, Confirm & Upload files it.
       5. The page comes back with "Consent saved successfully."
-    The Consented / Excluded marks are what is filed (`services`, and a
-    partial consent's `excepted_services`). With no reading — no reader set
-    up, a PDF, a photo it could not read — the same marks are made under the
-    parent's answer instead, starting from Excluded.
+    The marks are what is filed (`services` the Consented ones, and a partial
+    consent's `excepted_services` the Excluded ones). With no reading — no
+    reader set up, a PDF, a photo it could not read — the same marks are made
+    under the parent's answer instead, starting from Not offered.
+
+    A service the learner is never given is locked: one the school does not
+    offer this school year (HealthServicesOffered, the School Nurse's
+    setting) reads Not offered, and Iron for a male learner Not applicable
+    (ConsentStanding::appliesTo). Immunization is listed for Grade 7 only.
 
     Expects $schoolYear (the year an upload is filed under — always the
     current one), $scannerReady and $plannedServices, plus either
-    $uploadStudents (each with lrn and name, for the student list) or
-    $uploadLearner (one lrn and name, fixed).
+    $uploadStudents (each with lrn, name and sex, for the student list) or
+    $uploadLearner (one lrn, name and sex, fixed).
 --}}
 @php
     $uploadLearner = $uploadLearner ?? null;
     $uploadStudents = $uploadStudents ?? [];
     // The services the dialog marks and the summary lists, worded as the
-    // printed letter words
-    // them (in Cebuano) under the paper's own headings. Every learner in the
-    // class is in the adviser's grade, so a service one grade alone is given
-    // is listed only for that grade.
+    // printed letter words them (in Cebuano) under the paper's own headings.
+    // Every learner in the class is in the adviser's grade, so a service one
+    // grade alone is given is listed only for that grade. Each carries what
+    // locks it: not offered by the school this year, or for one sex only.
     $uploadGrade = \App\Support\LearnerPlacement::gradeNumber((string) session('assigned_grade_level', ''));
+    $uploadInstitution = session('active_institution_id');
+    $offeredServices = \App\Support\HealthServicesOffered::for($uploadInstitution ? (int) $uploadInstitution : null, (string) $schoolYear);
     $confirmServices = collect(array_keys($plannedServices ?? \App\Models\HealthConsentForm::PLANNED_SERVICES))
         ->filter(fn (string $key): bool => (\App\Support\ConsentStanding::GRADE_ONLY_SERVICES[$key] ?? $uploadGrade) === $uploadGrade)
-        ->map(fn (string $key): array => \App\Models\HealthConsentForm::printedService($key))
+        ->map(fn (string $key): array => \App\Models\HealthConsentForm::printedService($key) + [
+            'offered' => in_array($key, $offeredServices, true),
+            'only_sex' => \App\Support\ConsentStanding::SEX_ONLY_SERVICES[$key] ?? null,
+        ])
         ->values()
         ->all();
-    // What the services say under a heading ticked on the paper while none
-    // of its rows is consented: the one sentence the letter's Send and the reading
-    // use (HealthConsentForm::rowsRequiredNotice), naming this grade's rows.
     // The allergy and illness lines the parent writes in, by field, as the
     // dialog and its summary caption them.
     $writeIns = [
@@ -58,16 +67,6 @@
         'prev_immunization_detail' => 'Previous immunization',
         'other_illness_detail' => 'Other illnesses',
     ];
-    $headingNotices = [];
-    foreach (\App\Models\HealthConsentForm::SERVICES as $heading => $service) {
-        $rows = array_values(array_filter(
-            array_column($confirmServices, 'key'),
-            fn (string $key): bool => array_key_exists($key, $service['children']),
-        ));
-        if ($rows !== []) {
-            $headingNotices[$heading] = \App\Models\HealthConsentForm::rowsRequiredNotice($heading, $rows);
-        }
-    }
 @endphp
 <div class="confirm-overlay pc-modal" id="uploadConsentModal" aria-hidden="true">
     <div class="confirm-modal" role="dialog" aria-modal="true" aria-label="Upload Sulat-Pahibalo">
@@ -115,7 +114,7 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
                             <input id="pc_student" type="text" value="{{ $uploadLearner['name'] }} ({{ $uploadLearner['lrn'] }})" readonly>
                         </div>
-                        <input type="hidden" id="pc_lrn" name="lrn" value="{{ $uploadLearner['lrn'] }}">
+                        <input type="hidden" id="pc_lrn" name="lrn" value="{{ $uploadLearner['lrn'] }}" data-sex="{{ $uploadLearner['sex'] ?? '' }}">
                     </div>
                 @else
                     <div class="pc-field">
@@ -125,7 +124,7 @@
                             <select id="pc_lrn" name="lrn" required>
                                 <option value="">Select Student</option>
                                 @foreach ($uploadStudents as $student)
-                                    <option value="{{ $student['lrn'] }}">{{ $student['name'] }} ({{ $student['lrn'] }})</option>
+                                    <option value="{{ $student['lrn'] }}" data-sex="{{ $student['sex'] ?? '' }}">{{ $student['name'] }} ({{ $student['lrn'] }})</option>
                                 @endforeach
                             </select>
                         </div>
@@ -245,10 +244,11 @@
                     </div>
                 </div>
 
-                {{-- Each health service, Consented or Excluded, for an agreed
-                     form with no reading beside it. Once a photo has been
-                     read, the same marks are made in the reading's Services
-                     section instead, pre-filled from what the reader saw. --}}
+                {{-- Each health service, Consented, Excluded or Not offered,
+                     for an agreed form with no reading beside it. Once a
+                     photo has been read, the same marks are made in the
+                     reading's Services section instead, pre-filled from what
+                     the reader saw. --}}
                 <div class="pc-field" id="pcServicesField" hidden>
                     <span class="pc-field-label" id="pcServicesLabel">Health services</span>
                     <div class="pc-svc" id="pcSvcHome" role="group" aria-labelledby="pcServicesLabel"></div>
@@ -491,7 +491,8 @@
         if (isAgreed()) {
             const unsettled = keysIn('check');
             if (unsettled.length > 0) {
-                showServiceError('Choose Consented or Excluded for every service marked Check the paper.', unsettled[0]);
+                showServiceError('Choose ' + optionsFor().map((choice) => stateWords[choice]).join(', ').replace(/, ([^,]*)$/, ' or $1')
+                    + ' for every service marked Check the paper.', unsettled[0]);
                 return;
             }
             if (keysIn('consented').length === 0) {
@@ -515,40 +516,45 @@
         });
     };
 
-    // The services ticked in the letter's list. The reader fills them with
-    // the list the server read off the paper (ConsentPaperCopy::tickedServices),
-    // and with where each service starts for each answer
-    // (ConsentPaperCopy::proposal); with none the upload reads as the program
-    // it is filed for.
+    // The services shaded at the top of the letter. The reader fills them with
+    // the list the server read off the paper (ConsentPaperCopy::tickedServices
+    // — a shaded Pag Purga is its rows the school offers), and with where each
+    // service starts for each answer (ConsentPaperCopy::proposal); with none
+    // the upload reads as the program it is filed for.
     const servicesBox = document.getElementById('pcServices');
     let readServices = [];
     let proposal = null;
-    // The headings (Pag Purga, Immunization) ticked on the paper. A heading
-    // names the service and its rows say which, so while none of its rows is
-    // consented the services say that one must be.
-    let readHeadings = [];
-    const headingNotices = @json($headingNotices);
-    const setServices = (keys, proposed = null, headings = []) => {
+    const setServices = (keys, proposed = null) => {
         readServices = keys.slice();
         proposal = proposed;
-        readHeadings = headings.slice();
         writeKeys(servicesBox, 'services[]', keys);
     };
 
     // ── Marking the services ────────────────────────────────────────
-    // Every service the letter can carry, each Consented or Excluded. With a
-    // reading, each row starts where the reader left it
+    // Every service the letter can carry, each Consented, Excluded or Not
+    // offered. Shaded at the top and agreed to is Consented; shaded and named
+    // after "gawas lamang niini" is Excluded; not shaded is Not offered — the
+    // parent was not asked about it, so it is never read as a refusal. A full
+    // consent excludes nothing, so it offers only Consented and Not offered.
+    //
+    // With a reading, each row starts where the reader left it
     // (ConsentPaperCopy::proposal): a service it read as approved starts
     // Consented, a row it could not settle waits on the adviser as "Check the
-    // paper", and the rest start Excluded. With no reading every row starts
-    // Excluded, so a service is only ever Consented for a reason. The
-    // adviser's own marks override the reading and survive a switch between
-    // full and partial consent; they go with the photo or the learner.
+    // paper", one the exceptions name starts Excluded and the rest start Not
+    // offered. With no reading every row starts Not offered, so a service is
+    // only ever Consented for a reason. The adviser's own marks override the
+    // reading and survive a switch between full and partial consent (an
+    // Excluded mark asks again under a full consent); they go with the photo
+    // or the learner.
+    //
+    // A row the learner is never given is locked and marks nothing: Not
+    // offered when the school does not offer it this school year, Not
+    // applicable when it is for the other sex.
     //
     // The marks are what is filed: `services` the Consented ones, and on a
-    // partial consent the Excluded rows of the letter's list as
-    // `excepted_services`. The server reads them with ConsentStanding, exactly
-    // as the learner's Consent tab will show them.
+    // partial consent the Excluded ones as `excepted_services`. The server
+    // reads them with ConsentStanding, exactly as the learner's Consent tab
+    // will show them.
     const confirmModal = document.getElementById('pcConfirmModal');
     const confirmList = document.getElementById('pcConfirmList');
     const confirmTally = document.getElementById('pcConfirmTally');
@@ -561,8 +567,16 @@
     const serviceKeys = confirmServices.map((service) => service.key);
     const writeIns = @json($writeIns);
     const answerKinds = { full: 'is-full', partial: 'is-partial', refused: 'is-refused' };
-    const stateWords = { consented: 'Consented', excluded: 'Excluded', check: 'Check the paper', declined: 'Declined', pending: 'Pending' };
-    // The adviser's own marks: service key → 'consented' | 'excluded'.
+    const stateWords = {
+        consented: 'Consented',
+        excluded: 'Excluded',
+        not_offered: 'Not offered',
+        not_applicable: 'Not applicable',
+        check: 'Check the paper',
+        declined: 'Declined',
+        pending: 'Pending',
+    };
+    // The adviser's own marks: service key → 'consented' | 'excluded' | 'not_offered'.
     const decided = new Map();
     // While a reading is on screen the marks are made in its Services section:
     // the section's body, the tally on its folded line, and the section itself.
@@ -571,43 +585,79 @@
     let foldSection = null;
 
     const isAgreed = () => answerSelect.value === 'full' || answerSelect.value === 'partial';
+    // The marks an answer allows: a full consent excludes nothing.
+    const optionsFor = () => (answerSelect.value === 'partial'
+        ? ['consented', 'excluded', 'not_offered']
+        : ['consented', 'not_offered']);
+    // The chosen learner's sex, for the services one sex alone is given.
+    const learnerSex = () => (studentSelect?.tagName === 'SELECT'
+        ? studentSelect.options[studentSelect.selectedIndex]?.dataset.sex
+        : studentSelect?.dataset.sex) || '';
+    const serviceByKey = new Map(confirmServices.map((service) => [service.key, service]));
+    // A row the learner is never given, whatever the paper shows: the school
+    // does not offer it this school year, or it is for the other sex.
+    const lockedState = (key) => {
+        const service = serviceByKey.get(key);
+        if (!service) return null;
+        if (!service.offered) return 'not_offered';
+        if (service.only_sex && learnerSex() !== '' && learnerSex() !== service.only_sex) return 'not_applicable';
+        return null;
+    };
+    const lockReason = (key) => {
+        const state = lockedState(key);
+        if (state === 'not_offered') return 'The school does not offer it this school year.';
+        if (state === 'not_applicable') return 'For ' + String(serviceByKey.get(key)?.only_sex || '').toLowerCase() + ' learners only.';
+        return '';
+    };
+    const markableKeys = () => serviceKeys.filter((key) => !lockedState(key));
     // What the reading proposes for the answer on screen. Nothing without one.
-    const proposed = () => proposal?.[answerSelect.value] || { approved: [], check: [] };
+    const proposed = () => proposal?.[answerSelect.value] || { approved: [], check: [], excluded: [] };
+    // The rows the reader found shaded at the top, or could not settle.
+    const onPaper = (key) => readServices.includes(key) || Boolean(proposal?.full?.check?.includes(key));
     // Where one service stands for the answer on screen. A refusal declines
-    // every service and no answer yet gives none; only an agreed form has
-    // services to mark.
+    // what the paper offered (everything, when nothing was read at the top)
+    // and no answer yet gives none; only an agreed form has services to mark.
     const stateOf = (key) => {
-        if (answerSelect.value === 'refused') return 'declined';
+        const locked = lockedState(key);
+        if (locked) return locked;
+        if (answerSelect.value === 'refused') {
+            if (!proposal || !markableKeys().some(onPaper)) return 'declined';
+            return onPaper(key) ? 'declined' : 'not_offered';
+        }
         if (!isAgreed()) return 'pending';
-        if (decided.has(key)) return decided.get(key);
+        if (decided.has(key)) {
+            const mark = decided.get(key);
+            return optionsFor().includes(mark) ? mark : 'check';
+        }
         const reading = proposed();
         if (reading.approved.includes(key)) return 'consented';
         if (reading.check.includes(key)) return 'check';
-        return 'excluded';
+        if ((reading.excluded || []).includes(key)) return 'excluded';
+        return 'not_offered';
     };
     const keysIn = (state) => serviceKeys.filter((key) => stateOf(key) === state);
-    // The services the letter lists: every row the reader found marked or
-    // could not settle, or — with no reading — every one, as the printed
-    // letter carries them all.
-    const letterServices = () => {
-        if (!proposal) return serviceKeys.slice();
-        const onLetter = [...readServices, ...proposal.full.check];
-        return serviceKeys.filter((key) => onLetter.includes(key));
-    };
 
     // The counts, as the editor, the folded line and the summary say them.
     const tallies = () => {
-        if (answerSelect.value === 'refused') return [['declined', serviceKeys.length, 'Declined']];
-        if (!isAgreed()) return [['pending', serviceKeys.length, 'Pending']];
-        return [
-            ['consented', keysIn('consented').length, 'Consented'],
-            ['excluded', keysIn('excluded').length, 'Excluded'],
-            ['check', keysIn('check').length, 'To check'],
-        ].filter(([state, count]) => count > 0 || state !== 'check');
+        const order = isAgreed()
+            ? ['consented', 'excluded', 'check', 'not_offered', 'not_applicable']
+            : ['declined', 'pending', 'not_offered', 'not_applicable'];
+        const words = { check: 'To check' };
+        return order
+            .map((state) => [state, keysIn(state).length, words[state] || stateWords[state]])
+            .filter(([state, count]) => count > 0 || (state === 'consented' && isAgreed()));
     };
     const tallyText = () => tallies().map(([, count, word]) => count + ' ' + word).join(' · ');
     // The folded line's chips take the reading's own pill colours.
-    const chipKinds = { consented: 'consented', excluded: 'declined', check: 'unclear', declined: 'declined', pending: 'no_form' };
+    const chipKinds = {
+        consented: 'consented',
+        excluded: 'declined',
+        check: 'unclear',
+        declined: 'declined',
+        pending: 'no_form',
+        not_offered: 'not_on_form',
+        not_applicable: 'not_applicable',
+    };
 
     const learnerName = () => {
         if (studentSelect?.tagName === 'SELECT') {
@@ -622,7 +672,7 @@
     // amber word on a row nobody has settled, and the pill on a read-only row.
     const paintEditorRow = (row) => {
         const state = stateOf(row.dataset.key);
-        row.classList.remove('is-consented', 'is-excluded', 'is-check', 'is-declined', 'is-pending');
+        row.classList.remove(...Object.keys(stateWords).map((word) => 'is-' + word));
         row.classList.add('is-' + state);
         row.querySelectorAll('.pc-svc-opt').forEach((option) => {
             option.setAttribute('aria-pressed', String(option.dataset.choice === state));
@@ -633,21 +683,19 @@
         if (pill) pill.textContent = stateWords[state];
     };
 
-    // The tally, Mark all and the heading notes, after any change.
+    // Every row the adviser can mark is Consented.
+    const allConsented = () => markableKeys().length > 0 && markableKeys().every((key) => stateOf(key) === 'consented');
+
+    // The tally and Mark all, after any change.
     const syncEditor = () => {
         const host = editorHost();
         const tally = host?.querySelector('.pc-svc-tally');
         if (tally) tally.textContent = tallyText();
         const all = host?.querySelector('.pc-svc-all');
         if (all) {
-            all.hidden = !isAgreed();
-            all.textContent = keysIn('consented').length === serviceKeys.length ? 'Mark all Excluded' : 'Mark all Consented';
+            all.hidden = !isAgreed() || markableKeys().length === 0;
+            all.textContent = allConsented() ? 'Mark all Not offered' : 'Mark all Consented';
         }
-        host?.querySelectorAll('.pc-svc-group-note').forEach((note) => {
-            const heading = note.dataset.heading;
-            const rows = confirmServices.filter((service) => service.parent === heading).map((service) => service.key);
-            note.hidden = !(isAgreed() && readHeadings.includes(heading) && !rows.some((key) => stateOf(key) === 'consented'));
-        });
         if (foldTally) {
             foldTally.replaceChildren(...tallies().filter(([, count]) => count > 0).map(([state, count, word]) => {
                 const chip = document.createElement('span');
@@ -689,24 +737,15 @@
 
     // A heading the paper indents its sub-items under (Pag Purga,
     // Immunization) heads them here too, worded as the printed letter words
-    // it, with the notice that one of its rows must be consented when the
-    // paper ticks the heading alone.
-    const groupHead = (service, className, withNotice) => {
+    // it. A shaded heading is its rows the school offers, so it carries no
+    // mark of its own.
+    const groupHead = (service, className) => {
         const head = document.createElement('li');
         head.className = className;
         const title = document.createElement('span');
         title.lang = 'ceb';
         title.textContent = service.group;
         head.appendChild(title);
-        if (withNotice && headingNotices[service.parent]) {
-            const note = document.createElement('span');
-            note.className = 'pc-svc-group-note';
-            note.dataset.heading = service.parent;
-            note.setAttribute('role', 'status');
-            note.textContent = headingNotices[service.parent];
-            note.hidden = true;
-            head.appendChild(note);
-        }
         return head;
     };
 
@@ -719,8 +758,8 @@
         all.type = 'button';
         all.className = 'pc-svc-all';
         all.addEventListener('click', () => {
-            const every = keysIn('consented').length === serviceKeys.length;
-            serviceKeys.forEach((key) => decided.set(key, every ? 'excluded' : 'consented'));
+            const every = allConsented();
+            markableKeys().forEach((key) => decided.set(key, every ? 'not_offered' : 'consented'));
             repaintRows();
         });
         head.append(tally, all);
@@ -735,7 +774,7 @@
         let group = null;
         confirmServices.forEach((service) => {
             if (service.group && service.group !== group) {
-                list.appendChild(groupHead(service, 'pc-svc-group', true));
+                list.appendChild(groupHead(service, 'pc-svc-group'));
             }
             group = service.group || null;
 
@@ -750,7 +789,15 @@
             name.appendChild(words);
             row.appendChild(name);
 
-            if (isAgreed()) {
+            const why = lockReason(service.key);
+            if (why !== '') {
+                const note = document.createElement('span');
+                note.className = 'pc-svc-why';
+                note.textContent = why;
+                name.appendChild(note);
+            }
+
+            if (isAgreed() && why === '') {
                 const flag = document.createElement('span');
                 flag.className = 'pc-svc-flag';
                 flag.textContent = stateWords.check;
@@ -761,7 +808,7 @@
                 options.className = 'pc-svc-seg';
                 options.setAttribute('role', 'group');
                 options.setAttribute('aria-label', service.label);
-                ['consented', 'excluded'].forEach((choice) => {
+                optionsFor().forEach((choice) => {
                     const option = document.createElement('button');
                     option.type = 'button';
                     option.className = 'pc-svc-opt';
@@ -816,7 +863,7 @@
         let group = null;
         confirmServices.forEach((service) => {
             if (service.group && service.group !== group) {
-                rows.push(groupHead(service, 'pcc-group', false));
+                rows.push(groupHead(service, 'pcc-group'));
             }
             group = service.group || null;
 
@@ -915,12 +962,17 @@
                 return;
             }
             writeKeys(servicesBox, 'services[]', consented);
-            writeKeys(exceptedBox, 'excepted_services[]', answerSelect.value === 'partial'
-                ? letterServices().filter((key) => stateOf(key) !== 'consented')
-                : []);
+            writeKeys(exceptedBox, 'excepted_services[]', answerSelect.value === 'partial' ? keysIn('excluded') : []);
             servicesConfirmed.value = '1';
         } else {
-            writeKeys(servicesBox, 'services[]', readServices);
+            // A refusal files the services it declined — the ones the paper
+            // offered — so the rest read Not offered; with nothing read at the
+            // top it files none, and the server declines every service.
+            let filed = readServices;
+            if (answerSelect.value === 'refused') {
+                filed = proposal && markableKeys().some(onPaper) ? keysIn('declined') : [];
+            }
+            writeKeys(servicesBox, 'services[]', filed);
             writeKeys(exceptedBox, 'excepted_services[]', []);
             servicesConfirmed.value = '0';
         }
@@ -1270,11 +1322,7 @@
     const notSpecified = @json(\App\Support\LearnerAllergies::NOT_SPECIFIED);
 
     const fillFromReading = (draft, services, proposed) => {
-        setServices(
-            Array.isArray(services) ? services : [],
-            proposed || null,
-            Object.keys(headingNotices).filter((heading) => draft.services?.[heading] === 'yes'),
-        );
+        setServices(Array.isArray(services) ? services : [], proposed || null);
 
         Object.entries(writtenFields).forEach(([from, to]) => {
             const input = uploadForm.querySelector('[name="' + to + '"]');

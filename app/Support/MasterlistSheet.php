@@ -96,7 +96,7 @@ final class MasterlistSheet
         string $preparedBy,
         string $preparedRole,
         string $notedBy = '',
-        string $notedRole = 'Principal',
+        string $notedRole = SchoolSignatories::HEAD_DESIGNATION,
         string $scope = '',
         array $widths = [],
     ): void {

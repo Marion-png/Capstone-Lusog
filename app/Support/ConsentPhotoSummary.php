@@ -7,7 +7,11 @@ use App\Models\HealthConsentForm;
 /** A display of the photo reading, not a replacement for the recorded consent. */
 final class ConsentPhotoSummary
 {
-    public static function fromDraft(array $draft, ?int $grade): array
+    /**
+     * @param  string|null  $sex  the learner's, for the services one sex alone is given
+     * @param  list<string>|null  $offered  HealthServicesOffered::for(); null when not known
+     */
+    public static function fromDraft(array $draft, ?int $grade, ?string $sex = null, ?array $offered = null): array
     {
         $groups = array_fill_keys(['consented', 'declined', 'not_applicable', 'not_offered', 'unclear'], []);
         $choice = $draft['consent_choice'] ?? ConsentFormScanner::UNCLEAR;
@@ -20,20 +24,22 @@ final class ConsentPhotoSummary
         // The reading of the rows the upload dialog files, so this summary and
         // the list beside it cannot count different services.
         $services = $draft['services'] ?? [];
-        $listed = ConsentPaperCopy::tickedServices($services);
-        $unsettled = ConsentPaperCopy::unsettledServices($services);
+        $listed = ConsentPaperCopy::tickedServices($services, $offered);
+        $unsettled = ConsentPaperCopy::unsettledServices($services, $offered);
         $refused = $choice === HealthConsentForm::CONSENT_DENY;
 
         foreach (HealthConsentForm::PLANNED_SERVICES as $key => $label) {
-            $gradeOnly = ConsentStanding::GRADE_ONLY_SERVICES[$key] ?? null;
-
-            if ($gradeOnly !== null && $grade !== $gradeOnly) {
+            if (! ConsentStanding::appliesTo($key, $grade, $sex)) {
                 $group = 'not_applicable';
+            } elseif (! HealthServicesOffered::isOffered($key, $offered)) {
+                $group = 'not_offered';
             } elseif ($unreadable) {
                 $group = 'unclear';
             } elseif (! $refused && in_array($key, $unsettled, true)) {
                 $group = 'unclear';
-            } elseif (! $refused && ! in_array($key, $listed, true)) {
+            } elseif (! in_array($key, $listed, true) && ! in_array($key, $unsettled, true) && ($listed !== [] || ! $refused)) {
+                // Not shaded at the top: not offered, so not refused either.
+                // A refusal with nothing read at the top declines everything.
                 $group = 'not_offered';
             } else {
                 $group = match ($choice) {
@@ -49,7 +55,7 @@ final class ConsentPhotoSummary
             $groups[$group][] = $label;
         }
 
-        $checks = self::checks($draft, $grade, $choice, $excluded, $unreadable, $services);
+        $checks = self::checks($draft, $grade, $choice, $excluded, $unreadable, $services, $sex, $offered);
         if ($groups['unclear'] !== [] && $checks === []) {
             $checks[] = ['section' => 'services', 'subject' => 'Service list', 'message' => 'Some service decisions need to be checked against the photo.'];
         }
@@ -105,9 +111,10 @@ final class ConsentPhotoSummary
      * @param  array<string, mixed>  $draft
      * @param  array<string, string>  $services
      * @param  list<string>|null  $excluded
+     * @param  list<string>|null  $offered
      * @return list<array{section: string, subject: string, message: string}>
      */
-    private static function checks(array $draft, ?int $grade, string $choice, ?array $excluded, bool $unreadable, array $services): array
+    private static function checks(array $draft, ?int $grade, string $choice, ?array $excluded, bool $unreadable, array $services, ?string $sex = null, ?array $offered = null): array
     {
         $checks = [];
         $add = function (string $section, string $subject, string $message) use (&$checks): void {
@@ -139,6 +146,14 @@ final class ConsentPhotoSummary
             $add('sheet', 'Date (PETSA)', (string) ($draft['date_warning'] ?? '') ?: ConsentFormScanner::DATE_OUTSIDE_SCHOOL_YEAR);
         }
 
+        // The learner's name on the sheet is checked against the learner the
+        // form is being filed for (ConsentFormScanner::checkLearner); one that
+        // could not be read is no proof either way, so the adviser is asked.
+        $learner = is_array($draft['learner'] ?? null) ? $draft['learner'] : [];
+        if (($learner['matches'] ?? null) === null && trim((string) ($learner['name'] ?? '')) !== '') {
+            $add('sheet', 'Learner', 'The learner\'s name on the form could not be read. Check that this is '.$learner['name'].'\'s form.');
+        }
+
         $written = $draft['written'] ?? [];
         $fields = ConsentFormScanner::WRITTEN_FIELDS;
         $sectionOf = fn (string $field): string => in_array($field, ['consent_exceptions', 'refusal_reason'], true) ? 'consent' : 'allergies';
@@ -166,31 +181,44 @@ final class ConsentPhotoSummary
         // A photo too wide to trust has every row held back, which that one
         // line already says; listing all eleven would only repeat it.
         if ($choice !== HealthConsentForm::CONSENT_DENY && ! $wide) {
+            // A box that does not apply to this learner, or that the school does
+            // not offer, has nothing to settle. A heading (Pag Purga) is a box
+            // of its own, and is asked about when it is the one unclear.
             $unsure = array_values(array_filter(
                 array_keys($services, ConsentFormScanner::UNCLEAR, true),
-                fn (string $key): bool => (ConsentStanding::GRADE_ONLY_SERVICES[$key] ?? $grade) === $grade,
+                fn (string $key): bool => self::given($key, $grade, $sex, $offered),
             ));
             if ($unsure !== []) {
                 $add('services', 'Service list', 'Could not tell whether '.(count($unsure) === 1 ? 'this box is' : 'these boxes are').' ticked: '
                     .implode(', ', array_map(self::paperName(...), $unsure)).'. Mark '.(count($unsure) === 1 ? 'it' : 'them').' from the paper.');
             }
+        }
 
-            // A heading ticked with none of the rows under it: the rows must be
-            // ticked too, and the adviser is told so in the words the letter's
-            // Send uses. Grade-aware, so a Grade 8 form is not sent back over a
-            // row that class is never given; a row the reader could not settle
-            // is already named in the list above.
-            foreach (HealthConsentForm::SERVICES as $heading => $service) {
-                $rows = array_values(array_filter(
-                    array_keys($service['children']),
-                    fn (string $row): bool => (ConsentStanding::GRADE_ONLY_SERVICES[$row] ?? $grade) === $grade,
-                ));
+        // ── The adviser's shading against the rules and the setting ────
+        // The adviser shades the services the School Nurse said to offer. A
+        // shading the rules or the school's Health Services Offered rule out —
+        // Iron for a male learner, MR, Td beyond Grade 7, a service the school
+        // does not give this year — is named, and read as Not applicable or
+        // Not offered rather than consented.
+        if (! $wide) {
+            $shaded = fn (string $key): bool => ($services[$key] ?? null) === ConsentFormScanner::TICKED;
 
-                if (($services[$heading] ?? null) === ConsentFormScanner::TICKED
-                    && $rows !== []
-                    && array_filter($rows, fn (string $row): bool => in_array($services[$row] ?? null, [ConsentFormScanner::TICKED, ConsentFormScanner::UNCLEAR], true)) === []
-                ) {
-                    $add('services', HealthConsentForm::headingName($heading), HealthConsentForm::rowsRequiredNotice($heading, $rows).' Mark the ones that apply from the paper.');
+            foreach (HealthConsentForm::SERVICES as $key => $service) {
+                $named = false;
+
+                foreach (array_keys($service['children']) as $row) {
+                    $conflict = $shaded($row) ? ConsentStanding::shadingConflict($row, $grade, $sex, $offered) : null;
+                    if ($conflict !== null) {
+                        $add('services', self::paperName($row), $conflict);
+                        $named = true;
+                    }
+                }
+
+                // A heading shaded with no row under it given to this learner,
+                // and no row of its own shaded to say so already.
+                $conflict = $shaded($key) && ! $named ? ConsentStanding::boxConflict($key, $grade, $sex, $offered) : null;
+                if ($conflict !== null) {
+                    $add('services', self::paperName($key), $conflict);
                 }
             }
         }
@@ -218,9 +246,10 @@ final class ConsentPhotoSummary
             if (($entry['readable'] ?? true) === false) {
                 $add($section, $subject, 'Something is written on the line, but it could not be read. Type it from the paper.');
             } elseif (isset($asks[$field]) && $text === '' && $box === ConsentFormScanner::TICKED) {
-                // Ticked with nothing named: a clear answer, filed as "Not
-                // specified" (LearnerAllergies::NOT_SPECIFIED), not a doubt.
-                continue;
+                // Ticked with nothing named: the child has one and the parent
+                // did not say which. Filed as "Not specified"
+                // (LearnerAllergies::NOT_SPECIFIED), and the adviser asks.
+                $add($section, $subject, ConsentFormScanner::BOX_TICKED_NO_DETAILS);
             } elseif (isset($asks[$field]) && ! ConsentFormScanner::saysSomething($text) && $box === ConsentFormScanner::TICKED) {
                 $add($section, $subject, 'Its box is ticked, but the line reads "'.$text.'". Ask the parent '.$asks[$field].', if any.');
             } elseif (isset($asks[$field]) && ! ConsentFormScanner::saysSomething($text) && $box === ConsentFormScanner::UNCLEAR) {
@@ -243,20 +272,18 @@ final class ConsentPhotoSummary
         }
 
         // The allergy heading box against the three kinds under it. Ticked
-        // with none of them ticked, the boxes under it must be ticked too, as
-        // the service headings' must; a heading nobody could make out, with
-        // nothing named under it, is the paper's to settle.
+        // with nothing named under it, the parent said the child has one and
+        // not which, so the adviser asks; a heading nobody could make out,
+        // with nothing named under it, is the paper's to settle.
         $kinds = ConsentPaperCopy::ALLERGY_KINDS;
         $kindBox = fn (string $kind): ?string => $written[$kind]['box'] ?? ($allergyBoxes[$kind] ?? null);
         $heading = $allergyBoxes['allergy'] ?? null;
         $anyKind = fn (string $state): bool => array_filter($kinds, fn (string $kind): bool => $kindBox($kind) === $state) !== [];
+        $anyNamed = array_filter($kinds, fn (string $kind): bool => ConsentFormScanner::saysSomething((string) ($written[$kind]['text'] ?? ''))) !== [];
 
-        if ($heading === ConsentFormScanner::TICKED && ! $anyKind(ConsentFormScanner::TICKED) && ! $anyKind(ConsentFormScanner::UNCLEAR)) {
-            $add('allergies', self::allergyHeading(), self::allergyRowsNotice());
-        } elseif ($heading === ConsentFormScanner::UNCLEAR
-            && ! $anyKind(ConsentFormScanner::TICKED)
-            && array_filter($kinds, fn (string $kind): bool => ConsentFormScanner::saysSomething((string) ($written[$kind]['text'] ?? ''))) === []
-        ) {
+        if ($heading === ConsentFormScanner::TICKED && ! $anyKind(ConsentFormScanner::TICKED) && ! $anyKind(ConsentFormScanner::UNCLEAR) && ! $anyNamed) {
+            $add('allergies', self::allergyHeading(), ConsentFormScanner::BOX_TICKED_NO_DETAILS);
+        } elseif ($heading === ConsentFormScanner::UNCLEAR && ! $anyKind(ConsentFormScanner::TICKED) && ! $anyNamed) {
             $add('allergies', self::allergyHeading(), 'Could not tell whether its box is ticked. Check the paper.');
         }
 
@@ -303,19 +330,10 @@ final class ConsentPhotoSummary
         return trim(explode(',', HealthConsentForm::ALLERGY_TEXT['allergy'])[0]);
     }
 
-    /**
-     * The allergy heading ticked with none of the three kinds under it, said
-     * as the service headings' notice is (HealthConsentForm::rowsRequiredNotice),
-     * each kind by its printed words without the "(isulat …)" instruction.
-     */
-    private static function allergyRowsNotice(): string
+    /** Whether a service is given to this learner: by the rules, and by the school's setting. */
+    private static function given(string $key, ?int $grade, ?string $sex, ?array $offered): bool
     {
-        $names = array_map(
-            fn (string $kind): string => trim(explode(' (', HealthConsentForm::ALLERGY_TEXT[$kind])[0]),
-            ConsentPaperCopy::ALLERGY_KINDS,
-        );
-
-        return 'Ticked, but none of the boxes under it is. At least one must be ticked: '.implode('; ', $names).'. Ask the parent which, and write it on its line.';
+        return ConsentStanding::shadingConflict($key, $grade, $sex, $offered) === null;
     }
 
     /**

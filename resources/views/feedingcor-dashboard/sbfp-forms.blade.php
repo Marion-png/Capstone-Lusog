@@ -182,23 +182,7 @@
 						@include('feedingcor-dashboard.partials.bmi-chart', ['phase' => 'baseline', 'prefix' => 'bmib'])
 					</div>
 
-					<div class="foot-grid cols-3">
-						<div class="foot-block">
-							<div class="foot-label">Prepared by:</div>
-							<input type="text" class="sign-input" data-field="bmib_prepared_name" value="{{ $nurseName }}" placeholder="Full name" aria-label="Prepared by name">
-							<input type="text" class="foot-role-input" data-field="bmib_prepared_role" placeholder="School Clinic Nurse / Teacher" aria-label="Prepared by designation">
-						</div>
-						<div class="foot-block">
-							<div class="foot-label">Attested by:</div>
-							<input type="text" class="sign-input" data-field="bmib_attested_name" placeholder="Full name" aria-label="Attested by name">
-							<input type="text" class="foot-role-input" data-field="bmib_attested_role" placeholder="MAPEH Department Head" aria-label="Attested by designation">
-						</div>
-						<div class="foot-block">
-							<div class="foot-label">Noted by:</div>
-							<input type="text" class="sign-input" data-field="bmib_noted_name" placeholder="Full name" aria-label="Noted by name">
-							<input type="text" class="foot-role-input" data-field="bmib_noted_role" placeholder="Principal III" aria-label="Noted by designation">
-						</div>
-					</div>
+					@include('feedingcor-dashboard.partials.bmi-signatories', ['prefix' => 'bmib'])
 				</div>
 			</div>
 		</section>
@@ -237,23 +221,7 @@
 						@include('feedingcor-dashboard.partials.bmi-chart', ['phase' => 'endline', 'prefix' => 'bmif'])
 					</div>
 
-					<div class="foot-grid cols-3">
-						<div class="foot-block">
-							<div class="foot-label">Prepared by:</div>
-							<input type="text" class="sign-input" data-field="bmif_prepared_name" value="{{ $nurseName }}" placeholder="Full name" aria-label="Prepared by name">
-							<input type="text" class="foot-role-input" data-field="bmif_prepared_role" placeholder="School Clinic Nurse / Teacher" aria-label="Prepared by designation">
-						</div>
-						<div class="foot-block">
-							<div class="foot-label">Attested by:</div>
-							<input type="text" class="sign-input" data-field="bmif_attested_name" placeholder="Full name" aria-label="Attested by name">
-							<input type="text" class="foot-role-input" data-field="bmif_attested_role" placeholder="MAPEH Department Head" aria-label="Attested by designation">
-						</div>
-						<div class="foot-block">
-							<div class="foot-label">Noted by:</div>
-							<input type="text" class="sign-input" data-field="bmif_noted_name" placeholder="Full name" aria-label="Noted by name">
-							<input type="text" class="foot-role-input" data-field="bmif_noted_role" placeholder="Principal III" aria-label="Noted by designation">
-						</div>
-					</div>
+					@include('feedingcor-dashboard.partials.bmi-signatories', ['prefix' => 'bmif'])
 				</div>
 			</div>
 		</section>
@@ -305,7 +273,7 @@
 						<div class="foot-block">
 							<div class="foot-label">Noted by:</div>
 							<input type="text" class="sign-input" data-field="narr_noted_name" placeholder="Full name" aria-label="Noted by name">
-							<input type="text" class="foot-role-input" data-field="narr_noted_role" placeholder="Principal III" aria-label="Noted by designation">
+							<input type="text" class="foot-role-input" data-field="narr_noted_role" placeholder="{{ \App\Support\SchoolSignatories::HEAD_DESIGNATION }}" aria-label="Noted by designation">
 						</div>
 					</div>
 				</div>
@@ -369,7 +337,7 @@
 						<div class="foot-block">
 							<div class="foot-label">Noted by:</div>
 							<input type="text" class="sign-input" data-field="ml_noted_name" placeholder="Full name" aria-label="Noted by name">
-							<input type="text" class="foot-role-input" data-field="ml_noted_role" placeholder="Principal III" aria-label="Noted by designation">
+							<input type="text" class="foot-role-input" data-field="ml_noted_role" placeholder="{{ \App\Support\SchoolSignatories::HEAD_DESIGNATION }}" aria-label="Noted by designation">
 						</div>
 					</div>
 				</div>
@@ -436,7 +404,7 @@
 						<div class="foot-block">
 							<div class="foot-label">Noted by:</div>
 							<input type="text" class="sign-input" data-field="mlb_noted_name" placeholder="Full name" aria-label="Noted by name">
-							<input type="text" class="foot-role-input" data-field="mlb_noted_role" placeholder="Principal III" aria-label="Noted by designation">
+							<input type="text" class="foot-role-input" data-field="mlb_noted_role" placeholder="{{ \App\Support\SchoolSignatories::HEAD_DESIGNATION }}" aria-label="Noted by designation">
 						</div>
 					</div>
 				</div>
@@ -724,6 +692,13 @@
 		const values = valuesFor(scope);
 		const gradeKey = gradeKeyFor(scope.grade);
 		const label = scopeLabel(scope);
+
+		// Who signs the BMI report follows who it counts: Only Beneficiaries is
+		// the feeding programme's, prepared by the Feeding Coordinator.
+		const signedFor = scope.population === 'beneficiaries' ? 'beneficiaries' : 'all';
+		document.querySelectorAll('[data-foot-for]').forEach((foot) => {
+			foot.hidden = foot.getAttribute('data-foot-for') !== signedFor;
+		});
 
 		document.querySelectorAll('.bmi-input[data-field]').forEach((input) => {
 			const key = input.getAttribute('data-field');

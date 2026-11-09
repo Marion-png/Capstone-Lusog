@@ -25,10 +25,20 @@ class ConsentPhotoSummaryTest extends TestCase
         ];
     }
 
+    /** The same sheet as a Grade 8 adviser shades it: Immunization (Grade 7 only) left blank. */
+    private function grade8Draft(string $choice = HealthConsentForm::CONSENT_ALL): array
+    {
+        $draft = $this->draft($choice);
+        $draft['services']['immunization'] = 'no';
+        $draft['services']['immunization_grade7'] = 'no';
+
+        return $draft;
+    }
+
     #[Test]
     public function named_exceptions_are_separated_from_offered_services(): void
     {
-        $draft = $this->draft(HealthConsentForm::CONSENT_SPECIFIC);
+        $draft = $this->grade8Draft(HealthConsentForm::CONSENT_SPECIFIC);
         $draft['written']['consent_exceptions'] = [
             'text' => 'Deworming – Worms, Schistosomiasis, Filariasis', 'readable' => true, 'confident' => true,
         ];
@@ -90,8 +100,13 @@ class ConsentPhotoSummaryTest extends TestCase
         }
     }
 
+    /**
+     * A refusal declines what the form asked about. A row not shaded at the
+     * top was not offered, so it is Not offered, never a refusal; a box the
+     * reader could not make out may be on the sheet, so it is declined.
+     */
     #[Test]
-    public function a_refusal_declines_every_row_whatever_its_box_reads(): void
+    public function a_refusal_declines_the_shaded_rows_and_not_the_unshaded_ones(): void
     {
         $draft = $this->draft(HealthConsentForm::CONSENT_DENY);
         $draft['services']['dental'] = 'no';
@@ -99,45 +114,105 @@ class ConsentPhotoSummaryTest extends TestCase
 
         $summary = ConsentPhotoSummary::fromDraft($draft, 8);
 
-        $this->assertCount(8, $summary['groups']['declined']);
+        $this->assertCount(7, $summary['groups']['declined']);
+        $this->assertContains(HealthConsentForm::PLANNED_SERVICES['iron'], $summary['groups']['declined']);
         $this->assertSame([], $summary['groups']['unclear']);
-        $this->assertSame([], $summary['groups']['not_offered']);
+        $this->assertSame([HealthConsentForm::PLANNED_SERVICES['dental']], $summary['groups']['not_offered']);
     }
 
+    /**
+     * A shaded heading with no row under it shaded is its rows the school
+     * offers, so it asks for nothing more. Shading Immunization on a form for
+     * a learner it is never given (Grade 7 only) is named.
+     */
     #[Test]
-    public function a_heading_over_a_row_this_grade_is_never_given_raises_nothing(): void
+    public function a_heading_shaded_alone_covers_its_rows_and_a_rule_it_breaks_is_named(): void
     {
-        // Immunization ticked, its one row left empty: for Grade 7 that row
-        // must be ticked too; Grade 8 is never given it, so nothing is asked.
         $draft = $this->draft();
         $draft['services']['immunization_grade7'] = 'no';
 
-        $heading = fn (int $grade): array => array_values(array_filter(
+        $checks = fn (int $grade): array => array_values(array_filter(
             ConsentPhotoSummary::fromDraft($draft, $grade)['checks'],
-            fn (array $check): bool => $check['subject'] === 'Immunization / Bakuna',
+            fn (array $check): bool => $check['subject'] === 'Immunization',
         ));
 
-        $this->assertSame([], $heading(8));
+        $this->assertSame([], $checks(7));
+        $this->assertContains(HealthConsentForm::PLANNED_SERVICES['immunization_grade7'], ConsentPhotoSummary::fromDraft($draft, 7)['groups']['consented']);
         $this->assertSame([[
             'section' => 'services',
-            'subject' => 'Immunization / Bakuna',
-            'message' => 'Ticked, but the box under it (Grade 7 Male (Lalake) ug Female (Babae) - MR, Td) is not. It must be ticked too. Mark the ones that apply from the paper.',
-        ]], $heading(7));
+            'subject' => 'Immunization',
+            'message' => 'Shaded, but it is given to Grade 7 learners only and this learner is in Grade 8. It is read as Not applicable.',
+        ]], $checks(8));
+    }
+
+    /** Iron is for female learners only: shaded for a boy, it is named and read as Not applicable. */
+    #[Test]
+    public function iron_shaded_for_a_male_learner_is_named(): void
+    {
+        $draft = $this->grade8Draft();
+
+        $boy = ConsentPhotoSummary::fromDraft($draft, 8, 'Male');
+        $girl = ConsentPhotoSummary::fromDraft($draft, 8, 'Female');
+
+        $this->assertContains([
+            'section' => 'services',
+            'subject' => 'Iron Supplementation',
+            'message' => 'Shaded, but it is given to female learners only and this learner is male. It is read as Not applicable.',
+        ], $boy['checks']);
+        $this->assertContains(HealthConsentForm::PLANNED_SERVICES['iron'], $boy['groups']['not_applicable']);
+        $this->assertFalse($boy['complete']);
+
+        $this->assertContains(HealthConsentForm::PLANNED_SERVICES['iron'], $girl['groups']['consented']);
+        $this->assertTrue($girl['complete']);
+    }
+
+    /**
+     * The school's Health Services Offered: a service it does not give is Not
+     * offered, and Pag Purga shaded alone is the deworming it does give. A
+     * shaded row the school does not give is named.
+     */
+    #[Test]
+    public function a_service_the_school_does_not_offer_is_not_offered_and_shading_it_is_named(): void
+    {
+        $offered = array_values(array_diff(
+            array_keys(HealthConsentForm::PLANNED_SERVICES),
+            ['deworming_schistosomiasis', 'deworming_filariasis', 'tas'],
+        ));
+
+        $draft = $this->grade8Draft();
+        foreach (['deworming_worms', 'deworming_schistosomiasis', 'deworming_filariasis', 'tas'] as $row) {
+            $draft['services'][$row] = 'no';
+        }
+
+        $summary = ConsentPhotoSummary::fromDraft($draft, 8, 'Female', $offered);
+
+        // Pag Purga shaded on its own: Worms, the only deworming offered, and no warning.
+        $this->assertContains(HealthConsentForm::PLANNED_SERVICES['deworming_worms'], $summary['groups']['consented']);
+        foreach (['deworming_schistosomiasis', 'deworming_filariasis', 'tas'] as $row) {
+            $this->assertContains(HealthConsentForm::PLANNED_SERVICES[$row], $summary['groups']['not_offered']);
+        }
+        $this->assertSame([], $summary['checks']);
+        $this->assertTrue($summary['complete']);
+
+        $draft['services']['tas'] = 'yes';
+        $this->assertContains([
+            'section' => 'services',
+            'subject' => 'Transmission Assessment Survey (TAS) on Lymphatic Filariasis',
+            'message' => 'Shaded, but the school does not offer it this school year (Health Services Offered, in the School Nurse\'s Settings). It is read as Not offered.',
+        ], ConsentPhotoSummary::fromDraft($draft, 8, 'Female', $offered)['checks']);
     }
 
     /**
      * The adviser's own test sheet: Pag Purga shaded over empty rows, three
      * allergy boxes shaded over empty lines, and a signature the reader was
-     * unsure of, said again in its own note. It came out as seven lines — "The
-     * box beside this line…" naming no line, the same field again as "Check:
-     * Medicine allergy.", the signature twice. Now Pag Purga says one of its
-     * boxes must be ticked, the ticked allergy boxes are filed as "Not
-     * specified", and the signature is said once, in the reader's words.
+     * unsure of, said again in its own note. Pag Purga is its rows and asks
+     * nothing more, each allergy box shaded with no details written says so,
+     * and the signature is said once, in the reader's words.
      */
     #[Test]
     public function a_plainly_filled_sheet_leaves_only_what_really_needs_a_look(): void
     {
-        $draft = $this->draft();
+        $draft = $this->grade8Draft();
         foreach (['deworming_worms', 'deworming_schistosomiasis', 'deworming_filariasis'] as $row) {
             $draft['services'][$row] = 'no';
         }
@@ -153,27 +228,53 @@ class ConsentPhotoSummaryTest extends TestCase
         $summary = ConsentPhotoSummary::fromDraft($draft, 8);
 
         $this->assertSame([[
-            'section' => 'services',
-            'subject' => 'Pag Purga / Pagpainom ug Tambal sa',
-            'message' => 'Ticked, but none of the boxes under it is. At least one must be ticked: Pag Bitok / Worms; Schistosomiasis; Filariasis. Mark the ones that apply from the paper.',
+            'section' => 'allergies',
+            'subject' => 'Medicine allergy',
+            'message' => ConsentFormScanner::BOX_TICKED_NO_DETAILS,
+        ], [
+            'section' => 'allergies',
+            'subject' => 'Previous immunization',
+            'message' => ConsentFormScanner::BOX_TICKED_NO_DETAILS,
+        ], [
+            'section' => 'allergies',
+            'subject' => 'Other illnesses',
+            'message' => ConsentFormScanner::BOX_TICKED_NO_DETAILS,
         ], [
             'section' => 'signature',
             'subject' => 'Parent\'s signature',
             'message' => 'Parent name is printed on the signature line, but no handwritten signature is present. Check that the parent signed.',
         ]], $summary['checks']);
-        // Not approved on the heading's account: the adviser marks them.
+        // Pag Purga shaded on its own is its rows.
         foreach (['deworming_worms', 'deworming_schistosomiasis', 'deworming_filariasis'] as $row) {
-            $this->assertContains(HealthConsentForm::PLANNED_SERVICES[$row], $summary['groups']['unclear']);
+            $this->assertContains(HealthConsentForm::PLANNED_SERVICES[$row], $summary['groups']['consented']);
         }
         $this->assertSame('Food: CRABS; Medicine: Not specified; Previous immunization reaction: Not specified', $summary['allergies']);
         $this->assertSame('Not specified', $summary['illnesses']);
+    }
+
+    /** The allergy box shaded with nothing ticked or written under it is asked about. */
+    #[Test]
+    public function an_allergy_box_shaded_with_no_details_is_asked_about(): void
+    {
+        $draft = $this->grade8Draft();
+        $draft['allergy_boxes'] = ['allergy' => 'yes', 'allergy_food' => 'no', 'allergy_medicine' => 'no', 'prev_immunization' => 'no', 'other_illness' => 'no'];
+
+        $this->assertContains([
+            'section' => 'allergies',
+            'subject' => 'Kon adunay Allergy ang bata',
+            'message' => ConsentFormScanner::BOX_TICKED_NO_DETAILS,
+        ], ConsentPhotoSummary::fromDraft($draft, 8)['checks']);
+
+        // With the allergy named on its line, there is nothing to ask.
+        $draft['written']['allergy_food'] = ['text' => 'Shrimp', 'readable' => true, 'confident' => true];
+        $this->assertSame([], ConsentPhotoSummary::fromDraft($draft, 8)['checks']);
     }
 
     /** Each thing still to check is named once, by its field, with what to do. */
     #[Test]
     public function each_thing_to_check_is_named_once_with_what_to_do(): void
     {
-        $draft = $this->draft();
+        $draft = $this->grade8Draft();
         $draft['written']['allergy_medicine'] = ['text' => 'wala', 'readable' => true, 'confident' => true, 'box' => ConsentFormScanner::TICKED];
         $draft['field_notes']['allergy_medicine'] = 'The box beside this line is ticked but the line reads "wala" — ask the parent which is right.';
         $draft['written']['other_illness'] = ['text' => '', 'readable' => true, 'confident' => false, 'box' => ConsentFormScanner::UNCLEAR];
@@ -203,7 +304,7 @@ class ConsentPhotoSummaryTest extends TestCase
     #[Test]
     public function a_note_about_something_else_is_kept_as_the_readers_own(): void
     {
-        $draft = $this->draft();
+        $draft = $this->grade8Draft();
         $draft['note'] = 'The date line is blank.';
 
         $checks = ConsentPhotoSummary::fromDraft($draft, 8)['checks'];
@@ -215,7 +316,7 @@ class ConsentPhotoSummaryTest extends TestCase
     #[Test]
     public function an_unsure_or_unreadable_line_says_what_was_read(): void
     {
-        $draft = $this->draft();
+        $draft = $this->grade8Draft();
         $draft['written']['allergy_food'] = ['text' => 'Pasayan', 'readable' => true, 'confident' => false];
         $draft['written']['allergy_medicine'] = ['text' => ConsentFormScanner::UNREADABLE_TEXT, 'readable' => false, 'confident' => false];
         $draft['unclear'] = ['Food allergy', 'Medicine allergy'];

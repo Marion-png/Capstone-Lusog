@@ -137,7 +137,7 @@ class NutritionalStatusPrintListTest extends TestCase
         $tail = array_slice($rows, -3);
         $this->assertSame(['Prepared by:', '', '', 'Noted by:'], $tail[0]);
         $this->assertSame('Principal Reyes', $tail[1][0]);
-        $this->assertSame(['School Head', '', '', 'Principal'], $tail[2]);
+        $this->assertSame(['School Head', '', '', 'Principal II'], $tail[2]);
     }
 
     /**
@@ -360,7 +360,7 @@ class NutritionalStatusPrintListTest extends TestCase
             $rows = $this->workbook($this->withSession($this->sessionFor($role, 'Clinic Reader'))->get($url)->assertOk())['rows'];
 
             $this->assertSame(['Ana Abad'], $this->names($rows));
-            $this->assertSame([$label, '', '', 'Principal'], $rows[count($rows) - 1]);
+            $this->assertSame([$label, '', '', 'Principal II'], $rows[count($rows) - 1]);
         }
     }
 

@@ -166,6 +166,7 @@
 
 .foot-grid { display: grid; grid-template-columns: 1fr 1fr; border-left: 1px solid #111827; border-right: 1px solid #111827; border-bottom: 1px solid #111827; }
 .foot-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+.foot-grid[hidden] { display: none; }
 .foot-block { padding: 8px 10px; min-height: 82px; border-right: 1px solid #111827; }
 .foot-block:last-child { border-right: none; }
 .foot-label { font-size: .76rem; font-weight: 700; color: #0f172a; text-transform: uppercase; }

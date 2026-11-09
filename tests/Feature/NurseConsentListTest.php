@@ -400,7 +400,7 @@ class NurseConsentListTest extends TestCase
 
         $html = $this->list(['service' => 'dental']);
 
-        $this->assertStringContainsString('>Not consented</span>', $html);
+        $this->assertStringContainsString('>Not offered</span>', $html);
         $this->assertMatchesRegularExpression($this->card('Consent rate', '—'), $html);
     }
 
@@ -432,7 +432,7 @@ class NurseConsentListTest extends TestCase
         ]);
 
         $this->assertStringContainsString('>Consented</span>', $this->list(['service' => 'deworming_worms']));
-        $this->assertStringContainsString('>Not consented</span>', $this->list(['service' => 'vitamin_a']));
+        $this->assertStringContainsString('>Not offered</span>', $this->list(['service' => 'vitamin_a']));
     }
 
     #[Test]
@@ -452,7 +452,7 @@ class NurseConsentListTest extends TestCase
         ]);
 
         $this->assertStringContainsString('>Consented</span>', $this->list(['service' => 'vitamin_a']));
-        $this->assertStringContainsString('>Not consented</span>', $this->list(['service' => 'deworming_worms']));
+        $this->assertStringContainsString('>Not offered</span>', $this->list(['service' => 'deworming_worms']));
 
         $html = $this->withSession($this->readerSession())
             ->get(route('consent-forms.nurse-learner', $record))
@@ -463,7 +463,7 @@ class NurseConsentListTest extends TestCase
         $this->assertBox($html, 'yes', HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_ALL]);
         $this->assertService($html, HealthConsentForm::SERVICES['checkup']['label'], 'consented', 'Consented');
         $this->assertService($html, HealthConsentForm::SERVICES['vitamin_a']['label'], 'consented', 'Consented');
-        $this->assertService($html, 'Pag Bitok / Worms', 'not_on_form', 'Not consented');
+        $this->assertService($html, 'Pag Bitok / Worms', 'not_on_form', 'Not offered');
     }
 
     #[Test]

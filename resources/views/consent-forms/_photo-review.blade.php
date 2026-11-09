@@ -17,7 +17,7 @@
         <dl class="pc-review-facts pc-review-decision"><div><dt>Parent decision</dt><dd data-review-decision>Not recorded yet</dd></div></dl>
         @foreach ([
             'consented' => 'Consented services',
-            'declined' => 'Not consented (excluded by parent)',
+            'declined' => 'Excluded by parent',
             'unclear' => 'Services to check',
         ] as $group => $heading)
             <div class="pc-service-group is-{{ $group }}" data-review-group="{{ $group }}" hidden>

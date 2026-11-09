@@ -9,6 +9,8 @@ use App\Support\AuditTrail;
 use App\Support\ConsentFormScanner;
 use App\Support\ConsentPaperCopy;
 use App\Support\ConsentPhotoSummary;
+use App\Support\FeedingBeneficiarySummary;
+use App\Support\HealthServicesOffered;
 use App\Support\LearnerPlacement;
 use App\Support\StudentRosterSync;
 use App\Support\UploadReadFailure;
@@ -132,7 +134,15 @@ class ConsentFormScanController extends Controller
                 .(($draft['date_outside_school_year'] ?? false) ? ' (dated outside S.Y. '.$schoolYear.')' : ''),
         );
 
-        $copy = ConsentPaperCopy::fromDraft($draft, $learner['grade'] ?? null);
+        // What the school offers that year (the School Nurse's Health Services
+        // Offered), and the learner's grade and sex: every service is read
+        // against them, and a shading they rule out is named.
+        $institutionId = $request->session()->get('active_institution_id');
+        $offered = HealthServicesOffered::for($institutionId ? (int) $institutionId : null, $schoolYear);
+        $grade = $learner['grade'] ?? null;
+        $sex = $learner['sex'] ?? null;
+
+        $copy = ConsentPaperCopy::fromDraft($draft, $grade, $sex, $offered);
 
         return response()->json([
             'draft' => $draft,
@@ -142,12 +152,12 @@ class ConsentFormScanController extends Controller
             // The services the upload dialog files with this reading — the
             // same list the copy above judged each service by. Nothing for a
             // photo that could not be read or another child's sheet.
-            'ticked_services' => $copy !== null ? ConsentPaperCopy::tickedServices((array) ($draft['services'] ?? [])) : [],
-            // Where each service starts in the dialog (Consented, Excluded or
-            // to check), for whichever answer the adviser files. Null with
-            // nothing read, so every service starts Excluded.
-            'service_proposal' => $copy !== null ? ConsentPaperCopy::proposal($draft) : null,
-            'summary' => ConsentPhotoSummary::fromDraft($draft, $learner['grade'] ?? null),
+            'ticked_services' => $copy !== null ? ConsentPaperCopy::tickedServices((array) ($draft['services'] ?? []), $offered) : [],
+            // Where each service starts in the dialog (Consented, Excluded, to
+            // check, or Not offered), for whichever answer the adviser files.
+            // Null with nothing read, so every service starts Not offered.
+            'service_proposal' => $copy !== null ? ConsentPaperCopy::proposal($draft, $offered) : null,
+            'summary' => ConsentPhotoSummary::fromDraft($draft, $grade, $sex, $offered),
             // The upload can retain this reading without trusting JSON posted
             // by the browser or making another model call.
             'scan_token' => Crypt::encryptString(json_encode([
@@ -177,7 +187,7 @@ class ConsentFormScanController extends Controller
      * learner of another class (or school) is never compared against, and the
      * answer never says anything about them.
      *
-     * @return array{first_name: string, last_name: string, name: string, grade: int|null}|null
+     * @return array{first_name: string, last_name: string, name: string, grade: int|null, sex: string}|null
      */
     private function learner(Request $request, string $lrn): ?array
     {
@@ -202,6 +212,7 @@ class ConsentFormScanController extends Controller
             'last_name' => $last,
             'name' => trim($first.' '.$last),
             'grade' => LearnerPlacement::gradeNumber((string) ($row['grade_level'] ?? '')),
+            'sex' => FeedingBeneficiarySummary::normalizeSex((string) ($row['gender'] ?? '')),
         ];
     }
 }

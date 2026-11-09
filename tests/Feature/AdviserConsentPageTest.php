@@ -268,16 +268,18 @@ class AdviserConsentPageTest extends TestCase
         $this->assertStringContainsString('Read from the uploaded photo', $panel);
         $this->assertStringContainsString('All required fields completed', $panel);
 
-        // A Grade 1 learner: the Grade 7 immunization does not apply to them,
-        // and every other service on the letter is consented.
+        // A Grade 1 boy: the Grade 7 immunization and the Iron given to female
+        // learners do not apply to him, and every other service on the letter
+        // is consented.
         $this->assertBox($panel, 'yes', HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_ALL]);
         // One row per box on the paper: nine services, three consent boxes,
         // the allergy box with its three kinds, and the illness box.
         // Only the nine services carry the service marker.
         $this->assertSame(9 + 3 + 5, substr_count($panel, '<li class="pcopy-row '));
         $this->assertSame(9, substr_count($panel, ' is-service"><span class="pcopy-label"><span class="pcopy-mark"'));
-        $this->assertSame(8, substr_count($panel, '>Consented</span></li>'));
-        $this->assertStringContainsString('>Not applicable</span></li>', $panel);
+        $this->assertSame(7, substr_count($panel, '>Consented</span></li>'));
+        $this->assertSame(2, substr_count($panel, '>Not applicable</span></li>'));
+        $this->assertService($panel, HealthConsentForm::SERVICES['iron']['label'], 'not_applicable', 'Not applicable');
 
         // Each service by the letter's own printed name, never the English
         // short name, with its standing beside it.
@@ -772,13 +774,18 @@ class AdviserConsentPageTest extends TestCase
         $services = $this->profileConsentServices();
 
         $this->assertSame(['checkup', 'dental', 'deworming_worms'], array_column($services['approved'], 'key'));
+        // Not shaded at the top: never asked, so Not Offered — never Not
+        // Approved, which would read as the parent refusing them.
+        $this->assertSame([], $services['not_approved']);
         $this->assertSame(
-            ['deworming_schistosomiasis', 'deworming_filariasis', 'tas', 'iron', 'vitamin_a'],
-            array_column($services['not_approved'], 'key'),
+            ['deworming_schistosomiasis', 'deworming_filariasis', 'tas', 'vitamin_a'],
+            array_column($services['not_offered'], 'key'),
         );
         $this->assertSame([], $services['to_check']);
-        // Grade 7 MR/Td is not a Grade 1 learner's to be asked about.
-        $this->assertNotContains('immunization_grade7', array_column([...$services['approved'], ...$services['not_approved']], 'key'));
+        // Grade 7 MR/Td is not a Grade 1 learner's to be asked about, nor Iron a boy's.
+        $listed = array_column([...$services['approved'], ...$services['not_approved'], ...$services['not_offered']], 'key');
+        $this->assertNotContains('immunization_grade7', $listed);
+        $this->assertNotContains('iron', $listed);
 
         // Worded as the printed Sulat-Pahibalo words them, never translated,
         // with a sub-item under the heading it is indented under on the paper.
@@ -795,25 +802,29 @@ class AdviserConsentPageTest extends TestCase
 
         $this->postConsent([
             'consent_type' => 'partial',
-            'partial_exception' => 'Iron tablets',
+            'partial_exception' => 'Vitamin A',
             'services_confirmed' => '1',
             'services' => ['checkup', 'dental'],
-            'excepted_services' => ['iron'],
+            'excepted_services' => ['vitamin_a'],
         ]);
 
         $upload = ParentalConsentForm::sole();
-        $this->assertSame(['checkup', 'dental', 'iron'], $upload->services);
-        $this->assertSame(['iron'], $upload->excluded_services);
+        $this->assertSame(['checkup', 'dental', 'vitamin_a'], $upload->services);
+        $this->assertSame(['vitamin_a'], $upload->excluded_services);
 
         $services = $this->profileConsentServices();
         $this->assertSame(['checkup', 'dental'], array_column($services['approved'], 'key'));
-        $this->assertContains('iron', array_column($services['not_approved'], 'key'));
+        // Shaded at the top and listed under "except these": Excluded.
+        $this->assertSame(['vitamin_a'], array_column($services['not_approved'], 'key'));
+        // Not shaded at the top: Not offered, never a refusal.
+        $this->assertContains('tas', array_column($services['not_offered'], 'key'));
         $this->assertSame([], $services['to_check']);
 
         // The clinic reads the same form the same way.
         $answer = ConsentStanding::answer(null, $upload);
-        $this->assertSame(ConsentStanding::SERVICE_DECLINED, ConsentStanding::forService('iron', 1, true, $answer));
+        $this->assertSame(ConsentStanding::SERVICE_DECLINED, ConsentStanding::forService('vitamin_a', 1, true, $answer));
         $this->assertSame(ConsentStanding::SERVICE_CONSENTED, ConsentStanding::forService('checkup', 1, true, $answer));
+        $this->assertSame(ConsentStanding::SERVICE_NOT_ON_FORM, ConsentStanding::forService('tas', 1, true, $answer));
     }
 
     /**
@@ -827,16 +838,16 @@ class AdviserConsentPageTest extends TestCase
 
         $this->postConsent([
             'consent_type' => 'partial',
-            'partial_exception' => 'Iron tablets',
-            'services' => ['checkup', 'iron'],
+            'partial_exception' => 'Vitamin A tablets',
+            'services' => ['checkup', 'vitamin_a'],
         ]);
 
         $this->assertNull(ParentalConsentForm::sole()->excluded_services);
 
         $services = $this->profileConsentServices();
         $this->assertSame([], $services['approved']);
-        $this->assertSame(['checkup', 'iron'], array_column($services['to_check'], 'key'));
-        $this->assertSame('Iron tablets', $services['exceptions']);
+        $this->assertSame(['checkup', 'vitamin_a'], array_column($services['to_check'], 'key'));
+        $this->assertSame('Vitamin A tablets', $services['exceptions']);
     }
 
     /** @test */
@@ -1154,7 +1165,7 @@ class AdviserConsentPageTest extends TestCase
         // no list to pick somebody else from.
         $this->assertSame(1, substr_count($html, 'id="uploadConsentModal"'));
         $this->assertStringContainsString('action="'.route('parental-consent.store').'"', $html);
-        $this->assertStringContainsString('<input type="hidden" id="pc_lrn" name="lrn" value="123456789012">', $html);
+        $this->assertStringContainsString('<input type="hidden" id="pc_lrn" name="lrn" value="123456789012" data-sex="Male">', $html);
         $this->assertStringContainsString('value="Dela Cruz, Juan A. (123456789012)" readonly', $html);
         $this->assertStringNotContainsString('<select id="pc_lrn"', $html);
         $this->assertStringContainsString('value="'.ParentalConsentForm::currentSchoolYear().' (Current)"', $html);

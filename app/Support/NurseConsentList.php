@@ -81,7 +81,14 @@ final class NurseConsentList
             'adviser' => self::advisers($institutionId)[self::classKey($gradeLabel, $sectionName)] ?? '',
             'school_year' => $schoolYear,
             'service' => $service,
-        ] + self::reading($letter, $upload, LearnerPlacement::gradeNumber($gradeLabel), $service);
+        ] + self::reading(
+            $letter,
+            $upload,
+            LearnerPlacement::gradeNumber($gradeLabel),
+            $service,
+            FeedingBeneficiarySummary::sexOf($record),
+            HealthServicesOffered::for($institutionId, $schoolYear),
+        );
     }
 
     /**
@@ -93,9 +100,11 @@ final class NurseConsentList
      * desks cannot read one form two ways.
      *
      * @param  HealthConsentForm|null  $letter  a letter that was sent; never a draft
+     * @param  string|null  $sex  the learner's, for the services one sex alone is given
+     * @param  list<string>|null  $offered  HealthServicesOffered::for() for the form's school year
      * @return array<string, mixed>
      */
-    public static function reading(?HealthConsentForm $letter, ?ParentalConsentForm $upload, ?int $grade, string $service = ''): array
+    public static function reading(?HealthConsentForm $letter, ?ParentalConsentForm $upload, ?int $grade, string $service = '', ?string $sex = null, ?array $offered = null): array
     {
         $answer = ConsentStanding::answer($letter, $upload);
 
@@ -105,7 +114,7 @@ final class NurseConsentList
 
         return [
             'status' => $service !== ''
-                ? ConsentStanding::forService($service, $grade, true, $answer)
+                ? ConsentStanding::forService($service, $grade, true, $answer, $sex, $offered)
                 : ConsentStanding::overall(true, $answer),
             'answer' => $answer,
             'source' => $source,
@@ -116,8 +125,8 @@ final class NurseConsentList
             // shows whatever was recorded off it, answered or not; a letter
             // only once the parent has answered it.
             'copy' => match (true) {
-                $source === 'upload' && $upload !== null => ConsentPaperCopy::fromUpload($upload, $grade),
-                $source === 'letter' && $answer !== null && $letter !== null => ConsentPaperCopy::fromLetter($letter, $grade),
+                $source === 'upload' && $upload !== null => ConsentPaperCopy::fromUpload($upload, $grade, $sex, $offered),
+                $source === 'letter' && $answer !== null && $letter !== null => ConsentPaperCopy::fromLetter($letter, $grade, $sex, $offered),
                 default => null,
             },
             'missing' => $answer !== null ? self::missing($source, $letter, $upload, $answer) : [],
@@ -156,8 +165,9 @@ final class NurseConsentList
         $letters = self::letters($institutionId, $schoolYear, $records->pluck('student_id')->map(fn ($l) => (string) $l)->all());
         $uploads = self::uploads($records, $schoolYear);
         $advisers = self::advisers($institutionId);
+        $offered = HealthServicesOffered::for($institutionId, $schoolYear);
 
-        return $records->map(function (StudentHealthRecord $record) use ($letters, $uploads, $advisers, $service): array {
+        return $records->map(function (StudentHealthRecord $record) use ($letters, $uploads, $advisers, $service, $offered): array {
             [$gradeLabel, $sectionName] = FeedingBeneficiarySummary::splitSection((string) $record->section);
             $gradeNumber = LearnerPlacement::gradeNumber($gradeLabel);
 
@@ -175,7 +185,7 @@ final class NurseConsentList
                 'adviser' => $advisers[self::classKey($gradeLabel, $sectionName)] ?? '',
                 'new_enrollee' => (string) ($record->joined_as ?? '') === LearnerPlacement::NEW_ENROLLEE,
                 'status' => $service !== ''
-                    ? ConsentStanding::forService($service, $gradeNumber, true, $answer)
+                    ? ConsentStanding::forService($service, $gradeNumber, true, $answer, FeedingBeneficiarySummary::sexOf($record), $offered)
                     : ConsentStanding::overall(true, $answer),
                 'answer' => $answer,
                 'dated_label' => self::datedLabel($letter, $upload, $answer),

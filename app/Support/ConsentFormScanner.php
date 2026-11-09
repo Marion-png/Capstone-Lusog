@@ -102,6 +102,12 @@ class ConsentFormScanner
     public const DATE_OUTSIDE_SCHOOL_YEAR = 'This form is dated outside the selected school year.';
 
     /**
+     * Said when an allergy or illness box is shaded and nothing is written on
+     * its line: the parent said the child has one and not which.
+     */
+    public const BOX_TICKED_NO_DETAILS = 'Box ticked but no details written — check with the parent.';
+
+    /**
      * The parent's three consent boxes, keyed by the answer each one gives,
      * with the opening words printed beside it on the Sulat-Pahibalo. The
      * first two begin with the same sentence, so the model is told the words
@@ -1190,7 +1196,9 @@ class ConsentFormScanner
         $read = trim((string) ($draft['student_name'] ?? ''));
         $matches = ($draft['unreadable'] ?? false) ? null : self::namesAgree($read, $firstName, $lastName);
 
-        $draft['learner'] = ['matches' => $matches];
+        // The name it was checked against, so a sheet whose name could not be
+        // read can say whose form the adviser has to make sure it is.
+        $draft['learner'] = ['matches' => $matches, 'name' => $displayName];
 
         if ($matches === false) {
             $draft['learner_mismatch'] = true;
@@ -1606,12 +1614,12 @@ class ConsentFormScanner
             }
 
             if ($box === self::TICKED && $entry['text'] === '') {
-                // A clear answer, not a doubt: the child has one, and the
-                // parent did not say which. It is filed as ticked and read
-                // everywhere as LearnerAllergies::NOT_SPECIFIED — which the
-                // clinic's allergy check treats with caution — so nothing is
-                // lost by not sending the adviser back to the paper over it.
-                continue;
+                // The child has one, and the parent did not say which. It is
+                // filed as ticked and read everywhere as
+                // LearnerAllergies::NOT_SPECIFIED — which the clinic's allergy
+                // check treats with caution — and the adviser asks the parent.
+                $fieldNotes[$key] = self::BOX_TICKED_NO_DETAILS;
+                $unclear[] = self::WRITTEN_FIELDS[$key];
             } elseif ($box === self::TICKED) {
                 $fieldNotes[$key] = 'The box beside this line is ticked but the line reads "'.$entry['text'].'" — ask the parent which is right.';
                 $unclear[] = self::WRITTEN_FIELDS[$key];
@@ -1624,13 +1632,15 @@ class ConsentFormScanner
         $heading = self::answer($boxes['allergy'] ?? null);
         $kindBoxes = array_map(fn (string $kind): ?string => $written[$kind]['box'] ?? null, self::ALLERGY_KINDS);
 
-        // Ticked, with none of the three boxes under it ticked: one of them
-        // must be, as a box under Pag Purga must be (ConsentPhotoSummary says
+        // Ticked, with nothing ticked or written under it: the child has an
+        // allergy and the parent did not say which (ConsentPhotoSummary says
         // so to the adviser). A kind the reader could not make out is already
         // named on its own line.
         if ($heading === self::TICKED) {
-            if (! in_array(self::TICKED, $kindBoxes, true) && ! in_array(self::UNCLEAR, $kindBoxes, true)) {
-                $warnings[] = 'The allergy box is ticked but none of the boxes under it is — one of them must be ticked.';
+            $anyNamed = array_filter(self::ALLERGY_KINDS, fn (string $kind): bool => self::saysSomething($written[$kind]['text'] ?? '')) !== [];
+
+            if (! in_array(self::TICKED, $kindBoxes, true) && ! in_array(self::UNCLEAR, $kindBoxes, true) && ! $anyNamed) {
+                $warnings[] = 'The allergy box: '.self::BOX_TICKED_NO_DETAILS;
                 $unclear[] = 'Allergy';
             }
 

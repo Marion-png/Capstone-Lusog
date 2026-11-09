@@ -20,6 +20,7 @@ use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceMark;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramCycle;
+use App\Support\HealthServicesOffered;
 use App\Support\LearnerPlacement;
 use App\Support\MeasurementPlausibility;
 use App\Support\NutritionalHealthStatus;
@@ -462,6 +463,10 @@ class StudentHealthRecordController extends Controller
                     'services' => $this->consentServices(
                         ConsentStanding::answer($consent, $upload),
                         LearnerPlacement::gradeNumber((string) ($shRecord?->section ?? '')),
+                        $shRecord !== null
+                            ? FeedingBeneficiarySummary::sexOf($shRecord)
+                            : FeedingBeneficiarySummary::normalizeSex((string) ($rowByLrn->get($lrn, [])['gender'] ?? '')),
+                        HealthServicesOffered::for($institutionId ? (int) $institutionId : null, HealthConsentForm::currentSchoolYear()),
                     ),
                 ],
                 'feeding' => [
@@ -619,21 +624,27 @@ class StudentHealthRecordController extends Controller
      * Each service is worded as the printed letter words it, in Cebuano, with
      * the heading it sits under on the paper (HealthConsentForm::printedService).
      *
+     * A service that was not offered — not shaded at the top of the form, or
+     * not given by the school this year — is listed as Not Offered, never as
+     * Not Approved: the parent was not asked about it, so did not refuse it.
+     *
      * @param  array<string, mixed>|null  $answer  ConsentStanding::answer()
-     * @return array{approved: list<array>, not_approved: list<array>, to_check: list<array>, exceptions: string}|null
+     * @param  list<string>|null  $offered  HealthServicesOffered::for()
+     * @return array{approved: list<array>, not_approved: list<array>, to_check: list<array>, not_offered: list<array>, exceptions: string}|null
      */
-    private function consentServices(?array $answer, ?int $grade): ?array
+    private function consentServices(?array $answer, ?int $grade, ?string $sex = null, ?array $offered = null): ?array
     {
         if ($answer === null) {
             return null;
         }
 
-        $lists = ['approved' => [], 'not_approved' => [], 'to_check' => []];
+        $lists = ['approved' => [], 'not_approved' => [], 'to_check' => [], 'not_offered' => []];
 
         foreach (array_keys(HealthConsentForm::PLANNED_SERVICES) as $key) {
-            $list = match (ConsentStanding::forService($key, $grade, true, $answer)) {
+            $list = match (ConsentStanding::forService($key, $grade, true, $answer, $sex, $offered)) {
                 ConsentStanding::SERVICE_CONSENTED => 'approved',
                 ConsentStanding::SERVICE_CHECK_EXCEPTIONS => 'to_check',
+                ConsentStanding::SERVICE_NOT_ON_FORM => 'not_offered',
                 ConsentStanding::SERVICE_NOT_APPLICABLE => null,
                 default => 'not_approved',
             };

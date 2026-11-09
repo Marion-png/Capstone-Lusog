@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingProgramCycle;
+use App\Support\HealthServicesOffered;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -172,9 +173,27 @@ class Institution extends Model
         // today. A migration fills the same value on a database seeded before
         // this line existed; neither ever overrules a mode already chosen
         // through the System Admin form.
-        self::firstOrCreate(
+        $school = self::firstOrCreate(
             ['name' => self::REGISTRATION_SCHOOL],
             ['status' => 'active', 'feeding_at_risk_mode' => FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS]
         );
+
+        // Schistosomiasis, Filariasis and the TAS on Lymphatic Filariasis are
+        // not given in Davao City, so the school's Health Services Offered
+        // starts with them off — the same row a migration fills on a database
+        // seeded before this line existed. A nurse's saved choice is never
+        // overruled.
+        if (HealthServicesOffered::supported()
+            && ! HealthServiceSetting::query()->where('institution_id', $school->id)->exists()) {
+            HealthServicesOffered::save(
+                $school->id,
+                ParentalConsentForm::calendarSchoolYear(),
+                array_values(array_diff(
+                    array_keys(HealthConsentForm::PLANNED_SERVICES),
+                    ['deworming_schistosomiasis', 'deworming_filariasis', 'tas'],
+                )),
+                'System default',
+            );
+        }
     }
 }

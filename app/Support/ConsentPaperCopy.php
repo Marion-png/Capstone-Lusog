@@ -40,9 +40,11 @@ final class ConsentPaperCopy
      *
      * @param  array<string, mixed>  $draft  ConsentFormScanner::interpret(), after checkLearner()
      * @param  int|null  $grade  the learner's grade, for the services one grade alone is given
+     * @param  string|null  $sex  the learner's, for the services one sex alone is given
+     * @param  list<string>|null  $offered  HealthServicesOffered::for(); null when not known
      * @return array<string, array<string, string>>|null
      */
-    public static function fromDraft(array $draft, ?int $grade = null): ?array
+    public static function fromDraft(array $draft, ?int $grade = null, ?string $sex = null, ?array $offered = null): ?array
     {
         if (($draft['unreadable'] ?? false) || ($draft['learner_mismatch'] ?? false)) {
             return null;
@@ -62,7 +64,7 @@ final class ConsentPaperCopy
             'choice' => $choice,
             // The services the upload will store, so the reading the adviser
             // checks is the reading that is filed.
-            'services' => self::tickedServices($services),
+            'services' => self::tickedServices($services, $offered),
             'exceptions' => $choice === HealthConsentForm::CONSENT_SPECIFIC ? trim((string) ($written['consent_exceptions']['text'] ?? '')) : '',
             'excluded' => $choice === HealthConsentForm::CONSENT_SPECIFIC ? self::exceptedFromDraft($draft) : null,
         ] : null;
@@ -74,49 +76,64 @@ final class ConsentPaperCopy
             fn (string $line): string => (string) ($written[$line]['text'] ?? ''),
             $answer,
             $grade,
-            self::unsettledServices($services),
+            self::unsettledServices($services, $offered),
+            $sex,
+            $offered,
         );
     }
 
     /**
-     * The services a read paper marks, as an upload stores them: a row counts
-     * when its own box is ticked, and for no other reason. The upload dialog
-     * posts exactly this list.
+     * The services a read paper marks — the ones the class adviser shaded at
+     * the top, as the School Nurse instructed — as an upload stores them. The
+     * upload dialog posts exactly this list.
      *
-     * A ticked heading (Pag Purga, Immunization) is not a tick on the rows under
-     * it: the heading names the service, the rows say which, and a heading on
-     * its own is a form that is not finished. The rows read as unsettled (see
-     * unsettledServices()), and the adviser is told in so many words that a box
-     * under the heading must be ticked (HealthConsentForm::rowsRequiredNotice,
-     * through ConsentPhotoSummary). Covering them silently was tried once, and
-     * a reader that missed a small sub-item tick under a heading it did see
-     * approved all three rows at once.
+     * A row counts when its own box is ticked. A shaded heading (Pag Purga,
+     * Immunization) with no row under it shaded offers every row under it that
+     * the school offers (HealthServicesOffered): at a school that gives worm
+     * medicine alone, Pag Purga shaded is Pag Bitok / Worms. Rows shaded under
+     * it say which, and then only those count; a row under it the reader could
+     * not make out leaves the rows to the adviser (unsettledServices()).
      *
      * @param  array<string, mixed>  $boxes  every box of the letter's list, as the reader reported it
+     * @param  list<string>|null  $offered  HealthServicesOffered::for(); null offers every row
      * @return list<string> keys of HealthConsentForm::PLANNED_SERVICES
      */
-    public static function tickedServices(array $boxes): array
+    public static function tickedServices(array $boxes, ?array $offered = null): array
     {
-        return array_values(array_filter(
-            array_keys(HealthConsentForm::PLANNED_SERVICES),
-            fn (string $key): bool => ($boxes[$key] ?? null) === self::TICKED,
-        ));
+        return array_values(array_filter(array_keys(HealthConsentForm::PLANNED_SERVICES), function (string $key) use ($boxes, $offered): bool {
+            if (($boxes[$key] ?? null) === self::TICKED) {
+                return true;
+            }
+
+            $parent = HealthConsentForm::parentService($key);
+
+            if ($parent === null || ($boxes[$parent] ?? null) !== self::TICKED || ! HealthServicesOffered::isOffered($key, $offered)) {
+                return false;
+            }
+
+            $rows = array_map(fn (string $row): mixed => $boxes[$row] ?? null, array_keys(HealthConsentForm::SERVICES[$parent]['children']));
+
+            return ! in_array(self::TICKED, $rows, true) && ! in_array(self::UNCLEAR, $rows, true);
+        }));
     }
 
     /**
      * The rows a person has to settle from the paper: a box the reader could
      * not make out, and the rows under a heading that is marked (or might be)
-     * when none of them is ticked — the paper names the service, not which.
+     * when none of them is ticked and the heading does not settle them on its
+     * own. A row the school does not offer has nothing to settle: it is not
+     * offered whatever the paper shows.
      *
      * @param  array<string, mixed>  $boxes  every box of the letter's list, as the reader reported it
+     * @param  list<string>|null  $offered  HealthServicesOffered::for(); null offers every row
      * @return list<string> keys of HealthConsentForm::PLANNED_SERVICES
      */
-    public static function unsettledServices(array $boxes): array
+    public static function unsettledServices(array $boxes, ?array $offered = null): array
     {
-        $ticked = self::tickedServices($boxes);
+        $ticked = self::tickedServices($boxes, $offered);
 
-        return array_values(array_filter(array_keys(HealthConsentForm::PLANNED_SERVICES), function (string $key) use ($boxes, $ticked): bool {
-            if (in_array($key, $ticked, true)) {
+        return array_values(array_filter(array_keys(HealthConsentForm::PLANNED_SERVICES), function (string $key) use ($boxes, $ticked, $offered): bool {
+            if (in_array($key, $ticked, true) || ! HealthServicesOffered::isOffered($key, $offered)) {
                 return false;
             }
 
@@ -126,6 +143,8 @@ final class ConsentPaperCopy
 
             $parent = HealthConsentForm::parentService($key);
 
+            // A shaded heading with no row unclear has made its offered rows
+            // ticked already, so only a doubt is left here.
             return $parent !== null
                 && ($boxes[$parent] ?? self::EMPTY) !== self::EMPTY
                 && array_intersect(array_keys(HealthConsentForm::SERVICES[$parent]['children']), $ticked) === [];
@@ -135,37 +154,37 @@ final class ConsentPaperCopy
     /**
      * Where each service starts in the upload dialog, for each answer an agreed
      * form can be filed under. `approved` starts Consented; `check` waits on
-     * the adviser to choose Consented or Excluded; every other row starts
-     * Excluded. Every doubt lands on "not approved": an adviser can mark a row
-     * Consented they can see on the paper, but a consent nobody looked at is
-     * an authorisation nobody gave.
+     * the adviser to choose; `excluded` starts Excluded (a shaded row the
+     * parent's "gawas lamang niini" names); every other row starts **Not
+     * offered**, because it was not shaded at the top. Every doubt lands on
+     * "not approved": an adviser can mark a row Consented they can see on the
+     * paper, but a consent nobody looked at is an authorisation nobody gave.
      *
      * "Yes, except" whose exceptions cannot be named as services proposes
-     * nothing at all, since any row on the paper might be the one left out.
+     * nothing at all, since any shaded row might be the one left out.
      *
      * @param  array<string, mixed>  $draft  ConsentFormScanner::interpret(), after checkLearner()
-     * @return array{full: array{approved: list<string>, check: list<string>}, partial: array{approved: list<string>, check: list<string>}}
+     * @param  list<string>|null  $offered  HealthServicesOffered::for(); null offers every row
+     * @return array{full: array{approved: list<string>, check: list<string>, excluded: list<string>}, partial: array{approved: list<string>, check: list<string>, excluded: list<string>}}
      */
-    public static function proposal(array $draft): array
+    public static function proposal(array $draft, ?array $offered = null): array
     {
         $boxes = (array) ($draft['services'] ?? []);
-        $listed = self::tickedServices($boxes);
-        $unsettled = self::unsettledServices($boxes);
+        $listed = self::tickedServices($boxes, $offered);
+        $unsettled = self::unsettledServices($boxes, $offered);
         $excepted = self::exceptedFromDraft($draft);
+        $onPaper = array_values(array_intersect(array_keys(HealthConsentForm::PLANNED_SERVICES), [...$listed, ...$unsettled]));
 
-        $kept = fn (array $keys): array => array_values(array_filter(
+        $named = fn (array $keys, bool $excluded): array => array_values(array_filter(
             $keys,
-            fn (string $key): bool => ! HealthConsentForm::coversService($excepted ?? [], $key),
+            fn (string $key): bool => HealthConsentForm::coversService($excepted ?? [], $key) === $excluded,
         ));
 
         return [
-            'full' => ['approved' => $listed, 'check' => $unsettled],
+            'full' => ['approved' => $listed, 'check' => $unsettled, 'excluded' => []],
             'partial' => $excepted === null
-                ? [
-                    'approved' => [],
-                    'check' => array_values(array_intersect(array_keys(HealthConsentForm::PLANNED_SERVICES), [...$listed, ...$unsettled])),
-                ]
-                : ['approved' => $kept($listed), 'check' => $kept($unsettled)],
+                ? ['approved' => [], 'check' => $onPaper, 'excluded' => []]
+                : ['approved' => $named($listed, false), 'check' => $named($unsettled, false), 'excluded' => $named($onPaper, true)],
         ];
     }
 
@@ -265,9 +284,10 @@ final class ConsentPaperCopy
      * over its sub-items (Pag Purga, Immunization) reads ticked when any of
      * them is, since only the sub-items are stored.
      *
+     * @param  list<string>|null  $offered  HealthServicesOffered::for(); null when not known
      * @return array<string, array<string, string>>
      */
-    public static function fromUpload(ParentalConsentForm $upload, ?int $grade = null): array
+    public static function fromUpload(ParentalConsentForm $upload, ?int $grade = null, ?string $sex = null, ?array $offered = null): array
     {
         $services = (array) ($upload->services ?? []);
         $choice = match ((string) $upload->consent_type) {
@@ -308,6 +328,9 @@ final class ConsentPaperCopy
             fn (string $line): string => (string) ($lines[$line] ?? ''),
             ConsentStanding::answer(null, $upload),
             $grade,
+            [],
+            $sex,
+            $offered,
         );
     }
 
@@ -316,9 +339,10 @@ final class ConsentPaperCopy
      * the signed paper. A box beside a line is ticked when its line is
      * filled, as the letter itself draws it.
      *
+     * @param  list<string>|null  $offered  HealthServicesOffered::for(); null when not known
      * @return array<string, array<string, string>>
      */
-    public static function fromLetter(HealthConsentForm $letter, ?int $grade = null): array
+    public static function fromLetter(HealthConsentForm $letter, ?int $grade = null, ?string $sex = null, ?array $offered = null): array
     {
         $lines = [
             'consent_exceptions' => $letter->consent_exceptions,
@@ -339,6 +363,9 @@ final class ConsentPaperCopy
             fn (string $line): string => (string) ($lines[$line] ?? ''),
             ConsentStanding::answer($letter),
             $grade,
+            [],
+            $sex,
+            $offered,
         );
     }
 
@@ -352,9 +379,10 @@ final class ConsentPaperCopy
      * @param  callable(string): string  $line
      * @param  array<string, mixed>|null  $answer  ConsentStanding::answer()'s shape
      * @param  list<string>  $unsettled  rows a reader could not settle; a saved form has none
+     * @param  list<string>|null  $offered
      * @return array<string, array<string, string>>
      */
-    private static function copy(callable $service, callable $consent, callable $box, callable $line, ?array $answer, ?int $grade, array $unsettled = []): array
+    private static function copy(callable $service, callable $consent, callable $box, callable $line, ?array $answer, ?int $grade, array $unsettled = [], ?string $sex = null, ?array $offered = null): array
     {
         $state = fn (bool|string $value): string => is_bool($value) ? ($value ? self::TICKED : self::EMPTY) : $value;
 
@@ -365,7 +393,7 @@ final class ConsentPaperCopy
         }
 
         foreach (array_keys(HealthConsentForm::PLANNED_SERVICES) as $key) {
-            $copy['standings'][$key] = self::standing($key, $copy['services'], $answer, $grade, $unsettled);
+            $copy['standings'][$key] = self::standing($key, $copy['services'], $answer, $grade, $unsettled, $sex, $offered);
         }
 
         foreach (array_keys(HealthConsentForm::CONSENT_TEXT) as $choice) {
@@ -388,22 +416,27 @@ final class ConsentPaperCopy
      * whenever the paper and the answer can say, and UNCLEAR when the paper
      * has to be read instead — a row nobody could settle, or a service the
      * letter lists on a form whose answer is not known yet. A refusal needs no
-     * box read: it declines every service on the sheet.
+     * box read: it declines every service that may be on the sheet.
      *
      * @param  array<string, string>  $services  every box of the letter's list
      * @param  array<string, mixed>|null  $answer
      * @param  list<string>  $unsettled
+     * @param  list<string>|null  $offered
      */
-    private static function standing(string $key, array $services, ?array $answer, ?int $grade, array $unsettled): string
+    private static function standing(string $key, array $services, ?array $answer, ?int $grade, array $unsettled, ?string $sex = null, ?array $offered = null): string
     {
-        $onlyGrade = ConsentStanding::GRADE_ONLY_SERVICES[$key] ?? null;
-
-        if ($onlyGrade !== null && $grade !== $onlyGrade) {
+        if (! ConsentStanding::appliesTo($key, $grade, $sex)) {
             return ConsentStanding::SERVICE_NOT_APPLICABLE;
         }
 
-        if (in_array($key, $unsettled, true) && ($answer['choice'] ?? null) !== HealthConsentForm::CONSENT_DENY) {
-            return self::UNCLEAR;
+        if (! HealthServicesOffered::isOffered($key, $offered)) {
+            return ConsentStanding::SERVICE_NOT_ON_FORM;
+        }
+
+        if (in_array($key, $unsettled, true)) {
+            return ($answer['choice'] ?? null) === HealthConsentForm::CONSENT_DENY
+                ? ConsentStanding::SERVICE_DECLINED
+                : self::UNCLEAR;
         }
 
         $parent = HealthConsentForm::parentService($key);
@@ -415,7 +448,7 @@ final class ConsentPaperCopy
             return $listed ? self::UNCLEAR : ConsentStanding::SERVICE_NOT_ON_FORM;
         }
 
-        return ConsentStanding::forService($key, $grade, true, $answer);
+        return ConsentStanding::forService($key, $grade, true, $answer, $sex, $offered);
     }
 
     /** A reader's answer for one box, with anything off the list read as unclear. */

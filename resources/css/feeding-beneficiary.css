@@ -218,6 +218,13 @@
 }
 .bd-card-sub { font-size: .78rem; color: var(--lg-ink-soft); margin-bottom: 6px; }
 
+/* The Endline card's own action, beside its title. */
+.bd-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.bd-card-head .bd-card-title { margin-bottom: 0; }
+.bd-endline-note { margin: 4px 0 10px; }
+.bd-endline-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+.bd-endline-form .bd-endline-field { display: grid; gap: 6px; }
+
 .bd-facts { margin: 0; }
 .bd-fact {
 	display: grid;
@@ -393,6 +400,8 @@
 	.bd-back,
 	.bd-actions,
 	.modal-backdrop,
+	.bd-endline-edit,
+	.bd-endline-note,
 	.bd-tabs { display: none !important; }
 
 	/* The app shell is a fixed-height, scrolling window (see lusog-theme):

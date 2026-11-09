@@ -496,6 +496,10 @@ tbody tr:hover td{background:#f7fbf8}
 .pc-svc-state{flex-shrink:0;margin-left:auto;padding:2px 9px;border-radius:999px;font-size:.66rem;font-weight:700;white-space:nowrap}
 .pc-svc-row.is-declined .pc-svc-state{background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B)}
 .pc-svc-row.is-pending .pc-svc-state{background:#EDF1EF;color:#4A5A52}
+.pc-svc-opt[data-choice="not_offered"][aria-pressed="true"]{background:#EDF1EF;color:#4A5A52;box-shadow:inset 0 0 0 1px #C9D3CE}
+.pc-svc-row.is-not_offered .pc-svc-name,.pc-svc-row.is-not_applicable .pc-svc-name{color:var(--muted)}
+.pc-svc-row.is-not_offered .pc-svc-state,.pc-svc-row.is-not_applicable .pc-svc-state{background:#EDF1EF;color:#4A5A52}
+.pc-svc-why{display:block;margin-top:2px;font-size:.68rem;font-weight:600;color:var(--muted)}
 .pc-review .pc-svc{padding-top:2px}
 /* In the reading the folded line already counts them, as chips. */
 .pc-review .pc-svc-tally{display:none}
@@ -581,6 +585,10 @@ tbody tr:hover td{background:#f7fbf8}
 .pcc-row.is-excluded .pcc-box::after,.pcc-row.is-declined .pcc-box::after{content:"\2715"}
 .pcc-row.is-pending .pcc-state{background:#f1f5f9;color:#475569}
 .pcc-row.is-pending .pcc-box{border-style:dashed}
+.pcc-row.is-not_offered .pcc-name,.pcc-row.is-not_applicable .pcc-name{color:var(--muted)}
+.pcc-row.is-not_offered .pcc-state,.pcc-row.is-not_applicable .pcc-state{background:#f1f5f9;color:#475569}
+.pcc-row.is-not_offered .pcc-box,.pcc-row.is-not_applicable .pcc-box{border-style:dashed}
+.pcc-row.is-check .pcc-state{background:var(--lg-amber-tint,#FDF4E2);color:var(--lg-amber-ink,#8A5A06)}
 .pcc-services-head .pcc-tally{margin-left:auto}
 .pcc-list + .pcc-services-head{margin-top:18px}
 .pcc-health{margin-bottom:0}
@@ -830,6 +838,11 @@ tbody tr:hover td{background:#f7fbf8}
 .sp-cs-col.is-check h5{color:var(--lg-amber-ink,#8A5A06)}
 .sp-cs-col.is-check .sp-cs-count{background:var(--lg-amber-tint,#FDF4E2);color:var(--lg-amber-ink,#8A5A06)}
 .sp-cs-col.is-check li::before{content:"?";background:var(--lg-amber-tint,#FDF4E2);color:var(--lg-amber-ink,#8A5A06)}
+.sp-cs-col.is-not-offered{border-top-color:var(--border)}
+.sp-cs-col.is-not-offered h5{color:var(--muted)}
+.sp-cs-col.is-not-offered .sp-cs-count{background:#EDF1EF;color:#4A5A52}
+.sp-cs-col.is-not-offered li{color:var(--muted)}
+.sp-cs-col.is-not-offered li::before{content:"\2013";background:#EDF1EF;color:#4A5A52}
 .sp-cs-quote{margin:0 0 9px;padding:7px 10px;border-radius:8px;background:var(--lg-amber-tint,#FDF4E2);font-size:.76rem;font-style:italic;color:var(--lg-amber-ink,#8A5A06);overflow-wrap:anywhere}
 .sp-cs-quote:empty{display:none}
 .sp-review-block{margin-bottom:10px}

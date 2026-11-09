@@ -139,4 +139,8 @@
     @if ($profile['shows_assignment'])
         @include('partials.settings-assignment')
     @endif
+
+    @if (! empty($healthServices))
+        @include('partials.settings-health-services')
+    @endif
 </div>
