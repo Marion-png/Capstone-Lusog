@@ -699,6 +699,18 @@ window.shrYearQuery = (glue) => {
     const consultLink = document.getElementById('profileConsultLink');
     const openLrn = new URLSearchParams(window.location.search).get('open') || '';
 
+    // Every string in a reply the panels below build markup from, escaped as
+    // it arrives: what a parent wrote on the consent form, an adviser's notes
+    // and a condition's name are text, and must never run as markup in a
+    // nurse's session.
+    const escHtml = (v) => String(v == null ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const escDeep = (v) => typeof v === 'string' ? escHtml(v)
+        : Array.isArray(v) ? v.map(escDeep)
+        : (v && typeof v === 'object') ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, escDeep(x)]))
+        : v;
+
     // The learner on screen, so a reply for one the nurse has moved off, or a
     // live re-read, can tell whose panel it is filling.
     let profileLrn = '';
@@ -1193,7 +1205,7 @@ window.shrYearQuery = (glue) => {
                 return;
             }
 
-            const data = await resp.json();
+            const data = escDeep(await resp.json());
 
             if (data.has_consent) {
                 // Missing the parent's name or signature: on file, but it
@@ -1261,14 +1273,10 @@ window.shrYearQuery = (glue) => {
 
                 // The button already opened the document; this says which
                 // document it is, off the same row the upload wrote. The filed
-                // name is whatever the uploader's own machine called the file,
-                // so it is escaped before it goes near innerHTML.
-                const escName = (v) => String(v == null ? '' : v)
-                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-
+                // name is whatever the uploader's own machine called the file;
+                // like the rest of `data` it was escaped as it arrived.
                 const fileRow = data.has_file
-                    ? `<div class="kv"><div class="k">Signed Form:</div><div class="v">${escName(data.file_name || 'Signed consent form')}</div></div>`
+                    ? `<div class="kv"><div class="k">Signed Form:</div><div class="v">${data.file_name || 'Signed consent form'}</div></div>`
                     : '';
 
                 const viewBtn = data.has_file && data.consent_id
@@ -1336,7 +1344,7 @@ window.shrYearQuery = (glue) => {
         try {
             const resp = await fetch('/api/student-health-assessment?lrn=' + encodeURIComponent(lrn) + (window.shrYearQuery?.('&') || ''), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             if (!resp.ok) { showSystems(true); el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load assessment.</div></div>'; return; }
-            const d = await resp.json();
+            const d = escDeep(await resp.json());
             if (!d.has_assessment) {
                 // Two different absences, and they belong on two different
                 // tabs. Whose work is outstanding is what decides where.
@@ -1479,7 +1487,7 @@ window.shrYearQuery = (glue) => {
         try {
             const resp = await fetch('/api/student-health-history?lrn=' + encodeURIComponent(lrn), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             if (!resp.ok) { el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load history.</div></div>'; return; }
-            const d = await resp.json();
+            const d = escDeep(await resp.json());
             const years = d.years || [];
 
             if (!years.length) {
@@ -1666,7 +1674,7 @@ window.shrYearQuery = (glue) => {
                 return;
             }
 
-            const conditions = (await resp.json()).conditions || [];
+            const conditions = escDeep((await resp.json()).conditions || []);
 
             if (!conditions.length) {
                 listEl.innerHTML = '<div style="font-size:.78rem;color:#6B7C72;">No health conditions on file for this student.</div>';

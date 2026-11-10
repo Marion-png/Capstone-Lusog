@@ -19,10 +19,10 @@
     $editEventId = $editFailed ? (int) old('event_id') : 0;
 @endphp
 <style>
-    .evt-board { background: #fff; border: 1px solid #DCE8E0; border-radius: 12px; box-shadow: 0 1px 4px rgba(5,46,22,.06); margin-bottom: 18px; }
-    .evt-board-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #DCE8E0; }
+    .evt-board { background: var(--ann-bg, #fff); border: 1px solid var(--ann-border, #DCE8E0); border-radius: var(--ann-radius, 12px); box-shadow: var(--ann-shadow, 0 1px 4px rgba(5,46,22,.06)); margin-bottom: 18px; }
+    .evt-board-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--ann-border, #DCE8E0); }
     .evt-board-head svg { width: 17px; height: 17px; color: #1F8A4C; flex-shrink: 0; }
-    .evt-board-title { font-size: .82rem; font-weight: 700; color: #1F2D25; }
+    .evt-board-title { font-family: var(--ann-title-font, inherit); font-size: var(--ann-title-size, .82rem); font-weight: var(--ann-title-weight, 700); color: #1F2D25; }
     .evt-board-sub { font-size: .72rem; color: #6B7C72; margin-left: 4px; }
     .evt-add-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; background: #126B3A; color: #fff; border: none; border-radius: 8px; padding: 7px 13px; font-size: .76rem; font-weight: 600; cursor: pointer; font-family: inherit; }
     .evt-add-toggle:hover { background: #0d3d20; }

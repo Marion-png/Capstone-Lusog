@@ -21,9 +21,15 @@ class ConditionControllerTest extends TestCase
     }
 
     /** @test */
+    public function index_refuses_a_visitor_who_is_not_signed_in(): void
+    {
+        $this->getJson('/api/conditions')->assertStatus(401);
+    }
+
+    /** @test */
     public function index_returns_all_conditions_as_json(): void
     {
-        $response = $this->getJson('/api/conditions');
+        $response = $this->withSession(['active_role' => 'school_nurse', 'active_institution_id' => 1])->getJson('/api/conditions');
 
         $response->assertStatus(200)
             ->assertJsonCount(3)
@@ -33,7 +39,7 @@ class ConditionControllerTest extends TestCase
     /** @test */
     public function index_filters_conditions_by_search_query(): void
     {
-        $response = $this->getJson('/api/conditions?search=cough');
+        $response = $this->withSession(['active_role' => 'school_nurse', 'active_institution_id' => 1])->getJson('/api/conditions?search=cough');
 
         $response->assertStatus(200)
             ->assertJsonCount(1)
@@ -43,7 +49,7 @@ class ConditionControllerTest extends TestCase
     /** @test */
     public function index_search_is_case_insensitive(): void
     {
-        $response = $this->getJson('/api/conditions?search=FEVER');
+        $response = $this->withSession(['active_role' => 'school_nurse', 'active_institution_id' => 1])->getJson('/api/conditions?search=FEVER');
 
         $response->assertStatus(200)
             ->assertJsonCount(1)
@@ -53,7 +59,7 @@ class ConditionControllerTest extends TestCase
     /** @test */
     public function index_filters_conditions_by_category(): void
     {
-        $response = $this->getJson('/api/conditions?category=Respiratory');
+        $response = $this->withSession(['active_role' => 'school_nurse', 'active_institution_id' => 1])->getJson('/api/conditions?category=Respiratory');
 
         $response->assertStatus(200)
             ->assertJsonCount(2)
@@ -63,7 +69,7 @@ class ConditionControllerTest extends TestCase
     /** @test */
     public function index_filters_with_both_search_and_category(): void
     {
-        $response = $this->getJson('/api/conditions?search=cold&category=Respiratory');
+        $response = $this->withSession(['active_role' => 'school_nurse', 'active_institution_id' => 1])->getJson('/api/conditions?search=cold&category=Respiratory');
 
         $response->assertStatus(200)
             ->assertJsonCount(1)
@@ -73,7 +79,7 @@ class ConditionControllerTest extends TestCase
     /** @test */
     public function store_creates_new_condition_with_school_nurse_role(): void
     {
-        $response = $this->withSession(['active_role' => 'school_nurse'])
+        $response = $this->withSession(['active_role' => 'school_nurse', 'active_institution_id' => 1])
             ->postJson('/api/conditions', [
                 'name' => 'New Condition',
                 'category' => 'Custom',
@@ -89,7 +95,7 @@ class ConditionControllerTest extends TestCase
     /** @test */
     public function store_creates_new_condition_with_clinic_staff_role(): void
     {
-        $response = $this->withSession(['active_role' => 'clinic_staff'])
+        $response = $this->withSession(['active_role' => 'clinic_staff', 'active_institution_id' => 1])
             ->postJson('/api/conditions', [
                 'name' => 'Another Condition',
                 'category' => 'Test',
@@ -104,7 +110,7 @@ class ConditionControllerTest extends TestCase
     /** @test */
     public function store_rejects_duplicate_condition_case_insensitive(): void
     {
-        $response = $this->withSession(['active_role' => 'school_nurse'])
+        $response = $this->withSession(['active_role' => 'school_nurse', 'active_institution_id' => 1])
             ->postJson('/api/conditions', [
                 'name' => 'FEVER', // Different case
                 'category' => 'General',
@@ -119,7 +125,7 @@ class ConditionControllerTest extends TestCase
     {
         $fever = Condition::where('name', 'Fever')->first();
 
-        $response = $this->withSession(['active_role' => 'school_nurse'])
+        $response = $this->withSession(['active_role' => 'school_nurse', 'active_institution_id' => 1])
             ->postJson('/api/conditions', [
                 'name' => 'fever', // Different case
                 'category' => 'General',
@@ -132,7 +138,7 @@ class ConditionControllerTest extends TestCase
     /** @test */
     public function store_denies_access_to_class_adviser(): void
     {
-        $response = $this->withSession(['active_role' => 'class_adviser'])
+        $response = $this->withSession(['active_role' => 'class_adviser', 'active_institution_id' => 1])
             ->postJson('/api/conditions', [
                 'name' => 'Unauthorized Condition',
                 'category' => 'Test',
@@ -147,7 +153,7 @@ class ConditionControllerTest extends TestCase
     /** @test */
     public function store_requires_condition_name(): void
     {
-        $response = $this->withSession(['active_role' => 'school_nurse'])
+        $response = $this->withSession(['active_role' => 'school_nurse', 'active_institution_id' => 1])
             ->postJson('/api/conditions', [
                 'category' => 'Test',
             ]);
@@ -159,7 +165,7 @@ class ConditionControllerTest extends TestCase
     /** @test */
     public function store_validates_condition_name_max_length(): void
     {
-        $response = $this->withSession(['active_role' => 'school_nurse'])
+        $response = $this->withSession(['active_role' => 'school_nurse', 'active_institution_id' => 1])
             ->postJson('/api/conditions', [
                 'name' => str_repeat('a', 256),
                 'category' => 'Test',
@@ -172,7 +178,7 @@ class ConditionControllerTest extends TestCase
     /** @test */
     public function store_allows_category_to_be_null(): void
     {
-        $response = $this->withSession(['active_role' => 'school_nurse'])
+        $response = $this->withSession(['active_role' => 'school_nurse', 'active_institution_id' => 1])
             ->postJson('/api/conditions', [
                 'name' => 'No Category Condition',
             ]);
@@ -188,7 +194,7 @@ class ConditionControllerTest extends TestCase
     /** @test */
     public function store_denies_access_without_valid_role(): void
     {
-        $response = $this->withSession(['active_role' => 'invalid_role'])
+        $response = $this->withSession(['active_role' => 'invalid_role', 'active_institution_id' => 1])
             ->postJson('/api/conditions', [
                 'name' => 'Test Condition',
                 'category' => 'Test',
@@ -200,7 +206,7 @@ class ConditionControllerTest extends TestCase
     /** @test */
     public function store_allows_school_head_read_only(): void
     {
-        $response = $this->withSession(['active_role' => 'school_head'])
+        $response = $this->withSession(['active_role' => 'school_head', 'active_institution_id' => 1])
             ->postJson('/api/conditions', [
                 'name' => 'School Head Condition',
                 'category' => 'Test',

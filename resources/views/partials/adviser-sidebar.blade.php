@@ -13,6 +13,7 @@
             ->count()
         : 0;
 @endphp
+@include('partials.lusog-skin')
 <aside class="asb-sidebar">
     <div class="asb-logo">
         {{-- The full SIGLA mark, same as the School Nurse rail, so every role

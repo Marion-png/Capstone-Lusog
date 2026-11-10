@@ -48,6 +48,7 @@ use App\Models\Medicine;
 use App\Models\MedicineDispense;
 use App\Models\StudentHealthRecord;
 use App\Support\AccountName;
+use App\Support\AccountPassword;
 use App\Support\AccountSettings;
 use App\Support\AuditTrail;
 use App\Support\ClinicDashboard;
@@ -55,6 +56,7 @@ use App\Support\ConsultationMedicines;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingProgramCycle;
+use App\Support\LoginThrottle;
 use App\Support\SchemaCache;
 use App\Support\SchoolPulse;
 use App\Support\SchoolYear;
@@ -215,7 +217,7 @@ Route::post('/account-request', function (Request $request) {
     return redirect()
         ->route('account.request')
         ->with('success', 'Account request submitted. Please wait for System Admin approval.');
-})->name('account.request.submit');
+})->middleware('throttle:10,10')->name('account.request.submit');
 
 // Prototype flow: Class Adviser -> School Nurse (Session-based, no database)
 Route::get('/adviser/create', [AdviserController::class, 'create'])
@@ -1099,7 +1101,7 @@ Route::get('/dashboard/school-head/consent-forms/{form}/print', [HealthConsentFo
 Route::get('/consent/{token}', [HealthConsentFormController::class, 'parentShow'])
     ->name('consent-forms.parent');
 Route::post('/consent/{token}', [HealthConsentFormController::class, 'parentSubmit'])
-    ->name('consent-forms.parent-submit');
+    ->middleware('throttle:20,10')->name('consent-forms.parent-submit');
 
 // Health Assessment (MLHAT) — class_adviser submit, nurse/staff read
 Route::get('/dashboard/class-adviser/health-assessments', [HealthAssessmentController::class, 'index'])
@@ -1628,6 +1630,10 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
     $validated = $request->validate([
         'name' => ['required', 'string', 'max:255'],
         'username' => ['required', 'string', 'max:255'],
+        // An account is created with a password, never without one: the login
+        // route matches an empty hash against nothing, so a passwordless
+        // account could not sign in, and must never be open to anybody.
+        'password' => AccountPassword::rules(confirmed: false),
         'role' => ['required', 'in:school_nurse,clinic_staff,clinic_teacher,class_adviser,school_head,feeding_coor,nutricor'],
         'institution_id' => ['nullable', 'integer', 'exists:institutions,id'],
         'assigned_grade_level' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:50'],
@@ -1664,7 +1670,7 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
     DB::table('accounts')->insert([
         'name' => AccountName::seal($validated['name']),
         'username' => $validated['username'],
-        'password_hash' => null,
+        'password_hash' => Hash::make((string) $validated['password']),
         'role' => $role,
         'institution_id' => $institutionId,
         'school_name' => $institution?->name,
@@ -1821,32 +1827,49 @@ Route::post('/login', function (Request $request) {
     ]);
 
     $username = strtolower(trim((string) $request->input('email')));
+
+    // Password guessing: a few wrong tries lock that username from this
+    // address for a while, and an address that keeps failing across many
+    // usernames is locked too. Only failures count.
+    $throttle = LoginThrottle::for('login', $username, (string) $request->ip());
+    if ($throttle->locked()) {
+        return back()
+            ->withInput(['email' => $request->input('email')])
+            ->with('error', $throttle->message());
+    }
+
     $matchingAccounts = collect(
         Schema::hasTable('accounts')
             ? DB::table('accounts')->whereRaw('LOWER(TRIM(username)) = ?', [$username])->get()->map(fn ($r) => (array) $r)->values()->all()
             : []
     );
 
+    // An unknown username and a wrong password read the same and take the
+    // same time, so the form cannot be used to find out who has an account.
     if ($matchingAccounts->isEmpty()) {
+        Hash::check((string) $request->input('password'), LoginThrottle::DUMMY_HASH);
+        $throttle->fail();
         AuditTrail::record('login_failed', null, null, "Failed login: username '{$username}' not found");
 
         return back()
-            ->withInput()
-            ->with('error', 'Account was not found. Please submit a Create Account request first.');
+            ->withInput(['email' => $request->input('email')])
+            ->with('error', 'Invalid username or password.');
     }
 
     // The same username may exist in several schools (one separate account per
     // school). Keep only the accounts whose password matches, then require a
-    // school choice if more than one remains.
+    // school choice if more than one remains. An account with no password on
+    // file matches nothing: it is not open to whoever types its username.
     $candidates = $matchingAccounts
         ->filter(function (array $account) use ($request) {
             $passwordHash = (string) ($account['password_hash'] ?? '');
 
-            return $passwordHash === '' || Hash::check((string) $request->input('password'), $passwordHash);
+            return $passwordHash !== '' && Hash::check((string) $request->input('password'), $passwordHash);
         })
         ->values();
 
     if ($candidates->isEmpty()) {
+        $throttle->fail();
         AuditTrail::record('login_failed', null, null, "Failed login: wrong password for username '{$username}'");
 
         return back()
@@ -1878,6 +1901,7 @@ Route::post('/login', function (Request $request) {
 
     $account = $candidates->first();
     $role = (string) ($account['role'] ?? '');
+    $throttle->clear();
 
     // A sign-in starts a new session. Nothing the last person left in this
     // browser (a roster, a school, an assignment) carries over to this one, and
@@ -1926,16 +1950,34 @@ Route::post('/admin-login', function (Request $request) {
         'password' => ['required', 'string'],
     ]);
 
+    $throttle = LoginThrottle::for('admin-login', strtolower(trim($validated['username'])), (string) $request->ip());
+    if ($throttle->locked()) {
+        return back()
+            ->withInput(['username' => $validated['username']])
+            ->with('error', $throttle->message());
+    }
+
     $expectedUsername = (string) config('app.system_admin.username');
     $expectedPassword = (string) config('app.system_admin.password');
 
-    if ($validated['username'] !== $expectedUsername || $validated['password'] !== $expectedPassword) {
+    // The fallback password in config/app.php is public (it is in the
+    // repository), so outside local and testing it opens nothing: the deploy
+    // must set SYSTEM_ADMIN_PASSWORD. Compared in constant time.
+    $usable = $expectedUsername !== '' && $expectedPassword !== ''
+        && ($expectedPassword !== 'admin123' || app()->environment('local', 'testing'));
+
+    if (! $usable
+        || ! hash_equals($expectedUsername, $validated['username'])
+        || ! hash_equals($expectedPassword, $validated['password'])) {
+        $throttle->fail();
         AuditTrail::record('login_failed', null, null, "Failed System Admin login attempt for username '{$validated['username']}'");
 
         return back()
             ->withInput(['username' => $validated['username']])
             ->with('error', 'Invalid System Admin credentials.');
     }
+
+    $throttle->clear();
 
     // Same as the school sign-in. It also keeps this unscoped role from carrying
     // the school id of whoever last used this browser.

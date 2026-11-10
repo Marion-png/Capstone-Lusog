@@ -1,0 +1,202 @@
+/* ══════════════════════════════════════════════════════════════════════
+   LUSOG — Forest Green + Beige skin (every role)
+   ──────────────────────────────────────────────────────────────────────
+   The product palette, carried to every role:
+
+     Primary     #14532D   rail, headings, card base edge
+     Secondary   #166534   actions, the italic half of a page title
+     Background  #F5F0E6   the page canvas — and nowhere else
+     Cards       #FFFDF7   every card, table, board and the top bar
+     Accent      #D4A72C   small marks only: the clock, the active tab's bar
+     Text        #1F2933   body ink
+
+   Beige is the canvas between cards, never a fill on top of it: lines,
+   table heads and hovers stay a neutral green-grey, and the canvas is lit
+   by a white glow so it reads airy rather than tan.
+
+   The rail is forest green with curved bands at the top and the foot, and
+   a soft olive pill for the page you are on.
+
+   Emitted once per page by partials/lusog-skin, which every role's rail
+   partial includes — so it lands after the page sheets, the rail sheets
+   and the shared palette, and wins over them by coming last. Selectors
+   carry an `html` prefix so they also outrank style blocks printed further
+   down the body.
+
+   Colour and surface only: it never changes a typeface, size or weight,
+   and no element is shown, hidden or moved. Everything sits inside
+   @media screen, so a printed page keeps its plain white.
+
+   NOTE FOR EDITORS: this file is inlined inside a style element, so it
+   must never contain the sequence that closes one.
+   ══════════════════════════════════════════════════════════════════════ */
+
+@media screen {
+
+:root {
+	--sk-primary: #14532D;
+	--sk-secondary: #166534;
+	--sk-canvas: #F5F0E6;
+	--sk-card: #FFFDF7;
+	--sk-accent: #D4A72C;
+	--sk-text: #1F2933;
+
+	--sk-line: #E4E6DD;
+	--sk-line-strong: #D1D7CB;
+	--sk-head: #F2F5EE;
+	--sk-row-hover: #EEF5EF;
+	--sk-shadow: 0 1px 2px rgba(31, 41, 51, .04), 0 6px 18px rgba(31, 41, 51, .06);
+	--sk-shadow-lift: 0 2px 4px rgba(31, 41, 51, .05), 0 12px 26px rgba(31, 41, 51, .09);
+
+	/* Brand and ink. Chart series keep their own validated tokens. */
+	--lg-emerald-deep: var(--sk-primary);
+	--lg-emerald: var(--sk-secondary);
+	--lg-emerald-dark: #0F3F22;
+	--lg-ink: var(--sk-text);
+
+	/* Surfaces. */
+	--lg-page: var(--sk-canvas);
+	--lg-card: var(--sk-card);
+	--lg-border: var(--sk-line);
+	--lg-border-strong: var(--sk-line-strong);
+	--lg-rail: var(--sk-head);
+	--lg-shadow: var(--sk-shadow);
+	--lg-shadow-lift: var(--sk-shadow-lift);
+
+	/* The legacy sheets' names for the same things. */
+	--bg: var(--sk-canvas);
+	--cream: var(--sk-canvas);
+	--card: var(--sk-card);
+	--border: var(--sk-line);
+	--text: var(--sk-text);
+	--text-1: var(--sk-text);
+
+	/* The announcements and events boards style themselves inside their
+	   own partials; these are the tokens they read. */
+	--ann-bg: var(--sk-card);
+	--ann-border: var(--sk-line);
+	--ann-shadow: var(--sk-shadow);
+	--ann-radius: 14px;
+	--ann-icon: var(--sk-primary);
+	--ann-title: var(--sk-text);
+
+	/* Every rail, including the one still styled inside its own partial:
+	   curved bands at the top and the foot over forest green. */
+	--rail-bg:
+		url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 260 260' preserveAspectRatio='none'%3E%3Cpath d='M0 0H260V58C204 40 152 70 112 118C82 156 42 188 0 200Z' fill='%23FFFFFF' fill-opacity='.05'/%3E%3Cpath d='M0 0H172C140 30 92 52 0 130Z' fill='%230B3D20' fill-opacity='.35'/%3E%3C/svg%3E") top left / 100% 260px no-repeat,
+		url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 260 260' preserveAspectRatio='none'%3E%3Cpath d='M0 110C80 60 170 150 260 80V260H0Z' fill='%231E6B3D' fill-opacity='.55'/%3E%3Cpath d='M0 180C90 140 160 212 260 160V260H0Z' fill='%230E4524' fill-opacity='.6'/%3E%3C/svg%3E") bottom left / 100% 260px no-repeat,
+		var(--sk-primary);
+	--rail-hover-bg: rgba(255, 255, 255, .08);
+	--rail-active-bg: rgba(188, 214, 140, .24);
+	--rail-active-ink: #FFFFFF;
+	--rail-active-shadow: inset 0 0 0 1px rgba(255, 255, 255, .10);
+
+	--clock-bg: var(--sk-card);
+	--clock-border: rgba(212, 167, 44, .45);
+	--clock-icon: var(--sk-accent);
+}
+
+/* ── Canvas: the beige, lifted by a white glow at the top right, a sprig
+      of leaves under the top bar, and a faint green wash at the foot. ── */
+html, body { background-color: var(--sk-canvas); }
+html body {
+	background-image:
+		url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 160 160'%3E%3Cpath d='M152 8C98 14 66 52 72 108c48-6 80-42 80-100z' fill='%2387A96B' fill-opacity='.62'/%3E%3Cpath d='M150 74c-44-6-76 16-80 60 38 8 76-16 80-60z' fill='%236E9455' fill-opacity='.5'/%3E%3Cpath d='M96 18C64 34 52 66 68 98c28-22 36-52 28-80z' fill='%23B4CB97' fill-opacity='.55'/%3E%3C/svg%3E"),
+		radial-gradient(circle at 85% 0%, rgba(255, 255, 255, .75) 0, rgba(255, 255, 255, .35) 260px, rgba(255, 255, 255, 0) 560px),
+		radial-gradient(ellipse at 20% 110%, rgba(206, 228, 192, .45) 0, rgba(206, 228, 192, 0) 55%);
+	background-repeat: no-repeat;
+	background-position: right -30px top 70px, 0 0, 0 0;
+	background-size: 124px 124px, 100% 100%, 100% 100%;
+	background-attachment: fixed;
+}
+html .main, html .asb-main, html .content { background: transparent; }
+
+/* ── Top bar: the card colour, frosted. ── */
+html .topbar, html .asb-topbar, html .top {
+	background: rgba(255, 253, 247, .88);
+	border-bottom-color: var(--sk-line);
+	-webkit-backdrop-filter: saturate(1.2) blur(8px);
+	backdrop-filter: saturate(1.2) blur(8px);
+}
+html .lsearch input, html .lg-search input {
+	background: var(--sk-card);
+	border-color: var(--sk-line-strong);
+	border-radius: 999px;
+}
+html .lsearch input:focus, html .lg-search input:focus { border-color: var(--sk-secondary); }
+html .asb-icon-btn:hover { background: var(--lg-mint); color: var(--sk-primary); }
+
+/* ── Titles: colour only — every page keeps its own type. ── */
+html .page-title, html .title { color: var(--sk-text); }
+html .page-title span, html .title i { color: var(--sk-secondary); }
+html .page-eyebrow { color: var(--sk-secondary); }
+
+/* ── Cards. ── */
+html .card, html .table-card {
+	background: var(--sk-card);
+	border-color: var(--sk-line);
+	box-shadow: var(--sk-shadow);
+	border-radius: 14px;
+}
+html .card:hover { box-shadow: var(--sk-shadow-lift); border-color: var(--sk-line-strong); }
+
+/* Headline-number cards stand on a primary-green base edge; their colour
+   lives in the icon tile, as in the adviser's four cards. */
+html .kpi, html .dashboard-stat-card, html .card.stat {
+	border: 1px solid var(--sk-line);
+	border-bottom: 4px solid var(--sk-primary);
+	border-radius: 16px;
+}
+/* The Nutrition Coordinator's cards carry no icon tile, so their colour
+   stays on the left edge. */
+html .card.stat { border-left-width: 4px; }
+html .kpi::before { display: none; }
+html .kpi-icon { width: 42px; height: 42px; border-radius: 12px; }
+html .kpi-icon svg { width: 20px; height: 20px; }
+
+/* ── Tables: a soft sage head and a mint hover — never beige. ── */
+html th:not(.form-sheet *) { background: var(--sk-head); border-bottom-color: var(--sk-line); }
+html td:not(.form-sheet *) { border-bottom-color: var(--sk-line); }
+html tbody tr:hover td:not(.form-sheet *) { background: var(--sk-row-hover); }
+
+/* ── Hero banners: primary into secondary, lit at the corner. ── */
+html .hero-banner, html .role-hero, html .summary {
+	position: relative;
+	overflow: hidden;
+	background:
+		radial-gradient(circle at 92% -10%, rgba(212, 167, 44, .18) 0, rgba(212, 167, 44, 0) 45%),
+		radial-gradient(circle at 0% 120%, rgba(169, 220, 190, .20) 0, rgba(169, 220, 190, 0) 50%),
+		linear-gradient(135deg, #14532D 0%, #166534 55%, #1D7440 100%);
+	border-radius: 18px;
+	box-shadow: 0 12px 28px rgba(20, 83, 45, .20);
+	color: #fff;
+}
+
+/* ── Rails. ── */
+html .asb-sidebar, html .sidebar { background: var(--rail-bg); }
+html .asb-logo, html .sb-logo { border-bottom-color: transparent; }
+html .asb-nav-label, html .sb-section-label { color: rgba(190, 226, 180, .85); }
+html .asb-link, html .sb-link { color: #E8F0E4; border-radius: 12px; }
+html .asb-link:hover, html .sb-link:hover { background: var(--rail-hover-bg); color: #fff; }
+html .asb-link.active, html .sb-link.active {
+	background: var(--rail-active-bg);
+	color: var(--rail-active-ink);
+	box-shadow: var(--rail-active-shadow);
+}
+html .asb-link.active::before { background: var(--sk-accent); }
+html .asb-user, html .sb-user { border-top-color: rgba(255, 255, 255, .10); background: transparent; }
+html .asb-avatar, html .sb-avatar { background: #5E7F48; }
+html .asb-user-role, html .sb-user-role { color: rgba(190, 226, 180, .85); }
+
+html .empty-panel { background: var(--sk-card); border-color: var(--sk-line-strong); }
+
+}
+
+@media screen and (max-width: 900px) {
+	/* No room for the sprig beside a phone-width title. */
+	html body { background-size: 0 0, 100% 100%, 100% 100%; }
+}
+
+@media screen and (prefers-reduced-transparency: reduce) {
+	html .topbar, html .asb-topbar, html .top { background: var(--sk-card); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}

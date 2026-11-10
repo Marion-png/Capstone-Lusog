@@ -1660,8 +1660,10 @@ window.switchAdviserTab = (targetId) => {
         blocks.forEach((block) => {
             const card = document.createElement('div');
             card.className = 'summary-card';
+            // The values are what was typed into the form: text, not markup.
+            const escText = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const rowsHtml = block.rows
-                .map(([k, v]) => `<div class="summary-k">${k}:</div><div class="summary-v">${v}</div>`)
+                .map(([k, v]) => `<div class="summary-k">${k}:</div><div class="summary-v">${escText(v)}</div>`)
                 .join('');
             card.innerHTML = `<h5>${block.title}</h5><div class="summary-grid">${rowsHtml}</div>`;
             summary.appendChild(card);

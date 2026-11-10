@@ -33,6 +33,14 @@ class SecurityHeaders
         // Learners' health records are not for search engines, login page
         // included. robots.txt says the same to the crawlers that read it.
         $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
+        // What a script that got in could still do, narrowed: it cannot point
+        // the page's relative links elsewhere with <base>, load a plugin, or
+        // post a form (a typed password, a learner's record) to another site.
+        // Scripts and styles are not restricted, as the pages use inline ones.
+        $response->headers->set(
+            'Content-Security-Policy',
+            "base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'"
+        );
 
         // Only over HTTPS: sent over plain HTTP the header is ignored anyway,
         // and a local http:// server must stay reachable.

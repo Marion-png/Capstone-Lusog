@@ -40,6 +40,7 @@
         ->take(2)
         ->implode('');
 @endphp
+@include('partials.lusog-skin')
 <aside class="sidebar">
     <div class="sb-grid"></div>
     <div class="sb-logo">

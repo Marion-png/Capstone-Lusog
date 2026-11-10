@@ -17,23 +17,26 @@
     ];
 @endphp
 <section class="card set-panel set-services" id="health-services" aria-labelledby="healthServicesTitle">
-    <div class="card-head">
-        <div>
-            <div class="card-title" id="healthServicesTitle">Health Services Offered</div>
-            <div class="card-sub">The health services the school gives in a school year. A service switched off reads <strong>Not offered</strong> on every consent form, and consent is not asked for it.</div>
+    <div class="set-head">
+        <span class="set-head-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12h6M12 9v6"/></svg>
+        </span>
+        <div class="set-head-text">
+            <h2 class="card-title" id="healthServicesTitle">Health Services Offered</h2>
+            <p class="card-sub">The health services the school gives in a school year. A service switched off reads <strong>Not offered</strong> on every consent form, and consent is not asked for it.</p>
         </div>
-    </div>
 
-    {{-- Choosing a year reloads the page on that year's switches. --}}
-    <form method="GET" action="{{ route('settings') }}#health-services" class="set-services-year">
-        <label class="field-label" for="servicesYear">School year</label>
-        <select class="input" id="servicesYear" name="services_year" onchange="this.form.submit()">
-            @foreach ($hs['years'] as $year)
-                <option value="{{ $year }}" @selected($year === $hs['school_year'])>{{ $year }}{{ $year === $hs['current_year'] ? ' (current)' : '' }}</option>
-            @endforeach
-        </select>
-        <noscript><button type="submit" class="btn btn-secondary">Show</button></noscript>
-    </form>
+        {{-- Choosing a year reloads the page on that year's switches. --}}
+        <form method="GET" action="{{ route('settings') }}#health-services" class="set-services-year">
+            <label class="field-label" for="servicesYear">School year</label>
+            <select class="input" id="servicesYear" name="services_year" onchange="this.form.submit()">
+                @foreach ($hs['years'] as $year)
+                    <option value="{{ $year }}" @selected($year === $hs['school_year'])>{{ $year }}{{ $year === $hs['current_year'] ? ' (current)' : '' }}</option>
+                @endforeach
+            </select>
+            <noscript><button type="submit" class="btn btn-secondary">Show</button></noscript>
+        </form>
+    </div>
 
     @if (! $hs['supported'])
         <div class="flash info set-blocked">The database has not been updated for this setting yet. Every service is offered until it is.</div>

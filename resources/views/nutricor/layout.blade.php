@@ -335,6 +335,7 @@
     <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
 </head>
 <body>
+@include('partials.lusog-skin')
 <aside class="sidebar">
     <div class="sb-grid"></div>
     <div class="sb-logo">

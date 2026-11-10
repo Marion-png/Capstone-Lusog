@@ -10,10 +10,12 @@
 
 @section('title', 'Settings')
 @section('crumb', 'Settings')
-@section('page_title', 'Your Settings')
-@section('page_subtitle', 'The account you are signed in with, and your password.')
+@section('page_eyebrow', 'Account')
+@section('page_title')Your <span>Settings</span>@endsection
+@section('page_subtitle', 'Your account and password.')
 
 @section('content')
+    <script>document.documentElement.classList.add('js');</script>
     <style>{!! file_get_contents(resource_path('css/settings.css')) !!}</style>
     @include('partials.settings-panels')
 @endsection

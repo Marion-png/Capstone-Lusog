@@ -18,7 +18,7 @@
 <style>
     .nsb {
         position: fixed; left: 0; top: 0; bottom: 0; width: 264px; z-index: 100;
-        background: #0A2218; display: flex; flex-direction: column;
+        background: var(--rail-bg, #0A2218); display: flex; flex-direction: column;
         overflow-y: auto; overflow-x: hidden;
     }
     .nsb::-webkit-scrollbar { width: 4px; }
@@ -39,8 +39,8 @@
         font-family: inherit; font-size: 13.5px; font-weight: 500;
         color: rgba(255,255,255,.58); transition: background .15s ease, color .15s ease;
     }
-    .nsb-item:hover { background: rgba(255,255,255,.06); color: rgba(255,255,255,.9); }
-    .nsb-item.active { background: rgba(93,160,122,.18); color: #7ECDA0; }
+    .nsb-item:hover { background: var(--rail-hover-bg, rgba(255,255,255,.06)); color: rgba(255,255,255,.9); }
+    .nsb-item.active { background: var(--rail-active-bg, rgba(93,160,122,.18)); color: var(--rail-active-ink, #7ECDA0); box-shadow: var(--rail-active-shadow, none); }
     .nsb-item.active::before {
         content: ''; position: absolute; left: -12px; top: 50%; transform: translateY(-50%);
         width: 3px; height: 20px; background: #5BA07A; border-radius: 0 3px 3px 0;
@@ -77,6 +77,7 @@
     }
 </style>
 
+@include('partials.lusog-skin')
 <aside class="nsb">
     <div class="nsb-brand">
         <img src="{{ asset('images/sigla-logo.png') }}" alt="SIGLA" class="nsb-logo">

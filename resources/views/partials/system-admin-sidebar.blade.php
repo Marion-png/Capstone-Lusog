@@ -25,6 +25,7 @@
         ? '#'.$anchor
         : route('dashboard.system-admin').'#'.$anchor;
 @endphp
+@include('partials.lusog-skin')
 <aside class="asb-sidebar">
     <div class="asb-logo">
         <img src="{{ asset('images/sigla-logo.png') }}" alt="SIGLA" class="asb-logo-full">

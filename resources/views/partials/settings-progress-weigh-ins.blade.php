@@ -8,10 +8,13 @@
     Expects $progressWeighIns (SettingsController::index).
 --}}
 <section class="card set-panel" id="progress-weigh-ins" aria-labelledby="progressWeighInsTitle">
-    <div class="card-head">
-        <div>
-            <div class="card-title" id="progressWeighInsTitle">Progress weigh-ins</div>
-            <div class="card-sub">Optional weigh-ins around feeding days 30, 60 and 90, between the baseline and the endline.</div>
+    <div class="set-head">
+        <span class="set-head-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M5 7h14"/><path d="m5 7-3 7a3 3 0 0 0 6 0z"/><path d="m19 7-3 7a3 3 0 0 0 6 0z"/></svg>
+        </span>
+        <div class="set-head-text">
+            <h2 class="card-title" id="progressWeighInsTitle">Progress weigh-ins</h2>
+            <p class="card-sub">Optional weigh-ins around feeding days 30, 60 and 90, between the baseline and the endline.</p>
         </div>
     </div>
 

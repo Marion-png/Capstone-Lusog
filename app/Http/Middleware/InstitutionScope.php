@@ -33,7 +33,12 @@ class InstitutionScope
         if (in_array($role, self::SCOPED_ROLES, true)) {
             $institutionId = $request->session()->get('active_institution_id');
 
-            if (! $institutionId && $this->requiresActiveSession($request)) {
+            // Every path, not only the signed-in prefixes: the JSON endpoints
+            // under /api, the file downloads and the announcement and event
+            // writes are school data too, and several of them filter by school
+            // only `when` there is one. The sign-in pages are left alone, so
+            // a stale session can always sign in again.
+            if (! $institutionId && ! $this->isSignInPage($request)) {
                 $request->session()->forget([
                     'active_role', 'active_name', 'active_username',
                     'active_school_name', 'active_institution_id',
@@ -47,17 +52,8 @@ class InstitutionScope
         return $next($request);
     }
 
-    private function requiresActiveSession(Request $request): bool
+    private function isSignInPage(Request $request): bool
     {
-        return $request->is(
-            'dashboard',
-            'dashboard/*',
-            'adviser',
-            'adviser/*',
-            'nurse',
-            'nurse/*',
-            'health-records',
-            'health-records/*',
-        );
+        return $request->is('/', 'login', 'admin-login', 'logout', 'account-request');
     }
 }

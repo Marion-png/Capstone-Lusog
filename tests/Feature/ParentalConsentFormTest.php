@@ -434,7 +434,7 @@ class ParentalConsentFormTest extends TestCase
     public function consent_status_api_is_denied_for_unauthorized_roles(): void
     {
         foreach (['school_head', 'feeding_coor', 'nutricor'] as $role) {
-            $this->withSession(['active_role' => $role])
+            $this->withSession(['active_role' => $role, 'active_institution_id' => 1])
                 ->getJson(route('api.student-consent-status', ['lrn' => 'LRN001']))
                 ->assertStatus(403);
         }

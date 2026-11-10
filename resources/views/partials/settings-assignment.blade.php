@@ -1,8 +1,11 @@
 <section class="card set-panel set-assignment" aria-labelledby="assignmentTitle">
-    <div class="card-head">
-        <div>
-            <div class="card-title" id="assignmentTitle">Teaching assignment</div>
-            <div class="card-sub">Update your grade and section when your new school-year assignment takes effect.</div>
+    <div class="set-head">
+        <span class="set-head-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 2 9 2 12 0v-5"/></svg>
+        </span>
+        <div class="set-head-text">
+            <h2 class="card-title" id="assignmentTitle">Teaching assignment</h2>
+            <p class="card-sub">Update your grade and section when your new school-year assignment takes effect.</p>
         </div>
     </div>
 

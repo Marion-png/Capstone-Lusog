@@ -16,6 +16,12 @@ class ConditionController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        // The route sits outside the signed-in prefixes, so it checks for a
+        // sign-in itself.
+        if (! $request->session()->has('active_role')) {
+            return response()->json(['message' => 'Sign in to continue.'], 401);
+        }
+
         $search = $request->query('search');
         $category = $request->query('category');
 
