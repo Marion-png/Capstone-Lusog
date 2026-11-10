@@ -112,8 +112,9 @@ if (! Schema::hasTable('accounts')) {
             $warn(($withHash->count() - $bcrypt->count()).' account(s) have a password that is not a bcrypt hash.');
         }
 
-        // accounts is a plaintext table by design, so a collaborator's account
-        // works regardless of which APP_KEY wrote the encrypted student data.
+        // Usernames and password hashes are plaintext by design, so a
+        // collaborator's account signs in regardless of which APP_KEY wrote
+        // the encrypted data. Only the display name is encrypted (AccountName).
         $garbled = $accounts->filter(function ($a) {
             return str_starts_with((string) $a->username, 'eyJpdiI6');
         });

@@ -15,7 +15,7 @@
 
      The rate printed beside a learner, the state beside it and the flag it
      carries come from one reading of one set of marks, so a row can never show
-     92% next to a warning — or 25% next to At Risk before the school's
+     92% next to a warning — or 25% next to For Follow-up before the school's
      observation window says a rate means anything.
 
      The Session column is the one thing here that is not cumulative: it is this
@@ -142,7 +142,7 @@
 						     rate to report — an em dash, never 0%. --}}
 						<td class="num tnum">{{ $row['rate'] !== null ? number_format($row['rate'], 0).'%' : '—' }}</td>
 						<td>
-							{{-- One standing from the one reading the At-Risk
+							{{-- One standing from the one reading the For Follow-up
 							     Students tab works from: flagged only once the
 							     coordinator confirmed the record. --}}
 							@if ($row['at_risk'])

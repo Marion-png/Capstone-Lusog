@@ -116,15 +116,15 @@
 			<section class="card fp-table-section" id="atRiskSection">
 				<div class="fp-table-head">
 					<div>
-						<h2 class="card-title">At-Risk Beneficiaries</h2>
+						<h2 class="card-title">For Follow-up Beneficiaries</h2>
 						<p class="card-sub">{{ ucfirst($programStats['at_risk_rule'] ?? '') }}</p>
 					</div>
 					<div class="fp-filters">
 						<div class="lg-search fp-search">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-							<input type="search" id="riskSearch" placeholder="Search" autocomplete="off" aria-label="Search the at-risk list by name or section">
+							<input type="search" id="riskSearch" placeholder="Search" autocomplete="off" aria-label="Search the For Follow-up list by name or section">
 						</div>
-						<select class="select fp-filter" id="riskGenderFilter" aria-label="Filter the at-risk list by gender">
+						<select class="select fp-filter" id="riskGenderFilter" aria-label="Filter the For Follow-up list by gender">
 							<option value="all">Gender</option>
 							@foreach (\App\Support\FeedingBeneficiarySummary::SEX_OPTIONS as $sexOption)
 								<option value="{{ strtolower($sexOption) }}">{{ $sexOption }}</option>

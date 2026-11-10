@@ -34,7 +34,7 @@
 			position: fixed;
 			/* Above the dialog layer (250 across this app's modal sheets): a
 			   tooltip is the topmost transient thing on screen, and a chart
-			   inside a dialog — the At-Risk record opens one — would otherwise
+			   inside a dialog — the For Follow-up record opens one — would otherwise
 			   hand out readouts nobody can see. */
 			z-index: 260;
 			max-width: 240px;

@@ -198,7 +198,7 @@ class PriorityHealthFlagTest extends TestCase
 
         $html = $this->dashboard([$this->rosterRow('100000000008', 'Nena', 'Dela Cruz')]);
 
-        // At-risk by attendance counts toward follow-up but never puts a
+        // For Follow-up by attendance counts toward follow-up but never puts a
         // learner in the Priority table.
         $this->assertStringContainsString('0 Priority</span>', $html, 'The hero strip must show the priority count.');
         $this->assertStringContainsString('No learners are flagged as priority right now.', $html);

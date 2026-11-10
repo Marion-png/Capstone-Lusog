@@ -4,5 +4,5 @@
      one programme size, one wasting count and one turnout, never two.
 
      The Clinic Teacher's tally carries no flag (it is never computed for
-     them), and the partial leaves the At Risk card out. --}}
+     them), and the partial leaves the For Follow-up card out. --}}
 @include('feedingcor-dashboard.partials.beneficiary-cards', ['beneficiarySummary' => $beneficiarySummary ?? []])

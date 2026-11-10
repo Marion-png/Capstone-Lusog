@@ -247,8 +247,8 @@
 								     FeedingAtRiskRule::MODES, so a rule added to the class
 								     cannot go missing from this form. --}}
 								<div class="sa-field sa-field-wide">
-									<label class="field-label" for="{{ $fid }}-mode">At-risk rule</label>
-									<select class="select" id="{{ $fid }}-mode" name="at_risk_mode" aria-label="At-risk rule for {{ $school->name }}">
+									<label class="field-label" for="{{ $fid }}-mode">For Follow-up rule</label>
+									<select class="select" id="{{ $fid }}-mode" name="at_risk_mode" aria-label="For Follow-up rule for {{ $school->name }}">
 										<option value="">App default &mdash; {{ ($atRiskModes ?? [])[$defaultAtRiskMode ?? ''] ?? 'attendance rate' }}</option>
 										@foreach (($atRiskModes ?? []) as $modeValue => $modeLabel)
 											<option value="{{ $modeValue }}" @selected(($school->feeding_at_risk_mode ?? null) === $modeValue)>{{ $modeLabel }}</option>
@@ -262,7 +262,7 @@
 										<input type="number" id="{{ $fid }}-threshold" name="threshold" min="1" max="100" step="1"
 											value="{{ $school->feeding_at_risk_threshold }}"
 											placeholder="{{ (int) ($defaultAtRiskThreshold ?? 80) }}"
-											aria-label="At-risk attendance threshold for {{ $school->name }}">
+											aria-label="For Follow-up attendance threshold for {{ $school->name }}">
 										<span>%</span>
 									</div>
 								</div>

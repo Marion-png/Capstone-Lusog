@@ -150,7 +150,7 @@ class NutritionCoordinatorAccessTest extends TestCase
             'terminal' => ['terminal', 'Terminal Report'],
             'monthly' => ['monthly', 'Monthly Report'],
             'analytics' => ['analytics', 'Analytics Report'],
-            'at risk' => ['at-risk', 'At-Risk Report'],
+            'at risk' => ['at-risk', 'For Follow-up Report'],
         ];
     }
 

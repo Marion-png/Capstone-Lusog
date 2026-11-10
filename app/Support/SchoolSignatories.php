@@ -66,7 +66,7 @@ final class SchoolSignatories
             ->first(fn (object $account): bool => $norm((string) $account->assigned_grade_level) === $norm($grade)
                 && $norm((string) $account->assigned_section) === $norm($section));
 
-        return (string) ($adviser->name ?? '');
+        return AccountName::read($adviser->name ?? '');
     }
 
     /**
@@ -83,11 +83,11 @@ final class SchoolSignatories
         }
 
         if ($institutionId) {
-            $name = (string) (DB::table('accounts')
+            $name = AccountName::read(DB::table('accounts')
                 ->where('role', $role)
                 ->where('institution_id', $institutionId)
                 ->orderBy('id')
-                ->value('name') ?? '');
+                ->value('name'));
 
             if ($name !== '') {
                 return $name;
@@ -95,11 +95,11 @@ final class SchoolSignatories
         }
 
         if (trim($schoolName) !== '') {
-            return (string) (DB::table('accounts')
+            return AccountName::read(DB::table('accounts')
                 ->where('role', $role)
                 ->where('school_name', $schoolName)
                 ->orderBy('id')
-                ->value('name') ?? '');
+                ->value('name'));
         }
 
         return '';

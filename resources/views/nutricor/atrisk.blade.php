@@ -1,9 +1,9 @@
 @extends('nutricor.layout')
 
-@section('title', 'NutriCor At-Risk Learners')
-@section('crumb', 'At-Risk Learners')
+@section('title', 'NutriCor For Follow-up Learners')
+@section('crumb', 'For Follow-up Learners')
 @section('page_title')
-At-Risk <span>Learners</span>
+For Follow-up <span>Learners</span>
 @endsection
 @section('page_subtitle', 'Prioritized intervention queue with clear risk levels and practical action points.')
 

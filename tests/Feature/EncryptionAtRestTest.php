@@ -7,6 +7,7 @@ use App\Models\HealthConsentForm;
 use App\Models\Institution;
 use App\Models\StudentHealthCondition;
 use App\Models\StudentHealthRecord;
+use App\Support\AccountName;
 use App\Support\DecryptedValues;
 use App\Support\EncryptedFileStorage;
 use Illuminate\Encryption\Encrypter;
@@ -216,5 +217,76 @@ class EncryptionAtRestTest extends TestCase
     {
         $this->assertFalse(DecryptedValues::looksEncrypted('Dela Cruz, Juan'));
         $this->assertSame('Dela Cruz, Juan', DecryptedValues::plaintext('Dela Cruz, Juan'));
+    }
+
+    /**
+     * A staff member's full name is personal information too: ciphertext on
+     * the request and on the account it becomes, readable on every screen.
+     * The username stays plain, because sign-in matches on it in SQL.
+     *
+     * @test
+     */
+    public function staff_account_names_are_ciphertext_from_request_to_sign_in(): void
+    {
+        $school = Institution::create(['name' => Institution::REGISTRATION_SCHOOL, 'status' => 'active']);
+
+        $this->post('/account-request', [
+            'name' => 'Rosalinda Q. Magbanua',
+            'username' => 'nurse.magbanua',
+            'password' => 'password1',
+            'password_confirmation' => 'password1',
+            'role' => 'school_nurse',
+            'institution_id' => $school->id,
+        ])->assertSessionHasNoErrors();
+
+        $requestRow = DB::table('account_requests')->where('username', 'nurse.magbanua')->first();
+        $this->assertStringNotContainsString('Magbanua', (string) $requestRow->name);
+        $this->assertTrue(DecryptedValues::isEncrypted((string) $requestRow->name));
+
+        $admin = ['active_role' => 'system_admin', 'active_name' => 'Test Admin', 'active_username' => 'systemadmin'];
+
+        // The admin reads the request by name, then approves it.
+        $this->withSession($admin)->get('/dashboard/system-admin')
+            ->assertOk()
+            ->assertSee('Rosalinda Q. Magbanua');
+        $this->withSession($admin)->post(route('dashboard.system-admin.requests.approve', $requestRow->id));
+
+        $accountRow = DB::table('accounts')->where('username', 'nurse.magbanua')->first();
+        $this->assertNotNull($accountRow);
+        $this->assertSame('nurse.magbanua', $accountRow->username);
+        $this->assertStringNotContainsString('Magbanua', (string) $accountRow->name);
+        $this->assertTrue(DecryptedValues::isEncrypted((string) $accountRow->name));
+
+        // Signing in greets them by the name they typed.
+        $this->flushSession();
+        $this->post('/login', ['email' => 'nurse.magbanua', 'password' => 'password1'])
+            ->assertSessionHas('active_name', 'Rosalinda Q. Magbanua');
+    }
+
+    /**
+     * Names written before this was encrypted are sealed in place by the
+     * migration, and anything already ciphertext is left untouched.
+     *
+     * @test
+     */
+    public function the_migration_seals_legacy_plaintext_account_names(): void
+    {
+        $school = Institution::create(['name' => 'Legacy Name School', 'status' => 'active']);
+        $alreadySealed = AccountName::seal('Teodoro B. Lacson');
+
+        DB::table('accounts')->insert([
+            ['name' => 'Marites P. Villanueva', 'username' => 'legacy.one', 'role' => 'class_adviser',
+                'institution_id' => $school->id, 'created_at' => now(), 'updated_at' => now()],
+            ['name' => $alreadySealed, 'username' => 'legacy.two', 'role' => 'school_head',
+                'institution_id' => $school->id, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        (require database_path('migrations/2026_11_10_000004_encrypt_account_names.php'))->up();
+
+        $one = (string) DB::table('accounts')->where('username', 'legacy.one')->value('name');
+        $this->assertStringNotContainsString('Villanueva', $one);
+        $this->assertSame('Marites P. Villanueva', AccountName::read($one));
+
+        $this->assertSame($alreadySealed, DB::table('accounts')->where('username', 'legacy.two')->value('name'));
     }
 }

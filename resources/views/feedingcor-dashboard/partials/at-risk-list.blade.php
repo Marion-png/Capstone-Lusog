@@ -33,7 +33,7 @@
 		</div>
 		<div class="lg-search ar-search">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-			<input type="search" id="arSearch" placeholder="Search name or section" autocomplete="off" aria-label="Search the at-risk list by name or section">
+			<input type="search" id="arSearch" placeholder="Search name or section" autocomplete="off" aria-label="Search the For Follow-up list by name or section">
 		</div>
 	</div>
 

@@ -352,7 +352,7 @@ class SchoolHeadController extends Controller
                 'tone' => 'good',
             ],
             [
-                'label' => 'SBFP At-Risk Rate',
+                'label' => 'SBFP For Follow-up Rate',
                 'value' => $beneficiaries > 0 ? round(($atRisk / $beneficiaries) * 100, 1) : null,
                 'detail' => $beneficiaries > 0 ? $atRisk.' of '.$beneficiaries : null,
                 'tone' => 'risk',
@@ -625,7 +625,7 @@ class SchoolHeadController extends Controller
                     ? $sessions.' feeding '.$this->plural('day', 'days', $sessions).' recorded'
                         .($lastSession ? ' · last '.Carbon::parse($lastSession)->format('M j') : '')
                     : 'No attendance recorded yet',
-                'note' => $atRisk > 0 ? $atRisk.' '.$this->plural('learner', 'learners', $atRisk).' at risk' : null,
+                'note' => $atRisk > 0 ? $atRisk.' '.$this->plural('learner', 'learners', $atRisk).' for follow-up' : null,
                 'status' => $sessions > 0 ? 'Active' : 'Not started',
                 'tone' => $sessions > 0 ? 'ok' : 'idle',
                 'is_running' => $sessions > 0,

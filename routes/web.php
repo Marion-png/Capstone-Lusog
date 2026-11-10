@@ -47,6 +47,7 @@ use App\Models\InstitutionSection;
 use App\Models\Medicine;
 use App\Models\MedicineDispense;
 use App\Models\StudentHealthRecord;
+use App\Support\AccountName;
 use App\Support\AccountSettings;
 use App\Support\AuditTrail;
 use App\Support\ClinicDashboard;
@@ -195,7 +196,7 @@ Route::post('/account-request', function (Request $request) {
 
     DB::table('account_requests')->insert([
         'id' => (string) str()->uuid(),
-        'name' => $validated['name'],
+        'name' => AccountName::seal($validated['name']),
         'username' => $validated['username'],
         'password_hash' => Hash::make((string) $validated['password']),
         'role' => $role,
@@ -824,7 +825,7 @@ Route::get('/dashboard/feedingcor-attendance/metrics', [FeedingAttendanceControl
 Route::get('/dashboard/feedingcor-attendance/export', [FeedingAttendanceController::class, 'export'])
     ->name('dashboard.feedingcor-attendance.export');
 
-// At-Risk Students: the attendance flow the capstone adviser set — a notice to
+// For Follow-up Students: the attendance flow the capstone adviser set — a notice to
 // verify the record at day 3 of unexcused absence in a row, the flag threshold
 // at day 7, and a flag for follow-up only once the coordinator has confirmed
 // the record. It never records a session of its own.
@@ -860,6 +861,16 @@ Route::get('/dashboard/feedingcor-sbfp-forms', [FeedingCoordinatorController::cl
 // a reload.
 Route::get('/dashboard/feedingcor-sbfp-forms/roster', [FeedingCoordinatorController::class, 'sbfpFormsRoster'])
     ->name('dashboard.feedingcor-sbfp-forms.roster');
+
+// Download Excel: the form on screen as a workbook laid out as the form, and
+// the narrative report as a PDF. POST because the signatories' names travel
+// with it, and a name has no business in a URL. Each reader downloads under
+// their own path, as they read the page.
+Route::post('/dashboard/feedingcor-sbfp-forms/download', [FeedingCoordinatorController::class, 'downloadForm'])
+    ->name('dashboard.feedingcor-sbfp-forms.download');
+
+Route::post('/dashboard/feedingcor-sbfp-forms/narrative-pdf', [FeedingCoordinatorController::class, 'downloadNarrative'])
+    ->name('dashboard.feedingcor-sbfp-forms.narrative-pdf');
 
 Route::get('/dashboard/feedingcor-health-records', [StudentHealthRecordController::class, 'feedingHealthRecords'])
     ->name('dashboard.feedingcor-health-records');
@@ -1124,7 +1135,7 @@ Route::post('/events/{event}/delete', [EventController::class, 'destroy'])
 
 // The Feeding Coordinator's Feeding Program tab is gone. Everything it showed
 // now lives on a tab that owns it outright — the cycle and the session figures
-// on Attendance, the threshold list on At-Risk Students, the roll on
+// on Attendance, the threshold list on For Follow-up Students, the roll on
 // Beneficiaries — and the page was a fourth rendering of all three, which is how
 // screens start disagreeing about the same programme. Its endpoints (import,
 // scan, record, enrolment, the beneficiary record) are unaffected and keep their
@@ -1161,6 +1172,9 @@ Route::get('/dashboard/school-nurse/forms', [FeedingCoordinatorController::class
 
 Route::get('/dashboard/school-nurse/forms/roster', [FeedingCoordinatorController::class, 'sbfpFormsRoster'])
     ->name('dashboard.school-nurse.forms.roster');
+
+Route::post('/dashboard/school-nurse/forms/download', [FeedingCoordinatorController::class, 'downloadForm'])
+    ->name('dashboard.school-nurse.forms.download');
 
 /*
  * Clinic Teacher.
@@ -1223,6 +1237,9 @@ Route::get('/dashboard/clinic-teacher/forms', [FeedingCoordinatorController::cla
 
 Route::get('/dashboard/clinic-teacher/forms/roster', [FeedingCoordinatorController::class, 'sbfpFormsRoster'])
     ->name('dashboard.clinic-teacher.forms.roster');
+
+Route::post('/dashboard/clinic-teacher/forms/download', [FeedingCoordinatorController::class, 'downloadForm'])
+    ->name('dashboard.clinic-teacher.forms.download');
 
 // Every archived learner and every learner waiting for a section, read only —
 // the School Nurse's list under their path, the Clinic Teacher's under theirs.
@@ -1331,15 +1348,15 @@ Route::get('/dashboard/system-admin', function () {
     }
 
     $accounts = Schema::hasTable('accounts')
-        ? DB::table('accounts')->orderByDesc('created_at')->get()->map(fn ($r) => (array) $r)->values()->all()
+        ? DB::table('accounts')->orderByDesc('created_at')->get()->map(fn ($r) => AccountName::open((array) $r))->values()->all()
         : [];
 
     $pendingRequests = Schema::hasTable('account_requests')
-        ? DB::table('account_requests')->where('status', 'pending')->orderByDesc('created_at')->get()->map(fn ($r) => (array) $r)->values()->all()
+        ? DB::table('account_requests')->where('status', 'pending')->orderByDesc('created_at')->get()->map(fn ($r) => AccountName::open((array) $r))->values()->all()
         : [];
 
     $requestHistory = Schema::hasTable('account_requests')
-        ? DB::table('account_requests')->whereIn('status', ['accepted', 'declined'])->orderByDesc('decided_at')->get()->map(fn ($r) => array_merge((array) $r, ['submitted_at' => $r->created_at]))->values()->all()
+        ? DB::table('account_requests')->whereIn('status', ['accepted', 'declined'])->orderByDesc('decided_at')->get()->map(fn ($r) => AccountName::open(array_merge((array) $r, ['submitted_at' => $r->created_at])))->values()->all()
         : [];
 
     // Per-school feeding policy. The threshold is the one figure the SRS
@@ -1491,7 +1508,7 @@ Route::post('/dashboard/system-admin/institutions/{institution}/at-risk-threshol
             : (int) round((float) $validated['threshold']);
 
         $changes['feeding_at_risk_threshold'] = $threshold;
-        $notes[] = 'at-risk threshold for '.$school->name.' set to '
+        $notes[] = 'For Follow-up threshold for '.$school->name.' set to '
             .($threshold === null ? 'the app default' : $threshold.'%')
             .' (was '.($previous === null ? 'the app default' : $previous.'%').')';
     }
@@ -1513,7 +1530,7 @@ Route::post('/dashboard/system-admin/institutions/{institution}/at-risk-threshol
     // only written when the form actually posted it, and each records what it
     // replaced.
     $optional = [
-        'at_risk_mode' => ['feeding_at_risk_mode', 'at-risk rule', null],
+        'at_risk_mode' => ['feeding_at_risk_mode', 'For Follow-up rule', null],
         'absence_notice_days' => ['feeding_absence_notice_days', 'unexcused absences before the attendance notice', 'feeding sessions'],
         'absence_flag_days' => ['feeding_absence_flag_days', 'unexcused absences before flagging', 'feeding sessions'],
         'cycle_days' => ['feeding_cycle_days', 'cycle length', 'feeding days'],
@@ -1545,7 +1562,7 @@ Route::post('/dashboard/system-admin/institutions/{institution}/at-risk-threshol
 
     AuditTrail::record('updated', 'Institution', $school->id, 'Feeding '.implode('; ', $notes));
 
-    return back()->with('success', 'Feeding at-risk policy updated for '.$school->name.'.');
+    return back()->with('success', 'Feeding For Follow-up policy updated for '.$school->name.'.');
 })->whereNumber('institution')->name('dashboard.system-admin.institutions.at-risk-threshold');
 
 Route::get('/dashboard/system-admin/audit-logs', function (Request $request) {
@@ -1627,7 +1644,7 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
     AuditTrail::record('created', 'Account', null, "System Admin created account '{$username}' ({$role})");
 
     DB::table('accounts')->insert([
-        'name' => $validated['name'],
+        'name' => AccountName::seal($validated['name']),
         'username' => $validated['username'],
         'password_hash' => null,
         'role' => $role,
@@ -1667,7 +1684,9 @@ Route::post('/dashboard/system-admin/requests/{requestId}/approve', function (Re
 
     if (! $alreadyExists && Schema::hasTable('accounts')) {
         DB::table('accounts')->insert([
-            'name' => $target->name ?? '-',
+            // Re-sealed rather than copied, so a request filed before names
+            // were encrypted still becomes an encrypted account.
+            'name' => AccountName::seal(AccountName::read($target->name ?? '') ?: '-'),
             'username' => $target->username ?? '-',
             'password_hash' => $target->password_hash ?? null,
             'role' => $role,
@@ -1862,7 +1881,7 @@ Route::post('/login', function (Request $request) {
     }
 
     $request->session()->put('active_role', $role);
-    $request->session()->put('active_name', (string) ($account['name'] ?? 'User'));
+    $request->session()->put('active_name', AccountName::read($account['name'] ?? '') ?: ((string) ($account['username'] ?? '') ?: 'User'));
     $request->session()->put('active_username', (string) ($account['username'] ?? ''));
     $request->session()->put('active_school_name', $account['school_name'] ?? null);
     $request->session()->put('active_institution_id', $account['institution_id'] ?? null);

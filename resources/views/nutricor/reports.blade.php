@@ -10,7 +10,7 @@ Report <span>Center</span>
 @section('content')
 <section class="summary">
     <h3>Division Office Consolidated Totals</h3>
-    <p>Total population: {{ number_format($summary['total_population']) }} | Baseline: {{ number_format($summary['baseline_total']) }} | Endline: {{ number_format($summary['endline_total']) }} | At-risk: {{ number_format($summary['at_risk']) }}</p>
+    <p>Total population: {{ number_format($summary['total_population']) }} | Baseline: {{ number_format($summary['baseline_total']) }} | Endline: {{ number_format($summary['endline_total']) }} | For Follow-up: {{ number_format($summary['at_risk']) }}</p>
 </section>
 
 <article class="card" style="margin-bottom:12px;">
@@ -106,7 +106,7 @@ Report <span>Center</span>
         <a class="btn" href="{{ route('dashboard.nutricor-reports.print', 'analytics') }}" target="_blank" rel="noopener"><i class="fas fa-download"></i>Generate PDF</a>
     </article>
     <article class="card card-body">
-        <h3 style="font-size:.92rem; margin-bottom:6px;">At-Risk Report</h3>
+        <h3 style="font-size:.92rem; margin-bottom:6px;">For Follow-up Report</h3>
         <p class="muted" style="margin-bottom:10px;">Intervention tracker for medium and high-risk learners.</p>
         <a class="btn" href="{{ route('dashboard.nutricor-reports.print', 'at-risk') }}" target="_blank" rel="noopener"><i class="fas fa-download"></i>Generate PDF</a>
     </article>

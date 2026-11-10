@@ -2,8 +2,8 @@
      coordinator knows what is behind a view before opening it.
 
      The counts come from the same FeedingBeneficiarySummary the cards read, so
-     "All beneficiaries" is always the Total Beneficiaries figure and "At risk"
-     is always the At Risk figure — a tab can never disagree with the card above
+     "All beneficiaries" is always the Total Beneficiaries figure and "For Follow-up"
+     is always the For Follow-up figure — a tab can never disagree with the card above
      it. Re-rendered on every live refresh alongside the cards. --}}
 @php
 	$segView = $segmentView ?? 'all';
@@ -14,7 +14,7 @@
 	$segTabs = [
 		['key' => 'all', 'label' => 'All beneficiaries'],
 		['key' => \App\Http\Controllers\StudentHealthRecordController::VIEW_ALL_STUDENTS, 'label' => 'All Students'],
-		['key' => 'at_risk', 'label' => 'At risk'],
+		['key' => 'at_risk', 'label' => 'For Follow-up'],
 	];
 	// A tab keeps every filter already applied and changes only the view, so
 	// switching views never silently drops the grade the coordinator chose.

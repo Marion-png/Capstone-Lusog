@@ -1,6 +1,6 @@
 {{-- The four figures the tab opens on.
 
-     "At-Risk Students" counts FLAGGED learners and nothing else: the threshold
+     "For Follow-up Students" counts FLAGGED learners and nothing else: the threshold
      reached AND the coordinator's confirmation on record. Learners awaiting
      that confirmation, and those under an attendance notice, are named on the
      hint line rather than added to the count — neither has been flagged, and
@@ -21,7 +21,7 @@
 
 <article class="card kpi {{ $riskAccent }}">
 	<div class="kpi-top">
-		<div class="kpi-label">At-Risk Students</div>
+		<div class="kpi-label">For Follow-up Students</div>
 		<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div>
 	</div>
 	<div class="kpi-value">{{ $c['at_risk'] }}</div>
@@ -39,7 +39,7 @@
 
 <article class="card kpi {{ $c['at_risk'] > 0 ? 'accent-amber' : 'accent-success' }}">
 	<div class="kpi-top">
-		<div class="kpi-label">At-Risk Rate</div>
+		<div class="kpi-label">For Follow-up Rate</div>
 		<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></svg></div>
 	</div>
 	<div class="kpi-value">{{ $rateLabel }}</div>

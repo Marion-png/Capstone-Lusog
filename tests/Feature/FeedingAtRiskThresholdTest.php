@@ -209,7 +209,7 @@ class FeedingAtRiskThresholdTest extends TestCase
         $this->assertDatabaseCount('audit_logs', 2);   // the page-view middleware entry, then the change
         $this->assertTrue(
             AuditLog::query()->get()->contains(
-                fn ($log) => str_contains((string) $log->description, 'at-risk threshold for Test School set to 85%')
+                fn ($log) => str_contains((string) $log->description, 'For Follow-up threshold for Test School set to 85%')
             )
         );
     }

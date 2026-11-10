@@ -137,7 +137,7 @@ class FeedingProgramPageTest extends TestCase
 
         $response = $this->page()->assertOk();
         $response->assertSee('1 beneficiary flagged for follow-up');
-        $response->assertSee('At-Risk Beneficiaries');
+        $response->assertSee('For Follow-up Beneficiaries');
         $response->assertSee('Flagged On');
         // The page prints the school's rule, never a constant of its own.
         $response->assertDontSee('below 75%');
@@ -159,7 +159,7 @@ class FeedingProgramPageTest extends TestCase
         // The roll is still there; who is flagged is not.
         $response->assertSee('Flagged Learner');
         $response->assertDontSee('flagged for follow-up');
-        $response->assertDontSee('At-Risk Beneficiaries');
+        $response->assertDontSee('For Follow-up Beneficiaries');
         $response->assertDontSee('id="atRiskSection"', false);
         $this->assertCount(0, $response->viewData('atRiskStudents'));
     }
@@ -284,7 +284,7 @@ class FeedingProgramPageTest extends TestCase
             ->json('html');
         $this->assertStringNotContainsString('flagged for follow-up', $teacher['alert']);
         $this->assertSame('', trim($teacher['risk']));
-        $this->assertStringNotContainsString('At Risk', $teacher['cards']);
+        $this->assertStringNotContainsString('For Follow-up', $teacher['cards']);
     }
 
     /** The programme covers Junior High alone, and the filter offers exactly that. */

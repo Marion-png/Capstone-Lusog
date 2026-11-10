@@ -29,7 +29,7 @@
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>Dashboard</span><span class="bc-sep">&rsaquo;</span><span>Attendance At Risk</span><span class="bc-sep">&rsaquo;</span><span>{{ $learner['name'] }}</span></div>
+		<div class="topbar-bc"><span>Dashboard</span><span class="bc-sep">&rsaquo;</span><span>Attendance For Follow-up</span><span class="bc-sep">&rsaquo;</span><span>{{ $learner['name'] }}</span></div>
 		@include('partials.live-clock')
 	</header>
 

@@ -88,13 +88,13 @@ class FeedingFlagVisibilityTest extends TestCase
         $this->withSession($this->sessionFor('school_nurse'))
             ->get('/dashboard/school-nurse')
             ->assertOk()
-            ->assertSee('At-Risk Learners')
+            ->assertSee('For Follow-up Learners')
             ->assertViewHas('atRiskCount', 1);
 
         $this->withSession($this->sessionFor('clinic_teacher'))
             ->get('/dashboard/clinic-teacher')
             ->assertOk()
-            ->assertDontSee('At-Risk Learners')
+            ->assertDontSee('For Follow-up Learners')
             ->assertViewHas('atRiskCount', null);
     }
 
@@ -104,13 +104,13 @@ class FeedingFlagVisibilityTest extends TestCase
         $this->withSession($this->sessionFor('clinic_staff'))
             ->get('/dashboard/clinic-staff')
             ->assertOk()
-            ->assertDontSee('Feeding Program At-Risk Alerts')
+            ->assertDontSee('Feeding Program For Follow-up Alerts')
             ->assertDontSee('Flagged Learner');
 
         $this->withSession($this->sessionFor('school_nurse'))
             ->get('/dashboard/clinic-staff')
             ->assertOk()
-            ->assertSee('Feeding Program At-Risk Alerts')
+            ->assertSee('Feeding Program For Follow-up Alerts')
             ->assertSee('Flagged Learner');
     }
 
@@ -127,7 +127,7 @@ class FeedingFlagVisibilityTest extends TestCase
             ->assertOk()
             ->assertSee('Flagged Learner');
 
-        $response->assertDontSee('At-Risk');
+        $response->assertDontSee('For Follow-up');
         $response->assertDontSee('at-risk &middot;', false);
         $response->assertDontSee('value="at-risk"', false);
         $response->assertDontSee('data-risk', false);

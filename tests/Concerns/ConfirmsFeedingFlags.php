@@ -12,7 +12,7 @@ use App\Support\FeedingAttendanceFlag;
  * Reaching the threshold never flags anybody on its own — the coordinator has
  * to confirm the record first (FeedingAttendanceFlag). A test about what a
  * screen does with a flagged learner records that confirmation here, exactly
- * as the At-Risk Students tab's confirm endpoint would, then rewrites the
+ * as the For Follow-up Students tab's confirm endpoint would, then rewrites the
  * stored flags the clinic dashboards count.
  */
 trait ConfirmsFeedingFlags

@@ -6,7 +6,7 @@
      learner on no sheet yet is listed with nothing claimed; an unconfirmed
      scanned mark is "awaiting review", never present or absent. The rate
      carries a plain meter in one neutral fill: whether a rate is too low is
-     the school's own rule to say (the At-Risk list), never a colour band
+     the school's own rule to say (the For Follow-up list), never a colour band
      typed into this row. --}}
 @php $fpRows = $attendanceRoster ?? collect(); @endphp
 @forelse ($fpRows as $row)

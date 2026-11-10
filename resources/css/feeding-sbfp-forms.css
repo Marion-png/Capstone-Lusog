@@ -42,7 +42,7 @@
 }
 .sheet-tools { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 14px; }
 .sheet-status { font-size: .78rem; color: var(--lg-ink-soft); }
-.sheet-btns { display: flex; gap: 8px; align-items: center; }
+.sheet-btns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
 /* ══ The DepEd sheet itself — deliberately unstyled by the system ══ */
 

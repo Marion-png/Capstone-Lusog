@@ -38,7 +38,7 @@ class FeedingFollowUp extends Model
 
     /** @var array<string, string> status => label, in lifecycle order */
     public const STATUSES = [
-        self::STATUS_AT_RISK => 'At Risk',
+        self::STATUS_AT_RISK => 'For Follow-up',
         self::STATUS_FOLLOW_UP_REQUIRED => 'Follow-Up Required',
         self::STATUS_MONITORING => 'Monitoring',
         self::STATUS_RESOLVED => 'Resolved',
@@ -76,7 +76,7 @@ class FeedingFollowUp extends Model
 
     public static function statusLabel(?string $status): string
     {
-        return self::STATUSES[(string) $status] ?? 'At Risk';
+        return self::STATUSES[(string) $status] ?? 'For Follow-up';
     }
 
     /** The status scale's badge class, so a status reads the same wherever it appears. */

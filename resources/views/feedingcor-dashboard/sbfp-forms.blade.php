@@ -151,6 +151,7 @@
 		<section class="sheet-wrap form-panel" id="bmiBaselinePanel" data-template="bmi-report" data-phase="baseline">
 			<div class="sheet-tools">
 				<div class="sheet-btns">
+					<button type="button" class="btn btn-secondary" data-download-excel>Download Excel</button>
 					<button type="button" class="btn btn-ghost" id="printBmiBaselineBtn">Print Form</button>
 				</div>
 			</div>
@@ -190,6 +191,7 @@
 		<section class="sheet-wrap form-panel" id="bmiFinalPanel" data-template="bmi-report" data-phase="endline">
 			<div class="sheet-tools">
 				<div class="sheet-btns">
+					<button type="button" class="btn btn-secondary" data-download-excel>Download Excel</button>
 					<button type="button" class="btn btn-ghost" id="printBmiFinalBtn">Print Form</button>
 				</div>
 			</div>
@@ -238,6 +240,7 @@
 					     tables. This writes the interpretation from them. --}}
 					<button type="button" class="btn btn-secondary" id="generateNarrativeBtn">Generate Interpretation</button>
 					<button type="button" class="btn btn-primary" id="saveNarrativeDraftBtn">Save Draft</button>
+					<button type="button" class="btn btn-secondary" id="downloadNarrativePdfBtn">Download PDF</button>
 					<button type="button" class="btn btn-ghost" id="printNarrativeBtn">Print Form</button>
 					<button type="button" class="btn btn-warn" id="clearNarrativeDraftBtn">Clear</button>
 				</div>
@@ -290,6 +293,7 @@
 				<div class="sheet-status" id="mlDraftStatus">Draft not saved yet.</div>
 				<div class="sheet-btns">
 					<button type="button" class="btn btn-primary" id="saveMlDraftBtn">Save Draft</button>
+					<button type="button" class="btn btn-secondary" data-download-excel>Download Excel</button>
 					<button type="button" class="btn btn-ghost" id="printMlBtn">Print Form</button>
 					<button type="button" class="btn btn-warn" id="clearMlDraftBtn">Clear</button>
 				</div>
@@ -360,6 +364,7 @@
 				<div class="sheet-status" id="mlbDraftStatus">Draft not saved yet.</div>
 				<div class="sheet-btns">
 					<button type="button" class="btn btn-primary" id="saveMlbDraftBtn">Save Draft</button>
+					<button type="button" class="btn btn-secondary" data-download-excel>Download Excel</button>
 					<button type="button" class="btn btn-ghost" id="printMlbBtn">Print Form</button>
 					<button type="button" class="btn btn-warn" id="clearMlbDraftBtn">Clear</button>
 				</div>
@@ -1095,6 +1100,73 @@
 					? 'Every section already has text. Clear a section to draft it from the figures.'
 					: `${filled} section(s) drafted from the recorded figures. Edit, then save the draft.`;
 			}
+		});
+	}
+
+	// ── The downloads: a workbook per form, the narrative as a PDF ────────
+	// The file is the form on screen. What is sent is only what the server
+	// cannot know: which form, its four filters, and the words typed around
+	// the tables (address, school year, signatories, the narrative). Never a
+	// figure or a learner — those are re-read on the server from the same
+	// roster this page was painted from. A plain form post, so the browser
+	// saves the file and the page stays exactly as it is.
+	const downloadUrl = @json(route($forClinic ? $clinicFormsRoute.'.download' : 'dashboard.feedingcor-sbfp-forms.download'));
+	const narrativePdfUrl = @json($forClinic ? null : route('dashboard.feedingcor-sbfp-forms.narrative-pdf'));
+	const csrfToken = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
+
+	const typedFields = (panels) => {
+		const fields = {};
+		panels.forEach((panel) => {
+			panel.querySelectorAll('[data-field]:not(.bmi-input)').forEach((field) => {
+				fields[field.getAttribute('data-field')] = String(field.value || '');
+			});
+		});
+		return fields;
+	};
+
+	const postDownload = (url, params, fields) => {
+		const form = document.createElement('form');
+		form.method = 'POST';
+		form.action = url;
+		form.hidden = true;
+		const add = (name, value) => {
+			const input = document.createElement('input');
+			input.type = 'hidden';
+			input.name = name;
+			input.value = value;
+			form.appendChild(input);
+		};
+		add('_token', csrfToken);
+		Object.entries(params).forEach(([name, value]) => add(name, value));
+		Object.entries(fields).forEach(([name, value]) => add(`fields[${name}]`, value));
+		document.body.appendChild(form);
+		form.submit();
+		form.remove();
+	};
+
+	document.querySelectorAll('[data-download-excel]').forEach((button) => {
+		button.addEventListener('click', () => {
+			const template = String(templateSelect ? templateSelect.value : '');
+			if (template === '') {
+				return;
+			}
+			const scope = currentScope();
+			const panels = Array.from(document.querySelectorAll(`.form-panel[data-template="${template}"]`));
+			postDownload(downloadUrl, {
+				template,
+				phase: scope.phase,
+				population: scope.population,
+				grade: scope.grade,
+				section: scope.section,
+			}, typedFields(panels));
+		});
+	});
+
+	const downloadNarrativePdfBtn = document.getElementById('downloadNarrativePdfBtn');
+	const narrativePanel = document.getElementById('narrativePanel');
+	if (downloadNarrativePdfBtn && narrativePanel && narrativePdfUrl) {
+		downloadNarrativePdfBtn.addEventListener('click', () => {
+			postDownload(narrativePdfUrl, {}, typedFields([narrativePanel]));
 		});
 	}
 

@@ -79,7 +79,7 @@ class NurseFeedingProgramCardsTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        foreach (['Total Beneficiaries', 'Severely Wasted', 'Wasted', 'At Risk', 'Currently Attending'] as $label) {
+        foreach (['Total Beneficiaries', 'Severely Wasted', 'Wasted', 'For Follow-up', 'Currently Attending'] as $label) {
             $this->assertStringContainsString('<div class="kpi-label">'.$label.'</div>', $html);
         }
         $this->assertStringContainsString('class="kpi-grid cols-5 fp-cards live-pane"', $html);
@@ -94,7 +94,7 @@ class NurseFeedingProgramCardsTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertStringNotContainsString('<div class="kpi-label">At Risk</div>', $html);
+        $this->assertStringNotContainsString('<div class="kpi-label">For Follow-up</div>', $html);
         $this->assertStringContainsString('<div class="kpi-label">Currently Attending</div>', $html);
         $this->assertStringContainsString('class="kpi-grid fp-cards live-pane"', $html);
     }

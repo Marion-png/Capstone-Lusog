@@ -345,7 +345,7 @@
         <a href="{{ route('dashboard.nutricor-dashboard') }}" class="sb-link {{ request()->routeIs('dashboard.nutricor-dashboard') ? 'active' : '' }}"><i class="fas fa-chart-line"></i>Dashboard</a>
         <a href="{{ route('dashboard.nutricor-beneficiaries') }}" class="sb-link {{ request()->routeIs('dashboard.nutricor-beneficiaries') ? 'active' : '' }}"><i class="fas fa-users"></i>Beneficiaries</a>
         <a href="{{ route('dashboard.nutricor-analytics') }}" class="sb-link {{ request()->routeIs('dashboard.nutricor-analytics') ? 'active' : '' }}"><i class="fas fa-chart-bar"></i>Analytics</a>
-        <a href="{{ route('dashboard.nutricor-atrisk') }}" class="sb-link {{ request()->routeIs('dashboard.nutricor-atrisk') ? 'active' : '' }}"><i class="fas fa-exclamation-triangle"></i>At-Risk Learners</a>
+        <a href="{{ route('dashboard.nutricor-atrisk') }}" class="sb-link {{ request()->routeIs('dashboard.nutricor-atrisk') ? 'active' : '' }}"><i class="fas fa-exclamation-triangle"></i>For Follow-up Learners</a>
         <a href="{{ route('dashboard.nutricor-reports') }}" class="sb-link {{ request()->routeIs('dashboard.nutricor-reports') ? 'active' : '' }}"><i class="fas fa-file-alt"></i>Reports</a>
         <a href="{{ route('dashboard.nutricor-comparison') }}" class="sb-link {{ request()->routeIs('dashboard.nutricor-comparison') ? 'active' : '' }}"><i class="fas fa-code-branch"></i>Baseline/Endline</a>
         <a href="{{ route('dashboard.nutricor-consolidated') }}" class="sb-link {{ request()->routeIs('dashboard.nutricor-consolidated') ? 'active' : '' }}"><i class="fas fa-table"></i>Consolidated Report</a>

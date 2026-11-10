@@ -35,7 +35,7 @@ class NutritionCoordinatorController extends Controller
         'terminal' => 'Terminal Report',
         'monthly' => 'Monthly Report',
         'analytics' => 'Analytics Report',
-        'at-risk' => 'At-Risk Report',
+        'at-risk' => 'For Follow-up Report',
     ];
 
     public function dashboard(): View
@@ -379,7 +379,7 @@ class NutritionCoordinatorController extends Controller
             'section' => $record->section,
             'bmi' => $record->endline_bmi_value ?: $record->baseline_bmi_value ?: $record->bmi_value,
             'status' => self::STATUS_LABELS[$status] ?? ($record->nutritional_status ?: 'Not classified'),
-            'indicators' => $risk === 'High' ? 'Severe wasting' : 'Low BMI or at-risk flag',
+            'indicators' => $risk === 'High' ? 'Severe wasting' : 'Low BMI or For Follow-up flag',
             'action' => $risk === 'High' ? 'Immediate referral and weekly nutrition check' : 'Biweekly follow-up and diet coaching',
         ];
     }

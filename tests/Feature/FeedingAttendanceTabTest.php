@@ -548,7 +548,7 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertSee('<option value="absent"', false);
         $response->assertDontSee('<option value="unmarked"', false);
         $response->assertDontSee('<option value="unconfirmed"', false);
-        $response->assertDontSee('At risk (cumulative)');
+        $response->assertDontSee('For Follow-up (cumulative)');
         $response->assertDontSee('Early monitoring (cumulative)');
 
         // The standings kept a visible home rather than becoming a URL nobody
@@ -688,7 +688,7 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertSee('Early Learner');
         $response->assertSee('Early Monitoring');
         // No at-risk badge on the row, and nothing counted by the figure. (The
-        // words "At Risk" still appear as the card label and the filter option,
+        // words "For Follow-up" still appear as the card label and the filter option,
         // so the row itself is what this asserts.)
         $response->assertDontSee('badge badge-risk', false);
         $this->assertSame(0, $response->viewData('atRisk')['count']);
@@ -698,7 +698,7 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertSee('25%');
         // And the coordinator is told why nobody is flagged, in its own notice.
         $response->assertSee('currently under observation');
-        $response->assertSee('At-risk classification begins after 10 recorded feeding days');
+        $response->assertSee('For Follow-up classification begins after 10 recorded feeding days');
         $response->assertDontSee('below the 80% attendance threshold');
     }
 

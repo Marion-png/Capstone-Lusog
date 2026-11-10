@@ -27,7 +27,7 @@ use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
- * The Feeding Coordinator's At-Risk Students tab — where the attendance flow
+ * The Feeding Coordinator's For Follow-up Students tab — where the attendance flow
  * the capstone adviser set is worked:
  *
  *   day 3 of unexcused absence in a row → ATTENDANCE NOTICE: verify the record
@@ -72,7 +72,7 @@ class FeedingAtRiskController extends Controller
     public function index(Request $request): View|RedirectResponse
     {
         if (! $this->isCoordinator($request)) {
-            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can open the at-risk list.');
+            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can open the For Follow-up list.');
         }
 
         return view('feedingcor-dashboard.at-risk', $this->build($request));
@@ -110,7 +110,7 @@ class FeedingAtRiskController extends Controller
     public function export(Request $request): BinaryFileResponse|RedirectResponse
     {
         if (! $this->isCoordinator($request)) {
-            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can export the at-risk list.');
+            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can export the For Follow-up list.');
         }
 
         $data = $this->build($request);
@@ -125,7 +125,7 @@ class FeedingAtRiskController extends Controller
         $writer = new XlsxWriter;
         $writer->openToFile($path);
 
-        $writer->addRow(Row::fromValues(['AT-RISK FEEDING BENEFICIARIES']));
+        $writer->addRow(Row::fromValues(['FOR FOLLOW-UP FEEDING BENEFICIARIES']));
         $writer->addRow(Row::fromValues([(string) $data['schoolName']]));
         $writer->addRow(Row::fromValues(['S.Y. '.$data['schoolYear']]));
         $writer->addRow(Row::fromValues([
@@ -158,7 +158,7 @@ class FeedingAtRiskController extends Controller
 
         $writer->close();
 
-        $filename = 'SBFP-At-Risk-'.str_replace('/', '-', $data['schoolYear']).'-'.now()->format('Ymd').'.xlsx';
+        $filename = 'SBFP-For-Follow-up-'.str_replace('/', '-', $data['schoolYear']).'-'.now()->format('Ymd').'.xlsx';
 
         return response()->download($path, $filename)->deleteFileAfterSend();
     }

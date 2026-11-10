@@ -344,7 +344,7 @@ final class FeedingBeneficiarySummary
     /**
      * The five headline figures for a roll of beneficiaries already chosen.
      *
-     * At-risk is the learners FLAGGED for follow-up — the threshold reached AND
+     * For Follow-up is the learners FLAGGED for follow-up — the threshold reached AND
      * the coordinator's confirmation on record (FeedingAttendanceFlag) — read
      * live rather than off the stored is_at_risk column.
      *
@@ -400,7 +400,7 @@ final class FeedingBeneficiarySummary
                 : null,
             'attendance_sessions' => $confirmedSessions,
             'at_risk_rule' => $rule->describe(),
-            // The test on its own, for the At Risk card's hint. It names the
+            // The test on its own, for the For Follow-up card's hint. It names the
             // rule the school actually runs — never "below 80%" at a school
             // that runs no percentage — so the label and the figure above it
             // are always answering the same question.
@@ -517,7 +517,7 @@ final class FeedingBeneficiarySummary
      * The record ids the school's attendance threshold has flagged.
      *
      * Returned as a lookup rather than a count so a table can mark the very
-     * learners the At Risk figure counted — the tab and the rows it filters
+     * learners the For Follow-up figure counted — the tab and the rows it filters
      * must never be decided by two different readings of the same rule.
      *
      * @param  Collection<int, StudentHealthRecord>  $beneficiaries

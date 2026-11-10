@@ -306,7 +306,7 @@ final class NurseConsentList
                 ->where('role', 'class_adviser')
                 ->get(['name', 'assigned_grade_level', 'assigned_section']) as $account) {
                 $key = self::classKey((string) $account->assigned_grade_level, (string) $account->assigned_section);
-                $name = trim((string) $account->name);
+                $name = AccountName::read($account->name);
 
                 if ($name !== '') {
                     $names[$key][] = $name;

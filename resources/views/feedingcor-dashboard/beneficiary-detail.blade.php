@@ -27,7 +27,7 @@
 	$wasRemoved = ($program['removed_at'] ?? null) !== null;
 
 	[$standingLabel, $standingClass] = match (true) {
-		$standing['enrolled'] && $standing['at_risk'] => ['At Risk Beneficiary', 'is-risk'],
+		$standing['enrolled'] && $standing['at_risk'] => ['For Follow-up Beneficiary', 'is-risk'],
 		$standing['enrolled'] => ['Active Beneficiary', 'is-active'],
 		$wasRemoved => ['Removed from Active List', 'is-none'],
 		$standing['qualified'] => ['Pending Enrollment', 'is-pending'],
@@ -173,7 +173,7 @@
 				@if ($standing['enrolled'])
 					{{-- Leaving the programme is a decision about one learner, so it
 					     is offered on one learner's record and nowhere else. It is
-					     never offered by the At-Risk tab: an attendance figure is a
+					     never offered by the For Follow-up tab: an attendance figure is a
 					     reason to follow a learner up, never a reason to stop
 					     feeding them. --}}
 					<button type="button" class="btn btn-secondary" data-remove-open>
@@ -318,7 +318,7 @@
 				</div>
 				<p class="bd-note">
 					@if ($isRateRule)
-						At-risk threshold: <strong>{{ $thresholdLabel }}%</strong>
+						For Follow-up threshold: <strong>{{ $thresholdLabel }}%</strong>
 					@else
 						Flag threshold: <strong>{{ $attendance['threshold_label'] ?? '' }}</strong> &middot; {{ $attendance['absence_run'] }} unexcused in a row
 					@endif
@@ -348,7 +348,7 @@
 				@elseif ($standing['enrolled'] && ($flag['needs_action'] ?? false))
 					{{-- The notice the flow sends the coordinator: verify the
 					     record at a notice, confirm it at the threshold. Both
-					     happen on the At-Risk Students tab, with the absences
+					     happen on the For Follow-up Students tab, with the absences
 					     in front of them. --}}
 					<div class="alert-bar bd-alert">
 						<div class="alert-body">

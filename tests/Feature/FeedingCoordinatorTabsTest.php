@@ -289,7 +289,7 @@ class FeedingCoordinatorTabsTest extends TestCase
         $this->assertStringNotContainsString('<span class="asb-link-text">Feeding Program</span>', $html);
 
         // The four tabs that replaced it are all still on the rail.
-        foreach (['Dashboard', 'Beneficiaries', 'Attendance', 'At-Risk Students', 'Nutritional Health Status Report'] as $tab) {
+        foreach (['Dashboard', 'Beneficiaries', 'Attendance', 'For Follow-up Students', 'Nutritional Health Status Report'] as $tab) {
             $this->assertStringContainsString('<span class="asb-link-text">'.$tab.'</span>', $html);
         }
     }

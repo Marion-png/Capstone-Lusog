@@ -108,7 +108,7 @@
                 $isPending = ($segmentView ?? 'all') === $allStudentsView;
                 $sectionTitle = match ($segmentView ?? 'all') {
                     $allStudentsView => 'All Students',
-                    'at_risk' => 'Attendance At Risk',
+                    'at_risk' => 'Attendance For Follow-up',
                     default => 'Per Beneficiary Comparison',
                 };
             @endphp
@@ -371,7 +371,7 @@
                                     // the coordinator's decision.
                                     [$standing, $standingBadge] = match (true) {
                                         ($record->segment ?? '') === 'pending' => ['Pending', 'badge-monitor'],
-                                        (bool) ($record->at_risk ?? false) => ['At Risk', 'badge-risk'],
+                                        (bool) ($record->at_risk ?? false) => ['For Follow-up', 'badge-risk'],
                                         default => ['Active', 'badge-normal'],
                                     };
                                 @endphp
@@ -410,8 +410,8 @@
                                     <td>
                                         {{-- The warning glyph replaces the badge's
                                              own dot rather than joining it. --}}
-                                        <span class="badge {{ $standingBadge }} {{ $standing === 'At Risk' ? 'has-icon' : '' }}">
-                                            @if ($standing === 'At Risk')
+                                        <span class="badge {{ $standingBadge }} {{ $standing === 'For Follow-up' ? 'has-icon' : '' }}">
+                                            @if ($standing === 'For Follow-up')
                                                 <svg class="badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
                                             @endif
                                             {{ $standing }}

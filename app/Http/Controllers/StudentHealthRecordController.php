@@ -1666,7 +1666,7 @@ class StudentHealthRecordController extends Controller
         // Where each learner stands with the attendance rule — the rate and the
         // flag together, from one reading of one set of marks. The table prints
         // the very figure that decided the flag, and the tab filters on the
-        // same verdict the At Risk card counted.
+        // same verdict the For Follow-up card counted.
         $standings = FeedingBeneficiarySummary::attendanceStandings(
             $records->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isBeneficiary($record))->values(),
             FeedingAtRiskRule::forInstitution($institutionId)
@@ -1870,7 +1870,7 @@ class StudentHealthRecordController extends Controller
             : 'all';
 
         // "All beneficiaries" is the enrolled roll — the Total Beneficiaries
-        // card — and "At risk" is the At Risk card. Both read the flags set
+        // card — and "For Follow-up" is the For Follow-up card. Both read the flags set
         // above, so a tab can never disagree with the card it sits under.
         //
         // "All Students" is every learner on the roll, whatever their status:

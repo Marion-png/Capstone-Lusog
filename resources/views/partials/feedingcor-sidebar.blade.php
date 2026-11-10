@@ -39,12 +39,12 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg>
             <span class="asb-link-text">Attendance</span>
         </a>
-        <a href="{{ route('dashboard.feedingcor-at-risk') }}" class="asb-link {{ $active === 'at-risk' ? 'active' : '' }}" title="At-Risk Students">
+        <a href="{{ route('dashboard.feedingcor-at-risk') }}" class="asb-link {{ $active === 'at-risk' ? 'active' : '' }}" title="For Follow-up Students">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-            <span class="asb-link-text">At-Risk Students</span>
+            <span class="asb-link-text">For Follow-up Students</span>
         </a>
         {{-- No Feeding Program tab: the cycle and the session figures live on
-             Attendance, the threshold list on At-Risk Students and the roll on
+             Attendance, the threshold list on For Follow-up Students and the roll on
              Beneficiaries. A page repeating all three is how two screens start
              reporting different numbers for one programme. --}}
         {{-- Formerly "SBFP Forms": only the name moved, so the route and the

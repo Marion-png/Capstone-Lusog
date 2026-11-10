@@ -34,7 +34,7 @@ Nutritional Coordinator <span>Dashboard</span>
         <div class="hint">Wasted or severely wasted</div>
     </article>
     <article class="card stat" style="border-left-color:#b91c1c;">
-        <div class="label">At-Risk</div>
+        <div class="label">For Follow-up</div>
         <div class="num">{{ number_format($summary['at_risk']) }}</div>
         <div class="hint">Needs intervention</div>
     </article>

@@ -212,7 +212,7 @@ class FeedingAttendanceImportTest extends TestCase
      * This learner's row in the beneficiaries table, as plain text.
      *
      * Scoped to that table on purpose: an at-risk learner also appears in the
-     * At-Risk Beneficiaries alert above it, and that row carries different
+     * For Follow-up Beneficiaries alert above it, and that row carries different
      * figures.
      */
     private function rosterRowText(string $name): string
@@ -253,7 +253,7 @@ class FeedingAttendanceImportTest extends TestCase
      * How many rows of the beneficiaries roster name this learner.
      *
      * Scoped to the roster table on purpose: a flagged learner also appears in
-     * the At-Risk Beneficiaries table further down the same page, and that
+     * the For Follow-up Beneficiaries table further down the same page, and that
      * second listing is the feature working, not a duplicate.
      */
     private function rosterRowsFor(string $name): int

@@ -28,7 +28,7 @@
         ],
         'programme' => [
             'label' => 'Feeding Programme',
-            'hint' => 'Cycle, turnout and at-risk beneficiaries',
+            'hint' => 'Cycle, turnout and beneficiaries for follow-up',
             'url' => route($nutritionPrefix.'.feeding-program'),
         ],
     ];

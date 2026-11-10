@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Institution;
+use App\Support\AccountName;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -56,7 +57,7 @@ class AccountSeeder extends Seeder
             DB::table('accounts')->updateOrInsert(
                 ['username' => $username, 'institution_id' => $institution->id],
                 [
-                    'name' => $name,
+                    'name' => AccountName::seal($name),
                     'password_hash' => $hash,
                     'role' => $role,
                     'school_name' => $institution->name,

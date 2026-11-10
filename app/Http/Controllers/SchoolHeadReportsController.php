@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\StudentHealthRecord;
 use App\Support\BmiAssessmentReport;
+use App\Support\BmiReportInsight;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingProgramForecast;
+use App\Support\SbfpFormWorkbook;
 use App\Support\SchoolHeadOverview;
 use App\Support\SchoolLetterhead;
 use App\Support\SchoolPulse;
@@ -21,7 +23,6 @@ use OpenSpout\Common\Entity\Style\Border;
 use OpenSpout\Common\Entity\Style\BorderName;
 use OpenSpout\Common\Entity\Style\BorderPart;
 use OpenSpout\Common\Entity\Style\BorderWidth;
-use OpenSpout\Common\Entity\Style\CellAlignment;
 use OpenSpout\Common\Entity\Style\Style;
 use OpenSpout\Writer\XLSX\Writer as XlsxWriter;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -297,7 +298,8 @@ class SchoolHeadReportsController extends Controller
         $path = $reserved.'.xlsx';
         @unlink($reserved);
 
-        $writer = new XlsxWriter;
+        // A4 landscape, one page wide, as the form prints.
+        $writer = SbfpFormWorkbook::writer(landscape: true);
         $writer->openToFile($path);
 
         $this->writeAssessmentForm(
@@ -312,7 +314,7 @@ class SchoolHeadReportsController extends Controller
         $writer->addNewSheetAndMakeItCurrent();
         $this->writeSupportingSheet($writer, $overview, $report);
 
-        $writer->close();
+        SbfpFormWorkbook::close($writer, $path);
 
         $filename = str_replace([':', '/'], '-', $this->reportLabel($report))
             .'-'.str_replace('/', '-', $schoolYear).'-'.now()->format('Ymd').'.xlsx';
@@ -561,11 +563,7 @@ class SchoolHeadReportsController extends Controller
      * grade the programme covers, the OVERALL grid, and the signature block.
      * The grids come from BmiAssessmentReport, which the coordinator's page
      * reads too — one computation behind both, so the printed form and this one
-     * cannot disagree.
-     *
-     * A MALE or FEMALE cell nobody counted is left blank, exactly as on paper;
-     * the Total columns and the TOTAL row always print a figure, because a
-     * total of nothing is nothing.
+     * cannot disagree. Every cell is a count and prints as one, zero included.
      *
      * @param  array<string, int|string>  $bmiValues
      * @param  array{prepared: string, noted: string}  $signatories
@@ -579,94 +577,31 @@ class SchoolHeadReportsController extends Controller
         array $signatories,
         string $sheetName,
     ): void {
-        $writer->getCurrentSheet()->setName($sheetName);
-
-        $prefix = BmiAssessmentReport::prefixFor($phase);
-        $banner = $phase === 'baseline'
-            ? 'Baseline Nutritional Assessment (BMI) Report'
-            : 'Final Nutritional Assessment (BMI) Report';
-
-        $title = (new Style)->withFontBold(true)->withFontSize(12);
-        $heading = (new Style)->withFontBold(true)->withFontSize(11);
-        $gridTitle = (new Style)->withFontBold(true);
-        $ruled = (new Style)->withBorder($this->hairline());
-        $ruledHead = (new Style)->withFontBold(true)->withBorder($this->hairline())
-            ->withCellAlignment(CellAlignment::CENTER);
-
-        // The DepEd heading, from the one class that holds it — so this sheet
-        // and the coordinator's printed form head the same school the same way.
-        foreach (SchoolLetterhead::lines($letterhead) as $headingLine) {
-            $writer->addRow($this->line([$headingLine]));
-        }
-
-        $writer->addRow($this->line([$letterhead['school']], $title));
-        // The address the school is on file with. A school with none gets an
-        // empty line to write on, never a neighbouring school's street.
-        $writer->addRow($this->line([$letterhead['address']]));
-        $writer->addRow($this->line([$banner], $heading));
-        $writer->addRow($this->line(['S.Y. '.$overview->schoolYear]));
-        $writer->addRow($this->line(['']));
-
-        $nsLabels = array_values(BmiAssessmentReport::NS_COLUMNS);
-        $hfaLabels = array_values(BmiAssessmentReport::HFA_COLUMNS);
-        $nsKeys = array_keys(BmiAssessmentReport::NS_COLUMNS);
-        $hfaKeys = array_keys(BmiAssessmentReport::HFA_COLUMNS);
-
-        // The printed grid heads two groups of columns; a workbook cannot merge
-        // cells here, so each group name sits over the first column of its group
-        // and the sub-heads carry the rest — the same two-row head, read the
-        // same way down the sheet.
-        $groupHead = array_merge(
-            ['Sex', 'Nutritional Status'],
-            array_fill(0, count($nsLabels), ''),
-            ['Height for Age (HFA)'],
-            array_fill(0, count($hfaLabels), ''),
+        // The layout is SbfpFormWorkbook's — the one the coordinator's Download
+        // Excel writes — so the head's file and the coordinator's are the same
+        // form: the letterhead with both seals, the banner, every grid with
+        // its two-row head merged as the printed table spans it, the insight
+        // under the charts and the boxed signature block.
+        SbfpFormWorkbook::bmiReport(
+            $writer,
+            sheetName: $sheetName,
+            letterhead: $letterhead,
+            phase: $phase,
+            values: $bmiValues,
+            gridKeys: array_merge(BmiAssessmentReport::gradeKeys(), ['overall']),
+            schoolYear: $overview->schoolYear,
+            scope: '',
+            insight: BmiReportInsight::sentences($bmiValues, $phase, 'overall', 'All Grade Levels'),
+            insightScope: 'All Grade Levels',
+            // The signatories the head's own report view prints. A name the
+            // app does not hold prints as a blank line to sign on: a plausible
+            // name on a document nobody signed would be worse than a gap.
+            signatories: [
+                ['label' => 'Prepared by:', 'name' => $signatories['prepared'], 'role' => 'School Clinic Nurse / Teacher'],
+                ['label' => 'Attested by:', 'name' => '', 'role' => 'MAPEH Department Head'],
+                ['label' => 'Noted by:', 'name' => $signatories['noted'], 'role' => 'Principal'],
+            ],
         );
-        $columnHead = array_merge([''], $nsLabels, ['Total'], $hfaLabels, ['Total']);
-
-        foreach (array_merge(BmiAssessmentReport::gradeKeys(), ['overall']) as $gradeKey) {
-            $writer->addRow($this->line([BmiAssessmentReport::gridTitle($gradeKey)], $gridTitle));
-            $writer->addRow($this->line($groupHead, $ruledHead));
-            $writer->addRow($this->line($columnHead, $ruledHead));
-
-            foreach (BmiAssessmentReport::SEX_ROWS as $sexKey => $sexLabel) {
-                $cell = fn (string $key) => $bmiValues[$prefix.'_'.$gradeKey.'_'.$sexKey.'_'.$key] ?? '';
-
-                $writer->addRow($this->line(array_merge(
-                    [$sexLabel],
-                    array_map($cell, $nsKeys),
-                    [$cell('nst')],
-                    array_map($cell, $hfaKeys),
-                    [$cell('hfat')],
-                ), $ruled));
-            }
-
-            $writer->addRow($this->line(['']));
-        }
-
-        $this->writeSignatureBlock($writer, $signatories);
-    }
-
-    /**
-     * The form's foot: who prepared it, who attested it, who noted it — and,
-     * when the head has already decided on the report, that decision with the
-     * name of the person who made it.
-     *
-     * A name the app does not hold prints as a blank line to sign on. Putting a
-     * plausible name on a document nobody signed would be worse than a gap.
-     *
-     * @param  array{prepared: string, noted: string}  $signatories
-     */
-    private function writeSignatureBlock(XlsxWriter $writer, array $signatories): void
-    {
-        $label = (new Style)->withFontBold(true);
-
-        $writer->addRow($this->line(['']));
-        $writer->addRow($this->line(['Prepared by:', '', 'Attested by:', '', 'Noted by:'], $label));
-        $writer->addRow($this->line([$signatories['prepared'], '', '', '', $signatories['noted']]));
-        $writer->addRow($this->line([
-            'School Clinic Nurse / Teacher', '', 'MAPEH Department Head', '', 'Principal',
-        ]));
     }
 
     /**

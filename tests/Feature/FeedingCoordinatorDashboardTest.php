@@ -513,7 +513,7 @@ class FeedingCoordinatorDashboardTest extends TestCase
     }
 
     /**
-     * The four headline cards are Beneficiary / Attendance / At-Risk /
+     * The four headline cards are Beneficiary / Attendance / For Follow-up /
      * Awaiting Enrollment. "Beneficiary" is the learners the coordinator has
      * enrolled — qualifying alone does not feed anyone — and "Awaiting
      * Enrollment" is those who qualify but have not been enrolled yet.
@@ -677,10 +677,10 @@ class FeedingCoordinatorDashboardTest extends TestCase
         $panel = $this->withSession($this->coordinatorSession())
             ->get('/dashboard/feedingcor-dashboard')
             ->assertOk()
-            ->assertSee('Attendance At Risk')
+            ->assertSee('Attendance For Follow-up')
             ->assertSee('Flag at <strong>80%</strong>', false)
             ->assertSee('Awaiting Confirmation')
-            ->assertSee('View At-Risk List')
+            ->assertSee('View For Follow-up List')
             ->viewData('attendanceRisk');
 
         $this->assertSame('80%', $panel['threshold_label']);

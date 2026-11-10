@@ -89,7 +89,7 @@ class AccountSettings
                 ->when(! $institutionId, fn ($q) => $q->whereNull('institution_id'))
                 ->first();
 
-            return $row ? (array) $row : null;
+            return $row ? AccountName::open((array) $row) : null;
         });
     }
 

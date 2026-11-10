@@ -23,7 +23,7 @@
 </article>
 <article class="card kpi accent-orange">
 	<div class="kpi-top">
-		<div class="kpi-label">At-Risk</div>
+		<div class="kpi-label">For Follow-up</div>
 		<div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div>
 	</div>
 	<div class="kpi-value">{{ $dashboardStats['at_risk'] ?? 0 }}</div>

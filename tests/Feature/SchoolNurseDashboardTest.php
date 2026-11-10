@@ -113,7 +113,7 @@ class SchoolNurseDashboardTest extends TestCase
         $this->assertSame(1, $response->viewData('lowStockCount'));
 
         $response->assertSee('Total Records')
-            ->assertSee('At-Risk Learners')
+            ->assertSee('For Follow-up Learners')
             ->assertSee('Low Stock Medicines')
             ->assertSee('Paracetamol');
     }

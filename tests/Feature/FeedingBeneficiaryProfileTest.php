@@ -148,7 +148,7 @@ class FeedingBeneficiaryProfileTest extends TestCase
         // and the learner is not flagged.
         $response->assertSee('0 / 0');
         $response->assertDontSee('>0%<', false);
-        $response->assertDontSee('At Risk Beneficiary');
+        $response->assertDontSee('For Follow-up Beneficiary');
     }
 
     #[Test]
@@ -165,14 +165,14 @@ class FeedingBeneficiaryProfileTest extends TestCase
         // Below the threshold is not a flag: the record says it is waiting on
         // the coordinator, and points them at where it is confirmed.
         $this->openRecord($record)->assertOk()
-            ->assertDontSee('At Risk Beneficiary')
+            ->assertDontSee('For Follow-up Beneficiary')
             ->assertSee('Awaiting Confirmation')
             ->assertSee(route('dashboard.feedingcor-at-risk', ['status' => 'awaiting_confirmation']), false);
 
         $this->confirmFlag($record);
 
         $this->openRecord($record)->assertOk()
-            ->assertSee('At Risk Beneficiary')
+            ->assertSee('For Follow-up Beneficiary')
             ->assertSee('Flagged for Follow-Up');
     }
 
@@ -189,7 +189,7 @@ class FeedingBeneficiaryProfileTest extends TestCase
 
         $this->openRecord($record)->assertOk()
             ->assertSee('Active Beneficiary')
-            ->assertDontSee('At Risk Beneficiary');
+            ->assertDontSee('For Follow-up Beneficiary');
     }
 
     #[Test]
@@ -205,7 +205,7 @@ class FeedingBeneficiaryProfileTest extends TestCase
         // learner at the 80% default do not flag one here.
         $response = $this->openRecord($record)->assertOk();
         $response->assertSee('Active Beneficiary');
-        $response->assertSee('At-risk threshold: <strong>30%</strong>', false);
+        $response->assertSee('For Follow-up threshold: <strong>30%</strong>', false);
     }
 
     #[Test]

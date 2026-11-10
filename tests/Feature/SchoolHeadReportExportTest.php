@@ -137,12 +137,14 @@ class SchoolHeadReportExportTest extends TestCase
         $text = $this->flatten($form);
 
         // The heading block the printed sheet opens on: the DepEd letterhead,
-        // then the school and the address it is on file with.
+        // then the school and the address it is on file with. The form sets
+        // the school, the banner and the signatories in capitals, as the
+        // printed page does, so those are matched without regard to case.
         $this->assertSame('Republic of the Philippines', $form[0][0]);
         $this->assertStringContainsString('Department of Education', $text);
         $this->assertStringContainsString('Schools Division of Davao City', $text);
-        $this->assertStringContainsString('Sta. Ana National High School', $text);
-        $this->assertStringContainsString('Baseline Nutritional Assessment (BMI) Report', $text);
+        $this->assertStringContainsStringIgnoringCase('Sta. Ana National High School', $text);
+        $this->assertStringContainsStringIgnoringCase('Baseline Nutritional Assessment (BMI) Report', $text);
         $this->assertStringContainsString('S.Y. '.StudentHealthRecord::currentSchoolYear(), $text);
 
         // One grid per grade the programme covers, then the overall grid.
@@ -152,8 +154,8 @@ class SchoolHeadReportExportTest extends TestCase
         $this->assertStringContainsString('OVERALL BMI', $text);
 
         // The grid's own two-row head, and its rows.
-        $this->assertNotNull($this->rowStartingWith($form, 'Sex'));
-        $this->assertStringContainsString('Height for Age (HFA)', $text);
+        $this->assertNotNull($this->rowStartingWith($form, 'SEX'));
+        $this->assertStringContainsStringIgnoringCase('Height for Age (HFA)', $text);
         $this->assertStringContainsString('Severely Wasted', $text);
         $this->assertStringContainsString('Severely Stunted', $text);
         $this->assertNotNull($this->rowStartingWith($form, 'MALE'));
@@ -161,9 +163,9 @@ class SchoolHeadReportExportTest extends TestCase
         $this->assertNotNull($this->rowStartingWith($form, 'TOTAL'));
 
         // The signature block the form ends on.
-        $this->assertStringContainsString('Prepared by:', $text);
-        $this->assertStringContainsString('Attested by:', $text);
-        $this->assertStringContainsString('Noted by:', $text);
+        $this->assertStringContainsStringIgnoringCase('Prepared by:', $text);
+        $this->assertStringContainsStringIgnoringCase('Attested by:', $text);
+        $this->assertStringContainsStringIgnoringCase('Noted by:', $text);
     }
 
     #[Test]
@@ -248,8 +250,8 @@ class SchoolHeadReportExportTest extends TestCase
 
         // The nurse the SBFP Forms page pre-fills as preparer, and the head
         // exporting it as the one noting it.
-        $this->assertStringContainsString('Nurse Maria Santos', $text);
-        $this->assertStringContainsString('Welito I. Rosal', $text);
+        $this->assertStringContainsStringIgnoringCase('Nurse Maria Santos', $text);
+        $this->assertStringContainsStringIgnoringCase('Welito I. Rosal', $text);
         $this->assertStringContainsString('School Clinic Nurse / Teacher', $text);
         $this->assertStringContainsString('Principal', $text);
     }
@@ -273,8 +275,8 @@ class SchoolHeadReportExportTest extends TestCase
         $this->assertStringNotContainsString('REVIEW', $text);
         $this->assertStringNotContainsString('Reviewed by', $text);
         // The signature block is untouched: it is the school's own staff.
-        $this->assertStringContainsString('Prepared by:', $text);
-        $this->assertStringContainsString('Noted by:', $text);
+        $this->assertStringContainsStringIgnoringCase('Prepared by:', $text);
+        $this->assertStringContainsStringIgnoringCase('Noted by:', $text);
     }
 
     #[Test]
@@ -313,7 +315,7 @@ class SchoolHeadReportExportTest extends TestCase
 
         $this->assertArrayHasKey('Final BMI', $sheets);
         $this->assertArrayNotHasKey('Accomplishment', $sheets);
-        $this->assertStringContainsString(
+        $this->assertStringContainsStringIgnoringCase(
             'Final Nutritional Assessment (BMI) Report',
             $this->flatten($sheets['Final BMI'])
         );

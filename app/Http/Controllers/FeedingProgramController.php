@@ -1953,7 +1953,7 @@ class FeedingProgramController extends Controller
 
     /**
      * The coordinator corrects one learner's mark for one session, from the
-     * At-Risk Students tab's verification dialog.
+     * For Follow-up Students tab's verification dialog.
      *
      * A mark decides whether a child is flagged as at-risk, so it must be
      * correctable while its day is open — and every correction is attributed and

@@ -14,7 +14,7 @@
 
      They are notes and nothing else: no notice carries a button or a link.
      Recording sits on the Attendance Sheet, and verifying, confirming and
-     following up sit on the At-Risk Students tab. --}}
+     following up sit on the For Follow-up Students tab. --}}
 @php
 	$unrecorded = ! $sessionRecorded;
 	$incomplete = $sessionRecorded && $tally['recorded'] < $beneficiaryCount;
@@ -89,7 +89,7 @@
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
 			<div>
 				<strong>{{ $atRisk['observing'] }} {{ \Illuminate\Support\Str::plural('beneficiary', $atRisk['observing']) }} currently under observation</strong>
-				<span>At-risk classification begins after {{ $atRisk['minimumObservationDays'] }} recorded feeding days &middot; {{ $cumulative['sessions'] }} recorded so far.</span>
+				<span>For Follow-up classification begins after {{ $atRisk['minimumObservationDays'] }} recorded feeding days &middot; {{ $cumulative['sessions'] }} recorded so far.</span>
 			</div>
 		</div>
 	</div>

@@ -16,7 +16,9 @@ use App\Support\FeedingNutritionProgress;
 use App\Support\FeedingProgramCycle;
 use App\Support\FeedingReportNarrative;
 use App\Support\FeedingWeighIns;
+use App\Support\NarrativeReportPdf;
 use App\Support\RequestMemo;
+use App\Support\SbfpFormWorkbook;
 use App\Support\SchemaCache;
 use App\Support\SchoolCalendar;
 use App\Support\SchoolLetterhead;
@@ -27,8 +29,11 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
+use OpenSpout\Writer\XLSX\Writer;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class FeedingCoordinatorController extends Controller
 {
@@ -275,6 +280,305 @@ class FeedingCoordinatorController extends Controller
             'studentsByGrade' => (object) $studentsByGrade,
             'sectionsByGrade' => (object) $sectionsByGrade,
             'bmiReports' => $this->bmiReports($records),
+        ]);
+    }
+
+    /** The page's forms that download as a workbook. The narrative is a PDF. */
+    public const WORKBOOK_TEMPLATES = ['bmi-report', 'feeding-beneficiaries', 'feeding-masterlist'];
+
+    /**
+     * Download Excel: the form on screen, as a workbook laid out as the form.
+     *
+     * The page posts what it is showing — the template, its four filters and
+     * the words typed around the table (address, school year, signatories) —
+     * and nothing else. Every figure and every learner is re-read here from
+     * the same roster and the same BmiAssessmentReport the page was painted
+     * from, scoped to the reader's own school, so a number off the wire
+     * decides nothing. A filter naming a grade or section the roll does not
+     * hold reads as the whole school, exactly as the page's own controls
+     * would. POST rather than GET because staff names have no business in a
+     * URL, where every proxy and log would keep them.
+     */
+    public function downloadForm(Request $request): BinaryFileResponse|RedirectResponse
+    {
+        if (! $this->readsForms($request)) {
+            return redirect()->route('login')
+                ->with('error', 'Only the Feeding Coordinator, the School Nurse and the Clinic Teacher can download the SBFP forms.');
+        }
+
+        $template = (string) $request->input('template', '');
+        if (! in_array($template, self::WORKBOOK_TEMPLATES, true)) {
+            return back()->with('error', 'Choose a form to download.');
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+        $schoolName = (string) $request->session()->get('active_school_name', '');
+        [$records, $studentsByGrade, $sectionsByGrade] = $this->sbfpRoster($institutionId);
+
+        $grade = trim((string) $request->input('grade', ''));
+        if (! array_key_exists($grade, $studentsByGrade)) {
+            $grade = '';
+        }
+        $section = trim((string) $request->input('section', ''));
+        if ($grade === '' || ! in_array($section, $sectionsByGrade[$grade] ?? [], true)) {
+            $section = '';
+        }
+
+        $fields = $this->typedFields($request);
+        $letterhead = SchoolLetterhead::for($institutionId, $schoolName);
+        $schoolYear = StudentHealthRecord::currentSchoolYear();
+
+        // tempnam() creates the file it names, so the reservation is released
+        // before the writer claims the .xlsx path.
+        $reserved = tempnam(sys_get_temp_dir(), 'sbfp-form-');
+        $path = $reserved.'.xlsx';
+        @unlink($reserved);
+
+        if ($template === 'bmi-report') {
+            $phase = in_array($request->input('phase'), ['baseline', 'endline', 'both'], true)
+                ? (string) $request->input('phase')
+                : 'baseline';
+            $population = $request->input('population') === 'beneficiaries' ? 'beneficiaries' : 'all';
+
+            $writer = SbfpFormWorkbook::writer(landscape: true);
+            $writer->openToFile($path);
+            $this->writeBmiReport($writer, $records, $phase, $population, $grade, $section, $fields, $letterhead, $schoolYear, $institutionId, $schoolName);
+            SbfpFormWorkbook::close($writer, $path);
+
+            $name = 'BMI Report '.['baseline' => 'Baseline', 'endline' => 'Final', 'both' => 'Baseline and Final'][$phase];
+        } else {
+            $beneficiaryList = $template === 'feeding-beneficiaries';
+            $prefix = $beneficiaryList ? 'mlb' : 'ml';
+            $name = $beneficiaryList ? 'Master List of Beneficiaries' : 'Masterlist of Qualified Recipients';
+            $typed = $this->typedReader($fields);
+
+            $writer = SbfpFormWorkbook::writer(landscape: false);
+            $writer->openToFile($path);
+            SbfpFormWorkbook::masterlist(
+                $writer,
+                sheetName: $beneficiaryList ? 'Beneficiaries' : 'Masterlist',
+                letterhead: ['address' => $typed($prefix.'_school_address', $letterhead['address'])] + $letterhead,
+                title: $beneficiaryList
+                    ? FeedingMasterlistExportController::BENEFICIARY_LIST_TITLE
+                    : FeedingMasterlistExportController::LISTS['beneficiaries'][0],
+                schoolYear: $typed($prefix.'_school_year', $schoolYear),
+                scope: ($grade !== '' || $section !== '') ? $this->formScopeLabel($grade, $section) : '',
+                rows: $this->masterlistRows($studentsByGrade, $template, $grade, $section),
+                signatories: [
+                    ['label' => 'Prepared by:', 'name' => $typed($prefix.'_prepared_name', ''), 'role' => 'Feeding Coordinator'],
+                    ['label' => 'Noted by:', 'name' => $typed($prefix.'_noted_name', ''), 'role' => $typed($prefix.'_noted_role', '') ?: SchoolSignatories::HEAD_DESIGNATION],
+                ],
+            );
+            SbfpFormWorkbook::close($writer, $path);
+        }
+
+        return response()
+            ->download($path, SbfpFormWorkbook::filename($name, $schoolYear))
+            ->deleteFileAfterSend();
+    }
+
+    /**
+     * The BMI report as the page shows it: one sheet per weighing on screen,
+     * the grids the Grade control leaves visible, counted over the population
+     * and section the page counted, with the insight and signatories it shows.
+     *
+     * @param  Collection<int, StudentHealthRecord>  $records
+     * @param  array<string, string>  $fields
+     * @param  array<string, string>  $letterhead
+     */
+    private function writeBmiReport(
+        Writer $writer,
+        Collection $records,
+        string $phase,
+        string $population,
+        string $grade,
+        string $section,
+        array $fields,
+        array $letterhead,
+        string $schoolYear,
+        ?int $institutionId,
+        string $schoolName,
+    ): void {
+        $report = $this->bmiReports($records)[$population];
+        $setKey = ($grade !== '' && $section !== '' && isset($report['values'][$grade.' / '.$section]))
+            ? $grade.' / '.$section
+            : '';
+        $values = $report['values'][$setKey] ?? [];
+
+        // A chosen grade shows that grade's grid alone (Overall hidden too);
+        // All Grade Level shows every grade and the Overall grid.
+        $gradeKey = $grade !== '' ? BmiAssessmentReport::gradeKey($grade) : null;
+        $gridKeys = $gradeKey !== null ? [$gradeKey] : array_merge(BmiAssessmentReport::gradeKeys(), ['overall']);
+        $insightSet = $report['insights'][$setKey] ?? $report['insights'][''] ?? [];
+
+        $beneficiaries = $population === 'beneficiaries';
+        $populationLabel = $beneficiaries ? 'Only Beneficiaries' : '';
+        $where = $this->formScopeLabel($grade, $section);
+        $scope = $beneficiaries
+            ? $populationLabel.' · '.$where
+            : (($grade !== '' || $section !== '') ? $where : '');
+        $insightWhere = $grade === '' ? 'All Grade Levels' : ($section !== '' ? $grade.' · '.$section : $grade);
+
+        $nurse = $this->resolveSchoolNurseName($institutionId, $schoolName);
+        $typed = $this->typedReader($fields);
+        $phases = $phase === 'both' ? ['baseline', 'endline'] : [$phase];
+
+        foreach ($phases as $index => $weighing) {
+            if ($index > 0) {
+                $writer->addNewSheetAndMakeItCurrent();
+            }
+
+            $prefix = BmiAssessmentReport::prefixFor($weighing);
+            // Who signs follows who the report counts, as on the page.
+            $signatories = $beneficiaries
+                ? [
+                    ['label' => 'Prepared by:', 'name' => $typed($prefix.'_ben_prepared_name', SchoolSignatories::feedingCoordinator($institutionId, $schoolName)), 'role' => 'Feeding Coordinator'],
+                    ['label' => 'Attested by:', 'name' => $typed($prefix.'_ben_attested_name', $nurse), 'role' => 'School Clinic Nurse/Teacher'],
+                    ['label' => 'Noted by:', 'name' => $typed($prefix.'_ben_noted_name', SchoolSignatories::notedBy($institutionId, $schoolName)), 'role' => SchoolSignatories::HEAD_DESIGNATION],
+                ]
+                : [
+                    ['label' => 'Prepared by:', 'name' => $typed($prefix.'_prepared_name', $nurse), 'role' => $typed($prefix.'_prepared_role', '') ?: 'School Clinic Nurse / Teacher'],
+                    ['label' => 'Attested by:', 'name' => $typed($prefix.'_attested_name', ''), 'role' => $typed($prefix.'_attested_role', '') ?: 'MAPEH Department Head'],
+                    ['label' => 'Noted by:', 'name' => $typed($prefix.'_noted_name', ''), 'role' => $typed($prefix.'_noted_role', '') ?: SchoolSignatories::HEAD_DESIGNATION],
+                ];
+
+            SbfpFormWorkbook::bmiReport(
+                $writer,
+                sheetName: $weighing === 'baseline' ? 'Baseline BMI' : 'Final BMI',
+                letterhead: ['address' => $typed($prefix.'_school_address', $letterhead['address'])] + $letterhead,
+                phase: $weighing,
+                values: $values,
+                gridKeys: $gridKeys,
+                schoolYear: $typed($prefix.'_school_year', $schoolYear),
+                scope: $scope,
+                insight: $insightSet[$weighing][$gradeKey ?? 'overall'] ?? [],
+                insightScope: $populationLabel !== '' ? $populationLabel.' · '.$insightWhere : $insightWhere,
+                signatories: $signatories,
+            );
+        }
+    }
+
+    /**
+     * The learners a master list names in the scope the page shows: the
+     * server's own `lists` decision, every grade in grade order when none is
+     * chosen, each grade's learners in name order — the page's learnersFor().
+     *
+     * @param  array<string, list<array<string, mixed>>>  $studentsByGrade
+     * @return list<array{name: string, grade: string, section: string}>
+     */
+    private function masterlistRows(array $studentsByGrade, string $template, string $grade, string $section): array
+    {
+        $grades = $grade !== '' ? [$grade] : array_keys($studentsByGrade);
+
+        $rows = [];
+        foreach ($grades as $gradeLabel) {
+            foreach ($studentsByGrade[$gradeLabel] ?? [] as $student) {
+                if (! in_array($template, $student['lists'] ?? [], true)) {
+                    continue;
+                }
+                if ($section !== '' && $student['section'] !== $section) {
+                    continue;
+                }
+                $rows[] = [
+                    'name' => (string) $student['name'],
+                    'grade' => (string) $student['grade'],
+                    'section' => (string) $student['section'],
+                ];
+            }
+        }
+
+        return $rows;
+    }
+
+    /** "Grade 7 · All Sections" — the page's scope line, before CSS upper-cases it. */
+    private function formScopeLabel(string $grade, string $section): string
+    {
+        return ($grade !== '' ? $grade : 'All Grade Levels').' · '.($section !== '' ? $section : 'All Sections');
+    }
+
+    /**
+     * The words typed on the form around its tables — the school address and
+     * year, the names and designations on the signature lines, the narrative's
+     * paragraphs — as posted. Only the form's own field names are kept, each
+     * trimmed and capped, and none of them is ever stored: they are written
+     * into the file and gone.
+     *
+     * @return array<string, string>
+     */
+    private function typedFields(Request $request): array
+    {
+        $posted = $request->input('fields', []);
+        if (! is_array($posted)) {
+            return [];
+        }
+
+        $fields = [];
+        foreach ($posted as $key => $value) {
+            if (count($fields) >= 60 || ! is_string($key) || ! is_scalar($value)) {
+                continue;
+            }
+            if (! preg_match('/^(bmib|bmif|ml|mlb|narr)_[a-z_]{1,40}$/', $key)) {
+                continue;
+            }
+
+            // A narrative section is a few paragraphs; everything else is a line.
+            $limit = str_starts_with($key, 'narr_') && ! in_array($key, ['narr_funder', 'narr_prepared_name', 'narr_noted_name', 'narr_noted_role', 'narr_school_address'], true)
+                ? 20000
+                : 200;
+            $fields[$key] = mb_substr(trim((string) $value), 0, $limit);
+        }
+
+        return $fields;
+    }
+
+    /**
+     * Reads a typed field the way the page shows it: a field the page sent is
+     * what was on the form, even left blank (a blank line to sign on); one it
+     * did not send at all falls back to what the page would have prefilled.
+     *
+     * @param  array<string, string>  $fields
+     * @return \Closure(string, string): string
+     */
+    private function typedReader(array $fields): \Closure
+    {
+        return static fn (string $key, string $default): string => array_key_exists($key, $fields) ? $fields[$key] : $default;
+    }
+
+    /**
+     * Download PDF: the coordinator's narrative report, as the form on screen.
+     *
+     * The paragraphs are the coordinator's own — drafted from the figures,
+     * then edited in the browser — so they arrive with the request and are
+     * written straight into the document, never stored. Coordinator only: the
+     * clinic's copy of the page carries no narrative report.
+     */
+    public function downloadNarrative(Request $request): Response|RedirectResponse
+    {
+        if (! $this->isCoordinator($request)) {
+            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can download the narrative report.');
+        }
+
+        $institutionId = $request->session()->get('active_institution_id');
+        $letterhead = SchoolLetterhead::for($institutionId, (string) $request->session()->get('active_school_name', ''));
+        $typed = $this->typedReader($this->typedFields($request));
+        $schoolYear = StudentHealthRecord::currentSchoolYear();
+
+        $pdf = NarrativeReportPdf::render([
+            'letterhead' => ['address' => $typed('narr_school_address', $letterhead['address'])] + $letterhead,
+            'funder' => $typed('narr_funder', ''),
+            'sections' => array_map(
+                static fn (string $key): string => $typed('narr_'.$key, ''),
+                NarrativeReportPdf::SECTIONS
+            ),
+            'preparedName' => $typed('narr_prepared_name', ''),
+            'notedName' => $typed('narr_noted_name', ''),
+            'notedRole' => $typed('narr_noted_role', '') ?: SchoolSignatories::HEAD_DESIGNATION,
+        ]);
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.SbfpFormWorkbook::filename('SBFP Narrative Report', $schoolYear, 'pdf').'"',
+            'Cache-Control' => 'no-store, private',
         ]);
     }
 
@@ -545,7 +849,7 @@ class FeedingCoordinatorController extends Controller
         ]);
 
         // The tabs read the very figures the cards do, so "All beneficiaries"
-        // and "At risk" can never disagree with the cards above them.
+        // and "For Follow-up" can never disagree with the cards above them.
         $segmentCounts = [
             'all' => $summary['beneficiaries'],
             'pending' => $summary['pending'],
@@ -1195,7 +1499,7 @@ class FeedingCoordinatorController extends Controller
      * notice — the decision waiting on them first.
      *
      * Every standing comes from FeedingAttendanceFlag, the reading the
-     * At-Risk Students tab works from, so the two never list different
+     * For Follow-up Students tab works from, so the two never list different
      * learners. Days present is counted over **confirmed** sessions only — the
      * same denominator the rule uses.
      *

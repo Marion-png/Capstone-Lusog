@@ -16,7 +16,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Guards the Feeding Coordinator's At-Risk Students tab and the attendance flow
+ * Guards the Feeding Coordinator's For Follow-up Students tab and the attendance flow
  * the capstone adviser set:
  *
  *   day 3 of unexcused absence in a row → an attendance notice to verify the
@@ -134,16 +134,16 @@ class FeedingAtRiskTabTest extends TestCase
 
         $response = $this->open()->assertOk();
 
-        $response->assertSee('SBFP <span>At-Risk Students</span>', false);
+        $response->assertSee('SBFP <span>For Follow-up Students</span>', false);
         $response->assertSee('S.Y. '.str_replace('-', '&ndash;', StudentHealthRecord::currentSchoolYear()), false);
         $response->assertSee('Active Program:');
         $response->assertSee('School-Based Feeding Program');
-        $response->assertSee('At-Risk Students');
+        $response->assertSee('For Follow-up Students');
         $response->assertSee('Total Beneficiaries');
-        $response->assertSee('At-Risk Rate');
+        $response->assertSee('For Follow-up Rate');
         $response->assertSee('Attendance Threshold');
-        $response->assertSee('Export At-Risk List');
-        $response->assertSee('Print At-Risk List');
+        $response->assertSee('Export For Follow-up List');
+        $response->assertSee('Print For Follow-up List');
         // The adviser's two days, read from the rule — never typed.
         $response->assertSee('7 days');
         $response->assertSee('Notice at 3 days');

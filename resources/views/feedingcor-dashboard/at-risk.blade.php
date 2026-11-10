@@ -4,7 +4,7 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="csrf-token" content="{{ csrf_token() }}">
-	<title>At-Risk Students - Feeding Coordinator - SIGLA</title>
+	<title>For Follow-up Students - Feeding Coordinator - SIGLA</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="icon" type="image/png" href="{{ asset('images/sigla-mark.png') }}">
@@ -24,7 +24,7 @@
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>Dashboard</span><span class="bc-sep">&rsaquo;</span><span>At-Risk Students</span></div>
+		<div class="topbar-bc"><span>Dashboard</span><span class="bc-sep">&rsaquo;</span><span>For Follow-up Students</span></div>
 		@include('partials.live-clock')
 	</header>
 
@@ -47,7 +47,7 @@
 		<div class="page-header sbfp-header">
 			<div class="sbfp-headline">
 				<div class="sbfp-title-row">
-					<h1 class="page-title">SBFP <span>At-Risk Students</span></h1>
+					<h1 class="page-title">SBFP <span>For Follow-up Students</span></h1>
 					<span class="sbfp-year">S.Y. {!! $arYear !!}</span>
 				</div>
 				<p class="sbfp-program">Active Program: <strong>School-Based Feeding Program</strong></p>
@@ -73,11 +73,11 @@
 				@endif
 				<a class="btn btn-secondary" href="{{ route('dashboard.feedingcor-at-risk.export', request()->query()) }}">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-					Export At-Risk List
+					Export For Follow-up List
 				</a>
 				<button type="button" class="btn btn-secondary" id="arPrint">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
-					Print At-Risk List
+					Print For Follow-up List
 				</button>
 			</div>
 		</div>
@@ -85,7 +85,7 @@
 		{{-- Paper carries no rail and no clock, so the masthead prints in their
 		     place and is invisible on screen. --}}
 		<div class="print-masthead" aria-hidden="true">
-			<h2>At-Risk Feeding Beneficiaries</h2>
+			<h2>For Follow-up Feeding Beneficiaries</h2>
 			<p>{{ $schoolName }} &middot; S.Y. {{ $schoolYear }} &middot; Feeding Day {{ $programDay }} of {{ $programDuration }}</p>
 			<p>Attendance notice: {{ $cards['notice_label'] }} &middot; Flag threshold: {{ $cards['threshold_label'] }} &middot; Printed {{ now()->format('F j, Y') }}</p>
 		</div>
@@ -260,7 +260,7 @@
 				@csrf
 				<div class="modal-head">
 					<div>
-						<p class="ar-modal-eyebrow">At-Risk Beneficiary</p>
+						<p class="ar-modal-eyebrow">For Follow-up Beneficiary</p>
 						<p class="modal-title" id="followUpTitle">Record Follow-Up</p>
 					</div>
 					<button type="button" class="modal-close" data-followup-close aria-label="Close">&times;</button>

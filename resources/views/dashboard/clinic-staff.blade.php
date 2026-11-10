@@ -191,7 +191,7 @@
         <div class="card clinic-panel" style="margin-top:20px">
             <div class="card-head">
                 <div>
-                    <div class="card-title">Feeding Program At-Risk Alerts</div>
+                    <div class="card-title">Feeding Program For Follow-up Alerts</div>
                     <div class="card-sub">Flagged for follow-up by the Feeding Coordinator</div>
                 </div>
             </div>
@@ -220,7 +220,7 @@
                     </table>
                 </div>
             @else
-                <div class="empty-panel">No at-risk beneficiaries flagged at this time.</div>
+                <div class="empty-panel">No beneficiaries flagged for follow-up at this time.</div>
             @endif
         </div>
         @endif

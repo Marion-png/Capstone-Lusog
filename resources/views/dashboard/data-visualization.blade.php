@@ -39,7 +39,7 @@
     <div class="content">
         <div class="page-header">
             <div class="page-eyebrow">Reports</div>
-            <h1 class="page-title">Manuscript-Based <span>Data Visualization</span></h1>
+            <h1 class="page-title">Data <span>Visualization</span></h1>
             <p class="page-sub">{{ $schoolName }} &middot; S.Y. {{ $schoolYear }}</p>
         </div>
 

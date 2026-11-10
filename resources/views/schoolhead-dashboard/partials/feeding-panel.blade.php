@@ -32,7 +32,7 @@
         <div class="sh-fig-value tnum">{{ $shPct($feeding['cumulative_rate']) }}</div>
     </div>
     <div class="sh-fig">
-        <div class="sh-fig-label">At Risk</div>
+        <div class="sh-fig-label">For Follow-up</div>
         <div class="sh-fig-value tnum">{{ number_format($feeding['at_risk']) }}</div>
     </div>
     <div class="sh-fig">

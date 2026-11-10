@@ -1,4 +1,4 @@
-{{-- The At-Risk Beneficiaries rows: learners FLAGGED for follow-up — the
+{{-- The For Follow-up Beneficiaries rows: learners FLAGGED for follow-up — the
      threshold reached and the Feeding Coordinator's confirmation on record —
      with the date it was confirmed. Rendered only for a reader who may see
      flags — for anybody else it renders nothing, so the live refresh never

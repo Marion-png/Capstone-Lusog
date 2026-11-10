@@ -943,7 +943,7 @@ class FeedingAttendanceController extends Controller
                 $filters['status'] !== '',
                 fn (Collection $rows) => $rows->where('session_status', $filters['status'])
             )
-            // "At risk" is the flag — confirmed learners only.
+            // "For Follow-up" is the flag — confirmed learners only.
             ->when($filters['standing'] === 'at_risk', fn (Collection $rows) => $rows->where('at_risk', true))
             // The other standings narrow to exactly the learners in them: a
             // record awaiting confirmation, an attendance notice, or a rate
@@ -1272,7 +1272,7 @@ class FeedingAttendanceController extends Controller
      * three a mark can be. Whether a learner is at risk across the programme is
      * a verdict on twelve sheets rather than a mark on one, so it lives on its
      * own `standing` control on the roll it applies to. Folding the two into a
-     * single dropdown put "Absent" and "At risk (cumulative)" in one list as
+     * single dropdown put "Absent" and "For Follow-up (cumulative)" in one list as
      * though they answered the same question.
      *
      * A view with no toolbar (UNFILTERED_VIEWS) gets every filter blank

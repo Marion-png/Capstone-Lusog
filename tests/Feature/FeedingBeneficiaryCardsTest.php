@@ -155,7 +155,7 @@ class FeedingBeneficiaryCardsTest extends TestCase
             ->assertSee('Total Beneficiaries')
             ->assertSee('Severely Wasted')
             ->assertSee('Wasted')
-            ->assertSee('At Risk')
+            ->assertSee('For Follow-up')
             ->assertSee('Currently Attending')
             ->viewData('beneficiarySummary');
 
@@ -555,7 +555,7 @@ class FeedingBeneficiaryCardsTest extends TestCase
             ->assertOk()
             ->assertSee('All beneficiaries')
             ->assertSee('All Students')
-            ->assertSee('At risk')
+            ->assertSee('For Follow-up')
             ->viewData('segmentCounts');
 
         $this->assertSame($expected, $counts);
@@ -694,12 +694,12 @@ class FeedingBeneficiaryCardsTest extends TestCase
 
         // Under the threshold waits for the coordinator; once the record is
         // confirmed, the row carries the flag.
-        $this->assertStringNotContainsString('At Risk', $this->tableBody());
+        $this->assertStringNotContainsString('For Follow-up', $this->tableBody());
         $this->confirmFlag($learner);
 
         $body = $this->tableBody();
 
-        $this->assertStringContainsString('At Risk', $body);
+        $this->assertStringContainsString('For Follow-up', $body);
         $this->assertStringContainsString('50%', $body, 'The rate printed is the one that decided the flag.');
         $this->assertStringNotContainsString('Active', $body);
     }
@@ -735,7 +735,7 @@ class FeedingBeneficiaryCardsTest extends TestCase
 
         $body = $this->tableBody('?view=pending');
         $this->assertStringNotContainsString('Active', $body);
-        $this->assertStringNotContainsString('At Risk', $body, 'A learner nobody enrolled is not at risk of anything yet.');
+        $this->assertStringNotContainsString('For Follow-up', $body, 'A learner nobody enrolled is not at risk of anything yet.');
     }
 
     /** The other two views keep the roll, with no enrol controls on it. */
@@ -753,7 +753,7 @@ class FeedingBeneficiaryCardsTest extends TestCase
         $titles = [
             '' => 'Per Beneficiary Comparison',
             '?view=all' => 'Per Beneficiary Comparison',
-            '?view=at_risk' => 'Attendance At Risk',
+            '?view=at_risk' => 'Attendance For Follow-up',
         ];
 
         foreach ($titles as $query => $title) {
@@ -977,7 +977,7 @@ class FeedingBeneficiaryCardsTest extends TestCase
     }
 
     /**
-     * The At Risk card names the rule the school actually runs.
+     * The For Follow-up card names the rule the school actually runs.
      *
      * It used to print "Below 80% attendance" whatever the school was set to,
      * so at a school flagged on a week of unexcused absence — which is what the
