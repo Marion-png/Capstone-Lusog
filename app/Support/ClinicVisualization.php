@@ -65,11 +65,7 @@ final class ClinicVisualization
     public static function read(?int $institutionId, array $query): array
     {
         $years = SchoolHeadOverview::schoolYears($institutionId);
-        $schoolYear = trim((string) ($query['school_year'] ?? ''));
-        if (! in_array($schoolYear, $years, true)) {
-            $current = StudentHealthRecord::currentSchoolYear();
-            $schoolYear = in_array($current, $years, true) ? $current : ($years[0] ?? $current);
-        }
+        $schoolYear = SchoolYear::pick((string) ($query['school_year'] ?? ''), $years);
 
         // The whole school first: the selects offer every grade and section on
         // the roll, never only what the last choice left behind.

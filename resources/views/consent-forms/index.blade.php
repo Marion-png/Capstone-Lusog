@@ -94,7 +94,7 @@
             </div>
             <div class="ms-stat">
                 <div class="ms-stat-icon ms-icon-alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
-                <div><div class="ms-stat-number">{{ $stats['declined'] }}</div><div class="ms-stat-label">Declined</div></div>
+                <div><div class="ms-stat-number">{{ $stats['declined'] }}</div><div class="ms-stat-label">Refused</div></div>
             </div>
             <div class="ms-stat">
                 <div class="ms-stat-icon ms-icon-total"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
@@ -127,7 +127,7 @@
                     <select id="consentStatusFilter" class="ms-filter-select" aria-label="Filter by the parent's answer">
                         <option value="all">All students</option>
                         <option value="agreed">Agreed to the consent</option>
-                        <option value="declined">Did not agree</option>
+                        <option value="declined">Refused</option>
                         <option value="approved">&mdash; Agreed to all services</option>
                         <option value="partial">&mdash; Agreed, with exceptions</option>
                         <option value="pending">Awaiting response</option>
@@ -157,7 +157,7 @@
                     </thead>
                     <tbody id="consentTableBody">
                         @php
-                            $statusLabels = ['approved' => 'Approved', 'partial' => 'Partial', 'declined' => 'Declined', 'pending' => 'Pending Upload'];
+                            $statusLabels = ['approved' => 'Valid Consent', 'partial' => 'Valid Consent', 'declined' => 'Refused', 'pending' => 'Pending Upload'];
                         @endphp
                         @forelse ($rows as $row)
                             @php
@@ -167,9 +167,13 @@
                                 // this year (the school-year handover). Still the
                                 // pending state underneath, so filters and counts
                                 // are unchanged.
-                                $rowStatusLabel = ($row['status'] === 'pending' && $form === null && $row['upload'] === null)
-                                    ? 'No form yet'
-                                    : $statusLabels[$row['status']];
+                                $rowStatusLabel = match (true) {
+                                    $row['status'] === 'pending' && $form === null && $row['upload'] === null => 'No form yet',
+                                    // Missing the parent's name or signature:
+                                    // filed, and gives no service.
+                                    $row['status'] === 'pending' && (bool) $row['upload']?->incomplete => 'Incomplete',
+                                    default => $statusLabels[$row['status']],
+                                };
                             @endphp
                             <tr class="js-consent-row"
                                 data-name="{{ strtolower($row['name']) }}"
@@ -306,7 +310,7 @@
                     <p>Recorded as <b>{{ $row['recorded_response'] }}</b>, but the signed form has not been uploaded.</p>
                 @endif
                 @if ($letter !== null && $letter->status === \App\Models\HealthConsentForm::STATUS_SENT)
-                    <p>A letter was sent to the parent on {{ optional($letter->sent_at)->format('M j, Y') }} and has not been answered.</p>
+                    <p>A letter was sent to the parent on {{ \App\Support\SchoolClock::local($letter->sent_at)?->format('M j, Y') }} and has not been answered.</p>
                 @endif
             </div>
         @else

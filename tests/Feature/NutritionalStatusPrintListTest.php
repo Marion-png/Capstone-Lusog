@@ -120,11 +120,12 @@ class NutritionalStatusPrintListTest extends TestCase
         // The LRN stays text: as a number Excel would print it in scientific notation.
         $this->assertSame('109876543201', $learner[1]);
         $this->assertSame(['Maria Clara Santos', '7', 'Rizal', 'Female'], array_slice($learner, 3, 4));
-        // Age is the latest one on file (the endline's), as on screen. Baseline
-        // height-for-age is the adviser's stored reading; the endline one is
-        // computed from the endline height and age.
+        // Age is the latest one on file (the endline's), as on screen. Both
+        // height-for-age readings come off that weighing's own height (report
+        // #9): 150 cm is a normal height for a girl of 12, whatever the copy
+        // stored beside it says.
         $this->assertEquals(
-            [13, 38, 150, 16.9, 'Wasted', 'Stunted', 47, 155, 19.6, 'Normal', 'Normal Height-for-Age', 'Improved'],
+            [13, 38, 150, 16.9, 'Wasted', 'Normal Height-for-Age', 47, 155, 19.6, 'Normal', 'Normal Height-for-Age', 'Improved'],
             array_slice($learner, 7)
         );
 
@@ -341,7 +342,8 @@ class NutritionalStatusPrintListTest extends TestCase
         $baselineAt = array_search('BASELINE HEIGHT-FOR-AGE', $header, true);
         $endlineAt = array_search('ENDLINE HEIGHT-FOR-AGE', $header, true);
         $this->assertNotFalse($baselineAt);
-        $this->assertSame('Stunted', $learner[$baselineAt]);
+        // 125 cm for a girl of 12 is under −3 SD: read off the height (report #9).
+        $this->assertSame('Severely Stunted', $learner[$baselineAt]);
         $this->assertSame('—', $learner[$endlineAt]);
     }
 

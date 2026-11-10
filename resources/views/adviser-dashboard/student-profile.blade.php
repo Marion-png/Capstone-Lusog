@@ -204,11 +204,11 @@
                         </div>
                         <div class="sp-cs-grid">
                             <section class="sp-cs-col is-approved">
-                                <h5>Approved <span class="sp-cs-count" id="vpCsApprovedCount">0</span></h5>
+                                <h5>Consented <span class="sp-cs-count" id="vpCsApprovedCount">0</span></h5>
                                 <ul id="vpCsApproved"></ul>
                             </section>
                             <section class="sp-cs-col is-denied">
-                                <h5>Not Approved <span class="sp-cs-count" id="vpCsDeniedCount">0</span></h5>
+                                <h5>Excluded <span class="sp-cs-count" id="vpCsDeniedCount">0</span></h5>
                                 <ul id="vpCsDenied"></ul>
                             </section>
                             <section class="sp-cs-col is-check" id="vpCsCheckCol" hidden>
@@ -220,7 +220,7 @@
                                  the school this year: never asked, so never
                                  refused. --}}
                             <section class="sp-cs-col is-not-offered" id="vpCsNotOfferedCol" hidden>
-                                <h5>Not Offered <span class="sp-cs-count" id="vpCsNotOfferedCount">0</span></h5>
+                                <h5>Not offered <span class="sp-cs-count" id="vpCsNotOfferedCount">0</span></h5>
                                 <ul id="vpCsNotOffered"></ul>
                             </section>
                         </div>

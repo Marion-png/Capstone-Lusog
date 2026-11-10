@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\MedicineCatalogue;
 use App\Support\RxNormService;
 use App\Support\SchemaCache;
 use Carbon\Carbon;
@@ -41,7 +42,32 @@ class Medicine extends Model
         'generic_name',
         'rx_concept_id',
         'rx_status',
+        'item_type',
     ];
+
+    /** A drug: looked up in RxNorm and checked against a learner's allergies. */
+    public const TYPE_MEDICINE = 'medicine';
+
+    /** Gauze, bandages, cotton, tape, gloves, masks: never looked up in RxNorm. */
+    public const TYPE_SUPPLY = 'supply';
+
+    /**
+     * Whether this item is a supply, not a medicine (testers' report #16): the
+     * type chosen when it was added, or — on a row from before the type was
+     * kept — read off its name as before (MedicineCatalogue::isSupply).
+     */
+    public function isSupply(): bool
+    {
+        $type = (string) ($this->getAttribute('item_type') ?? '');
+
+        return $type !== '' ? $type === self::TYPE_SUPPLY : MedicineCatalogue::isSupply((string) $this->name);
+    }
+
+    /** Whether the item_type column is on this database yet. */
+    public static function supportsItemType(): bool
+    {
+        return SchemaCache::hasColumn('medicines', 'item_type');
+    }
 
     protected $casts = [
         'off_catalogue' => 'boolean',

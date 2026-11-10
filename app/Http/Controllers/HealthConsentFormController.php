@@ -17,7 +17,9 @@ use App\Support\LearnerPlacement;
 use App\Support\MedicineAllergies;
 use App\Support\NurseConsentList;
 use App\Support\SchemaCache;
+use App\Support\SchoolClock;
 use App\Support\SchoolHeadOverview;
+use App\Support\SchoolYear;
 use App\Support\StudentRosterSync;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -97,15 +99,15 @@ class HealthConsentFormController extends Controller
                     $offered,
                 ),
                 'status' => $this->deriveConsentStatus($form, $upload),
-                'dated_at' => $upload?->created_at?->toDateString()
-                    ?? $form?->signed_at?->toDateString(),
+                'dated_at' => SchoolClock::local($upload?->created_at)?->toDateString()
+                    ?? SchoolClock::local($form?->signed_at)?->toDateString(),
                 'has_form_file' => ($upload !== null && $upload->file_path !== null) || $paperForm,
                 'file_is_image' => $paperForm || in_array(strtolower(pathinfo((string) $upload?->file_original_name, PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'webp'], true),
                 'photo_summary' => is_array($scan)
                     ? ConsentPhotoSummary::fromDraft($scan, LearnerPlacement::gradeNumber((string) ($student['grade_level'] ?? '')), $student['sex'] ?? '', $offered)
                     : null,
                 'uploaded_by' => $upload?->uploaded_by_name ?: ($paperForm ? $form->created_by_name : null),
-                'uploaded_on' => $upload?->created_at?->format('M j, Y') ?? ($paperForm ? $form->signed_at?->format('M j, Y') : null),
+                'uploaded_on' => SchoolClock::local($upload?->created_at)?->format('M j, Y') ?? ($paperForm ? SchoolClock::local($form->signed_at)?->format('M j, Y') : null),
                 'has_med_cert' => (bool) $upload?->medical_cert_attached,
                 // The adviser's own remark, falling back to the reason recorded
                 // against a partial or declined consent.
@@ -171,12 +173,8 @@ class HealthConsentFormController extends Controller
     {
         $institutionId = $request->session()->get('active_institution_id');
         $years = SchoolHeadOverview::schoolYears($institutionId ? (int) $institutionId : null);
-        $requested = trim((string) $request->query('school_year', ''));
 
-        return [
-            in_array($requested, $years, true) ? $requested : HealthConsentForm::currentSchoolYear(),
-            $years,
-        ];
+        return [SchoolYear::pick((string) $request->query('school_year', ''), $years), $years];
     }
 
     /**

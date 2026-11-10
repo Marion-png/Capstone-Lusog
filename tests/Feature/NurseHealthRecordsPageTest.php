@@ -877,7 +877,11 @@ class NurseHealthRecordsPageTest extends TestCase
         $this->assertSame('38', $status['baseline']['weight_kg']);
         $this->assertSame('16.2', $status['baseline']['bmi']);
         $this->assertSame('Wasted', $status['baseline']['bmi_status']);
-        $this->assertSame('Normal', $status['baseline']['hfa_status']);
+        // Height-for-age is read off the baseline height itself (WHO 2007,
+        // 153 cm for a boy of 15 is under −2 SD), never the stored copy beside
+        // it — the copy is how the Baseline report's Insight and its list came
+        // to disagree (testers' report #9).
+        $this->assertSame('Stunted', $status['baseline']['hfa_status']);
         $this->assertSame('2026-07-01', $status['baseline']['recorded_at']);
 
         $this->assertFalse($status['endline']['measured'], 'Nobody has re-measured this learner.');

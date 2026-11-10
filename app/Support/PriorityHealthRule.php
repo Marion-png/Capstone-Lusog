@@ -124,9 +124,7 @@ class PriorityHealthRule
             return [];
         }
 
-        $history = $details['health_history'] ?? null;
-
-        return is_array($history) ? $history : [];
+        return HealthHistory::fromDetails($details);
     }
 
     /**

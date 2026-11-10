@@ -7,7 +7,6 @@ use App\Models\Medicine;
 use App\Models\RxConcept;
 use App\Models\StudentHealthRecord;
 use App\Support\MedicineAllergies;
-use App\Support\MedicineCatalogue;
 use App\Support\RxNormService;
 use App\Support\RxNormUnavailable;
 use Illuminate\Console\Command;
@@ -51,12 +50,12 @@ class RetryUnverifiedRxNorm extends Command
             $this->info('Read the recorded allergies of '.$learners->count().' learners.');
         }
 
-        // A supply is not a drug and is never looked up (MedicineCatalogue::isSupply).
+        // A supply is not a drug and is never looked up (Medicine::isSupply).
         $medicines = Medicine::query()
             ->where('rx_status', RxNormService::UNVERIFIED)
             ->whereNotNull('generic_name')
             ->get()
-            ->reject(fn (Medicine $medicine): bool => MedicineCatalogue::isSupply((string) $medicine->name))
+            ->reject(fn (Medicine $medicine): bool => $medicine->isSupply())
             ->values();
 
         foreach ($medicines as $medicine) {

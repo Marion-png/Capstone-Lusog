@@ -140,7 +140,21 @@ class MedicineInventoryTesterFixesTest extends TestCase
                 'unit' => 'tablets',
                 'generic_name' => 'Paracetamol',
             ])
-            ->assertSessionHasErrors(['name' => 'Paracetamol 500mg tablet is already in the inventory. Use Receive Stock to add to it.']);
+            ->assertSessionHasErrors(['name' => 'This medicine is already in the inventory (Paracetamol 500mg tablet). Use Receive Stock to add quantity.']);
+
+        // A brand of the same generic, strength and form is the same item.
+        $this->withSession($this->nurse())
+            ->from(route('dashboard.medicine-inventory'))
+            ->post(route('medicine-inventory.store'), [
+                'catalogue_name' => MedicineCatalogue::OTHER,
+                'custom_name' => 'Biogesic 500 mg Tablet',
+                'off_catalogue_reason' => 'Testing',
+                'stock_quantity' => 10,
+                'minimum_threshold' => 5,
+                'unit' => 'tablets',
+                'generic_name' => 'Paracetamol',
+            ])
+            ->assertSessionHasErrors(['name' => 'This medicine is already in the inventory (Paracetamol 500mg tablet). Use Receive Stock to add quantity.']);
 
         $this->assertSame(1, Medicine::count());
 
@@ -173,6 +187,26 @@ class MedicineInventoryTesterFixesTest extends TestCase
 
         $gauze = Medicine::where('name', 'Sterile gauze pad')->firstOrFail();
         $this->assertNull($gauze->generic_name);
+        $this->assertTrue($gauze->isSupply());
+        if (Medicine::supportsItemType()) {
+            $this->assertSame(Medicine::TYPE_SUPPLY, $gauze->item_type, 'The type is kept on the row (report #16).');
+        }
+
+        // The type the nurse chose decides, whatever the name reads as: an
+        // off-list "Bandage scissors" kept as a supply asks for no generic.
+        $this->withSession($this->nurse())
+            ->from(route('dashboard.medicine-inventory'))
+            ->post(route('medicine-inventory.store'), [
+                'catalogue_name' => MedicineCatalogue::OTHER,
+                'custom_name' => 'Bandage scissors',
+                'off_catalogue_reason' => 'Wound care',
+                'item_type' => Medicine::TYPE_SUPPLY,
+                'stock_quantity' => 2,
+                'minimum_threshold' => 1,
+                'unit' => 'pcs',
+            ])
+            ->assertSessionHasNoErrors();
+        $this->assertTrue(Medicine::where('name', 'Bandage scissors')->firstOrFail()->isSupply());
 
         $html = $this->withSession($this->nurse())->get(route('dashboard.medicine-inventory'))->getContent();
         $this->assertStringContainsString('Not applicable', $html);
@@ -186,19 +220,63 @@ class MedicineInventoryTesterFixesTest extends TestCase
         }
     }
 
+    /**
+     * "Antifungal cream" names a kind of medicine, and its generic is the
+     * clinic's product's (report #17). It is asked for — empty, with where to
+     * read it — never guessed; and a generic the kind cannot be, like the
+     * antiseptic Povidone-iodine, is named for correction.
+     */
     #[Test]
-    public function the_antifungal_cream_is_offered_a_real_generic_and_an_empty_one_is_asked_for(): void
+    public function the_antifungal_cream_asks_for_its_products_generic_and_a_wrong_one_is_named(): void
     {
-        $this->assertSame('Clotrimazole', MedicineCatalogue::genericFor('Antifungal cream'));
-        $this->assertNull(MedicineCatalogue::genericFor('Paracetamol 500mg tablet'));
+        $this->assertNull(MedicineCatalogue::genericFor('Antifungal cream'), 'No generic is guessed.');
+        $this->assertStringContainsString('Clotrimazole or Miconazole', (string) MedicineCatalogue::labelHint('Antifungal cream'));
+        $this->assertNull(MedicineCatalogue::labelHint('Paracetamol 500mg tablet'));
+
+        $this->assertNotNull(MedicineCatalogue::genericMismatch('Antifungal cream', 'Povidone-iodine'));
+        $this->assertNull(MedicineCatalogue::genericMismatch('Antifungal cream', 'Clotrimazole'));
+        $this->assertNull(MedicineCatalogue::genericMismatch('Paracetamol 500mg tablet', 'Paracetamol'), 'Nothing is said of an item named by its generic.');
 
         $this->medicine('Ibuprofen 200mg tablet', 40, 20, 'tablets');
         $html = $this->withSession($this->nurse())->get(route('dashboard.medicine-inventory'))->getContent();
 
-        $this->assertStringContainsString('data-generic="Clotrimazole"', $html);
+        $this->assertStringContainsString('data-generic-hint="Clotrimazole or Miconazole', $html);
+        $this->assertStringNotContainsString('data-generic="Clotrimazole"', $html);
         if (RxNormService::supported()) {
             // An empty generic reads as a control to set it, not as a value.
             $this->assertStringContainsString('>Set generic name</button>', $html);
         }
+    }
+
+    /**
+     * Report #14: "Generic name" — the label of an old button — was saved as
+     * Paracetamol's and Ibuprofen's generic. A label or an example is refused
+     * wherever a generic is set.
+     */
+    #[Test]
+    public function a_fields_label_is_never_saved_as_a_generic_name(): void
+    {
+        foreach (['Generic name', 'generic', 'e.g. Mefenamic Acid', 'N/A'] as $placeholder) {
+            $this->assertTrue(RxNormService::isPlaceholder($placeholder), $placeholder);
+        }
+        $this->assertFalse(RxNormService::isPlaceholder('Paracetamol'));
+        $this->assertFalse(RxNormService::isPlaceholder('Mefenamic Acid'));
+
+        if (! RxNormService::supported()) {
+            $this->markTestSkipped('The allergy-check tables are not on this database.');
+        }
+
+        $this->withSession($this->nurse())
+            ->from(route('dashboard.medicine-inventory'))
+            ->post(route('medicine-inventory.store'), [
+                'catalogue_name' => 'Ibuprofen 200mg tablet',
+                'generic_name' => 'Generic name',
+                'stock_quantity' => 10,
+                'minimum_threshold' => 5,
+                'unit' => 'tablets',
+            ])
+            ->assertSessionHasErrors('generic_name');
+
+        $this->assertSame(0, Medicine::count());
     }
 }

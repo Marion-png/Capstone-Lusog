@@ -51,7 +51,7 @@ class AdviserConsentPageTest extends TestCase
                 'parent_guardian' => 'Maria Dela Cruz', 'address' => '123 Mabini St.',
                 'region' => 'XI', 'division' => 'Davao City',
                 'telephone_no' => '09171234567', 'gender' => 'Male',
-                'height_cm' => 110, 'weight_kg' => 18.5,
+                'height_cm' => 140, 'weight_kg' => 32,
                 'grade_level' => 'Grade 1', 'section' => 'Sampaguita',
             ])->assertRedirect();
     }
@@ -278,14 +278,14 @@ class AdviserConsentPageTest extends TestCase
         $this->assertSame(9 + 3 + 5, substr_count($panel, '<li class="pcopy-row '));
         $this->assertSame(9, substr_count($panel, ' is-service"><span class="pcopy-label"><span class="pcopy-mark"'));
         $this->assertSame(7, substr_count($panel, '>Consented</span></li>'));
-        $this->assertSame(2, substr_count($panel, '>Not applicable</span></li>'));
-        $this->assertService($panel, HealthConsentForm::SERVICES['iron']['label'], 'not_applicable', 'Not applicable');
+        $this->assertSame(2, substr_count($panel, '>Not offered</span></li>'));
+        $this->assertService($panel, HealthConsentForm::SERVICES['iron']['label'], 'not_applicable', 'Not offered');
 
         // Each service by the letter's own printed name, never the English
         // short name, with its standing beside it.
         $this->assertService($panel, HealthConsentForm::SERVICES['checkup']['label'], 'consented', 'Consented');
         $this->assertService($panel, 'Pag Bitok / Worms', 'consented', 'Consented');
-        $this->assertService($panel, HealthConsentForm::SERVICES['immunization']['children']['immunization_grade7'], 'not_applicable', 'Not applicable');
+        $this->assertService($panel, HealthConsentForm::SERVICES['immunization']['children']['immunization_grade7'], 'not_applicable', 'Not offered');
         foreach (HealthConsentForm::PLANNED_SERVICES as $english) {
             $this->assertStringNotContainsString('>'.e($english).'<', $panel);
         }
@@ -777,15 +777,13 @@ class AdviserConsentPageTest extends TestCase
         // Not shaded at the top: never asked, so Not Offered — never Not
         // Approved, which would read as the parent refusing them.
         $this->assertSame([], $services['not_approved']);
+        // Grade 7 MR/Td is not a Grade 1 learner's to be asked about, nor Iron
+        // a boy's: both are Not Offered too, as the School Nurse reads them.
         $this->assertSame(
-            ['deworming_schistosomiasis', 'deworming_filariasis', 'tas', 'vitamin_a'],
+            ['deworming_schistosomiasis', 'deworming_filariasis', 'tas', 'iron', 'vitamin_a', 'immunization_grade7'],
             array_column($services['not_offered'], 'key'),
         );
         $this->assertSame([], $services['to_check']);
-        // Grade 7 MR/Td is not a Grade 1 learner's to be asked about, nor Iron a boy's.
-        $listed = array_column([...$services['approved'], ...$services['not_approved'], ...$services['not_offered']], 'key');
-        $this->assertNotContains('immunization_grade7', $listed);
-        $this->assertNotContains('iron', $listed);
 
         // Worded as the printed Sulat-Pahibalo words them, never translated,
         // with a sub-item under the heading it is indented under on the paper.
@@ -895,17 +893,27 @@ class AdviserConsentPageTest extends TestCase
         $this->assertStringContainsString('id="pcConfirmSubmit">Confirm &amp; Upload</button>', $summary);
         $this->assertStringContainsString('id="pcConfirmHealth"', $summary);
 
-        // A row starts from what was read off the paper, and Excluded when
-        // nobody read it, so a service is never Consented for no reason.
-        $this->assertStringContainsString("if (reading.approved.includes(key)) return 'consented';", $html);
-        $this->assertStringContainsString("if (reading.check.includes(key)) return 'check';", $html);
+        // A row starts from the parent's answer, and is always one of the
+        // three words — never "Check the paper".
+        $this->assertStringContainsString("if ((reading.excluded || []).includes(key)) return 'excluded';", $html);
+        $this->assertStringNotContainsString('Check the paper', $html);
 
-        // The summary lists this class's services: no Grade 7 MR/Td here.
+        // Consented and Excluded in two lists, with the learner's LRN and the
+        // school year, each service by its whole printed name.
+        $this->assertStringContainsString('id="pcConfirmConsented"', $summary);
+        $this->assertStringContainsString('id="pcConfirmExcluded"', $summary);
+        $this->assertStringContainsString('id="pcConfirmLrn"', $summary);
+        $this->assertStringContainsString('<dt>School year</dt>', $summary);
+
+        // Every service is listed. Grade 7 MR/Td is listed for this class too,
+        // carrying the grade that locks it to Not offered here.
         $this->assertSame(1, preg_match('/const confirmServices = (\[.*?\]);/', $html, $m));
         $listed = json_decode($m[1], true);
         $keys = array_column($listed, 'key');
         $this->assertContains('checkup', $keys);
-        $this->assertNotContains('immunization_grade7', $keys);
+        $this->assertSame(7, $listed[array_search('immunization_grade7', $keys, true)]['only_grade']);
+        $this->assertNull($listed[array_search('checkup', $keys, true)]['only_grade']);
+        $this->assertStringContainsString("if (service.only_grade && service.only_grade !== classGrade) return 'not_applicable';", $html);
         // In the printed letter's own Cebuano wording.
         $this->assertSame(HealthConsentForm::SERVICES['checkup']['label'], $listed[array_search('checkup', $keys, true)]['label']);
     }

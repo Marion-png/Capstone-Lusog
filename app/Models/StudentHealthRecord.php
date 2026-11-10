@@ -7,6 +7,7 @@ use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
 use App\Support\RequestMemo;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -40,6 +41,8 @@ class StudentHealthRecord extends Model
         'endline_bmi_value',
         'endline_nutritional_status',
         'endline_recorded_at',
+        'endline_entered_by',
+        'endline_entered_at',
         'attendance_sessions_count',
         'is_at_risk',
         'examination',
@@ -83,6 +86,10 @@ class StudentHealthRecord extends Model
         'endline_nutritional_status' => EncryptedString::class,
         'baseline_recorded_at' => 'date',
         'endline_recorded_at' => 'date',
+        // Who entered the endline (the Feeding Program Coordinator) and when:
+        // a staff name is personal data, the time is plain.
+        'endline_entered_by' => EncryptedString::class,
+        'endline_entered_at' => 'datetime',
         'is_at_risk' => 'boolean',
         // Enrolment state is plain (queries filter on it); the staff name that
         // made the decision is personal data, so it is encrypted.
@@ -127,6 +134,51 @@ class StudentHealthRecord extends Model
     public function consentForms(): HasMany
     {
         return $this->hasMany(ParentalConsentForm::class);
+    }
+
+    /**
+     * Whether an endline weighing was taken: an endline height or weight on
+     * the row. The one test of "measured at endline" (testers' report #7).
+     *
+     * The old Fill Medical Record stamped an endline status — the baseline's,
+     * copied across — on learners nobody re-weighed, and every page that read
+     * the status then showed "Normal" and "No change" for them and counted
+     * them on the Final BMI grid. A status with no height or weight behind it
+     * is a leftover, not a reading.
+     */
+    public function hasEndlineMeasurement(): bool
+    {
+        foreach (['endline_height_cm', 'endline_weight_kg'] as $column) {
+            $value = $this->getAttribute($column);
+
+            if (is_numeric($value) && (float) $value > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The endline status, only when an endline weighing was taken
+     * (hasEndlineMeasurement()); otherwise null, which every page reads as
+     * "Not measured" and no report counts. Enforced here, on the model, so the
+     * forty-odd places that read the column cannot each decide for themselves.
+     * Written through the cast as before.
+     */
+    protected function endlineNutritionalStatus(): Attribute
+    {
+        return Attribute::get(fn (mixed $value, array $attributes): ?string => $this->hasEndlineMeasurement()
+            ? (new EncryptedString)->get($this, 'endline_nutritional_status', $value, $attributes)
+            : null);
+    }
+
+    /** The endline BMI, under the same rule as endlineNutritionalStatus(). */
+    protected function endlineBmiValue(): Attribute
+    {
+        return Attribute::get(fn (mixed $value, array $attributes): ?string => $this->hasEndlineMeasurement()
+            ? (new EncryptedString)->get($this, 'endline_bmi_value', $value, $attributes)
+            : null);
     }
 
     /**

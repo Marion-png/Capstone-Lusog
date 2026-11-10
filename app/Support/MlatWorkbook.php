@@ -64,7 +64,7 @@ class MlatWorkbook
     public static function build(StudentHealthRecord $record, string $schoolName = ''): array
     {
         $details = is_array($record->student_details) ? $record->student_details : [];
-        $history = is_array($details['health_history'] ?? null) ? $details['health_history'] : [];
+        $history = HealthHistory::fromDetails($details);
         $review = is_array($details['systems_review'] ?? null) ? $details['systems_review'] : [];
         $exam = is_array($record->examination) ? $record->examination : [];
         $vitals = StudentVitalSigns::read($record);

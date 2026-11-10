@@ -528,7 +528,7 @@ class SchoolHeadMasterlistController extends Controller
             'at_risk' => $flagged,
             'history' => $this->buildHistory($record, $details),
             'sparkline' => $this->buildSparkline($record),
-            'enrolled_on' => $record->feeding_enrolled_at?->format('j F Y'),
+            'enrolled_on' => SchoolClock::local($record->feeding_enrolled_at)?->format('j F Y'),
             'marks' => count($overview->marksFor($record->id)),
         ];
     }
@@ -583,7 +583,7 @@ class SchoolHeadMasterlistController extends Controller
         if ($currentStatus !== '' || $this->filled($record->weight)) {
             $history[] = [
                 'phase' => 'Current record',
-                'date' => $record->updated_at?->format('j F Y') ?? '—',
+                'date' => SchoolClock::local($record->updated_at)?->format('j F Y') ?? '—',
                 'weight' => $this->firstFilled([$details['weight_kg'] ?? null, $record->weight]),
                 'height' => $this->firstFilled([$details['height_cm'] ?? null]),
                 'bmi' => $this->firstFilled([$record->bmi_value]),

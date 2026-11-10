@@ -319,7 +319,7 @@
                         <tr>
                             <td>
                                 <strong>{{ $medicine->name }}</strong>
-                                @if ($invRx && \App\Support\MedicineCatalogue::isSupply((string) $medicine->name))
+                                @if ($invRx && $medicine->isSupply())
                                     {{-- A supply is not a drug: RxNorm has nothing to say
                                          about it, so there is no generic to set. --}}
                                     <div class="inv-rx">
@@ -436,7 +436,7 @@
                                     <span class="badge badge-normal">In Stock</span>
                                 @endif
                             </td>
-                            <td class="tnum">{{ $medicine->updated_at?->format('Y-m-d') ?? '—' }}</td>
+                            <td class="tnum">{{ \App\Support\SchoolClock::local($medicine->updated_at)?->format('Y-m-d') ?? '—' }}</td>
                             @if ($invHasActions)
                                 <td class="inv-actions">
                                     @if ($invMayReceive)

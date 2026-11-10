@@ -453,3 +453,14 @@
 	.bd-bar-fill { background: #666 !important; }
 	.bd-bar-mark { background: #000 !important; opacity: 1; }
 }
+
+/* ── Weigh-ins tab (FeedingWeighIns): the checkpoints and the trend, one row
+      per weighing. ── */
+.bd-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.bd-table th { text-align: left; font-weight: 600; color: var(--lg-ink-soft); padding: 8px 10px; border-bottom: 1px solid var(--lg-border); }
+.bd-table td { padding: 8px 10px; border-bottom: 1px solid var(--lg-border); font-variant-numeric: tabular-nums; }
+.bd-table tr:last-child td { border-bottom: 0; }
+.bd-table td.is-critical { color: var(--lg-danger-ink); font-weight: 600; }
+.bd-table td.is-risk { color: var(--lg-orange-ink); font-weight: 600; }
+.bd-table td.is-monitor { color: var(--lg-amber-ink); font-weight: 600; }
+.bd-table .btn-sm { padding: 4px 10px; font-size: .78rem; }

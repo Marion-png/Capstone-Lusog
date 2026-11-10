@@ -56,7 +56,10 @@ class NutricorController extends Controller
         $records = StudentHealthRecord::query()
             ->when($schoolName, fn ($q) => $q->where('school_name', $schoolName))
             ->forCurrentSchoolYear()
-            ->get(['section', 'baseline_nutritional_status', 'endline_nutritional_status']);
+            // The endline height and weight come with the status: a status is
+            // only read as measured when one of them is on the row
+            // (StudentHealthRecord::hasEndlineMeasurement).
+            ->get(['section', 'baseline_nutritional_status', 'endline_nutritional_status', 'endline_height_cm', 'endline_weight_kg']);
 
         // ── Baseline ──────────────────────────────────────────────────────────
         $baselineRows = $records->filter(fn ($r) => $r->baseline_nutritional_status !== null

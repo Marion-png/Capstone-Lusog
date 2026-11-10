@@ -867,9 +867,13 @@
                 <div class="student-section">
                     <h4>Measurements</h4>
                     <div class="student-grid" style="margin-bottom:10px;">
-                        <div class="field"><label for="weight">Weight (kg) <span style="color:#D95C5C">*</span></label><input id="weight" name="weight_kg" type="number" step="0.1" min="0.1" max="200" placeholder="e.g., 34" value="{{ old('weight_kg') }}" required><div class="muted" style="font-size:.7rem;">Valid range: 0.1 - 200 kg</div></div>
-                        <div class="field"><label for="height">Height (m) <span style="color:#D95C5C">*</span></label><input id="height" name="height_m" type="number" step="0.01" min="0.50" max="2.50" placeholder="e.g., 1.27" value="{{ old('height_cm') ? number_format(old('height_cm') / 100, 2, '.', '') : '' }}" required><div class="muted" style="font-size:.7rem;">Convert cm to m: 127 cm = 1.27 m | Valid range: 0.50 - 2.50 m</div></div>
+                        {{-- No HTML min/max here: a figure out of range is named
+                             by WhoGrowth.check() in the server's own words ("looks
+                             like grams"), not the browser's bare "must be ≤ 200". --}}
+                        <div class="field"><label for="weight">Weight (kg) <span style="color:#D95C5C">*</span></label><input id="weight" name="weight_kg" type="number" step="0.1" min="0.1" placeholder="e.g., 34" value="{{ old('weight_kg') }}" required><div class="muted" style="font-size:.7rem;">In kilograms, e.g. 42</div></div>
+                        <div class="field"><label for="height">Height (m) <span style="color:#D95C5C">*</span></label><input id="height" name="height_m" type="number" step="0.01" min="0.01" placeholder="e.g., 1.27" value="{{ old('height_cm') ? number_format(old('height_cm') / 100, 2, '.', '') : '' }}" required><div class="muted" style="font-size:.7rem;">In metres: 127 cm = 1.27 m</div></div>
                     </div>
+                    @include('partials.measurement-confirm')
 
                     {{-- Computed from weight, height and date of birth as they
                          are typed — never entered by hand. The script that
@@ -1104,26 +1108,20 @@
                 </div>
             </form>
 
-            {{-- Endline measurement.
+            {{-- Endline measurement, read-only.
 
                  The height and weight above are the learner's BASELINE — the
-                 opening measurement of the feeding programme. This is the
-                 closing one, so it only opens after the cycle has run its
-                 full length; a mid-cycle "endline" would compare a learner
-                 against themselves halfway through and report it as an
-                 outcome. It sits outside the form above because it posts
-                 somewhere else, and only appears when one learner is open for
-                 editing (?edit=<LRN>) — there is nothing to close otherwise.
-
-                 StudentHealthRecordController::storeEndline enforces the same
-                 rule, so the disabled fieldset is a courtesy, not the control. --}}
+                 opening measurement of the feeding programme. The endline is
+                 the closing one, weighed by the coordinator once the cycle has
+                 run its full length, and shown here when one learner is open
+                 for editing (?edit=<LRN>). --}}
             @if (! empty($editRecord))
-                @php
-                    $endlineOpen = $editRecord->baseline_bmi_value !== null
-                        && isset($cycle)
-                        && $cycle->isComplete();
-                @endphp
-
+                {{-- The endline is the Feeding Program Coordinator's to weigh and
+                     record (testers' report #32); the class adviser reads it here
+                     and cannot change it. StudentHealthRecordController::storeEndline
+                     refuses an adviser whatever is posted. A reading nobody took
+                     reads "Not measured". --}}
+                @php $endlineGrowth = \App\Support\NutritionalHealthStatus::forRecord($editRecord); @endphp
                 <section class="student-section endline-section">
                     <h4>Endline Measurement</h4>
 
@@ -1135,86 +1133,19 @@
                         <span class="muted">{{ $editRecord->baseline_nutritional_status ?: 'Not classified' }}</span>
                     </div>
 
-                    @unless ($endlineOpen)
-                        <div class="endline-locked">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                            <span>
-                                <b>Not yet open —</b>
-                                @if ($editRecord->baseline_bmi_value === null)
-                                    record the baseline height and weight first; endline is measured against it.
-                                @elseif (! isset($cycle) || ! $cycle->hasStarted())
-                                    the feeding programme has not started.
-                                @else
-                                    endline opens when the {{ $cycle->durationDays() }}-day programme finishes.
-                                    Day {{ $cycle->day() }} of {{ $cycle->durationDays() }},
-                                    {{ $cycle->daysRemaining() }} {{ \Illuminate\Support\Str::plural('day', $cycle->daysRemaining()) }} to go.
-                                @endif
-                            </span>
-                        </div>
-                    @endunless
-
-                    <form method="POST" action="{{ route('class-adviser.health-records.endline.store', $editRecord) }}">
-                        @csrf
-                        <fieldset class="endline-fieldset" @disabled(! $endlineOpen)>
-                            <div class="student-grid">
-                                <div class="field">
-                                    <label for="endlineAge">Age</label>
-                                    <input id="endlineAge" name="age" type="number" min="2" max="25" step="1"
-                                           value="{{ old('age', $editRecord->endline_age ?? $editRecord->baseline_age) }}" required>
-                                </div>
-                                <div class="field">
-                                    <label for="endlineHeight">Height (cm)</label>
-                                    <input id="endlineHeight" name="height_cm" type="number" min="50" max="250" step="0.1"
-                                           value="{{ old('height_cm', $editRecord->endline_height_cm) }}" required>
-                                </div>
-                                <div class="field">
-                                    <label for="endlineWeight">Weight (kg)</label>
-                                    <input id="endlineWeight" name="weight_kg" type="number" min="5" max="300" step="0.1"
-                                           value="{{ old('weight_kg', $editRecord->endline_weight_kg) }}" required>
-                                </div>
-                                <div class="field">
-                                    <label>BMI</label>
-                                    {{-- Worked out, never typed: the server recalculates on save. --}}
-                                    <div class="endline-bmi" id="endlineBmi">{{ $editRecord->endline_bmi_value ?: '—' }}</div>
-                                </div>
-                            </div>
-
-                            <div class="endline-foot">
-                                <span class="muted" style="font-size:.74rem;">
-                                    @if ($editRecord->endline_nutritional_status)
-                                        Recorded {{ $editRecord->endline_recorded_at ?: '' }} &middot; {{ $editRecord->endline_nutritional_status }}
-                                    @else
-                                        BMI and nutritional status are worked out on save.
-                                    @endif
-                                </span>
-                                <button type="submit" class="btn" @disabled(! $endlineOpen)>Save endline</button>
-                            </div>
-                        </fieldset>
-                    </form>
+                    <div class="endline-baseline" data-endline-readonly>
+                        <span>Endline &middot;</span>
+                        @if ($endlineGrowth['endline']['measured'])
+                            <b>{{ $endlineGrowth['endline']['height_cm'] !== '' ? $endlineGrowth['endline']['height_cm'].' cm' : '—' }}</b>
+                            <b>{{ $endlineGrowth['endline']['weight_kg'] !== '' ? $endlineGrowth['endline']['weight_kg'].' kg' : '—' }}</b>
+                            <b>BMI {{ $endlineGrowth['endline']['bmi'] ?: '—' }}</b>
+                            <span class="muted">{{ $endlineGrowth['endline']['bmi_status'] ?: 'Not classified' }}{{ $endlineGrowth['endline']['hfa_status'] ? ' · '.$endlineGrowth['endline']['hfa_status'] : '' }}</span>
+                        @else
+                            <span class="muted">Not measured</span>
+                        @endif
+                    </div>
+                    <p class="muted" style="font-size:.74rem;margin:6px 0 0;">Recorded by the Feeding Program Coordinator.</p>
                 </section>
-
-                <script>
-                // Endline BMI preview. The server recalculates on save, so a
-                // tampered value could never become the stored one.
-                (() => {
-                    const h = document.getElementById('endlineHeight');
-                    const w = document.getElementById('endlineWeight');
-                    const out = document.getElementById('endlineBmi');
-                    if (!h || !w || !out) return;
-
-                    const recalc = () => {
-                        const height = parseFloat(h.value);
-                        const weight = parseFloat(w.value);
-                        out.textContent = (height > 0 && weight > 0)
-                            ? (weight / Math.pow(height / 100, 2)).toFixed(2)
-                            : '—';
-                    };
-
-                    h.addEventListener('input', recalc);
-                    w.addEventListener('input', recalc);
-                    recalc();
-                })();
-                </script>
 
                 {{-- Mark as left school (mid-year): the learner is archived and
                      kept five years, and leaves this section's roster. Not for
@@ -1530,8 +1461,9 @@ window.switchAdviserTab = (targetId) => {
     const bmiAgeOut = document.getElementById('nutriStatusDisplay');
     const hfaOut = document.getElementById('hfaDisplay');
     const genderInput = document.getElementById('gender');
+    const form = document.getElementById('studentForm');
 
-    if (!heightInput || !weightInput || !birthDate || !heightCmHidden || !heightSquaredOut || !bmiOut || !bmiAgeOut || !hfaOut || !window.WhoGrowth) {
+    if (!form || !heightInput || !weightInput || !birthDate || !heightCmHidden || !heightSquaredOut || !bmiOut || !bmiAgeOut || !hfaOut || !window.WhoGrowth) {
         return;
     }
 
@@ -1552,12 +1484,32 @@ window.switchAdviserTab = (targetId) => {
     };
 
     // A height and weight no learner of this age and sex could have holds the
-    // form back with the server's own message (MeasurementPlausibility), and
-    // no status is previewed for it.
+    // form back on its own field with the server's own message — a unit slip
+    // said as one (MeasurementPlausibility) — and no status is previewed for
+    // it. An unusual one shows the confirmation box, whose tick it then needs.
+    const confirmBox = form.querySelector('[data-measure-confirm]');
+    const confirmText = confirmBox?.querySelector('[data-measure-confirm-text]');
+    const confirmTick = confirmBox?.querySelector('input[type="checkbox"]');
+    const serverAsked = confirmText ? confirmText.textContent.trim() : '';
+
     const flagImplausible = (heightCm, weightKg, age, gender) => {
-        const found = window.WhoGrowth.problems(heightCm, weightKg, age, gender);
+        const result = window.WhoGrowth.check(heightCm, weightKg, age, gender);
+        const metresBox = toNum(heightInput.value);
+        // This form takes metres: 150 typed here is centimetres in the wrong box.
+        const heightSlip = metresBox !== null && metresBox >= 3
+            ? 'The height is entered in metres on this form, and ' + metresBox + ' looks like centimetres. Enter ' + (metresBox / 100).toFixed(2) + ' m.'
+            : '';
+        const found = { height: heightSlip || result.errors.height, weight: result.errors.weight };
         heightInput.setCustomValidity(found.height);
         weightInput.setCustomValidity(found.weight);
+
+        if (confirmBox) {
+            const unusual = !found.height && !found.weight && result.warnings.length > 0;
+            confirmBox.hidden = !unusual && serverAsked === '';
+            if (confirmText) confirmText.textContent = unusual ? result.warnings.join(' ') : serverAsked;
+            if (confirmTick) confirmTick.required = unusual;
+        }
+
         return found;
     };
 
@@ -1567,9 +1519,9 @@ window.switchAdviserTab = (targetId) => {
         const age = getAgeInMonths();
         const gender = genderInput ? genderInput.value : '';
 
-        if (!heightM || !weightKg || heightM <= 0 || weightKg <= 0 || heightM > 2.5) {
-            const heightOnly = heightM && heightM > 0 && heightM <= 2.5 ? heightM * 100 : null;
-            const found = flagImplausible(heightOnly, null, age, gender);
+        if (!heightM || !weightKg || heightM <= 0 || weightKg <= 0 || heightM >= 3) {
+            const heightOnly = heightM && heightM > 0 && heightM < 3 ? heightM * 100 : null;
+            const found = flagImplausible(heightOnly, weightKg && weightKg > 0 ? weightKg : null, age, gender);
             heightCmHidden.value = '';
             heightSquaredOut.textContent = '-';
             bmiOut.textContent = '-';
@@ -1608,6 +1560,8 @@ window.switchAdviserTab = (targetId) => {
     }
 
     node.textContent = new Date().toLocaleDateString('en-US', {
+        // The school's date, whatever the reading device is set to.
+        timeZone: @json(config('app.school_timezone')),
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -2364,18 +2318,18 @@ window.showAdviserSheet = (panelId) => {
     heightInput?.addEventListener('input', recalcBmi);
     weightInput?.addEventListener('input', recalcBmi);
 
-    // Allergy checkbox → reveal text input
-    const allergyCheck = document.getElementById('haAllergyCheck');
-    const allergyDetail = document.querySelector('input[name="med_allergies_detail"]');
-    allergyCheck?.addEventListener('change', () => {
-        if (allergyDetail) allergyDetail.style.display = allergyCheck.checked ? 'block' : 'none';
-    });
-
-    // Hospitalization checkbox → reveal text input
-    const hospCheck = document.getElementById('haHospCheck');
-    const hospDetail = document.querySelector('input[name="med_hospitalization_detail"]');
-    hospCheck?.addEventListener('change', () => {
-        if (hospDetail) hospDetail.style.display = hospCheck.checked ? 'block' : 'none';
+    // A detail typed for Allergies or Hospitalization / Surgery ticks its box
+    // (HealthHistory, testers' report #8): the detail is the answer that the
+    // learner has one, and a box left empty beside it read as "no". The
+    // server applies the same rule on save.
+    [['allergies_detail', 'med_allergies'], ['hospitalization_detail', 'med_hospitalization']].forEach(([detail, flag]) => {
+        const text = document.querySelector('input[name="health_history[' + detail + ']"]');
+        const box = document.querySelector('input[name="health_history[' + flag + ']"]');
+        const nothing = /^(wala|walay|none|no|n\/?a|nil|-)$/i;
+        text?.addEventListener('input', () => {
+            const value = text.value.trim();
+            if (box && value !== '' && !nothing.test(value)) box.checked = true;
+        });
     });
 
     // Level of consciousness "Other" radio → reveal text input

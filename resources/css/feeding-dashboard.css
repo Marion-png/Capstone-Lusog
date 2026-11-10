@@ -466,3 +466,9 @@
 	.dash-stack { grid-template-columns: minmax(0, 1fr); }
 	.att-scroll { max-height: 340px; }
 }
+
+/* Not Improving (FeedingWeighIns): who to act on before the programme ends. */
+.fc-not-improving { list-style: none; margin: 0; padding: 0 18px 16px; display: grid; gap: 8px; }
+.fc-not-improving li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .86rem; }
+.fc-not-improving a { color: var(--lg-ink); font-weight: 600; }
+.fc-not-improving .badge { margin-left: auto; }

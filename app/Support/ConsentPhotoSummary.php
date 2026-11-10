@@ -18,15 +18,12 @@ final class ConsentPhotoSummary
         $unreadable = ! empty($draft['unreadable']) || ! empty($draft['learner_mismatch']);
         $written = $draft['written'] ?? [];
         $exceptions = trim((string) ($written['consent_exceptions']['text'] ?? ''));
-        $excluded = $choice === HealthConsentForm::CONSENT_SPECIFIC
-            ? ConsentPaperCopy::exceptedServices($written['consent_exceptions'] ?? [], $draft['field_notes']['consent_exceptions'] ?? null)
-            : [];
-        // The reading of the rows the upload dialog files, so this summary and
-        // the list beside it cannot count different services.
-        $services = $draft['services'] ?? [];
-        $listed = ConsentPaperCopy::tickedServices($services, $offered);
-        $unsettled = ConsentPaperCopy::unsettledServices($services, $offered);
-        $refused = $choice === HealthConsentForm::CONSENT_DENY;
+        // Only the parent's own "gawas lamang niini" line excludes anything.
+        // Which services the learner is asked about is the system's: the
+        // school's list for the year and the rules (ConsentPaperCopy::proposal()
+        // starts the dialog's rows the same way). The school's list printed at
+        // the top of the paper is not read.
+        $excluded = $choice === HealthConsentForm::CONSENT_SPECIFIC ? ConsentPaperCopy::excepted($draft) : [];
 
         foreach (HealthConsentForm::PLANNED_SERVICES as $key => $label) {
             if (! ConsentStanding::appliesTo($key, $grade, $sex)) {
@@ -35,19 +32,13 @@ final class ConsentPhotoSummary
                 $group = 'not_offered';
             } elseif ($unreadable) {
                 $group = 'unclear';
-            } elseif (! $refused && in_array($key, $unsettled, true)) {
-                $group = 'unclear';
-            } elseif (! in_array($key, $listed, true) && ! in_array($key, $unsettled, true) && ($listed !== [] || ! $refused)) {
-                // Not shaded at the top: not offered, so not refused either.
-                // A refusal with nothing read at the top declines everything.
-                $group = 'not_offered';
             } else {
                 $group = match ($choice) {
                     HealthConsentForm::CONSENT_ALL => 'consented',
                     HealthConsentForm::CONSENT_DENY => 'declined',
-                    HealthConsentForm::CONSENT_SPECIFIC => $excluded === null
-                        ? 'unclear'
-                        : (HealthConsentForm::coversService($excluded, $key) ? 'declined' : 'consented'),
+                    // Exceptions that cannot be named exclude nothing yet: the
+                    // line is named for the adviser, who marks them.
+                    HealthConsentForm::CONSENT_SPECIFIC => HealthConsentForm::coversService($excluded ?? [], $key) ? 'declined' : 'consented',
                     default => 'unclear',
                 };
             }
@@ -55,7 +46,7 @@ final class ConsentPhotoSummary
             $groups[$group][] = $label;
         }
 
-        $checks = self::checks($draft, $grade, $choice, $excluded, $unreadable, $services, $sex, $offered);
+        $checks = self::checks($draft, $choice, $excluded, $unreadable);
         if ($groups['unclear'] !== [] && $checks === []) {
             $checks[] = ['section' => 'services', 'subject' => 'Service list', 'message' => 'Some service decisions need to be checked against the photo.'];
         }
@@ -109,12 +100,10 @@ final class ConsentPhotoSummary
      * order of the paper, top to bottom, so the adviser works down the sheet.
      *
      * @param  array<string, mixed>  $draft
-     * @param  array<string, string>  $services
      * @param  list<string>|null  $excluded
-     * @param  list<string>|null  $offered
      * @return list<array{section: string, subject: string, message: string}>
      */
-    private static function checks(array $draft, ?int $grade, string $choice, ?array $excluded, bool $unreadable, array $services, ?string $sex = null, ?array $offered = null): array
+    private static function checks(array $draft, string $choice, ?array $excluded, bool $unreadable): array
     {
         $checks = [];
         $add = function (string $section, string $subject, string $message) use (&$checks): void {
@@ -144,6 +133,9 @@ final class ConsentPhotoSummary
         // this one; the PETSA is at the top of the paper, so it is said first.
         if (! empty($draft['date_outside_school_year'])) {
             $add('sheet', 'Date (PETSA)', (string) ($draft['date_warning'] ?? '') ?: ConsentFormScanner::DATE_OUTSIDE_SCHOOL_YEAR);
+        } elseif (trim((string) ($draft['date_note'] ?? '')) !== '') {
+            // No year could be read: said softly, as something to look at.
+            $add('sheet', 'Date (PETSA)', (string) $draft['date_note']);
         }
 
         // The learner's name on the sheet is checked against the learner the
@@ -165,67 +157,11 @@ final class ConsentPhotoSummary
             default => $fields[$field],
         };
 
-        // ── The service list ───────────────────────────────────────────
-        // The reader's own notes about the list as a whole (a photo too wide to
-        // trust its rows, a count of marks that does not match them), then the
-        // rows. A refusal declines every row whatever its box reads, so the
-        // rows are not worth the adviser's time on one.
-        $wide = false;
-        foreach ((array) ($draft['warnings'] ?? []) as $warning) {
-            if (is_string($warning) && (str_starts_with($warning, 'This photo is wider') || str_starts_with($warning, 'The reader saw'))) {
-                $add('services', 'Service list', $warning);
-                $wide = $wide || str_starts_with($warning, 'This photo is wider');
-            }
-        }
-
-        // A photo too wide to trust has every row held back, which that one
-        // line already says; listing all eleven would only repeat it.
-        if ($choice !== HealthConsentForm::CONSENT_DENY && ! $wide) {
-            // A box that does not apply to this learner, or that the school does
-            // not offer, has nothing to settle. A heading (Pag Purga) is a box
-            // of its own, and is asked about when it is the one unclear.
-            $unsure = array_values(array_filter(
-                array_keys($services, ConsentFormScanner::UNCLEAR, true),
-                fn (string $key): bool => self::given($key, $grade, $sex, $offered),
-            ));
-            if ($unsure !== []) {
-                $add('services', 'Service list', 'Could not tell whether '.(count($unsure) === 1 ? 'this box is' : 'these boxes are').' ticked: '
-                    .implode(', ', array_map(self::paperName(...), $unsure)).'. Mark '.(count($unsure) === 1 ? 'it' : 'them').' from the paper.');
-            }
-        }
-
-        // ── The adviser's shading against the rules and the setting ────
-        // The adviser shades the services the School Nurse said to offer. A
-        // shading the rules or the school's Health Services Offered rule out —
-        // Iron for a male learner, MR, Td beyond Grade 7, a service the school
-        // does not give this year — is named, and read as Not applicable or
-        // Not offered rather than consented.
-        if (! $wide) {
-            $shaded = fn (string $key): bool => ($services[$key] ?? null) === ConsentFormScanner::TICKED;
-
-            foreach (HealthConsentForm::SERVICES as $key => $service) {
-                $named = false;
-
-                foreach (array_keys($service['children']) as $row) {
-                    $conflict = $shaded($row) ? ConsentStanding::shadingConflict($row, $grade, $sex, $offered) : null;
-                    if ($conflict !== null) {
-                        $add('services', self::paperName($row), $conflict);
-                        $named = true;
-                    }
-                }
-
-                // A heading shaded with no row under it given to this learner,
-                // and no row of its own shaded to say so already.
-                $conflict = $shaded($key) && ! $named ? ConsentStanding::boxConflict($key, $grade, $sex, $offered) : null;
-                if ($conflict !== null) {
-                    $add('services', self::paperName($key), $conflict);
-                }
-            }
-        }
-
         // ── The parent's answer ────────────────────────────────────────
+        // None marked, more than one, or a box nobody could make out: the
+        // adviser chooses the answer from the paper.
         if ($choice === ConsentFormScanner::UNCLEAR) {
-            $add('consent', 'Parent\'s answer', ($draft['consent_reason'] ?? '') ?: 'The parent\'s answer could not be read. Choose it from the paper.');
+            $add('consent', 'Parent\'s answer', ($draft['consent_reason'] ?? '') ?: ConsentFormScanner::ANSWER_UNDETERMINED.' Choose it from the paper.');
         }
 
         // ── Lines written by hand, and the boxes beside them ───────────
@@ -264,8 +200,18 @@ final class ConsentPhotoSummary
             }
         }
 
-        if ($choice === HealthConsentForm::CONSENT_SPECIFIC && $excluded === null && ! isset($checks['consent|'.$fields['consent_exceptions']])) {
-            $add('consent', $fields['consent_exceptions'], 'The services written after "gawas lamang niini" could not be matched to the list. Mark which ones the parent left out.');
+        if ($choice === HealthConsentForm::CONSENT_SPECIFIC && ! isset($checks['consent|'.$fields['consent_exceptions']])) {
+            $byLine = ConsentPaperCopy::exceptedServices($written['consent_exceptions'] ?? [], $draft['field_notes']['consent_exceptions'] ?? null);
+
+            if ($excluded === null) {
+                $add('consent', $fields['consent_exceptions'], 'The services written after "gawas lamang niini" could not be matched to the list. Mark which ones the parent left out.');
+            } elseif ($byLine === null) {
+                // Matched by the reader, not word for word: said with what it
+                // took them to be, so the adviser checks those rows.
+                $add('consent', $fields['consent_exceptions'], 'The services written after "gawas lamang niini" were read as '
+                    .implode('; ', array_map(fn (string $key): string => self::paperName($key), $excluded))
+                    .'. Check which ones the parent left out.');
+            }
         }
         if ($choice === HealthConsentForm::CONSENT_DENY && ! ConsentFormScanner::saysSomething((string) ($written['refusal_reason']['text'] ?? '')) && ! isset($checks['consent|'.$fields['refusal_reason']])) {
             $add('consent', $fields['refusal_reason'], 'No reason was read. Ask the parent for the reason.');
@@ -294,15 +240,31 @@ final class ConsentPhotoSummary
         $aboutSignature = $note !== '' && preg_match('/sign|pirma/i', $note) === 1;
         $parent = trim((string) ($draft['parent_guardian_name'] ?? ''));
 
-        if ($parent === '') {
-            $add('signature', 'Parent or guardian\'s name', 'No name was read at the signature line. Type it from the paper.');
-        } elseif (! empty($draft['field_notes']['parent_guardian_name'])) {
-            $add('signature', 'Parent or guardian\'s name', 'Read as "'.$parent.'", but the handwriting was hard to read. Check it against the paper.');
-        }
-        if (empty($draft['signature_present'])) {
-            $add('signature', 'Parent\'s signature', ($aboutSignature ? rtrim($note, '.') : 'No handwritten signature was found at the parent\'s signature line').'. Check that the parent signed.');
+        $nameNote = (string) ($draft['field_notes']['parent_guardian_name'] ?? '');
+        // A reading saved before these were read says it from the name and the
+        // signature themselves.
+        $named = (bool) ($draft['parent_name_present'] ?? ($parent !== '' || $nameNote !== ''));
+        $signed = ! empty($draft['signature_present']);
+
+        // Either one missing: the form is saved as incomplete and gives no
+        // service until a complete one is on file. Said in one entry, with
+        // which of the two is missing after it.
+        if (! $named || ! $signed) {
+            $missing = [];
+            if (! $named) {
+                $missing[] = 'No name was read at the signature line.';
+            }
+            if (! $signed) {
+                $missing[] = $aboutSignature ? rtrim($note, '.').'.' : 'No handwritten signature was found at the parent\'s signature line.';
+            }
+            $add('signature', 'Parent\'s name and signature', ConsentFormScanner::FORM_INCOMPLETE.'. '.implode(' ', $missing));
         } elseif ($aboutSignature) {
             $add('signature', 'Parent\'s signature', $note);
+        }
+        if ($named && $parent !== '' && $nameNote !== '') {
+            $add('signature', 'Parent or guardian\'s name', 'Read as "'.$parent.'", but the handwriting was hard to read. Check it against the paper.');
+        } elseif ($named && $parent === '' && $nameNote !== '') {
+            $add('signature', 'Parent or guardian\'s name', 'A name is written at the signature line, but it could not be read. Type it from the paper.');
         }
         if ($note !== '' && ! $aboutSignature) {
             $add('sheet', 'Reader\'s note', $note);
@@ -330,24 +292,16 @@ final class ConsentPhotoSummary
         return trim(explode(',', HealthConsentForm::ALLERGY_TEXT['allergy'])[0]);
     }
 
-    /** Whether a service is given to this learner: by the rules, and by the school's setting. */
-    private static function given(string $key, ?int $grade, ?string $sex, ?array $offered): bool
-    {
-        return ConsentStanding::shadingConflict($key, $grade, $sex, $offered) === null;
-    }
-
     /**
-     * A row of the service list by the first words printed on it — "Pag
-     * Purga", "Iron Supplementation" — so the adviser can find it on the sheet
-     * they are holding; the full printed line is in the reading beside it.
+     * A row of the service list by its whole printed name, never shortened —
+     * a heading (Pag Purga, Immunization) as printed without its colon, a row
+     * with the heading it sits under — as the reading beside it prints it.
      */
     private static function paperName(string $key): string
     {
-        // The "(sa mga lugar nga common / endemic …)" aside goes first: it has a
-        // slash of its own, and cutting at the slash would leave half of it.
-        $label = trim((string) preg_replace('/\s*\(sa [^)]*\)/u', '', (string) (ConsentFormScanner::serviceKeys()[$key] ?? $key)));
-
-        return rtrim(trim(explode(' / ', $label)[0]), ': ');
+        return isset(HealthConsentForm::PLANNED_SERVICES[$key])
+            ? HealthConsentForm::printedName($key)
+            : HealthConsentForm::headingName($key);
     }
 
     private static function writtenValue(array $draft, string $field, string $empty = 'None indicated'): string

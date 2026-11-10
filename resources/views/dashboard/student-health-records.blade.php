@@ -1158,26 +1158,32 @@
             const data = await resp.json();
 
             if (data.has_consent) {
-                setBadge('pConsentBadge', data.consent_type === 'refused'
-                    ? 'Declined'
-                    : (data.consent_type === 'partial' ? 'Partial' : 'Approved'));
+                // Missing the parent's name or signature: on file, but it
+                // gives no service until a complete form is filed.
+                setBadge('pConsentBadge', data.incomplete
+                    ? 'Incomplete'
+                    : (data.consent_type === 'refused' ? 'Refused' : 'Valid Consent'));
 
                 // Status banner colour by consent_type
-                const bannerStyle = data.consent_type === 'refused'
+                const bannerStyle = data.incomplete
+                    ? 'background:#FDF4E2;border:1px solid #fcd34d;color:#8A5A06;'
+                    : data.consent_type === 'refused'
                     ? 'background:#f3f4f6;border:1px solid #d1d5db;color:#374151;'
                     : data.consent_type === 'partial'
                         ? 'background:#FDF4E2;border:1px solid #fcd34d;color:#8A5A06;'
                         : 'background:#E7F5EC;border:1px solid #BFE3CC;color:#14653C;';
 
-                const consentLabel = data.consent_type === 'refused'
+                const consentLabel = data.incomplete
+                    ? 'Incomplete form: missing parent name or signature'
+                    : data.consent_type === 'refused'
                     ? 'Consent Refused'
                     : data.consent_type === 'partial'
                         ? 'Partial Consent on file'
                         : 'Full Consent on file';
 
-                const bannerIcon = data.consent_type === 'refused'
+                const bannerIcon = data.consent_type === 'refused' && !data.incomplete
                     ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
-                    : data.consent_type === 'partial'
+                    : data.consent_type === 'partial' || data.incomplete
                         ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
                         : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
 

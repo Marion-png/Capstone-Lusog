@@ -49,6 +49,13 @@ final class ConsentStanding
     public const RETURNED = 'returned';
 
     /**
+     * A signed form is on file, but it is missing the parent's name or their
+     * signature. Like RETURNED, only `badge()` returns it: `for()` keeps the
+     * learner PENDING, so no service is given until a complete form is filed.
+     */
+    public const INCOMPLETE = 'incomplete';
+
+    /**
      * The short label printed beside a learner, for every value `badge()` can
      * return. Typed once, so the profile's tab badge and the My Students
      * column cannot word one answer two ways.
@@ -56,10 +63,14 @@ final class ConsentStanding
      * @var array<string, string>
      */
     public const LABELS = [
-        self::APPROVED => 'Approved',
-        self::PARTIAL => 'Partial',
-        self::DECLINED => 'Declined',
+        // A learner's consent status, in three words: a full or partial
+        // consent is a Valid Consent, a refusal is Refused, and a form
+        // missing the parent's name or signature is Incomplete.
+        self::APPROVED => 'Valid Consent',
+        self::PARTIAL => 'Valid Consent',
+        self::DECLINED => 'Refused',
         self::RETURNED => 'Returned',
+        self::INCOMPLETE => 'Incomplete',
         self::PENDING => 'Pending',
     ];
 
@@ -97,16 +108,25 @@ final class ConsentStanding
 
     public const SERVICE_NOT_APPLICABLE = 'not_applicable';
 
+    /**
+     * The form on file is missing the parent's name or signature: whatever it
+     * answers, no service is given until a complete form is on file.
+     */
+    public const SERVICE_INCOMPLETE = 'incomplete';
+
     /** @var array<string, string> */
     public const SERVICE_LABELS = [
         self::SERVICE_CONSENTED => 'Consented',
         self::SERVICE_WITH_EXCEPTIONS => 'Consented with exceptions',
-        self::SERVICE_DECLINED => 'Declined',
+        // A service a refusal or a "yes, except" leaves out. One of the three
+        // words every service is read in: Consented, Excluded, Not offered.
+        self::SERVICE_DECLINED => 'Excluded',
         self::SERVICE_CHECK_EXCEPTIONS => 'Check the exceptions',
         self::SERVICE_NO_FORM => 'No form yet',
         self::SERVICE_NOT_ON_FORM => 'Not offered',
         self::SERVICE_NOT_ENROLLED => 'Not enrolled that year',
-        self::SERVICE_NOT_APPLICABLE => 'Not applicable',
+        self::SERVICE_NOT_APPLICABLE => 'Not offered',
+        self::SERVICE_INCOMPLETE => 'Incomplete form',
     ];
 
     /**
@@ -175,12 +195,12 @@ final class ConsentStanding
 
         if ($onlyGrade !== null && $grade !== $onlyGrade) {
             return 'Shaded, but it is given to Grade '.$onlyGrade.' learners only and this learner is '
-                .($grade !== null ? 'in Grade '.$grade : 'not in Grade '.$onlyGrade).'. It is read as Not applicable.';
+                .($grade !== null ? 'in Grade '.$grade : 'not in Grade '.$onlyGrade).'. It is read as Not offered.';
         }
 
         if (! self::appliesTo($service, $grade, $sex)) {
             return 'Shaded, but it is given to '.strtolower(self::SEX_ONLY_SERVICES[$service]).' learners only and this learner is '
-                .strtolower((string) $sex).'. It is read as Not applicable.';
+                .strtolower((string) $sex).'. It is read as Not offered.';
         }
 
         if (! HealthServicesOffered::isOffered($service, $offered)) {
@@ -213,7 +233,14 @@ final class ConsentStanding
     /** The standing one learner's consent is in. */
     public static function for(?HealthConsentForm $form, ?ParentalConsentForm $upload = null): string
     {
-        return match (self::answer($form, $upload)['choice'] ?? null) {
+        $answer = self::answer($form, $upload);
+
+        // An incomplete form authorises nothing, whatever it answers.
+        if (! empty($answer['incomplete'])) {
+            return self::PENDING;
+        }
+
+        return match ($answer['choice'] ?? null) {
             HealthConsentForm::CONSENT_DENY => self::DECLINED,
             HealthConsentForm::CONSENT_SPECIFIC => self::PARTIAL,
             HealthConsentForm::CONSENT_ALL => self::APPROVED,
@@ -297,6 +324,9 @@ final class ConsentStanding
                 'listed' => $services !== [],
                 'exceptions' => $choice === HealthConsentForm::CONSENT_SPECIFIC ? trim((string) $upload->partial_exception) : '',
                 'excluded' => $excluded,
+                // Filed without the parent's name or signature: its answer is
+                // kept, and gives no service until a complete form is on file.
+                'incomplete' => (bool) $upload->incomplete,
             ];
         }
 
@@ -328,6 +358,10 @@ final class ConsentStanding
 
         if ($answer === null) {
             return self::SERVICE_NO_FORM;
+        }
+
+        if (! empty($answer['incomplete'])) {
+            return self::SERVICE_INCOMPLETE;
         }
 
         $covered = HealthConsentForm::coversService($answer['services'], $service);
@@ -371,6 +405,10 @@ final class ConsentStanding
             return self::SERVICE_NOT_ENROLLED;
         }
 
+        if (! empty($answer['incomplete'])) {
+            return self::SERVICE_INCOMPLETE;
+        }
+
         return match ($answer['choice'] ?? null) {
             HealthConsentForm::CONSENT_DENY => self::SERVICE_DECLINED,
             HealthConsentForm::CONSENT_SPECIFIC => self::SERVICE_WITH_EXCEPTIONS,
@@ -392,6 +430,10 @@ final class ConsentStanding
     public static function badge(?HealthConsentForm $form, ?ParentalConsentForm $upload = null): string
     {
         $standing = self::for($form, $upload);
+
+        if ($standing === self::PENDING && (self::answer($form, $upload)['incomplete'] ?? false)) {
+            return self::INCOMPLETE;
+        }
 
         return $standing === self::PENDING && self::guardianReturnedPaperForm($upload)
             ? self::RETURNED

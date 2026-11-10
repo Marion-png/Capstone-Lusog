@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\AttendanceImport;
 use App\Models\FeedingAttendance;
+use App\Models\FeedingWeighIn;
 use App\Models\StudentHealthRecord;
 use App\Models\StudentPhoto;
 use App\Support\AccountSettings;
 use App\Support\AttendanceSheetParser;
 use App\Support\AttendanceSheetScanner;
 use App\Support\AuditTrail;
+use App\Support\BmiClassifier;
 use App\Support\EncryptedFileStorage;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceFlag;
@@ -18,6 +20,9 @@ use App\Support\FeedingAttendanceWindow;
 use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingNutritionProgress;
 use App\Support\FeedingProgramCycle;
+use App\Support\FeedingWeighIns;
+use App\Support\MeasurementPlausibility;
+use App\Support\NutritionalHealthStatus;
 use App\Support\SchemaCache;
 use App\Support\SchoolCalendar;
 use App\Support\SchoolClock;
@@ -29,6 +34,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Throwable;
 
@@ -174,7 +180,13 @@ class FeedingProgramController extends Controller
 
         $marksByRecord = FeedingBeneficiarySummary::marksByRecord($students);
 
-        $studentRows = $students->map(function (StudentHealthRecord $record) use ($marksByRecord, $rule, $flags): array {
+        // The optional progress weigh-ins (report #33), read once for the
+        // whole list, and only when the school records them.
+        $weighInsOn = FeedingWeighIns::enabled($institutionId ? (int) $institutionId : null);
+        $weighInsByRecord = $weighInsOn ? FeedingWeighIns::forRecords($students) : collect();
+
+        $studentRows = $students->map(function (StudentHealthRecord $record) use ($marksByRecord, $rule, $flags, $weighInsOn, $weighInsByRecord): array {
+            $weighIns = $weighInsByRecord->get($record->id, collect());
             // Attendance is counted over the sessions the rule judged: present
             // out of confirmed. An unconfirmed mark votes neither way, and the
             // cycle length is not a denominator — a learner is not 3% attended
@@ -201,7 +213,14 @@ class FeedingProgramController extends Controller
                 'baseline_status' => FeedingBeneficiarySummary::statusOf($record),
                 'endline_status' => $this->endlineStatus($record),
                 'baseline_weight' => $baselineWeight,
-                'current_weight' => $this->measurement($record->weight),
+                // A weight taken after the baseline — the endline, else the
+                // latest progress weigh-in — or null when nobody has re-weighed
+                // the learner. The baseline weight is not a current one:
+                // compared with itself it read "No change" (report #7).
+                'current_weight' => FeedingWeighIns::latestWeight($record, $weighIns),
+                // Improving or not at the latest weighing, with progress
+                // weigh-ins on; null with nothing yet to compare.
+                'progress' => $weighInsOn ? FeedingWeighIns::progress($record, $weighIns) : null,
                 // Null, not 0: no confirmed session is not a turnout of nothing.
                 'attendance' => $confirmedSessions > 0
                     ? $attendanceCount.'/'.$confirmedSessions.' sessions'
@@ -269,6 +288,20 @@ class FeedingProgramController extends Controller
             'gradeOptions' => $gradeOptions,
             'selectedGrade' => $selectedGrade,
             'attendanceRoster' => $this->buildAttendanceRoster($studentRows, $allMarks),
+            // Progress weigh-ins (report #33): whether the school records them,
+            // and who is not improving at their latest weighing, so they can be
+            // acted on before the programme ends.
+            'weighInsOn' => $weighInsOn,
+            'notImproving' => $studentRows
+                ->filter(fn (array $row): bool => ($row['progress'] ?? null) === FeedingWeighIns::NOT_IMPROVING)
+                ->map(fn (array $row): array => [
+                    'id' => $row['id'],
+                    'name' => (string) $row['student_name'],
+                    'class' => trim($row['grade_level'].' '.$row['section_name']),
+                    'url' => $activeRole === 'feeding_coor' ? route('feedingcor-program.beneficiary', $row['id']) : null,
+                ])
+                ->values()
+                ->all(),
         ];
     }
 
@@ -412,6 +445,7 @@ class FeedingProgramController extends Controller
                     'weight_change' => $baselineWeight === null || $currentWeight === null
                         ? null
                         : round($currentWeight - $baselineWeight, 1),
+                    'progress' => $student['progress'] ?? null,
                     'is_at_risk' => (bool) ($student['is_at_risk'] ?? false),
                     'sessions' => 0,
                     'present' => 0,
@@ -1215,6 +1249,16 @@ class FeedingProgramController extends Controller
             default => '',
         };
 
+        // Height-for-age, BMI and status for both weighings from the one
+        // reading every page uses (NutritionalHealthStatus), so this record
+        // and the Baseline report cannot disagree about a learner (report #9).
+        $growth = NutritionalHealthStatus::forRecord($learner);
+
+        // The optional progress weigh-ins, when the school records them
+        // (report #33). Off, the record is exactly as before.
+        $weighInsOn = FeedingWeighIns::enabled($institutionId ? (int) $institutionId : null);
+        $weighIns = $weighInsOn ? FeedingWeighIns::forRecords([$learner->id])->get($learner->id, collect()) : collect();
+
         return view('feedingcor-dashboard.beneficiary-detail', [
             'learner' => [
                 'id' => $learner->id,
@@ -1224,6 +1268,11 @@ class FeedingProgramController extends Controller
                 // Sex lives in the encrypted details blob, so it is read here
                 // rather than being a column anything could filter on.
                 'sex' => $this->resolveGenderLabel((string) ($details['gender'] ?? '')),
+                // For the measurement forms' check as it is typed: WHO reads
+                // the age in months on the day of the weighing.
+                'birth_date' => ! empty($details['birth_year']) && ! empty($details['birth_month']) && ! empty($details['birth_day'])
+                    ? sprintf('%04d-%02d-%02d', (int) $details['birth_year'], (int) $details['birth_month'], (int) $details['birth_day'])
+                    : '',
                 'school_year' => (string) $learner->school_year,
                 // The face the class adviser put on the record. Resolved here
                 // rather than fetched by the page: this record is one server
@@ -1241,9 +1290,7 @@ class FeedingProgramController extends Controller
                 'weight_kg' => $this->measurement($learner->baseline_weight_kg ?? $details['weight_kg'] ?? null),
                 'bmi' => $this->measurement($learner->baseline_bmi_value ?? $learner->bmi_value ?? $details['bmi_value'] ?? null),
                 'status' => trim((string) ($learner->baseline_nutritional_status ?: $learner->nutritional_status)),
-                // Height-for-age is classified by the adviser at entry time and
-                // kept in the encrypted details blob, not in its own column.
-                'height_for_age' => trim((string) ($details['nutritional_status_height_for_age'] ?? '')),
+                'height_for_age' => (string) $growth['baseline']['hfa_status'],
                 'recorded_at' => $learner->baseline_recorded_at?->format('F j, Y'),
             ],
             'endline' => [
@@ -1251,7 +1298,31 @@ class FeedingProgramController extends Controller
                 'weight_kg' => $this->measurement($learner->endline_weight_kg),
                 'bmi' => $this->measurement($learner->endline_bmi_value),
                 'status' => trim((string) $learner->endline_nutritional_status),
+                'height_for_age' => (string) $growth['endline']['hfa_status'],
                 'recorded_at' => $learner->endline_recorded_at?->format('F j, Y'),
+                // Who entered it and when, on the school's clock (report #32).
+                'entered_by' => trim((string) $learner->getAttribute('endline_entered_by')),
+                'entered_at' => $learner->getAttribute('endline_entered_at')
+                    ? SchoolClock::local($learner->getAttribute('endline_entered_at'))?->format('F j, Y g:i A')
+                    : null,
+            ],
+            'weighIns' => [
+                'enabled' => $weighInsOn,
+                'url' => route('feedingcor-program.beneficiary.weigh-in', $learner->id),
+                'checkpoints' => array_map(function (int $day) use ($weighIns): array {
+                    $taken = $weighIns->firstWhere('feeding_day', $day);
+
+                    return [
+                        'day' => $day,
+                        'taken' => $taken !== null,
+                        'weighed_on' => $taken?->weighed_on?->format('Y-m-d'),
+                        'height_cm' => $taken !== null ? $this->measurement($taken->height_cm) : null,
+                        'weight_kg' => $taken !== null ? $this->measurement($taken->weight_kg) : null,
+                    ];
+                }, FeedingWeighIns::CHECKPOINTS),
+                'trend' => $weighInsOn ? FeedingWeighIns::trend($learner, $weighIns) : [],
+                'progress' => $weighInsOn ? FeedingWeighIns::progress($learner, $weighIns) : null,
+                'today' => SchoolClock::today(),
             ],
             'endlineEdit' => [
                 'allowed' => $endlineNote === '',
@@ -1266,7 +1337,7 @@ class FeedingProgramController extends Controller
                 'today' => SchoolClock::today(),
             ],
             'program' => [
-                'enrolled_at' => $learner->feeding_enrolled_at?->format('F j, Y'),
+                'enrolled_at' => SchoolClock::local($learner->feeding_enrolled_at)?->format('F j, Y'),
                 'enrolled_by' => trim((string) $learner->feeding_enrolled_by),
                 // A removal is history the record keeps, not a deletion of the
                 // enrolment: this learner was fed, and the page has to say so
@@ -1303,6 +1374,77 @@ class FeedingProgramController extends Controller
             // learner's mark on each — see sessionCalendar().
             'sessionMonths' => $this->sessionCalendar($learner, $institutionId, $sessions),
         ]);
+    }
+
+    /**
+     * Record or correct one optional progress weigh-in (report #33): the
+     * coordinator's, at their own school, only while the school records
+     * progress weigh-ins. Classified on save with the functions the baseline
+     * is, after the same plausibility checks; one row per checkpoint, so a
+     * second entry for day 30 corrects the first. Audited through the model.
+     */
+    public function storeWeighIn(Request $request, int $record): RedirectResponse
+    {
+        if (! $this->isFeedingCoordinator($request)) {
+            return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can record a progress weigh-in.');
+        }
+
+        $institutionId = (int) $request->session()->get('active_institution_id');
+
+        $learner = StudentHealthRecord::query()
+            ->where('institution_id', $institutionId)
+            ->whereKey($record)
+            ->first();
+
+        abort_if($learner === null || $institutionId <= 0, 404);
+
+        if (! FeedingWeighIns::enabled($institutionId)) {
+            return back()->with('error', 'Progress weigh-ins are switched off for this school. Turn them on in Settings.');
+        }
+
+        $validated = $request->validateWithBag('weighIn', [
+            'feeding_day' => ['required', 'integer', 'in:'.implode(',', FeedingWeighIns::CHECKPOINTS)],
+            'weighed_on' => ['required', 'date', 'before_or_equal:'.SchoolClock::today()],
+            'height_cm' => MeasurementPlausibility::rule(),
+            'weight_kg' => MeasurementPlausibility::rule(),
+        ]);
+
+        $details = is_array($learner->student_details) ? $learner->student_details : [];
+
+        try {
+            MeasurementPlausibility::guard(
+                (float) $validated['height_cm'],
+                (float) $validated['weight_kg'],
+                BmiClassifier::ageAtMeasurement($details, $validated['weighed_on'], $learner->baseline_age),
+                isset($details['gender']) ? (string) $details['gender'] : null,
+                $request->boolean(MeasurementPlausibility::CONFIRM_FIELD),
+            );
+        } catch (ValidationException $e) {
+            throw $e->errorBag('weighIn');
+        }
+
+        $reading = FeedingWeighIns::classify($learner, (float) $validated['height_cm'], (float) $validated['weight_kg'], (string) $validated['weighed_on']);
+
+        $weighIn = FeedingWeighIn::query()->firstOrNew([
+            'student_health_record_id' => $learner->id,
+            'feeding_day' => (int) $validated['feeding_day'],
+        ]);
+
+        $weighIn->fill([
+            'institution_id' => $institutionId,
+            'school_year' => (string) $learner->school_year,
+            'weighed_on' => $validated['weighed_on'],
+            'height_cm' => (float) $validated['height_cm'],
+            'weight_kg' => (float) $validated['weight_kg'],
+            'bmi_value' => $reading['bmi'],
+            'nutritional_status' => $reading['status'],
+            'height_for_age' => $reading['height_for_age'],
+            'recorded_by_name' => (string) $request->session()->get('active_name', 'Feeding Program Coordinator'),
+        ])->save();
+
+        return redirect()
+            ->route('feedingcor-program.beneficiary', ['record' => $learner->id, 'tab' => 'profile'])
+            ->with('success', 'Day '.$validated['feeding_day'].' weigh-in saved: BMI '.number_format($reading['bmi'], 1).', '.$reading['status'].'.');
     }
 
     /**

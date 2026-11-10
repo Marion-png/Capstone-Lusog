@@ -13,8 +13,12 @@
 	@php
 		$weightChange = $row['weight_change'] === null ? null : (float) $row['weight_change'];
 		$hasAttendance = $row['sessions'] > 0;
+		// Nobody re-weighed since the baseline: there is no change to report,
+		// and the row says "Not measured" rather than "No change" (report #7).
 		[$statusBadge, $statusLabel] = match (true) {
-			$weightChange === null => ['badge-neutral', 'No baseline'],
+			$row['baseline_weight'] === null => ['badge-neutral', 'No baseline'],
+			$row['current_weight'] === null => ['badge-neutral', 'Not measured'],
+			($row['progress'] ?? null) === \App\Support\FeedingWeighIns::NOT_IMPROVING => ['badge-risk', 'Not improving'],
 			$weightChange > 1 => ['badge-normal', 'Improved'],
 			$weightChange < 0 => ['badge-risk', 'Declined'],
 			default => ['badge-neutral', 'No change'],

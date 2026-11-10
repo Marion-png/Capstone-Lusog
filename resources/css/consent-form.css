@@ -97,6 +97,7 @@ html, body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: v
 .cf-badge.is-consented { background: #E7F5EC; color: #14653C; }
 .cf-badge.is-consented_with_exceptions,
 .cf-badge.is-check_exceptions { background: #FDF4E2; color: #8A5A06; }
+.cf-badge.is-incomplete { background: #FDF4E2; color: #8A5A06; }
 .cf-badge.is-declined { background: #FCECEC; color: #A32B2B; }
 .cf-badge.is-no_form { background: #f1f5f9; color: #475569; }
 .cf-badge.is-not_on_form,

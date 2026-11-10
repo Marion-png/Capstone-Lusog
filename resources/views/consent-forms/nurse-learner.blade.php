@@ -23,7 +23,7 @@
     $photo = $detail['photo'];
     $letter = $detail['letter'];
     $upload = $detail['upload'];
-    $serviceName = $service !== '' ? HealthConsentForm::PLANNED_SERVICES[$service] : 'All services';
+    $serviceName = $service !== '' ? HealthConsentForm::printedName($service) : 'All services';
     $classLine = trim($detail['grade'].' – '.$detail['section'], ' –');
     $answered = $letter !== null && in_array($letter->status, [HealthConsentForm::STATUS_SIGNED, HealthConsentForm::STATUS_REVIEWED], true);
 @endphp
@@ -50,7 +50,7 @@
     <div class="cf-card">
         <div class="cf-card-head">
             <h2>{{ $serviceName }}</h2>
-            <span class="cf-badge is-{{ $detail['status'] }}">{{ ConsentStanding::SERVICE_LABELS[$detail['status']] }}</span>
+            <span class="cf-badge is-{{ $detail['status'] }}">{{ $service === '' && $detail['status'] === ConsentStanding::SERVICE_DECLINED ? 'Refused' : ConsentStanding::SERVICE_LABELS[$detail['status']] }}</span>
             <span class="cf-muted">LRN {{ $detail['lrn_masked'] }} &middot; SY {{ $detail['school_year'] }}</span>
             <a href="{{ $backUrl }}" class="cf-btn cf-btn-ghost cf-close">Close</a>
         </div>
@@ -60,7 +60,7 @@
             <div class="cf-card-body">
                 <p class="cf-empty-note"><b>No form yet.</b> Follow up with the class adviser.</p>
                 @if ($letter !== null && $letter->status === HealthConsentForm::STATUS_SENT)
-                    <p class="cf-muted">A letter was sent to the parent on {{ optional($letter->sent_at)->format('M j, Y') }} and has not been answered.</p>
+                    <p class="cf-muted">A letter was sent to the parent on {{ \App\Support\SchoolClock::local($letter->sent_at)?->format('M j, Y') }} and has not been answered.</p>
                 @endif
             </div>
         @endif

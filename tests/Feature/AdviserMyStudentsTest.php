@@ -76,8 +76,8 @@ class AdviserMyStudentsTest extends TestCase
                 'division' => 'Davao City',
                 'telephone_no' => '09171234567',
                 'gender' => 'Male',
-                'height_cm' => 110,
-                'weight_kg' => 18.5,
+                'height_cm' => 140,
+                'weight_kg' => 32,
                 'grade_level' => 'Grade 1',
                 'section' => 'Sampaguita',
             ], $overrides))
@@ -122,7 +122,7 @@ class AdviserMyStudentsTest extends TestCase
                 'lrn' => '123456789012', 'birth_date' => '2015-06-01',
                 'birthplace' => 'Davao City', 'parent_guardian' => 'Maria Dela Cruz',
                 'address' => '123 Mabini St.', 'telephone_no' => '09171234567',
-                'gender' => 'Male', 'height_cm' => 110, 'weight_kg' => 18.5,
+                'gender' => 'Male', 'height_cm' => 140, 'weight_kg' => 32,
                 'grade_level' => 'Grade 1', 'section' => 'Sampaguita',
             ]);
 
@@ -555,7 +555,7 @@ class AdviserMyStudentsTest extends TestCase
         $this->enrol([
             'address' => '456 Rizal St., Davao City',
             'telephone_no' => '09998887777',
-            'weight_kg' => 21.0,
+            'weight_kg' => 34.0,
             'systems_review' => ['resp_cough' => '1', 'dental_caries' => '1'],
         ]);
 
@@ -582,7 +582,7 @@ class AdviserMyStudentsTest extends TestCase
 
         $record = StudentHealthRecord::where('student_id', '123456789012')->first();
         $this->assertSame('456 Rizal St., Davao City', $record->student_details['address']);
-        $this->assertEquals(21.0, $record->baseline_weight_kg);
+        $this->assertEquals(34.0, $record->baseline_weight_kg);
     }
 
     /** @test */
@@ -602,8 +602,8 @@ class AdviserMyStudentsTest extends TestCase
             'lrn' => '123456789012', 'birth_date' => '2015-06-01', 'birthplace' => 'Davao City',
             'parent_guardian' => 'Maria Dela Cruz', 'address' => 'Edited address',
             'region' => 'XI', 'division' => 'Davao City',
-            'telephone_no' => '09171234567', 'gender' => 'Male', 'height_cm' => 112,
-            'weight_kg' => 19.0, 'grade_level' => 'Grade 1', 'section' => 'Sampaguita',
+            'telephone_no' => '09171234567', 'gender' => 'Male', 'height_cm' => 142,
+            'weight_kg' => 33.0, 'grade_level' => 'Grade 1', 'section' => 'Sampaguita',
         ])->assertRedirect(route('dashboard.class-adviser'));
 
         $row = collect(session('school_health_card_records'))
@@ -732,7 +732,7 @@ class AdviserMyStudentsTest extends TestCase
                 'birthplace' => 'Davao City', 'parent_guardian' => 'Maria Dela Cruz',
                 'address' => '123 Mabini St.', 'region' => 'XI',
                 'division' => 'Davao City', 'telephone_no' => '09171234567', 'gender' => 'Male',
-                'height_cm' => 110, 'weight_kg' => 18.5,
+                'height_cm' => 140, 'weight_kg' => 32,
                 'grade_level' => 'Grade 1', 'section' => 'Sampaguita',
                 'systems_review' => ['examiner_signature' => 'data:image/png;base64,'.str_repeat('A', 2_900_001)],
             ])
@@ -867,7 +867,7 @@ class AdviserMyStudentsTest extends TestCase
                 'birthplace' => 'Davao City', 'parent_guardian' => 'Maria Dela Cruz',
                 'address' => '123 Mabini St.', 'region' => 'XI',
                 'division' => 'Davao City', 'telephone_no' => '09171234567', 'gender' => 'Male',
-                'height_cm' => 110, 'weight_kg' => 18.5,
+                'height_cm' => 140, 'weight_kg' => 32,
                 'grade_level' => 'Grade 1', 'section' => 'Sampaguita',
                 'temperature_c' => 120,
                 'pulse_bpm' => 900,

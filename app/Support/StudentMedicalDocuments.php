@@ -79,7 +79,7 @@ class StudentMedicalDocuments
             'id' => $document->id,
             'file_name' => $document->file_original_name,
             'file_size' => $document->file_size,
-            'uploaded_at' => $document->created_at?->toDateString(),
+            'uploaded_at' => SchoolClock::local($document->created_at)?->toDateString(),
             'uploaded_by' => $document->uploaded_by_name,
             'uploaded_by_role' => self::roleLabel($document->uploaded_by_role),
             'condition_name' => $document->condition?->condition_name,

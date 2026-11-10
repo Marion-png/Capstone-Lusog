@@ -284,7 +284,8 @@ class MedicineBatches
             'institution_id' => $medicine->institution_id,
             'medicine_receipt_id' => null,
             'expiry_date' => $expiryDate !== null && $expiryDate !== '' ? Carbon::parse($expiryDate)->toDateString() : null,
-            'received_at' => Carbon::today()->toDateString(),
+            // The school's date: before 8 AM in Manila the server's is yesterday.
+            'received_at' => SchoolClock::today(),
             'quantity_received' => $quantity,
             'quantity_remaining' => $quantity,
             'source' => self::OPENING_SOURCE,

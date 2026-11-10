@@ -22,9 +22,10 @@ use Illuminate\Support\Collection;
  *
  *   sex                → student_details.gender (encrypted)
  *   baseline BMI-for-age → baseline_nutritional_status, else nutritional_status
- *   baseline HFA       → student_details.nutritional_status_height_for_age
- *   final BMI-for-age  → endline_nutritional_status
- *   final HFA          → recomputed from endline height and age (it is not stored)
+ *   baseline / final HFA → NutritionalHealthStatus::forRecord(), from that
+ *                          weighing's height and age — the reading every
+ *                          learner list prints
+ *   final BMI-for-age  → endline_nutritional_status, only with an endline weighing
  *
  * Because all of those are encrypted at rest, the counting runs in PHP over
  * fetched rows — never as a SQL GROUP BY.
@@ -105,29 +106,27 @@ final class BmiAssessmentReport
                 continue; // No sex on file — cannot place in a MALE/FEMALE row.
             }
 
-            // Baseline: BMI-for-age from the baseline column, HFA from the
-            // classification the adviser computed at entry time.
+            // Height-for-age at both weighings from the one reading every page
+            // uses (NutritionalHealthStatus), so the grid, the Insight under it
+            // and the learner lists cannot disagree about a learner (report #9).
+            $growth = NutritionalHealthStatus::forRecord($record);
+
+            // Baseline: BMI-for-age from the baseline column.
             if ($ns = self::nsColumn((string) ($record->baseline_nutritional_status ?: $record->nutritional_status))) {
                 $counts['bmib'][$gk][$sex][$ns]++;
             }
-            if ($hfa = self::hfaColumn((string) ($details['nutritional_status_height_for_age'] ?? ''))) {
+            if ($growth['baseline']['measured'] && ($hfa = self::hfaColumn((string) $growth['baseline']['hfa_status']))) {
                 $counts['bmib'][$gk][$sex][$hfa]++;
             }
 
-            // Final: only learners with an endline measurement contribute; HFA is
-            // recomputed from the endline height/age (endline HFA is not stored).
+            // Final: only learners with an endline weighing contribute
+            // (StudentHealthRecord::hasEndlineMeasurement — a status stamped
+            // with no weighing reads empty).
             if ($ns = self::nsColumn((string) $record->endline_nutritional_status)) {
                 $counts['bmif'][$gk][$sex][$ns]++;
             }
-            if ($record->endline_height_cm !== null) {
-                $endlineHfa = self::classifyHeightForAge(
-                    (float) $record->endline_height_cm,
-                    BmiClassifier::ageAtMeasurement($details, $record->endline_recorded_at, $record->endline_age),
-                    (string) ($details['gender'] ?? '')
-                );
-                if ($hfa = self::hfaColumn($endlineHfa)) {
-                    $counts['bmif'][$gk][$sex][$hfa]++;
-                }
+            if ($growth['endline']['measured'] && ($hfa = self::hfaColumn((string) $growth['endline']['hfa_status']))) {
+                $counts['bmif'][$gk][$sex][$hfa]++;
             }
         }
 

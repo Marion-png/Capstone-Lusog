@@ -250,9 +250,24 @@ class HealthConsentForm extends Model
         return [
             'key' => $key,
             'label' => self::serviceLabels()[$key] ?? $key,
+            // The heading and the row together, as one line.
+            'full' => $parent !== null ? trim(self::SERVICES[$parent]['label']).' '.(self::serviceLabels()[$key] ?? $key) : (self::serviceLabels()[$key] ?? $key),
             'group' => $parent !== null ? self::SERVICES[$parent]['label'] : null,
             'parent' => $parent,
         ];
+    }
+
+    /**
+     * A service's whole name exactly as the Sulat-Pahibalo prints it, never
+     * shortened: a row on its own line ("Iron Supplementation / Pagpainom ug
+     * Tambal para sa Kulang og Pula nga Dugo"), or a row with the heading it is
+     * indented under ("Pag Purga / Pagpainom ug Tambal sa: Pag Bitok / Worms").
+     */
+    public static function printedName(string $key): string
+    {
+        $printed = self::printedService($key);
+
+        return $printed['group'] !== null ? trim($printed['group']).' '.$printed['label'] : $printed['label'];
     }
 
     /** A heading as printed, without the colon that leads into its rows: "Pag Purga / Pagpainom ug Tambal sa". */

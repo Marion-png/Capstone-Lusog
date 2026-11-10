@@ -531,7 +531,7 @@ class FeedingAtRiskController extends Controller
         $openedOn = $standing['flagged'] ? ($standing['confirmation']['confirmed_on'] ?? null) : null;
         $latest = $followUps->first();
         $current = $standing['flagged'] ? $latest : null;
-        if ($current !== null && $openedOn !== null && $current->created_at?->toDateString() < $openedOn) {
+        if ($current !== null && $openedOn !== null && SchoolClock::local($current->created_at)?->toDateString() < $openedOn) {
             $current = null;
         }
 

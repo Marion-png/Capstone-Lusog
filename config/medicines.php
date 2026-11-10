@@ -116,8 +116,38 @@ return [
     |
     */
 
-    'generic_names' => [
-        'Antifungal cream' => 'Clotrimazole',
+    'generic_names' => [],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Items named by their class
+    |--------------------------------------------------------------------------
+    |
+    | "Antifungal cream" is a kind of medicine, not a medicine: its generic is
+    | whatever the clinic's product is, and only its label says which. So the
+    | form asks for it — empty, with this hint — rather than guessing one
+    | (testers' report #17: Povidone-iodine, an antiseptic, had been saved as
+    | the antifungal's generic). `generics` are the ones the class can be; a
+    | generic outside them is listed by `inventory:check-data` to correct.
+    |
+    | TODO (clinic): confirm the antifungal and antacid the school stocks and
+    | correct their generic names on the Medicine Inventory page.
+    |
+    */
+
+    'label_generics' => [
+        'Antifungal cream' => [
+            'hint' => 'Clotrimazole or Miconazole — as printed on the product',
+            'generics' => ['clotrimazole', 'miconazole', 'ketoconazole', 'terbinafine', 'tolnaftate', 'econazole', 'nystatin', 'butenafine'],
+        ],
+        'Antacid tablet' => [
+            'hint' => 'Aluminum hydroxide / Magnesium hydroxide — as printed on the product',
+            'generics' => ['aluminum hydroxide', 'magnesium hydroxide', 'calcium carbonate', 'simethicone', 'magnesium trisilicate', 'sodium bicarbonate'],
+        ],
+        'Multivitamins syrup' => [
+            'hint' => 'as printed on the product',
+            'generics' => [],
+        ],
     ],
 
     /*

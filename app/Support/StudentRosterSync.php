@@ -107,9 +107,11 @@ class StudentRosterSync
         $row['lrn'] = $lrn;
 
         // Posture / Gait reads Good or Poor; a record saved under the older
-        // Normal / Abnormal words is handed to every profile under the current ones.
+        // Normal / Abnormal words is handed to every profile under the current
+        // ones, and a detail written for Allergies or Hospitalization / Surgery
+        // reads with its box ticked (HealthHistory).
         if (isset($row['health_history']) && is_array($row['health_history'])) {
-            $row['health_history'] = PostureGait::normalizeHistory($row['health_history']);
+            $row['health_history'] = HealthHistory::normalize($row['health_history']);
         }
 
         // Nurse examination and feeding attendance live in their own columns.

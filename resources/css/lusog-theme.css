@@ -641,3 +641,20 @@ td strong { color: var(--lg-ink); font-weight: 600; }
 .nh-tab.active .nh-tab-label { color: #fff; }
 .nh-tab.active .nh-tab-hint { color: rgba(255,255,255,.78); }
 @media print { .nh-tabs { display: none !important; } }
+
+/* ── An unusual measurement, confirmed before it is saved
+      (partials/measurement-confirm, MeasurementPlausibility). Amber:
+      a reading to look at again, not an error. ── */
+.measure-confirm {
+	margin-top: 10px;
+	padding: 10px 12px;
+	border: 1px solid #EFDCB2;
+	border-radius: 10px;
+	background: var(--lg-amber-tint);
+	color: var(--lg-amber-ink);
+	font-size: .82rem;
+	line-height: 1.45;
+}
+.measure-confirm[hidden] { display: none; }
+.measure-confirm-text { margin: 0 0 8px; }
+.measure-confirm-tick { display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; }

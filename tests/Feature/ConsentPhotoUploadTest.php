@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\AuditLog;
 use App\Models\Institution;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use App\Support\ConsentFormScanner;
+use App\Support\ConsentStanding;
 use App\Support\SchemaCache;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -72,6 +74,7 @@ class ConsentPhotoUploadTest extends TestCase
                 'other_illness' => ['text' => 'Asthma', 'box' => 'yes', 'readable' => true, 'confident' => true],
             ],
             'field_notes' => [], 'signature_present' => true, 'learner_mismatch' => false,
+            'parent_name_present' => true, 'form_complete' => true,
             'warnings' => [], 'unclear' => [], 'needs_review' => false, 'unreadable' => false,
         ], $changes);
     }
@@ -195,13 +198,128 @@ class ConsentPhotoUploadTest extends TestCase
         $this->assertSame(0, ParentalConsentForm::count());
     }
 
+    /**
+     * Nothing is saved from the reader alone: the adviser may correct any of
+     * it, the answer included. The correction is filed with the reading it
+     * corrected, and the review log keeps both, for each service and field,
+     * so edited fields can be counted later.
+     */
     #[Test]
-    public function a_manual_answer_cannot_retain_a_conflicting_scan_summary(): void
+    public function an_answer_the_adviser_corrects_is_filed_and_the_review_logs_both_values(): void
     {
         $photo = $this->photo();
         $read = $this->scan($photo);
-        $this->upload($photo, $read['scan_token'], ['consent_type' => 'full'])->assertSessionHasErrors('scan_token');
-        $this->assertSame(0, ParentalConsentForm::count());
+        $before = AuditLog::count();
+
+        $this->upload($photo, $read['scan_token'], [
+            'consent_type' => 'full', 'answer_from_scan' => '0',
+            'services_confirmed' => '1', 'services' => ['checkup', 'dental'],
+            'allergy_food_detail' => 'Peanuts, shrimp', 'form_complete' => '1',
+        ])->assertSessionHasNoErrors();
+
+        $upload = ParentalConsentForm::sole();
+        $this->assertSame('full', $upload->consent_type);
+        $this->assertSame($read['draft'], $upload->scan_result);
+        $this->assertFalse((bool) $upload->incomplete);
+
+        $review = $upload->scan_review;
+        $this->assertSame(['vlm' => 'partial', 'final' => 'full', 'edited' => true], $review['fields']['consent_type']);
+        // "Deworming" excepted: the reader started Checkup Consented and the
+        // deworming rows Excluded; the adviser left Checkup and filed the
+        // deworming rows Not offered.
+        $this->assertSame(['vlm' => 'consented', 'final' => 'consented', 'edited' => false], $review['services']['checkup']);
+        $this->assertSame(['vlm' => 'excluded', 'final' => 'not_offered', 'edited' => true], $review['services']['deworming_worms']);
+        $this->assertSame(['vlm' => 'consented', 'final' => 'not_offered', 'edited' => true], $review['services']['vitamin_a']);
+        // Grade 7 MR, Td is not a Grade 8 learner's: Not offered on both sides.
+        $this->assertSame(['vlm' => 'not_offered', 'final' => 'not_offered', 'edited' => false], $review['services']['immunization_grade7']);
+        $this->assertSame(['vlm' => 'Peanuts', 'final' => 'Peanuts, shrimp', 'edited' => true], $review['fields']['allergy_food_detail']);
+        $this->assertSame(['vlm' => 'Asthma', 'final' => 'Asthma', 'edited' => false], $review['fields']['other_illness_detail']);
+        // The exceptions belonged to the partial answer the adviser replaced.
+        $this->assertSame(['vlm' => 'Deworming', 'final' => '', 'edited' => true], $review['fields']['partial_exception']);
+        $this->assertSame(['vlm' => true, 'final' => true, 'edited' => false], $review['fields']['form_complete']);
+        $this->assertSame($review['services_edited'] + $review['fields_edited'], $review['edited']);
+        $this->assertSame(3, $review['fields_edited']);
+
+        // Encrypted at rest: the parent's handwriting is in it.
+        $this->assertStringNotContainsString('Peanuts', (string) DB::table('parental_consent_forms')->value('scan_review'));
+
+        $this->assertTrue(AuditLog::where('id', '>', $before)
+            ->get()
+            ->contains(fn (AuditLog $log): bool => $log->description === 'Consent answer chosen by the class adviser in place of the photo reading'));
+    }
+
+    /** A reading the adviser filed unchanged logs no edit. */
+    #[Test]
+    public function a_reading_filed_as_read_logs_no_edit(): void
+    {
+        $photo = $this->photo();
+        $read = $this->scan($photo);
+
+        $this->upload($photo, $read['scan_token'], [
+            'services_confirmed' => '1',
+            'services' => $read['service_proposal']['partial']['approved'],
+            'excepted_services' => $read['service_proposal']['partial']['excluded'],
+            'form_complete' => '1',
+        ])->assertSessionHasNoErrors();
+
+        $review = ParentalConsentForm::sole()->scan_review;
+        $this->assertSame(0, $review['edited']);
+        $this->assertSame(['vlm' => 'partial', 'final' => 'partial', 'edited' => false], $review['fields']['consent_type']);
+    }
+
+    /**
+     * Missing the parent's name or signature: the form is saved as incomplete,
+     * its answer kept, and no service is given until a complete form is on
+     * file — on the clinic's list, the adviser's badge and the deworming gate.
+     */
+    #[Test]
+    public function a_form_missing_the_parents_name_or_signature_is_filed_as_incomplete_and_gives_no_service(): void
+    {
+        $photo = $this->photo();
+        $read = $this->scan($photo, ['signature_present' => false, 'form_complete' => false]);
+        $this->assertFalse($read['summary']['complete']);
+        $this->assertContains(
+            ['section' => 'signature', 'subject' => 'Parent\'s name and signature', 'message' => ConsentFormScanner::FORM_INCOMPLETE.'. No handwritten signature was found at the parent\'s signature line.'],
+            $read['summary']['checks'],
+        );
+
+        $this->upload($photo, $read['scan_token'], [
+            'services_confirmed' => '1',
+            'services' => $read['service_proposal']['partial']['approved'],
+            'excepted_services' => $read['service_proposal']['partial']['excluded'],
+            'form_complete' => '0',
+        ])->assertSessionHasNoErrors();
+
+        $upload = ParentalConsentForm::sole();
+        $this->assertTrue($upload->incomplete);
+        $this->assertSame('partial', $upload->consent_type);
+        $this->assertSame(['vlm' => false, 'final' => false, 'edited' => false], $upload->scan_review['fields']['form_complete']);
+
+        $this->assertSame(ConsentStanding::PENDING, ConsentStanding::for(null, $upload));
+        $this->assertSame(ConsentStanding::INCOMPLETE, ConsentStanding::badge(null, $upload));
+        $answer = ConsentStanding::answer(null, $upload);
+        $this->assertSame(ConsentStanding::SERVICE_INCOMPLETE, ConsentStanding::forService('checkup', 8, true, $answer));
+        $this->assertSame(ConsentStanding::SERVICE_INCOMPLETE, ConsentStanding::overall(true, $answer));
+        // A service the learner is never given still reads Not offered.
+        $this->assertSame(ConsentStanding::SERVICE_NOT_APPLICABLE, ConsentStanding::forService('immunization_grade7', 8, true, $answer));
+
+        $this->withSession($this->adviserSession())->getJson(route('api.student-consent-status', ['lrn' => '123456789012']))
+            ->assertOk()->assertJsonPath('incomplete', true);
+    }
+
+    /** The adviser's tick overrules a reader that missed the signature. */
+    #[Test]
+    public function the_adviser_can_confirm_a_signature_the_reader_missed(): void
+    {
+        $photo = $this->photo();
+        $read = $this->scan($photo, ['signature_present' => false, 'form_complete' => false]);
+
+        $this->upload($photo, $read['scan_token'], ['form_complete' => '1'])->assertSessionHasNoErrors();
+
+        $upload = ParentalConsentForm::sole();
+        $this->assertFalse((bool) $upload->incomplete);
+        $this->assertSame(['vlm' => false, 'final' => true, 'edited' => true], $upload->scan_review['fields']['form_complete']);
+        $this->assertSame(ConsentStanding::PARTIAL, ConsentStanding::for(null, $upload));
     }
 
     #[Test]

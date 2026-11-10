@@ -67,6 +67,7 @@ class FeedingOutcomeAnalyticsTest extends TestCase
             'nutritional_status' => $baseline,
             'baseline_nutritional_status' => $baseline,
             'endline_nutritional_status' => $endline,
+            'endline_weight_kg' => $endline !== null ? 40 : null,
             'feeding_enrolled_at' => now(),
         ]);
     }
@@ -226,6 +227,7 @@ class FeedingOutcomeAnalyticsTest extends TestCase
                 'nutritional_status' => 'Wasted',
                 'baseline_nutritional_status' => 'Wasted',
                 'endline_nutritional_status' => 'Normal',
+                'endline_weight_kg' => 40,
                 'feeding_enrolled_at' => now(),
             ]);
         }

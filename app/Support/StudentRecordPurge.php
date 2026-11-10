@@ -71,7 +71,7 @@ final class StudentRecordPurge
      *
      * @var array<string, list<string>>
      */
-    private const LRN_KEYED = [
+    public const LRN_KEYED = [
         'student_health_conditions' => [],
         'clinic_notes' => [],
         'student_incident_reports' => [],
@@ -101,11 +101,13 @@ final class StudentRecordPurge
      *
      * @var array<string, list<string>>
      */
-    private const RECORD_KEYED = [
+    public const RECORD_KEYED = [
         'health_assessments' => [],
         'feeding_attendances' => [],
         'feeding_follow_ups' => [],
         'feeding_attendance_confirmations' => [],
+        // The coordinator's optional progress weigh-ins (FeedingWeighIns).
+        'feeding_weigh_ins' => [],
         'parental_consent_forms' => ['file_path', 'med_cert_path'],
     ];
 

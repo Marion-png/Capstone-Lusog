@@ -53,7 +53,7 @@ final class WorkingSchoolYear
     /** "2027-2028": a year and the one after it. */
     public static function isSchoolYear(string $year): bool
     {
-        return preg_match('/^(\d{4})-(\d{4})$/', $year, $m) === 1 && (int) $m[2] === (int) $m[1] + 1;
+        return SchoolYear::isValid($year);
     }
 
     /**

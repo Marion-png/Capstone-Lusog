@@ -185,12 +185,14 @@
                             <td>
                                 <div class="consent-cell">
                                     @if ($rowConsent !== null)
-                                        @if ($rowConsent->consent_type === 'refused')
+                                        @if ($rowConsent->incomplete)
+                                            <span class="badge badge-monitor">Incomplete</span>
+                                        @elseif ($rowConsent->consent_type === 'refused')
                                             <span class="badge badge-neutral">Refused</span>
-                                        @elseif ($rowConsent->consent_type === 'partial')
-                                            <span class="badge badge-monitor">Partial</span>
+                                        @elseif (in_array($rowConsent->consent_type, ['full', 'partial'], true))
+                                            <span class="badge badge-normal">Valid Consent</span>
                                         @else
-                                            <span class="badge badge-normal">Full consent</span>
+                                            <span class="badge badge-neutral">Not recorded</span>
                                         @endif
 
                                         @if ($rowConsent->file_path !== null)

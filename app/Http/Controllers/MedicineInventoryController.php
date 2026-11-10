@@ -169,17 +169,39 @@ class MedicineInventoryController extends Controller
      * The item this school already stocks under a name, compared without
      * regard to case, spacing or punctuation — or null.
      */
-    private function stockedAs(mixed $institutionId, string $name): ?Medicine
+    private function stockedAs(mixed $institutionId, string $name, string $genericName = ''): ?Medicine
     {
         $wanted = MedicineCatalogue::comparableName($name);
         if ($wanted === '') {
             return null;
         }
 
+        // The same item under another name counts too (testers' report #15):
+        // the same generic, at the same strength, in the same form — "Biogesic
+        // 500mg tablet" beside "Paracetamol 500mg tablet".
+        $generic = MedicineCatalogue::comparableName($genericName !== '' ? $genericName : MedicineCatalogue::impliedGeneric($name));
+        $strengthForm = MedicineCatalogue::strengthAndForm($name);
+
         return Medicine::query()
             ->when($institutionId, fn ($query) => $query->where('institution_id', $institutionId))
-            ->get(['id', 'name'])
-            ->first(fn (Medicine $medicine): bool => MedicineCatalogue::comparableName((string) $medicine->name) === $wanted);
+            ->get(['id', 'name', 'generic_name'])
+            ->first(function (Medicine $medicine) use ($wanted, $generic, $strengthForm): bool {
+                if (MedicineCatalogue::comparableName((string) $medicine->name) === $wanted) {
+                    return true;
+                }
+
+                $theirs = MedicineCatalogue::comparableName((string) ($medicine->generic_name ?: MedicineCatalogue::impliedGeneric((string) $medicine->name)));
+
+                return $generic !== '' && $strengthForm !== ''
+                    && $theirs === $generic
+                    && MedicineCatalogue::strengthAndForm((string) $medicine->name) === $strengthForm;
+            });
+    }
+
+    /** What Add Medicine says of an item already on the shelf (testers' report #15). */
+    public static function alreadyStocked(Medicine $existing): string
+    {
+        return 'This medicine is already in the inventory ('.$existing->name.'). Use Receive Stock to add quantity.';
     }
 
     /**
@@ -245,26 +267,36 @@ class MedicineInventoryController extends Controller
         // Stock, never created twice: two rows for one medicine split its
         // stock, its usage and its forecast in half. Compared without regard to
         // case, spacing or punctuation, so a retyped name is caught too.
+        // A supply is not a drug, so there is no generic name to ask RxNorm
+        // for. The type the nurse chose (testers' report #16); a form that
+        // does not send one is read off the name, as before.
+        $postedType = (string) $request->input('item_type', '');
+        $isSupply = in_array($postedType, [Medicine::TYPE_MEDICINE, Medicine::TYPE_SUPPLY], true)
+            ? $postedType === Medicine::TYPE_SUPPLY
+            : MedicineCatalogue::isSupply($resolved['name']);
+
         $institutionId = $request->session()->get('active_institution_id');
-        $existing = $this->stockedAs($institutionId, $resolved['name']);
+        $existing = $this->stockedAs(
+            $institutionId,
+            $resolved['name'],
+            $isSupply ? '' : trim((string) $request->input('generic_name', '')),
+        );
 
         if ($existing !== null) {
             $request->session()->flash('duplicate_medicine_id', $existing->id);
         }
-
-        // A supply is not a drug, so there is no generic name to ask RxNorm for.
-        $isSupply = MedicineCatalogue::isSupply($resolved['name']);
 
         $validated = $request->validate([
             'name' => [
                 'bail', 'required', 'string', 'max:255',
                 function (string $attribute, mixed $value, \Closure $fail) use ($existing): void {
                     if ($existing !== null) {
-                        $fail($existing->name.' is already in the inventory. Use Receive Stock to add to it.');
+                        $fail(self::alreadyStocked($existing));
                     }
                 },
                 'unique:medicines,name',
             ],
+            'item_type' => ['nullable', 'in:'.Medicine::TYPE_MEDICINE.','.Medicine::TYPE_SUPPLY],
             // A reason is required only when the medicine is off the list.
             // Refusing an off-list entry outright would not stop the practice,
             // it would only stop the stock record being true.
@@ -289,7 +321,11 @@ class MedicineInventoryController extends Controller
         }
 
         $genericName = $isSupply ? '' : trim((string) ($validated['generic_name'] ?? ''));
-        unset($validated['generic_name']);
+        unset($validated['generic_name'], $validated['item_type']);
+
+        if (Medicine::supportsItemType()) {
+            $validated['item_type'] = $isSupply ? Medicine::TYPE_SUPPLY : Medicine::TYPE_MEDICINE;
+        }
 
         // The stock an item is created with is its first lot, at the date
         // typed for it, so the shelf can say which box goes first from the
@@ -342,7 +378,7 @@ class MedicineInventoryController extends Controller
                 ->with('error', 'The allergy check is not available until the database has been updated.');
         }
 
-        if (MedicineCatalogue::isSupply((string) $medicine->name)) {
+        if ($medicine->isSupply()) {
             return redirect()
                 ->route('dashboard.medicine-inventory')
                 ->with('error', $medicine->name.' is a supply, not a medicine, so it has no generic name to check.');

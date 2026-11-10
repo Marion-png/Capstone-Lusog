@@ -102,7 +102,7 @@ class NurseConsentListTest extends TestCase
     // ── Spec test 1 ──────────────────────────────────────────────────
 
     #[Test]
-    public function immunization_is_not_applicable_outside_grade_7_and_is_left_out_of_the_counts(): void
+    public function immunization_is_not_offered_outside_grade_7_and_is_left_out_of_the_counts(): void
     {
         foreach ([['100000000007', 7], ['100000000008', 8], ['100000000009', 9], ['100000000010', 10]] as [$lrn, $grade]) {
             $this->record($lrn, 'Learner '.$grade, $grade);
@@ -111,7 +111,7 @@ class NurseConsentListTest extends TestCase
 
         $html = $this->list(['service' => 'immunization_grade7']);
 
-        $this->assertSame(3, substr_count($html, '>Not applicable</span>'));
+        $this->assertSame(3, substr_count($html, 'is-not_applicable">Not offered</span>'));
         $this->assertSame(1, substr_count($html, '>Consented</span>'));
         $this->assertMatchesRegularExpression($this->card('Consented', '1'), $html);
         $this->assertStringContainsString('of 1 learner this service applies to', $html);
@@ -304,7 +304,7 @@ class NurseConsentListTest extends TestCase
         $html = $this->withSession($this->readerSession())
             ->get(route('consent-forms.nurse-learner', ['record' => $record->id, 'service' => 'dental']))
             ->assertOk()
-            ->assertSee('Dental check-up')
+            ->assertSee(HealthConsentForm::printedName('dental'))
             ->assertSee('>Check the exceptions</span>', false)
             ->assertSee('All required fields completed.')
             ->assertSee('Valid for all service cycles in SY')

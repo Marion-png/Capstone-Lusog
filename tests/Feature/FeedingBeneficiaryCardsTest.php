@@ -67,6 +67,10 @@ class FeedingBeneficiaryCardsTest extends TestCase
             'nutritional_status' => $status,
             'baseline_nutritional_status' => $status,
             'endline_nutritional_status' => $endline,
+            // An endline status stands only with the weighing that gave it
+            // (StudentHealthRecord::hasEndlineMeasurement).
+            'endline_height_cm' => $endline !== null ? 140 : null,
+            'endline_weight_kg' => $endline !== null ? 32 : null,
             'student_details' => ['gender' => $sex],
             'feeding_enrolled_at' => $enrolled ? now() : null,
         ]);

@@ -413,7 +413,7 @@ class NutritionCoordinatorController extends Controller
 
     private function hasEndline(StudentHealthRecord $record): bool
     {
-        return $record->endline_bmi_value !== null || $record->endline_nutritional_status !== null;
+        return $record->hasEndlineMeasurement();
     }
 
     private function statusKey(string $status): string

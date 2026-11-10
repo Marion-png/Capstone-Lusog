@@ -1279,6 +1279,12 @@ Route::post('/dashboard/feedingcor-program/beneficiary/{record}/endline', [Stude
     ->whereNumber('record')
     ->name('feedingcor-program.beneficiary.endline');
 
+// An optional progress weigh-in (day 30, 60 or 90) on that record, while the
+// school records them (FeedingWeighIns). The coordinator's alone.
+Route::post('/dashboard/feedingcor-program/beneficiary/{record}/weigh-in', [FeedingProgramController::class, 'storeWeighIn'])
+    ->whereNumber('record')
+    ->name('feedingcor-program.beneficiary.weigh-in');
+
 // Correcting one learner's mark for one session. Keyed by learner and date, so
 // the same path fixes a wrong mark and fills one a sheet skipped; every
 // correction is attributed and audited with the value it replaced.
@@ -1750,6 +1756,12 @@ Route::post('/dashboard/settings/assignment', [SettingsController::class, 'updat
 // school does not give reads Not offered on every consent form.
 Route::post('/dashboard/settings/health-services', [SettingsController::class, 'updateHealthServices'])
     ->name('settings.health-services');
+
+// The Feeding Program Coordinator's Progress weigh-ins switch: whether the
+// school records optional day-30/60/90 weigh-ins (FeedingWeighIns). OFF by
+// default; turning it off hides them and keeps what was recorded.
+Route::post('/dashboard/settings/progress-weigh-ins', [SettingsController::class, 'updateProgressWeighIns'])
+    ->name('settings.progress-weigh-ins');
 
 Route::post('/logout', function (Request $request) {
     AuditTrail::record('logout', null, null, 'Logged out');

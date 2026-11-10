@@ -202,6 +202,9 @@ class FeedingProgramPageTest extends TestCase
     {
         $this->makeStudent([
             'weight' => 20.0,
+            // Re-weighed at endline: the weight the change is read against
+            // is a weighing taken after the baseline (report #7).
+            'endline_weight_kg' => 20.0,
             'baseline_weight_kg' => 18.0,
             'baseline_bmi_value' => 12.5,
         ]);

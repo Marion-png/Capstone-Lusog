@@ -34,7 +34,7 @@
 
     @if ($locked)
         <div class="cf-flash cf-flash-ok">
-            This consent form was submitted on <b>{{ optional($form->signed_at)->format('F j, Y g:i A') }}</b> and can no longer be edited.
+            This consent form was submitted on <b>{{ \App\Support\SchoolClock::local($form->signed_at)?->format('F j, Y g:i A') }}</b> and can no longer be edited.
         </div>
         @include('consent-forms._document', ['form' => $form, 'mode' => 'locked'])
     @else

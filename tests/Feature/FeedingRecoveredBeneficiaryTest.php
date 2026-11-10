@@ -58,15 +58,14 @@ class FeedingRecoveredBeneficiaryTest extends TestCase
             'is_present' => true,
         ]);
 
+        // The coordinator weighs the endline (testers' report #32).
         $this->withSession([
-            'active_role' => 'class_adviser',
-            'active_name' => 'Maria Santos',
-            'active_username' => 'adviser.santos',
+            'active_role' => 'feeding_coor',
+            'active_name' => 'Feeding Coordinator',
+            'active_username' => 'feedcor.test',
             'active_school_name' => 'Test School',
             'active_institution_id' => $this->school->id,
-            'assigned_grade_level' => 'Grade 7',
-            'assigned_section' => 'Matiyaga',
-        ])->post(route('class-adviser.health-records.endline.store', $this->recovered), [
+        ])->post(route('feedingcor-program.beneficiary.endline', $this->recovered), [
             'age' => 13,
             'height_cm' => 145,
             'weight_kg' => 46,

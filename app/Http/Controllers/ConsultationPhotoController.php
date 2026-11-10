@@ -6,6 +6,7 @@ use App\Models\Consultation;
 use App\Models\ConsultationPhoto;
 use App\Support\EncryptedFileStorage;
 use App\Support\SchemaCache;
+use App\Support\SchoolClock;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -193,7 +194,7 @@ class ConsultationPhotoController extends Controller
             'id' => $photo->id,
             'url' => route('consultation-photos.view', $photo),
             'caption' => (string) $photo->caption,
-            'taken_label' => $photo->created_at?->format('M j, Y \a\t g:i A'),
+            'taken_label' => SchoolClock::local($photo->created_at)?->format('M j, Y \a\t g:i A'),
             'file_name' => (string) $photo->file_original_name,
             'file_size' => $photo->file_size,
             'uploaded_by' => (string) $photo->uploaded_by_name,

@@ -8,6 +8,7 @@ use App\Support\AdviserClassScope;
 use App\Support\EncryptedFileStorage;
 use App\Support\LearnerPlacement;
 use App\Support\SchemaCache;
+use App\Support\SchoolClock;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -76,7 +77,7 @@ class StudentPhotoController extends Controller
             'has_photo' => $photo !== null,
             'url' => $photo !== null ? route('student-photo.show', $lrn) : null,
             'uploaded_by' => (string) ($photo?->uploaded_by_name ?? ''),
-            'uploaded_at' => $photo?->updated_at?->format('M j, Y'),
+            'uploaded_at' => SchoolClock::local($photo?->updated_at)?->format('M j, Y'),
             'may_manage' => $this->mayWrite($request, $lrn),
         ]);
     }

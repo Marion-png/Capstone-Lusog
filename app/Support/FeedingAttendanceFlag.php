@@ -529,8 +529,8 @@ final class FeedingAttendanceFlag
     {
         return [
             'stage' => (string) $row->stage,
-            'confirmed_on' => $row->created_at?->toDateString(),
-            'date_label' => $row->created_at?->format('M j, Y') ?? '—',
+            'confirmed_on' => SchoolClock::local($row->created_at)?->toDateString(),
+            'date_label' => SchoolClock::local($row->created_at)?->format('M j, Y') ?? '—',
             'by' => trim((string) $row->confirmed_by_name),
             'absences' => (int) $row->absences,
             'run_started_on' => $row->run_started_on?->toDateString(),

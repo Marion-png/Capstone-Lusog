@@ -143,4 +143,8 @@
     @if (! empty($healthServices))
         @include('partials.settings-health-services')
     @endif
+
+    @if (! empty($progressWeighIns))
+        @include('partials.settings-progress-weigh-ins')
+    @endif
 </div>

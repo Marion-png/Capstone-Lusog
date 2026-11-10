@@ -118,7 +118,7 @@ class ConsentHistoryTest extends TestCase
                 'parent_guardian' => 'Maria Dela Cruz', 'address' => '123 Mabini St.',
                 'region' => 'XI', 'division' => 'Davao City',
                 'telephone_no' => '09171234567', 'gender' => 'Male',
-                'height_cm' => 110, 'weight_kg' => 18.5,
+                'height_cm' => 140, 'weight_kg' => 32,
                 'grade_level' => 'Grade 1', 'section' => 'Sampaguita',
             ])->assertRedirect();
 
@@ -260,7 +260,7 @@ class ConsentHistoryTest extends TestCase
             ->assertSee('•••••••11111')
             ->assertSee('>Consented</span>', false)
             ->assertSee('•••••••22222')
-            ->assertSee('>Declined</span>', false)
+            ->assertSee('>Refused</span>', false)
             ->assertDontSee('111111111111')
             ->assertDontSee('222222222222');
 
@@ -319,7 +319,7 @@ class ConsentHistoryTest extends TestCase
         $this->flushSession()->withSession($this->nurseSession())
             ->get(route('consent-forms.nurse-index', ['school_year' => $last]))
             ->assertOk()
-            ->assertSee('>Declined</span>', false)
+            ->assertSee('>Refused</span>', false)
             ->assertDontSee('>Consented</span>', false);
     }
 }

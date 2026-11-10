@@ -77,7 +77,7 @@ class MedicineUsage
             ->get(['medicine_id', 'quantity', 'dispensed_at'])
             ->groupBy('medicine_id')
             ->map(fn (Collection $rows): Collection => $rows
-                ->groupBy(fn (MedicineDispense $row): string => $row->dispensed_at->format('Y-m'))
+                ->groupBy(fn (MedicineDispense $row): string => SchoolClock::local($row->dispensed_at)?->format('Y-m'))
                 ->map(fn (Collection $inMonth): int => (int) $inMonth->sum('quantity'))
             ));
     }

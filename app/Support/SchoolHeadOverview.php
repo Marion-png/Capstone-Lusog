@@ -211,30 +211,23 @@ final class SchoolHeadOverview
         ];
     }
 
-    /** The school years this school has records for, newest first. */
+    /**
+     * The school years this school has records for, newest first, with the
+     * current one always among them (SchoolYear::options()): a year nobody has
+     * a record in, a future one included, is never offered.
+     *
+     * @return list<string>
+     */
     public static function schoolYears(?int $institutionId): array
     {
-        $current = StudentHealthRecord::currentSchoolYear();
-
         if (! $institutionId || ! SchemaCache::hasTable('student_health_records')) {
-            return [$current];
+            return SchoolYear::options([]);
         }
 
-        $years = StudentHealthRecord::query()
+        return SchoolYear::options(StudentHealthRecord::query()
             ->where('institution_id', $institutionId)
             ->distinct()
-            ->orderByDesc('school_year')
-            ->pluck('school_year')
-            ->filter()
-            ->values()
-            ->all();
-
-        if (! in_array($current, $years, true)) {
-            $years[] = $current;
-            rsort($years);
-        }
-
-        return $years;
+            ->pluck('school_year'));
     }
 
     /**
@@ -247,9 +240,7 @@ final class SchoolHeadOverview
      */
     public static function defaultYear(array $years): string
     {
-        $current = StudentHealthRecord::currentSchoolYear();
-
-        return in_array($current, $years, true) ? $current : ($years[0] ?? $current);
+        return SchoolYear::pick(null, $years);
     }
 
     /**

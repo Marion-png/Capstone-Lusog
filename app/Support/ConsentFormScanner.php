@@ -32,9 +32,10 @@ use Throwable;
  *    absence, but the stakes here are higher, so nothing is ever auto-saved.
  *
  * 2. **The model matches, it does not invent.** It is handed the exact service
- *    list from HealthConsentForm::SERVICES and may only answer about those
- *    keys. It cannot return a service the form does not have, and it is never
- *    asked to identify anybody from a signature — only whether one is present.
+ *    list from HealthConsentForm::SERVICES and may only name those keys, as
+ *    the services the parent wrote on the "gawas lamang niini" line. It cannot
+ *    return a service the form does not have, and it is never asked to
+ *    identify anybody from a signature — only whether one is present.
  *
  * 3. **"Unclear" is a first-class answer.** A box that is smudged, hidden or
  *    ambiguous comes back UNCLEAR rather than being guessed either way, and
@@ -47,9 +48,14 @@ use Throwable;
  *
  * 4. **The model reports the boxes; the server decides the consent.** Whether
  *    the parent agreed is the one answer on the sheet that matters most, and
- *    it lives in three boxes of its own under "TIMAAN SA PAGDAWAT…" — not in
- *    the service list at the top, which says what the sheet covers. So the
- *    model is asked to describe each of the three boxes, then what is in
+ *    it lives in three boxes of its own under "TIMAAN SA PAGDAWAT…" — never in
+ *    the service list at the top, which is the school's offer. That list is
+ *    not read at all (a dentist check-up left unshaded there was once taken
+ *    for one the parent refused): the response schema has no field for it,
+ *    and everything the parent answers comes back grouped as `parent_reply` —
+ *    the three boxes, the services written on the "gawas lamang niini" line
+ *    (`excluded_services`), the allergy section, the name and the signature.
+ *    The model describes each of the three boxes, then what is in
  *    it, and `decideConsent()` rules on the answers: exactly one ticked and
  *    the other two clearly empty is an answer; none, two, or any box it could
  *    not make out is UNCLEAR, with the reason — and what the model saw — said
@@ -63,13 +69,11 @@ use Throwable;
  *    because its answers would authorise — or withhold — a procedure on a
  *    child whose parent never gave them.
  *
- * 6. **A sheet is read upright or not at all.** The service rows are 1% of the
- *    sheet apart, and on a sideways photo the reader put ticks confidently on
- *    the wrong row. So it says which way the sheet lies, a sheet that is not
- *    upright proposes nothing, and `turn` tells the page how far to turn the
- *    photo before it asks again. That rests on the model noticing, so a photo
- *    wider than it is tall gets no service rows from it either way: the sheet is
- *    portrait, so a wide photo of it is sideways whatever the reader says.
+ * 6. **A sheet is read upright or not at all.** The boxes sit close together,
+ *    and on a sideways photo the reader put ticks confidently on the wrong
+ *    row. So it says which way the sheet lies, a sheet that is not upright
+ *    proposes nothing, and `turn` tells the page how far to turn the photo
+ *    before it asks again.
  *
  * Requires GEMINI_API_KEY (the same key and model as the masterlist reader).
  * Without one the feature is simply unavailable and the adviser fills the form
@@ -102,10 +106,51 @@ class ConsentFormScanner
     public const DATE_OUTSIDE_SCHOOL_YEAR = 'This form is dated outside the selected school year.';
 
     /**
+     * Said, softly, when no year can be read off the PETSA: no proof the form
+     * is old, and no proof it is current (testers' report #31).
+     */
+    public const DATE_UNREAD = 'Date could not be read; please check the form.';
+
+    /**
      * Said when an allergy or illness box is shaded and nothing is written on
      * its line: the parent said the child has one and not which.
      */
     public const BOX_TICKED_NO_DETAILS = 'Box ticked but no details written — check with the parent.';
+
+    /**
+     * Said when no single consent box can be read as the parent's answer —
+     * none marked, more than one, or a box nobody could make out. The adviser
+     * chooses the answer from the paper.
+     */
+    public const ANSWER_UNDETERMINED = 'The parent\'s answer could not be determined.';
+
+    /**
+     * Said when the parent's name or signature is missing from the sheet. A
+     * form without both is saved as incomplete and gives no service until a
+     * complete one is on file.
+     */
+    public const FORM_INCOMPLETE = 'Missing parent name or signature';
+
+    /**
+     * Said when the reader's JSON leaves out one of the parent's consent boxes:
+     * a part of a reading is not shown in place of the whole, so the form is
+     * filled in from the paper instead.
+     */
+    public const READING_INCOMPLETE = 'The reader did not return an answer for every consent box, so nothing was filled in.';
+
+    /**
+     * The parent's answer, in the words the system logic uses for it: one of
+     * the three boxes, or why none of them can be taken as the answer.
+     */
+    public const ANSWER_FULL = 'full';
+
+    public const ANSWER_PARTIAL = 'partial';
+
+    public const ANSWER_REFUSED = 'refused';
+
+    public const ANSWER_NONE_MARKED = 'none_marked';
+
+    public const ANSWER_MULTIPLE_MARKED = 'multiple_marked';
 
     /**
      * The parent's three consent boxes, keyed by the answer each one gives,
@@ -242,7 +287,7 @@ class ConsentFormScanner
      *     consent_boxes: array<string, string>,
      *     allergy_boxes: array<string, string>,
      *     consent_reason: string,
-     *     services: array<string, string>,
+     *     excluded_services: list<string>,
      *     written: array<string, array{text: string, confident: bool, readable: bool, box?: string}>,
      *     field_notes: array<string, string>,
      *     warnings: list<string>,
@@ -264,45 +309,16 @@ class ConsentFormScanner
             throw new RuntimeException('Consent scanning is not configured. Set GEMINI_API_KEY.');
         }
 
-        return self::holdBackWidePhoto(
-            self::interpret($this->decode($this->ask($photo, $closeups))),
-            $photo,
-        );
-    }
-
-    /**
-     * The service rows off a photo wider than it is tall, which the reader has
-     * called upright. Each row is a medical authorisation and they are the part
-     * of the sheet a sideways photo gets wrong, so they go to the adviser to
-     * settle from the paper. The size is measured, not reported, so this holds
-     * whatever the model believes about the photo.
-     *
-     * @param  array<string, mixed>  $draft  what interpret() returned
-     * @return array<string, mixed>
-     */
-    private static function holdBackWidePhoto(array $draft, UploadedFile $photo): array
-    {
-        $size = @getimagesize((string) $photo->getRealPath());
-
-        if (($draft['unreadable'] ?? false) || $size === false || $size[0] <= $size[1]) {
-            return $draft;
-        }
-
-        $draft['services'] = array_map(fn (): string => self::UNCLEAR, $draft['services']);
-        $draft['unclear'] = array_values(array_unique([...$draft['unclear'], ...array_values(self::serviceKeys())]));
-        $draft['warnings'][] = 'This photo is wider than it is tall, so the service rows were not read from it. Check them against the paper.';
-        $draft['needs_review'] = true;
-
-        return $draft;
+        return self::interpret($this->decode($this->ask($photo, $closeups)));
     }
 
     /**
      * One image for the request, at the most detail it can have.
      *
      * A model gives one image the same number of tokens whatever its size, and
-     * this sheet's service rows sit about 1% of its height apart. At the default
-     * a tick lands on the wrong row, which is a medical authorisation on the
-     * wrong service.
+     * this sheet's boxes sit close together. At the default a tick lands on the
+     * wrong box, which is a consent the parent did not give, or an allergy put
+     * on the wrong line.
      *
      * @return array<string, mixed>
      */
@@ -511,22 +527,24 @@ class ConsentFormScanner
 
         THE LETTER (top half), from the school: "Tinahud namong Ginikanan /
         Guardian" (Dear parent / guardian). It lists the health services the
-        school will give ("Ang mga serbisyong panglawas nga ihatag o ipahigayon
+        school offers ("Ang mga serbisyong panglawas nga ihatag o ipahigayon
         mao ang mga musunod" — the health services to be given are these), each
-        with a box. Marks in those boxes say which services this sheet covers:
-        any combination of rows may be marked, on any sheet, including none at
-        all. They are NOT the parent's answer to the consent question. A fully
-        ticked service list says nothing about whether the parent agreed. The
-        letter ends "Daghang Salamat. Matinahuron," over
-        "(Pangalan ug Pirma Sa Principal / School Head)" — that name and
-        signature are the school head's, never the parent's.
+        with a box. That list and its boxes are the SCHOOL'S, not the parent's:
+        they say what is offered, and the school may mark some, all or none of
+        them. They are never the parent's answer. A service whose box there is
+        empty is NOT refused, and one whose box is marked is NOT agreed to. You
+        do not report those boxes, and nothing in them may change anything you
+        report about the parent's reply. The letter ends "Daghang Salamat.
+        Matinahuron," over "(Pangalan ug Pirma Sa Principal / School Head)" —
+        that name and signature are the school head's, never the parent's.
 
         THE PARENT'S REPLY (bottom half, below a dashed line), headed "TIMAAN SA
         PAGDAWAT SA SULAT-PAHIBALO UG PAGTUGOT SA GINIKANAN/GUARDIAN"
         (acknowledgement of the letter and consent of the parent/guardian), with
         the instruction "(Palihug butang ug tsek (√) sulod sa kahon)" (please put
         a check inside the box). The "(√)" printed in that instruction is not a
-        tick.
+        tick. Everything you report in parent_reply comes from this part of the
+        sheet, and from nowhere else.
 
         The three CONSENT BOXES. The parent ticks ONE:
           [all]      "Oo, ako mutugot nga mahatagan o mahimong benepisyaryo akong
@@ -652,45 +670,37 @@ class ConsentFormScanner
         did not agree to; a wrongly reported "no" withdraws one they did. Both
         are worse than "unclear".
 
-        THE SERVICE LIST at the top. You are given the exact services the letter
-        offers. Answer only about those, by key; never invent one. Each mark here
-        decides which medical service a child is given, and the rows are packed
-        so tightly that this is the hardest part of the sheet. Read it slowly,
-        one row at a time, from the top:
+        THE SERVICES THE PARENT LEFT OUT. A parent leaves a service out in one
+        way only: by ticking the [specific] box ("gawas lamang niini") and
+        writing the service on its line. Transcribe that line into
+        consent_exceptions first; then name, in excluded_services, the services
+        it names, by key from the list you are given:
+          - Name a service only when the words on that line name it, in
+            whatever language or spelling the parent used ("bakuna" or "MR" is
+            immunization, "purga" is deworming, "ngipon" or "dentist" is
+            dental). A word naming a heading (Pag Purga, Immunization / Bakuna)
+            is that heading's key.
+          - Leave it empty when the [specific] box is not ticked, when its line
+            is empty or says "wala", or when you cannot tell which service the
+            words name. Never guess one to fill it.
+          - Never name a service because of the school's list at the top —
+            whether its box there is empty or marked — or because of the
+            allergy section. A service the line does not name is not excluded.
+
+        THE ALLERGY AND ILLNESS BOXES sit close together, one row under the
+        next. Read them one row at a time, from the top:
           - Find each row by its printed words, never by counting down. Its box
             is the one immediately to the left of those words, on the same line.
-            The sub-items under "Pag Purga" and "Immunization / Bakuna" are
-            indented, so their boxes sit further right than the others.
+            The three kinds under the allergy heading are indented, so their
+            boxes sit further right than the heading's.
           - Every tick belongs to exactly one row: the row its bottom point is
-            in. The rows are so close that the long upstroke of a tick nearly
-            always runs across the box of the row ABOVE it. A box with only that
-            stroke passing through it, and no bottom point inside, is "no". So
-            when you see a tick, first ask whose bottom point it is, then give
-            it to that row and to no other.
+            in. A box with only the upstroke of the tick from the row below
+            passing through it, and no bottom point inside, is "no".
           - Each box answers for itself alone. A ticked heading does not tick
-            its sub-items, and a ticked sub-item does not tick its heading.
-            Never fill a gap because the rows around it are ticked, and never
-            assume a pattern: unticked rows between ticked ones are normal, and
-            a sheet where nothing here is ticked is normal too.
-          - "Immunization / Bakuna" has one sub-item row. Some printings give it
-            two boxes on one line, one before "Grade 7" and one before "MR, Td":
-            answer "yes" for immunization_grade7 if either of them is marked,
-            and count the two as one mark.
-        First count the separate marks you can see in the whole list — ticks,
-        crosses and boxes shaded in, in pen or in pencil — and report it in
-        services_marks_seen. A box shaded in, however lightly, is one mark.
-        Then, for every row, look inside that row's own box and say in
-        services_evidence what is there, in a few plain words — "tick, bottom
-        point inside", "shaded in", "empty outline", "in shadow, empty inside",
-        "only the upstroke of the tick from the row below". Then answer
-        services. The number of "yes"
-        answers must equal the number of marks you counted; if it does not, look
-        again at the rows you were least sure of before you answer. A row you
-        still cannot settle is "unclear".
-
-        Treat the allergy and illness boxes the same way, row by row, saying in
-        allergy_evidence what is in each box before you answer allergy_boxes. A
-        tick in a box counts even when nothing is written on its line.
+            the kinds under it, and a ticked kind does not tick the heading.
+        Say in allergy_evidence what is in each box before you answer
+        allergy_boxes. A tick in a box counts even when nothing is written on
+        its line.
 
         THE HANDWRITTEN BLANKS. For each blank, transcribe exactly what is
         written and say whether you are confident you read it correctly. There
@@ -822,7 +832,9 @@ class ConsentFormScanner
         $written = $list(self::WRITTEN_FIELDS);
 
         return $closeups.<<<PROMPT
-        Read the attached photograph of a Sulat-Pahibalo.
+        Read the attached photograph of a Sulat-Pahibalo. Report the parent's
+        reply — the part under "TIMAAN SA PAGDAWAT…" — in parent_reply. The
+        school's list of services at the top is not read.
 
         The parent's three consent boxes, in the bottom half — first describe
         what you see in each, then answer "yes", "no" or "unclear" for each, by
@@ -835,15 +847,15 @@ class ConsentFormScanner
 
         {$allergy}
 
-        The services in the letter's list at the top — count the marks, describe
-        what you see in each row's box, then "yes", "no" or "unclear" for every
-        one:
-
-        {$services}
-
         Transcribe each handwritten blank, with its readable and confident flags:
 
         {$written}
+
+        The services the letter offers, by key. Use them only to name, in
+        excluded_services, the services the parent wrote on the "gawas lamang
+        niini" line:
+
+        {$services}
 
         Also report the learner's name, the parent or guardian's name, whether
         the parent's signature is present, whether this is the Sulat-Pahibalo,
@@ -919,6 +931,51 @@ class ConsentFormScanner
             $written[$key] = $reading($label.' — empty text if the blank is empty.');
         }
 
+        // Everything the parent answers, read from below the dashed line and
+        // grouped so it cannot be taken from the school's list at the top,
+        // which has no field at all. The line is transcribed before the
+        // services it names are.
+        $reply = [
+            // The words about these three are also shown to the adviser beside
+            // an unclear answer.
+            'consent_evidence' => $evidence(self::CONSENT_BOXES, 'What you see in each of the parent\'s three consent boxes, in a few plain words, written before you answer consent_boxes.'),
+            'consent_boxes' => $answers(self::CONSENT_BOXES, 'What is in each of the parent\'s three consent boxes, read separately.'),
+            'consent_choice' => [
+                'type' => 'STRING',
+                'format' => 'enum',
+                'enum' => [
+                    HealthConsentForm::CONSENT_ALL,
+                    HealthConsentForm::CONSENT_SPECIFIC,
+                    HealthConsentForm::CONSENT_DENY,
+                    self::UNCLEAR,
+                ],
+                'description' => 'Your summary of the three consent boxes: the one ticked box, or unclear.',
+            ],
+            'allergy_evidence' => $evidence(self::ALLERGY_BOXES, 'What you see in each box of the allergy and illness section, in a few plain words, written before you answer allergy_boxes.'),
+            'allergy_boxes' => $answers(self::ALLERGY_BOXES, 'What is in each box of the allergy and illness section.'),
+            'written' => [
+                'type' => 'OBJECT',
+                'description' => 'One entry per handwritten blank in the parent\'s reply.',
+                'properties' => $written,
+                'required' => array_keys(self::WRITTEN_FIELDS),
+                'propertyOrdering' => array_keys(self::WRITTEN_FIELDS),
+            ],
+            'excluded_services' => [
+                'type' => 'ARRAY',
+                'description' => 'The services the parent wrote on the "gawas lamang niini" line, by key. Empty unless that box is ticked and its line names a service. Never taken from the school\'s list at the top.',
+                'items' => [
+                    'type' => 'STRING',
+                    'format' => 'enum',
+                    'enum' => array_keys(self::serviceKeys()),
+                ],
+            ],
+            'parent_guardian_name' => $reading('The parent or guardian\'s name at the signature line, or on the header line when the signature line has none.'),
+            'signature_present' => [
+                'type' => 'BOOLEAN',
+                'description' => 'True when the parent\'s own handwriting is at the parent\'s signature line — a signature, initials, or their name written by hand. False when the line is empty or holds only typed or machine-printed text.',
+            ],
+        ];
+
         $properties = [
             'sheet_orientation' => [
                 'type' => 'STRING',
@@ -960,40 +1017,12 @@ class ConsentFormScanner
                 'propertyOrdering' => ['text', 'year', 'month', 'day', 'readable'],
             ],
             'student_name' => $reading('The learner\'s name on the "PANGALAN SA ESTUDYANTE" line.'),
-            'services_marks_seen' => [
-                'type' => 'INTEGER',
-                'description' => 'How many separate marks — ticks, crosses and boxes shaded in, in pen or pencil — you can see in the whole service list, counted before you read the rows.',
-            ],
-            'services_evidence' => $evidence(self::serviceKeys(), 'What you see in each row\'s box in the service list, in a few plain words, written before you answer services.'),
-            'services' => $answers(self::serviceKeys(), 'One answer per row of the letter\'s service list, each row judged on its own box.'),
-            // The words about these three are also shown to the adviser beside
-            // an unclear answer.
-            'consent_evidence' => $evidence(self::CONSENT_BOXES, 'What you see in each of the parent\'s three consent boxes, in a few plain words, written before you answer consent_boxes.'),
-            'consent_boxes' => $answers(self::CONSENT_BOXES, 'What is in each of the parent\'s three consent boxes, read separately.'),
-            'consent_choice' => [
-                'type' => 'STRING',
-                'format' => 'enum',
-                'enum' => [
-                    HealthConsentForm::CONSENT_ALL,
-                    HealthConsentForm::CONSENT_SPECIFIC,
-                    HealthConsentForm::CONSENT_DENY,
-                    self::UNCLEAR,
-                ],
-                'description' => 'Your summary of the three consent boxes: the one ticked box, or unclear.',
-            ],
-            'allergy_evidence' => $evidence(self::ALLERGY_BOXES, 'What you see in each box of the allergy and illness section, in a few plain words, written before you answer allergy_boxes.'),
-            'allergy_boxes' => $answers(self::ALLERGY_BOXES, 'What is in each box of the allergy and illness section.'),
-            'written' => [
+            'parent_reply' => [
                 'type' => 'OBJECT',
-                'description' => 'One entry per handwritten blank on the form.',
-                'properties' => $written,
-                'required' => array_keys(self::WRITTEN_FIELDS),
-                'propertyOrdering' => array_keys(self::WRITTEN_FIELDS),
-            ],
-            'parent_guardian_name' => $reading('The parent or guardian\'s name at the signature line, or on the header line when the signature line has none.'),
-            'signature_present' => [
-                'type' => 'BOOLEAN',
-                'description' => 'True when the parent\'s own handwriting is at the parent\'s signature line — a signature, initials, or their name written by hand. False when the line is empty or holds only typed or machine-printed text.',
+                'description' => 'The parent\'s reply: everything below the dashed line under "TIMAAN SA PAGDAWAT SA SULAT-PAHIBALO…". The only part of the sheet the parent\'s answer is read from — never the school\'s list of services at the top.',
+                'properties' => $reply,
+                'required' => array_keys($reply),
+                'propertyOrdering' => array_keys($reply),
             ],
             'unreadable' => ['type' => 'BOOLEAN'],
             'note' => [
@@ -1039,6 +1068,7 @@ class ConsentFormScanner
      */
     public static function interpret(array $payload): array
     {
+        $payload = self::liftParentReply($payload);
         $unreadable = self::flag($payload['unreadable'] ?? false) === true;
         $note = trim((string) ($payload['note'] ?? ''));
 
@@ -1060,24 +1090,21 @@ class ConsentFormScanner
             $note = 'The photograph is sideways or upside down. Turn it upright and read it again.';
         }
 
-        $answers = is_array($payload['services'] ?? null) ? $payload['services'] : [];
+        // Every consent box must come back. A reading that leaves one out is
+        // not shown in part: the form is filled in from the paper instead,
+        // exactly as for a photo nothing could be read off.
+        $incomplete = ! $unreadable && self::incompleteReading($payload);
 
-        $services = [];
-        $unclear = [];
-
-        foreach (self::serviceKeys() as $key => $label) {
-            $answer = self::answer($answers[$key] ?? null);
-
-            // A sheet the model calls unreadable answers nothing at all.
-            if ($unreadable || $answer === self::UNCLEAR) {
-                $services[$key] = self::UNCLEAR;
-                $unclear[] = $label;
-
-                continue;
-            }
-
-            $services[$key] = $answer;
+        if ($incomplete) {
+            $unreadable = true;
+            $note = self::READING_INCOMPLETE;
         }
+
+        // The school's list of services at the top is never read: which
+        // services a learner is asked about is the school's list for the year
+        // (HealthServicesOffered) and the rules, and the parent's answer is
+        // read from their own reply alone.
+        $unclear = [];
 
         // The handwritten blanks. An unreadable sheet transcribes nothing, and
         // a blank the model was unsure of keeps its text and is named.
@@ -1094,9 +1121,13 @@ class ConsentFormScanner
             }
         }
 
-        [$choice, $consentReason] = $unreadable
-            ? [self::UNCLEAR, '']
+        [$choice, $consentReason, $answerCode] = $unreadable
+            ? [self::UNCLEAR, '', self::UNCLEAR]
             : self::decideConsent($payload, $written);
+
+        if ($choice === self::UNCLEAR && $consentReason !== '') {
+            $consentReason = self::ANSWER_UNDETERMINED.' '.$consentReason;
+        }
 
         $fieldNotes = [];
         $warnings = [];
@@ -1104,7 +1135,6 @@ class ConsentFormScanner
         if (! $unreadable) {
             self::checkConsentLines($choice, $written, $fieldNotes, $unclear);
             self::checkAllergyBoxes($payload, $written, $fieldNotes, $warnings, $unclear);
-            self::checkMarkCount($payload, $services, $warnings);
         }
 
         $student = self::reading($payload['student_name'] ?? null, $unreadable);
@@ -1119,6 +1149,45 @@ class ConsentFormScanner
         }
 
         $signature = ! $unreadable && self::flag($payload['signature_present'] ?? false) === true;
+        // A name written there counts even when it could not be read: it is
+        // on the form, and the adviser types it from the paper.
+        $parentNamed = ! $unreadable && ($parent['text'] !== '' || ! $parent['readable']);
+
+        // The services the parent's "gawas lamang niini" line names, as the
+        // reader matched them to the list. Only under that box, and only from
+        // a line that says something: an empty or unreadable line names none.
+        $exceptions = $written['consent_exceptions'];
+        $writesExceptions = $choice === HealthConsentForm::CONSENT_SPECIFIC
+            && $exceptions['readable']
+            && self::saysSomething($exceptions['text']);
+        $excluded = $writesExceptions ? self::excludedServices($payload) : [];
+
+        // A "yes, except" whose line cannot be matched to the list word for
+        // word: it is highlighted, and the services the reader named (if any)
+        // start Excluded for the adviser to check against the paper.
+        $unmatched = $writesExceptions
+            && ConsentPaperCopy::exceptedServices($exceptions, $fieldNotes['consent_exceptions'] ?? null) === null
+                ? [$exceptions['text']]
+                : [];
+
+        // The fields the adviser checks against the photo, by key: a line the
+        // reader could not read or was unsure of, a line with a question about
+        // it, the parent's name, and the answer itself when no box decided it.
+        $unclearFields = [];
+        if (! $unreadable) {
+            foreach (array_keys(self::WRITTEN_FIELDS) as $key) {
+                $entry = $written[$key];
+                if (! $entry['readable'] || ($entry['text'] !== '' && ! $entry['confident']) || isset($fieldNotes[$key])) {
+                    $unclearFields[] = $key;
+                }
+            }
+            if (isset($fieldNotes['parent_guardian_name'])) {
+                $unclearFields[] = 'parent_guardian_name';
+            }
+            if ($choice === self::UNCLEAR) {
+                $unclearFields[] = 'consent_answer';
+            }
+        }
 
         // What each box itself shows, beside the verdicts drawn from them, so
         // the form can be drawn back exactly as the parent marked it.
@@ -1133,13 +1202,22 @@ class ConsentFormScanner
 
         return [
             'consent_choice' => $choice,
+            // The same answer as the system logic names it: full, partial or
+            // refused, none_marked or multiple_marked when no box can be taken
+            // as it, and unclear for anything else (an unreadable box, a sheet
+            // nothing was read off).
+            'answer' => $answerCode,
             'consent_boxes' => $boxesSeen('consent_boxes', array_keys(self::CONSENT_BOXES)),
             'allergy_boxes' => $boxesSeen('allergy_boxes', array_keys(self::ALLERGY_BOXES)),
             // Why the consent could not be decided, in words the adviser can
             // act on — "two boxes are ticked" sends them to the parent, "a box
             // could not be made out" sends them to the paper. Empty when it was.
             'consent_reason' => $consentReason,
-            'services' => $services,
+            // The services the reader matched the parent's exceptions line to,
+            // keys of serviceKeys(). Empty unless the answer is "yes, except".
+            // ConsentPaperCopy::excepted() prefers the line's own words when
+            // they match the list exactly, and falls back on these.
+            'excluded_services' => $excluded,
             'written' => $written,
             // The question to ask about one field, keyed by the field it sits
             // under, decided here so no screen has to work it out for itself.
@@ -1153,8 +1231,19 @@ class ConsentFormScanner
             'form_date' => self::formDate($payload['form_date'] ?? null, $unreadable),
             'date_outside_school_year' => false,
             'date_warning' => '',
+            // DATE_UNREAD when no year could be read off the PETSA: a softer
+            // note than the warning, deciding nothing (checkSchoolYear()).
+            'date_note' => '',
             'parent_guardian_name' => $parent['readable'] ? $parent['text'] : '',
             'signature_present' => $signature,
+            'parent_name_present' => $parentNamed,
+            // Both the parent's name and their signature: a form missing either
+            // is saved as incomplete and gives no service.
+            'form_complete' => $parentNamed && $signature,
+            'unmatched_exceptions' => $unmatched,
+            'unclear_fields' => array_values(array_unique($unclearFields)),
+            // The reader left a service or a consent box out of its answer.
+            'incomplete_reading' => $incomplete,
             // Filled in by checkLearner() once the controller knows whose form
             // this is meant to be. Null is "not checked", never "it matches".
             'learner' => ['matches' => null],
@@ -1167,8 +1256,9 @@ class ConsentFormScanner
             'needs_review' => $unreadable
                 || $unclear !== []
                 || $warnings !== []
+                || $unmatched !== []
                 || $choice === self::UNCLEAR
-                || ! $signature,
+                || ! ($parentNamed && $signature),
             'unreadable' => $unreadable,
             'note' => $note,
             // Degrees clockwise to bring the sheet upright; 0 when it already is.
@@ -1203,6 +1293,7 @@ class ConsentFormScanner
         if ($matches === false) {
             $draft['learner_mismatch'] = true;
             $draft['consent_choice'] = self::UNCLEAR;
+            $draft['answer'] = self::UNCLEAR;
             $draft['consent_reason'] = 'The learner\'s name on this form reads "'.$read.'", not '.$displayName
                 .' — check that this is the right child\'s form.';
             $draft['needs_review'] = true;
@@ -1233,6 +1324,7 @@ class ConsentFormScanner
     {
         $draft['date_outside_school_year'] = false;
         $draft['date_warning'] = '';
+        $draft['date_note'] = '';
 
         if (! empty($draft['unreadable']) || ! empty($draft['learner_mismatch'])
             || preg_match('/^(\d{4})-(\d{4})$/', $schoolYear, $m) !== 1 || (int) $m[2] !== (int) $m[1] + 1) {
@@ -1244,7 +1336,12 @@ class ConsentFormScanner
         $year = is_int($date['year'] ?? null) ? $date['year'] : null;
         $month = is_int($date['month'] ?? null) ? $date['month'] : null;
 
+        // No year read off the PETSA — blank, smudged, or a date whose year is
+        // not certain — is no proof either way, so it is said softly and
+        // decides nothing (testers' report #31).
         if ($year === null) {
+            $draft['date_note'] = self::DATE_UNREAD;
+
             return $draft;
         }
 
@@ -1456,14 +1553,14 @@ class ConsentFormScanner
      *
      * @param  array<string, mixed>  $payload
      * @param  array<string, array{text: string, confident: bool, readable: bool}>  $written
-     * @return array{0: string, 1: string} the choice, and why it is unclear ('' when it is not)
+     * @return array{0: string, 1: string, 2: string} the choice, why it is unclear ('' when it is not), and the answer as the system logic names it
      */
     private static function decideConsent(array $payload, array $written): array
     {
         $boxes = is_array($payload['consent_boxes'] ?? null) ? $payload['consent_boxes'] : null;
 
         if ($boxes === null) {
-            return [self::UNCLEAR, 'The reader did not report the consent boxes — read the parent\'s answer off the paper.'];
+            return [self::UNCLEAR, 'The reader did not report the consent boxes — read the parent\'s answer off the paper.', self::UNCLEAR];
         }
 
         $ticked = [];
@@ -1480,22 +1577,22 @@ class ConsentFormScanner
         }
 
         if ($unsure !== []) {
-            return [self::UNCLEAR, 'A consent box could not be made out — check which one the parent ticked.'.self::evidence($payload, $unsure)];
+            return [self::UNCLEAR, 'A consent box could not be made out — check which one the parent ticked.'.self::evidence($payload, $unsure), self::UNCLEAR];
         }
 
         if ($ticked === []) {
-            return [self::UNCLEAR, 'None of the three consent boxes is ticked — the parent may not have answered.'];
+            return [self::UNCLEAR, 'None of the three consent boxes is ticked — the parent may not have answered.', self::ANSWER_NONE_MARKED];
         }
 
         if (count($ticked) > 1) {
-            return [self::UNCLEAR, 'More than one consent box is ticked — ask the parent which one they meant.'.self::evidence($payload, $ticked)];
+            return [self::UNCLEAR, 'More than one consent box is ticked — ask the parent which one they meant.'.self::evidence($payload, $ticked), self::ANSWER_MULTIPLE_MARKED];
         }
 
         $choice = $ticked[0];
 
         $summary = strtolower(trim((string) ($payload['consent_choice'] ?? '')));
         if ($summary !== '' && $summary !== $choice) {
-            return [self::UNCLEAR, 'The reading disagrees with itself about which box is ticked — check the paper.'];
+            return [self::UNCLEAR, 'The reading disagrees with itself about which box is ticked — check the paper.', self::UNCLEAR];
         }
 
         $hasWriting = fn (string $field): bool => self::saysSomething($written[$field]['text'] ?? '');
@@ -1508,10 +1605,82 @@ class ConsentFormScanner
         };
 
         if ($stray) {
-            return [self::UNCLEAR, 'One box is ticked, but something is written on another box\'s line — check what the parent meant.'];
+            return [self::UNCLEAR, 'One box is ticked, but something is written on another box\'s line — check what the parent meant.', self::UNCLEAR];
         }
 
-        return [$choice, ''];
+        return [$choice, '', self::answerCode($choice)];
+    }
+
+    /** One ticked box, as the system logic names the answer it gives. */
+    private static function answerCode(string $choice): string
+    {
+        return match ($choice) {
+            HealthConsentForm::CONSENT_ALL => self::ANSWER_FULL,
+            HealthConsentForm::CONSENT_SPECIFIC => self::ANSWER_PARTIAL,
+            HealthConsentForm::CONSENT_DENY => self::ANSWER_REFUSED,
+            default => self::UNCLEAR,
+        };
+    }
+
+    /**
+     * Whether the reader left one of the parent's consent boxes out of its
+     * answer, or answered one with something off the list. The response
+     * schema marks every one of them required, so a reading without one is
+     * not the JSON that was asked for, and none of it is trusted.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private static function incompleteReading(array $payload): bool
+    {
+        $valid = fn (mixed $value): bool => is_string($value)
+            && in_array(strtolower(trim($value)), [self::TICKED, self::NOT_TICKED, self::UNCLEAR], true);
+
+        $given = $payload['consent_boxes'] ?? null;
+
+        if (! is_array($given)) {
+            return true;
+        }
+
+        foreach (array_keys(self::CONSENT_BOXES) as $key) {
+            if (! array_key_exists($key, $given) || ! $valid($given[$key])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The parent's reply as the response schema groups it (`parent_reply`),
+     * lifted to the top level the rules read, beside the header fields. A
+     * payload that is already flat reads the same.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private static function liftParentReply(array $payload): array
+    {
+        $reply = $payload['parent_reply'] ?? null;
+        unset($payload['parent_reply']);
+
+        return is_array($reply) ? array_merge($payload, $reply) : $payload;
+    }
+
+    /**
+     * The services the reader named off the "gawas lamang niini" line, kept
+     * only where they are services the letter has.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return list<string>
+     */
+    private static function excludedServices(array $payload): array
+    {
+        $named = is_array($payload['excluded_services'] ?? null) ? $payload['excluded_services'] : [];
+
+        return array_values(array_unique(array_filter(
+            $named,
+            fn (mixed $key): bool => is_string($key) && array_key_exists($key, self::serviceKeys()),
+        )));
     }
 
     /**
@@ -1661,33 +1830,6 @@ class ConsentFormScanner
 
         $warnings[] = 'Could not tell whether the allergy box is ticked — check the paper.';
         $unclear[] = 'Allergy';
-    }
-
-    /**
-     * The reader's count of marks (ticks and shaded boxes, pen or pencil) in the service list against the rows it
-     * placed them on. A tick given to the wrong row, or to two rows, is the
-     * mistake this list invites, and it is the one the count can catch: which
-     * row is wrong cannot be told from here, so the rows stand as read and the
-     * adviser is sent to the paper. Rows it already called unclear are expected
-     * not to add up, and are named on their own.
-     *
-     * @param  array<string, mixed>  $payload
-     * @param  array<string, string>  $services
-     * @param  list<string>  $warnings
-     */
-    private static function checkMarkCount(array $payload, array $services, array &$warnings): void
-    {
-        $seen = $payload['services_marks_seen'] ?? null;
-
-        if (! is_numeric($seen) || in_array(self::UNCLEAR, $services, true)) {
-            return;
-        }
-
-        $placed = count(array_keys($services, self::TICKED, true));
-
-        if ((int) $seen !== $placed) {
-            $warnings[] = 'The reader saw '.(int) $seen.' marks in the service list but placed '.$placed.' — check the rows against the paper.';
-        }
     }
 
     /**

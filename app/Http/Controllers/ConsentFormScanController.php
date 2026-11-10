@@ -136,7 +136,7 @@ class ConsentFormScanController extends Controller
 
         // What the school offers that year (the School Nurse's Health Services
         // Offered), and the learner's grade and sex: every service is read
-        // against them, and a shading they rule out is named.
+        // against them. The school's list printed on the paper is not read.
         $institutionId = $request->session()->get('active_institution_id');
         $offered = HealthServicesOffered::for($institutionId ? (int) $institutionId : null, $schoolYear);
         $grade = $learner['grade'] ?? null;
@@ -149,13 +149,11 @@ class ConsentFormScanController extends Controller
             // The sheet drawn back as the parent marked it, in the letter's
             // own words, by the partial every read-back of a form uses.
             'copy_html' => $copy !== null ? view('consent-forms._paper-copy', ['copy' => $copy])->render() : null,
-            // The services the upload dialog files with this reading — the
-            // same list the copy above judged each service by. Nothing for a
-            // photo that could not be read or another child's sheet.
-            'ticked_services' => $copy !== null ? ConsentPaperCopy::tickedServices((array) ($draft['services'] ?? []), $offered) : [],
-            // Where each service starts in the dialog (Consented, Excluded, to
-            // check, or Not offered), for whichever answer the adviser files.
-            // Null with nothing read, so every service starts Not offered.
+            // Where each service starts in the dialog (Consented, Excluded or
+            // Not offered), for whichever answer the adviser files — from the
+            // parent's answer and the school's list for the year alone. Null
+            // with nothing read, so every service starts from the answer the
+            // adviser chooses.
             'service_proposal' => $copy !== null ? ConsentPaperCopy::proposal($draft, $offered) : null,
             'summary' => ConsentPhotoSummary::fromDraft($draft, $grade, $sex, $offered),
             // The upload can retain this reading without trusting JSON posted

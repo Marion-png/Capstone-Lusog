@@ -708,7 +708,7 @@ class FeedingExcusedAbsenceTest extends TestCase
     public function the_narrative_counts_the_improvement_the_progress_panel_counts(): void
     {
         $improved = $this->makeStudent('Severely Wasted');
-        $improved->update(['endline_nutritional_status' => 'Normal']);
+        $improved->update(['endline_nutritional_status' => 'Normal', 'endline_weight_kg' => 40]);
         $this->makeStudent('Wasted');
 
         $narrative = FeedingReportNarrative::build(

@@ -467,7 +467,9 @@
 		return { max: step * intervals, ticks };
 	};
 
+	// On the school's clock, whatever the reading device is set to.
 	const stamp = () => new Date().toLocaleString('en-US', {
+		timeZone: @json(config('app.school_timezone')),
 		year: 'numeric',
 		month: 'short',
 		day: '2-digit',

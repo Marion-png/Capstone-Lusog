@@ -33,7 +33,8 @@
                         @php $inStock = isset($stocked[\App\Support\MedicineCatalogue::comparableName($item)]); @endphp
                         <option value="{{ $item }}" @selected(! $inStock && old('catalogue_name') === $item) @disabled($inStock)
                                 @if (\App\Support\MedicineCatalogue::isSupply($item)) data-supply @endif
-                                @if ($generic = \App\Support\MedicineCatalogue::genericFor($item)) data-generic="{{ $generic }}" @endif>{{ $item }}{{ $inStock ? ' (in inventory)' : '' }}</option>
+                                @if ($generic = \App\Support\MedicineCatalogue::genericFor($item)) data-generic="{{ $generic }}" @endif
+                                @if ($hint = \App\Support\MedicineCatalogue::labelHint($item)) data-generic-hint="{{ $hint }}" @endif>{{ $item }}{{ $inStock ? ' (in inventory)' : '' }}</option>
                     @endforeach
                 </optgroup>
             @endforeach
@@ -64,6 +65,20 @@
             <div class="muted" style="font-size:.72rem;margin-top:6px;">
                 This will be recorded as stock held outside the DepEd list.
             </div>
+        </div>
+    @endif
+
+    {{-- Medicine or supply (testers' report #16): a supply — gauze, bandages,
+         cotton, tape, gloves, masks — has no generic name and is never looked
+         up in RxNorm. Set from the item chosen above; the nurse may change it. --}}
+    @if (\App\Models\Medicine::supportsItemType())
+        <div class="field full">
+            <label for="item_type">Item type</label>
+            <select class="select" id="item_type" name="item_type">
+                <option value="{{ \App\Models\Medicine::TYPE_MEDICINE }}" @selected(old('item_type', \App\Models\Medicine::TYPE_MEDICINE) === \App\Models\Medicine::TYPE_MEDICINE)>Medicine</option>
+                <option value="{{ \App\Models\Medicine::TYPE_SUPPLY }}" @selected(old('item_type') === \App\Models\Medicine::TYPE_SUPPLY)>Supply</option>
+            </select>
+            @error('item_type') <div class="err">{{ $message }}</div> @enderror
         </div>
     @endif
 
@@ -135,19 +150,40 @@
         return supplyWords.some((word) => words.includes(' ' + word + ' '));
     };
 
+    // The Item type select (testers' report #16) is what decides; choosing an
+    // item, or typing one outside the list, sets it to what the name reads as,
+    // and the nurse may change it.
+    const type = document.getElementById('item_type');
+    const readType = () => {
+        const option = select.options[select.selectedIndex];
+        return Boolean(option && option.hasAttribute('data-supply')) || (select.value === other && typedSupply())
+            ? 'supply' : 'medicine';
+    };
+
     const sync = () => {
         const option = select.options[select.selectedIndex];
-        const supply = Boolean(option && option.hasAttribute('data-supply'))
-            || (select.value === other && typedSupply());
+        const supply = type ? type.value === 'supply' : readType() === 'supply';
         if (field) field.hidden = supply;
         generic.required = !supply;
         generic.disabled = supply;
         return { option, supply };
     };
 
+    type?.addEventListener('change', sync);
+    custom?.addEventListener('input', () => { if (type) type.value = readType(); });
+
+    const placeholder = generic.placeholder;
+
     select.addEventListener('change', () => {
+        if (type) type.value = readType();
         const { option, supply } = sync();
+        // An item named by its class ("Antifungal cream") has whatever generic
+        // its product has: the field is left empty with where to read it,
+        // never filled with a guess (testers' report #17).
+        const hint = option?.dataset.genericHint || '';
+        generic.placeholder = hint ? 'e.g. ' + hint : placeholder;
         if (!automatic || supply) return;
+        if (hint) { generic.value = ''; return; }
         generic.value = option && option.value !== '' && option.closest('optgroup')
             ? (option.dataset.generic || option.value.split(/\s\d|\s\(/)[0]
                 .replace(/\s+(tablets?|capsules?|syrup|suspension|solution|cream|lotion|sachets?|drops)\b.*$/i, '')

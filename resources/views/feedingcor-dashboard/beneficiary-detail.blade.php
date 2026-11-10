@@ -200,6 +200,9 @@
 			<button type="button" class="bd-tab is-active" role="tab" aria-selected="true" aria-controls="bd-overview" data-tab="overview">Overview</button>
 			<button type="button" class="bd-tab" role="tab" aria-selected="false" aria-controls="bd-attendance" data-tab="attendance">Attendance</button>
 			<button type="button" class="bd-tab" role="tab" aria-selected="false" aria-controls="bd-endline" data-tab="endline">Endline</button>
+			@if ($weighIns['enabled'])
+				<button type="button" class="bd-tab" role="tab" aria-selected="false" aria-controls="bd-weighins" data-tab="weighins">Weigh-ins</button>
+			@endif
 		</div>
 
 		{{-- ── Overview: why this learner is on the programme, and where they
@@ -422,7 +425,7 @@
 					</button>
 				</div>
 				@if ($hasEndline && $endline['recorded_at'])
-					<p class="bd-card-sub">Measured {{ $endline['recorded_at'] }}</p>
+					<p class="bd-card-sub">Measured {{ $endline['recorded_at'] }}@if ($endline['entered_by'] !== '') &middot; entered by {{ $endline['entered_by'] }}@if ($endline['entered_at']), {{ $endline['entered_at'] }}@endif @endif</p>
 				@endif
 				@if (! $endlineEdit['allowed'])
 					<p class="bd-note bd-endline-note" id="bdEndlineNote">{{ $endlineEdit['note'] }}</p>
@@ -446,6 +449,10 @@
 							<dd class="{{ $endline['status'] !== '' ? $statusTone($endline['status']) : 'is-none' }}">{{ $endline['status'] !== '' ? $endline['status'] : '—' }}</dd>
 						</div>
 						<div class="bd-fact">
+							<dt>Height-for-Age</dt>
+							<dd class="{{ $endline['height_for_age'] !== '' ? $statusTone($endline['height_for_age']) : 'is-none' }}">{{ $endline['height_for_age'] !== '' ? $endline['height_for_age'] : '—' }}</dd>
+						</div>
+						<div class="bd-fact">
 							<dt>Baseline BMI Status</dt>
 							<dd class="{{ $baseline['status'] !== '' ? $statusTone($baseline['status']) : 'is-none' }}">{{ $baseline['status'] !== '' ? $baseline['status'] : '—' }}</dd>
 						</div>
@@ -455,8 +462,131 @@
 				@endif
 			</section>
 		</div>
+
+		@if ($weighIns['enabled'])
+			{{-- ── Weigh-ins: the optional progress weighings around feeding
+			     days 30, 60 and 90 (FeedingWeighIns), and the trend from the
+			     baseline to the endline. Shown only while the school records
+			     them; turned off, this tab goes and the weighings are kept. ── --}}
+			<div class="bd-panel" id="bd-weighins" role="tabpanel" data-panel="weighins" hidden>
+				<section class="card bd-card">
+					<div class="bd-card-head">
+						<p class="bd-card-title">Progress Weigh-ins</p>
+						@if ($weighIns['progress'] === \App\Support\FeedingWeighIns::NOT_IMPROVING)
+							<span class="badge badge-risk" data-progress="not_improving">Not improving</span>
+						@elseif ($weighIns['progress'] === \App\Support\FeedingWeighIns::IMPROVING)
+							<span class="badge badge-normal" data-progress="improving">Improving</span>
+						@endif
+					</div>
+					<table class="bd-table">
+						<thead>
+							<tr><th>Checkpoint</th><th>Date</th><th>Height</th><th>Weight</th><th></th></tr>
+						</thead>
+						<tbody>
+							@foreach ($weighIns['checkpoints'] as $checkpoint)
+								<tr>
+									<td>Day {{ $checkpoint['day'] }}</td>
+									<td>{{ $checkpoint['taken'] ? \Illuminate\Support\Carbon::parse($checkpoint['weighed_on'])->format('M j, Y') : 'Not weighed' }}</td>
+									<td>{{ $checkpoint['height_cm'] !== null ? rtrim(rtrim(number_format($checkpoint['height_cm'], 1), '0'), '.').' cm' : '—' }}</td>
+									<td>{{ $checkpoint['weight_kg'] !== null ? number_format($checkpoint['weight_kg'], 1).' kg' : '—' }}</td>
+									<td>
+										<button type="button" class="btn btn-secondary btn-sm" data-weighin-open
+											data-day="{{ $checkpoint['day'] }}"
+											data-date="{{ $checkpoint['weighed_on'] ?? $weighIns['today'] }}"
+											data-height="{{ $checkpoint['height_cm'] }}"
+											data-weight="{{ $checkpoint['weight_kg'] }}">{{ $checkpoint['taken'] ? 'Edit' : 'Record' }}</button>
+									</td>
+								</tr>
+							@endforeach
+						</tbody>
+					</table>
+				</section>
+
+				<section class="card bd-card">
+					<p class="bd-card-title">Trend</p>
+					@if ($weighIns['trend'] === [])
+						<p class="bd-empty">No weighing on file yet</p>
+					@else
+						<table class="bd-table" data-weighin-trend>
+							<thead>
+								<tr><th>Weighing</th><th>Date</th><th>Weight</th><th>BMI</th><th>BMI Status</th></tr>
+							</thead>
+							<tbody>
+								@foreach ($weighIns['trend'] as $point)
+									<tr>
+										<td>{{ $point['label'] }}</td>
+										<td>{{ $point['date'] !== '' ? $point['date'] : '—' }}</td>
+										<td>{{ $point['weight_kg'] !== '' ? $point['weight_kg'].' kg' : '—' }}</td>
+										<td>{{ $point['bmi'] !== '' ? $point['bmi'] : '—' }}</td>
+										<td class="{{ $point['status'] !== '' ? $statusTone($point['status']) : 'is-none' }}">{{ $point['status'] !== '' ? $point['status'] : '—' }}</td>
+									</tr>
+								@endforeach
+							</tbody>
+						</table>
+					@endif
+				</section>
+			</div>
+		@endif
 	</div>
 </div>
+
+@if ($weighIns['enabled'])
+	@php
+		$weighInErrors = $errors->getBag('weighIn');
+		$weighInFailed = $weighInErrors->any();
+	@endphp
+	<div class="modal-backdrop{{ $weighInFailed ? ' open' : '' }}" id="weighInBackdrop" data-open-on-load="{{ $weighInFailed ? '1' : '0' }}">
+		<div class="modal-panel bd-remove-modal" role="dialog" aria-modal="true" aria-labelledby="weighInTitle">
+			<form method="POST" action="{{ $weighIns['url'] }}" data-measure-form
+				data-birth="{{ $learner['birth_date'] ?? '' }}" data-sex="{{ $learner['sex'] }}">
+				@csrf
+				<header class="modal-head">
+					<div>
+						<p class="modal-eyebrow">Beneficiary Record</p>
+						<h2 class="modal-title" id="weighInTitle">Progress Weigh-in</h2>
+						<p class="modal-sub">{{ $learner['name'] }} &middot; {{ $learner['grade'] }}{{ $learner['section'] !== '' ? ' — '.$learner['section'] : '' }}</p>
+					</div>
+					<button type="button" class="modal-close" data-weighin-close aria-label="Close">&times;</button>
+				</header>
+				<div class="modal-body bd-endline-form">
+					<div class="bd-endline-field">
+						<label class="field-label" for="weighInDay">Feeding day</label>
+						<select class="input" id="weighInDay" name="feeding_day" required>
+							@foreach (\App\Support\FeedingWeighIns::CHECKPOINTS as $day)
+								<option value="{{ $day }}" @selected((int) old('feeding_day') === $day)>Day {{ $day }}</option>
+							@endforeach
+						</select>
+					</div>
+					<div class="bd-endline-field">
+						<label class="field-label" for="weighInDate">Date weighed</label>
+						<input type="date" class="input" id="weighInDate" name="weighed_on" max="{{ $weighIns['today'] }}"
+							value="{{ old('weighed_on', $weighIns['today']) }}" required>
+					</div>
+					<div class="bd-endline-field">
+						<label class="field-label" for="weighInHeight">Height (cm)</label>
+						<input type="number" class="input" id="weighInHeight" name="height_cm" min="0.1" step="0.1"
+							value="{{ old('height_cm') }}" required data-measure-height>
+					</div>
+					<div class="bd-endline-field">
+						<label class="field-label" for="weighInWeight">Weight (kg)</label>
+						<input type="number" class="input" id="weighInWeight" name="weight_kg" min="0.1" step="0.1"
+							value="{{ old('weight_kg') }}" required data-measure-weight>
+					</div>
+					@if ($weighInErrors->hasAny(['feeding_day', 'weighed_on', 'height_cm', 'weight_kg']))
+						<div class="flash err" role="alert">{{ $weighInErrors->first('height_cm') ?: ($weighInErrors->first('weight_kg') ?: ($weighInErrors->first('weighed_on') ?: $weighInErrors->first('feeding_day'))) }}</div>
+					@endif
+					@include('partials.measurement-confirm', ['bag' => 'weighIn'])
+				</div>
+				<footer class="modal-foot">
+					<div class="modal-actions">
+						<button type="button" class="btn btn-ghost" data-weighin-close>Cancel</button>
+						<button type="submit" class="btn btn-primary">Save Weigh-in</button>
+					</div>
+				</footer>
+			</form>
+		</div>
+	</div>
+@endif
 
 @if ($standing['enrolled'])
 	{{-- Removing a beneficiary asks for a reason, because the reason is the
@@ -496,10 +626,11 @@
 	     path the class adviser uses (StudentHealthRecordController::storeEndline)
 	     — the same validation, the same WHO classification, the same audit.
 	     BMI and status are computed on the server, never typed. --}}
-	@php $endlineFailed = $errors->hasAny(['age', 'height_cm', 'weight_kg', 'recorded_at']); @endphp
+	@php $endlineFailed = $errors->hasAny(['age', 'height_cm', 'weight_kg', 'recorded_at', \App\Support\MeasurementPlausibility::CONFIRM_FIELD]); @endphp
 	<div class="modal-backdrop{{ $endlineFailed ? ' open' : '' }}" id="endlineBackdrop" data-open-on-load="{{ $endlineFailed ? '1' : '0' }}">
 		<div class="modal-panel bd-remove-modal" role="dialog" aria-modal="true" aria-labelledby="endlineTitle">
-			<form method="POST" action="{{ $endlineEdit['url'] }}">
+			<form method="POST" action="{{ $endlineEdit['url'] }}" data-measure-form
+				data-birth="{{ $learner['birth_date'] ?? '' }}" data-sex="{{ $learner['sex'] }}">
 				@csrf
 				<header class="modal-head">
 					<div>
@@ -522,14 +653,18 @@
 					</div>
 					<div class="bd-endline-field">
 						<label class="field-label" for="endlineHeight">Height (cm)</label>
-						<input type="number" class="input" id="endlineHeight" name="height_cm" min="50" max="250" step="0.1"
-							value="{{ old('height_cm', $endlineEdit['height_cm']) }}" required>
+						<input type="number" class="input" id="endlineHeight" name="height_cm" min="0.1" step="0.1"
+							value="{{ old('height_cm', $endlineEdit['height_cm']) }}" required data-measure-height>
 					</div>
 					<div class="bd-endline-field">
 						<label class="field-label" for="endlineWeight">Weight (kg)</label>
-						<input type="number" class="input" id="endlineWeight" name="weight_kg" min="5" max="300" step="0.1"
-							value="{{ old('weight_kg', $endlineEdit['weight_kg']) }}" required>
+						<input type="number" class="input" id="endlineWeight" name="weight_kg" min="0.1" step="0.1"
+							value="{{ old('weight_kg', $endlineEdit['weight_kg']) }}" required data-measure-weight>
 					</div>
+					@if ($errors->hasAny(['age', 'height_cm', 'weight_kg', 'recorded_at']))
+						<div class="flash err" role="alert">{{ $errors->first('height_cm') ?: ($errors->first('weight_kg') ?: ($errors->first('recorded_at') ?: $errors->first('age'))) }}</div>
+					@endif
+					@include('partials.measurement-confirm')
 				</div>
 				<footer class="modal-foot">
 					<div class="modal-actions">
@@ -542,6 +677,7 @@
 	</div>
 @endif
 
+@include('partials.who-growth-script')
 <script>
 // The rail chooses which reading of the record is on screen; print puts the
 // whole record on paper through the sheet's @media print block; and enrolling
@@ -635,6 +771,62 @@
 			if (event.key === 'Escape' && endlineBackdrop.classList.contains('open')) setEndlineOpen(false);
 		});
 	}
+
+	// A progress weigh-in: one dialog for every checkpoint, opened on the one
+	// clicked with what is on file for it. A refused save reopens it on the
+	// Weigh-ins tab with what was typed.
+	const weighInBackdrop = document.getElementById('weighInBackdrop');
+	if (weighInBackdrop) {
+		const field = (id) => weighInBackdrop.querySelector('#' + id);
+		const setWeighInOpen = (open) => {
+			weighInBackdrop.classList.toggle('open', open);
+			if (open) field('weighInHeight')?.focus();
+		};
+
+		if (weighInBackdrop.dataset.openOnLoad === '1') {
+			show('weighins', false);
+		}
+
+		document.addEventListener('click', (event) => {
+			const opener = event.target.closest('[data-weighin-open]');
+			if (opener) {
+				event.preventDefault();
+				field('weighInDay').value = opener.dataset.day;
+				field('weighInDate').value = opener.dataset.date || '';
+				field('weighInHeight').value = opener.dataset.height || '';
+				field('weighInWeight').value = opener.dataset.weight || '';
+				field('weighInHeight').dispatchEvent(new Event('input'));
+				setWeighInOpen(true);
+				return;
+			}
+			if (event.target.closest('[data-weighin-close]') || event.target === weighInBackdrop) {
+				setWeighInOpen(false);
+			}
+		});
+
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape' && weighInBackdrop.classList.contains('open')) setWeighInOpen(false);
+		});
+	}
+
+	// Every measurement form on the record is held to the server's own limits
+	// as it is typed (WhoGrowth.check, MeasurementPlausibility): an impossible
+	// figure on its field, an unusual one asking for the confirmation tick.
+	document.querySelectorAll('form[data-measure-form]').forEach((measureForm) => {
+		const birth = (measureForm.dataset.birth || '').split('-').map(Number);
+		const dateField = measureForm.querySelector('input[type="date"]');
+		window.WhoGrowth?.bind(measureForm, {
+			height: measureForm.querySelector('[data-measure-height]'),
+			weight: measureForm.querySelector('[data-measure-weight]'),
+			heightUnit: 'cm',
+			sex: () => measureForm.dataset.sex || '',
+			age: () => {
+				if (birth.length !== 3 || birth.some((n) => !n)) return null;
+				const on = dateField && dateField.value ? new Date(dateField.value + 'T00:00:00') : new Date();
+				return window.WhoGrowth.ageInMonths(new Date(birth[0], birth[1] - 1, birth[2]), on);
+			},
+		});
+	});
 
 	const page = document.getElementById('bd-page');
 	const button = document.getElementById('bdEnroll');

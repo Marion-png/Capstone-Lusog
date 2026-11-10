@@ -152,6 +152,33 @@
 			</section>
 		@endif
 
+		{{-- Progress weigh-ins (FeedingWeighIns): beneficiaries whose latest
+		     weighing is no better than their baseline, to act on before the
+		     programme ends. Only while the school records weigh-ins. --}}
+		@if (($weighInsOn ?? false) && ! empty($notImproving))
+			<section class="card fp-table-section" id="notImprovingSection" data-not-improving>
+				<div class="fp-table-head">
+					<div>
+						<h2 class="card-title">Not Improving</h2>
+						<p class="card-sub">{{ count($notImproving) }} {{ \Illuminate\Support\Str::plural('beneficiary', count($notImproving)) }} no better than at baseline at the latest weighing</p>
+					</div>
+				</div>
+				<ul class="fp-not-improving">
+					@foreach ($notImproving as $learner)
+						<li>
+							@if ($learner['url'])
+								<a href="{{ $learner['url'] }}">{{ $learner['name'] }}</a>
+							@else
+								{{ $learner['name'] }}
+							@endif
+							<span class="fp-sub">{{ $learner['class'] }}</span>
+							<span class="badge badge-risk">Not improving</span>
+						</li>
+					@endforeach
+				</ul>
+			</section>
+		@endif
+
 		<section class="card fp-table-section" id="attendanceRosterSection">
 			<div class="fp-table-head">
 				<div>

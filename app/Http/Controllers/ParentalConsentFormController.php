@@ -8,10 +8,14 @@ use App\Models\StudentHealthRecord;
 use App\Support\AdviserClassScope;
 use App\Support\AuditTrail;
 use App\Support\ConsentFormScanner;
+use App\Support\ConsentReviewLog;
 use App\Support\EncryptedFileStorage;
+use App\Support\FeedingBeneficiarySummary;
+use App\Support\HealthServicesOffered;
 use App\Support\LearnerPlacement;
 use App\Support\MedicineAllergies;
 use App\Support\SchemaCache;
+use App\Support\SchoolClock;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -78,6 +82,12 @@ class ParentalConsentFormController extends Controller
             'has_other_illness' => ['nullable', 'boolean'],
             'other_illness_detail' => ['nullable', 'string', 'max:255'],
             'medical_cert_attached' => ['nullable', 'boolean'],
+            // Whether the parent's name and signature are both on the form, as
+            // the adviser confirmed it against the photo. The dialog always
+            // sends it; a form without both is filed as incomplete and gives
+            // no service until a complete one is on file. A request without
+            // the field files as complete, as every upload did before.
+            'form_complete' => ['nullable', 'boolean'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'consent' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
             'medical_certificate' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
@@ -95,6 +105,15 @@ class ParentalConsentFormController extends Controller
         if ($confirmed && empty($validated['services'])) {
             throw ValidationException::withMessages([
                 'services' => 'Mark at least one service the parent approved.',
+            ]);
+        }
+
+        // A "yes, except" leaves something out: the services it excludes are
+        // the rows marked Excluded, so one confirmed with none is a full
+        // consent filed under the wrong answer.
+        if ($confirmed && $consentType === 'partial' && empty($validated['excepted_services'])) {
+            throw ValidationException::withMessages([
+                'excepted_services' => 'Mark the services the parent excepted as Excluded.',
             ]);
         }
 
@@ -129,7 +148,9 @@ class ParentalConsentFormController extends Controller
             $request->validate(['answer_confirmed' => ['accepted']], [
                 'answer_confirmed.accepted' => 'Confirm that the answer read from the photo matches the signed form.',
             ]);
-            $validated['answer_from_scan'] = true;
+            // The reader's answer, or the adviser's correction of it: both are
+            // filed with the reading, and the review log says which.
+            $validated['answer_from_scan'] = self::scanAnswer($scan) === $validated['consent_type'];
 
             // Keep the clinical fields in step with the reading the adviser
             // checked. Explicit corrections take precedence over a proposal.
@@ -187,6 +208,25 @@ class ParentalConsentFormController extends Controller
             $services = array_values(array_unique([...$services, ...$excepted]));
         }
 
+        $incomplete = $request->has('form_complete') && ! $request->boolean('form_complete');
+
+        // For each service and field, what the reader proposed beside what the
+        // adviser files, so edited fields can be counted later.
+        $review = $scan !== null && SchemaCache::hasColumn('parental_consent_forms', 'scan_review')
+            ? $this->reviewLog($scan, $record, $schoolYear, [
+                'consent_type' => $consentType,
+                'services' => $services,
+                'excluded' => $excepted,
+                'partial_exception' => $consentType === 'partial' ? ($validated['partial_exception'] ?? null) : null,
+                'refused_reason' => $consentType === 'refused' ? ($validated['refused_reason'] ?? null) : null,
+                'allergy_food_detail' => $validated['allergy_food_detail'] ?? null,
+                'allergy_medicine_detail' => $validated['allergy_medicine_detail'] ?? null,
+                'prev_immunization_detail' => $validated['prev_immunization_detail'] ?? null,
+                'other_illness_detail' => $validated['other_illness_detail'] ?? null,
+                'incomplete' => $incomplete,
+            ])
+            : null;
+
         $upload = ParentalConsentForm::create([
             'student_health_record_id' => $record->id,
             'program_type' => ParentalConsentForm::PROGRAM_HEALTH_SERVICES,
@@ -213,6 +253,8 @@ class ParentalConsentFormController extends Controller
             'file_original_name' => $originalName,
             'uploaded_by_name' => (string) $request->session()->get('active_name', 'Class Adviser'),
             ...($storesScanResult ? ['scan_result' => $scan] : []),
+            ...($review !== null ? ['scan_review' => $review] : []),
+            ...($incomplete && SchemaCache::hasColumn('parental_consent_forms', 'incomplete') ? ['incomplete' => true] : []),
         ] + (SchemaCache::hasColumn('parental_consent_forms', 'services')
             // Written once the column exists, so an upload still files
             // before `php artisan migrate` has been run.
@@ -231,6 +273,22 @@ class ParentalConsentFormController extends Controller
                 'ParentalConsentForm',
                 $upload->id,
                 'Consent answer read from the photographed form and confirmed by the class adviser',
+            );
+        } elseif ($scan !== null && $consentType !== null) {
+            AuditTrail::record(
+                'confirmed',
+                'ParentalConsentForm',
+                $upload->id,
+                'Consent answer chosen by the class adviser in place of the photo reading',
+            );
+        }
+
+        if ($incomplete) {
+            AuditTrail::record(
+                'confirmed',
+                'ParentalConsentForm',
+                $upload->id,
+                'Consent form filed as incomplete: missing parent name or signature',
             );
         }
 
@@ -275,12 +333,35 @@ class ParentalConsentFormController extends Controller
             throw ValidationException::withMessages(['consent' => 'The name on this form belongs to another student. Choose the correct signed form.']);
         }
 
-        $readAnswer = ['all' => 'full', 'specific' => 'partial', 'deny' => 'refused'][$payload['draft']['consent_choice'] ?? ''] ?? null;
-        if (($validated['consent_type'] ?? null) !== null && $readAnswer !== $validated['consent_type']) {
-            throw ValidationException::withMessages(['scan_token' => 'The selected answer differs from the photo reading. Read the photo again or record the corrected answer without the reading.']);
-        }
-
         return $payload['draft'];
+    }
+
+    /** The answer the reader read off the sheet, as the upload names it; null when it read none. */
+    private static function scanAnswer(array $draft): ?string
+    {
+        return ['all' => 'full', 'specific' => 'partial', 'deny' => 'refused'][$draft['consent_choice'] ?? ''] ?? null;
+    }
+
+    /**
+     * The review log for one upload, read against the learner's grade and sex
+     * and the services the school offers that year — the same list the dialog
+     * started its rows from.
+     *
+     * @param  array<string, mixed>  $scan
+     * @param  array<string, mixed>  $saved
+     * @return array<string, mixed>
+     */
+    private function reviewLog(array $scan, StudentHealthRecord $record, string $schoolYear, array $saved): array
+    {
+        [$gradeLabel] = FeedingBeneficiarySummary::splitSection((string) $record->section);
+
+        return ConsentReviewLog::build(
+            $scan,
+            $saved,
+            LearnerPlacement::gradeNumber($gradeLabel),
+            FeedingBeneficiarySummary::sexOf($record),
+            HealthServicesOffered::for($record->institution_id ? (int) $record->institution_id : null, $schoolYear),
+        );
     }
 
     /**
@@ -329,9 +410,12 @@ class ParentalConsentFormController extends Controller
             'has_consent' => $form !== null,
             'school_year' => $schoolYear,
             'uploaded_by' => $form?->uploaded_by_name,
-            'uploaded_at' => $form?->created_at?->format('M d, Y'),
+            'uploaded_at' => SchoolClock::local($form?->created_at)?->format('M d, Y'),
             'consent_id' => $form?->id,
             'consent_type' => $form?->consent_type,
+            // Missing the parent's name or signature: on file, but it gives no
+            // service until a complete form is filed.
+            'incomplete' => (bool) $form?->incomplete,
             'partial_exception' => $form?->partial_exception,
             'refused_reason' => $form?->refused_reason,
             'allergy_food' => (bool) $form?->allergy_food,

@@ -659,21 +659,24 @@ class FeedingBeneficiaryProfileTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('/<button[^>]*data-endline-open[^>]*disabled/', $html);
         $this->assertStringContainsString('Record Endline', $html);
 
-        $this->postEndline($record, ['age' => 12, 'height_cm' => 121, 'weight_kg' => 22.4, 'recorded_at' => now()->toDateString()])
+        $this->postEndline($record, ['age' => 12, 'height_cm' => 145, 'weight_kg' => 32.2, 'recorded_at' => now()->toDateString()])
             ->assertRedirect(route('feedingcor-program.beneficiary', $record->id))
             ->assertSessionHas('success');
 
         $fresh = $record->fresh();
-        $this->assertEqualsWithDelta(121, (float) $fresh->endline_height_cm, 0.01);
-        $this->assertEqualsWithDelta(22.4, (float) $fresh->endline_weight_kg, 0.01);
-        // 22.4 / 1.21^2 = 15.30, computed on the server.
-        $this->assertEqualsWithDelta(15.30, (float) $fresh->endline_bmi_value, 0.05);
+        $this->assertEqualsWithDelta(145, (float) $fresh->endline_height_cm, 0.01);
+        $this->assertEqualsWithDelta(32.2, (float) $fresh->endline_weight_kg, 0.01);
+        // 32.2 / 1.45^2 = 15.32, computed on the server.
+        $this->assertEqualsWithDelta(15.32, (float) $fresh->endline_bmi_value, 0.05);
         $this->assertNotSame('', (string) $fresh->endline_nutritional_status);
+        // Who entered it, and when (report #32).
+        $this->assertSame('Test Coordinator', $fresh->endline_entered_by);
+        $this->assertNotNull($fresh->endline_entered_at);
 
         // Edited again, the endline on file is replaced.
-        $this->postEndline($record, ['age' => 12, 'height_cm' => 122, 'weight_kg' => 23.5])->assertSessionHas('success');
-        $this->assertEqualsWithDelta(23.5, (float) $record->fresh()->endline_weight_kg, 0.01);
-        $this->openRecord($record)->assertOk()->assertSee('Edit Endline');
+        $this->postEndline($record, ['age' => 12, 'height_cm' => 146, 'weight_kg' => 34])->assertSessionHas('success');
+        $this->assertEqualsWithDelta(34, (float) $record->fresh()->endline_weight_kg, 0.01);
+        $this->openRecord($record)->assertOk()->assertSee('Edit Endline')->assertSee('entered by Test Coordinator');
     }
 
     #[Test]

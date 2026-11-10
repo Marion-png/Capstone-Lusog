@@ -67,7 +67,7 @@ class SchoolHeadReportExportTest extends TestCase
             'bmi_value' => 15,
             'nutritional_status' => 'Wasted',
             'baseline_nutritional_status' => 'Wasted',
-            'student_details' => ['gender' => 'Male', 'nutritional_status_height_for_age' => 'Stunted'],
+            'student_details' => ['gender' => 'Male', 'height_cm' => 140, 'weight_kg' => 30, 'nutritional_status_height_for_age' => 'Stunted'],
         ], $extra));
     }
 
@@ -176,7 +176,7 @@ class SchoolHeadReportExportTest extends TestCase
         $this->makeLearner([
             'nutritional_status' => 'Normal',
             'baseline_nutritional_status' => 'Normal',
-            'student_details' => ['gender' => 'Female', 'nutritional_status_height_for_age' => 'Normal'],
+            'student_details' => ['gender' => 'Female', 'height_cm' => 140, 'weight_kg' => 30, 'nutritional_status_height_for_age' => 'Normal'],
         ]);
 
         $sheets = $this->sheets($this->withSession($this->headSession())
@@ -304,7 +304,7 @@ class SchoolHeadReportExportTest extends TestCase
     #[Test]
     public function the_endline_exports_as_its_own_form_and_the_packet_is_gone(): void
     {
-        $this->makeLearner(['feeding_enrolled_at' => now(), 'endline_nutritional_status' => 'Normal']);
+        $this->makeLearner(['feeding_enrolled_at' => now(), 'endline_nutritional_status' => 'Normal', 'endline_weight_kg' => 40]);
 
         $sheets = $this->sheets($this->withSession($this->headSession())
             ->get('/dashboard/school-head/reports/export?report=endline')

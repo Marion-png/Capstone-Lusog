@@ -300,6 +300,7 @@ class SchoolHeadRoleTest extends TestCase
             'baseline_nutritional_status' => 'Severely Wasted',
             'nutritional_status' => 'Normal',
             'endline_nutritional_status' => 'Normal',
+            'endline_weight_kg' => 40,
         ]);
 
         $baseline = $this->withSession($this->headSession())
@@ -367,12 +368,14 @@ class SchoolHeadRoleTest extends TestCase
             'feeding_enrolled_at' => now(),
             'baseline_nutritional_status' => 'Wasted',
             'endline_nutritional_status' => 'Normal',
+            'endline_weight_kg' => 40,
         ]);
         // Improved but NOT rehabilitated: climbed one rung, still wasted.
         $this->makeLearner([
             'feeding_enrolled_at' => now(),
             'baseline_nutritional_status' => 'Severely Wasted',
             'endline_nutritional_status' => 'Wasted',
+            'endline_weight_kg' => 40,
         ]);
         // Not measured at endline at all.
         $this->makeLearner([
@@ -434,6 +437,7 @@ class SchoolHeadRoleTest extends TestCase
                 'feeding_enrolled_at' => now(),
                 'baseline_nutritional_status' => 'Wasted',
                 'endline_nutritional_status' => $i === 4 ? 'Wasted' : 'Normal',
+                'endline_weight_kg' => 40,
             ]);
         }
 
@@ -641,6 +645,7 @@ class SchoolHeadRoleTest extends TestCase
         $learner = $this->makeLearner([
             'feeding_enrolled_at' => now(),
             'endline_nutritional_status' => 'Normal',
+            'endline_weight_kg' => 40,
         ]);
         $this->mark($learner, now()->toDateString(), true);
 

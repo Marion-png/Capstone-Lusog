@@ -105,7 +105,7 @@ class PublicHolidaySync
             }
 
             $status[$year]['count']++;
-            $stamp = $row->created_at?->toDateTimeString();
+            $stamp = SchoolClock::local($row->created_at)?->toDateTimeString();
             if ($stamp !== null && ($status[$year]['synced_at'] === null || $stamp > $status[$year]['synced_at'])) {
                 $status[$year]['synced_at'] = $stamp;
             }

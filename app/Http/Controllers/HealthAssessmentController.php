@@ -6,9 +6,11 @@ use App\Models\HealthAssessment;
 use App\Models\StudentHealthRecord;
 use App\Rules\BloodPressure;
 use App\Support\AdviserClassScope;
+use App\Support\ConsentFormScanner;
 use App\Support\LearnerPlacement;
 use App\Support\MedicineAllergies;
 use App\Support\SchemaCache;
+use App\Support\SchoolClock;
 use App\Support\StudentRosterSync;
 use App\Support\StudentVitalSigns;
 use Illuminate\Http\JsonResponse;
@@ -122,11 +124,13 @@ class HealthAssessmentController extends Controller
             'med_seizure_disorder' => ! empty($validated['med_seizure_disorder']),
             'med_frequent_infections' => ! empty($validated['med_frequent_infections']),
             'med_current_medications' => $validated['med_current_medications'] ?? null,
-            'med_allergies' => ! empty($validated['med_allergies']),
+            // A detail written for a box is the answer that the learner has
+            // it, so the box follows (HealthHistory, testers' report #8).
+            'med_allergies' => ! empty($validated['med_allergies']) || ConsentFormScanner::saysSomething((string) ($validated['med_allergies_detail'] ?? '')),
             'med_allergies_detail' => $validated['med_allergies_detail'] ?? null,
             'med_heart_condition' => ! empty($validated['med_heart_condition']),
             'med_tuberculosis' => ! empty($validated['med_tuberculosis']),
-            'med_hospitalization_surgery' => ! empty($validated['med_hospitalization_surgery']),
+            'med_hospitalization_surgery' => ! empty($validated['med_hospitalization_surgery']) || ConsentFormScanner::saysSomething((string) ($validated['med_hospitalization_detail'] ?? '')),
             'med_hospitalization_detail' => $validated['med_hospitalization_detail'] ?? null,
             'med_other_conditions' => $validated['med_other_conditions'] ?? null,
             'fam_hypertension' => ! empty($validated['fam_hypertension']),
@@ -219,7 +223,7 @@ class HealthAssessmentController extends Controller
             'date_of_assessment' => $assessment->date_of_assessment?->format('M d, Y'),
             'assessed_by' => $assessment->assessed_by,
             'submitted_by' => $assessment->submitted_by_name,
-            'submitted_at' => $assessment->created_at?->format('M d, Y'),
+            'submitted_at' => SchoolClock::local($assessment->created_at)?->format('M d, Y'),
             // Medical history
             'med_asthma' => (bool) $assessment->med_asthma,
             'med_diabetes' => (bool) $assessment->med_diabetes,

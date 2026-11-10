@@ -47,7 +47,7 @@
                 <dt>Learner ID / Grade</dt><dd>{{ $record?->student_id }} &middot; {{ $record?->section }}</dd>
                 <dt>Date of Assessment</dt><dd>{{ optional($a->date_of_assessment)->format('F j, Y') ?? '—' }}</dd>
                 <dt>Assessed by</dt><dd>{{ $a->assessed_by ?: '—' }}</dd>
-                <dt>Submitted by</dt><dd>{{ $a->submitted_by_name }} &middot; {{ $a->created_at?->format('M j, Y g:i A') }}</dd>
+                <dt>Submitted by</dt><dd>{{ $a->submitted_by_name }} &middot; {{ \App\Support\SchoolClock::local($a->created_at)?->format('M j, Y g:i A') }}</dd>
             </dl>
             <div class="cf-actions no-print" style="margin-top:12px;">
                 <button type="button" class="cf-btn cf-btn-ghost" onclick="window.print()">Print / Export PDF</button>

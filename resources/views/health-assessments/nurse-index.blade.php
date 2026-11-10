@@ -65,7 +65,7 @@
                             <td>{{ $assessment->studentHealthRecord?->section }}</td>
                             <td>{{ optional($assessment->date_of_assessment)->format('M j, Y') ?? '—' }}</td>
                             <td>{{ $assessment->assessed_by ?: $assessment->submitted_by_name }}</td>
-                            <td>{{ $assessment->created_at?->format('M j, Y g:i A') }}</td>
+                            <td>{{ \App\Support\SchoolClock::local($assessment->created_at)?->format('M j, Y g:i A') }}</td>
                             <td>
                                 @if ($examineIndex === null)
                                     <span style="color:var(--muted);">Not on this year's roster</span>

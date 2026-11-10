@@ -65,6 +65,7 @@ class FeedingCoordinatorTabsTest extends TestCase
             'nutritional_status' => $status,
             'baseline_nutritional_status' => $status,
             'endline_nutritional_status' => $endline,
+            'endline_weight_kg' => $endline !== null ? 40 : null,
             'student_details' => ['gender' => 'Male'],
             'feeding_enrolled_at' => $enrolled ? now() : null,
         ]);

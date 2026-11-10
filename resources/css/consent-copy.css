@@ -223,6 +223,7 @@
 
 .pcopy-std.is-consented_with_exceptions,
 .pcopy-std.is-check_exceptions,
+.pcopy-std.is-incomplete,
 .pcopy-std.is-unclear {
 	background: var(--lg-amber-tint, #FDF4E2);
 	color: var(--lg-amber-ink, #8A5A06);

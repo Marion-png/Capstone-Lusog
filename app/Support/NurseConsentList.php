@@ -33,8 +33,9 @@ final class NurseConsentList
     /** @var array<string, string> */
     public const STATUS_FILTERS = [
         ConsentStanding::SERVICE_CONSENTED => 'Consented',
-        ConsentStanding::SERVICE_DECLINED => 'Declined',
+        ConsentStanding::SERVICE_DECLINED => 'Excluded',
         ConsentStanding::SERVICE_NO_FORM => 'No form yet',
+        ConsentStanding::SERVICE_INCOMPLETE => 'Incomplete form',
     ];
 
     /**
@@ -328,7 +329,7 @@ final class NurseConsentList
             'letter' => 'Signed '.optional($letter?->signed_at)->format('M j, Y'),
             'upload' => 'Uploaded '.optional($upload?->created_at)->format('M j, Y'),
             default => $letter?->status === HealthConsentForm::STATUS_SENT
-                ? 'Letter sent '.optional($letter->sent_at)->format('M j, Y')
+                ? 'Letter sent '.SchoolClock::local($letter->sent_at)?->format('M j, Y')
                 : '',
         };
     }
@@ -409,7 +410,7 @@ final class NurseConsentList
         if ($source === 'upload' && $upload !== null) {
             return [
                 'by' => trim((string) $upload->uploaded_by_name) ?: 'the class adviser',
-                'on' => (string) optional($upload->created_at)->format('M j, Y'),
+                'on' => (string) SchoolClock::local($upload->created_at)?->format('M j, Y'),
                 'how' => 'Uploaded',
             ];
         }
@@ -421,7 +422,7 @@ final class NurseConsentList
 
                 return [
                     'by' => trim((string) ($entry['actor_name'] ?? '')) ?: (trim((string) $letter->created_by_name) ?: 'the class adviser'),
-                    'on' => (string) optional($letter->signed_at)->format('M j, Y'),
+                    'on' => (string) SchoolClock::local($letter->signed_at)?->format('M j, Y'),
                     'how' => 'Uploaded',
                 ];
             }

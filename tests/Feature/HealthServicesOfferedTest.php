@@ -195,7 +195,8 @@ class HealthServicesOfferedTest extends TestCase
 
     /**
      * The upload dialog locks the rows the learner is never given: a service
-     * the school does not offer this school year, and Iron per learner sex.
+     * the school does not offer this school year, MR, Td outside Grade 7, and
+     * Iron per learner sex.
      */
     #[Test]
     public function the_upload_dialog_knows_which_rows_are_locked(): void
@@ -215,8 +216,10 @@ class HealthServicesOfferedTest extends TestCase
         $this->assertStringContainsString('"key":"tas","label":', $html);
         $this->assertMatchesRegularExpression('/"key":"tas".*?"offered":false/', $html);
         $this->assertMatchesRegularExpression('/"key":"iron".*?"offered":true,"only_sex":"Female"/', $html);
-        // A Grade 8 class is never given the Grade 7 immunization.
-        $this->assertStringNotContainsString('"key":"immunization_grade7"', $html);
+        // A Grade 8 class is never given the Grade 7 immunization: it is listed,
+        // carrying the grade that locks it to Not offered for this class.
+        $this->assertMatchesRegularExpression('/"key":"immunization_grade7".*?"only_grade":7/', $html);
+        $this->assertStringContainsString('const classGrade = 8;', $html);
         $this->assertStringContainsString("'Not offered'", $html);
     }
 }

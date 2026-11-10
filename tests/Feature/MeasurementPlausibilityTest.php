@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\FeedingWeighIn;
 use App\Models\Institution;
 use App\Models\StudentHealthRecord;
 use App\Support\MeasurementPlausibility;
@@ -84,20 +85,65 @@ class MeasurementPlausibilityTest extends TestCase
         $this->assertSame(0, StudentHealthRecord::count(), 'Nothing is written for a reading nobody could have.');
     }
 
+    /**
+     * BMI 12.6 at 14 years is beyond −4 SD: Severely Wasted, real, and
+     * unusual. It is never refused — the adviser is asked once to confirm the
+     * figures (testers' report #6), and with that it saves.
+     */
     #[Test]
-    public function a_real_severely_wasted_learner_is_never_refused(): void
+    public function a_real_severely_wasted_learner_is_never_refused_only_confirmed(): void
     {
-        // BMI 12.6 at 14 years: about −4 SD, Severely Wasted, and real.
         $this->assertSame([], MeasurementPlausibility::problems(152, 29.2, 14 * 12 + 7, 'Male'));
+        $this->assertNotSame([], MeasurementPlausibility::check(152, 29.2, 14 * 12 + 7, 'Male')['warnings']);
 
-        // The tester's four learners all save.
-        $this->assertSame([], MeasurementPlausibility::problems(152, 38, 175.8, 'Male'));
-        $this->assertSame([], MeasurementPlausibility::problems(158, 38, 186.0, 'Male'));
-        $this->assertSame([], MeasurementPlausibility::problems(148, 52, 153.6, 'Female'));
-        $this->assertSame([], MeasurementPlausibility::problems(145, 38, 170.1, 'Male'));
+        // The tester's four learners all save, with nothing to confirm.
+        foreach ([[152, 38, 175.8, 'Male'], [158, 38, 186.0, 'Male'], [148, 52, 153.6, 'Female'], [145, 38, 170.1, 'Male']] as [$h, $w, $age, $sex]) {
+            $this->assertSame(['errors' => [], 'warnings' => []], MeasurementPlausibility::check($h, $w, $age, $sex));
+        }
 
-        $this->enrol(['weight_kg' => 29.2])->assertSessionHasNoErrors();
+        $this->enrol(['weight_kg' => 29.2])
+            ->assertSessionHasErrors(MeasurementPlausibility::CONFIRM_FIELD)
+            ->assertSessionDoesntHaveErrors(['height_cm', 'weight_kg']);
+        $this->assertSame(0, StudentHealthRecord::count(), 'Not saved until the adviser confirms.');
+
+        $this->enrol(['weight_kg' => 29.2, MeasurementPlausibility::CONFIRM_FIELD => '1'])->assertSessionHasNoErrors();
         $this->assertSame(1, StudentHealthRecord::count());
+        $this->assertSame('Severely Wasted', StudentHealthRecord::first()->baseline_nutritional_status);
+    }
+
+    /**
+     * A slip of a unit is said as one, on the field to correct: a height in
+     * metres in a centimetre box, a weight in grams, centimetres in the
+     * enrolment form's metre box.
+     */
+    #[Test]
+    public function a_unit_slip_is_named_on_its_field(): void
+    {
+        $this->assertStringContainsString('looks like metres', MeasurementPlausibility::problems(1.5, 42, 160.0, 'Female')['height_cm']);
+        $this->assertStringContainsString('looks like grams', MeasurementPlausibility::problems(150, 42000, 160.0, 'Female')['weight_kg']);
+
+        $this->enrol(['height_m' => 152])
+            ->assertSessionHasErrors(['height_cm' => 'The height is entered in metres on this form, and 152 looks like centimetres. Enter 1.52 m.']);
+        $this->enrol(['weight_kg' => 38000])->assertSessionHasErrors('weight_kg');
+        $this->assertSame(0, StudentHealthRecord::count());
+    }
+
+    /**
+     * The tester's own example: a girl born 22 August 2013, 42 kg, 1.50 m —
+     * BMI 18.7, Normal, with nothing to confirm.
+     */
+    #[Test]
+    public function an_ordinary_learner_saves_as_before(): void
+    {
+        $this->enrol([
+            'lrn' => '400000000209', 'gender' => 'Female',
+            'birth_month' => 8, 'birth_day' => 22, 'birth_year' => 2013,
+            'weight_kg' => 42, 'height_m' => 1.50,
+        ])->assertSessionHasNoErrors();
+
+        $record = StudentHealthRecord::where('student_id', '400000000209')->firstOrFail();
+        $this->assertSame('18.67', (string) $record->baseline_bmi_value);
+        $this->assertSame('Normal', $record->baseline_nutritional_status);
     }
 
     #[Test]
@@ -141,8 +187,47 @@ class MeasurementPlausibilityTest extends TestCase
     {
         $html = $this->withSession($this->adviserSession())->get(route('dashboard.class-adviser'))->assertOk()->getContent();
 
-        $this->assertStringContainsString('window.WhoGrowth.problems(', $html);
+        $this->assertStringContainsString('window.WhoGrowth.check(', $html);
         $this->assertStringContainsString('setCustomValidity(found.weight)', $html);
         $this->assertStringContainsString('"bmiZ":'.json_encode(MeasurementPlausibility::BMI_Z_LIMIT), $html);
+        $this->assertStringContainsString('"warnZ":'.json_encode(MeasurementPlausibility::WARN_Z), $html);
+        // The confirmation an unusual reading asks for, ready on the form.
+        $this->assertStringContainsString('name="'.MeasurementPlausibility::CONFIRM_FIELD.'"', $html);
+    }
+
+    /**
+     * Every place a measurement is entered asks the same check: the baseline,
+     * the coordinator's endline, and a progress weigh-in.
+     */
+    #[Test]
+    public function every_measurement_entry_point_refuses_the_same_reading(): void
+    {
+        $record = StudentHealthRecord::create([
+            'institution_id' => $this->school->id,
+            'school_year' => StudentHealthRecord::currentSchoolYear(),
+            'student_name' => 'Testcase, Rafael',
+            'student_id' => '400000000210',
+            'section' => 'Grade 8 / Rizal',
+            'baseline_age' => 14, 'baseline_height_cm' => 152, 'baseline_weight_kg' => 38,
+            'baseline_bmi_value' => 16.4, 'baseline_nutritional_status' => 'Wasted',
+            'student_details' => ['gender' => 'Male', 'birth_year' => 2012, 'birth_month' => 3, 'birth_day' => 14],
+            'feeding_enrolled_at' => now(),
+        ]);
+        $this->school->forceFill(['feeding_progress_weigh_ins' => true])->save();
+
+        $coordinator = [
+            'active_role' => 'feeding_coor',
+            'active_name' => 'Feeding Coordinator',
+            'active_school_name' => 'Test School',
+            'active_institution_id' => $this->school->id,
+        ];
+
+        $this->withSession($coordinator)
+            ->post(route('feedingcor-program.beneficiary.weigh-in', $record), [
+                'feeding_day' => 30, 'weighed_on' => '2026-11-09', 'height_cm' => 187, 'weight_kg' => 8.8,
+            ])
+            ->assertSessionHasErrorsIn('weighIn', 'weight_kg');
+
+        $this->assertSame(0, FeedingWeighIn::count());
     }
 }

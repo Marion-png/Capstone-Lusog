@@ -8,11 +8,11 @@ use App\Support\AuditTrail;
 use App\Support\BmiClassifier;
 use App\Support\ClassMasterlistTemplate;
 use App\Support\ClassMasterlistWorkbook;
+use App\Support\HealthHistory;
 use App\Support\LearnerPlacement;
 use App\Support\MasterlistSheetScanner;
 use App\Support\MeasurementPlausibility;
 use App\Support\MedicineAllergies;
-use App\Support\PostureGait;
 use App\Support\SchemaCache;
 use App\Support\SchoolClock;
 use App\Support\SchoolYearTransition;
@@ -104,15 +104,24 @@ class AdviserController extends Controller
     {
         $this->adviserOnly($request);
 
+        // The form takes the height in metres. A figure of three or more in
+        // that box is centimetres typed in the wrong unit, said as such.
+        $heightMetres = $request->input('height_m');
+        if (is_numeric($heightMetres) && (float) $heightMetres >= 3) {
+            throw ValidationException::withMessages([
+                'height_cm' => 'The height is entered in metres on this form, and '.rtrim(rtrim(number_format((float) $heightMetres, 2, '.', ''), '0'), '.')
+                    .' looks like centimetres. Enter '.number_format(((float) $heightMetres) / 100, 2).' m.',
+            ]);
+        }
+
         $request->merge($this->normaliseEnrolmentInput($request->all()));
 
         $validated = $request->validate($this->enrolmentRules());
 
         // A height and weight no learner of this age and sex could have is a
-        // typing slip, and it would be classified, counted and fed on.
-        if ($problems = $this->implausibleMeasurements($validated)) {
-            throw ValidationException::withMessages($problems);
-        }
+        // typing slip, and it would be classified, counted and fed on; an
+        // unusual one is saved once the adviser confirms it.
+        $this->guardMeasurements($validated, $request->boolean(MeasurementPlausibility::CONFIRM_FIELD));
 
         $this->applyAssignedClass($request, $validated);
 
@@ -1090,8 +1099,10 @@ class AdviserController extends Controller
             'division' => ['nullable', 'string', 'max:255'],
             'telephone_no' => ['required', 'string', 'max:50'],
             'gender' => ['nullable', 'string', 'max:20'],
-            'height_cm' => ['required', 'numeric', 'min:30', 'max:250'],
-            'weight_kg' => ['required', 'numeric', 'min:0.1', 'max:250'],
+            // The range is MeasurementPlausibility's to say, in words that name
+            // the slip (metres, grams), not a bare "must be at least 30".
+            'height_cm' => MeasurementPlausibility::rule(),
+            'weight_kg' => MeasurementPlausibility::rule(),
             'grade_level' => ['required', 'string', 'max:50'],
             'section' => ['required', 'string', 'max:100'],
             'systems_review' => ['nullable', 'array'],
@@ -1523,8 +1534,10 @@ class AdviserController extends Controller
     private function normaliseHealthHistory(array $input): array
     {
         // Posture / Gait is Good or Poor; a form still posting the old
-        // Normal / Abnormal words is saved under the current ones.
-        $history = PostureGait::normalizeHistory(
+        // Normal / Abnormal words is saved under the current ones. A detail
+        // written for Allergies or Hospitalization / Surgery ticks its box
+        // (HealthHistory, testers' report #8).
+        $history = HealthHistory::normalize(
             $this->normaliseChecklist($input, self::HEALTH_HISTORY_FLAGS, self::HEALTH_HISTORY_TEXT)
         );
 
@@ -1583,7 +1596,29 @@ class AdviserController extends Controller
      */
     private function implausibleMeasurements(array $validated): array
     {
-        return MeasurementPlausibility::problems(
+        return MeasurementPlausibility::problems(...$this->measurementReading($validated));
+    }
+
+    /**
+     * Refuse an impossible reading, and an unusual one the adviser has not
+     * confirmed (MeasurementPlausibility::guard).
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    private function guardMeasurements(array $validated, bool $confirmed): void
+    {
+        MeasurementPlausibility::guard(...[...$this->measurementReading($validated), $confirmed]);
+    }
+
+    /**
+     * Height, weight, age in months today and sex, as the checks read them.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array{0: float|null, 1: float|null, 2: float|null, 3: string|null}
+     */
+    private function measurementReading(array $validated): array
+    {
+        return [
             $this->measurementOrNull($validated['height_cm'] ?? null),
             $this->measurementOrNull($validated['weight_kg'] ?? null),
             BmiClassifier::ageAtMeasurement([
@@ -1592,7 +1627,7 @@ class AdviserController extends Controller
                 'birth_day' => $validated['birth_day'] ?? null,
             ], SchoolClock::today()),
             isset($validated['gender']) ? (string) $validated['gender'] : null,
-        );
+        ];
     }
 
     private function measurementOrNull(mixed $value): ?float

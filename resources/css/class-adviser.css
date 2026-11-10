@@ -302,14 +302,16 @@ tbody tr:hover td{background:#f7fbf8}
 .ms-row-anchor{color:inherit;text-decoration:none}
 
 .ms-badge{display:inline-flex;align-items:center;padding:4px 12px;border-radius:999px;font-size:.7rem;font-weight:700;white-space:nowrap}
-.ms-profile-complete,.ms-consent-approved{background:#E7F5EC;color:#1F8A4C}
-.ms-profile-partial,.ms-consent-partial{background:#FDF4E2;color:#b45309}
+.ms-profile-complete,.ms-consent-approved,.ms-consent-partial{background:#E7F5EC;color:#1F8A4C}
+.ms-profile-partial{background:#FDF4E2;color:#b45309}
 .ms-profile-pending{background:#FCECEC;color:#b91c1c}
 .ms-consent-declined{background:#FCECEC;color:#b91c1c}
 .ms-consent-pending{background:#e6efe9;color:#3f6350}
 /* The guardian has returned their signed form; nobody has keyed in what it
    says. Blue, not green: the document is in, the answer is not read yet. */
 .ms-consent-returned{background:#E4EDF8;color:#1E4E8C}
+/* A form on file without the parent's name or signature gives no service. */
+.ms-consent-incomplete{background:var(--lg-amber-tint,#FDF4E2);color:var(--lg-amber-ink,#8A5A06)}
 
 /* Row actions: View Profile, Edit Profile, Parent's Consent. Consent posts the
    learner's LRN, so it is a one-button form rather than a link. */
@@ -455,6 +457,13 @@ tbody tr:hover td{background:#f7fbf8}
 .pc-confirm{display:flex;align-items:flex-start;gap:8px;margin-top:4px;padding:9px 11px;font-size:.76rem;font-weight:600;color:var(--text);background:var(--g100);border:1.5px solid var(--g300);border-radius:10px;cursor:pointer}
 .pc-confirm[hidden]{display:none}
 .pc-confirm input{accent-color:var(--g700);margin-top:2px;flex-shrink:0}
+/* The parent's name and signature: a plain tick, not an attestation. */
+.pc-complete{margin-top:0;background:#f7faf8;border-color:var(--border);font-weight:500}
+.pc-complete-missing{margin:6px 0 0;font-size:.74rem;font-weight:700;color:var(--lg-amber-ink,#8A5A06)}
+.pc-complete-missing[hidden]{display:none}
+/* A field the reader was unsure of: checked against the photo. */
+.pc-input.is-check{border-color:var(--lg-amber,#F2B84B);background:var(--lg-amber-tint,#FDF4E2)}
+.pcc-summary dd.pcc-incomplete{color:var(--lg-amber-ink,#8A5A06)}
 /* The tick sits on its own line above Cancel / Upload Consent: step three,
    then step four. */
 .pc-actions{flex-wrap:wrap;align-items:center}
@@ -677,7 +686,7 @@ tbody tr:hover td{background:#f7fbf8}
 .pc-view-row dd{margin:0;font-weight:600;color:var(--text);overflow-wrap:anywhere}
 .pc-std{display:inline-block;font-size:.68rem;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
 .pc-std.is-consented{background:var(--lg-mint,#E7F5EC);color:var(--lg-success-ink,#14653C)}
-.pc-std.is-consented_with_exceptions,.pc-std.is-check_exceptions{background:var(--lg-amber-tint,#FDF4E2);color:var(--lg-amber-ink,#8A5A06)}
+.pc-std.is-consented_with_exceptions,.pc-std.is-check_exceptions,.pc-std.is-incomplete{background:var(--lg-amber-tint,#FDF4E2);color:var(--lg-amber-ink,#8A5A06)}
 .pc-std.is-declined{background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B)}
 .pc-std.is-no_form{background:#f1f5f9;color:#475569}
 .pc-std.is-not_on_form,.pc-std.is-not_applicable,.pc-std.is-not_enrolled{background:#fff;color:var(--muted);border:1px dashed var(--border)}
@@ -1323,3 +1332,42 @@ tbody tr:hover td{background:#f3fbf6}
     .confirm-overlay.open, .confirm-overlay.is-closing,
     .confirm-overlay.open .confirm-modal, .confirm-overlay.is-closing .confirm-modal { animation: none; }
 }
+
+/* ── The adviser review panel ─────────────────────────────────────
+   The form's own fields, moved into the reading beside the photo while a
+   reading is on screen, under the section they belong to. */
+.pc-fold-edit{display:flex;flex-direction:column;gap:12px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--border)}
+.pc-fold-edit .pc-field{margin:0}
+.pc-fold-edit .pc-fieldset > legend{display:none}
+/* Changed from what the reading pre-filled. */
+.pc-edited{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#E4EDF8;color:#1E4E8C;font-size:.62rem;font-weight:700;letter-spacing:.02em;vertical-align:middle;white-space:nowrap}
+/* A partial consent's exceptions: the rows marked Excluded, and the
+   parent's own words as written. */
+.pc-excepted{margin:4px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}
+.pc-excepted li{padding:6px 10px;border-radius:8px;background:var(--lg-danger-tint,#FCECEC);color:var(--lg-danger-ink,#A32B2B);font-size:.76rem;font-weight:600;line-height:1.4}
+.pc-excepted li.is-none{background:#f1f5f9;color:#475569;font-weight:500}
+.pc-written{margin:6px 0 0;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;background:#f7faf8;font-size:.76rem;line-height:1.45}
+.pc-written[hidden]{display:none}
+.pc-written > span{display:block;font-size:.68rem;font-weight:600;color:var(--muted)}
+.pc-written q{quotes:"\201C" "\201D";font-weight:600;color:var(--text)}
+.pc-written.is-check{border-color:var(--lg-amber,#F2B84B);background:var(--lg-amber-tint,#FDF4E2)}
+/* Two lists on Confirm Upload; an empty one says None. */
+.pcc-list + .pcc-services-head{margin-top:14px}
+.pcc-row.is-none{padding:10px 12px;font-size:.78rem;color:var(--muted)}
+button.btn[type="submit"]:disabled{opacity:.55;cursor:not-allowed}
+
+/* An unusual measurement, confirmed before it is saved
+   (partials/measurement-confirm) — the same box lusog-theme.css draws. */
+.measure-confirm {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid #EFDCB2;
+    border-radius: 10px;
+    background: var(--lg-amber-tint, #FDF4E2);
+    color: var(--lg-amber-ink, #8A5A06);
+    font-size: .82rem;
+    line-height: 1.45;
+}
+.measure-confirm[hidden] { display: none; }
+.measure-confirm-text { margin: 0 0 8px; }
+.measure-confirm-tick { display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; }

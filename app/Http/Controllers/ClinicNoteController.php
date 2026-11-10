@@ -7,6 +7,7 @@ use App\Models\Consultation;
 use App\Models\StudentHealthRecord;
 use App\Support\ConsultationMedicines;
 use App\Support\SchemaCache;
+use App\Support\SchoolClock;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -44,7 +45,7 @@ class ClinicNoteController extends Controller
                 'id' => $note->id,
                 'note' => (string) $note->note,
                 'author' => (string) $note->author_name,
-                'recorded_at' => $note->created_at?->format('M j, Y g:i A'),
+                'recorded_at' => SchoolClock::local($note->created_at)?->format('M j, Y g:i A'),
                 'follow_up_date' => $note->follow_up_date?->format('M j, Y'),
                 'school_year' => $note->school_year,
             ])->values(),
@@ -86,7 +87,7 @@ class ClinicNoteController extends Controller
                 'id' => $note->id,
                 'note' => (string) $note->note,
                 'author' => (string) $note->author_name,
-                'recorded_at' => $note->created_at?->format('M j, Y g:i A'),
+                'recorded_at' => SchoolClock::local($note->created_at)?->format('M j, Y g:i A'),
                 'follow_up_date' => $note->follow_up_date?->format('M j, Y'),
                 'school_year' => $note->school_year,
             ],

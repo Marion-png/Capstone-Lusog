@@ -339,6 +339,14 @@ class NurseController extends Controller
                     ->withInput()
                     ->withErrors(['deworming' => "Cannot proceed — the parent/guardian refused consent for health services for SY {$schoolYear}."]);
             }
+
+            // Filed without the parent's name or signature: it gives no
+            // service until a complete form is on file.
+            if ($consentForm->incomplete) {
+                return back()
+                    ->withInput()
+                    ->withErrors(['deworming' => "Cannot proceed — the consent form on file for SY {$schoolYear} is missing the parent's name or signature."]);
+            }
         }
 
         $existingHeight = $records[$index]['height_cm'] ?? null;
@@ -439,37 +447,15 @@ class NurseController extends Controller
             $studentRecord = StudentHealthRecord::currentForStudent($lrn, $request->session()->get('active_institution_id'));
 
             if ($studentRecord !== null) {
-                $endlineHeight = $request->input('height_cm');
-                $endlineWeight = $request->input('weight_kg');
-                $endlineBmi = null;
-                if (is_numeric($endlineHeight) && is_numeric($endlineWeight) && (float) $endlineHeight > 0) {
-                    $heightMeters = ((float) $endlineHeight) / 100;
-                    $endlineBmi = round(((float) $endlineWeight) / ($heightMeters * $heightMeters), 2);
-                }
-
-                $changes = [
+                // An examination is not a weighing, and it never writes the
+                // endline: that is the Feeding Program Coordinator's, through
+                // the one endline write path with its checks (testers' report
+                // #32). The older form that still posted a height and weight
+                // here stamped the baseline status as an endline nobody took.
+                $studentRecord->update([
                     'examination' => $records[$index]['examination'],
                     'attendance_by_month' => $attendanceByMonth,
-                ];
-
-                // An examination is not a weighing. This form no longer asks for
-                // a height or a weight, and stamping the endline columns anyway
-                // recorded a closing weigh-in nobody took: the baseline status
-                // copied across and counted on the Final BMI grid as a learner
-                // re-measured with no change. Only an older form that still posts
-                // the figures has measured anything.
-                if (is_numeric($endlineHeight) || is_numeric($endlineWeight)) {
-                    $changes += [
-                        'weight' => is_numeric($endlineWeight) ? (float) $endlineWeight : $studentRecord->weight,
-                        'endline_height_cm' => is_numeric($endlineHeight) ? (float) $endlineHeight : $studentRecord->endline_height_cm,
-                        'endline_weight_kg' => is_numeric($endlineWeight) ? (float) $endlineWeight : $studentRecord->endline_weight_kg,
-                        'endline_bmi_value' => $endlineBmi ?? $studentRecord->endline_bmi_value,
-                        'endline_nutritional_status' => $lockedBmiStatus !== '' ? $lockedBmiStatus : $studentRecord->endline_nutritional_status,
-                        'endline_recorded_at' => $examDate,
-                    ];
-                }
-
-                $studentRecord->update($changes);
+                ]);
             }
         }
 

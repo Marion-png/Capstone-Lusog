@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\HealthConsentForm;
 use App\Models\HealthServiceSetting;
+use App\Models\Institution;
 use App\Models\InstitutionSection;
 use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use App\Support\AccountPassword;
 use App\Support\AccountSettings;
 use App\Support\AuditTrail;
+use App\Support\FeedingWeighIns;
 use App\Support\HealthServicesOffered;
 use App\Support\RequestMemo;
 use App\Support\WorkingSchoolYear;
@@ -61,7 +63,39 @@ class SettingsController extends Controller
             'healthServices' => in_array($profile['role'], HealthServicesOffered::EDIT_ROLES, true) && $institutionId > 0
                 ? $this->healthServicesPanel($institutionId, (string) $request->query('services_year', ''))
                 : null,
+            // The Feeding Program Coordinator's Progress weigh-ins switch.
+            'progressWeighIns' => $profile['role'] === 'feeding_coor' && $institutionId > 0
+                ? ['supported' => FeedingWeighIns::supported(), 'enabled' => FeedingWeighIns::enabled($institutionId)]
+                : null,
         ]);
+    }
+
+    /**
+     * Turn the school's optional progress weigh-ins on or off (report #33).
+     * The coordinator's, for their own school, which the request never names.
+     * Off hides the weigh-ins everywhere and keeps every one recorded.
+     */
+    public function updateProgressWeighIns(Request $request)
+    {
+        $institutionId = (int) $request->session()->get('active_institution_id');
+
+        abort_unless((string) $request->session()->get('active_role') === 'feeding_coor' && $institutionId > 0, 403, 'Only the Feeding Program Coordinator can change progress weigh-ins.');
+
+        if (! FeedingWeighIns::supported()) {
+            return redirect()->route('settings')->with('error', 'The database has not been updated for this setting yet.');
+        }
+
+        $on = $request->boolean('enabled');
+        $was = FeedingWeighIns::enabled($institutionId);
+
+        Institution::query()->whereKey($institutionId)->update(['feeding_progress_weigh_ins' => $on]);
+        RequestMemo::forgetPrefix('weigh-ins:');
+
+        // A raw write, so the audit entry is recorded here.
+        AuditTrail::record('updated', 'Institution', $institutionId, 'Progress weigh-ins turned '.($on ? 'on' : 'off').' (were '.($was ? 'on' : 'off').')');
+
+        return redirect()->route('settings')->withFragment('progress-weigh-ins')
+            ->with('success', 'Progress weigh-ins are now '.($on ? 'on' : 'off').' for your school.');
     }
 
     /**

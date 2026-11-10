@@ -111,7 +111,7 @@
 								};
 							@endphp
 							<tr>
-								<td class="sa-nowrap tnum">{{ $log->created_at?->format('M d, Y H:i:s') }}</td>
+								<td class="sa-nowrap tnum">{{ \App\Support\SchoolClock::local($log->created_at)?->format('M d, Y H:i:s') }}</td>
 								<td>
 									<span class="sa-audit-actor">{{ $log->actor_name ?: '—' }}</span>
 									<span class="sa-cell-sub">{{ $log->actor_username }}{{ $log->actor_role ? ' · '.$log->actor_role : '' }}</span>
@@ -131,7 +131,7 @@
 										        data-audit-title="{{ $log->description ?: $log->action }}">View</button>
 										<template id="sa-audit-entry-{{ $log->id }}">
 											<dl class="sa-audit-facts">
-												<div><dt>When</dt><dd class="tnum">{{ $log->created_at?->format('F j, Y · g:i:s A') }}</dd></div>
+												<div><dt>When</dt><dd class="tnum">{{ \App\Support\SchoolClock::local($log->created_at)?->format('F j, Y · g:i:s A') }}</dd></div>
 												<div><dt>Actor</dt><dd>{{ $log->actor_name ?: '—' }}@if ($log->actor_username)<span class="sa-cell-sub">{{ $log->actor_username }}{{ $log->actor_role ? ' · '.$log->actor_role : '' }}</span>@endif</dd></div>
 												<div><dt>Action</dt><dd><span class="badge {{ $actionBadge((string) $log->action) }}">{{ $log->action }}</span></dd></div>
 												<div><dt>Subject</dt><dd>{{ $log->subject_type ? $log->subject_type.($log->subject_id ? ' #'.$log->subject_id : '') : '—' }}</dd></div>

@@ -29,8 +29,13 @@
     $whoGrowthLimits = [
         'bmiZ' => \App\Support\MeasurementPlausibility::BMI_Z_LIMIT,
         'heightZ' => \App\Support\MeasurementPlausibility::HEIGHT_Z_LIMIT,
+        'warnZ' => \App\Support\MeasurementPlausibility::WARN_Z,
         'minBmi' => \App\Support\MeasurementPlausibility::MIN_BMI,
         'maxBmi' => \App\Support\MeasurementPlausibility::MAX_BMI,
+        'minHeight' => \App\Support\MeasurementPlausibility::MIN_HEIGHT_CM,
+        'maxHeight' => \App\Support\MeasurementPlausibility::MAX_HEIGHT_CM,
+        'minWeight' => \App\Support\MeasurementPlausibility::MIN_WEIGHT_KG,
+        'maxWeight' => \App\Support\MeasurementPlausibility::MAX_WEIGHT_KG,
     ];
 @endphp
 <script>
@@ -151,6 +156,97 @@ window.WhoGrowth = window.WhoGrowth || (() => {
         return found;
     };
 
-    return { ageInMonths, bmiForAge, heightForAge, problems };
+    // MeasurementPlausibility::check(), read again: the impossible (refused,
+    // naming the field — a unit slip said as one) and the unusual (saved once
+    // confirmed), in the server's own words.
+    const check = (heightCm, weightKg, age, gender) => {
+        const errors = { height: '', weight: '' };
+        const warnings = [];
+        let h = heightCm > 0 ? heightCm : null;
+        let w = weightKg > 0 ? weightKg : null;
+
+        if (h !== null && h < LIMIT.minHeight) {
+            errors.height = h < 3
+                ? 'A height of ' + figure(h) + ' cm looks like metres. Enter the height in centimetres (' + figure(h * 100) + ' cm).'
+                : 'A height of ' + figure(h) + ' cm is too short for a learner. Check the height.';
+            h = null;
+        } else if (h !== null && h > LIMIT.maxHeight) {
+            errors.height = 'A height of ' + figure(h) + ' cm is too tall for a learner. Check the height.';
+            h = null;
+        }
+
+        if (w !== null && w > LIMIT.maxWeight) {
+            errors.weight = w >= 1000
+                ? 'A weight of ' + figure(w) + ' kg looks like grams. Enter the weight in kilograms (' + figure(w / 1000) + ' kg).'
+                : 'A weight of ' + figure(w) + ' kg is too heavy for a learner. Check the weight.';
+            w = null;
+        } else if (w !== null && w < LIMIT.minWeight) {
+            errors.weight = 'A weight of ' + figure(w) + ' kg is too light for a learner. Check the weight.';
+            w = null;
+        }
+
+        const found = problems(h, w, age, gender);
+        errors.height = errors.height || found.height;
+        errors.weight = errors.weight || found.weight;
+
+        if (h !== null && !found.height) {
+            const z = zScore(HEIGHT_FOR_AGE, gender, age, h);
+            if (z !== null && Math.abs(z) > LIMIT.warnZ) {
+                warnings.push('A height of ' + figure(h) + ' cm is very ' + (z < 0 ? 'short' : 'tall') + ' for a learner aged '
+                    + ageLabel(age) + ' (more than ' + LIMIT.warnZ + ' SD from the WHO median).');
+            }
+        }
+
+        if (h !== null && w !== null && !found.weight && !found.height) {
+            const bmi = w / Math.pow(h / 100, 2);
+            const z = zScore(BMI_FOR_AGE, gender, age, Math.round(bmi * 100) / 100);
+            if (z !== null && Math.abs(z) > LIMIT.warnZ) {
+                warnings.push('A BMI of ' + bmi.toFixed(1) + ' is very ' + (z < 0 ? 'low' : 'high') + ' for a learner aged '
+                    + ageLabel(age) + ' (more than ' + LIMIT.warnZ + ' SD from the WHO median).');
+            }
+        }
+
+        return { errors, warnings };
+    };
+
+    // Wires one form's height and weight to check(): an impossible figure
+    // holds the form back on its own field, and an unusual one shows the
+    // confirmation box ([data-measure-confirm]) whose tick is then required.
+    // opts: { height, weight, heightUnit: 'cm' | 'm', age: () => months|null, sex: () => string }
+    const bind = (form, opts) => {
+        if (!form || !opts.height || !opts.weight) return () => {};
+        const box = form.querySelector('[data-measure-confirm]');
+        const text = box?.querySelector('[data-measure-confirm-text]');
+        const tick = box?.querySelector('input[type="checkbox"]');
+        const serverSaid = text ? text.textContent.trim() : '';
+
+        const run = () => {
+            const raw = Number(opts.height.value);
+            const heightCm = Number.isFinite(raw) && raw > 0 ? (opts.heightUnit === 'm' ? raw * 100 : raw) : null;
+            const kg = Number(opts.weight.value);
+            const result = check(heightCm, Number.isFinite(kg) && kg > 0 ? kg : null, opts.age ? opts.age() : null, opts.sex ? opts.sex() : '');
+            opts.height.setCustomValidity(result.errors.height);
+            opts.weight.setCustomValidity(result.errors.weight);
+
+            if (box) {
+                const unusual = result.warnings.length > 0;
+                box.hidden = !unusual && serverSaid === '';
+                if (text) text.textContent = unusual ? result.warnings.join(' ') : serverSaid;
+                if (tick) tick.required = unusual;
+            }
+
+            return result;
+        };
+
+        ['input', 'change'].forEach((event) => {
+            opts.height.addEventListener(event, run);
+            opts.weight.addEventListener(event, run);
+        });
+        run();
+
+        return run;
+    };
+
+    return { ageInMonths, bmiForAge, heightForAge, problems, check, bind };
 })();
 </script>

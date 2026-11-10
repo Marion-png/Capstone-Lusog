@@ -57,8 +57,12 @@ class FeedingBmiReportTest extends TestCase
             'bmi_value' => 15.0,
             'nutritional_status' => $baselineStatus,
             'baseline_nutritional_status' => $baselineStatus,
+            // A height on file, as enrolment always stores one with the
+            // classification; no birth date, so the stored one stands.
             'student_details' => [
                 'gender' => $gender,
+                'height_cm' => 140,
+                'weight_kg' => 30,
                 'nutritional_status_height_for_age' => $hfa,
             ],
         ], $attributes));

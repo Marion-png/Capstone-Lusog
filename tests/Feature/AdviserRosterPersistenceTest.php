@@ -54,8 +54,8 @@ class AdviserRosterPersistenceTest extends TestCase
                 'division' => 'Davao City',
                 'telephone_no' => '09171234567',
                 'gender' => 'Male',
-                'height_cm' => 110,
-                'weight_kg' => 18.5,
+                'height_cm' => 140,
+                'weight_kg' => 32,
                 'grade_level' => 'Grade 1',
                 'section' => 'Sampaguita',
             ])

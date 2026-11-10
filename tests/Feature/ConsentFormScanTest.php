@@ -154,17 +154,17 @@ class ConsentFormScanTest extends TestCase
         ]);
     }
 
-    /** @param  array<string, string>  $services */
-    private function draft(array $services = [], array $overrides = []): array
+    /**
+     * One reading, flat: the parent's reply's fields beside the header's, as
+     * interpret() reads them once `parent_reply` is lifted. There is no service
+     * list in it — the school's list at the top of the sheet is not read.
+     *
+     * @param  array<string, mixed>  $overrides
+     */
+    private function draft(array $overrides = []): array
     {
-        $answers = [];
-        foreach (array_keys(ConsentFormScanner::serviceKeys()) as $key) {
-            $answers[$key] = $services[$key] ?? ConsentFormScanner::NOT_TICKED;
-        }
-
         $draft = array_merge([
             'consent_choice' => HealthConsentForm::CONSENT_SPECIFIC,
-            'services' => $answers,
             'parent_guardian_name' => 'Maria Cruz',
             'signature_present' => true,
             'unclear' => [],
@@ -248,11 +248,11 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function a_scan_returns_a_draft_and_saves_nothing(): void
     {
-        $this->fakeScanner($this->draft(['checkup' => ConsentFormScanner::TICKED]));
+        $this->fakeScanner($this->draft(['consent_choice' => HealthConsentForm::CONSENT_ALL]));
 
         $body = $this->scanRequest()->assertOk()->json();
 
-        $this->assertSame(ConsentFormScanner::TICKED, $body['draft']['services']['checkup']);
+        $this->assertSame(HealthConsentForm::CONSENT_ALL, $body['draft']['consent_choice']);
         $this->assertFalse($body['saved']);
         $this->assertTrue($body['review_required']);
 
@@ -291,57 +291,93 @@ class ConsentFormScanTest extends TestCase
     // ── Erring towards unclear ───────────────────────────────────────
 
     /**
-     * A missing answer is not a refusal.
+     * Every consent box must come back. A reading that leaves one out is not
+     * shown in part: nothing is proposed, and the form is filled in from the
+     * paper — never a partial result with a gap in it, and never a "no".
      *
      * Asserted against interpret() rather than through the endpoint: the
      * faked scanner returns its draft verbatim, so a test routed through it
      * would stub out the very rule under test.
      */
     #[Test]
-    public function an_omitted_service_comes_back_unclear_not_no(): void
+    public function an_omitted_consent_box_shows_the_manual_form_instead_of_a_partial_result(): void
     {
-        $payload = $this->draft();
-        unset($payload['services']['dental']);
+        $payload = $this->draft(['consent_choice' => HealthConsentForm::CONSENT_ALL]);
+        unset($payload['consent_boxes'][HealthConsentForm::CONSENT_DENY]);
 
         $draft = ConsentFormScanner::interpret($payload);
 
-        $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['services']['dental']);
-        $this->assertContains(
-            ConsentFormScanner::serviceKeys()['dental'],
-            $draft['unclear'],
-            'An omitted answer must be listed for the adviser to check.'
+        $this->assertTrue($draft['unreadable']);
+        $this->assertTrue($draft['incomplete_reading']);
+        $this->assertSame(ConsentFormScanner::READING_INCOMPLETE, $draft['note']);
+        $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['consent_choice'], 'The answer it did read is not proposed either.');
+        $this->assertSame([], $draft['excluded_services']);
+        $this->assertNull(ConsentPaperCopy::fromDraft($draft));
+        $this->assertSame(
+            [['section' => 'sheet', 'subject' => 'Photo', 'message' => ConsentFormScanner::READING_INCOMPLETE.' Fill the form in from the paper.']],
+            ConsentPhotoSummary::fromDraft($draft, 10)['checks'],
         );
     }
 
-    /** An answer that is not on the list is unclear too, never a "no". */
+    /**
+     * The school's list at the top is not read, so an answer about it —
+     * should one ever come back — neither holds a reading back nor decides a
+     * service: a partial or garbled one is not an incomplete reading, and none
+     * of it reaches the draft.
+     */
     #[Test]
-    public function an_unrecognised_answer_comes_back_unclear(): void
+    public function an_answer_about_the_schools_list_is_ignored(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft(['iron' => 'probably?']));
+        $draft = ConsentFormScanner::interpret($this->draft([
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'services' => ['iron' => 'probably?', 'dental' => ConsentFormScanner::NOT_TICKED],
+            'services_marks_seen' => 7,
+        ]));
 
-        $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['services']['iron']);
+        $this->assertFalse($draft['unreadable']);
+        $this->assertFalse($draft['incomplete_reading']);
+        $this->assertArrayNotHasKey('services', $draft);
+        $this->assertSame([], $draft['warnings']);
+        $this->assertSame(HealthConsentForm::CONSENT_ALL, $draft['consent_choice']);
+    }
+
+    /** A complete reading is used whole. */
+    #[Test]
+    public function a_complete_reading_is_not_held_back(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft(['consent_choice' => HealthConsentForm::CONSENT_ALL]));
+
+        $this->assertFalse($draft['unreadable']);
+        $this->assertFalse($draft['incomplete_reading']);
+        $this->assertSame(ConsentFormScanner::ANSWER_FULL, $draft['answer']);
     }
 
     #[Test]
     public function an_unclear_box_stays_unclear(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft(['iron' => ConsentFormScanner::UNCLEAR]));
+        $draft = ConsentFormScanner::interpret($this->draft([
+            'allergy_boxes' => $this->allergyBoxes(['allergy_food' => ConsentFormScanner::UNCLEAR]),
+        ]));
 
-        $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['services']['iron']);
+        $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['allergy_boxes']['allergy_food']);
     }
 
     /** An unreadable photo answers nothing — no guesses beside the warning. */
     #[Test]
     public function an_unreadable_photo_answers_nothing(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft(
-            ['checkup' => ConsentFormScanner::TICKED],
-            ['unreadable' => true, 'note' => 'Too dark to read.'],
-        ));
+        $draft = ConsentFormScanner::interpret($this->draft([
+            'consent_choice' => HealthConsentForm::CONSENT_SPECIFIC,
+            'written' => ['consent_exceptions' => ['text' => 'Bakuna', 'confident' => true, 'readable' => true]],
+            'excluded_services' => ['immunization'],
+            'unreadable' => true,
+            'note' => 'Too dark to read.',
+        ]));
 
         $this->assertTrue($draft['unreadable']);
         $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['consent_choice']);
-        $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['services']['checkup']);
+        $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['consent_boxes'][HealthConsentForm::CONSENT_SPECIFIC]);
+        $this->assertSame([], $draft['excluded_services']);
         $this->assertSame('', $draft['parent_guardian_name']);
         $this->assertFalse($draft['signature_present']);
     }
@@ -360,7 +396,8 @@ class ConsentFormScanTest extends TestCase
     {
         $everyService = array_fill_keys(array_keys(ConsentFormScanner::serviceKeys()), ConsentFormScanner::TICKED);
 
-        $refused = ConsentFormScanner::interpret($this->draft($everyService, [
+        $refused = ConsentFormScanner::interpret($this->draft([
+            'services' => $everyService,
             'consent_choice' => HealthConsentForm::CONSENT_DENY,
             'written' => ['refusal_reason' => ['text' => 'Takot sa tusok', 'confident' => true, 'readable' => true]],
         ]));
@@ -369,7 +406,8 @@ class ConsentFormScanTest extends TestCase
 
         // Every service ticked, no consent box ticked: the parent has not
         // answered, and "all" is the one thing this must not report.
-        $silent = ConsentFormScanner::interpret($this->draft($everyService, [
+        $silent = ConsentFormScanner::interpret($this->draft([
+            'services' => $everyService,
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'consent_boxes' => $this->boxes(''),
         ]));
@@ -387,7 +425,7 @@ class ConsentFormScanTest extends TestCase
                 default => [],
             };
 
-            $draft = ConsentFormScanner::interpret($this->draft([], [
+            $draft = ConsentFormScanner::interpret($this->draft([
                 'consent_choice' => $choice,
                 'written' => $written,
             ]));
@@ -408,28 +446,45 @@ class ConsentFormScanTest extends TestCase
         $deny = HealthConsentForm::CONSENT_DENY;
 
         foreach ([
-            'no box ticked' => ['consent_boxes' => $this->boxes('')],
-            'two boxes ticked' => ['consent_boxes' => $this->boxes($all, [$deny => ConsentFormScanner::TICKED])],
-            'a box nobody could make out' => ['consent_boxes' => $this->boxes($all, [$deny => ConsentFormScanner::UNCLEAR])],
-            'an answer off the list' => ['consent_boxes' => $this->boxes($all, [$deny => 'maybe'])],
-            'a box left out' => ['consent_boxes' => array_diff_key($this->boxes($all), [$deny => true])],
-            'no boxes reported at all' => ['consent_boxes' => null],
-            'a summary that disagrees with the boxes' => ['consent_boxes' => $this->boxes($all), 'consent_choice' => $deny],
-            'a refusal written under an "Oo"' => [
+            'no box ticked' => [['consent_boxes' => $this->boxes('')], ConsentFormScanner::ANSWER_NONE_MARKED],
+            'two boxes ticked' => [['consent_boxes' => $this->boxes($all, [$deny => ConsentFormScanner::TICKED])], ConsentFormScanner::ANSWER_MULTIPLE_MARKED],
+            'a box nobody could make out' => [['consent_boxes' => $this->boxes($all, [$deny => ConsentFormScanner::UNCLEAR])], ConsentFormScanner::UNCLEAR],
+            'a summary that disagrees with the boxes' => [['consent_boxes' => $this->boxes($all), 'consent_choice' => $deny], ConsentFormScanner::UNCLEAR],
+            'a refusal written under an "Oo"' => [[
                 'consent_boxes' => $this->boxes($all),
                 'written' => ['refusal_reason' => ['text' => 'Dili gusto', 'confident' => true, 'readable' => true]],
-            ],
-            'unreadable writing on another box\'s line' => [
+            ], ConsentFormScanner::UNCLEAR],
+            'unreadable writing on another box\'s line' => [[
                 'consent_boxes' => $this->boxes($deny),
                 'consent_choice' => $deny,
                 'written' => ['consent_exceptions' => ['text' => '', 'confident' => false, 'readable' => false]],
-            ],
-        ] as $because => $overrides) {
-            $draft = ConsentFormScanner::interpret($this->draft([], array_merge(['consent_choice' => $all], $overrides)));
+            ], ConsentFormScanner::UNCLEAR],
+        ] as $because => [$overrides, $answer]) {
+            $draft = ConsentFormScanner::interpret($this->draft(array_merge(['consent_choice' => $all], $overrides)));
 
             $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['consent_choice'], 'Unclear when there is '.$because);
-            $this->assertNotSame('', $draft['consent_reason'], 'The adviser is told why for '.$because);
+            $this->assertSame($answer, $draft['answer'], 'The answer is named for '.$because);
+            $this->assertStringStartsWith(ConsentFormScanner::ANSWER_UNDETERMINED.' ', $draft['consent_reason'], 'The adviser is told why for '.$because);
+            $this->assertContains('consent_answer', $draft['unclear_fields'], 'The answer is highlighted for '.$because);
             $this->assertTrue($draft['needs_review'], 'needs_review is set by '.$because);
+            $this->assertFalse($draft['unreadable'], 'Only the answer is in doubt for '.$because);
+        }
+
+        // A consent box left out of the JSON, or answered off the list, is not
+        // the reading that was asked for: nothing is shown from it, and the
+        // form is filled in from the paper.
+        foreach ([
+            'an answer off the list' => ['consent_boxes' => $this->boxes($all, [$deny => 'maybe'])],
+            'a box left out' => ['consent_boxes' => array_diff_key($this->boxes($all), [$deny => true])],
+            'no boxes reported at all' => ['consent_boxes' => null],
+        ] as $because => $overrides) {
+            $draft = ConsentFormScanner::interpret($this->draft(array_merge(['consent_choice' => $all], $overrides)));
+
+            $this->assertTrue($draft['unreadable'], 'Nothing is read for '.$because);
+            $this->assertTrue($draft['incomplete_reading'], 'Named as an incomplete reading for '.$because);
+            $this->assertSame(ConsentFormScanner::READING_INCOMPLETE, $draft['note']);
+            $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['consent_choice']);
+            $this->assertNull(ConsentPaperCopy::fromDraft($draft), 'No reading is drawn for '.$because);
         }
     }
 
@@ -439,11 +494,13 @@ class ConsentFormScanTest extends TestCase
     {
         $schema = (new \ReflectionMethod(ConsentFormScanner::class, 'responseSchema'))
             ->invoke(new ConsentFormScanner);
+        $reply = $schema['properties']['parent_reply'];
 
-        $this->assertContains('consent_boxes', $schema['required']);
+        $this->assertContains('parent_reply', $schema['required']);
+        $this->assertContains('consent_boxes', $reply['required']);
         $this->assertSame(
             array_keys(ConsentFormScanner::CONSENT_BOXES),
-            $schema['properties']['consent_boxes']['required'],
+            $reply['properties']['consent_boxes']['required'],
         );
         $this->assertSame(
             [HealthConsentForm::CONSENT_ALL, HealthConsentForm::CONSENT_SPECIFIC, HealthConsentForm::CONSENT_DENY],
@@ -455,16 +512,16 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function the_reader_describes_each_consent_box_before_answering(): void
     {
-        $schema = (new \ReflectionMethod(ConsentFormScanner::class, 'responseSchema'))
-            ->invoke(new ConsentFormScanner);
+        $reply = (new \ReflectionMethod(ConsentFormScanner::class, 'responseSchema'))
+            ->invoke(new ConsentFormScanner)['properties']['parent_reply'];
 
-        $this->assertContains('consent_evidence', $schema['required']);
+        $this->assertContains('consent_evidence', $reply['required']);
         $this->assertSame(
             array_keys(ConsentFormScanner::CONSENT_BOXES),
-            $schema['properties']['consent_evidence']['required'],
+            $reply['properties']['consent_evidence']['required'],
         );
 
-        $order = $schema['propertyOrdering'];
+        $order = $reply['propertyOrdering'];
         $this->assertLessThan(
             array_search('consent_boxes', $order, true),
             array_search('consent_evidence', $order, true),
@@ -481,7 +538,7 @@ class ConsentFormScanTest extends TestCase
         $all = HealthConsentForm::CONSENT_ALL;
         $deny = HealthConsentForm::CONSENT_DENY;
 
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => $all,
             'consent_boxes' => $this->boxes($all, [$deny => ConsentFormScanner::UNCLEAR]),
             'consent_evidence' => [$all => 'dark shaded square', $deny => 'glare covers it'],
@@ -492,7 +549,7 @@ class ConsentFormScanTest extends TestCase
         $this->assertStringNotContainsString('dark shaded square', $draft['consent_reason']);
 
         // Two marks: both descriptions, so the adviser knows which to ask about.
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => $all,
             'consent_boxes' => $this->boxes($all, [$deny => ConsentFormScanner::TICKED]),
             'consent_evidence' => [$all => 'dark shaded square', $deny => 'light pencil shading'],
@@ -502,7 +559,7 @@ class ConsentFormScanTest extends TestCase
         $this->assertStringContainsString('"Dili" box: light pencil shading', $draft['consent_reason']);
 
         // A description at odds with its own box changes nothing: the boxes rule.
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => $deny,
             'consent_evidence' => [$deny => 'empty outline'],
         ]));
@@ -511,12 +568,12 @@ class ConsentFormScanTest extends TestCase
         $this->assertSame('', $draft['consent_reason']);
 
         // A reading with no descriptions at all still says why it is unclear.
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => $all,
             'consent_boxes' => $this->boxes($all, [$deny => ConsentFormScanner::UNCLEAR]),
         ]));
 
-        $this->assertSame('A consent box could not be made out — check which one the parent ticked.', $draft['consent_reason']);
+        $this->assertSame(ConsentFormScanner::ANSWER_UNDETERMINED.' A consent box could not be made out — check which one the parent ticked.', $draft['consent_reason']);
     }
 
     // ── Availability and failure ─────────────────────────────────────
@@ -584,7 +641,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function the_handwritten_blanks_are_transcribed_with_their_confidence(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'written' => [
                 'consent_exceptions' => ['text' => 'Dili ang bakuna', 'confident' => true],
                 'allergy_food' => ['text' => 'Lamang dagat', 'confident' => false],
@@ -616,7 +673,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function an_unreadable_photo_transcribes_no_handwriting(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'unreadable' => true,
             'written' => ['allergy_medicine' => ['text' => 'Amoxicillin', 'confident' => true]],
         ]));
@@ -634,10 +691,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function needs_review_is_set_by_anything_the_reader_was_unsure_of(): void
     {
-        $clean = ConsentFormScanner::interpret($this->draft(
-            array_fill_keys(array_keys(ConsentFormScanner::serviceKeys()), ConsentFormScanner::TICKED),
-            ['consent_choice' => HealthConsentForm::CONSENT_ALL, 'written' => []],
-        ));
+        $clean = ConsentFormScanner::interpret($this->draft(['consent_choice' => HealthConsentForm::CONSENT_ALL, 'written' => []]));
         $this->assertFalse($clean['needs_review']);
 
         foreach ([
@@ -647,7 +701,6 @@ class ConsentFormScanTest extends TestCase
             'shaky handwriting' => ['written' => ['other_illness' => ['text' => 'ubo', 'confident' => false]]],
         ] as $because => $overrides) {
             $draft = ConsentFormScanner::interpret($this->draft(
-                array_fill_keys(array_keys(ConsentFormScanner::serviceKeys()), ConsentFormScanner::TICKED),
                 array_merge(['consent_choice' => HealthConsentForm::CONSENT_ALL, 'written' => []], $overrides),
             ));
 
@@ -667,7 +720,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function handwriting_nobody_could_read_is_marked_unreadable(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'written' => [
                 // Blurred beyond reading.
                 'allergy_medicine' => ['text' => '', 'confident' => false, 'readable' => false],
@@ -705,7 +758,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function a_blank_with_no_readable_flag_is_taken_as_read(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'written' => ['other_illness' => ['text' => 'Ubo', 'confident' => true]],
         ]));
 
@@ -717,7 +770,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function an_unreadable_photo_marks_nothing_unreadable_field_by_field(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'unreadable' => true,
             'written' => ['allergy_food' => ['text' => 'x', 'confident' => true, 'readable' => false]],
         ]));
@@ -757,19 +810,103 @@ class ConsentFormScanTest extends TestCase
                 && ($image['mime_type'] ?? null) === 'image/jpeg'
                 && base64_decode((string) ($image['data'] ?? ''), true) !== false
                 && ($body['generationConfig']['responseMimeType'] ?? null) === 'application/json'
-                && isset($body['generationConfig']['responseSchema']['properties']['consent_boxes'])
-                && isset($body['generationConfig']['responseSchema']['properties']['allergy_boxes'])
+                && isset($body['generationConfig']['responseSchema']['properties']['parent_reply']['properties']['consent_boxes'])
+                && isset($body['generationConfig']['responseSchema']['properties']['parent_reply']['properties']['allergy_boxes'])
                 && str_contains($system, 'Cebuano')
                 && str_contains($system, 'TIMAAN SA PAGDAWAT')
                 && str_contains($system, 'gawas lamang niini');
         });
     }
 
+    /**
+     * Tester report (#2): "Dentist check-up" was read as not consented
+     * because its box in the school's list at the top was empty. That list is
+     * the school's offer, so the reader is not asked about it at all: the
+     * schema has no field for it, and the parent's answer comes back grouped
+     * as `parent_reply` — the three boxes, the services written on the
+     * "gawas lamang niini" line, the name and the signature. The date is the
+     * PETSA line in the header; the parent's reply has none of its own.
+     */
+    #[Test]
+    public function the_reader_returns_the_parents_reply_on_its_own_and_never_the_schools_list(): void
+    {
+        $this->fakeGemini($this->draft(['consent_choice' => HealthConsentForm::CONSENT_ALL]));
+
+        $this->withSession($this->adviserSession())
+            ->post(route('consent-forms.scan'), ['photo' => $this->jpeg()], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        Http::assertSent(function (ClientRequest $request): bool {
+            $body = $request->data();
+            $schema = $body['generationConfig']['responseSchema'] ?? [];
+            $reply = $schema['properties']['parent_reply'] ?? [];
+            $system = (string) preg_replace('/\s+/', ' ', (string) ($body['system_instruction']['parts'][0]['text'] ?? ''));
+            $user = (string) preg_replace('/\s+/', ' ', (string) ($body['contents'][0]['parts'][1]['text'] ?? ''));
+
+            // Nothing asks about the school's list, at any depth.
+            $json = (string) json_encode($schema);
+            foreach (['"services"', 'services_marks_seen', 'services_evidence'] as $field) {
+                if (str_contains($json, $field)) {
+                    return false;
+                }
+            }
+
+            $excluded = $reply['properties']['excluded_services'] ?? [];
+
+            return ($reply['type'] ?? null) === 'OBJECT'
+                && ['consent_evidence', 'consent_boxes', 'consent_choice', 'allergy_evidence', 'allergy_boxes', 'written', 'excluded_services', 'parent_guardian_name', 'signature_present'] === ($reply['propertyOrdering'] ?? [])
+                && ($reply['properties']['signature_present']['type'] ?? null) === 'BOOLEAN'
+                && ($excluded['type'] ?? null) === 'ARRAY'
+                && ($excluded['items']['enum'] ?? null) === array_keys(ConsentFormScanner::serviceKeys())
+                // The line is transcribed before the services it names are.
+                && array_search('written', $reply['propertyOrdering'], true) < array_search('excluded_services', $reply['propertyOrdering'], true)
+                // The date stays the header's PETSA line.
+                && isset($schema['properties']['form_date'])
+                && str_contains($system, 'A service whose box there is empty is NOT refused')
+                && str_contains($system, 'A service the line does not name is not excluded')
+                && str_contains($user, 'The school\'s list of services at the top is not read');
+        });
+    }
+
+    /**
+     * The reader's answer comes back nested as the schema asks for it, and is
+     * read exactly as a flat one: the boxes, the line, the services it names,
+     * the name and the signature.
+     */
+    #[Test]
+    public function a_nested_parent_reply_is_read_like_a_flat_one(): void
+    {
+        $line = ['text' => 'Bakuna', 'confident' => true, 'readable' => true];
+
+        $draft = ConsentFormScanner::interpret([
+            'sheet_orientation' => 'upright',
+            'is_sulat_pahibalo' => true,
+            'unreadable' => false,
+            'note' => '',
+            'parent_reply' => [
+                'consent_boxes' => $this->boxes(HealthConsentForm::CONSENT_SPECIFIC),
+                'consent_choice' => HealthConsentForm::CONSENT_SPECIFIC,
+                'allergy_boxes' => $this->allergyBoxes(),
+                'written' => ['consent_exceptions' => $line],
+                'excluded_services' => ['immunization', 'not-a-service'],
+                'parent_guardian_name' => ['text' => 'Maria Cruz', 'confident' => true, 'readable' => true],
+                'signature_present' => true,
+            ],
+        ]);
+
+        $this->assertFalse($draft['unreadable']);
+        $this->assertSame(HealthConsentForm::CONSENT_SPECIFIC, $draft['consent_choice']);
+        $this->assertSame('Bakuna', $draft['written']['consent_exceptions']['text']);
+        $this->assertSame(['immunization'], $draft['excluded_services'], 'Only services the letter has are kept.');
+        $this->assertSame('Maria Cruz', $draft['parent_guardian_name']);
+        $this->assertTrue($draft['form_complete']);
+    }
+
     /** What Gemini read comes back as the draft, through every rule interpret() applies. */
     #[Test]
     public function a_gemini_reading_becomes_the_draft(): void
     {
-        $this->fakeGemini($this->draft([], [
+        $this->fakeGemini($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_DENY,
             'written' => [
                 'refusal_reason' => ['text' => 'Mahadlok sa tusok', 'readable' => true, 'confident' => true],
@@ -807,7 +944,7 @@ class ConsentFormScanTest extends TestCase
                     'finishReason' => 'STOP',
                     'content' => ['parts' => [
                         ['text' => 'Looking at the three boxes first…', 'thought' => true],
-                        ['text' => json_encode($this->draft([], ['consent_choice' => HealthConsentForm::CONSENT_ALL]))],
+                        ['text' => json_encode($this->draft(['consent_choice' => HealthConsentForm::CONSENT_ALL]))],
                     ]],
                 ]],
             ], 200),
@@ -1052,7 +1189,7 @@ class ConsentFormScanTest extends TestCase
                 $written['refusal_reason'] = ['text' => 'Relihiyon', 'confident' => true, 'readable' => true];
             }
 
-            $draft = ConsentFormScanner::interpret($this->draft([], ['consent_choice' => $choice, 'written' => $written]));
+            $draft = ConsentFormScanner::interpret($this->draft(['consent_choice' => $choice, 'written' => $written]));
 
             $this->assertSame($choice, $draft['consent_choice'], '"'.$text.'" on the '.$field.' line says nothing');
             $this->assertSame($text, $draft['written'][$field]['text'], 'The parent\'s own word is kept');
@@ -1063,7 +1200,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function a_reason_that_begins_with_wala_is_still_a_reason(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'written' => ['refusal_reason' => ['text' => 'Wala koy tiwala sa bakuna', 'confident' => true, 'readable' => true]],
         ]));
@@ -1080,7 +1217,7 @@ class ConsentFormScanTest extends TestCase
     public function an_except_with_nothing_excepted_is_put_to_the_adviser(): void
     {
         foreach (['', 'Wala'] as $text) {
-            $draft = ConsentFormScanner::interpret($this->draft([], [
+            $draft = ConsentFormScanner::interpret($this->draft([
                 'consent_choice' => HealthConsentForm::CONSENT_SPECIFIC,
                 'written' => ['consent_exceptions' => ['text' => $text, 'confident' => true, 'readable' => true]],
             ]));
@@ -1095,7 +1232,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function a_refusal_with_no_reason_is_put_to_the_adviser(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_DENY,
             'written' => [],
         ]));
@@ -1117,7 +1254,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function a_ticked_allergy_box_over_an_empty_line_is_never_read_as_no_allergy(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'allergy_boxes' => $this->allergyBoxes(['allergy' => 'yes', 'allergy_medicine' => 'yes']),
             'written' => ['allergy_medicine' => ['text' => '', 'confident' => false, 'readable' => true]],
@@ -1144,7 +1281,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function a_ticked_illness_box_over_an_empty_line_is_asked_about(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'allergy_boxes' => $this->allergyBoxes(['other_illness' => 'yes']),
         ]));
@@ -1159,7 +1296,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function a_ticked_box_over_a_wala_is_put_to_the_adviser(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'allergy_boxes' => $this->allergyBoxes(['allergy' => 'yes', 'allergy_food' => 'yes']),
             'written' => ['allergy_food' => ['text' => 'Wala', 'confident' => true, 'readable' => true]],
@@ -1174,7 +1311,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function writing_without_a_tick_is_an_answer(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'written' => ['other_illness' => ['text' => 'Hubak', 'confident' => true, 'readable' => true]],
         ]));
@@ -1187,7 +1324,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function an_allergy_box_nobody_could_make_out_over_an_empty_line_is_flagged(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'allergy_boxes' => $this->allergyBoxes(['prev_immunization' => ConsentFormScanner::UNCLEAR]),
         ]));
@@ -1207,7 +1344,7 @@ class ConsentFormScanTest extends TestCase
     {
         $checks = fn (array $draft): array => array_column(ConsentPhotoSummary::fromDraft($draft, 8)['checks'], 'message', 'subject');
 
-        $bare = ConsentFormScanner::interpret($this->draft([], [
+        $bare = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'allergy_boxes' => $this->allergyBoxes(['allergy' => 'yes']),
         ]));
@@ -1215,7 +1352,7 @@ class ConsentFormScanTest extends TestCase
         $this->assertTrue($bare['needs_review']);
         $this->assertSame(ConsentFormScanner::BOX_TICKED_NO_DETAILS, $checks($bare)['Kon adunay Allergy ang bata'] ?? null);
 
-        $written = ConsentFormScanner::interpret($this->draft([], [
+        $written = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'allergy_boxes' => $this->allergyBoxes(['allergy' => 'yes']),
             'written' => ['allergy_food' => ['text' => 'Itlog', 'confident' => true, 'readable' => true]],
@@ -1223,7 +1360,7 @@ class ConsentFormScanTest extends TestCase
         $this->assertSame([], $written['warnings']);
         $this->assertArrayNotHasKey('Kon adunay Allergy ang bata', $checks($written));
 
-        $ticked = ConsentFormScanner::interpret($this->draft([], [
+        $ticked = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'allergy_boxes' => $this->allergyBoxes(['allergy' => 'yes', 'allergy_food' => 'yes']),
             'written' => ['allergy_food' => ['text' => 'Itlog', 'confident' => true, 'readable' => true]],
@@ -1236,7 +1373,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function an_omitted_allergy_box_is_unclear_not_no(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'allergy_boxes' => [],
             'written' => ['allergy_food' => ['text' => 'Mani', 'confident' => true, 'readable' => true]],
@@ -1254,14 +1391,14 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function a_document_that_is_not_the_sulat_pahibalo_answers_nothing(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft(['checkup' => ConsentFormScanner::TICKED], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'is_sulat_pahibalo' => false,
         ]));
 
         $this->assertTrue($draft['unreadable']);
         $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['consent_choice']);
-        $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['services']['checkup']);
+        $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['consent_boxes'][HealthConsentForm::CONSENT_ALL]);
         $this->assertNotSame('', $draft['note']);
     }
 
@@ -1269,7 +1406,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function an_unsure_parents_name_is_flagged(): void
     {
-        $unreadable = ConsentFormScanner::interpret($this->draft([], [
+        $unreadable = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'parent_guardian_name' => ['text' => '', 'readable' => false, 'confident' => false],
         ]));
@@ -1277,7 +1414,7 @@ class ConsentFormScanTest extends TestCase
         $this->assertArrayHasKey('parent_guardian_name', $unreadable['field_notes']);
         $this->assertTrue($unreadable['needs_review']);
 
-        $unsure = ConsentFormScanner::interpret($this->draft([], [
+        $unsure = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'parent_guardian_name' => ['text' => 'Josefina Dela Crus', 'readable' => true, 'confident' => false],
         ]));
@@ -1289,7 +1426,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function a_signature_reported_as_the_string_false_is_not_a_signature(): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft([], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'signature_present' => 'false',
         ]));
@@ -1332,7 +1469,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function another_learners_sheet_proposes_no_consent(): void
     {
-        $read = fn (array $name) => ConsentFormScanner::interpret($this->draft([], [
+        $read = fn (array $name) => ConsentFormScanner::interpret($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'student_name' => $name,
         ]));
@@ -1374,7 +1511,7 @@ class ConsentFormScanTest extends TestCase
         $this->learner('130000000001', 'Juan', 'Dela Cruz');
         $this->learner('130000000002', 'Maria', 'Santos', 'Newton');
 
-        $this->fakeGemini($this->draft([], [
+        $this->fakeGemini($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'student_name' => ['text' => 'SANTOS, PEDRO', 'readable' => true, 'confident' => true],
         ]));
@@ -1433,10 +1570,6 @@ class ConsentFormScanTest extends TestCase
     public function the_scan_draws_the_sheet_back_in_the_forms_own_words(): void
     {
         $this->fakeGemini($this->draft([
-            'deworming' => ConsentFormScanner::TICKED,
-            'deworming_worms' => ConsentFormScanner::TICKED,
-            'vitamin_a' => ConsentFormScanner::UNCLEAR,
-        ], [
             'consent_choice' => HealthConsentForm::CONSENT_SPECIFIC,
             'written' => [
                 'consent_exceptions' => ['text' => 'Bakuna', 'readable' => true, 'confident' => true],
@@ -1453,16 +1586,15 @@ class ConsentFormScanTest extends TestCase
         $this->assertStringContainsString('lang="ceb"', $html);
 
         // Each service by its printed name, with the standing the reading
-        // gives it: "gawas lamang niini: Bakuna" does not touch Pag Bitok, and
-        // a box nobody could make out is read off the paper.
+        // gives it: "gawas lamang niini: Bakuna" excepts the immunization alone,
+        // and every other service the school offers is Consented. The school's
+        // list at the top of the sheet is not read.
         $this->assertStringContainsString('<span class="pcopy-group-label" lang="ceb">'.e(HealthConsentForm::SERVICES['deworming']['label']).'</span>', $html);
         $this->assertService($html, 'Pag Bitok / Worms', 'consented', 'Consented');
-        // Pag Purga is ticked with only Pag Bitok under it, so Filariasis was
-        // not chosen — as the upload files it (ConsentPaperCopy::tickedServices).
-        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_filariasis'], 'not_on_form', 'Not offered');
-        $this->assertService($html, HealthConsentForm::SERVICES['checkup']['label'], 'not_on_form', 'Not offered');
-        $this->assertService($html, HealthConsentForm::SERVICES['vitamin_a']['label'], 'unclear', '?');
-        $this->assertService($html, HealthConsentForm::SERVICES['immunization']['children']['immunization_grade7'], 'not_applicable', 'Not applicable');
+        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_filariasis'], 'consented', 'Consented');
+        $this->assertService($html, HealthConsentForm::SERVICES['checkup']['label'], 'consented', 'Consented');
+        $this->assertService($html, HealthConsentForm::SERVICES['vitamin_a']['label'], 'consented', 'Consented');
+        $this->assertService($html, HealthConsentForm::SERVICES['immunization']['children']['immunization_grade7'], 'not_applicable', 'Not offered');
         $this->assertStringNotContainsString('Check-up (Nurse or Doctor)', $html);
 
         $this->assertBox($html, ConsentFormScanner::NOT_TICKED, HealthConsentForm::CONSENT_TEXT[HealthConsentForm::CONSENT_ALL]);
@@ -1481,62 +1613,67 @@ class ConsentFormScanTest extends TestCase
     }
 
     /**
-     * Pag Purga ticked with only Pag Bitok under it is a choice of Pag Bitok:
-     * the reading the adviser checks says so, and the services the dialog
-     * files are that same list — so View Details cannot say otherwise later.
+     * Tester report (#2): a dentist check-up the parent did not except was
+     * read as not consented, because its box in the school's list at the top
+     * was empty. Every service the school offers is Consented unless the
+     * parent's own reply leaves it out — under a full consent, and under a
+     * "yes, except" whose line names something else — and the reading files
+     * no list of its own.
      */
     #[Test]
-    public function a_ticked_heading_with_one_sub_item_ticked_covers_only_that_sub_item(): void
+    #[DataProvider('dentistNotExcepted')]
+    public function a_dentist_check_up_the_parent_did_not_except_is_consented(array $reply, string $answer, array $excluded): void
     {
         $this->learner('130000000001', 'Juan', 'Dela Cruz');
-
-        $this->fakeGemini($this->draft([
-            'checkup' => ConsentFormScanner::TICKED,
-            'deworming' => ConsentFormScanner::TICKED,
-            'deworming_worms' => ConsentFormScanner::TICKED,
-        ], ['consent_choice' => HealthConsentForm::CONSENT_ALL]));
+        $this->fakeGemini($this->draft($reply));
 
         $response = $this->withSession($this->adviserSession())
             ->post(route('consent-forms.scan'), ['photo' => $this->jpeg(), 'lrn' => '130000000001'], ['Accept' => 'application/json'])
             ->assertOk();
 
-        $this->assertSame(['checkup', 'deworming_worms'], $response->json('ticked_services'));
+        $this->assertArrayNotHasKey('ticked_services', $response->json());
+        $this->assertContains('dental', $response->json('service_proposal.'.$answer.'.approved'));
+        $this->assertSame($excluded, $response->json('service_proposal.'.$answer.'.excluded'));
+        $this->assertContains(HealthConsentForm::PLANNED_SERVICES['dental'], $response->json('summary.groups.consented'));
+        $this->assertService((string) $response->json('copy_html'), HealthConsentForm::SERVICES['dental']['label'], 'consented', 'Consented');
+    }
 
-        $html = (string) $response->json('copy_html');
-        $this->assertService($html, 'Pag Bitok / Worms', 'consented', 'Consented');
-        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_schistosomiasis'], 'not_on_form', 'Not offered');
-        $this->assertService($html, HealthConsentForm::SERVICES['deworming']['children']['deworming_filariasis'], 'not_on_form', 'Not offered');
+    /** @return array<string, array{0: array<string, mixed>, 1: string, 2: list<string>}> */
+    public static function dentistNotExcepted(): array
+    {
+        return [
+            'a full consent' => [['consent_choice' => HealthConsentForm::CONSENT_ALL], 'full', []],
+            'a "yes, except" that names the vaccine' => [[
+                'consent_choice' => HealthConsentForm::CONSENT_SPECIFIC,
+                'written' => ['consent_exceptions' => ['text' => 'Bakuna', 'readable' => true, 'confident' => true]],
+                'excluded_services' => ['immunization'],
+            ], 'partial', ['immunization_grade7']],
+        ];
     }
 
     /**
-     * Pag Purga shaded over three empty boxes is the deworming the school
-     * offers, with no box under it to tick and no warning. A school offering
-     * all three gets all three; at Sta. Ana, where the School Nurse switched
-     * Schistosomiasis and Filariasis off, it is Pag Bitok / Worms alone.
+     * A full consent is every service the school offers that year, whatever
+     * the paper prints: a school offering all of them gets all of them; at
+     * Sta. Ana, where the School Nurse switched Schistosomiasis, Filariasis
+     * and TAS off, those read Not offered.
      */
     #[Test]
-    public function a_heading_shaded_alone_is_the_rows_the_school_offers(): void
+    public function a_full_consent_is_the_services_the_school_offers_that_year(): void
     {
         $this->learner('130000000001', 'Juan', 'Dela Cruz');
 
-        $this->fakeGemini($this->draft([
-            'dental' => ConsentFormScanner::TICKED,
-            'deworming' => ConsentFormScanner::TICKED,
-        ], ['consent_choice' => HealthConsentForm::CONSENT_ALL]));
+        $this->fakeGemini($this->draft(['consent_choice' => HealthConsentForm::CONSENT_ALL]));
 
         $scan = fn () => $this->withSession($this->adviserSession())
             ->post(route('consent-forms.scan'), ['photo' => $this->jpeg(), 'lrn' => '130000000001'], ['Accept' => 'application/json'])
             ->assertOk();
 
-        $rows = ['deworming_worms', 'deworming_schistosomiasis', 'deworming_filariasis'];
-
         $everything = $scan();
-        $this->assertSame(['dental', ...$rows], $everything->json('ticked_services'));
-        $this->assertSame(['dental', ...$rows], $everything->json('service_proposal.full.approved'));
+        $this->assertSame(array_keys(HealthConsentForm::PLANNED_SERVICES), $everything->json('service_proposal.full.approved'));
         $this->assertSame([], $everything->json('service_proposal.full.check'));
         $this->assertSame([], array_values(array_filter(
             $everything->json('summary.checks'),
-            fn (array $check): bool => str_starts_with($check['subject'], 'Pag Purga'),
+            fn (array $check): bool => $check['section'] === 'services',
         )));
 
         HealthServicesOffered::save(
@@ -1547,7 +1684,7 @@ class ConsentFormScanTest extends TestCase
         );
 
         $staAna = $scan();
-        $this->assertSame(['dental', 'deworming_worms'], $staAna->json('ticked_services'));
+        $this->assertSame(['checkup', 'dental', 'deworming_worms', 'iron', 'vitamin_a', 'immunization_grade7'], $staAna->json('service_proposal.full.approved'));
         $this->assertSame([], $staAna->json('service_proposal.full.check'));
 
         $html = (string) $staAna->json('copy_html');
@@ -1558,51 +1695,6 @@ class ConsentFormScanTest extends TestCase
         foreach ($staAna->json('summary.checks') as $check) {
             $this->assertStringNotContainsString('none of the boxes under it', $check['message']);
         }
-    }
-
-    /** A heading the reader was unsure of covers nothing: its rows are still the paper's to settle. */
-    #[Test]
-    public function an_unclear_heading_covers_none_of_its_rows(): void
-    {
-        $boxes = [
-            'deworming' => ConsentFormScanner::UNCLEAR,
-            'deworming_worms' => ConsentFormScanner::NOT_TICKED,
-            'deworming_schistosomiasis' => ConsentFormScanner::NOT_TICKED,
-            'deworming_filariasis' => ConsentFormScanner::NOT_TICKED,
-        ];
-
-        $this->assertSame([], ConsentPaperCopy::tickedServices($boxes));
-        $this->assertSame(['deworming_worms', 'deworming_schistosomiasis', 'deworming_filariasis'], ConsentPaperCopy::unsettledServices($boxes));
-    }
-
-    /** One unreadable sub-item must not approve the sub-items read as empty. */
-    #[Test]
-    public function an_unclear_sub_item_does_not_approve_its_empty_neighbours(): void
-    {
-        $boxes = [
-            'deworming' => ConsentFormScanner::TICKED,
-            'deworming_worms' => ConsentFormScanner::UNCLEAR,
-            'deworming_schistosomiasis' => ConsentFormScanner::NOT_TICKED,
-            'deworming_filariasis' => ConsentFormScanner::NOT_TICKED,
-        ];
-
-        $this->assertSame([], ConsentPaperCopy::tickedServices($boxes));
-        $this->assertSame(['deworming_worms', 'deworming_schistosomiasis', 'deworming_filariasis'], ConsentPaperCopy::unsettledServices($boxes));
-    }
-
-    /** A sub-item ticked under an unticked heading is a tick on that sub-item. */
-    #[Test]
-    public function a_sub_item_counts_on_its_own_box_alone(): void
-    {
-        $boxes = [
-            'checkup' => ConsentFormScanner::TICKED,
-            'immunization' => ConsentFormScanner::NOT_TICKED,
-            'immunization_grade7' => ConsentFormScanner::TICKED,
-            'iron' => ConsentFormScanner::NOT_TICKED,
-        ];
-
-        $this->assertSame(['checkup', 'immunization_grade7'], ConsentPaperCopy::tickedServices($boxes));
-        $this->assertSame([], ConsentPaperCopy::unsettledServices($boxes));
     }
 
     /**
@@ -1616,11 +1708,6 @@ class ConsentFormScanTest extends TestCase
         $this->learner('130000000001', 'Juan', 'Dela Cruz');
 
         $this->fakeGemini($this->draft([
-            'checkup' => ConsentFormScanner::TICKED,
-            'dental' => ConsentFormScanner::TICKED,
-            'iron' => ConsentFormScanner::TICKED,
-            'vitamin_a' => ConsentFormScanner::TICKED,
-        ], [
             'consent_choice' => HealthConsentForm::CONSENT_SPECIFIC,
             'written' => ['consent_exceptions' => ['text' => 'Ibot sa ngipon, Iron', 'readable' => true, 'confident' => true]],
         ]));
@@ -1629,39 +1716,93 @@ class ConsentFormScanTest extends TestCase
             ->post(route('consent-forms.scan'), ['photo' => $this->jpeg(), 'lrn' => '130000000001'], ['Accept' => 'application/json'])
             ->assertOk();
 
-        $this->assertSame(['checkup', 'vitamin_a'], $response->json('service_proposal.partial.approved'));
+        // The services the line names start Excluded, and every other service
+        // the school offers Consented.
+        $this->assertSame(
+            ['checkup', 'deworming_worms', 'deworming_schistosomiasis', 'deworming_filariasis', 'tas', 'vitamin_a', 'immunization_grade7'],
+            $response->json('service_proposal.partial.approved'),
+        );
+        $this->assertSame(['dental', 'iron'], $response->json('service_proposal.partial.excluded'));
         $this->assertSame([], $response->json('service_proposal.partial.check'));
         // Filed by hand as a full consent instead, the line no longer applies.
-        $this->assertSame(['checkup', 'dental', 'iron', 'vitamin_a'], $response->json('service_proposal.full.approved'));
+        $this->assertSame(array_keys(HealthConsentForm::PLANNED_SERVICES), $response->json('service_proposal.full.approved'));
+        // A refusal excludes every one.
+        $this->assertSame(array_keys(HealthConsentForm::PLANNED_SERVICES), $response->json('service_proposal.refused.excluded'));
 
         $html = (string) $response->json('copy_html');
         $this->assertService($html, HealthConsentForm::SERVICES['checkup']['label'], 'consented', 'Consented');
-        $this->assertService($html, HealthConsentForm::SERVICES['dental']['label'], 'declined', 'Declined');
+        $this->assertService($html, HealthConsentForm::SERVICES['dental']['label'], 'declined', 'Excluded');
         // Iron is for female learners only, so for this boy it is Not
         // applicable whatever the exceptions say.
-        $this->assertService($html, HealthConsentForm::SERVICES['iron']['label'], 'not_applicable', 'Not applicable');
+        $this->assertService($html, HealthConsentForm::SERVICES['iron']['label'], 'not_applicable', 'Not offered');
     }
 
     /**
-     * Exceptions nobody can name as services could be any row, so nothing is
-     * proposed as approved and every row on the paper goes to the adviser.
+     * Exceptions nobody can name as services exclude nothing yet: every row
+     * starts Consented — one of the three words, never "Check the paper" —
+     * and the line is highlighted for the adviser to mark the excepted rows
+     * Excluded from the paper.
      */
     #[Test]
     #[DataProvider('unnamedExceptions')]
     public function exceptions_that_cannot_be_named_propose_no_approval(array $line): void
     {
-        $boxes = array_fill_keys(array_keys(ConsentFormScanner::serviceKeys()), ConsentFormScanner::NOT_TICKED);
-        $boxes['checkup'] = ConsentFormScanner::TICKED;
-        $boxes['iron'] = ConsentFormScanner::TICKED;
-
         $proposal = ConsentPaperCopy::proposal([
             'consent_choice' => HealthConsentForm::CONSENT_SPECIFIC,
-            'services' => $boxes,
             'written' => ['consent_exceptions' => $line],
+            'excluded_services' => [],
         ]);
 
-        $this->assertSame([], $proposal['partial']['approved']);
-        $this->assertSame(['checkup', 'iron'], $proposal['partial']['check']);
+        $this->assertSame(array_keys(HealthConsentForm::PLANNED_SERVICES), $proposal['partial']['approved']);
+        $this->assertSame([], $proposal['partial']['check']);
+        $this->assertSame([], $proposal['partial']['excluded']);
+    }
+
+    /**
+     * A "yes, except" line that does not match the list word for word starts
+     * from the services the reader named off that same line — never from the
+     * school's list — and stays highlighted, with what it was read as said to
+     * the adviser. A line that matches exactly is read by its own words, so a
+     * service the reader added on its own is not excluded.
+     */
+    #[Test]
+    public function a_line_the_reader_matched_starts_those_services_excluded_and_is_still_checked(): void
+    {
+        $draft = ConsentFormScanner::interpret($this->draft([
+            'consent_choice' => HealthConsentForm::CONSENT_SPECIFIC,
+            'written' => ['consent_exceptions' => ['text' => 'ayaw ang injection ug purga', 'readable' => true, 'confident' => true]],
+            'excluded_services' => ['immunization', 'deworming'],
+        ]));
+
+        $this->assertSame(['ayaw ang injection ug purga'], $draft['unmatched_exceptions']);
+        $this->assertTrue($draft['needs_review']);
+
+        $proposal = ConsentPaperCopy::proposal($draft);
+        $this->assertSame(['deworming_worms', 'deworming_schistosomiasis', 'deworming_filariasis', 'immunization_grade7'], $proposal['partial']['excluded']);
+        $this->assertSame(['checkup', 'dental', 'tas', 'iron', 'vitamin_a'], $proposal['partial']['approved']);
+
+        $check = collect(ConsentPhotoSummary::fromDraft($draft, 7)['checks'])
+            ->firstWhere('subject', ConsentFormScanner::WRITTEN_FIELDS['consent_exceptions']);
+        $this->assertNotNull($check);
+        $this->assertStringContainsString('were read as', $check['message']);
+        $this->assertStringContainsString(HealthConsentForm::headingName('immunization'), $check['message']);
+
+        // The line's own words win when they match: "Bakuna" is immunization
+        // alone, whatever else the reader named.
+        $exact = ConsentFormScanner::interpret($this->draft([
+            'consent_choice' => HealthConsentForm::CONSENT_SPECIFIC,
+            'written' => ['consent_exceptions' => ['text' => 'Bakuna', 'readable' => true, 'confident' => true]],
+            'excluded_services' => ['immunization', 'dental'],
+        ]));
+        $this->assertSame([], $exact['unmatched_exceptions']);
+        $this->assertSame(['immunization_grade7'], ConsentPaperCopy::proposal($exact)['partial']['excluded']);
+
+        // Services named under any other answer are not exceptions at all.
+        $full = ConsentFormScanner::interpret($this->draft([
+            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'excluded_services' => ['dental'],
+        ]));
+        $this->assertSame([], $full['excluded_services']);
     }
 
     /** @return array<string, array{0: array<string, mixed>}> */
@@ -1678,23 +1819,30 @@ class ConsentFormScanTest extends TestCase
     }
 
     /**
-     * A sheet with nothing ticked in its list used to come up with every
-     * service Approved, beside a reading that said none of them was.
+     * Which services a learner is asked about is the school's list, never the
+     * paper's: a full consent starts every service the school offers
+     * Consented, and nothing about the printed list is put to the adviser.
      */
     #[Test]
-    public function a_sheet_with_nothing_ticked_proposes_no_approval(): void
+    public function a_full_consent_covers_every_offered_service(): void
     {
         $this->learner('130000000001', 'Juan', 'Dela Cruz');
 
-        $this->fakeGemini($this->draft([], ['consent_choice' => HealthConsentForm::CONSENT_ALL]));
+        $this->fakeGemini($this->draft(['consent_choice' => HealthConsentForm::CONSENT_ALL]));
 
         $response = $this->withSession($this->adviserSession())
             ->post(route('consent-forms.scan'), ['photo' => $this->jpeg(), 'lrn' => '130000000001'], ['Accept' => 'application/json'])
             ->assertOk();
 
-        $this->assertSame([], $response->json('ticked_services'));
-        $this->assertSame(['approved' => [], 'check' => [], 'excluded' => []], $response->json('service_proposal.full'));
-        $this->assertFalse($response->json('summary.complete'));
+        $this->assertSame(
+            ['approved' => array_keys(HealthConsentForm::PLANNED_SERVICES), 'check' => [], 'excluded' => []],
+            $response->json('service_proposal.full'),
+        );
+        // Nothing about the empty list is put to the adviser.
+        $this->assertSame([], array_values(array_filter(
+            $response->json('summary.checks'),
+            fn (array $check): bool => $check['section'] === 'services',
+        )));
     }
 
     /** Nothing to propose from another child's sheet, or one that cannot be read. */
@@ -1703,7 +1851,7 @@ class ConsentFormScanTest extends TestCase
     {
         $this->learner('130000000001', 'Juan', 'Dela Cruz');
 
-        $this->fakeGemini($this->draft(['checkup' => ConsentFormScanner::TICKED], [
+        $this->fakeGemini($this->draft([
             'student_name' => ['text' => 'SANTOS, PEDRO', 'readable' => true, 'confident' => true],
         ]));
 
@@ -1714,9 +1862,8 @@ class ConsentFormScanTest extends TestCase
     }
 
     /**
-     * The service rows sit about 1% of the sheet's height apart, so the photo
-     * goes at the most detail it can have and the reader says what is in each
-     * box before it answers.
+     * The boxes sit close together, so the photo goes at the most detail it
+     * can have and the reader says what is in each box before it answers.
      */
     #[Test]
     public function the_photo_is_read_in_full_detail_and_described_before_it_is_judged(): void
@@ -1730,12 +1877,10 @@ class ConsentFormScanTest extends TestCase
 
         Http::assertSent(function (ClientRequest $request): bool {
             $body = $request->data();
-            $order = $body['generationConfig']['responseSchema']['propertyOrdering'] ?? [];
+            $order = $body['generationConfig']['responseSchema']['properties']['parent_reply']['propertyOrdering'] ?? [];
             $before = fn (string $a, string $b): bool => array_search($a, $order, true) < array_search($b, $order, true);
 
             return ($body['contents'][0]['parts'][0]['media_resolution']['level'] ?? null) === 'MEDIA_RESOLUTION_ULTRA_HIGH'
-                && $before('services_marks_seen', 'services_evidence')
-                && $before('services_evidence', 'services')
                 && $before('consent_evidence', 'consent_boxes')
                 && $before('allergy_evidence', 'allergy_boxes');
         });
@@ -1854,7 +1999,7 @@ class ConsentFormScanTest extends TestCase
         Http::assertSent(function (ClientRequest $request): bool {
             $data = $request->data();
             $system = (string) preg_replace('/\s+/', ' ', (string) ($data['system_instruction']['parts'][0]['text'] ?? ''));
-            $field = (string) ($data['generationConfig']['responseSchema']['properties']['signature_present']['description'] ?? '');
+            $field = (string) ($data['generationConfig']['responseSchema']['properties']['parent_reply']['properties']['signature_present']['description'] ?? '');
 
             return str_contains($system, 'a signature, initials, or their name written by hand, in joined-up writing or in separate capital letters alike')
                 && str_contains($system, 'false when that line is empty, or carries only typed or machine-printed text')
@@ -1898,16 +2043,18 @@ class ConsentFormScanTest extends TestCase
     #[DataProvider('sheetsNotUpright')]
     public function a_sheet_not_upright_proposes_nothing_and_says_how_far_to_turn_it(string $orientation, int $turn): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft(['checkup' => 'yes', 'dental' => 'yes'], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'sheet_orientation' => $orientation,
-            'consent_boxes' => $this->boxes(HealthConsentForm::CONSENT_ALL),
-            'consent_choice' => HealthConsentForm::CONSENT_ALL,
+            'consent_boxes' => $this->boxes(HealthConsentForm::CONSENT_SPECIFIC),
+            'consent_choice' => HealthConsentForm::CONSENT_SPECIFIC,
+            'written' => ['consent_exceptions' => ['text' => 'Bakuna', 'readable' => true, 'confident' => true]],
+            'excluded_services' => ['immunization'],
         ]));
 
         $this->assertSame($turn, $draft['turn']);
         $this->assertTrue($draft['unreadable']);
         $this->assertSame(ConsentFormScanner::UNCLEAR, $draft['consent_choice']);
-        $this->assertSame([], ConsentPaperCopy::tickedServices($draft['services']));
+        $this->assertSame([], $draft['excluded_services']);
         $this->assertNull(ConsentPaperCopy::fromDraft($draft));
         $this->assertStringContainsString('upright', $draft['note']);
     }
@@ -1927,7 +2074,7 @@ class ConsentFormScanTest extends TestCase
     #[DataProvider('sheetsReadAsTheyAre')]
     public function any_other_answer_about_the_way_it_lies_changes_nothing(mixed $orientation): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft(['checkup' => 'yes'], [
+        $draft = ConsentFormScanner::interpret($this->draft([
             'sheet_orientation' => $orientation,
             'consent_boxes' => $this->boxes(HealthConsentForm::CONSENT_ALL),
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
@@ -1969,14 +2116,16 @@ class ConsentFormScanTest extends TestCase
     }
 
     /**
-     * A sideways sheet the reader calls upright: the size is measured, so the
-     * service rows are held back whatever it says, and the rest of the reading
-     * stands for the adviser to check.
+     * A wide photo used to have its service rows held back, the part of the
+     * sheet a sideways photo got wrong. The school's list is not read any
+     * more, so there is nothing to hold back: the parent's answer off a wide
+     * photo the reader calls upright stands for the adviser to check, with no
+     * warning about rows nobody read.
      */
     #[Test]
-    public function a_photo_wider_than_it_is_tall_proposes_no_service_rows(): void
+    public function a_wide_photo_says_nothing_about_service_rows(): void
     {
-        $this->fakeGemini($this->draft(['checkup' => 'yes', 'iron' => 'yes'], [
+        $this->fakeGemini($this->draft([
             'sheet_orientation' => 'upright',
             'consent_boxes' => $this->boxes(HealthConsentForm::CONSENT_ALL),
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
@@ -1991,31 +2140,8 @@ class ConsentFormScanTest extends TestCase
 
         $this->assertSame(HealthConsentForm::CONSENT_ALL, $response->json('draft.consent_choice'));
         $this->assertSame(0, $response->json('draft.turn'));
-        $this->assertSame([], $response->json('ticked_services'));
-        $this->assertSame(ConsentFormScanner::UNCLEAR, $response->json('draft.services.checkup'));
-        $this->assertTrue($response->json('draft.needs_review'));
-        $this->assertStringContainsString('wider than it is tall', $response->json('draft.warnings.0'));
-    }
-
-    /** The same reading off a photo taller than it is wide keeps its rows. */
-    #[Test]
-    public function a_photo_taller_than_it_is_wide_keeps_its_service_rows(): void
-    {
-        $this->fakeGemini($this->draft(['checkup' => 'yes', 'iron' => 'yes'], [
-            'sheet_orientation' => 'upright',
-            'consent_boxes' => $this->boxes(HealthConsentForm::CONSENT_ALL),
-            'consent_choice' => HealthConsentForm::CONSENT_ALL,
-        ]));
-
-        $response = $this->withSession($this->adviserSession())
-            ->post(route('consent-forms.scan'), [
-                'photo' => $this->jpeg(),
-                'sheet' => UploadedFile::fake()->createWithContent('sheet.jpg', self::tinyJpeg('tall', 1080, 1920)),
-            ], ['Accept' => 'application/json'])
-            ->assertOk();
-
-        $this->assertSame(['checkup', 'iron'], $response->json('ticked_services'));
         $this->assertSame([], $response->json('draft.warnings'));
+        $this->assertFalse($response->json('draft.needs_review'));
     }
 
     /**
@@ -2120,40 +2246,13 @@ class ConsentFormScanTest extends TestCase
         Http::assertSent(fn (ClientRequest $request): bool => ! isset($request->data()['contents'][0]['parts'][0]['media_resolution']));
     }
 
-    /**
-     * The count is what catches a tick given to the wrong row or to two rows.
-     * It cannot say which row, so the rows stand and the adviser is told.
-     */
-    #[Test]
-    public function a_count_of_marks_that_disagrees_with_the_rows_is_said(): void
-    {
-        $boxes = ['checkup' => ConsentFormScanner::TICKED, 'dental' => ConsentFormScanner::TICKED];
-        $choice = ['consent_choice' => HealthConsentForm::CONSENT_ALL];
-
-        $agrees = ConsentFormScanner::interpret($this->draft($boxes, $choice + ['services_marks_seen' => 2]));
-        $this->assertSame([], $agrees['warnings']);
-        $this->assertFalse($agrees['needs_review']);
-
-        $disagrees = ConsentFormScanner::interpret($this->draft($boxes, $choice + ['services_marks_seen' => 3]));
-        $this->assertSame(['The reader saw 3 marks in the service list but placed 2 — check the rows against the paper.'], $disagrees['warnings']);
-        $this->assertTrue($disagrees['needs_review']);
-        $this->assertSame(ConsentFormScanner::TICKED, $disagrees['services']['checkup']);
-
-        // Rows it could not settle are named already, and are expected not to add up.
-        $unsure = ConsentFormScanner::interpret($this->draft($boxes + ['iron' => ConsentFormScanner::UNCLEAR], $choice + ['services_marks_seen' => 3]));
-        $this->assertSame([], $unsure['warnings']);
-
-        // A reader that gave no count is not accused of a wrong one.
-        $this->assertSame([], ConsentFormScanner::interpret($this->draft($boxes, $choice))['warnings']);
-    }
-
     /** Another child's sheet, or one nothing could be read off, draws nothing. */
     #[Test]
     public function another_childs_sheet_or_an_unreadable_one_draws_nothing(): void
     {
         $this->learner('130000000001', 'Juan', 'Dela Cruz');
 
-        $this->fakeGemini($this->draft([], [
+        $this->fakeGemini($this->draft([
             'student_name' => ['text' => 'SANTOS, PEDRO', 'readable' => true, 'confident' => true],
         ]));
 
@@ -2162,7 +2261,7 @@ class ConsentFormScanTest extends TestCase
             ->assertOk()
             ->json('copy_html'));
 
-        $this->assertNull(ConsentPaperCopy::fromDraft(ConsentFormScanner::interpret($this->draft([], ['unreadable' => true]))));
+        $this->assertNull(ConsentPaperCopy::fromDraft(ConsentFormScanner::interpret($this->draft(['unreadable' => true]))));
         $this->assertNotNull(ConsentPaperCopy::fromDraft(ConsentFormScanner::interpret($this->draft())));
     }
 
@@ -2172,7 +2271,7 @@ class ConsentFormScanTest extends TestCase
     #[Test]
     public function the_petsa_is_read_and_only_its_certain_parts_are_kept(): void
     {
-        $read = fn (array $date): array => ConsentFormScanner::interpret($this->draft([], ['form_date' => $date]))['form_date'];
+        $read = fn (array $date): array => ConsentFormScanner::interpret($this->draft(['form_date' => $date]))['form_date'];
 
         $this->assertSame(
             ['text' => 'October 27, 2024', 'year' => 2024, 'month' => 10, 'day' => 27, 'readable' => true],
@@ -2229,7 +2328,7 @@ class ConsentFormScanTest extends TestCase
     #[DataProvider('datesAndSchoolYears')]
     public function a_sheet_dated_in_another_school_year_is_named(array $formDate, string $schoolYear, bool $outside): void
     {
-        $draft = ConsentFormScanner::interpret($this->draft([], ['form_date' => $formDate]));
+        $draft = ConsentFormScanner::interpret($this->draft(['form_date' => $formDate]));
         $checked = ConsentFormScanner::checkSchoolYear($draft, $schoolYear);
 
         $this->assertSame($outside, $checked['date_outside_school_year']);
@@ -2243,15 +2342,49 @@ class ConsentFormScanTest extends TestCase
 
         // It decides nothing about the answer on the sheet.
         $this->assertSame($draft['consent_choice'], $checked['consent_choice']);
-        $this->assertSame($draft['services'], $checked['services']);
+        $this->assertSame($draft['excluded_services'], $checked['excluded_services']);
     }
 
     /** The upload dialog's reading leads with it, and says what the PETSA reads. */
+    /**
+     * Testers' report #31: a PETSA no year could be read off says so softly —
+     * no warning that the form is old, no claim that it is current.
+     */
+    #[Test]
+    public function a_date_that_could_not_be_read_is_noted_softly(): void
+    {
+        foreach ([
+            'blank' => ['text' => '', 'year' => 0, 'month' => 0, 'day' => 0, 'readable' => true],
+            'smudged' => ['text' => '', 'year' => 0, 'month' => 0, 'day' => 0, 'readable' => false],
+        ] as $because => $date) {
+            $checked = ConsentFormScanner::checkSchoolYear(
+                ConsentFormScanner::interpret($this->draft(['consent_choice' => HealthConsentForm::CONSENT_ALL, 'form_date' => $date])),
+                '2026-2027',
+            );
+
+            $this->assertFalse($checked['date_outside_school_year'], $because);
+            $this->assertSame(ConsentFormScanner::DATE_UNREAD, $checked['date_note'], $because);
+            $this->assertContains(
+                ['section' => 'sheet', 'subject' => 'Date (PETSA)', 'message' => ConsentFormScanner::DATE_UNREAD],
+                ConsentPhotoSummary::fromDraft($checked, 7)['checks'],
+                $because,
+            );
+        }
+
+        // A date inside the year says nothing at all.
+        $current = ConsentFormScanner::checkSchoolYear(
+            ConsentFormScanner::interpret($this->draft(['form_date' => ['text' => 'Oktubre 27, 2026', 'year' => 2026, 'month' => 10, 'day' => 27, 'readable' => true]])),
+            '2026-2027',
+        );
+        $this->assertSame('', $current['date_note']);
+        $this->assertFalse($current['date_outside_school_year']);
+    }
+
     #[Test]
     public function the_reading_says_the_form_is_dated_outside_the_school_year(): void
     {
         $this->learner('130000000001', 'Juan', 'Dela Cruz');
-        $this->fakeGemini($this->draft(['checkup' => ConsentFormScanner::TICKED], [
+        $this->fakeGemini($this->draft([
             'consent_choice' => HealthConsentForm::CONSENT_ALL,
             'form_date' => ['text' => 'October 27, 2024', 'year' => 2024, 'month' => 10, 'day' => 27, 'readable' => true],
         ]));
@@ -2291,7 +2424,7 @@ class ConsentFormScanTest extends TestCase
         $this->travelTo(now()->setDate(2026, 11, 9)->setTime(10, 0));
         $this->learner('130000000001', 'Juan', 'Dela Cruz');
 
-        $this->fakeGemini($this->draft([], [
+        $this->fakeGemini($this->draft([
             'form_date' => ['text' => 'October 27, '.$year, 'year' => $year, 'month' => 10, 'day' => 27, 'readable' => true],
         ]));
 

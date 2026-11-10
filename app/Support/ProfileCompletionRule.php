@@ -57,19 +57,13 @@ class ProfileCompletionRule
     }
 
     /**
-     * The closing measurement. Read from the status rather than the BMI
-     * value because a record can carry a status the classifier wrote with
-     * no numeric copy on some legacy rows; either one proves it was taken.
+     * The closing measurement: an endline height or weight on the row
+     * (StudentHealthRecord::hasEndlineMeasurement). A status stamped with no
+     * weighing behind it is not one.
      */
     public static function hasEndline(?StudentHealthRecord $record): bool
     {
-        if ($record === null) {
-            return false;
-        }
-
-        $status = trim((string) ($record->endline_nutritional_status ?? ''));
-
-        return $status !== '' || (float) ($record->endline_bmi_value ?? 0) > 0;
+        return $record !== null && $record->hasEndlineMeasurement();
     }
 
     /** Enrolment is the Feeding Coordinator's stamp — qualifying is not it. */

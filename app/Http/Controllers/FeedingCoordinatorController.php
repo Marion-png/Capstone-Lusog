@@ -15,12 +15,14 @@ use App\Support\FeedingBeneficiarySummary;
 use App\Support\FeedingNutritionProgress;
 use App\Support\FeedingProgramCycle;
 use App\Support\FeedingReportNarrative;
+use App\Support\FeedingWeighIns;
 use App\Support\RequestMemo;
 use App\Support\SchemaCache;
 use App\Support\SchoolCalendar;
 use App\Support\SchoolLetterhead;
 use App\Support\SchoolPulse;
 use App\Support\SchoolSignatories;
+use App\Support\SchoolYear;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -630,22 +632,26 @@ class FeedingCoordinatorController extends Controller
         $filters['population'] ??= self::POPULATION_BENEFICIARIES;
 
         $students = collect();
-        $schoolYears = collect();
-        if (SchemaCache::hasTable('student_health_records')) {
-            $scope = fn () => StudentHealthRecord::query()
-                ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId));
+        $hasRecords = SchemaCache::hasTable('student_health_records');
 
-            // school_year is a plain lookup column, so the year list and the
-            // year filter are the only parts of this that SQL may decide.
-            $schoolYears = $scope()->distinct()->orderByDesc('school_year')->pluck('school_year')->values();
+        // school_year is a plain lookup column, so the year list and the year
+        // filter are the only parts of this that SQL may decide. The list is
+        // the years on record and the current one (SchoolYear::options), and a
+        // year off the query string it does not offer — one nobody has a
+        // record in, a future one included — reads the current year instead.
+        $schoolYears = collect(SchoolYear::options($hasRecords
+            ? StudentHealthRecord::query()
+                ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
+                ->distinct()
+                ->pluck('school_year')
+            : []));
+        $filters['school_year'] = SchoolYear::pick($filters['school_year'], $schoolYears->all());
+
+        if ($hasRecords) {
             // Shared with the Record Attendance dialog below, which wants this
             // same roll: on the usual path (the filter naming the current year)
             // the two are one read rather than two.
             $students = StudentHealthRecord::rosterFor($institutionId, $filters['school_year']);
-        }
-
-        if ($schoolYears->doesntContain($filters['school_year'])) {
-            $schoolYears = $schoolYears->push($filters['school_year'])->sortDesc()->values();
         }
 
         // The feeding cycle the header counts down comes from the school's first
@@ -707,7 +713,28 @@ class FeedingCoordinatorController extends Controller
         $rule = FeedingAtRiskRule::forInstitution($institutionId);
         $beneficiaryStats = $this->buildBeneficiaryStats($beneficiaries, $rule);
 
+        // Progress weigh-ins (testers' report #33): beneficiaries no better
+        // than at baseline at their latest weighing, to act on before the
+        // programme ends. Read once, and only while the school records them.
+        $weighInsOn = FeedingWeighIns::enabled($institutionId ? (int) $institutionId : null);
+        $weighIns = $weighInsOn ? FeedingWeighIns::forRecords($beneficiaries) : collect();
+        $notImproving = $weighInsOn
+            ? $beneficiaries
+                ->filter(fn (StudentHealthRecord $record): bool => FeedingWeighIns::progress($record, $weighIns->get($record->id, collect())) === FeedingWeighIns::NOT_IMPROVING)
+                ->map(fn (StudentHealthRecord $record): array => [
+                    'id' => $record->id,
+                    'name' => (string) $record->student_name,
+                    'class' => implode(' ', array_filter($this->splitSection((string) $record->section))),
+                    'url' => route('feedingcor-program.beneficiary', $record->id),
+                ])
+                ->sortBy(fn (array $row): string => strtolower($row['name']))
+                ->values()
+                ->all()
+            : [];
+
         return [
+            'weighInsOn' => $weighInsOn,
+            'notImproving' => $notImproving,
             'filters' => $filters,
             'filterOptions' => $this->buildFilterOptions($allBeneficiaries, $schoolYears, $filters),
             'dashboardStats' => [

@@ -196,7 +196,7 @@ class MedicalCertificateController extends Controller
                     'doctor_clinic' => $cert->doctor_clinic,
                     'diagnosis_date' => $cert->diagnosis_date?->format('Y-m-d'),
                     'uploaded_by' => $cert->uploaded_by_name,
-                    'uploaded_at' => $cert->created_at->format('M d, Y'),
+                    'uploaded_at' => SchoolClock::local($cert->created_at)?->format('M d, Y'),
                 ];
                 $entry['download_url'] = route('medical-certificate.download', $cert->id);
 

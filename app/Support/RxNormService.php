@@ -58,7 +58,30 @@ class RxNormService
     /** The validation rules for a generic name, checked before every lookup. */
     public static function nameRules(): array
     {
-        return ['required', 'string', 'min:2', 'max:100', 'regex:'.self::NAME_PATTERN];
+        return [
+            'required', 'string', 'min:2', 'max:100', 'regex:'.self::NAME_PATTERN,
+            // A field's label or its example is not a generic name: the old
+            // inventory button read "Generic name" when empty, and that text
+            // was saved as Paracetamol's and Ibuprofen's (testers' report #14).
+            function (string $attribute, mixed $value, \Closure $fail): void {
+                if (self::isPlaceholder((string) $value)) {
+                    $fail('Type the medicine\'s generic name (for example, Paracetamol), not the field\'s label.');
+                }
+            },
+        ];
+    }
+
+    /**
+     * Whether a generic name is really a field's label or example ("Generic
+     * name", "e.g. Mefenamic Acid", "N/A") rather than a drug's name.
+     */
+    public static function isPlaceholder(string $name): bool
+    {
+        $plain = trim((string) preg_replace('/[^a-z0-9]+/', ' ', strtolower($name)));
+
+        return $plain === ''
+            || in_array($plain, ['generic', 'generic name', 'name', 'n a', 'na', 'none', 'unknown', 'medicine', 'drug'], true)
+            || str_starts_with($plain, 'e g ');
     }
 
     /** Is this a name worth sending? 2 to 100 characters, letters, digits, spaces, - / . only. */

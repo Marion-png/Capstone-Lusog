@@ -12,28 +12,49 @@
     the learner in the student list. The host page inlines class-adviser.css
     and consent-copy.css. Exactly one instance per page: the ids are fixed.
 
-    The flow, in order:
-      1. The photo reader pre-fills the reading panel beside the photo.
+    The flow, in order (set 2026-11-09):
+      1. The photo reader ("Reading consent form… This may take a few
+         seconds.") pre-fills the "Read from the uploaded photo" panel beside
+         the photo. That panel is the one place the adviser edits: while it is
+         on screen the parent's answer, the excepted services, the refusal
+         reason, the name-and-signature tick, the allergy and illness lines
+         and the medical certificate are moved into it, under the section of
+         the sheet each belongs to.
       2. The adviser holds the reading against the signed form and corrects
-         it there. Each service is one of three: **Consented** (shaded at the
-         top and agreed to), **Excluded** (shaded at the top and named after
-         "gawas lamang niini") or **Not offered** (not shaded at the top — the
-         adviser shades the services the School Nurse said to offer, and
-         consent is not asked for the rest). The allergy and illness lines
-         are corrected in their own fields.
-      3. They tick "I checked this answer against the signed form."
-      4. Upload Consent opens a read-only Confirm Upload summary: Back to Edit
-         returns to the dialog untouched, Confirm & Upload files it.
-      5. The page comes back with "Consent saved successfully."
-    The marks are what is filed (`services` the Consented ones, and a partial
-    consent's `excepted_services` the Excluded ones). With no reading — no
+         it there. The system, not the reader, decides which services there
+         are: the ones the school offers this school year, with the rules for
+         one grade or one sex applied. Each is Consented, Excluded or Not
+         offered — the only three words — and starts from the parent's answer
+         (ConsentPaperCopy::proposal): a full consent every service Consented;
+         a partial one the services its exceptions name Excluded and the rest
+         Consented; a refusal every service Excluded. The services a partial
+         consent excepts are not typed: they are the rows marked Excluded, and
+         what the parent wrote is shown as written. An answer the reader could
+         not determine is chosen by the adviser, and the rows start from that.
+         A field the reader was unsure of is highlighted, and every row or
+         field changed from the reading says "Edited".
+      3. They confirm the parent's name and signature are on the form (a form
+         without both is filed as incomplete and gives no service), and tick
+         "I checked this answer against the signed form." Upload Consent stays
+         disabled until it is ticked.
+      4. Upload Consent opens a read-only Confirm Upload summary — learner,
+         LRN, school year, file, answer, the Consented and the Excluded
+         services as two lists by their whole printed names, the allergy and
+         illness lines: Back to Edit returns to the dialog untouched, Confirm &
+         Upload files it.
+      5. The page comes back with "Consent saved successfully.", and the
+         learner's status reads Valid Consent, Refused or Incomplete.
+    The marks are what is filed (`services` the Consented ones — on a refusal
+    the Excluded ones — and a partial consent's `excepted_services` the
+    Excluded ones), with the reading itself (`scan_token`), so the server can
+    log what the reader proposed beside what was saved. With no reading — no
     reader set up, a PDF, a photo it could not read — the same marks are made
-    under the parent's answer instead, starting from Not offered.
+    under the parent's answer instead.
 
     A service the learner is never given is locked: one the school does not
     offer this school year (HealthServicesOffered, the School Nurse's
-    setting) reads Not offered, and Iron for a male learner Not applicable
-    (ConsentStanding::appliesTo). Immunization is listed for Grade 7 only.
+    setting) reads Not offered, and so do MR, Td outside Grade 7 and Iron
+    for a male learner (ConsentStanding::appliesTo), each with its reason.
 
     Expects $schoolYear (the year an upload is filed under — always the
     current one), $scannerReady and $plannedServices, plus either
@@ -45,17 +66,17 @@
     $uploadStudents = $uploadStudents ?? [];
     // The services the dialog marks and the summary lists, worded as the
     // printed letter words them (in Cebuano) under the paper's own headings.
-    // Every learner in the class is in the adviser's grade, so a service one
-    // grade alone is given is listed only for that grade. Each carries what
-    // locks it: not offered by the school this year, or for one sex only.
+    // Every service is listed, and each carries what locks it: not offered by
+    // the school this year, or for one grade or one sex only. Every learner in
+    // the class is in the adviser's grade.
     $uploadGrade = \App\Support\LearnerPlacement::gradeNumber((string) session('assigned_grade_level', ''));
     $uploadInstitution = session('active_institution_id');
     $offeredServices = \App\Support\HealthServicesOffered::for($uploadInstitution ? (int) $uploadInstitution : null, (string) $schoolYear);
     $confirmServices = collect(array_keys($plannedServices ?? \App\Models\HealthConsentForm::PLANNED_SERVICES))
-        ->filter(fn (string $key): bool => (\App\Support\ConsentStanding::GRADE_ONLY_SERVICES[$key] ?? $uploadGrade) === $uploadGrade)
         ->map(fn (string $key): array => \App\Models\HealthConsentForm::printedService($key) + [
             'offered' => in_array($key, $offeredServices, true),
             'only_sex' => \App\Support\ConsentStanding::SEX_ONLY_SERVICES[$key] ?? null,
+            'only_grade' => \App\Support\ConsentStanding::GRADE_ONLY_SERVICES[$key] ?? null,
         ])
         ->values()
         ->all();
@@ -194,13 +215,16 @@
                             <div id="pcCopy"></div>
                         </div>
                     @endif
-                    <div class="pc-input">
+                    {{-- While a reading is on screen this box is moved into the
+                         reading's "Parent's consent" section, so every edit is
+                         made in one place beside the photo. --}}
+                    <div class="pc-input" id="pcAnswerBox">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                         <select id="pc_consent_type" name="consent_type">
                             <option value="">Not recorded yet</option>
-                            <option value="full" @selected(old('consent_type') === 'full')>Full consent &mdash; agreed to every service</option>
-                            <option value="partial" @selected(old('consent_type') === 'partial')>Partial consent &mdash; agreed, with exceptions</option>
-                            <option value="refused" @selected(old('consent_type') === 'refused')>Declined &mdash; did not agree</option>
+                            <option value="full" @selected(old('consent_type') === 'full')>Full consent</option>
+                            <option value="partial" @selected(old('consent_type') === 'partial')>Partial consent</option>
+                            <option value="refused" @selected(old('consent_type') === 'refused')>Refused</option>
                         </select>
                     </div>
                     {{-- One span, so the hint's flex layout keeps the bold words
@@ -216,6 +240,10 @@
                              adviser's tick beside Upload Consent; choosing an
                              answer by hand makes it the adviser's own. --}}
                         <input type="hidden" name="answer_from_scan" id="pcAnswerFromScan" value="0">
+                        {{-- The reading the dialog was filled from, sealed by the
+                             server, so what it proposed is kept beside what is
+                             filed. Only while a reading is on screen. --}}
+                        <input type="hidden" name="scan_token" id="pcScanToken" value="" disabled>
                     @endif
                 </div>
 
@@ -230,11 +258,15 @@
                 <div id="pcExcepted" hidden></div>
                 <input type="hidden" name="services_confirmed" id="pcServicesConfirmed" value="0">
 
+                {{-- Not typed: the services a partial consent excepts are the
+                     rows marked Excluded, listed here by their printed names.
+                     What the parent wrote is shown as written, and filed as
+                     the exceptions; with nothing read, the names are. --}}
                 <div class="pc-field" id="pcPartialField" hidden>
-                    <label for="pc_partial_exception">Services the parent excepted</label>
-                    <div class="pc-input is-plain">
-                        <input id="pc_partial_exception" name="partial_exception" type="text" maxlength="500" autocomplete="off">
-                    </div>
+                    <span class="pc-field-label">Services the parent excepted</span>
+                    <ul class="pc-excepted" id="pcExceptedList"></ul>
+                    <p class="pc-written" id="pcExceptWritten" hidden><span>Written on the form</span><q lang="ceb" id="pcExceptWrittenText"></q></p>
+                    <input type="hidden" id="pc_partial_exception" name="partial_exception" value="">
                 </div>
 
                 <div class="pc-field" id="pcRefusedField" hidden>
@@ -254,7 +286,19 @@
                     <div class="pc-svc" id="pcSvcHome" role="group" aria-labelledby="pcServicesLabel"></div>
                 </div>
 
-                <fieldset class="pc-field pc-fieldset">
+                {{-- Both the parent's name and their signature on the form.
+                     Without both it is filed as incomplete, and no service is
+                     given until a complete form is on file. --}}
+                <div class="pc-field" id="pcCompleteField">
+                    <input type="hidden" name="form_complete" value="0">
+                    <label class="pc-confirm pc-complete">
+                        <input type="checkbox" name="form_complete" value="1" id="pcFormComplete">
+                        <span>The parent's name and signature are on the form.</span>
+                    </label>
+                    <p class="pc-complete-missing" id="pcCompleteMissing" role="status" hidden>{{ \App\Support\ConsentFormScanner::FORM_INCOMPLETE }}</p>
+                </div>
+
+                <fieldset class="pc-field pc-fieldset" id="pcHealthField">
                     <legend>Allergies and illnesses</legend>
                     <div class="pc-writeins">
                         @foreach ($writeIns as $field => $caption)
@@ -266,7 +310,7 @@
                     </div>
                 </fieldset>
 
-                <div class="pc-field">
+                <div class="pc-field" id="pcMedField">
                     <label>Medical Certificate <span class="pc-optional">(Optional)</span></label>
                     <p class="pc-hint">Upload if the parent attached a medical certificate with the consent form.</p>
                     <div class="pc-drop" id="pcMedDrop" role="button" tabindex="0">
@@ -289,8 +333,9 @@
 
                 <div class="confirm-actions pc-actions">
                     @if ($scannerReady)
-                        {{-- Shown, and required, while a reading is on screen:
-                             the adviser has held the whole reading — answer,
+                        {{-- Shown while a reading is on screen, and Upload
+                             Consent stays disabled until it is ticked: the
+                             adviser has held the whole reading — answer,
                              services, allergies — against the paper. --}}
                         <label class="pc-confirm" id="pcAnswerConfirm" hidden>
                             <input type="checkbox" name="answer_confirmed" value="1" id="pcAnswerConfirmed">
@@ -321,18 +366,30 @@
         </div>
         <div class="confirm-body">
             <dl class="pcc-summary">
-                <div><dt>Parent's answer</dt><dd><span class="pcc-answer" id="pcConfirmAnswer"></span></dd></div>
+                <div><dt>Learner</dt><dd id="pcConfirmName"></dd></div>
+                <div><dt>LRN</dt><dd id="pcConfirmLrn"></dd></div>
+                <div><dt>School year</dt><dd>{{ $schoolYear }}</dd></div>
                 <div><dt>Signed form</dt><dd id="pcConfirmFile"></dd></div>
+                <div><dt>Parent's answer</dt><dd><span class="pcc-answer" id="pcConfirmAnswer"></span></dd></div>
+                <div><dt>Parent's name and signature</dt><dd id="pcConfirmComplete"></dd></div>
                 <div id="pcConfirmDateRow" class="pcc-dated" hidden><dt>Form date</dt><dd id="pcConfirmDate"></dd></div>
                 <div id="pcConfirmNoteRow" hidden><dt id="pcConfirmNoteLabel"></dt><dd id="pcConfirmNote"></dd></div>
                 <div id="pcConfirmCertRow" hidden><dt>Medical certificate</dt><dd id="pcConfirmCert"></dd></div>
                 <div id="pcConfirmNotesRow" hidden><dt>Additional notes</dt><dd id="pcConfirmNotes"></dd></div>
             </dl>
+            {{-- Consented and Excluded apart, each service by its whole
+                 printed name. A service the learner is not offered is in
+                 neither. --}}
             <div class="pcc-services-head">
-                <h4>Health Services</h4>
-                <span class="pcc-tally" id="pcConfirmTally"></span>
+                <h4>Consented services</h4>
+                <span class="pcc-tally" id="pcConfirmConsentedCount"></span>
             </div>
-            <ul class="pcc-list" id="pcConfirmList"></ul>
+            <ul class="pcc-list is-consented" id="pcConfirmConsented"></ul>
+            <div class="pcc-services-head">
+                <h4>Excluded services</h4>
+                <span class="pcc-tally" id="pcConfirmExcludedCount"></span>
+            </div>
+            <ul class="pcc-list is-excluded" id="pcConfirmExcluded"></ul>
             <div class="pcc-services-head">
                 <h4>Allergies and illnesses</h4>
             </div>
@@ -461,6 +518,17 @@
 
     consentFile?.addEventListener('change', () => consentDrop?.classList.remove('invalid'));
 
+    // The parent's name and signature: ticked when both are on the form. The
+    // reader's verdict pre-fills it; unticked, the form is filed as incomplete
+    // and gives no service, and the dialog says what is missing.
+    const formComplete = document.getElementById('pcFormComplete');
+    const completeMissing = document.getElementById('pcCompleteMissing');
+    let readerSawComplete = null;
+    const syncComplete = () => {
+        if (completeMissing) completeMissing.hidden = Boolean(formComplete?.checked) || readerSawComplete !== false;
+    };
+    formComplete?.addEventListener('change', syncComplete);
+
     // ── What the rest of the paper says ─────────────────────────────
     const answerLines = { partial: document.getElementById('pcPartialField'), refused: document.getElementById('pcRefusedField') };
 
@@ -488,11 +556,11 @@
         }
         if (confirmedSubmit) return;
         event.preventDefault();
+        if (submitButton?.disabled) return;
         if (isAgreed()) {
-            const unsettled = keysIn('check');
-            if (unsettled.length > 0) {
-                showServiceError('Choose ' + optionsFor().map((choice) => stateWords[choice]).join(', ').replace(/, ([^,]*)$/, ' or $1')
-                    + ' for every service marked Check the paper.', unsettled[0]);
+            // A "yes, except" leaves something out: the rows marked Excluded.
+            if (answerSelect.value === 'partial' && keysIn('excluded').length === 0) {
+                showServiceError('Mark the services the parent excepted as Excluded.');
                 return;
             }
             if (keysIn('consented').length === 0) {
@@ -516,48 +584,40 @@
         });
     };
 
-    // The services shaded at the top of the letter. The reader fills them with
-    // the list the server read off the paper (ConsentPaperCopy::tickedServices
-    // — a shaded Pag Purga is its rows the school offers), and with where each
-    // service starts for each answer (ConsentPaperCopy::proposal); with none
-    // the upload reads as the program it is filed for.
+    // Where each service starts for each answer, from a reading
+    // (ConsentPaperCopy::proposal). The school's list printed at the top of
+    // the letter is not read, so a reading files no services of its own: the
+    // rows the adviser marks are what is filed.
     const servicesBox = document.getElementById('pcServices');
-    let readServices = [];
     let proposal = null;
-    const setServices = (keys, proposed = null) => {
-        readServices = keys.slice();
+    const setProposal = (proposed = null) => {
         proposal = proposed;
-        writeKeys(servicesBox, 'services[]', keys);
+        writeKeys(servicesBox, 'services[]', []);
     };
 
     // ── Marking the services ────────────────────────────────────────
     // Every service the letter can carry, each Consented, Excluded or Not
-    // offered. Shaded at the top and agreed to is Consented; shaded and named
-    // after "gawas lamang niini" is Excluded; not shaded is Not offered — the
-    // parent was not asked about it, so it is never read as a refusal. A full
-    // consent excludes nothing, so it offers only Consented and Not offered.
+    // offered. Which services the learner is asked about is the system's: the
+    // ones the school offers this school year, less those for another grade or
+    // the other sex (locked, with the reason under them). The school's list
+    // printed at the top of the paper is not read. Every row of an agreed form
+    // offers all three; marking one Excluded under a full consent makes it a
+    // partial one.
     //
-    // With a reading, each row starts where the reader left it
-    // (ConsentPaperCopy::proposal): a service it read as approved starts
-    // Consented, a row it could not settle waits on the adviser as "Check the
-    // paper", one the exceptions name starts Excluded and the rest start Not
-    // offered. With no reading every row starts Not offered, so a service is
-    // only ever Consented for a reason. The adviser's own marks override the
-    // reading and survive a switch between full and partial consent (an
-    // Excluded mark asks again under a full consent); they go with the photo
-    // or the learner.
+    // Each row starts from the parent's answer (ConsentPaperCopy::proposal,
+    // the same with or without a reading): full — every service Consented;
+    // partial — the services the exceptions name Excluded and the rest
+    // Consented (exceptions that cannot be named as services exclude nothing
+    // yet, and their line is highlighted for the adviser to mark them);
+    // refused — every service Excluded. The adviser's own marks override that
+    // and survive a switch to partial consent (switching to full drops the
+    // Excluded ones); they go with the photo or the learner.
     //
-    // A row the learner is never given is locked and marks nothing: Not
-    // offered when the school does not offer it this school year, Not
-    // applicable when it is for the other sex.
-    //
-    // The marks are what is filed: `services` the Consented ones, and on a
-    // partial consent the Excluded ones as `excepted_services`. The server
-    // reads them with ConsentStanding, exactly as the learner's Consent tab
-    // will show them.
+    // The marks are what is filed: `services` the Consented ones (on a refusal
+    // the Excluded ones), and on a partial consent the Excluded ones as
+    // `excepted_services`. The server reads them with ConsentStanding, exactly
+    // as the learner's Consent tab will show them.
     const confirmModal = document.getElementById('pcConfirmModal');
-    const confirmList = document.getElementById('pcConfirmList');
-    const confirmTally = document.getElementById('pcConfirmTally');
     const confirmSubmit = document.getElementById('pcConfirmSubmit');
     const exceptedBox = document.getElementById('pcExcepted');
     const servicesConfirmed = document.getElementById('pcServicesConfirmed');
@@ -571,13 +631,15 @@
         consented: 'Consented',
         excluded: 'Excluded',
         not_offered: 'Not offered',
-        not_applicable: 'Not applicable',
-        check: 'Check the paper',
-        declined: 'Declined',
+        not_applicable: 'Not offered',
         pending: 'Pending',
     };
     // The adviser's own marks: service key → 'consented' | 'excluded' | 'not_offered'.
     const decided = new Map();
+    // What the reading pre-filled, to say "Edited" beside anything the
+    // adviser changes from it: the answer, each row, each field. Null with
+    // no reading.
+    let vlm = null;
     // While a reading is on screen the marks are made in its Services section:
     // the section's body, the tally on its folded line, and the section itself.
     let foldHost = null;
@@ -585,54 +647,57 @@
     let foldSection = null;
 
     const isAgreed = () => answerSelect.value === 'full' || answerSelect.value === 'partial';
-    // The marks an answer allows: a full consent excludes nothing.
-    const optionsFor = () => (answerSelect.value === 'partial'
-        ? ['consented', 'excluded', 'not_offered']
-        : ['consented', 'not_offered']);
+    // Every row of an agreed form is one of the three. Marking one Excluded
+    // under a full consent makes it a partial one (the option's click says so).
+    const optionsFor = () => ['consented', 'excluded', 'not_offered'];
     // The chosen learner's sex, for the services one sex alone is given.
     const learnerSex = () => (studentSelect?.tagName === 'SELECT'
         ? studentSelect.options[studentSelect.selectedIndex]?.dataset.sex
         : studentSelect?.dataset.sex) || '';
     const serviceByKey = new Map(confirmServices.map((service) => [service.key, service]));
+    // The class's grade: every learner in it is in the adviser's grade.
+    const classGrade = @json($uploadGrade);
     // A row the learner is never given, whatever the paper shows: the school
-    // does not offer it this school year, or it is for the other sex.
+    // does not offer it this school year, or it is for another grade or the
+    // other sex. Each reads Not offered, with its reason under it.
     const lockedState = (key) => {
         const service = serviceByKey.get(key);
         if (!service) return null;
         if (!service.offered) return 'not_offered';
+        if (service.only_grade && service.only_grade !== classGrade) return 'not_applicable';
         if (service.only_sex && learnerSex() !== '' && learnerSex() !== service.only_sex) return 'not_applicable';
         return null;
     };
     const lockReason = (key) => {
         const state = lockedState(key);
         if (state === 'not_offered') return 'The school does not offer it this school year.';
+        if (state === 'not_applicable' && serviceByKey.get(key)?.only_grade) return 'Grade ' + serviceByKey.get(key).only_grade + ' learners only.';
         if (state === 'not_applicable') return 'For ' + String(serviceByKey.get(key)?.only_sex || '').toLowerCase() + ' learners only.';
         return '';
     };
     const markableKeys = () => serviceKeys.filter((key) => !lockedState(key));
-    // What the reading proposes for the answer on screen. Nothing without one.
-    const proposed = () => proposal?.[answerSelect.value] || { approved: [], check: [], excluded: [] };
-    // The rows the reader found shaded at the top, or could not settle.
-    const onPaper = (key) => readServices.includes(key) || Boolean(proposal?.full?.check?.includes(key));
-    // Where one service stands for the answer on screen. A refusal declines
-    // what the paper offered (everything, when nothing was read at the top)
-    // and no answer yet gives none; only an agreed form has services to mark.
+    // Where the rows start for the answer on screen: the reading's proposal,
+    // or with no reading the same rule over every row (the locked ones are
+    // set apart before this is asked). A partial consent with nothing read
+    // starts every row Consented, and the adviser marks the excepted ones.
+    const unread = {
+        full: { approved: serviceKeys, check: [], excluded: [] },
+        partial: { approved: serviceKeys, check: [], excluded: [] },
+        refused: { approved: [], check: [], excluded: serviceKeys },
+    };
+    const proposed = () => (proposal || unread)[answerSelect.value] || { approved: [], check: [], excluded: [] };
+    // Where one service stands for the answer on screen. A refusal excludes
+    // every service the learner is given, and no answer yet gives none; only
+    // an agreed form has services to mark.
     const stateOf = (key) => {
         const locked = lockedState(key);
         if (locked) return locked;
-        if (answerSelect.value === 'refused') {
-            if (!proposal || !markableKeys().some(onPaper)) return 'declined';
-            return onPaper(key) ? 'declined' : 'not_offered';
-        }
+        if (answerSelect.value === 'refused') return 'excluded';
         if (!isAgreed()) return 'pending';
-        if (decided.has(key)) {
-            const mark = decided.get(key);
-            return optionsFor().includes(mark) ? mark : 'check';
-        }
+        if (decided.has(key)) return decided.get(key);
         const reading = proposed();
-        if (reading.approved.includes(key)) return 'consented';
-        if (reading.check.includes(key)) return 'check';
         if ((reading.excluded || []).includes(key)) return 'excluded';
+        if (reading.approved.includes(key) || (reading.check || []).includes(key)) return 'consented';
         return 'not_offered';
     };
     const keysIn = (state) => serviceKeys.filter((key) => stateOf(key) === state);
@@ -640,11 +705,10 @@
     // The counts, as the editor, the folded line and the summary say them.
     const tallies = () => {
         const order = isAgreed()
-            ? ['consented', 'excluded', 'check', 'not_offered', 'not_applicable']
-            : ['declined', 'pending', 'not_offered', 'not_applicable'];
-        const words = { check: 'To check' };
+            ? ['consented', 'excluded', 'not_offered', 'not_applicable']
+            : ['excluded', 'pending', 'not_offered', 'not_applicable'];
         return order
-            .map((state) => [state, keysIn(state).length, words[state] || stateWords[state]])
+            .map((state) => [state, keysIn(state).length, stateWords[state]])
             .filter(([state, count]) => count > 0 || (state === 'consented' && isAgreed()));
     };
     const tallyText = () => tallies().map(([, count, word]) => count + ' ' + word).join(' · ');
@@ -677,10 +741,44 @@
         row.querySelectorAll('.pc-svc-opt').forEach((option) => {
             option.setAttribute('aria-pressed', String(option.dataset.choice === state));
         });
-        const flag = row.querySelector('.pc-svc-flag');
-        if (flag) flag.hidden = state !== 'check';
         const pill = row.querySelector('.pc-svc-state');
         if (pill) pill.textContent = stateWords[state];
+        // Changed from what the reading pre-filled.
+        setEdited(row.querySelector('.pc-svc-name'), vlm !== null && vlm.states[row.dataset.key] !== state);
+    };
+
+    // A small "Edited" beside a row or field the adviser changed from the
+    // reading; gone again once it matches.
+    const setEdited = (host, edited) => {
+        if (!host) return;
+        let badge = host.querySelector(':scope > .pc-edited');
+        if (edited && !badge) {
+            badge = document.createElement('span');
+            badge.className = 'pc-edited';
+            badge.textContent = 'Edited';
+            host.appendChild(badge);
+        } else if (!edited && badge) {
+            badge.remove();
+        }
+    };
+
+    // The services a partial consent excepts: the rows marked Excluded, by
+    // their whole printed names.
+    const exceptedList = document.getElementById('pcExceptedList');
+    const syncExcepted = () => {
+        if (!exceptedList) return;
+        const excluded = answerSelect.value === 'partial' ? keysIn('excluded') : [];
+        exceptedList.replaceChildren(...(excluded.length ? excluded : ['']).map((key) => {
+            const item = document.createElement('li');
+            if (key === '') {
+                item.className = 'is-none';
+                item.textContent = 'None marked Excluded';
+            } else {
+                item.lang = 'ceb';
+                item.textContent = serviceByKey.get(key)?.full || key;
+            }
+            return item;
+        }));
     };
 
     // Every row the adviser can mark is Consented.
@@ -704,7 +802,7 @@
                 return chip;
             }));
         }
-        foldSection?.classList.toggle('needs-check', keysIn('check').length > 0);
+        syncExcepted();
     };
 
     const hideServiceError = () => {
@@ -737,8 +835,8 @@
 
     // A heading the paper indents its sub-items under (Pag Purga,
     // Immunization) heads them here too, worded as the printed letter words
-    // it. A shaded heading is its rows the school offers, so it carries no
-    // mark of its own.
+    // it. A heading is its rows the school offers, so it carries no mark of
+    // its own.
     const groupHead = (service, className) => {
         const head = document.createElement('li');
         head.className = className;
@@ -798,12 +896,6 @@
             }
 
             if (isAgreed() && why === '') {
-                const flag = document.createElement('span');
-                flag.className = 'pc-svc-flag';
-                flag.textContent = stateWords.check;
-                flag.hidden = true;
-                name.appendChild(flag);
-
                 const options = document.createElement('span');
                 options.className = 'pc-svc-seg';
                 options.setAttribute('role', 'group');
@@ -816,9 +908,17 @@
                     option.textContent = stateWords[choice];
                     option.addEventListener('click', () => {
                         decided.set(service.key, choice);
+                        // A full consent that leaves a service out is a
+                        // partial one: the answer follows the row.
+                        if (choice === 'excluded' && answerSelect.value === 'full') {
+                            answerSelect.value = 'partial';
+                            answerSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                            return;
+                        }
                         paintEditorRow(row);
                         hideServiceError();
                         syncEditor();
+                        syncEdited();
                     });
                     options.appendChild(option);
                 });
@@ -858,36 +958,34 @@
         value.textContent = text;
     };
 
+    // Consented and Excluded in two lists, each service by its whole printed
+    // name; a service the learner is not offered is in neither.
     const renderSummaryServices = () => {
-        const rows = [];
-        let group = null;
-        confirmServices.forEach((service) => {
-            if (service.group && service.group !== group) {
-                rows.push(groupHead(service, 'pcc-group'));
-            }
-            group = service.group || null;
-
-            const state = stateOf(service.key);
-            const row = document.createElement('li');
-            row.className = 'pcc-row is-' + state + (service.group ? ' is-child' : '');
-            const line = document.createElement('div');
-            line.className = 'pcc-line';
-            const box = document.createElement('span');
-            box.className = 'pcc-box';
-            box.setAttribute('aria-hidden', 'true');
-            const name = document.createElement('span');
-            name.className = 'pcc-name';
-            name.lang = 'ceb';
-            name.textContent = service.label;
-            const pill = document.createElement('span');
-            pill.className = 'pcc-state';
-            pill.textContent = stateWords[state];
-            line.append(box, name, pill);
-            row.appendChild(line);
-            rows.push(row);
+        [['consented', 'pcConfirmConsented', 'pcConfirmConsentedCount'], ['excluded', 'pcConfirmExcluded', 'pcConfirmExcludedCount']].forEach(([state, listId, countId]) => {
+            const keys = keysIn(state);
+            document.getElementById(countId).textContent = String(keys.length);
+            document.getElementById(listId).replaceChildren(...(keys.length ? keys : ['']).map((key) => {
+                const row = document.createElement('li');
+                if (key === '') {
+                    row.className = 'pcc-row is-none';
+                    row.textContent = 'None';
+                    return row;
+                }
+                row.className = 'pcc-row is-' + state;
+                const line = document.createElement('div');
+                line.className = 'pcc-line';
+                const box = document.createElement('span');
+                box.className = 'pcc-box';
+                box.setAttribute('aria-hidden', 'true');
+                const name = document.createElement('span');
+                name.className = 'pcc-name';
+                name.lang = 'ceb';
+                name.textContent = serviceByKey.get(key)?.full || key;
+                line.append(box, name);
+                row.appendChild(line);
+                return row;
+            }));
         });
-        confirmList.replaceChildren(...rows);
-        confirmTally.textContent = tallyText();
     };
 
     // The allergy and illness lines as they will be filed; an empty line is
@@ -912,6 +1010,10 @@
         if (!confirmModal) return;
 
         document.getElementById('pcConfirmLearner').textContent = learnerName();
+        // The list shows "Name (LRN)": split back into the two.
+        const lrn = studentSelect?.value || '';
+        document.getElementById('pcConfirmName').textContent = learnerName().replace(new RegExp('\\s*\\(' + lrn + '\\)\\s*$'), '');
+        document.getElementById('pcConfirmLrn').textContent = lrn;
         const answer = document.getElementById('pcConfirmAnswer');
         answer.className = 'pcc-answer ' + (answerKinds[answerSelect.value] || 'is-none');
         answer.textContent = answerSelect.options[answerSelect.selectedIndex]?.text || '';
@@ -919,6 +1021,9 @@
         // Said again before filing: the reading found this sheet dated in
         // another school year.
         setSummaryRow('pcConfirmDateRow', 'pcConfirmDate', datedOutside);
+        const complete = document.getElementById('pcConfirmComplete');
+        complete.textContent = formComplete?.checked ? 'On the form' : @json(\App\Support\ConsentFormScanner::FORM_INCOMPLETE);
+        complete.classList.toggle('pcc-incomplete', !formComplete?.checked);
 
         // What the parent wrote under their box, as the form carries it.
         const note = { partial: ['Exceptions', 'pc_partial_exception'], refused: ['Reason given', 'pc_refused_reason'] }[answerSelect.value];
@@ -957,21 +1062,26 @@
             const consented = keysIn('consented');
             // The summary opens only once both hold; a form changed behind it
             // goes back to be checked again.
-            if (consented.length === 0 || keysIn('check').length > 0) {
+            if (consented.length === 0 || (answerSelect.value === 'partial' && keysIn('excluded').length === 0)) {
                 closeConfirm();
                 return;
             }
             writeKeys(servicesBox, 'services[]', consented);
             writeKeys(exceptedBox, 'excepted_services[]', answerSelect.value === 'partial' ? keysIn('excluded') : []);
+            // The exceptions as the parent wrote them, or with nothing read,
+            // the printed names of the rows marked Excluded.
+            const exceptionLine = document.getElementById('pc_partial_exception');
+            if (exceptionLine) {
+                exceptionLine.value = answerSelect.value !== 'partial' ? '' : (writtenExceptions
+                    || keysIn('excluded').map((key) => serviceByKey.get(key)?.full || key).join('; '));
+            }
             servicesConfirmed.value = '1';
         } else {
-            // A refusal files the services it declined — the ones the paper
-            // offered — so the rest read Not offered; with nothing read at the
-            // top it files none, and the server declines every service.
-            let filed = readServices;
-            if (answerSelect.value === 'refused') {
-                filed = proposal && markableKeys().some(onPaper) ? keysIn('declined') : [];
-            }
+            // A refusal files the services it excludes — every one the learner
+            // is given — so the rest read Not offered. With no answer recorded
+            // nothing is filed, and the upload reads as the program it is
+            // filed for.
+            const filed = answerSelect.value === 'refused' ? keysIn('excluded') : [];
             writeKeys(servicesBox, 'services[]', filed);
             writeKeys(exceptedBox, 'excepted_services[]', []);
             servicesConfirmed.value = '0';
@@ -1216,6 +1326,7 @@
             uploadModal.classList.remove('is-reviewing');
             reviewPhoto?.removeAttribute('src');
             photoDialogImg?.removeAttribute('src');
+            undockFields();
             if (copyBox) copyBox.innerHTML = '';
             folds = [];
             foldHost = null;
@@ -1251,9 +1362,11 @@
             setFlash('warn', summary.decision || 'Check the reading against the signed form.');
         }
 
+        undockFields();
         if (copyBox) {
             copyBox.innerHTML = data.copy_html || '';
             foldCopy(copyBox);
+            dockFields();
         }
         renderEditor();
         review.hidden = false;
@@ -1275,6 +1388,59 @@
         if (event.target === photoDialog) photoDialog.close();
     });
 
+    // ── One place to edit ───────────────────────────────────────────
+    // While a reading is on screen every field the adviser corrects sits in
+    // the reading beside the photo: the parent's answer, the excepted
+    // services, the refusal reason and the name-and-signature tick in its
+    // "Parent's consent" section, the allergy and illness lines and the
+    // medical certificate in its "Allergies and illnesses" section. They are
+    // the form's own fields, moved, so nothing is entered twice; each goes
+    // back to its place in the form when the reading goes.
+    const docked = [];
+    const dock = (node, host, label = null) => {
+        if (!node || !host) return;
+        const home = document.createComment('pc-dock');
+        node.before(home);
+        let moved = node;
+        if (label !== null) {
+            moved = document.createElement('div');
+            moved.className = 'pc-field pc-dock-field';
+            const caption = document.createElement('span');
+            caption.className = 'pc-field-label';
+            caption.id = 'pcAnswerLabel';
+            caption.textContent = label;
+            moved.append(caption, node);
+        }
+        host.appendChild(moved);
+        docked.push({ node, home, wrapper: moved !== node ? moved : null });
+    };
+    const undockFields = () => {
+        while (docked.length) {
+            const { node, home, wrapper } = docked.pop();
+            home.replaceWith(node);
+            wrapper?.remove();
+        }
+    };
+    const dockFields = () => {
+        const editHost = (index) => {
+            const body = folds[index]?.querySelector('.pc-fold-body');
+            if (!body) return null;
+            folds[index].open = true;
+            const host = document.createElement('div');
+            host.className = 'pc-fold-edit';
+            body.appendChild(host);
+            return host;
+        };
+        const consent = editHost(1);
+        dock(document.getElementById('pcAnswerBox'), consent, 'Parent\'s answer');
+        dock(document.getElementById('pcPartialField'), consent);
+        dock(document.getElementById('pcRefusedField'), consent);
+        dock(document.getElementById('pcCompleteField'), consent);
+        const health = editHost(2);
+        dock(document.getElementById('pcHealthField'), health);
+        dock(document.getElementById('pcMedField'), health);
+    };
+
     // Whether the answer in the select is the reader's.
     const setReaderAnswer = (fromScan) => {
         if (answerFromScan) answerFromScan.value = fromScan ? '1' : '0';
@@ -1283,11 +1449,20 @@
     // "I checked this answer against the signed form", beside Upload
     // Consent: shown, and required, while a reading of this photo is on
     // screen, and unticked whenever a new one arrives or the old one goes.
+    // Upload Consent waits while a read is on its way, and while the tick is
+    // shown and not ticked.
+    let reading = false;
+    const syncSubmit = () => {
+        if (!submitButton) return;
+        submitButton.disabled = reading || Boolean(answerConfirm && !answerConfirm.hidden && !answerConfirmed?.checked);
+    };
+    answerConfirmed?.addEventListener('change', syncSubmit);
     const setAttestation = (show) => {
         if (!answerConfirm || !answerConfirmed) return;
         answerConfirm.hidden = !show;
         answerConfirmed.required = show;
         answerConfirmed.checked = false;
+        syncSubmit();
     };
 
     // The upload takes a PDF too, but the reader reads photographs only.
@@ -1320,9 +1495,41 @@
     };
     let filledFromScan = false;
     const notSpecified = @json(\App\Support\LearnerAllergies::NOT_SPECIFIED);
+    const scanToken = document.getElementById('pcScanToken');
 
-    const fillFromReading = (draft, services, proposed) => {
-        setServices(Array.isArray(services) ? services : [], proposed || null);
+    // A field the reader was unsure of, had a question about, or whose
+    // exceptions it could not match to the list is highlighted, so the
+    // adviser checks it against the photo; typing in it clears the mark. An
+    // answer no box decided highlights the answer itself.
+    const clearHighlights = () => uploadForm.querySelectorAll('.pc-input.is-check, .pc-written.is-check').forEach((field) => field.classList.remove('is-check'));
+    const highlightFields = (draft) => {
+        clearHighlights();
+        const keys = new Set([
+            ...(Array.isArray(draft.unclear_fields) ? draft.unclear_fields : []),
+            ...Object.keys(draft.field_notes || {}),
+        ]);
+        if (Array.isArray(draft.unmatched_exceptions) && draft.unmatched_exceptions.length > 0) keys.add('consent_exceptions');
+        keys.forEach((key) => {
+            // The exceptions are not typed: what the parent wrote is shown,
+            // and that is what is highlighted.
+            if (key === 'consent_exceptions') {
+                document.getElementById('pcExceptWritten')?.classList.add('is-check');
+                return;
+            }
+            const name = key === 'consent_answer' ? 'consent_type' : writtenFields[key];
+            if (name) uploadForm.querySelector('[name="' + name + '"]')?.closest('.pc-input')?.classList.add('is-check');
+        });
+    };
+    const unmark = (event) => event.target.closest?.('.pc-input')?.classList.remove('is-check');
+    uploadForm.addEventListener('input', unmark);
+    uploadForm.addEventListener('change', unmark);
+
+    const fillFromReading = (draft, proposed) => {
+        setProposal(proposed || null);
+        highlightFields(draft);
+        readerSawComplete = Boolean(draft.form_complete);
+        if (formComplete) formComplete.checked = readerSawComplete;
+        syncComplete();
 
         Object.entries(writtenFields).forEach(([from, to]) => {
             const input = uploadForm.querySelector('[name="' + to + '"]');
@@ -1332,12 +1539,63 @@
             // "no allergy"; it is filed as the clinic's own "Not specified".
             if (input) input.value = entry.text || (entry.box === 'yes' ? notSpecified : '');
         });
+        writtenExceptions = String(draft.written?.consent_exceptions?.text || '').trim();
+        showWrittenExceptions();
         filledFromScan = true;
     };
 
+    // What the parent wrote after "gawas lamang niini", exactly as read.
+    let writtenExceptions = '';
+    const showWrittenExceptions = () => {
+        const line = document.getElementById('pcExceptWritten');
+        const text = document.getElementById('pcExceptWrittenText');
+        if (!line || !text) return;
+        line.hidden = writtenExceptions === '';
+        text.textContent = writtenExceptions;
+    };
+
+    // ── "Edited" ────────────────────────────────────────────────────
+    // What the reading pre-filled, kept once it is on screen; every row and
+    // field the adviser then changes says "Edited" until it matches again.
+    const editedFields = ['consent_type', 'refused_reason', ...Object.keys(writeIns), 'form_complete'];
+    const fieldValue = (name) => (name === 'form_complete'
+        ? Boolean(formComplete?.checked)
+        : String(uploadForm.querySelector('[name="' + name + '"]:not([type="hidden"])')?.value || '').trim());
+    const editedHost = (name) => {
+        if (name === 'consent_type') return document.getElementById('pcAnswerLabel');
+        if (name === 'refused_reason') return document.querySelector('label[for="pc_refused_reason"]');
+        if (name === 'form_complete') return document.querySelector('.pc-complete > span');
+        return uploadForm.querySelector('[name="' + name + '"]')?.closest('.pc-writein')?.querySelector(':scope > span');
+    };
+    const syncEdited = () => {
+        editedFields.forEach((name) => setEdited(editedHost(name), vlm !== null && vlm.fields[name] !== fieldValue(name)));
+    };
+    const snapshotReading = () => {
+        vlm = {
+            states: Object.fromEntries(serviceKeys.map((key) => [key, stateOf(key)])),
+            fields: Object.fromEntries(editedFields.map((name) => [name, fieldValue(name)])),
+        };
+        repaintRows();
+        syncEdited();
+    };
+    uploadForm.addEventListener('input', () => syncEdited());
+    uploadForm.addEventListener('change', () => syncEdited());
+
     const clearReading = () => {
+        clearHighlights();
+        vlm = null;
+        writtenExceptions = '';
+        showWrittenExceptions();
+        editedFields.forEach((name) => setEdited(editedHost(name), false));
+        if (scanToken) {
+            scanToken.value = '';
+            scanToken.disabled = true;
+        }
+        if (readerSawComplete !== null && formComplete) formComplete.checked = false;
+        readerSawComplete = null;
+        syncComplete();
         if (!filledFromScan) return;
-        setServices([]);
+        setProposal();
         Object.values(writtenFields).forEach((name) => {
             const input = uploadForm.querySelector('[name="' + name + '"]');
             if (input) input.value = '';
@@ -1352,7 +1610,8 @@
         readVersion += 1;
         readRequest?.abort();
         readRequest = null;
-        if (submitButton) submitButton.disabled = false;
+        reading = false;
+        syncSubmit();
     };
 
     // A reading belongs to the photo it was taken from, and to the
@@ -1382,8 +1641,14 @@
     answerSelect.addEventListener('change', () => {
         cancelRead();
         setReaderAnswer(false);
+        // A full consent excludes nothing: rows marked Excluded go back to
+        // where the answer starts them.
+        if (answerSelect.value === 'full') {
+            decided.forEach((mark, key) => { if (mark === 'excluded') decided.delete(key); });
+        }
         renderEditor();
         syncReader();
+        syncEdited();
     });
 
     if (readButton && readState) {
@@ -1398,8 +1663,9 @@
             const version = readVersion;
             readRequest = new AbortController();
             readButton.disabled = true;
-            if (submitButton) submitButton.disabled = true;
-            readState.textContent = 'Reading the form…';
+            reading = true;
+            syncSubmit();
+            readState.textContent = 'Reading consent form… This may take a few seconds.';
 
             const body = new FormData();
             body.append('photo', file);
@@ -1453,12 +1719,20 @@
                 // off, fills nothing in.
                 clearReading();
                 if (!draft.unreadable && !draft.learner_mismatch) {
-                    fillFromReading(draft, data.ticked_services, data.service_proposal);
+                    fillFromReading(draft, data.service_proposal);
+                    // Filed with the upload, so the server can log what the
+                    // reader proposed beside what the adviser saves.
+                    if (scanToken && data.scan_token && data.copy_html) {
+                        scanToken.value = data.scan_token;
+                        scanToken.disabled = false;
+                    }
                 }
                 showReview(file, data, body.get('sheet'));
                 // A reading the adviser can hold against the paper waits on
                 // their tick; one that read nothing has nothing to check.
                 setAttestation(Boolean(data.copy_html) || answer !== '');
+                // From here, anything changed from the reading says "Edited".
+                if (!draft.unreadable && !draft.learner_mismatch) snapshotReading();
 
                 if (draft.unreadable) {
                     readState.textContent = 'The photo could not be read. Choose the answer from the paper.';
@@ -1476,7 +1750,8 @@
                 if (version === readVersion) {
                     readRequest = null;
                     readButton.disabled = !readable(consentFile?.files && consentFile.files[0]) || chosenLearner() === '';
-                    if (submitButton) submitButton.disabled = false;
+                    reading = false;
+                    syncSubmit();
                 }
             }
         });
@@ -1490,7 +1765,8 @@
         setReaderAnswer(false);
         setAttestation(false);
         filledFromScan = false;
-        setServices([]);
+        clearReading();
+        setProposal();
         decided.clear();
         writeKeys(exceptedBox, 'excepted_services[]', []);
         servicesConfirmed.value = '0';

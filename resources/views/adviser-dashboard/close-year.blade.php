@@ -33,7 +33,7 @@
                 <p class="ms-page-sub">{{ $sectionLabel }} &middot; S.Y. {{ $schoolYear }}</p>
                 @if ($closure)
                     <div class="yt-meta">
-                        <span class="yt-chip is-closed" id="sectionClosedChip">Closed {{ $closure->closed_at?->format('j M Y') }}</span>
+                        <span class="yt-chip is-closed" id="sectionClosedChip">Closed {{ \App\Support\SchoolClock::local($closure->closed_at)?->format('j M Y') }}</span>
                     </div>
                 @endif
             </div>

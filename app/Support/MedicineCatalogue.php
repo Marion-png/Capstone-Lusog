@@ -116,6 +116,87 @@ class MedicineCatalogue
     }
 
     /**
+     * For an item named by its class ("Antifungal cream"), the hint the form
+     * shows in place of a guessed generic; null for an item whose name says it.
+     */
+    public static function labelHint(string $name): ?string
+    {
+        $entry = ((array) config('medicines.label_generics', []))[trim($name)] ?? null;
+
+        return is_array($entry) && trim((string) ($entry['hint'] ?? '')) !== '' ? trim((string) $entry['hint']) : null;
+    }
+
+    /**
+     * Why a stored generic cannot be this item's, or null when it can (or
+     * when nothing is known about the class): Povidone-iodine, an antiseptic,
+     * saved as an antifungal cream's (testers' report #17).
+     */
+    public static function genericMismatch(string $name, ?string $generic): ?string
+    {
+        $entry = ((array) config('medicines.label_generics', []))[trim($name)] ?? null;
+        $allowed = is_array($entry) ? array_map('strtolower', (array) ($entry['generics'] ?? [])) : [];
+        $generic = strtolower(trim((string) $generic));
+
+        if ($allowed === [] || $generic === '') {
+            return null;
+        }
+
+        foreach ($allowed as $candidate) {
+            if (str_contains($generic, $candidate)) {
+                return null;
+            }
+        }
+
+        return '"'.trim($name).'" has "'.$generic.'" as its generic name, which is not one this kind of item can be ('.implode(', ', $allowed).'). Check the product\'s label.';
+    }
+
+    /** The dosage forms a name may end in, singular, as compared. */
+    private const FORMS = ['tablet', 'capsule', 'syrup', 'suspension', 'solution', 'cream', 'ointment', 'lotion', 'sachet', 'drop', 'gel', 'spray', 'powder'];
+
+    /**
+     * The generic an item's name implies, as the Add Medicine form fills it:
+     * the list's own generic, else the name without its strength and form
+     * ("Paracetamol 500mg tablet" → "Paracetamol").
+     */
+    public static function impliedGeneric(string $name): string
+    {
+        $listed = self::genericFor($name);
+        if ($listed !== null) {
+            return $listed;
+        }
+
+        $base = preg_split('/\s\d|\s\(/', trim($name))[0] ?? '';
+
+        return trim((string) preg_replace('/\s+(tablets?|capsules?|syrup|suspension|solution|cream|lotion|sachets?|drops)\b.*$/i', '', $base));
+    }
+
+    /**
+     * An item's strength and dosage form, compared without case or spacing
+     * ("500mg|tablet"), or '' when its name says neither — then nothing can
+     * be said to match it on them.
+     */
+    public static function strengthAndForm(string $name): string
+    {
+        $plain = mb_strtolower($name);
+
+        preg_match_all('/(\d+(?:[.,]\d+)*)\s*(mcg|mg|g|ml|iu|%)(?:\s*\/\s*(\d+(?:\.\d+)?)\s*(ml))?/', $plain, $matches, PREG_SET_ORDER);
+        $strength = implode('+', array_map(
+            fn (array $m): string => str_replace(',', '', $m[1]).$m[2].(isset($m[3]) && $m[3] !== '' ? '/'.$m[3].($m[4] ?? '') : ''),
+            $matches,
+        ));
+
+        $form = '';
+        foreach (self::FORMS as $candidate) {
+            if (preg_match('/\b'.$candidate.'s?\b/', $plain) === 1) {
+                $form = $candidate;
+                break;
+            }
+        }
+
+        return $strength === '' && $form === '' ? '' : $strength.'|'.$form;
+    }
+
+    /**
      * The name an item is compared by: case, spacing and punctuation dropped,
      * so "Paracetamol 500 mg Tablet" and "paracetamol 500mg tablet" are found
      * to be one item.

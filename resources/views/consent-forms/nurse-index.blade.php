@@ -112,9 +112,9 @@
             </div>
         </div>
         <div class="cf-stat">
-            <div class="cf-stat-label">Declined</div>
+            <div class="cf-stat-label">{{ $service !== '' ? 'Excluded' : 'Refused' }}</div>
             <div class="cf-stat-value">{{ $cards['declined'] }}</div>
-            <div class="cf-stat-hint">parent declined {{ $service !== '' ? 'this service' : 'the services' }}</div>
+            <div class="cf-stat-hint">parent excluded {{ $service !== '' ? 'this service' : 'the services' }}</div>
         </div>
         <div class="cf-stat">
             <div class="cf-stat-label">No form yet</div>
@@ -174,7 +174,8 @@
                             <td>{{ $row['section'] }}</td>
                             <td>{!! $row['adviser'] !== '' ? e($row['adviser']) : '<span class="cf-muted">—</span>' !!}</td>
                             <td>
-                                <span class="cf-badge is-{{ $row['status'] }}">{{ ConsentStanding::SERVICE_LABELS[$row['status']] }}</span>
+                                {{-- With every service, a refusal is the learner's status: Refused. --}}
+                                <span class="cf-badge is-{{ $row['status'] }}">{{ $service === '' && $row['status'] === ConsentStanding::SERVICE_DECLINED ? 'Refused' : ConsentStanding::SERVICE_LABELS[$row['status']] }}</span>
                                 @if ($row['dated_label'] !== '')
                                     <div class="cf-muted cf-dated">{{ $row['dated_label'] }}</div>
                                 @endif

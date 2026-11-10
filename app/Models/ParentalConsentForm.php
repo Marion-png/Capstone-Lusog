@@ -6,7 +6,7 @@ use App\Casts\EncryptedArray;
 use App\Casts\EncryptedBoolean;
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
-use App\Support\WorkingSchoolYear;
+use App\Support\SchoolYear;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -55,6 +55,8 @@ class ParentalConsentForm extends Model
         'file_original_name',
         'uploaded_by_name',
         'scan_result',
+        'incomplete',
+        'scan_review',
     ];
 
     /** Where the files sit on disk is the server's business; pages link by id. */
@@ -74,6 +76,12 @@ class ParentalConsentForm extends Model
         // then only the parent's handwriting, and each service is checked.
         'excluded_services' => EncryptedArray::class,
         'scan_result' => EncryptedArray::class,
+        // For each service and field, what the photo reader proposed and what
+        // the adviser saved (ConsentReviewLog). NULL without a reading.
+        'scan_review' => EncryptedArray::class,
+        // Missing the parent's name or signature: filed, and gives no service
+        // until a complete form is on file. NULL on older rows reads complete.
+        'incomplete' => EncryptedBoolean::class,
         'consent_type' => EncryptedString::class,
         'partial_exception' => EncryptedString::class,
         'refused_reason' => EncryptedString::class,
@@ -106,26 +114,19 @@ class ParentalConsentForm extends Model
      * The school year the application is working in — the one every other
      * model's currentSchoolYear() delegates to. The calendar's, unless the
      * signed-in teacher has set their Teaching Assignment to another year
-     * for testing (WorkingSchoolYear).
+     * for testing (WorkingSchoolYear). Decided by App\Support\SchoolYear.
      */
     public static function currentSchoolYear(): string
     {
-        return WorkingSchoolYear::chosen() ?? self::calendarSchoolYear();
+        return SchoolYear::current();
     }
 
     /**
-     * Returns the Philippine school year the calendar is in (e.g. "2025-2026").
-     * DepEd's academic year runs June–May, so months 6–12 belong to the SY
-     * starting that calendar year; months 1–5 belong to the SY that started
-     * the previous calendar year.
+     * The Philippine school year the calendar is in (e.g. "2026-2027"), on
+     * the school's clock (Asia/Manila): DepEd's year runs June–May.
      */
     public static function calendarSchoolYear(): string
     {
-        $month = (int) now()->format('n');
-        $year = (int) now()->format('Y');
-
-        return $month >= 6
-            ? "{$year}-".($year + 1)
-            : ($year - 1)."-{$year}";
+        return SchoolYear::calendar();
     }
 }

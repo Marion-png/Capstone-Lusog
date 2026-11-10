@@ -187,6 +187,7 @@ class NutricorConsolidatedReportTest extends TestCase
             'nutritional_status' => 'Normal',
             'baseline_nutritional_status' => 'Wasted',
             'endline_nutritional_status' => 'Normal',  // improved
+            'endline_weight_kg' => 40,
         ]);
         StudentHealthRecord::create([
             'school_year' => StudentHealthRecord::currentSchoolYear(),
@@ -199,6 +200,7 @@ class NutricorConsolidatedReportTest extends TestCase
             'nutritional_status' => 'Wasted',
             'baseline_nutritional_status' => 'Severely Wasted',
             'endline_nutritional_status' => 'Wasted',  // improved
+            'endline_weight_kg' => 40,
         ]);
 
         $response = $this->withSession($this->nutricorSession())
@@ -256,6 +258,7 @@ class NutricorConsolidatedReportTest extends TestCase
             'nutritional_status' => 'Wasted',
             'baseline_nutritional_status' => null,
             'endline_nutritional_status' => 'Normal',
+            'endline_weight_kg' => 40,
         ]);
 
         $response = $this->withSession($this->nutricorSession())
@@ -283,6 +286,7 @@ class NutricorConsolidatedReportTest extends TestCase
             'nutritional_status' => 'Not enough data',
             'baseline_nutritional_status' => 'Not enough data',
             'endline_nutritional_status' => 'Not enough data',
+            'endline_weight_kg' => 40,
         ]);
 
         $response = $this->withSession($this->nutricorSession())

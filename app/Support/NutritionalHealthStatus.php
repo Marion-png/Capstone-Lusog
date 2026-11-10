@@ -21,12 +21,14 @@ use App\Models\StudentHealthRecord;
  *
  * Classification is never re-implemented here: BMI-for-age is
  * `BmiClassifier::bmiForAge()` and height-for-age is
- * `BmiAssessmentReport::classifyHeightForAge()`, the same functions the DepEd
- * grids count with, both read against the WHO 2007 reference for the learner's
- * sex and age in months on the day of the weigh-in. A stored classification
- * wins over a recomputed one — it is what the adviser recorded at the time
- * (`nutrition:reclassify` brings ones stored under the old adult cut-offs up
- * to date).
+ * `BmiAssessmentReport::classifyHeightForAge()`, both read against the WHO
+ * 2007 reference for the learner's sex and age in months on the day of the
+ * weigh-in. A stored BMI-for-age classification wins over a recomputed one —
+ * it is what the adviser recorded at the time (`nutrition:reclassify` brings
+ * ones stored under the old adult cut-offs up to date). Height-for-age is
+ * always read off the weighing's own height, the stored copy only standing in
+ * where there is none, and the DepEd grids and their Insight count it from
+ * here (BmiAssessmentReport), so no page can read it another way.
  */
 class NutritionalHealthStatus
 {
@@ -115,9 +117,18 @@ class NutritionalHealthStatus
             $bmiStatus = BmiClassifier::bmiForAge($bmiValue, $ageInMonths, $sex);
         }
 
-        $hfaStatus = trim((string) $storedHfaStatus);
-        if ($hfaStatus === '' && $heightCm !== null) {
-            $hfaStatus = BmiAssessmentReport::classifyHeightForAge($heightCm, $ageInMonths, $sex);
+        // Height-for-age is read off this weighing's own height, every time:
+        // it depends on nothing but the height, the age on the day and the
+        // sex. The copy stored at enrolment was taken from the height typed
+        // then, and a baseline measured again later never refreshed it, so
+        // the Baseline report's Insight and its learner list read two
+        // different heights for one learner (testers' report #9). The stored
+        // copy stands only where no height was recorded.
+        $hfaStatus = $heightCm !== null
+            ? BmiAssessmentReport::classifyHeightForAge($heightCm, $ageInMonths, $sex)
+            : '';
+        if ($hfaStatus === '') {
+            $hfaStatus = trim((string) $storedHfaStatus);
         }
 
         // Measured means somebody took a height or a weight. A classification

@@ -332,3 +332,9 @@
 	   list on screen, not a different one. */
 	#riskNoMatchRow, #rosterNoMatchRow { display: none !important; }
 }
+
+/* Not Improving (FeedingWeighIns): who to act on before the programme ends. */
+.fp-not-improving { list-style: none; margin: 0; padding: 0 16px 14px; display: grid; gap: 8px; }
+.fp-not-improving li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: .86rem; }
+.fp-not-improving a { color: var(--lg-ink); font-weight: 600; }
+.fp-not-improving .badge { margin-left: auto; }

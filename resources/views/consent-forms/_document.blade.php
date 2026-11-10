@@ -34,7 +34,7 @@
     // — a rule (MR, Td for Grade 7, Iron for female learners) or the school's
     // Health Services Offered — says so beside it, in the words the photo
     // reading uses (ConsentStanding::boxConflict). It is a warning: the
-    // letter still sends, and the service reads Not applicable or Not offered.
+    // letter still sends, and the service reads Not offered.
     $docConflicts = [];
     if ($editServices) {
         $docInstitution = $form->institution_id ? (int) $form->institution_id : null;
@@ -70,7 +70,7 @@
     <div class="doc-field"><label>DIVISION:</label><span class="doc-line">{{ $form->division }}</span></div>
     <div class="doc-field"><label>PANGALAN SA ISKWELAHAN:</label><span class="doc-line">{{ $form->school_name }}</span></div>
     <div class="doc-field"><label>ADDRESS SA ISKWELAHAN:</label><span class="doc-line">{{ $form->school_address }}</span></div>
-    <div class="doc-field"><label>PETSA:</label><span class="doc-line">{{ optional($form->sent_at)->format('F j, Y') }}</span></div>
+    <div class="doc-field"><label>PETSA:</label><span class="doc-line">{{ \App\Support\SchoolClock::local($form->sent_at)?->format('F j, Y') }}</span></div>
     <div class="doc-field"><label>PANGALAN SA ESTUDYANTE:</label><span class="doc-line">{{ $form->student_name }}</span></div>
     <div class="doc-field"><label>PINUY-ANAN SA ESTUDYANTE:</label><span class="doc-line">{{ $form->student_address }}</span></div>
     <div class="doc-field"><label>PANGALAN SA GINIKANAN / GUARDIAN:</label><span class="doc-line">{{ $form->parent_guardian_name }}</span></div>
@@ -268,7 +268,7 @@
             <div class="doc-sign-name" style="margin-top:6px;">{{ $form->parent_guardian_name }}</div>
             <div class="doc-sign-caption">(Pangalan ug Pirma Sa Ginikanan o Guardian)</div>
             @if ($form->signed_at)
-                <div style="font-size:.78rem; margin-top:4px;">Signed: {{ $form->signed_at->format('F j, Y g:i A') }}</div>
+                <div style="font-size:.78rem; margin-top:4px;">Signed: {{ \App\Support\SchoolClock::local($form->signed_at)?->format('F j, Y g:i A') }}</div>
             @endif
         </div>
     </div>

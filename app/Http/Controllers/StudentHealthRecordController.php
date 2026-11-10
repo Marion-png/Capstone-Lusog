@@ -29,6 +29,7 @@ use App\Support\ProfileCompletionRule;
 use App\Support\RequestMemo;
 use App\Support\SchemaCache;
 use App\Support\SchoolClock;
+use App\Support\SchoolYear;
 use App\Support\Sheet2Review;
 use App\Support\StudentDataCompleteness;
 use App\Support\StudentMedicalDocuments;
@@ -434,8 +435,8 @@ class StudentHealthRecordController extends Controller
                     'choice' => $consent
                         ? $this->consentChoiceLabel($consent->consent_choice)
                         : ConsentStanding::uploadAnswerLabel($upload),
-                    'signed_at' => $consent?->signed_at?->toDateString(),
-                    'reviewed_at' => $consent?->reviewed_at?->toDateString(),
+                    'signed_at' => SchoolClock::local($consent?->signed_at)?->toDateString(),
+                    'reviewed_at' => SchoolClock::local($consent?->reviewed_at)?->toDateString(),
                     // The learner's own Sulat-Pahibalo, opened from their
                     // profile; none yet means the Consent Forms page, where
                     // one is started.
@@ -445,7 +446,7 @@ class StudentHealthRecordController extends Controller
                     // adviser who had just uploaded a signed consent was still
                     // shown "Pending" on that learner's own page.
                     'returned' => $returned,
-                    'returned_at' => $returned ? $upload->created_at?->toDateString() : null,
+                    'returned_at' => $returned ? SchoolClock::local($upload->created_at)?->toDateString() : null,
                     'returned_by' => $returned ? ($upload->uploaded_by_name ?: null) : null,
                     // A scan whose answer nobody keyed in is not an unanswered
                     // consent: the guardian answered on paper, and the answer is
@@ -590,7 +591,7 @@ class StudentHealthRecordController extends Controller
             ->get()
             ->groupBy('student_lrn')
             ->map(fn (Collection $notes) => $notes->map(fn (ClinicNote $note) => [
-                'recorded_at' => $note->created_at?->format('M j, Y \a\t g:i A'),
+                'recorded_at' => SchoolClock::local($note->created_at)?->format('M j, Y \a\t g:i A'),
                 'author' => (string) $note->author_name,
                 'note' => (string) $note->note,
                 'follow_up_date' => $note->follow_up_date?->format('M j, Y'),
@@ -640,12 +641,18 @@ class StudentHealthRecordController extends Controller
 
         $lists = ['approved' => [], 'not_approved' => [], 'to_check' => [], 'not_offered' => []];
 
+        // An incomplete form still says what the parent marked; the learner's
+        // status (Incomplete) says that no service is given on it.
+        unset($answer['incomplete']);
+
         foreach (array_keys(HealthConsentForm::PLANNED_SERVICES) as $key) {
             $list = match (ConsentStanding::forService($key, $grade, true, $answer, $sex, $offered)) {
                 ConsentStanding::SERVICE_CONSENTED => 'approved',
                 ConsentStanding::SERVICE_CHECK_EXCEPTIONS => 'to_check',
                 ConsentStanding::SERVICE_NOT_ON_FORM => 'not_offered',
-                ConsentStanding::SERVICE_NOT_APPLICABLE => null,
+                // Ruled out for this learner (another grade, the other sex):
+                // Not offered, as the School Nurse reads it.
+                ConsentStanding::SERVICE_NOT_APPLICABLE => 'not_offered',
                 default => 'not_approved',
             };
 
@@ -1243,8 +1250,8 @@ class StudentHealthRecordController extends Controller
 
                 $hasBaseline = $record->baseline_recorded_at !== null
                     || trim((string) $record->baseline_weight_kg) !== '';
-                $hasEndline = $record->endline_recorded_at !== null
-                    || trim((string) $record->endline_weight_kg) !== '';
+                // A weighing, never a date stamped with no reading behind it.
+                $hasEndline = $record->hasEndlineMeasurement();
 
                 $program = match (true) {
                     ! $enrolled => 'not-enrolled',
@@ -1463,8 +1470,8 @@ class StudentHealthRecordController extends Controller
             'school_name' => ['nullable', 'string', 'max:255'],
             'section' => ['required', 'string', 'max:255'],
             'age' => ['required', 'integer', 'min:2', 'max:25'],
-            'height_cm' => ['required', 'numeric', 'min:50', 'max:250'],
-            'weight_kg' => ['required', 'numeric', 'min:5', 'max:300'],
+            'height_cm' => MeasurementPlausibility::rule(),
+            'weight_kg' => MeasurementPlausibility::rule(),
             'recorded_at' => ['nullable', 'date'],
         ]);
 
@@ -1526,20 +1533,22 @@ class StudentHealthRecordController extends Controller
 
     public function storeEndline(Request $request, StudentHealthRecord $record): RedirectResponse
     {
-        if (! $this->canRecordMeasurements($request)) {
+        // The Feeding Program Coordinator weighs the beneficiaries at endline,
+        // so theirs is the only write (testers' report #32). The class adviser
+        // reads the endline on the learner's record and cannot change it —
+        // refused here, not only by a form that is no longer shown to them.
+        if (strtolower(trim((string) $request->session()->get('active_role', ''))) !== 'feeding_coor') {
+            if ((string) $request->session()->get('active_role') === 'class_adviser') {
+                return back()->with('error', self::ENDLINE_IS_THE_COORDINATORS);
+            }
+
             return redirect()->route('login')->with('error', 'You are not allowed to record endline data.');
         }
 
         // Child records inherit school scope from their parent — never serve or
         // write one belonging to another institution.
         $institutionId = $request->session()->get('active_institution_id');
-        if ($institutionId && (int) $record->institution_id !== (int) $institutionId) {
-            abort(403);
-        }
-
-        // A class adviser records the endline of a learner still in their own
-        // section, never of one who has left it.
-        if (! AdviserClassScope::coversRecord($request, $record)) {
+        if (! $institutionId || (int) $record->institution_id !== (int) $institutionId) {
             abort(403);
         }
 
@@ -1567,15 +1576,24 @@ class StudentHealthRecordController extends Controller
 
         $validated = $request->validate([
             'age' => ['required', 'integer', 'min:2', 'max:25'],
-            'height_cm' => ['required', 'numeric', 'min:50', 'max:250'],
-            'weight_kg' => ['required', 'numeric', 'min:5', 'max:300'],
-            'recorded_at' => ['nullable', 'date'],
+            'height_cm' => MeasurementPlausibility::rule(),
+            'weight_kg' => MeasurementPlausibility::rule(),
+            'recorded_at' => ['nullable', 'date', 'before_or_equal:'.SchoolClock::today()],
         ]);
 
         $bmi = $this->computeBmi((float) $validated['height_cm'], (float) $validated['weight_kg']);
         $recordedAt = $validated['recorded_at'] ?? SchoolClock::today();
         $this->refuseImplausibleMeasurement($validated, $record, $recordedAt);
         $status = $this->classifyStatus($bmi, $record, $recordedAt, $validated['age']);
+
+        // Who weighed, and when it was entered — kept on the row once the
+        // migration has run; the audit trail has it either way.
+        $enteredBy = SchemaCache::hasColumn('student_health_records', 'endline_entered_by')
+            ? [
+                'endline_entered_by' => (string) $request->session()->get('active_name', 'Feeding Program Coordinator'),
+                'endline_entered_at' => now(),
+            ]
+            : [];
 
         $record->update([
             'weight' => (float) $validated['weight_kg'],
@@ -1587,10 +1605,14 @@ class StudentHealthRecordController extends Controller
             'endline_bmi_value' => $bmi,
             'endline_nutritional_status' => $status,
             'endline_recorded_at' => $recordedAt,
+            ...$enteredBy,
         ]);
 
-        return back()->with('success', 'Endline record saved. BMI comparison is now available.');
+        return back()->with('success', 'Endline record saved. BMI and nutritional status were computed automatically.');
     }
+
+    /** Said to a class adviser who tries to record an endline. */
+    public const ENDLINE_IS_THE_COORDINATORS = 'The endline is weighed and recorded by the Feeding Program Coordinator. You can read it on the learner\'s record.';
 
     /**
      * One learner, one key. Names and sections reach this page from two places
@@ -1614,20 +1636,24 @@ class StudentHealthRecordController extends Controller
         }
 
         $records = collect();
-        $schoolYears = collect();
         $institutionId = $request->session()->get('active_institution_id');
+        $hasRecords = SchemaCache::hasTable('student_health_records');
 
         // school_year is a plain lookup column, so the year list and the year
         // filter are the only parts of this the database may decide. Every
-        // other filter reads an encrypted column and is applied in PHP.
-        $yearFilter = trim((string) $request->query('school_year', '')) ?: StudentHealthRecord::currentSchoolYear();
+        // other filter reads an encrypted column and is applied in PHP. The
+        // list is the years on record and the current one, which is offered
+        // even before anyone has a row in it (SchoolYear::options); a year off
+        // the query string it does not offer reads the current year instead.
+        $schoolYears = collect(SchoolYear::options($hasRecords
+            ? StudentHealthRecord::query()
+                ->when($institutionId, fn ($query) => $query->where('institution_id', $institutionId))
+                ->distinct()
+                ->pluck('school_year')
+            : []));
+        $yearFilter = SchoolYear::pick((string) $request->query('school_year', ''), $schoolYears->all());
 
-        if (SchemaCache::hasTable('student_health_records')) {
-            $scope = fn () => StudentHealthRecord::query()
-                ->when($institutionId, fn ($query) => $query->where('institution_id', $institutionId));
-
-            $schoolYears = $scope()->distinct()->orderByDesc('school_year')->pluck('school_year')->values();
-
+        if ($hasRecords) {
             // student_name is encrypted at rest, so sorting happens in PHP.
             // The roll itself comes from the shared per-request read, so the
             // cards partial and this table are one query rather than two.
@@ -1635,11 +1661,6 @@ class StudentHealthRecordController extends Controller
                 ['section', 'asc'],
                 ['student_name', 'asc'],
             ])->values();
-        }
-
-        // The year on screen is always offered, even before anyone has a row in it.
-        if ($schoolYears->doesntContain($yearFilter)) {
-            $schoolYears = $schoolYears->push($yearFilter)->sortDesc()->values();
         }
 
         // Where each learner stands with the attendance rule — the rate and the
@@ -2012,9 +2033,9 @@ class StudentHealthRecordController extends Controller
      * record has none (BmiClassifier::ageAtMeasurement).
      */
     /**
-     * Refuse a height and weight no learner of this age and sex could have
-     * (MeasurementPlausibility), read with the same age and sex the status is
-     * classified with.
+     * Refuse a height and weight no learner of this age and sex could have,
+     * and an unusual one nobody has confirmed (MeasurementPlausibility::guard),
+     * read with the same age and sex the status is classified with.
      *
      * @param  array<string, mixed>  $validated
      *
@@ -2024,16 +2045,13 @@ class StudentHealthRecordController extends Controller
     {
         $details = is_array($record?->student_details) ? $record->student_details : [];
 
-        $problems = MeasurementPlausibility::problems(
+        MeasurementPlausibility::guard(
             (float) $validated['height_cm'],
             (float) $validated['weight_kg'],
             BmiClassifier::ageAtMeasurement($details, $recordedAt, $validated['age'] ?? null),
             isset($details['gender']) ? (string) $details['gender'] : null,
+            request()->boolean(MeasurementPlausibility::CONFIRM_FIELD),
         );
-
-        if ($problems !== []) {
-            throw ValidationException::withMessages($problems);
-        }
     }
 
     private function classifyStatus(float $bmi, ?StudentHealthRecord $record, mixed $recordedAt, mixed $ageInYears): string

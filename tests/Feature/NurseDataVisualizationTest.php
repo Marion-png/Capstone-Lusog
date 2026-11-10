@@ -185,6 +185,7 @@ class NurseDataVisualizationTest extends TestCase
     {
         $this->learner('Improved', 'Grade 8 / Mabini', 'Wasted', [
             'endline_nutritional_status' => 'Normal',
+            'endline_weight_kg' => 40,
         ]);
         $this->learner('Not yet', 'Grade 8 / Mabini', 'Wasted');
 
