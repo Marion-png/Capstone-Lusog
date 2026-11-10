@@ -18,6 +18,7 @@ use App\Support\LearnerSearchIndex;
 use App\Support\MedicineBatches;
 use App\Support\SchemaCache;
 use App\Support\SchoolClock;
+use App\Support\SchoolYear;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -45,6 +46,23 @@ class ConsultationController extends Controller
             return $q;
         };
 
+        // School years are kept apart. A visit has no school_year column; its
+        // year is the one its date falls in (June to May), so the dropdown is
+        // read off the first and last visit — one aggregate — and every figure,
+        // chart and row below is that year's alone. The page opens on the
+        // current year; an earlier one is read only.
+        $span = $baseQuery()->toBase()
+            ->selectRaw('min(consulted_at) as first_at, max(consulted_at) as last_at')
+            ->first();
+        $schoolYears = SchoolYear::options(SchoolYear::spanning($span->first_at ?? null, $span->last_at ?? null));
+        $selectedYear = SchoolYear::pick((string) $request->query('school_year', ''), $schoolYears);
+        $isCurrentYear = $selectedYear === SchoolYear::current();
+        [$yearFrom, $yearBefore] = SchoolYear::bounds($selectedYear);
+
+        $yearQuery = fn () => $baseQuery()
+            ->where('consulted_at', '>=', $yearFrom)
+            ->where('consulted_at', '<', $yearBefore);
+
         // The headline figures in one aggregate rather than a COUNT each.
         // consulted_at and status are plain columns, so they may be counted in
         // SQL; ranges rather than date functions keep the one statement valid
@@ -53,7 +71,7 @@ class ConsultationController extends Controller
         $weekStart = SchoolClock::now()->startOfWeek();
         $weekEnd = $weekStart->copy()->addWeek();
 
-        $totals = $baseQuery()->toBase()
+        $totals = $yearQuery()->toBase()
             ->selectRaw(
                 'count(*) as total, '
                 .'coalesce(sum(case when consulted_at >= ? and consulted_at < ? then 1 else 0 end), 0) as month, '
@@ -63,18 +81,22 @@ class ConsultationController extends Controller
             ->first();
 
         // This week's visits, read once: the week and today figures and the
-        // seven-day trend are all counted from these timestamps.
-        $thisWeek = $baseQuery()->toBase()
-            ->where('consulted_at', '>=', $weekStart->toDateTimeString())
-            ->where('consulted_at', '<', $weekEnd->toDateTimeString())
-            ->pluck('consulted_at')
-            ->map(fn ($at): string => Carbon::parse($at)->toDateString())
-            ->countBy();
+        // seven-day trend are all counted from these timestamps. An earlier
+        // year has no "this week", so it is not read.
+        $thisWeek = $isCurrentYear
+            ? $baseQuery()->toBase()
+                ->where('consulted_at', '>=', $weekStart->toDateTimeString())
+                ->where('consulted_at', '<', $weekEnd->toDateTimeString())
+                ->pluck('consulted_at')
+                ->map(fn ($at): string => Carbon::parse($at)->toDateString())
+                ->countBy()
+            : collect();
 
-        $consultations = $baseQuery()
+        $consultations = $yearQuery()
             ->latest('consulted_at')
             ->latest('id')
-            ->paginate(10, total: (int) $totals->total);
+            ->paginate(10, total: (int) $totals->total)
+            ->withQueryString();
 
         // How many photographs each visit on this page carries — one grouped
         // query on plain columns, so the row can say "No photos attached" or
@@ -88,10 +110,17 @@ class ConsultationController extends Controller
                 ->pluck('total', 'consultation_id');
         }
 
-        // condition is encrypted at rest, so grouping happens in PHP after decryption.
-        $topConditionStats = $baseQuery()
-            ->whereMonth('consulted_at', SchoolClock::now()->month)
-            ->whereYear('consulted_at', SchoolClock::now()->year)
+        // condition is encrypted at rest, so grouping happens in PHP after
+        // decryption. The current year charts this month; an earlier year its
+        // whole twelve months, read in the same one query as its monthly trend.
+        $conditionVisits = $isCurrentYear
+            ? $baseQuery()
+                ->whereMonth('consulted_at', SchoolClock::now()->month)
+                ->whereYear('consulted_at', SchoolClock::now()->year)
+                ->get(['condition', 'consulted_at'])
+            : $yearQuery()->get(['condition', 'consulted_at']);
+
+        $topConditionStats = $conditionVisits
             ->pluck('condition')
             ->map(fn ($condition) => strtolower((string) $condition))
             ->filter()
@@ -101,16 +130,36 @@ class ConsultationController extends Controller
             ->map(fn ($total, $conditionName) => (object) ['condition_name' => $conditionName, 'total' => $total])
             ->values();
 
-        $dailyTrend = collect(range(0, 6))->map(function (int $offset) use ($weekStart, $thisWeek): array {
-            $day = $weekStart->copy()->addDays($offset);
+        if ($isCurrentYear) {
+            $dailyTrend = collect(range(0, 6))->map(function (int $offset) use ($weekStart, $thisWeek): array {
+                $day = $weekStart->copy()->addDays($offset);
 
-            return [
-                'label' => $day->format('D'),
-                'count' => (int) $thisWeek->get($day->toDateString(), 0),
-            ];
-        });
+                return [
+                    'label' => $day->format('D'),
+                    'count' => (int) $thisWeek->get($day->toDateString(), 0),
+                ];
+            });
+        } else {
+            // June to May, a point a month.
+            $perMonth = $conditionVisits
+                ->map(fn ($visit): string => Carbon::parse($visit->consulted_at)->format('Y-m'))
+                ->countBy();
+            $firstMonth = Carbon::parse($yearFrom);
+
+            $dailyTrend = collect(range(0, 11))->map(function (int $offset) use ($firstMonth, $perMonth): array {
+                $month = $firstMonth->copy()->addMonths($offset);
+
+                return [
+                    'label' => $month->format('M'),
+                    'count' => (int) $perMonth->get($month->format('Y-m'), 0),
+                ];
+            });
+        }
 
         return view('dashboard.consultation-log', [
+            'schoolYears' => $schoolYears,
+            'selectedYear' => $selectedYear,
+            'isCurrentYear' => $isCurrentYear,
             'consultations' => $consultations,
             'photoCounts' => $photoCounts,
             // What was handed over at each visit on this page, read for the

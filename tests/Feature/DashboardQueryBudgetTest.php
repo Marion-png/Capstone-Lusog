@@ -261,15 +261,17 @@ class DashboardQueryBudgetTest extends TestCase
         $response = $this->withSession($this->sessionFor('school_nurse'))
             ->get('/dashboard/consultation-log')->assertOk();
 
+        // Total and referrals are the current school year's (from 1 June
+        // 2026), so October 2025's visit is SY 2025-2026's and not counted.
         $this->assertSame(
-            ['total' => 6, 'month' => 4, 'week' => 3, 'today' => 2, 'referrals' => 2],
+            ['total' => 5, 'month' => 4, 'week' => 3, 'today' => 2, 'referrals' => 2],
             $response->viewData('stats'),
         );
         $this->assertSame(
             ['Mon' => 1, 'Tue' => 0, 'Wed' => 2, 'Thu' => 0, 'Fri' => 0, 'Sat' => 0, 'Sun' => 0],
             collect($response->viewData('dailyTrend'))->pluck('count', 'label')->all(),
         );
-        $this->assertSame(6, $response->viewData('consultations')->total());
+        $this->assertSame(5, $response->viewData('consultations')->total());
     }
 
     /** A learner in the adviser's own class, named so clinic visits match them. */

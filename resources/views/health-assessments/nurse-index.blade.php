@@ -27,14 +27,30 @@
 
 <div class="cf-wrap">
     <h1 class="cf-page-title">Submitted Health Assessments</h1>
-    <p class="cf-page-sub">Mandatory Learner's Health Assessment Tool forms submitted by class advisers for SY {{ \App\Models\HealthAssessment::currentSchoolYear() }}. The assessment itself belongs to the adviser who submitted it; the health record beside it is yours to fill in or correct.</p>
+    @php
+        $selectedYear = $selectedYear ?? \App\Models\HealthAssessment::currentSchoolYear();
+        $schoolYears = $schoolYears ?? [$selectedYear];
+        $isCurrentYear = $isCurrentYear ?? true;
+    @endphp
+    <p class="cf-page-sub">Mandatory Learner's Health Assessment Tool forms submitted by class advisers for SY {{ $selectedYear }}. The assessment itself belongs to the adviser who submitted it; the health record beside it is yours to fill in or correct.</p>
 
     @if (session('error')) <div class="cf-flash cf-flash-err">{{ session('error') }}</div> @endif
+
+    {{-- An earlier year is that year's assessments and that year's health
+         record, read only: Fill Health Record writes the current year. --}}
+    <form method="GET" class="cf-filter" action="{{ route('health-assessments.nurse-index') }}">
+        <label for="assessmentYear">School year</label>
+        <select name="school_year" id="assessmentYear" onchange="this.form.submit()">
+            @foreach ($schoolYears as $yearOption)
+                <option value="{{ $yearOption }}" @selected($yearOption === $selectedYear)>S.Y. {{ $yearOption }}{{ $yearOption === \App\Support\SchoolYear::current() ? ' (current)' : '' }}</option>
+            @endforeach
+        </select>
+    </form>
 
     <div class="cf-card">
         <div class="cf-card-head"><h2>Assessments</h2></div>
         @if ($assessments->isEmpty())
-            <div class="cf-empty">No health assessments submitted yet.</div>
+            <div class="cf-empty">{{ $isCurrentYear ? 'No health assessments submitted yet.' : 'No health assessments submitted in S.Y. '.$selectedYear.'.' }}</div>
         @else
             <table class="cf-table">
                 <thead>
@@ -67,7 +83,14 @@
                             <td>{{ $assessment->assessed_by ?: $assessment->submitted_by_name }}</td>
                             <td>{{ \App\Support\SchoolClock::local($assessment->created_at)?->format('M j, Y g:i A') }}</td>
                             <td>
-                                @if ($examineIndex === null)
+                                @if (! $isCurrentYear)
+                                    {{-- That year's own row says whether it was recorded. --}}
+                                    @if (! empty($assessment->studentHealthRecord?->examination))
+                                        <span style="color:var(--g700);font-weight:600;">Recorded</span>
+                                    @else
+                                        <span style="color:var(--muted);">Not recorded</span>
+                                    @endif
+                                @elseif ($examineIndex === null)
                                     <span style="color:var(--muted);">Not on this year's roster</span>
                                 @elseif ($examined)
                                     <span style="color:var(--g700);font-weight:600;">Recorded</span>

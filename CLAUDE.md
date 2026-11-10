@@ -39,7 +39,7 @@ Roles are strings in `session('active_role')`:
 |---|---|
 | `school_nurse` | **School Nurse** — deworming, consultations, health records |
 | `clinic_staff` | Consultation logging, medicine inventory; dispenses **paracetamol only** (`DispensingRights`) |
-| `clinic_teacher` | **Clinic Teacher** — reads the nurse's screens; dispenses **paracetamol only**, never writes stock |
+| `clinic_teacher` | **Clinic Teacher** — reads the nurse's screens; records vital signs; dispenses **paracetamol only**, never writes stock |
 | `class_adviser` | Student data entry, medical certificates, consent forms |
 | `school_head` | **School Head** — reads, monitors, exports; writes nothing but their own session and password |
 | `feeding_coor` | SBFP: attendance, enrolment, SBFP forms, BMI reports |

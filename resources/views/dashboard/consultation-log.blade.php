@@ -25,8 +25,13 @@
 <div class="main">
     @php
         $schoolName = session('active_school_name', 'No school assigned');
-        $schoolYear = \App\Models\StudentHealthRecord::currentSchoolYear();
-        $canEditVisits = in_array(session('active_role'), \App\Models\Consultation::EDIT_ROLES, true);
+        // School years are kept apart: the current year is where the clinic
+        // works; an earlier one (the School Year filter) is read only.
+        $selectedYear = $selectedYear ?? \App\Support\SchoolYear::current();
+        $schoolYears = $schoolYears ?? [$selectedYear];
+        $isCurrentYear = $isCurrentYear ?? true;
+        $schoolYear = $selectedYear;
+        $canEditVisits = $isCurrentYear && in_array(session('active_role'), \App\Models\Consultation::EDIT_ROLES, true);
         $logColumns = $canEditVisits ? 10 : 9;
     @endphp
 
@@ -52,22 +57,30 @@
                 <div>
                     <div class="page-eyebrow">Consultation Management</div>
                     <h1 class="page-title">School Clinic <span>Consultation Log</span></h1>
-                    <p class="page-sub">Every clinic visit recorded for this school, with the month's most common conditions and this week's daily volume.</p>
+                    @if ($isCurrentYear)
+                        <p class="page-sub">Every clinic visit recorded for this school, with the month's most common conditions and this week's daily volume.</p>
+                    @else
+                        <p class="page-sub">Every clinic visit recorded for this school in SY {{ $selectedYear }}, with the year's most common conditions and its monthly volume.</p>
+                    @endif
                 </div>
                 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-                    <a href="{{ route('dashboard.student-health-records') }}" class="btn btn-secondary">Health Records</a>
+                    <a href="{{ route('dashboard.student-health-records', $isCurrentYear ? [] : ['school_year' => $selectedYear]) }}" class="btn btn-secondary">Health Records</a>
                     {{-- Opens the dialog on this page rather than navigating
                          away; the standalone form is still at
-                         consultations.create for anyone who links to it. --}}
-                    <button type="button" class="btn btn-primary" data-bmodal-open="consultModal">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                        New Consultation
-                    </button>
+                         consultations.create for anyone who links to it.
+                         A visit is the current year's, so an earlier year
+                         draws no button. --}}
+                    @if ($isCurrentYear)
+                        <button type="button" class="btn btn-primary" data-bmodal-open="consultModal">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            New Consultation
+                        </button>
+                    @endif
                 </div>
             </div>
         </div>
 
-        <div class="kpi-grid cols-5">
+        <div class="kpi-grid {{ $isCurrentYear ? 'cols-5' : 'cols-2' }}">
             <div class="card kpi accent-brand">
                 <div class="kpi-top">
                     <div class="kpi-label">Total Consultations</div>
@@ -76,9 +89,11 @@
                     </div>
                 </div>
                 <div class="kpi-value">{{ number_format($stats['total'] ?? 0) }}</div>
-                <div class="kpi-hint">All time</div>
+                <div class="kpi-hint">SY {{ $selectedYear }}</div>
             </div>
 
+            {{-- This month, this week and today belong to the current year. --}}
+            @if ($isCurrentYear)
             <div class="card kpi accent-info">
                 <div class="kpi-top">
                     <div class="kpi-label">This Month</div>
@@ -111,6 +126,7 @@
                 <div class="kpi-value">{{ number_format($stats['today'] ?? 0) }}</div>
                 <div class="kpi-hint">{{ \App\Support\SchoolClock::now()->format('M j') }}</div>
             </div>
+            @endif
 
             <div class="card kpi accent-orange">
                 <div class="kpi-top">
@@ -138,18 +154,18 @@
         <div class="chart-grid" style="margin-top:20px">
             <div class="card chart-card">
                 <div class="chart-head">Most Common Conditions</div>
-                <div class="chart-sub">This month, by number of consultations</div>
+                <div class="chart-sub">{{ $isCurrentYear ? 'This month' : 'SY '.$selectedYear }}, by number of consultations</div>
                 @if ($conditionChartLabels->isEmpty())
-                    <div class="chart-empty">No consultations recorded this month.</div>
+                    <div class="chart-empty">No consultations recorded {{ $isCurrentYear ? 'this month' : 'in SY '.$selectedYear }}.</div>
                 @else
                     <div class="chart-body"><canvas id="conditionsChart"></canvas></div>
                 @endif
             </div>
             <div class="card chart-card">
-                <div class="chart-head">Daily Consultation Trend</div>
-                <div class="chart-sub">This week, consultations per day</div>
+                <div class="chart-head">{{ $isCurrentYear ? 'Daily' : 'Monthly' }} Consultation Trend</div>
+                <div class="chart-sub">{{ $isCurrentYear ? 'This week, consultations per day' : 'SY '.$selectedYear.', consultations per month' }}</div>
                 @if ($dailyTrendLabels->isEmpty())
-                    <div class="chart-empty">No consultations recorded this week.</div>
+                    <div class="chart-empty">No consultations recorded {{ $isCurrentYear ? 'this week' : 'in SY '.$selectedYear }}.</div>
                 @else
                     <div class="chart-body"><canvas id="dailyTrendChart"></canvas></div>
                 @endif
@@ -157,6 +173,15 @@
         </div>
 
         <div class="toolbar">
+            {{-- Opens that year's log: a page of its own, so it navigates. --}}
+            <form method="GET" action="{{ route('dashboard.consultation-log') }}" id="clogYearForm">
+                <label class="field-label" for="clogYearFilter">School Year</label>
+                <select class="select" id="clogYearFilter" name="school_year" onchange="this.form.submit()">
+                    @foreach ($schoolYears as $yearOption)
+                        <option value="{{ $yearOption }}" @selected($yearOption === $selectedYear)>SY {{ $yearOption }}{{ $yearOption === \App\Support\SchoolYear::current() ? ' (current)' : '' }}</option>
+                    @endforeach
+                </select>
+            </form>
             <div style="flex:1;min-width:240px">
                 <label class="field-label" for="searchInput">Search</label>
                 <div class="lg-search">
@@ -251,7 +276,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="{{ $logColumns }}" class="table-empty">No consultations yet. Use New Consultation to add the first entry.</td>
+                                <td colspan="{{ $logColumns }}" class="table-empty">{{ $isCurrentYear ? 'No consultations yet. Use New Consultation to add the first entry.' : 'No consultations recorded in SY '.$selectedYear.'.' }}</td>
                             </tr>
                         @endforelse
                         <tr id="logNoMatch" hidden>

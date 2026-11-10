@@ -34,13 +34,15 @@ class StudentVitalSigns
     ];
 
     /**
-     * Who records a reading: the school nurse and the clinic staff who work the
-     * clinic beside them. The endpoint refuses everyone else, and the health
-     * records page draws the Record button from this same list.
+     * Who records a reading: the school nurse, the clinic staff who work the
+     * clinic beside them, and the Clinic Teacher who covers the clinic when
+     * the nurse is out (admitted 2026-11-10). The endpoint refuses everyone
+     * else, and the health records page draws the Record button from this
+     * same list.
      *
      * @var list<string>
      */
-    public const WRITE_ROLES = ['school_nurse', 'clinic_staff'];
+    public const WRITE_ROLES = ['school_nurse', 'clinic_staff', 'clinic_teacher'];
 
     /** Attribution, kept beside the readings so a figure is never anonymous. */
     public const RECORDED_BY = 'vitals_recorded_by';

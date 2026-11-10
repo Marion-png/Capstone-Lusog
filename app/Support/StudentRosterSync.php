@@ -85,6 +85,46 @@ class StudentRosterSync
         }
     }
 
+    /**
+     * An earlier school year's roster, in the session roster's own row shape,
+     * read straight from the database and never written to the session.
+     *
+     * The session copy is this year's working roster: Fill Medical Record is
+     * keyed by its index, and every write follows it. An earlier year is only
+     * ever read, so it is built here instead — one row per learner who had a
+     * placement that year (the latest when there are two), whether they were
+     * later promoted, retained or archived, because that year's record is
+     * what is being read. One query (StudentHealthRecord::rosterFor).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function rowsForYear(?int $institutionId, string $schoolYear): array
+    {
+        if (! $institutionId || ! SchemaCache::hasTable('student_health_records')) {
+            return [];
+        }
+
+        $latest = [];
+        foreach (StudentHealthRecord::rosterFor($institutionId, $schoolYear) as $record) {
+            $lrn = (string) $record->student_id;
+
+            if ($lrn === '') {
+                continue;
+            }
+
+            if (! isset($latest[$lrn]) || (int) $record->id > (int) $latest[$lrn]->id) {
+                $latest[$lrn] = $record;
+            }
+        }
+
+        $rows = [];
+        foreach ($latest as $lrn => $record) {
+            $rows[] = self::buildSessionRow($record, (string) $lrn);
+        }
+
+        return $rows;
+    }
+
     private static function buildSessionRow(StudentHealthRecord $record, string $lrn): array
     {
         // Records saved with the full adviser entry restore every field

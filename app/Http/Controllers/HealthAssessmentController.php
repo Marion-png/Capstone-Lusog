@@ -11,6 +11,7 @@ use App\Support\LearnerPlacement;
 use App\Support\MedicineAllergies;
 use App\Support\SchemaCache;
 use App\Support\SchoolClock;
+use App\Support\SchoolYear;
 use App\Support\StudentRosterSync;
 use App\Support\StudentVitalSigns;
 use Illuminate\Http\JsonResponse;
@@ -195,7 +196,10 @@ class HealthAssessmentController extends Controller
             return response()->json(['has_assessment' => false]);
         }
 
-        $record = StudentHealthRecord::currentForStudent($lrn, $request->session()->get('active_institution_id'));
+        // An earlier school year when Health Records has one open
+        // (SchoolYear::askedFor — an adviser's is always this year's).
+        $schoolYear = SchoolYear::askedFor($request);
+        $record = StudentHealthRecord::currentForStudent($lrn, $request->session()->get('active_institution_id'), $schoolYear);
 
         if ($activeRole === 'class_adviser' && $record !== null) {
             $grade = (string) $request->session()->get('assigned_grade_level', '');
@@ -210,7 +214,6 @@ class HealthAssessmentController extends Controller
             return response()->json(['has_assessment' => false]);
         }
 
-        $schoolYear = HealthAssessment::currentSchoolYear();
         $assessment = HealthAssessment::forStudent($record->id, $schoolYear);
 
         if ($assessment === null) {
@@ -379,17 +382,40 @@ class HealthAssessmentController extends Controller
         }
 
         $institutionId = $request->session()->get('active_institution_id');
+        $hasTable = SchemaCache::hasTable('health_assessments');
 
-        $assessments = SchemaCache::hasTable('health_assessments')
-            ? HealthAssessment::with('studentHealthRecord')
-                ->where('school_year', HealthAssessment::currentSchoolYear())
-                ->when($institutionId, fn ($q) => $q->whereHas(
-                    'studentHealthRecord',
-                    fn ($r) => $r->where('institution_id', $institutionId)
-                ))
+        $forSchool = fn () => HealthAssessment::query()
+            ->when($institutionId, fn ($q) => $q->whereHas(
+                'studentHealthRecord',
+                fn ($r) => $r->where('institution_id', $institutionId)
+            ));
+
+        // School years are kept apart: the page opens on the current year and
+        // the School Year filter opens an earlier one, read only — its
+        // assessments with the health record of that year's own row.
+        $schoolYears = SchoolYear::options($hasTable
+            ? $forSchool()->distinct()->pluck('school_year')
+            : []);
+        $selectedYear = SchoolYear::pick((string) $request->query('school_year', ''), $schoolYears);
+        $isCurrentYear = $selectedYear === SchoolYear::current();
+
+        $assessments = $hasTable
+            ? $forSchool()->with('studentHealthRecord')
+                ->where('school_year', $selectedYear)
                 ->latest()
                 ->get()
             : collect();
+
+        if (! $isCurrentYear) {
+            return view('health-assessments.nurse-index', [
+                'assessments' => $assessments,
+                'examineIndexByLrn' => [],
+                'examinedByLrn' => [],
+                'schoolYears' => $schoolYears,
+                'selectedYear' => $selectedYear,
+                'isCurrentYear' => false,
+            ]);
+        }
 
         // Fill Medical Record is keyed by the learner's index in the session
         // roster, so rebuild the roster first (the invariant every page reading
@@ -420,6 +446,9 @@ class HealthAssessmentController extends Controller
             'assessments' => $assessments,
             'examineIndexByLrn' => $examineIndexByLrn,
             'examinedByLrn' => $examinedByLrn,
+            'schoolYears' => $schoolYears,
+            'selectedYear' => $selectedYear,
+            'isCurrentYear' => true,
         ]);
     }
 

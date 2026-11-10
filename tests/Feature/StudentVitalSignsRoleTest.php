@@ -322,6 +322,22 @@ class StudentVitalSignsRoleTest extends TestCase
         $this->assertSame('Maria Santos', $vitals['recorded_by']);
     }
 
+    /** The Clinic Teacher covers the clinic when the nurse is out, and records one too. */
+    #[Test]
+    public function the_clinic_teacher_can_record_vital_signs(): void
+    {
+        $record = $this->learner();
+
+        $this->recordVitals(['temperature_c' => '37.4', 'pulse_bpm' => '88', 'blood_pressure' => '115/75'], 'clinic_teacher')
+            ->assertOk()
+            ->assertJsonPath('vitals.pulse_bpm', '88');
+
+        $vitals = StudentVitalSigns::read($record->fresh());
+        $this->assertSame('37.4', $vitals['temperature_c']);
+        $this->assertSame('115/75', $vitals['blood_pressure']);
+        $this->assertSame('Maria Santos', $vitals['recorded_by']);
+    }
+
     /**
      * The health records page offers Record Vital Signs to the roles that may
      * record, and draws no button for one that would only be refused.
@@ -331,7 +347,7 @@ class StudentVitalSignsRoleTest extends TestCase
     {
         $this->learner();
 
-        foreach (['school_nurse' => true, 'clinic_staff' => true, 'clinic_teacher' => false] as $role => $offered) {
+        foreach (['school_nurse' => true, 'clinic_staff' => true, 'clinic_teacher' => true] as $role => $offered) {
             $html = $this->withSession($this->sessionFor($role))
                 ->get('/dashboard/student-health-records')
                 ->assertOk()
@@ -346,7 +362,7 @@ class StudentVitalSignsRoleTest extends TestCase
     {
         $record = $this->learner();
 
-        foreach (['class_adviser', 'clinic_teacher', 'school_head', 'feeding_coor'] as $role) {
+        foreach (['class_adviser', 'school_head', 'feeding_coor'] as $role) {
             $this->withSession($this->sessionFor($role))
                 ->postJson(route('student-vitals.store', '110000000001'), ['temperature_c' => '38.0'])
                 ->assertForbidden();

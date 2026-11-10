@@ -19,7 +19,13 @@
     $mlatId = $mlatId ?? 'mlatMenus';
     $mlatLrn = trim((string) ($mlatLrn ?? ''));
     $mlatTemplate = '__LRN__';
-    $mlatUrl = fn (string $route, int $sheet, string $lrn): string => route($route, ['lrn' => $lrn, 'sheet' => $sheet]);
+    // An earlier school year's sheet when the page has one open; the current
+    // year's otherwise (MlatExportController reads ?school_year=).
+    $mlatSchoolYear = isset($mlatSchoolYear) && $mlatSchoolYear !== '' ? (string) $mlatSchoolYear : null;
+    $mlatUrl = fn (string $route, int $sheet, string $lrn): string => route($route, array_filter(
+        ['lrn' => $lrn, 'sheet' => $sheet, 'school_year' => $mlatSchoolYear],
+        fn ($value) => $value !== null
+    ));
 @endphp
 @once
 <style>

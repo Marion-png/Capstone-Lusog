@@ -2,6 +2,10 @@
 
 namespace App\Support;
 
+use Carbon\CarbonInterface;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+
 /**
  * Which school year it is, and which years a page offers.
  *
@@ -31,10 +35,58 @@ final class SchoolYear
     /** The school year today falls in, on the school's clock: "2026-2027". */
     public static function calendar(): string
     {
-        $today = SchoolClock::now();
-        $start = (int) $today->format('Y') - ((int) $today->format('n') >= self::START_MONTH ? 0 : 1);
+        return self::containing(SchoolClock::now());
+    }
+
+    /** The school year a date falls in: June to December its own year's, January to May the year before's. */
+    public static function containing(CarbonInterface $date): string
+    {
+        $start = (int) $date->format('Y') - ((int) $date->format('n') >= self::START_MONTH ? 0 : 1);
 
         return $start.'-'.($start + 1);
+    }
+
+    /**
+     * Where a school year starts and where the next one does, as
+     * "Y-m-d H:i:s" on the school's clock: [from, before). For a column
+     * holding the moment as the school read it — consulted_at is the date
+     * and time the nurse typed in — so a range, never a date function, and
+     * the same statement runs on Postgres and SQLite.
+     *
+     * @return array{0: string, 1: string}
+     */
+    public static function bounds(string $year): array
+    {
+        $start = self::startOf($year);
+        $month = str_pad((string) self::START_MONTH, 2, '0', STR_PAD_LEFT);
+
+        return ["{$start}-{$month}-01 00:00:00", ($start + 1)."-{$month}-01 00:00:00"];
+    }
+
+    /**
+     * The school years from one date to another, newest first — the years a
+     * table with a date but no school_year column has rows in, read off its
+     * first and last date. A stray date years away is held to ten years
+     * before the later one, so a typo cannot fill the dropdown.
+     *
+     * @return list<string>
+     */
+    public static function spanning(mixed $first, mixed $last): array
+    {
+        if ($first === null || $first === '' || $last === null || $last === '') {
+            return [];
+        }
+
+        $from = self::startOf(self::containing(Carbon::parse((string) $first)));
+        $to = self::startOf(self::containing(Carbon::parse((string) $last)));
+        $from = max($from, $to - 10);
+
+        $years = [];
+        for ($start = $to; $start >= $from; $start--) {
+            $years[] = $start.'-'.($start + 1);
+        }
+
+        return $years;
     }
 
     /**
@@ -91,6 +143,23 @@ final class SchoolYear
         $requested = trim((string) $requested);
 
         return $requested !== '' && in_array($requested, $options, true) ? $requested : self::current();
+    }
+
+    /**
+     * The year a clinic read asks for with `?school_year=`, or the current
+     * one. Health Records opens an earlier year's roster, and the profile's
+     * lookups (vital signs, consent, the adviser's MLHAT) follow it. A class
+     * adviser always reads the current year: they see one class, this year.
+     */
+    public static function askedFor(Request $request): string
+    {
+        $year = trim((string) $request->query('school_year', ''));
+
+        if ($year === '' || ! self::isValid($year) || (string) $request->session()->get('active_role', '') === 'class_adviser') {
+            return self::current();
+        }
+
+        return $year;
     }
 
     private static function startOf(string $year): int

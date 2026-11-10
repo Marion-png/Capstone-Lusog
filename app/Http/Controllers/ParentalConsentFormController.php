@@ -16,6 +16,7 @@ use App\Support\LearnerPlacement;
 use App\Support\MedicineAllergies;
 use App\Support\SchemaCache;
 use App\Support\SchoolClock;
+use App\Support\SchoolYear;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -383,7 +384,10 @@ class ParentalConsentFormController extends Controller
             return response()->json(['has_consent' => false, 'school_year' => ParentalConsentForm::currentSchoolYear()]);
         }
 
-        $record = StudentHealthRecord::currentForStudent($lrn, $request->session()->get('active_institution_id'));
+        // Health Records can open an earlier school year; the consent read is
+        // that year's then (SchoolYear::askedFor — an adviser's is always this year's).
+        $schoolYear = SchoolYear::askedFor($request);
+        $record = StudentHealthRecord::currentForStudent($lrn, $request->session()->get('active_institution_id'), $schoolYear);
 
         if ($activeRole === 'class_adviser' && $record !== null) {
             $grade = (string) $request->session()->get('assigned_grade_level', '');
@@ -393,8 +397,6 @@ class ParentalConsentFormController extends Controller
                 return response()->json(['has_consent' => false, 'school_year' => ParentalConsentForm::currentSchoolYear()]);
             }
         }
-
-        $schoolYear = ParentalConsentForm::currentSchoolYear();
 
         if ($record === null) {
             return response()->json(['has_consent' => false, 'school_year' => $schoolYear]);

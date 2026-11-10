@@ -55,7 +55,9 @@ use App\Support\ConsultationMedicines;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingProgramCycle;
+use App\Support\SchemaCache;
 use App\Support\SchoolPulse;
+use App\Support\SchoolYear;
 use App\Support\StudentRosterSync;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -302,7 +304,23 @@ Route::get('/dashboard/student-health-records', function () {
     // a fresh session painted an empty table on its first load.
     StudentRosterSync::syncToSession(request());
 
-    return view('dashboard.student-health-records');
+    // School years are kept apart: the page opens on the current year (the
+    // session roster, where the clinic works) and the School Year filter opens
+    // an earlier one, read from that year's own rows and read only.
+    $institutionId = (int) session('active_institution_id');
+    $onRecord = $institutionId && SchemaCache::hasTable('student_health_records')
+        ? StudentHealthRecord::query()->where('institution_id', $institutionId)->distinct()->pluck('school_year')
+        : [];
+    $schoolYears = SchoolYear::options($onRecord);
+    $selectedYear = SchoolYear::pick(request()->query('school_year'), $schoolYears);
+    $isCurrentYear = $selectedYear === SchoolYear::current();
+
+    return view('dashboard.student-health-records', [
+        'schoolYears' => $schoolYears,
+        'selectedYear' => $selectedYear,
+        'isCurrentYear' => $isCurrentYear,
+        'yearRecords' => $isCurrentYear ? null : StudentRosterSync::rowsForYear($institutionId, $selectedYear),
+    ]);
 })->name('dashboard.student-health-records');
 
 Route::get('/dashboard/school-nurse/deworming', function (Request $request) {

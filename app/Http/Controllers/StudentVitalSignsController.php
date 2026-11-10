@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\StudentHealthRecord;
 use App\Rules\BloodPressure;
 use App\Support\AdviserClassScope;
+use App\Support\SchoolYear;
 use App\Support\StudentVitalSigns;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,8 +19,8 @@ use Illuminate\Http\Request;
  * and never asks for them, and this is the only endpoint that writes one.
  *
  * The read-only rendering on the adviser's form is presentation. This is the
- * guarantee: a role not in StudentVitalSigns::WRITE_ROLES (the nurse and
- * clinic staff) is refused here whatever any form on any page renders.
+ * guarantee: a role not in StudentVitalSigns::WRITE_ROLES (the nurse,
+ * clinic staff and the Clinic Teacher) is refused here whatever any form on any page renders.
  *
  * Routes sit under /health-records/*, not /nurse/*, for the same reason the
  * medical-documents ones do: EnsureActiveSession seeds a demo session for
@@ -31,7 +32,9 @@ class StudentVitalSignsController extends Controller
 {
     public function show(Request $request, string $lrn): JsonResponse
     {
-        $record = $this->readableRecord($request, $lrn);
+        // Health Records can open an earlier school year; the reading shown is
+        // that year's. The write below is always the current year's.
+        $record = $this->readableRecord($request, $lrn, SchoolYear::askedFor($request));
 
         if ($record === null) {
             return response()->json(['message' => 'Forbidden.'], 403);
@@ -43,7 +46,7 @@ class StudentVitalSignsController extends Controller
     public function store(Request $request, string $lrn): JsonResponse
     {
         if (! in_array((string) $request->session()->get('active_role'), StudentVitalSigns::WRITE_ROLES, true)) {
-            return response()->json(['message' => 'Only the school nurse and clinic staff record vital signs.'], 403);
+            return response()->json(['message' => 'Only the school nurse, clinic staff and the clinic teacher record vital signs.'], 403);
         }
 
         $record = $this->readableRecord($request, $lrn);
@@ -79,7 +82,7 @@ class StudentVitalSignsController extends Controller
      * adviser's form displays these, and the nurse and clinic staff read them
      * on the health-records page. Writing is checked separately above.
      */
-    private function readableRecord(Request $request, string $lrn): ?StudentHealthRecord
+    private function readableRecord(Request $request, string $lrn, ?string $schoolYear = null): ?StudentHealthRecord
     {
         $role = (string) $request->session()->get('active_role');
 
@@ -93,7 +96,7 @@ class StudentVitalSignsController extends Controller
             return null;
         }
 
-        $record = StudentHealthRecord::currentForStudent($lrn, $institutionId);
+        $record = StudentHealthRecord::currentForStudent($lrn, $institutionId, $schoolYear);
 
         // An adviser reads their own section's learners, and only while the
         // learner is still in it.

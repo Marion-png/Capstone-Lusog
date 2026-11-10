@@ -24,6 +24,17 @@
     // learner whose row it was rendered on (see NurseController::dedupedRoster).
     $records = \App\Http\Controllers\NurseController::dedupedRoster(session('school_health_card_records', []));
 
+    // School years are kept apart. The current year is the session roster the
+    // clinic works in; an earlier year (the School Year filter) is that year's
+    // own rows, read only — no Fill Medical Record, no New Consultation, no
+    // Record Vital Signs, and the profile's lookups ask for that year.
+    $selectedYear = $selectedYear ?? \App\Support\SchoolYear::current();
+    $schoolYears = $schoolYears ?? [$selectedYear];
+    $isCurrentYear = $isCurrentYear ?? true;
+    if (! $isCurrentYear) {
+        $records = $yearRecords ?? [];
+    }
+
     // Alphabetical by last name, then first — a roster is read by surname,
     // not by the order learners were enrolled. uasort keeps the raw session
     // index on every row, which is what "Fill Medical Record" is keyed by.
@@ -86,7 +97,7 @@
 
 @php
     $schoolName = session('active_school_name', 'No school assigned');
-    $schoolYear = \App\Models\StudentHealthRecord::currentSchoolYear();
+    $schoolYear = $selectedYear;
 @endphp
 
 <div class="main">
@@ -168,6 +179,17 @@
                      sections wrapped the panel over several lines, and the
                      counts stay on each option so nothing is lost. --}}
                 <div class="shr-filter-row">
+                    {{-- Opens that year's records: a page of its own, not a
+                         narrowing of this one, so it navigates. --}}
+                    <form class="shr-filter-group" method="GET" action="{{ route('dashboard.student-health-records') }}" id="shrYearForm">
+                        <label class="shr-filter-label" for="shrYearFilter">School Year</label>
+                        <select class="shr-select" id="shrYearFilter" name="school_year" onchange="this.form.submit()">
+                            @foreach ($schoolYears as $yearOption)
+                                <option value="{{ $yearOption }}" @selected($yearOption === $selectedYear)>SY {{ $yearOption }}{{ $yearOption === \App\Support\SchoolYear::current() ? ' (current)' : '' }}</option>
+                            @endforeach
+                        </select>
+                    </form>
+
                     <div class="shr-filter-group">
                         <label class="shr-filter-label" for="shrGradeFilter">Grade Level</label>
                         <select class="shr-select" id="shrGradeFilter" data-filter="grade">
@@ -291,7 +313,7 @@
                                 @endphp
                                 <tr class="js-record-row"
                                     data-record='@json($record, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP)'
-                                    data-route="{{ route('nurse.examine', $index) }}"
+                                    data-route="{{ $isCurrentYear ? route('nurse.examine', $index) : '' }}"
                                     data-lrn="{{ $rowLrn }}"
                                     data-search="{{ strtolower($fullName . ' ' . $rowLrn) }}"
                                     data-grade="{{ $rowGrade }}"
@@ -322,8 +344,12 @@
                                     <td colspan="15">
                                         <div class="shr-empty">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
-                                            <h4>No Adviser Submissions Yet</h4>
-                                            <p>Learner health cards appear here once a Class Adviser submits them.</p>
+                                            @if ($isCurrentYear)
+                                                <h4>No Adviser Submissions Yet</h4>
+                                                <p>Learner health cards appear here once a Class Adviser submits them.</p>
+                                            @else
+                                                <h4>No Records for SY {{ $selectedYear }}</h4>
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>
@@ -384,18 +410,21 @@
                 {{-- Print and Download, one MLAT sheet at a time, in the clinic's
                      own form (App\Support\MlatWorkbook). Pointed at the learner
                      when the profile opens. --}}
-                @include('partials.mlat-menus', ['mlatId' => 'profileMlatMenus'])
+                @include('partials.mlat-menus', ['mlatId' => 'profileMlatMenus', 'mlatSchoolYear' => $isCurrentYear ? null : $selectedYear])
                 {{-- Opens the consultation dialog over this profile, with the
                      learner already filled in — the profile stays behind it
-                     rather than being navigated away from. --}}
-                <button type="button" id="profileConsultLink" class="btn btn-secondary">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
-                    New Consultation
-                </button>
-                <a href="#" id="profileFillLink" class="btn btn-primary">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
-                    Fill Medical Record
-                </a>
+                     rather than being navigated away from. Both write the
+                     current school year, so an earlier year draws neither. --}}
+                @if ($isCurrentYear)
+                    <button type="button" id="profileConsultLink" class="btn btn-secondary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z"/></svg>
+                        New Consultation
+                    </button>
+                    <a href="#" id="profileFillLink" class="btn btn-primary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+                        Fill Medical Record
+                    </a>
+                @endif
             </div>
         </div>
 
@@ -444,12 +473,12 @@
                      BMI is built from and a teacher takes them with a tape and a
                      scale. Temperature, pulse and blood pressure are a clinical
                      observation, so the adviser's form shows them and only this
-                     panel writes one — for the nurse and clinic staff
-                     (StudentVitalSigns::WRITE_ROLES). Anyone else reads it. --}}
+                     panel writes one — for the nurse, clinic staff and the
+                     Clinic Teacher (StudentVitalSigns::WRITE_ROLES). Anyone else reads it. --}}
                 <div class="student-profile-section" id="vitalsSection">
                     <div class="sp-panel-head">
                         <h4>Vital Signs</h4>
-                        @if (in_array(session('active_role'), \App\Support\StudentVitalSigns::WRITE_ROLES, true))
+                        @if ($isCurrentYear && in_array(session('active_role'), \App\Support\StudentVitalSigns::WRITE_ROLES, true))
                             <button type="button" class="btn btn-secondary" id="vitalsEditBtn">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
                                 Record Vital Signs
@@ -649,6 +678,15 @@
 
 @include('partials.sheet2-review-script')
 @include('partials.mlat-menus-script')
+{{-- The school year the page has open, for the profile's lookups that are
+     tied to one (vital signs, consent, the adviser's MLHAT): empty on the
+     current year, so those read what they always have. --}}
+<script>
+window.shrYearQuery = (glue) => {
+    const year = @json($isCurrentYear ? '' : $selectedYear);
+    return year === '' ? '' : glue + 'school_year=' + encodeURIComponent(year);
+};
+</script>
 @include('partials.student-documents-script')
 @include('partials.student-incidents-script')
 
@@ -1146,7 +1184,7 @@
         setBadge('pConsentBadge', '…');
 
         try {
-            const resp = await fetch('/api/student-consent-status?lrn=' + encodeURIComponent(lrn), {
+            const resp = await fetch('/api/student-consent-status?lrn=' + encodeURIComponent(lrn) + (window.shrYearQuery?.('&') || ''), {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
 
@@ -1296,7 +1334,7 @@
         if (!lrn) { showSystems(true); el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">No LRN available.</div></div>'; return; }
         el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Loading&hellip;</div></div>';
         try {
-            const resp = await fetch('/api/student-health-assessment?lrn=' + encodeURIComponent(lrn), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            const resp = await fetch('/api/student-health-assessment?lrn=' + encodeURIComponent(lrn) + (window.shrYearQuery?.('&') || ''), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             if (!resp.ok) { showSystems(true); el.innerHTML = '<div class="kv"><div class="k">Status:</div><div class="v" style="color:#6B7C72;">Could not load assessment.</div></div>'; return; }
             const d = await resp.json();
             if (!d.has_assessment) {
@@ -1977,7 +2015,7 @@
 
         // Re-read from the server rather than trusting the row: the adviser's
         // roster copy can be stale, and this figure is clinical.
-        fetch(urlFor(lrn), { headers: { Accept: 'application/json' } })
+        fetch(urlFor(lrn) + (window.shrYearQuery?.('?') || ''), { headers: { Accept: 'application/json' } })
             .then((r) => (r.ok ? r.json() : null))
             .then((data) => { if (data?.vitals) paint(data.vitals); })
             .catch(() => {});
