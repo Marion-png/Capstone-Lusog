@@ -12,10 +12,10 @@
 	<script>document.documentElement.classList.add('js');</script>
 	<style>{!! file_get_contents(resource_path('css/lusog-theme.css')) !!}</style>
 	<style>{!! file_get_contents(resource_path('css/feeding-attendance.css')) !!}</style>
-	{{-- The Record Attendance dialog is one dialog with one sheet, shared with
-	     the Dashboard, which opens the same one. --}}
+	{{-- The sheet is drawn as the School Form 2 grid, read-only. --}}
+	<style>{!! file_get_contents(resource_path('css/feeding-sf2.css')) !!}</style>
+	{{-- The shared dialog anatomy, for the day and learner dialogs. --}}
 	<style>{!! file_get_contents(resource_path('css/feeding-record-modal.css')) !!}</style>
-	<style>{!! file_get_contents(resource_path('css/feeding-attendance-confirm.css')) !!}</style>
 	<style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
 </head>
 <body>
@@ -285,8 +285,11 @@
 						@endif
 						@if ($canRecord)
 							{{-- Today's session stays open all day: once recorded,
-							     the same control opens it again to change a mark. --}}
-							<button type="button" class="btn btn-primary" data-record-open>{{ $recordEditing ? 'Edit Attendance' : 'Record Attendance' }}</button>
+							     the same page opens it again to change a mark. It is
+							     the School Form 2 page, on the class this sheet is
+							     narrowed to. --}}
+							<a class="btn btn-primary" data-record-link
+								href="{{ route('feedingcor-program.attendance.record', array_filter(['grade' => $filters['grade'], 'section' => $filters['section']])) }}">{{ $recordEditing ? 'Edit Attendance' : 'Record Attendance' }}</a>
 						@endif
 					</div>
 				</div>
@@ -324,58 +327,17 @@
 					</div>
 				@endif
 
-				<div class="table-card">
-					<div class="table-scroll">
-						<table class="fa-table fa-sheet-table" id="faTable">
-							<thead>
-								<tr>
-									<th class="fa-idx">#</th>
-									<th>Student</th>
-									<th>Grade</th>
-									<th>Section</th>
-									<th class="fa-mark-col">Status</th>
-									<th>Remarks</th>
-								</tr>
-							</thead>
-							<tbody>
-								@forelse ($rows as $index => $row)
-									<tr data-search="{{ strtolower(trim($row['name'].' '.$row['grade'].' '.$row['section'])) }}">
-										<td class="fa-idx">{{ $index + 1 }}</td>
-										<td class="fa-name"><strong>{{ $row['name'] }}</strong></td>
-										<td>{{ $row['grade_number'] !== '' ? $row['grade_number'] : '—' }}</td>
-										<td>{{ $row['section'] }}</td>
-										<td class="fa-mark-col">
-											@if ($row['status'] === 'present' || $row['status'] === 'absent')
-												<span class="badge {{ $row['status'] === 'present' ? 'badge-normal' : 'badge-critical' }} has-glyph">
-													<span class="fa-glyph">{{ $row['status'] === 'present' ? '✓' : '✕' }}</span>{{ ucfirst($row['status']) }}
-												</span>
-											@elseif ($row['status'] === 'excused')
-												{{-- Away, with a reason the school accepted. Still an
-												     absence on the sheet, and never counted toward the
-												     at-risk flag. --}}
-												<span class="badge badge-monitor has-glyph"><span class="fa-glyph">E</span>Excused</span>
-											@elseif ($row['status'] === 'unconfirmed')
-												{{-- A scanned mark no human has read. Neither present nor
-												     absent until somebody decides it, so it is neither
-												     here. --}}
-												<span class="badge badge-monitor">Unconfirmed</span>
-											@else
-												{{-- Never an absence: nobody wrote this learner down. --}}
-												<span class="badge badge-neutral">{{ \App\Support\FeedingAttendanceMark::NOT_RECORDED }}</span>
-											@endif
-										</td>
-										<td><span class="fa-remark-read">{{ $row['remarks'] !== '' ? $row['remarks'] : '—' }}</span></td>
-									</tr>
-								@empty
-									<tr><td colspan="6" class="table-empty">
-										{{ $beneficiaryCount === 0 ? 'No beneficiaries are enrolled for this school year.' : 'No beneficiary matches these filters.' }}
-									</td></tr>
-								@endforelse
-								<tr id="faNoMatch" style="display:none;"><td colspan="6" class="table-empty">No learner matches this search.</td></tr>
-							</tbody>
-						</table>
-					</div>
-				</div>
+				{{-- The session's month as the School Form 2 grid, read-only:
+				     the same grid the Record Attendance page writes through, with
+				     the selected day marked out. Every cell is a record here. --}}
+				@include('feedingcor-dashboard.partials.sf2-grid', [
+					'rows' => $sf2['rows'],
+					'days' => $sf2['days'],
+					'monthLabel' => $sf2['monthLabel'],
+					'readOnly' => true,
+					'emptyText' => $beneficiaryCount === 0 ? 'No beneficiaries are enrolled for this school year.' : 'No beneficiary matches these filters.',
+				])
+				<p class="table-empty" id="faNoMatch" hidden>No learner matches this search.</p>
 
 				@if ($rows->isNotEmpty())
 					{{-- What this session came to, not what is about to be saved. --}}
@@ -389,6 +351,11 @@
 						</div>
 					</div>
 				@endif
+
+				@include('feedingcor-dashboard.partials.sf2-summary', [
+					'summary' => $sf2['summary'],
+					'monthLabel' => $sf2['monthLabel'],
+				])
 			</div>
 		@elseif ($view === 'history')
 			<div class="live-pane" id="fa-history">
@@ -406,16 +373,6 @@
 	</div>
 </div>
 
-{{-- The dialog belongs to the sheet: it lists the whole roll unfiltered, and
-     the other views are readings of their own. --}}
-@if ($view === 'sheet' && $canRecord)
-	@include('feedingcor-dashboard.partials.attendance-record-modal')
-	{{-- The marks are read back and confirmed before they are posted: they
-	     can be changed until the day ends, and never after. --}}
-	@include('feedingcor-dashboard.partials.attendance-confirm-modal', [
-		'confirmSessionLabel' => $selectedDateLabel,
-	])
-@endif
 
 {{-- The roll's own dialog: one learner's sessions, read from the row that
      opened it. It belongs to By Beneficiary and is drawn nowhere else. --}}
@@ -480,12 +437,17 @@
 		const search = document.getElementById('faSearch');
 		const noMatch = document.getElementById('faNoMatch');
 
+		// SF2 numbers each block — males, then females — from 1.
 		const renumber = () => {
-			let n = 0;
+			const counters = new Map();
 			rows.forEach((row) => {
-				const cell = row.querySelector('.fa-idx');
+				const cell = row.querySelector('.sf2-no');
 				if (!cell) return;
-				cell.textContent = row.style.display === 'none' ? '' : String(++n);
+				const block = row.closest('tbody');
+				if (row.style.display === 'none') { cell.textContent = ''; return; }
+				const n = (counters.get(block) || 0) + 1;
+				counters.set(block, n);
+				cell.textContent = n + '.';
 			});
 		};
 
@@ -497,7 +459,7 @@
 				row.style.display = hit ? '' : 'none';
 				if (hit) shown++;
 			});
-			if (noMatch) noMatch.style.display = shown === 0 && rows.length > 0 ? '' : 'none';
+			if (noMatch) noMatch.hidden = !(shown === 0 && rows.length > 0);
 			renumber();
 		});
 	}

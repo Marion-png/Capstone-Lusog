@@ -32,6 +32,7 @@ class AccountRequestConstraintsTest extends TestCase
             'password_confirmation' => 'goodpass1',
             'role' => 'school_nurse',
             'institution_id' => $this->school()->id,
+            'terms' => '1',
         ], $overrides);
     }
 

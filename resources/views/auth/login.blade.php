@@ -380,6 +380,14 @@
             color: var(--brand-dark);
         }
 
+        .terms-line {
+            display: block;
+            margin-top: 6px;
+            font-size: .74rem;
+        }
+
+        .terms-line .link { padding: 1px 3px; }
+
         .version {
             display: block;
             margin-top: 8px;
@@ -547,6 +555,46 @@
     {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
          last so it overrides this page's own :root colours. --}}
     <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
+    {{-- The Forest Green + Beige skin every role's pages wear, so the first
+         screen and the app behind it are one product. Last, so it wins. --}}
+    @include('partials.lusog-skin')
+    <style>
+        @media screen {
+            /* The brand panel is the rail: forest green with curved bands at
+               the top and the foot. */
+            html .brand { background: var(--rail-bg); }
+            html .brand::before { opacity: .28; }
+            html .rings span { border-color: rgba(255, 255, 255, .08); }
+            html .shell {
+                background: var(--sk-card);
+                border-color: var(--sk-line);
+                box-shadow: 0 2px 4px rgba(31, 41, 51, .05), 0 22px 50px rgba(20, 83, 45, .12);
+            }
+            html .panel { background: var(--sk-card); }
+            html .top h1 { color: var(--sk-text); }
+            /* The italic half of a title, as on every page title. */
+            html .top h1 span { color: var(--sk-secondary); font-style: italic; }
+            /* The accent is a small mark only: a short bar over the title. */
+            html .top::before {
+                content: "";
+                display: block;
+                width: 34px;
+                height: 3px;
+                border-radius: 3px;
+                background: var(--sk-accent);
+                margin-bottom: 16px;
+            }
+            html .control { background: #FFFFFF; border-color: var(--sk-line-strong); }
+            html .control:focus { border-color: var(--sk-secondary); }
+            html .submit { background: var(--sk-primary); }
+            html .submit:hover { background: var(--sk-secondary); }
+            html .link { color: var(--sk-secondary); }
+            html .foot { border-top-color: var(--sk-line); }
+            @media (max-width: 940px) {
+                html body { background-color: var(--sk-card); }
+            }
+        }
+    </style>
 </head>
 <body>
 <main class="shell">
@@ -567,7 +615,7 @@
 
     <section class="panel">
         <div class="top">
-            <h1>Welcome back</h1>
+            <h1>Welcome <span>back</span></h1>
             <p>Enter your credentials to access your assigned modules.</p>
         </div>
 
@@ -691,6 +739,7 @@
             <p class="foot">
                 Forgot your password? Contact your system administrator.<br>
                 <a href="{{ route('account.request') }}" class="link">Create Account</a>
+                <span class="terms-line">By signing in, you agree to the <a href="{{ route('terms') }}" class="link">Terms of Service</a>.</span>
                 <span class="version">SIGLA v1.0 &middot; School-Based Information Governance for Life Care Administration</span>
             </p>
         </form>

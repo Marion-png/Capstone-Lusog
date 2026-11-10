@@ -1,64 +1,113 @@
 /* ══════════════════════════════════════════════════════════════════════
-   Feeding Coordinator — Record Attendance
+   Feeding Coordinator — Record Attendance (School Form 2 layout)
    Page-specific styles only. Tokens, shell, buttons, inputs, tables and
    the status scale come from lusog-theme.css, which is loaded first.
    ══════════════════════════════════════════════════════════════════════ */
 
-.ra-toolbar { display: flex; align-items: flex-end; gap: 12px 16px; flex-wrap: wrap; padding: 16px var(--lg-pad-card); }
-.ra-field { min-width: 170px; }
-.ra-field-grow { flex: 1 1 220px; }
-.ra-bulk { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+/* ── SF2 heading: school, year, month, and the class filter ── */
+.sf2-head {
+	display: grid;
+	/* The month gets the widest field after the school: "September 2026"
+	   with both arrows must never be cut. */
+	grid-template-columns: minmax(200px, 1.6fr) minmax(120px, .8fr) minmax(250px, 1.3fr) minmax(140px, 1fr) minmax(140px, 1fr);
+	gap: 14px 18px;
+	align-items: end;
+	padding: 16px var(--lg-pad-card);
+}
+.sf2-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sf2-label {
+	font-size: .68rem;
+	font-weight: 600;
+	letter-spacing: .06em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft);
+}
+.sf2-value {
+	font-size: .9rem;
+	font-weight: 600;
+	color: var(--lg-ink);
+	min-height: 38px;
+	display: flex;
+	align-items: center;
+	border-bottom: 1px solid var(--lg-border-strong);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.sf2-month { display: flex; align-items: center; gap: 6px; }
+.sf2-month .sf2-value { flex: 1 1 auto; justify-content: center; min-width: 150px; overflow: visible; text-overflow: clip; }
+.sf2-step {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-btn);
+	background: var(--lg-card);
+	color: var(--lg-ink);
+	font-size: 1.05rem;
+	text-decoration: none;
+	flex: none;
+}
+.sf2-step:hover { background: var(--lg-rail); }
+.sf2-step:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+.sf2-step.is-off { color: var(--lg-border-strong); background: transparent; }
 
-.ra-card { margin-top: 16px; padding: 0; overflow: hidden; }
-.ra-table { width: 100%; }
-.ra-table th:first-child, .ra-table td:first-child { padding-left: 20px; }
-.ra-table th:last-child, .ra-table td:last-child { padding-right: 20px; }
-.ra-table thead th { position: sticky; top: 0; z-index: 1; background: var(--lg-rail); }
-
-/* One tap per learner: two targets side by side, both well over 44px
-   wide, so a coordinator standing at the line can work down the list
-   with a thumb. The radios stay in the DOM (unstyled but focusable) —
-   the label is the control, and keyboard order is unchanged. */
-.ra-toggle { display: inline-flex; border: 1px solid var(--lg-border); border-radius: var(--lg-r-pill); overflow: hidden; }
-.ra-opt { position: relative; }
-.ra-opt input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
-.ra-opt span {
-	display: block;
-	padding: 8px 16px;
-	min-width: 74px;
-	text-align: center;
+/* ── The cell's pop-up ── */
+.sf2-pop {
+	position: fixed;
+	z-index: 60;
+	width: 280px;
+	padding: 12px;
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-card);
+	background: var(--lg-card);
+	box-shadow: var(--lg-shadow-pop);
+}
+.sf2-pop[hidden] { display: none; }
+.sf2-pop-title {
+	margin: 0 0 10px;
+	font-size: .78rem;
+	font-weight: 600;
+	color: var(--lg-ink);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.sf2-pop-choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.sf2-choice {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	padding: 10px 4px;
+	border: 1px solid var(--lg-border);
+	border-radius: var(--lg-r-btn);
+	background: var(--lg-card);
+	font: inherit;
 	font-size: .76rem;
 	font-weight: 600;
-	color: var(--lg-ink-soft);
-	background: var(--lg-card);
+	color: var(--lg-ink);
 	cursor: pointer;
-	transition: background .12s ease, color .12s ease;
+	transition: background .12s ease, border-color .12s ease;
 }
-.ra-opt + .ra-opt span { border-left: 1px solid var(--lg-border); }
-.ra-opt span:hover { background: var(--lg-rail); }
-/* Present is the healthy signal, absent the critical one — the same two
-   colours the dashboard's status badges use, so a mark means the same
-   thing on both screens. */
-.ra-opt-present input:checked + span { background: var(--lg-mint); color: var(--lg-success-ink); }
-.ra-opt-absent input:checked + span { background: var(--lg-danger-tint); color: var(--lg-danger-ink); }
-/* Amber, the monitoring step: an excused absence is neither the good outcome
-   nor the one that counts against a learner. */
-.ra-opt-excused input:checked + span { background: var(--lg-amber-tint); color: var(--lg-amber-ink); }
-.ra-opt input:focus-visible + span { box-shadow: var(--lg-focus); }
+.sf2-choice:hover { background: var(--lg-rail); }
+.sf2-choice:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+.sf2-choice.is-present[aria-pressed="true"] { background: var(--lg-mint); border-color: var(--lg-green); color: var(--lg-success-ink); }
+.sf2-choice.is-absent[aria-pressed="true"] { background: var(--lg-danger-tint); border-color: var(--lg-danger); color: var(--lg-danger-ink); }
+.sf2-choice.is-excused[aria-pressed="true"] { background: var(--lg-amber-tint); border-color: var(--lg-amber); color: var(--lg-amber-ink); }
+.sf2-pop-reason { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.sf2-pop-reason[hidden] { display: none; }
+.sf2-pop-reason .input { width: 100%; font-size: .8rem; padding: 8px 10px; }
+.sf2-pop-reason .input:disabled { background: var(--lg-rail); cursor: not-allowed; }
+.sf2-pop-actions { display: flex; gap: 8px; margin-top: 10px; }
+.sf2-pop-actions .btn { flex: 1 1 0; justify-content: center; }
+.sf2-pop-clear[hidden] { display: none; }
+.sf2-pop-save:disabled { opacity: .55; cursor: not-allowed; }
 
-/* Closed until the learner is marked absent, so an empty box never invites
-   a reason for someone who was there. */
-.ra-remark { width: 100%; min-width: 150px; font-size: .78rem; padding: 7px 10px; }
-.ra-remark:disabled { background: var(--lg-rail); border-color: var(--lg-border); cursor: not-allowed; }
-/* A recorded session shows its remark as text: there is nothing to type into. */
-.ra-remark-read { font-size: .78rem; color: var(--lg-ink-soft); }
-
-/* The save bar follows the list down: with 90 learners the button must
-   never be a scroll away from the row just marked. */
+/* ── Save bar: sits under the grid, in the page's flow ── */
 .ra-savebar {
-	position: sticky;
-	bottom: 0;
-	z-index: 5;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -69,17 +118,18 @@
 	border: 1px solid var(--lg-border);
 	border-radius: var(--lg-r-card);
 	background: var(--lg-card);
-	box-shadow: var(--lg-shadow-lift);
+	box-shadow: var(--lg-shadow);
 }
-.ra-tally { display: flex; gap: 6px; flex-wrap: wrap; font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
+.ra-tally { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
+.ra-session { font-size: .85rem; margin-right: 12px; color: var(--lg-ink); white-space: nowrap; }
 .ra-actions { display: flex; gap: 8px; margin-left: auto; }
 
+@media (max-width: 1100px) {
+	.sf2-head { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.sf2-head .sf2-field-wide { grid-column: 1 / -1; }
+}
 @media (max-width: 620px) {
-	.ra-bulk { margin-left: 0; width: 100%; }
-	.ra-bulk .btn { flex: 1 1 auto; justify-content: center; }
+	.sf2-head { grid-template-columns: 1fr; }
 	.ra-actions { width: 100%; }
 	.ra-actions .btn { flex: 1 1 auto; justify-content: center; }
-}
-@media (prefers-reduced-motion: reduce) {
-	.ra-opt span { transition: none; }
 }

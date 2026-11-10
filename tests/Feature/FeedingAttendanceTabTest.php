@@ -161,18 +161,19 @@ class FeedingAttendanceTabTest extends TestCase
     }
 
     #[Test]
-    public function the_sheet_offers_a_toggle_and_bulk_marking(): void
+    public function record_attendance_leads_to_the_sf2_page_for_the_sheets_class(): void
     {
         $record = $this->makeStudent(['student_name' => 'John Dave A. Sumod-ong']);
 
-        $response = $this->open()->assertOk();
+        $response = $this->open('?grade='.urlencode('Grade 7').'&section=Maabilidad')->assertOk();
 
         $response->assertSee('John Dave A. Sumod-ong');
-        $response->assertSee('marks['.$record->id.']', false);
-        $response->assertSee('Mark All Present');
-        $response->assertSee('Save Attendance');
-        // Both belong to the dialog now; the sheet behind it is a record.
-        $response->assertSee('recordBackdrop', false);
+        // A link to the School Form 2 page, narrowed to the class on screen —
+        // never a dialog, and never a mark on the sheet itself.
+        $response->assertSee('data-record-link', false);
+        $response->assertSee(e(route('feedingcor-program.attendance.record', ['grade' => 'Grade 7', 'section' => 'Maabilidad'])), false);
+        $response->assertDontSee('recordBackdrop', false);
+        $response->assertDontSee('marks['.$record->id.']', false);
     }
 
     #[Test]
@@ -224,18 +225,22 @@ class FeedingAttendanceTabTest extends TestCase
         $this->assertDatabaseCount('feeding_attendances', 1);
     }
 
+    private function openRecord(string $query = '')
+    {
+        return $this->withSession($this->coordinatorSession())->get(route('feedingcor-program.attendance.record').$query);
+    }
+
     /**
      * The sheet is a record, not a form — and today's recorded session can
-     * still be changed, through the dialog.
+     * still be changed, on the School Form 2 page.
      *
      * The sheet reports what was recorded and offers no control over it: no
      * radio, no remark box, no bulk mark, no save bar. Until the day ends the
-     * dialog opens on the marks on file, each one selected with its reason, so
-     * saving changes them; there is no Clear, because an unmarked row writes
-     * nothing and would leave the earlier mark standing behind it.
+     * SF2 page opens on the marks on file, each one selected with its reason,
+     * so saving changes them.
      */
     #[Test]
-    public function todays_recorded_session_is_a_record_on_the_sheet_and_editable_in_the_dialog(): void
+    public function todays_recorded_session_is_a_record_on_the_sheet_and_editable_on_the_sf2_page(): void
     {
         $recorded = $this->makeStudent(['student_name' => 'Already Recorded']);
         $skipped = $this->makeStudent(['student_name' => 'Nobody Marked Me']);
@@ -249,23 +254,20 @@ class FeedingAttendanceTabTest extends TestCase
         $response->assertSee('has been recorded');
         $response->assertSee('until the end of the day');
         $response->assertSee('Not Recorded');
+        $response->assertSee('Edit Attendance');
         $this->assertTrue($response->viewData('recordEditing'));
 
         // The sheet itself carries no control, for either learner.
-        $html = $response->getContent();
-        $sheet = substr($html, 0, strpos($html, 'id="recordBackdrop"'));
         foreach ([$recorded, $skipped] as $learner) {
-            $this->assertStringNotContainsString('marks['.$learner->id.']', $sheet);
-            $this->assertStringNotContainsString('remarks['.$learner->id.']', $sheet);
+            $response->assertDontSee('marks['.$learner->id.']', false);
+            $response->assertDontSee('remarks['.$learner->id.']', false);
         }
 
-        // The dialog opens on what is on file, ready to change.
-        $response->assertSee('Edit Attendance');
-        $response->assertSee('Save Changes');
+        // The SF2 page opens on what is on file, ready to change.
+        $html = $this->openRecord()->assertOk()->getContent();
         $this->assertMatchesRegularExpression('/name="marks\['.$recorded->id.'\]" value="absent"\s+checked/', $html);
         $this->assertMatchesRegularExpression('/name="remarks\['.$recorded->id.'\]"\s+value="Sick"/', $html);
-        $response->assertSee('marks['.$skipped->id.']', false);
-        $response->assertDontSee('data-record-all=""', false);
+        $this->assertStringContainsString('marks['.$skipped->id.']', $html);
     }
 
     /**
@@ -298,8 +300,8 @@ class FeedingAttendanceTabTest extends TestCase
 
     /**
      * On its own day a recorded session is still open, for the learners who
-     * arrive late: the sheet reads Recorded, and the dialog opens as Edit
-     * Attendance with the marks on file already selected.
+     * arrive late: the sheet reads Recorded, and Edit Attendance opens the SF2
+     * page with the marks on file already selected.
      */
     #[Test]
     public function a_session_recorded_today_can_still_be_edited(): void
@@ -310,57 +312,56 @@ class FeedingAttendanceTabTest extends TestCase
         $response = $this->open()->assertOk();
 
         $response->assertSee('<span class="fa-glyph">✓</span>Recorded', false);
-        $response->assertSee('data-record-open>Edit Attendance</button>', false);
-        $response->assertSee('id="recordForm"', false);
-        $response->assertSee('name="marks['.$absent->id.']" value="absent" checked', false);
-        $response->assertSee('value="Not yet in"', false);
+        $response->assertSee('>Edit Attendance</a>', false);
         // Recorded, and still open: the sheet says so, and never that it is closed.
         $response->assertSee('until the end of the day');
         $response->assertDontSee('is closed</strong>', false);
+
+        $this->openRecord()->assertOk()
+            ->assertSee('id="recordForm"', false)
+            ->assertSee('name="marks['.$absent->id.']" value="absent" checked', false)
+            ->assertSee('value="Not yet in"', false);
     }
 
-    /** An open session offers exactly one way in: the dialog. */
+    /** An open session offers exactly one way in: the SF2 page. */
     #[Test]
-    public function an_open_session_records_through_the_dialog(): void
+    public function an_open_session_records_through_the_sf2_page(): void
     {
         $learner = $this->makeStudent(['student_name' => 'Not Yet Recorded']);
 
         $response = $this->open()->assertOk();
 
-        $response->assertSee('id="recordBackdrop"', false);
-        $response->assertSee('class="btn btn-primary" data-record-open', false);
-        $response->assertSee('marks['.$learner->id.']', false);
-        $response->assertSee('Save Attendance');
+        $response->assertSee('class="btn btn-primary" data-record-link', false);
+        // The sheet itself carries no control of its own.
+        $response->assertDontSee('marks['.$learner->id.']', false);
+        $response->assertDontSee('id="recordBackdrop"', false);
 
-        // And the sheet itself still carries no control of its own.
-        $response->assertDontSee('data-mark-all="present"', false);
+        $this->openRecord()->assertOk()
+            ->assertSee('marks['.$learner->id.']', false)
+            ->assertSee('Save attendance');
     }
 
     /**
-     * The dialog lists the whole roll, whatever the sheet is filtered to.
-     *
-     * Recording is one act covering every beneficiary, and the session closes
-     * when the day does — so recording through a filtered list would leave the
-     * learners the filter was hiding unmarked when it shut.
+     * SF2 is kept one class at a time, so the page narrows by grade and section.
+     * The options are built from the whole roll, so choosing one never deletes
+     * the choice that would widen it again.
      */
     #[Test]
-    public function the_record_dialog_ignores_the_sheets_filters(): void
+    public function the_sf2_page_narrows_by_grade_and_section(): void
     {
         $this->makeStudent(['student_name' => 'Grade Seven Learner', 'section' => 'Grade 7 / Maabilidad']);
         $this->makeStudent(['student_name' => 'Grade Eight Learner', 'section' => 'Grade 8 / Matiyaga']);
+        $this->makeStudent(['student_name' => 'Grade Eight Other', 'section' => 'Grade 8 / Masipag']);
 
-        $response = $this->open('?grade='.urlencode('Grade 8'))->assertOk();
+        $response = $this->openRecord('?grade='.urlencode('Grade 8').'&section=Matiyaga')->assertOk();
 
-        $this->assertSame(
-            ['Grade Eight Learner'],
-            collect($response->viewData('rows'))->pluck('name')->all(),
-            'The sheet shows the filtered session.'
-        );
-        $this->assertEqualsCanonicalizing(
-            ['Grade Seven Learner', 'Grade Eight Learner'],
-            collect($response->viewData('recordRows'))->pluck('name')->all(),
-            'The dialog shows everyone, so a filter cannot close the day on a hidden learner.'
-        );
+        $this->assertSame(['Grade Eight Learner'], collect($response->viewData('rows'))->pluck('name')->all());
+        $this->assertSame(['Grade 7', 'Grade 8'], $response->viewData('grades')->all());
+        $this->assertSame(['Masipag', 'Matiyaga'], $response->viewData('sections')->all());
+
+        // A section from another grade is not a choice under this one.
+        $rows = $this->openRecord('?grade='.urlencode('Grade 7').'&section=Matiyaga')->viewData('rows');
+        $this->assertSame(['Grade Seven Learner'], collect($rows)->pluck('name')->all());
     }
 
     /** A weekend is not a session the school missed — it is not a session. */
@@ -387,10 +388,12 @@ class FeedingAttendanceTabTest extends TestCase
         $learner = $this->makeStudent();
         $this->mark($learner, now()->toDateString(), null, needsReview: true);
 
-        $response = $this->open()->assertOk();
+        $this->open()->assertOk()->assertSee('Unconfirmed');
 
-        $response->assertSee('marks['.$learner->id.']', false);
-        $response->assertSee('Unconfirmed');
+        // Nothing is selected for it, so saving the SF2 page decides it.
+        $html = $this->openRecord()->assertOk()->getContent();
+        $this->assertStringContainsString('marks['.$learner->id.']', $html);
+        $this->assertStringNotContainsString('name="marks['.$learner->id.']" value="present" checked', $html);
     }
 
     #[Test]
@@ -927,12 +930,46 @@ class FeedingAttendanceTabTest extends TestCase
             ->assertSee('id="faDate"', false)
             ->assertSee('data-weekday-picker', false)
             ->assertSee('.wdp-day.is-weekend:disabled', false);
+    }
 
-        $this->withSession($this->coordinatorSession())
-            ->get(route('feedingcor-program.attendance.record'))
-            ->assertOk()
-            ->assertSee('id="sessionDate"', false)
-            ->assertSee('data-weekday-picker', false);
+    /**
+     * The sheet is the same School Form 2 grid the Record Attendance page
+     * writes through — read-only: every mark is shown, none can be entered.
+     */
+    #[Test]
+    public function the_sheet_is_the_sf2_grid_read_only(): void
+    {
+        $learner = $this->makeStudent(['student_name' => 'Grid Learner']);
+        $this->mark($learner, now()->toDateString(), false, remarks: 'Fever');
+
+        $response = $this->open('?view=sheet')->assertOk();
+
+        $response->assertSee('id="sf2Table"', false);
+        $response->assertSee('scope="rowgroup">Male</th>', false);
+        $response->assertSee('Combined total per day');
+        $response->assertSee('Average daily attendance');
+        $response->assertSee('Fever');
+        $response->assertDontSee('data-cell', false);
+        $response->assertDontSee('marks['.$learner->id.']', false);
+
+        $sf2 = $response->viewData('sf2');
+        $this->assertSame('absent', $sf2['rows']->first()['marks'][now()->toDateString()]);
+        $this->assertFalse($sf2['sessionOpen']);
+        $this->assertSame([], collect($sf2['days'])->where('editable', true)->all());
+    }
+
+    /** The SF2 page has a column per weekday of the month, and none for a weekend. */
+    #[Test]
+    public function the_sf2_page_has_no_weekend_column(): void
+    {
+        $this->makeStudent();
+
+        $days = $this->openRecord()->assertOk()->viewData('days');
+
+        $this->assertNotEmpty($days);
+        foreach ($days as $day) {
+            $this->assertFalse(Carbon::parse($day['date'])->isWeekend(), $day['date'].' is a weekend.');
+        }
     }
 
     #[Test]
@@ -1217,7 +1254,7 @@ class FeedingAttendanceTabTest extends TestCase
         // The sheet offers it, once, beside the session it writes.
         $this->assertSame(
             1,
-            substr_count($html, '<button type="button" class="btn btn-primary" data-record-open>Record Attendance</button>'),
+            substr_count($html, 'data-record-link'),
             'The Attendance Sheet is where a mark is entered.'
         );
 
@@ -1226,7 +1263,7 @@ class FeedingAttendanceTabTest extends TestCase
         // and no nested div, so its first closing tag is its own.
         $actions = substr($html, strpos($html, '<div class="sbfp-actions">'));
         $actions = substr($actions, 0, strpos($actions, '</div>'));
-        $this->assertStringNotContainsString('data-record-open', $actions);
+        $this->assertStringNotContainsString('data-record-link', $actions);
         $this->assertStringNotContainsString('Record Attendance', $actions);
         $this->assertStringContainsString('Export Attendance Sheet', $actions);
         $this->assertStringContainsString('Print Attendance Sheet', $actions);

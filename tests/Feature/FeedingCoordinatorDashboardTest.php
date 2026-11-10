@@ -245,16 +245,12 @@ class FeedingCoordinatorDashboardTest extends TestCase
     }
 
     /**
-     * "Record Today's Attendance" records today's attendance.
-     *
-     * It used to send the coordinator to the Attendance tab so they could press
-     * a second button there — a tab change and a page load to reach the control
-     * this one already names. The dialog opens here instead, and it is the
-     * *shared* partial: the same markup, the same endpoint and the same audited
-     * write the Attendance tab uses, never a copy.
+     * "Record Today's Attendance" leads to the School Form 2 Record Attendance
+     * page — the same page the Attendance tab's button opens, posting to the
+     * same audited endpoint. The Dashboard carries no dialog of its own.
      */
     #[Test]
-    public function record_todays_attendance_opens_the_dialog_on_the_dashboard(): void
+    public function record_todays_attendance_opens_the_sf2_page(): void
     {
         $learner = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', 15.1);
 
@@ -263,35 +259,32 @@ class FeedingCoordinatorDashboardTest extends TestCase
             ->assertOk();
 
         $response->assertSee('Record Today&rsquo;s Attendance', false);
-        $response->assertSee('data-record-open', false);
-        $response->assertSee('id="recordBackdrop"', false);
-        $response->assertSee(route('feedingcor-program.attendance.record.store'), false);
-        // The whole enrolled roll, so a filter left on cannot close the day on
-        // the learners it was hiding.
-        $response->assertSee($learner->student_name);
-        // The read-back before the write, the same one every other surface has.
-        $response->assertSee('id="confirmBackdrop"', false);
-        // The save comes back here rather than landing on another tab.
-        $response->assertSee('name="return_to" value="dashboard"', false);
-        // It no longer hands the coordinator off to the Attendance tab.
-        $response->assertDontSee('record=1', false);
-
+        $response->assertSee('data-record-link', false);
+        $response->assertSee('href="'.route('feedingcor-program.attendance.record').'"', false);
+        $response->assertDontSee('id="recordBackdrop"', false);
+        $response->assertDontSee('id="confirmBackdrop"', false);
         $this->assertTrue($response->viewData('canRecordToday'));
         $this->assertFalse($response->viewData('recordEditing'));
-        $this->assertCount(1, $response->viewData('recordRows'));
+
+        // The page it opens: today's column takes the marks, and the save is
+        // read back first.
+        $this->withSession($this->coordinatorSession())
+            ->get(route('feedingcor-program.attendance.record'))
+            ->assertOk()
+            ->assertSee($learner->student_name)
+            ->assertSee(route('feedingcor-program.attendance.record.store'), false)
+            ->assertSee('name="marks['.$learner->id.']"', false)
+            ->assertSee('id="confirmBackdrop"', false)
+            ->assertSee('name="return_to" value="record"', false);
     }
 
     /**
-     * Today's session stays open until the day ends — recorded or not.
-     *
-     * Once it has been recorded the same button opens the same dialog on the
-     * marks on file, each one selected, so a wrong mark is changed where it was
-     * entered; the read-back still confirms the save. There is no Clear on an
-     * edit: an unmarked row writes nothing, so clearing a recorded mark would
-     * look undone on screen and stay on file.
+     * Today's session stays open until the day ends — recorded or not. Once it
+     * has been recorded the button reads Edit, and the page opens on the marks
+     * on file, each one selected.
      */
     #[Test]
-    public function a_recorded_day_reopens_the_dialog_to_change_a_mark(): void
+    public function a_recorded_day_reopens_the_sf2_page_to_change_a_mark(): void
     {
         $learner = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', 15.1);
         $this->markAttendance($learner, now()->toDateString(), true);
@@ -302,32 +295,24 @@ class FeedingCoordinatorDashboardTest extends TestCase
 
         $this->assertTrue($response->viewData('canRecordToday'));
         $this->assertTrue($response->viewData('recordEditing'));
-
         $response->assertSee('Edit Today&rsquo;s Attendance', false);
-        $response->assertSee('data-record-open', false);
-        $response->assertSee('until the end of the day');
-        $response->assertSee('id="confirmBackdrop"', false);
 
-        // The dialog's markup alone: its script names the controls it drives,
-        // so the slice stops where the markup does.
-        $html = $response->getContent();
-        $dialog = substr($html, strpos($html, 'id="recordBackdrop"'));
-        $dialog = substr($dialog, 0, strpos($dialog, '<script>'));
+        $html = $this->withSession($this->coordinatorSession())
+            ->get(route('feedingcor-program.attendance.record'))
+            ->assertOk()
+            ->assertSee('until the end of the day')
+            ->getContent();
 
-        $this->assertStringContainsString(route('feedingcor-program.attendance.record.store'), $dialog);
-        $this->assertStringContainsString('Edit Attendance', $dialog);
-        $this->assertStringContainsString('Save Changes', $dialog);
-        $this->assertMatchesRegularExpression('/name="marks\['.$learner->id.'\]" value="present"\s+checked/', $dialog);
-        $this->assertStringNotContainsString('data-record-all=""', $dialog);
+        $this->assertMatchesRegularExpression('/name="marks\['.$learner->id.'\]" value="present"\s+checked/', $html);
     }
 
-    /** A weekend is not a session, so the dialog reports that rather than offering to write one. */
+    /** A weekend is not a session, so the page reports that rather than offering to write one. */
     #[Test]
-    public function a_weekend_opens_the_dialog_as_a_closed_day(): void
+    public function a_weekend_opens_the_sf2_page_as_a_closed_day(): void
     {
         $this->travelTo(Carbon::parse('2026-09-12')->next(Carbon::SATURDAY)->setTime(9, 0));
 
-        $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', 15.1);
+        $learner = $this->makeStudent('Grade 7 / Sampaguita', 'Wasted', 15.1);
 
         $response = $this->withSession($this->coordinatorSession())
             ->get('/dashboard/feedingcor-dashboard')
@@ -335,7 +320,12 @@ class FeedingCoordinatorDashboardTest extends TestCase
 
         $this->assertFalse($response->viewData('canRecordToday'));
         $response->assertSee('Record Today&rsquo;s Attendance', false);
-        $response->assertSee('There are no feeding sessions on Saturdays or Sundays.');
+
+        $this->withSession($this->coordinatorSession())
+            ->get(route('feedingcor-program.attendance.record'))
+            ->assertOk()
+            ->assertSee('There are no feeding sessions on Saturdays or Sundays.')
+            ->assertDontSee('name="marks['.$learner->id.']"', false);
 
         $this->travelBack();
     }

@@ -318,6 +318,7 @@
 								<th class="name-col">Name</th>
 								<th class="grade-col">Grade</th>
 								<th>Section</th>
+								<th class="adviser-col">Class Adviser</th>
 							</tr>
 						</thead>
 						<tbody id="mlTbody">
@@ -327,6 +328,7 @@
 									<td class="ml-cell" data-ml="name"></td>
 									<td class="ml-cell" data-ml="grade"></td>
 									<td class="ml-cell" data-ml="section"></td>
+									<td class="ml-cell" data-ml="adviser"></td>
 								</tr>
 							@endfor
 						</tbody>
@@ -386,6 +388,7 @@
 								<th class="name-col">Name</th>
 								<th class="grade-col">Grade</th>
 								<th>Section</th>
+								<th class="adviser-col">Class Adviser</th>
 							</tr>
 						</thead>
 						<tbody id="mlbTbody">
@@ -395,6 +398,7 @@
 									<td class="ml-cell" data-ml="name"></td>
 									<td class="ml-cell" data-ml="grade"></td>
 									<td class="ml-cell" data-ml="section"></td>
+									<td class="ml-cell" data-ml="adviser"></td>
 								</tr>
 							@endfor
 						</tbody>

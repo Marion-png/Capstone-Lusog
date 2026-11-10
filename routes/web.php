@@ -61,6 +61,7 @@ use App\Support\SchemaCache;
 use App\Support\SchoolPulse;
 use App\Support\SchoolYear;
 use App\Support\StudentRosterSync;
+use App\Support\TermsOfService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -80,6 +81,12 @@ Route::get('/login', function () {
 Route::get('/admin-login', function () {
     return view('auth.admin-login');
 })->name('admin.login');
+
+// SIGLA's Terms of Service. Public: a person reads it before they request an
+// account, and the sign-in page links to it.
+Route::get('/terms', function () {
+    return view('auth.terms');
+})->name('terms');
 
 Route::get('/account-request', function () {
     $institutions = collect();
@@ -116,7 +123,10 @@ Route::post('/account-request', function (Request $request) {
         'institution_id' => ['nullable', 'integer', 'exists:institutions,id'],
         'assigned_grade_level' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:50'],
         'assigned_section' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:100'],
+        // Nobody is given an account without agreeing to the Terms of Service.
+        'terms' => ['accepted'],
     ], [
+        'terms.accepted' => 'You must agree to the Terms of Service to request an account.',
         'name.regex' => 'Enter your name using letters, spaces, hyphens or apostrophes only.',
         'username.regex' => 'Use lowercase letters, numbers, dots and underscores only, starting with a letter or number.',
         'password.regex' => 'Passwords must contain at least one letter and one number.',
@@ -196,7 +206,9 @@ Route::post('/account-request', function (Request $request) {
     $institutionId = $requestedInstitutionId;
     $institution = $institutionId ? Institution::find($institutionId) : null;
 
-    AuditTrail::record('created', 'AccountRequest', null, "Account request submitted for username '{$username}' ({$role})");
+    // The agreement is kept in the append-only audit trail, with the version
+    // agreed to, so it can be shown later who agreed to what and when.
+    AuditTrail::record('created', 'AccountRequest', null, "Account request submitted for username '{$username}' ({$role}); agreed to the Terms of Service v".TermsOfService::VERSION.' (effective '.TermsOfService::EFFECTIVE.')');
 
     DB::table('account_requests')->insert([
         'id' => (string) str()->uuid(),

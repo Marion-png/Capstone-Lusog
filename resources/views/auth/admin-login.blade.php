@@ -208,6 +208,31 @@
     {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
          last so it overrides this page's own :root colours. --}}
     <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
+    {{-- The Forest Green + Beige skin every role's pages and the sign-in page
+         wear. Last, so it wins. --}}
+    @include('partials.lusog-skin')
+    <style>
+        @media screen {
+            /* The brand band is the rail: forest green with curved bands. */
+            html .brand { background: var(--rail-bg); }
+            html .brand::before { opacity: .28; }
+            html .card {
+                background: var(--sk-card);
+                border-color: var(--sk-line);
+                box-shadow: 0 2px 4px rgba(31, 41, 51, .05), 0 22px 50px rgba(20, 83, 45, .12);
+            }
+            html .eyebrow { color: var(--sk-accent); }
+            html h1 { color: var(--sk-text); }
+            html h1 span { color: var(--sk-secondary); }
+            html .control { background: #FFFFFF; border-color: var(--sk-line-strong); }
+            html .control:focus { border-color: var(--sk-secondary); }
+            html .btn-primary { background: var(--sk-primary); }
+            html .btn-primary:hover { background: var(--sk-secondary); }
+            html .btn-secondary { background: #FFFFFF; border-color: var(--sk-line-strong); }
+            html .terms-line { margin-top: 18px; font-size: .74rem; color: var(--lg-ink-soft, #6B7C72); text-align: center; }
+            html .terms-line a { color: var(--sk-secondary); font-weight: 600; text-decoration: none; }
+        }
+    </style>
 </head>
 <body>
     <main class="card">
@@ -249,6 +274,7 @@
                 </a>
             </div>
         </form>
+        <p class="terms-line">By signing in, you agree to the <a href="{{ route('terms') }}">Terms of Service</a>.</p>
         </div>
     </main>
 </body>

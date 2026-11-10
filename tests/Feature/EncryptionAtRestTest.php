@@ -231,6 +231,7 @@ class EncryptionAtRestTest extends TestCase
         $school = Institution::create(['name' => Institution::REGISTRATION_SCHOOL, 'status' => 'active']);
 
         $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Rosalinda Q. Magbanua',
             'username' => 'nurse.magbanua',
             'password' => 'password1',

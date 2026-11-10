@@ -289,6 +289,16 @@
                                     $rowLrn = trim((string) ($record['lrn'] ?? ''));
                                     $rowGrade = trim((string) ($record['grade_level'] ?? ''));
                                     $rowSection = trim((string) ($record['section'] ?? ''));
+                                    // Who holds the learner's class, for the profile. One
+                                    // query for the whole list (memoized), never one per row.
+                                    // Assignments are this year's, so an earlier year names nobody.
+                                    $record['class_adviser'] = $isCurrentYear
+                                        ? \App\Support\SchoolSignatories::classAdviser(
+                                            session('active_institution_id') !== null ? (int) session('active_institution_id') : null,
+                                            $rowGrade,
+                                            $rowSection
+                                        )
+                                        : null;
                                     $rowSex = trim((string) ($record['gender'] ?? ''));
                                     $rowHealth = $healthStatusOf($record);
                                     $examined = ! empty($record['examination']);
@@ -403,6 +413,7 @@
                     <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="14" r="5"/><path d="M19 5l-5.4 5.4M15 5h4v4"/></svg>Gender: <b id="pSex">-</b></span>
                     <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Age: <b id="pAge">-</b></span>
                     <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>DOB: <b id="pDob">-</b></span>
+                    <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Class Adviser: <b id="pAdviser">-</b></span>
                 </div>
             </div>
             {{-- The nurse also records the examination, so Print sits beside it. --}}
@@ -1106,6 +1117,7 @@ window.shrYearQuery = (glue) => {
         setText('pAge', record.age || '-');
         setText('pDob', dob || '-');
         setText('pGrade', [record.grade_level, record.section].filter(Boolean).join(' - ') || '-');
+        setText('pAdviser', record.class_adviser === '' ? 'Not assigned' : record.class_adviser);
 
         setText('pdName', fullName || '-');
         setText('pdLrn', record.lrn || '-');

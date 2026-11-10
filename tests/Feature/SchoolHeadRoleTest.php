@@ -230,6 +230,7 @@ class SchoolHeadRoleTest extends TestCase
 
         $this->withSession($this->headSession())
             ->post('/account-request', [
+                'terms' => '1',
                 'name' => 'New Coordinator',
                 'username' => 'new.coordinator',
                 'password' => 'password1',

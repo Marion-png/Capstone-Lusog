@@ -16,11 +16,9 @@
         <style>{!! file_get_contents($pageCssPath) !!}</style>
     @endif
     <style>{!! file_get_contents(resource_path('css/feeding-enroll-modal.css')) !!}</style>
-    {{-- "Record Today's Attendance" opens the dialog here, so this page loads
-         the same two sheets the Attendance tab does. One dialog, one sheet:
-         never a copy of these rules in feeding-dashboard.css. --}}
+    {{-- The shared dialog anatomy. One sheet: never a copy of these rules in
+         feeding-dashboard.css. --}}
     <style>{!! file_get_contents(resource_path('css/feeding-record-modal.css')) !!}</style>
-    <style>{!! file_get_contents(resource_path('css/feeding-attendance-confirm.css')) !!}</style>
     <style>{!! file_get_contents(resource_path('css/role-sidebar.css')) !!}</style>
 </head>
 <body>
@@ -197,27 +195,17 @@
 						<h2 class="card-title">Attendance Monitoring</h2>
 						<p class="card-sub">Today&rsquo;s feeding attendance &middot; <span id="fc-updated">{{ $generatedAt }}</span></p>
 					</div>
-					{{-- The dialog opens here. It used to send the coordinator to
-					     the Attendance tab to press a second button, which is a
-					     tab change and a page load to reach the control this one
-					     already names. It is the same shared dialog, the same
-					     endpoint and the same audited write; only the page it is
-					     opened from differs, and the save returns here.
-
-					     An anchor, not a button, so without JavaScript it still
-					     lands on the standalone screen that posts to the same
-					     endpoint.
+					{{-- Opens the School Form 2 Record Attendance page, the same
+					     page the Attendance tab opens.
 
 					     It is drawn every day, recorded or not. Once today's
-					     session is recorded it opens the same dialog on the
-					     marks on file, to change them until the day ends; on a
-					     day with no session (a weekend, outside the cycle) it
-					     opens on the day as a record and says why — a control
-					     that disappears leaves a coordinator with nothing to
-					     press and no way to tell "already done" from "broken".
-					     Nothing writable is rendered on a closed day, and the
-					     endpoint refuses the write regardless. --}}
-					<a class="btn btn-primary" data-record-open
+					     session is recorded the page opens on the marks on
+					     file, to change them until the day ends; on a day with
+					     no session (a weekend, outside the cycle) it opens as a
+					     record and says why. Nothing writable is rendered on a
+					     closed day, and the endpoint refuses the write
+					     regardless. --}}
+					<a class="btn btn-primary" data-record-link
 						href="{{ route('feedingcor-program.attendance.record') }}">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
 						{{ $recordEditing ? 'Edit' : 'Record' }} Today&rsquo;s Attendance
@@ -300,33 +288,6 @@
 
 @include('partials.feeding-enroll-modal')
 
-{{-- Today's Record Attendance dialog, and the read-back that confirms it.
-     Both are the shared partials the Attendance tab includes — never a copy —
-     so a mark entered from either screen is the same mark, entered the same
-     way, through the one audited endpoint. They sit outside .main so fixed
-     backdrops always remain relative to the viewport. --}}
-@include('feedingcor-dashboard.partials.attendance-record-modal', [
-	'selectedDate' => $recordSelectedDate,
-	'selectedDateLabel' => $recordSelectedDateLabel,
-	'beneficiaryCount' => $recordBeneficiaryCount,
-	'programDay' => $programCycle['day'],
-	'programDuration' => $programCycle['duration'],
-	'recordRows' => $recordRows,
-	// The save lands back on the Dashboard, the screen it was opened from.
-	'recordReturnTo' => 'dashboard',
-	// On a closed day the dialog renders no form, no radios and no Save — it
-	// reports the session instead of offering to write it.
-	'recordCanSave' => $canRecordToday,
-	// Already recorded today: the marks on file come back selected.
-	'recordEditing' => $recordEditing,
-	'recordBlockedReason' => $recordBlockedReason,
-])
-{{-- The read-back only exists where there is something to write. --}}
-@if ($canRecordToday)
-	@include('feedingcor-dashboard.partials.attendance-confirm-modal', [
-		'confirmSessionLabel' => $recordSelectedDateLabel,
-	])
-@endif
 <script>
 // Feeding-day progress. The bar ships filled from the server; this only keeps
 // it honest on a page nobody reloads — at midnight the day advances by itself.

@@ -26,6 +26,9 @@ use App\Support\NutritionalHealthStatus;
 use App\Support\SchemaCache;
 use App\Support\SchoolCalendar;
 use App\Support\SchoolClock;
+use App\Support\SchoolLetterhead;
+use App\Support\SchoolSignatories;
+use App\Support\Sf2AttendanceForm;
 use App\Support\UploadReadFailure;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -961,14 +964,15 @@ class FeedingProgramController extends Controller
     }
 
     /**
-     * The fast lane for a coordinator standing at the feeding line: one screen
-     * listing every beneficiary, one tap per learner, one save. The alternative
-     * — opening each learner in turn — is why sessions went unrecorded.
+     * Record Attendance, laid out as the DepEd School Form 2 (SF2): one row per
+     * beneficiary, males then females, one column per weekday of the month,
+     * totals per learner and per day, and the SF2 summary block beneath.
      *
-     * Marks already on file for the chosen date pre-select their rows, so
-     * re-opening the screen on the same day corrects the session instead of
-     * starting a blank one. An earlier day opens as a record: its attendance
-     * closed when the day did.
+     * Only the session's own day can be written — a day's attendance closes
+     * when the day does (FeedingAttendanceWindow) — so every other column is a
+     * record of the marks on file. Grade and section narrow the roll the way
+     * an SF2 is kept, one class at a time; that is safe because an unmarked
+     * learner writes nothing and today stays open for the rest of the school.
      */
     public function recordAttendanceForm(Request $request): View|RedirectResponse
     {
@@ -981,76 +985,64 @@ class FeedingProgramController extends Controller
         // The school's date, not the server's — the same "today" the endpoint
         // will judge the save against.
         $today = FeedingAttendanceWindow::today();
-        $sessionDate = filled($request->query('date'))
-            ? Carbon::parse((string) $request->query('date'))->toDateString()
-            : $today;
-        if ($sessionDate > $today) {
-            $sessionDate = $today;
+        $sessionDate = $today;
+        $dateParam = $request->query('date');
+        if (is_string($dateParam) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateParam)) {
+            $sessionDate = min($today, Carbon::parse($dateParam)->toDateString());
         }
 
-        $beneficiaries = collect();
-        if (SchemaCache::hasTable('student_health_records')) {
-            $beneficiaries = StudentHealthRecord::query()
-                ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-                ->forCurrentSchoolYear()
-                ->get()
-                ->filter(fn (StudentHealthRecord $record): bool => $this->isEnrolledBeneficiary($record))
-                ->values();
+        // The month on the form. A month ahead of today has nothing to read.
+        $monthStart = Carbon::parse($sessionDate)->startOfMonth();
+        $monthParam = $request->query('month');
+        if (is_string($monthParam) && preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $monthParam)) {
+            $monthStart = Carbon::parse($monthParam.'-01')->startOfMonth();
+            if ($monthStart->toDateString() > $today) {
+                $monthStart = Carbon::parse($today)->startOfMonth();
+            }
+        }
+        $monthKey = $monthStart->format('Y-m');
+
+        // A session belongs to the month it falls in; reading another month
+        // reads it as a record.
+        if (substr($sessionDate, 0, 7) !== $monthKey) {
+            $sessionDate = null;
         }
 
-        $existing = collect();
-        if ($beneficiaries->isNotEmpty() && SchemaCache::hasTable('feeding_attendances')) {
-            $existing = FeedingAttendance::query()
-                ->whereIn('student_health_record_id', $beneficiaries->pluck('id'))
-                ->whereDate('session_date', $sessionDate)
-                ->get()
-                ->keyBy('student_health_record_id');
-        }
+        $form = Sf2AttendanceForm::build(
+            $institutionId,
+            $sessionDate,
+            $monthStart,
+            is_string($request->query('grade')) ? $request->query('grade') : '',
+            is_string($request->query('section')) ? $request->query('section') : '',
+        );
 
-        // student_name is encrypted at rest, so sorting happens in PHP.
-        $rows = $beneficiaries
-            ->map(function (StudentHealthRecord $record) use ($existing): array {
-                [$grade, $section] = $this->splitGradeSection((string) $record->section);
-                $mark = $existing->get($record->id);
+        $sessionRecorded = $sessionDate !== null && $this->sessionIsRecorded($form['beneficiaryIds'], $sessionDate);
 
-                return [
-                    'id' => $record->id,
-                    'name' => (string) $record->student_name,
-                    'grade' => $grade,
-                    'section' => $section,
-                    // An unconfirmed scanned mark arrives with nothing selected,
-                    // so saving this screen is what confirms it.
-                    'mark' => match (FeedingAttendanceMark::state($mark)) {
-                        // An unconfirmed scanned mark and a learner no sheet has
-                        // covered both arrive with nothing selected, so saving
-                        // this screen is what decides them.
-                        FeedingAttendanceMark::PRESENT => FeedingAttendanceMark::PRESENT,
-                        FeedingAttendanceMark::ABSENT => FeedingAttendanceMark::ABSENT,
-                        FeedingAttendanceMark::EXCUSED => FeedingAttendanceMark::EXCUSED,
-                        default => '',
-                    },
-                    'remarks' => (string) ($mark->remarks ?? ''),
-                ];
-            })
-            ->sortBy(fn (array $row) => strtolower($row['name']))
-            ->values();
-
-        // A day that has ended is closed, recorded or not, so the screen becomes
-        // a record: no inputs, no save. The same rule the Attendance tab, the
-        // Dashboard's dialog and this endpoint's POST apply, asked in one place.
-        $sessionRecorded = $this->sessionIsRecorded($beneficiaries->pluck('id')->map(fn ($id): int => (int) $id)->all(), $sessionDate);
+        $letterhead = SchoolLetterhead::for($institutionId, (string) $request->session()->get('active_school_name', ''));
+        $nextMonth = $monthStart->copy()->addMonthNoOverflow();
 
         return view('feedingcor-dashboard.record-attendance', [
-            'rows' => $rows,
+            'rows' => $form['rows'],
+            'days' => $form['days'],
+            'summary' => $form['summary'],
+            'grades' => $form['grades'],
+            'sections' => $form['sections'],
+            'grade' => $form['grade'],
+            'section' => $form['section'],
+            'month' => $monthKey,
+            'monthLabel' => $form['monthLabel'],
+            'prevMonth' => $monthStart->copy()->subMonthNoOverflow()->format('Y-m'),
+            'nextMonth' => $nextMonth->toDateString() <= $today ? $nextMonth->format('Y-m') : null,
+            'schoolName' => $letterhead['school'],
+            'schoolYear' => StudentHealthRecord::currentSchoolYear(),
             'sessionDate' => $sessionDate,
-            'sessionLabel' => Carbon::parse($sessionDate)->format('M d, Y'),
+            'sessionLabel' => $sessionDate !== null ? Carbon::parse($sessionDate)->format('M d, Y') : '',
             'today' => $today,
-            'alreadyRecorded' => $existing->count(),
             'sessionRecorded' => $sessionRecorded,
-            'sessionClosed' => ! FeedingAttendanceWindow::isOpen($sessionDate),
-            'isFeedingDay' => FeedingProgramCycle::isFeedingDay($sessionDate, $institutionId),
-            'noSession' => SchoolCalendar::noSession($sessionDate, $institutionId, 'M d, Y'),
-            'closedDates' => SchoolCalendar::pickerDates($institutionId),
+            'sessionOpen' => $form['sessionOpen'],
+            'sessionClosed' => $sessionDate !== null && ! FeedingAttendanceWindow::isOpen($sessionDate),
+            'isFeedingDay' => $sessionDate === null || FeedingProgramCycle::isFeedingDay($sessionDate, $institutionId),
+            'noSession' => $sessionDate !== null ? SchoolCalendar::noSession($sessionDate, $institutionId, 'M d, Y') : null,
         ]);
     }
 
@@ -1268,6 +1260,11 @@ class FeedingProgramController extends Controller
                 // Sex lives in the encrypted details blob, so it is read here
                 // rather than being a column anything could filter on.
                 'sex' => $this->resolveGenderLabel((string) ($details['gender'] ?? '')),
+                // Who holds the learner's class this year. Assignments are
+                // this year's, so an earlier year's record names nobody (null).
+                'class_adviser' => (string) $learner->school_year === StudentHealthRecord::currentSchoolYear()
+                    ? SchoolSignatories::classAdviser($institutionId ? (int) $institutionId : null, $grade, $section)
+                    : null,
                 // For the measurement forms' check as it is typed: WHO reads
                 // the age in months on the day of the weighing.
                 'birth_date' => ! empty($details['birth_year']) && ! empty($details['birth_month']) && ! empty($details['birth_day'])
@@ -1643,7 +1640,10 @@ class FeedingProgramController extends Controller
             'remarks' => ['nullable', 'array'],
             'remarks.*' => ['nullable', 'string', 'max:255'],
             // Which screen the coordinator saved from, so they land back on it.
-            'return_to' => ['nullable', 'in:attendance,dashboard'],
+            'return_to' => ['nullable', 'in:attendance,dashboard,record'],
+            // The class the SF2 form was narrowed to, so the save returns to it.
+            'grade' => ['nullable', 'string', 'max:60'],
+            'section' => ['nullable', 'string', 'max:60'],
         ]);
 
         if (! SchemaCache::hasTable('student_health_records') || ! SchemaCache::hasTable('feeding_attendances')) {
@@ -1733,9 +1733,15 @@ class FeedingProgramController extends Controller
             $marks = $this->changedMarks($marks, $remarks, $sessionDate);
         }
 
-        $redirect = $request->input('return_to') === 'attendance'
-            ? redirect()->route('dashboard.feedingcor-attendance', ['date' => $sessionDate])
-            : redirect()->route('dashboard.feedingcor-dashboard');
+        $redirect = match ($request->input('return_to')) {
+            'attendance' => redirect()->route('dashboard.feedingcor-attendance', ['date' => $sessionDate]),
+            'record' => redirect()->route('feedingcor-program.attendance.record', array_filter([
+                'date' => $sessionDate,
+                'grade' => (string) $request->input('grade', ''),
+                'section' => (string) $request->input('section', ''),
+            ])),
+            default => redirect()->route('dashboard.feedingcor-dashboard'),
+        };
 
         if ($marks->isEmpty()) {
             return $redirect->with('success', 'No mark was changed for '.Carbon::parse($sessionDate)->format('M d, Y').'.');

@@ -312,15 +312,15 @@ final class SbfpFormWorkbook
     }
 
     /**
-     * A master list as the forms page rules it: No. / Name / Grade / Section,
-     * never fewer than the form's twenty lines.
+     * A master list as the forms page rules it: No. / Name / Grade / Section /
+     * Class Adviser, never fewer than the form's twenty lines.
      *
-     * Five columns for four on paper: the seals need a column each side, and
-     * the right-hand one is the second half of Section, merged row by row so
-     * the table still reads as four columns.
+     * Six columns for five on paper: the seals need a column each side, and
+     * the right-hand one is the second half of Class Adviser, merged row by
+     * row so the table still reads as five columns.
      *
      * @param  array<string, string>  $letterhead
-     * @param  list<array{name: string, grade: string, section: string}>  $rows
+     * @param  list<array{name: string, grade: string, section: string, adviser?: string}>  $rows
      * @param  list<array{label: string, name: string, role: string}>  $signatories
      */
     public static function masterlist(
@@ -334,14 +334,15 @@ final class SbfpFormWorkbook
         array $signatories,
     ): void {
         $writer->getCurrentSheet()->setName($sheetName);
-        $form = new self($writer, 4);
+        $form = new self($writer, 5);
 
         $sheet = $writer->getCurrentSheet();
         $sheet->setColumnWidth(self::SEAL_COLUMN, 1);
-        $sheet->setColumnWidth(40, 2);
-        $sheet->setColumnWidth(12, 3);
-        $sheet->setColumnWidth(16, 4);
-        $sheet->setColumnWidth(self::SEAL_COLUMN, 5);
+        $sheet->setColumnWidth(32, 2);
+        $sheet->setColumnWidth(9, 3);
+        $sheet->setColumnWidth(14, 4);
+        $sheet->setColumnWidth(18, 5);
+        $sheet->setColumnWidth(self::SEAL_COLUMN, 6);
 
         $form->letterhead($letterhead);
         $form->title($title);
@@ -358,9 +359,10 @@ final class SbfpFormWorkbook
             Cell::fromValue('NAME', $head),
             Cell::fromValue('GRADE', $head),
             Cell::fromValue('SECTION', $head),
+            Cell::fromValue('CLASS ADVISER', $head),
             Cell::fromValue('', $head),
         ], 18);
-        $form->merge(3, $headRow, 4, $headRow);
+        $form->merge(4, $headRow, 5, $headRow);
         // A long roll runs onto a second page; its head goes with it. The
         // sheet's name is one word on purpose: OpenSpout writes it into the
         // print-title reference unquoted.
@@ -379,14 +381,15 @@ final class SbfpFormWorkbook
                 Cell::fromValue((string) $entry['name'], $text),
                 Cell::fromValue((string) $entry['grade'], $centred),
                 Cell::fromValue((string) $entry['section'], $text),
+                Cell::fromValue((string) ($entry['adviser'] ?? ''), $text),
                 Cell::fromValue('', $text),
             ], 16);
-            $form->merge(3, $at, 4, $at);
+            $form->merge(4, $at, 5, $at);
         }
 
         $form->spacer(10);
         // Prepared by under No. and Name, Noted by under the rest.
-        $form->signatures($signatories, [[0, 1], [2, 4]]);
+        $form->signatures($signatories, [[0, 1], [2, 5]]);
     }
 
     /** "BMI-Report-Baseline-2026-2027-20261110.xlsx" — a name a folder sorts. */

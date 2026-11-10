@@ -128,6 +128,7 @@ class PerSchoolAccountTest extends TestCase
 
         // Same username, same school -> rejected
         $sameSchool = $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Teacher Ana',
             'username' => 'teacher.ana',
             'password' => 'secret123',
@@ -141,6 +142,7 @@ class PerSchoolAccountTest extends TestCase
 
         // Any other school -> refused outright, whatever the username.
         $otherSchool = $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Teacher Bea',
             'username' => 'teacher.bea',
             'password' => 'secret123',

@@ -52,21 +52,64 @@ final class SchoolSignatories
      */
     public static function classAdviser(?int $institutionId, string $grade, string $section): string
     {
-        $norm = static fn (string $value): string => mb_strtolower((string) preg_replace('/\s+/u', ' ', trim($value)));
+        $key = self::classKey($grade, $section);
 
-        if (! $institutionId || $norm($grade) === '' || $norm($section) === '' || ! SchemaCache::hasTable('accounts')) {
+        if (! $institutionId || $key === null) {
             return '';
         }
 
-        $adviser = DB::table('accounts')
-            ->where('role', 'class_adviser')
-            ->where('institution_id', $institutionId)
-            ->orderBy('id')
-            ->get(['name', 'assigned_grade_level', 'assigned_section'])
-            ->first(fn (object $account): bool => $norm((string) $account->assigned_grade_level) === $norm($grade)
-                && $norm((string) $account->assigned_section) === $norm($section));
+        return self::classAdvisers($institutionId)[$key] ?? '';
+    }
 
-        return AccountName::read($adviser->name ?? '');
+    /**
+     * The class adviser of a learner's class, read from the record's
+     * "Grade 7 / Maingat" section column; empty where nobody holds the class.
+     */
+    public static function adviserOf(?int $institutionId, string $recordSection): string
+    {
+        $parts = explode(' / ', $recordSection, 2);
+
+        return self::classAdviser($institutionId, trim($parts[0]), trim($parts[1] ?? ''));
+    }
+
+    /**
+     * Every class adviser of one school, keyed by their class — one query per
+     * request however many learners a list names (a list never queries per
+     * row). The first account to hold a class answers for it.
+     *
+     * @return array<string, string>
+     */
+    public static function classAdvisers(int $institutionId): array
+    {
+        if (! SchemaCache::hasTable('accounts')) {
+            return [];
+        }
+
+        return RequestMemo::remember('class-advisers:'.$institutionId, function () use ($institutionId): array {
+            $map = [];
+
+            DB::table('accounts')
+                ->where('role', 'class_adviser')
+                ->where('institution_id', $institutionId)
+                ->orderBy('id')
+                ->get(['name', 'assigned_grade_level', 'assigned_section'])
+                ->each(function (object $account) use (&$map): void {
+                    $key = self::classKey((string) $account->assigned_grade_level, (string) $account->assigned_section);
+                    if ($key !== null && ! isset($map[$key])) {
+                        $map[$key] = AccountName::read($account->name ?? '');
+                    }
+                });
+
+            return $map;
+        });
+    }
+
+    /** Grade and section compared without regard to case or spacing, as the adviser's scope reads them. */
+    private static function classKey(string $grade, string $section): ?string
+    {
+        $norm = static fn (string $value): string => mb_strtolower((string) preg_replace('/\s+/u', ' ', trim($value)));
+
+        return $norm($grade) === '' || $norm($section) === '' ? null : $norm($grade).'|'.$norm($section);
     }
 
     /**

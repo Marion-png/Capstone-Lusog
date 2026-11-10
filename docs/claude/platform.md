@@ -178,3 +178,7 @@ Blade templates with Tailwind CSS 4. No Livewire. Alpine.js is used inline in so
 ### Test Setup
 
 PHPUnit with an in-memory SQLite DB (configured in `phpunit.xml`, which blanks `DB_URL`), so the suite never reaches the Railway database. Tests use `RefreshDatabase`. Feature tests directly boot the Laravel app — session state must be set manually via `$this->withSession([...])` since there is no Auth facade to log in with.
+
+### Terms of Service (2026-11-10)
+
+SIGLA's Terms of Service are a public page, `GET /terms` (route `terms`, `auth/terms.blade.php`, listed in `PenetrationTest::PUBLIC_URIS`), written for this system: authorized school personnel only, one role each, confidentiality of minors' health records under the Data Privacy Act of 2012 (RA 10173), the audit trail, SIGLA's computations as aids rather than diagnoses, the outside services (Gemini / Claude photo readers and proofreader, RxNorm, Calendarific), retention by school year, and suspension. **They are agreed to when an account is requested:** the Create Account form carries a required checkbox (`terms`, validated `accepted` on the server), and the agreement with `App\Support\TermsOfService::VERSION` / `EFFECTIVE` is written into the request's audit entry — the append-only audit trail is the record of who agreed to which version, so no migration was needed. Both sign-in pages say "By signing in, you agree to the Terms of Service" with a link. Change `VERSION` and `EFFECTIVE` whenever the text changes in substance. `TermsOfServiceTest` guards it.

@@ -14,6 +14,7 @@ use App\Support\SchemaCache;
 use App\Support\SchoolCalendar;
 use App\Support\SchoolLetterhead;
 use App\Support\SchoolSignatories;
+use App\Support\Sf2AttendanceForm;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -106,7 +107,28 @@ class FeedingAttendanceController extends Controller
             return redirect()->route('login')->with('error', 'Only the Feeding Coordinator can open attendance.');
         }
 
-        return view('feedingcor-dashboard.attendance', $this->build($request));
+        $data = $this->build($request);
+
+        // The sheet is drawn as the School Form 2 grid, read-only: the same
+        // reading the Record Attendance page writes through, so the two cannot
+        // disagree. Built here and not in build(), which the live refresh also
+        // runs and which never redraws the sheet.
+        $data['sf2'] = $data['view'] === 'sheet'
+            ? Sf2AttendanceForm::build(
+                $request->session()->get('active_institution_id'),
+                $data['selectedDate'],
+                Carbon::parse($data['selectedDate']),
+                $data['filters']['grade'],
+                $data['filters']['section'],
+                $data['filters']['sex'],
+                // The mark filter and the search narrow the list, as they do
+                // the sheet; the summary stays the class's.
+                collect($data['rows'])->pluck('id')->map(fn ($id): int => (int) $id)->all(),
+                writable: false,
+            )
+            : null;
+
+        return view('feedingcor-dashboard.attendance', $data);
     }
 
     /**
@@ -394,11 +416,10 @@ class FeedingAttendanceController extends Controller
         // The enrolled roll, decided by the one class that decides it. Sorting
         // happens in PHP because student_name is encrypted at rest.
         $allBeneficiaries = collect();
-        if (SchemaCache::hasTable('student_health_records')) {
-            $allBeneficiaries = StudentHealthRecord::query()
-                ->when($institutionId, fn ($q) => $q->where('institution_id', $institutionId))
-                ->forCurrentSchoolYear($schoolYear)
-                ->get()
+        // The memoized roster: the sheet's SF2 grid reads the same one, and a
+        // page reads the roster once. No school reads nobody.
+        if ($institutionId && SchemaCache::hasTable('student_health_records')) {
+            $allBeneficiaries = StudentHealthRecord::rosterFor((int) $institutionId, $schoolYear)
                 ->filter(fn (StudentHealthRecord $record): bool => FeedingBeneficiarySummary::isBeneficiary($record))
                 ->sortBy(fn (StudentHealthRecord $record): string => strtolower((string) $record->student_name))
                 ->values();

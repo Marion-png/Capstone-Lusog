@@ -313,11 +313,11 @@ class SbfpFormDownloadTest extends TestCase
         $this->assertStringContainsString('PRINCIPAL TYPED', $text);
 
         $head = collect($form)->search(fn (array $row): bool => ($row[0] ?? '') === 'NO.');
-        $this->assertSame(['NO.', 'NAME', 'GRADE', 'SECTION'], array_slice($form[$head], 0, 4));
+        $this->assertSame(['NO.', 'NAME', 'GRADE', 'SECTION', 'CLASS ADVISER'], array_slice($form[$head], 0, 5));
         $this->assertSame(['1', 'Ana Cruz', 'Grade 7', 'Rosal'], array_slice($form[$head + 1], 0, 4));
         $this->assertSame('20', $form[$head + 20][0]);
-        // Section is one column on paper across two in the sheet.
-        $this->assertContains('D'.($head + 2).':E'.($head + 2), $book['merges']);
+        // Class Adviser is one column on paper across two in the sheet.
+        $this->assertContains('E'.($head + 2).':F'.($head + 2), $book['merges']);
     }
 
     #[Test]

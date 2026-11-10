@@ -70,6 +70,7 @@ class InstitutionSectionCatalogTest extends TestCase
     public function an_adviser_may_register_with_a_section_their_school_runs(): void
     {
         $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Maria Santos',
             'username' => 'maria.santos',
             'password' => 'password1',
@@ -90,6 +91,7 @@ class InstitutionSectionCatalogTest extends TestCase
     public function a_section_the_school_does_not_run_is_refused(): void
     {
         $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Typo Teacher',
             'username' => 'typo.teacher',
             'password' => 'password1',
@@ -108,6 +110,7 @@ class InstitutionSectionCatalogTest extends TestCase
     {
         // RIZAL is a Grade 10 section at this school, not a Grade 7 one.
         $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Wrong Grade',
             'username' => 'wrong.grade',
             'password' => 'password1',
@@ -130,6 +133,7 @@ class InstitutionSectionCatalogTest extends TestCase
         ]);
 
         $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Wrong School',
             'username' => 'wrong.school',
             'password' => 'password1',
@@ -147,6 +151,7 @@ class InstitutionSectionCatalogTest extends TestCase
         // Two advisers who type their section differently must still end up
         // scoped by the same string, or the roster filters would split the class.
         $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Lower Case',
             'username' => 'lower.case',
             'password' => 'password1',
@@ -174,6 +179,7 @@ class InstitutionSectionCatalogTest extends TestCase
         InstitutionSection::where('institution_id', $this->school->id)->delete();
 
         $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Typed Section',
             'username' => 'typed.section',
             'password' => 'password1',
@@ -194,6 +200,7 @@ class InstitutionSectionCatalogTest extends TestCase
     public function a_non_adviser_role_is_never_checked_against_the_catalog(): void
     {
         $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Nurse Cruz',
             'username' => 'nurse.cruz',
             'password' => 'password1',

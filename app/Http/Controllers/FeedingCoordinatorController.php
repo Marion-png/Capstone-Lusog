@@ -214,6 +214,8 @@ class FeedingCoordinatorController extends Controller
                 'status' => $status,
                 'bmi' => $record->bmi_value !== null ? (string) $record->bmi_value : '',
                 'lists' => $this->masterlistsFor($record),
+                // Who holds the class, for the two master lists' Adviser column.
+                'adviser' => SchoolSignatories::classAdviser($institutionId, $grade, $section),
             ];
 
             if ($section !== '') {
@@ -483,6 +485,7 @@ class FeedingCoordinatorController extends Controller
                     'name' => (string) $student['name'],
                     'grade' => (string) $student['grade'],
                     'section' => (string) $student['section'],
+                    'adviser' => (string) ($student['adviser'] ?? ''),
                 ];
             }
         }

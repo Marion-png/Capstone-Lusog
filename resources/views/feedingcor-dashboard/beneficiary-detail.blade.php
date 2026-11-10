@@ -153,6 +153,9 @@
 						@if ($learner['sex'] !== '')
 							<span class="bd-sep">&middot;</span>{{ $learner['sex'] }}
 						@endif
+						@if ($learner['class_adviser'] !== null)
+							<span class="bd-sep">&middot;</span>Class Adviser: <strong>{{ $learner['class_adviser'] !== '' ? $learner['class_adviser'] : 'Not assigned' }}</strong>
+						@endif
 					</p>
 					<p class="bd-meta">
 						S.Y. {!! $yearLabel !!}<span class="bd-sep">&middot;</span>School-Based Feeding Program

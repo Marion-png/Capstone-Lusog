@@ -25,6 +25,8 @@ class PenetrationTest extends TestCase
     /** Pages anybody may open or post to, by design. */
     private const PUBLIC_URIS = [
         '/', 'login', 'admin-login', 'logout', 'account-request', 'up',
+        // The Terms of Service, read before an account is requested: no data.
+        'terms',
         'consent/{token}',
         // The registration form's school and section lists: school structure,
         // no personal data.

@@ -288,7 +288,7 @@ class SchoolCalendarTest extends TestCase
 
         $response->assertSee('No session &mdash; holiday', false);
         $response->assertSee(Carbon::parse($today)->format('F j, Y').' is Test Holiday Day');
-        $this->assertDoesNotMatchRegularExpression('~<button[^>]*data-record-open~', $response->getContent());
+        $this->assertDoesNotMatchRegularExpression('~<a[^>]*data-record-link~', $response->getContent());
         // The picker locks the day beside the weekends.
         $response->assertSee('data-closed-dates="{&quot;'.$today.'&quot;:&quot;Test Holiday Day&quot;}"', false);
     }

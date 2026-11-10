@@ -1,0 +1,194 @@
+/* ══════════════════════════════════════════════════════════════════════
+   Feeding Coordinator — School Form 2 (SF2) attendance grid and summary
+   Shared by the Record Attendance page (where today's column takes a
+   mark) and the Attendance tab's sheet (which only reads it), so the two
+   draw one form. Markup: partials/sf2-grid and partials/sf2-summary.
+   Tokens, shell, buttons and badges come from lusog-theme.css.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── The grid ── */
+.sf2-card { margin-top: 16px; padding: 0; overflow: hidden; }
+.sf2-scroll { overflow: auto; max-height: calc(100vh - 230px); }
+.sf2 {
+	border-collapse: separate;
+	border-spacing: 0;
+	width: max-content;
+	min-width: 100%;
+	font-size: .78rem;
+	font-variant-numeric: var(--lg-figures);
+	font-feature-settings: var(--lg-figure-features);
+}
+.sf2 th, .sf2 td {
+	border-right: 1px solid var(--lg-border);
+	border-bottom: 1px solid var(--lg-border);
+	padding: 0;
+	text-align: center;
+	vertical-align: middle;
+	background: var(--lg-card);
+}
+.sf2 thead th {
+	position: sticky;
+	z-index: 2;
+	background: var(--lg-rail);
+	color: var(--lg-ink-soft);
+	font-weight: 600;
+	font-size: .7rem;
+	padding: 6px 4px;
+}
+.sf2 thead tr:first-child th { top: 0; height: 32px; }
+.sf2 thead tr:nth-child(2) th { top: 32px; height: 28px; }
+.sf2 thead tr:nth-child(3) th { top: 60px; }
+/* The month the date columns belong to, over them, as SF2 heads its date row. */
+.sf2 thead .sf2-month-head {
+	font-size: .78rem;
+	font-weight: 700;
+	letter-spacing: .06em;
+	color: var(--lg-emerald-deep);
+}
+
+/* No. and Name stay in view while the days scroll. */
+.sf2 .sf2-no { position: sticky; left: 0; z-index: 1; width: 44px; min-width: 44px; color: var(--lg-ink-soft); }
+.sf2 .sf2-name {
+	position: sticky;
+	left: 44px;
+	z-index: 1;
+	min-width: 240px;
+	max-width: 280px;
+	padding: 0 12px;
+	text-align: left;
+	font-weight: 600;
+	color: var(--lg-ink);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	box-shadow: 1px 0 0 var(--lg-border-strong);
+}
+.sf2 tbody .sf2-name { text-transform: none; letter-spacing: normal; font-size: .8rem; }
+.sf2 thead .sf2-no, .sf2 thead .sf2-name { z-index: 3; }
+.sf2 thead .sf2-name { color: var(--lg-ink-soft); }
+.sf2 thead .sf2-name span { display: block; font-weight: 500; font-size: .64rem; }
+
+.sf2 .sf2-day, .sf2 .sf2-dow, .sf2 .sf2-cell { width: 34px; min-width: 34px; }
+.sf2 tbody td, .sf2 tbody th, .sf2 tfoot td, .sf2 tfoot th { height: 36px; }
+.sf2 .sf2-day.is-today, .sf2 .sf2-dow.is-today { background: var(--lg-mint); color: var(--lg-success-ink); }
+.sf2 td.sf2-cell.is-today { background: color-mix(in srgb, var(--lg-mint) 55%, var(--lg-card)); }
+/* A day the school was closed is not a session: hatched, never a mark. */
+.sf2 .is-closed {
+	background-image: repeating-linear-gradient(135deg, transparent 0 5px, var(--lg-border) 5px 6px);
+}
+/* Still to come: quieter than a held day, but readable. */
+.sf2 .sf2-day.is-future, .sf2 .sf2-dow.is-future { color: var(--lg-ink-soft); font-weight: 500; }
+.sf2 .sf2-day { font-size: .76rem; color: var(--lg-ink); }
+
+.sf2 .sf2-totals-head { border-bottom: 1px solid var(--lg-border); }
+.sf2 .sf2-tot { width: 62px; min-width: 62px; font-weight: 600; color: var(--lg-ink); }
+.sf2 thead .sf2-tot { color: var(--lg-ink-soft); }
+.sf2 .sf2-remarks { min-width: 200px; max-width: 280px; padding: 0 12px; text-align: left; color: var(--lg-ink-soft); }
+.sf2 thead .sf2-remarks { text-align: left; }
+.sf2-remark-date { font-weight: 600; color: var(--lg-ink); margin-right: 4px; }
+
+/* Male / Female bands and the totals under each. */
+.sf2 .sf2-group th {
+	position: sticky;
+	left: 0;
+	padding: 7px 12px;
+	text-align: left;
+	font-size: .68rem;
+	font-weight: 700;
+	letter-spacing: .08em;
+	text-transform: uppercase;
+	color: var(--lg-emerald-deep);
+	background: var(--lg-rail);
+}
+.sf2 .sf2-total th, .sf2 .sf2-total td { background: var(--lg-rail); font-weight: 700; color: var(--lg-ink); }
+.sf2 .sf2-total .sf2-total-label {
+	position: sticky;
+	left: 0;
+	z-index: 1;
+	padding: 0 12px;
+	text-align: right;
+	font-size: .7rem;
+	letter-spacing: .04em;
+	text-transform: uppercase;
+	color: var(--lg-ink-soft);
+}
+.sf2 .sf2-combined th, .sf2 .sf2-combined td { border-top: 2px solid var(--lg-border-strong); }
+.sf2 .sf2-none td { height: 40px; padding: 0; }
+
+/* ── A mark ── */
+.sf2-mark {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 6px;
+	font-size: .8rem;
+	font-weight: 700;
+	line-height: 1;
+}
+.sf2-mark.is-present { background: var(--lg-mint); color: var(--lg-success-ink); }
+.sf2-mark.is-absent { background: var(--lg-danger-tint); color: var(--lg-danger-ink); }
+.sf2-mark.is-excused { background: var(--lg-amber-tint); color: var(--lg-amber-ink); }
+.sf2-mark.is-unconfirmed { background: var(--lg-rail); color: var(--lg-ink-soft); }
+.sf2-mark.is-blank { background: transparent; box-shadow: inset 0 0 0 1px var(--lg-border-strong); }
+
+/* Today's cell is the one that takes a mark. */
+button.sf2-mark {
+	border: 0;
+	padding: 0;
+	font-family: inherit;
+	cursor: pointer;
+	transition: transform .1s ease, box-shadow .12s ease;
+}
+button.sf2-mark.is-blank { box-shadow: inset 0 0 0 1.5px var(--lg-emerald); background: var(--lg-card); }
+button.sf2-mark:hover { transform: scale(1.08); }
+button.sf2-mark:focus-visible { outline: none; box-shadow: var(--lg-focus); }
+
+/* The form's real fields live in the cell, out of sight. */
+.sf2-fields { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.sf2-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 18px;
+	margin: 0;
+	padding: 12px var(--lg-pad-card);
+	list-style: none;
+	border-top: 1px solid var(--lg-border);
+	font-size: .76rem;
+	color: var(--lg-ink-soft);
+}
+.sf2-legend li { display: inline-flex; align-items: center; gap: 7px; }
+.sf2-legend .sf2-mark { width: 20px; height: 20px; font-size: .7rem; }
+.sf2-swatch { display: inline-block; width: 20px; height: 20px; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--lg-border); }
+
+/* The session a read-only sheet is opened on, marked out on the grid. */
+.sf2 .sf2-day.is-selected, .sf2 .sf2-dow.is-selected { box-shadow: inset 0 -2px 0 var(--lg-emerald); color: var(--lg-emerald-deep); }
+.sf2 td.sf2-cell.is-selected { background: color-mix(in srgb, var(--lg-mint) 40%, var(--lg-card)); }
+
+/* ── SF2 summary ── */
+.sf2-summary {
+	display: grid;
+	grid-template-columns: minmax(200px, 260px) 1fr;
+	gap: 18px 28px;
+	margin-top: 16px;
+	padding: 18px var(--lg-pad-card);
+}
+.sf2-summary-meta dl { margin: 12px 0 0; display: grid; gap: 10px; }
+.sf2-summary-meta dl div { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--lg-border); }
+.sf2-summary-meta dt { font-size: .78rem; color: var(--lg-ink-soft); }
+.sf2-summary-meta dd { margin: 0; font-size: .85rem; font-weight: 600; color: var(--lg-ink); font-variant-numeric: var(--lg-figures); }
+.sf2-sum { width: 100%; font-size: .8rem; font-variant-numeric: var(--lg-figures); font-feature-settings: var(--lg-figure-features); }
+.sf2-sum th, .sf2-sum td { padding: 8px 12px; border-bottom: 1px solid var(--lg-border); }
+.sf2-sum thead th { background: var(--lg-rail); color: var(--lg-ink-soft); font-size: .7rem; font-weight: 600; text-align: right; }
+.sf2-sum thead th:first-child { text-align: left; }
+.sf2-sum tbody th { text-align: left; font-weight: 500; font-size: .8rem; color: var(--lg-ink); text-transform: none; letter-spacing: normal; background: transparent; }
+.sf2-sum td { width: 90px; text-align: right; font-weight: 600; color: var(--lg-ink); }
+
+@media (max-width: 1100px) {
+	.sf2-summary { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+	.sf2 .sf2-name { min-width: 170px; }
+}

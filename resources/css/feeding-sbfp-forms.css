@@ -71,6 +71,7 @@
 .template-table .name-col { width: 36%; }
 .template-table .tel-col, .template-table .mobile-col, .template-table .email-col, .template-table .sign-col { width: 16%; }
 .template-table .grade-col { width: 14%; }
+.template-table .adviser-col { width: 26%; }
 .template-table .tol-col { width: 17%; }
 .template-table .packs-col { width: 11%; }
 .template-table .remarks-col { width: 15%; }

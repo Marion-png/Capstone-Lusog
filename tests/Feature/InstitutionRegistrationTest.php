@@ -22,6 +22,7 @@ class InstitutionRegistrationTest extends TestCase
     public function school_nurse_cannot_register_without_selecting_a_school(): void
     {
         $response = $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Nurse No School',
             'username' => 'nurse.noschool',
             'password' => 'password1',
@@ -37,6 +38,7 @@ class InstitutionRegistrationTest extends TestCase
     public function clinic_staff_cannot_register_without_selecting_a_school(): void
     {
         $response = $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Staff No School',
             'username' => 'staff.noschool',
             'password' => 'password1',
@@ -51,6 +53,7 @@ class InstitutionRegistrationTest extends TestCase
     public function school_head_cannot_register_without_selecting_a_school(): void
     {
         $response = $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Head No School',
             'username' => 'head.noschool',
             'password' => 'password1',
@@ -65,6 +68,7 @@ class InstitutionRegistrationTest extends TestCase
     public function class_adviser_cannot_register_without_selecting_a_school(): void
     {
         $response = $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Adviser No School',
             'username' => 'adviser.noschool',
             'password' => 'password1',
@@ -81,6 +85,7 @@ class InstitutionRegistrationTest extends TestCase
     public function scoped_role_registers_successfully_with_valid_institution(): void
     {
         $response = $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Nurse Maria',
             'username' => 'nurse.maria',
             'password' => 'password1',
@@ -122,6 +127,7 @@ class InstitutionRegistrationTest extends TestCase
     public function institution_id_must_reference_existing_institution(): void
     {
         $response = $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Nurse Bad',
             'username' => 'nurse.bad',
             'password' => 'password1',
@@ -137,6 +143,7 @@ class InstitutionRegistrationTest extends TestCase
     public function feeding_coordinator_registers_successfully_with_institution(): void
     {
         $response = $this->post('/account-request', [
+            'terms' => '1',
             'name' => 'Feeding Coor',
             'username' => 'feeding.test',
             'password' => 'password1',

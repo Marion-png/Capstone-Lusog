@@ -120,18 +120,14 @@ class FeedingRecordAttendanceTest extends TestCase
     /**
      * A session can be changed until its day ends and never after, so the save
      * is read back before it is made — every learner named, with the mark
-     * entered for them — on both surfaces that carry the form, since both post
-     * to the same endpoint.
+     * entered for them.
      */
     #[Test]
     public function the_marks_are_confirmed_before_they_are_saved(): void
     {
         $learner = $this->makeStudent();
 
-        foreach ([
-            '/dashboard/feedingcor-program/attendance/record',
-            '/dashboard/feedingcor-attendance?view=sheet',
-        ] as $url) {
+        foreach (['/dashboard/feedingcor-program/attendance/record'] as $url) {
             $response = $this->withSession($this->coordinatorSession())->get($url)->assertOk();
 
             $response->assertSee('id="confirmBackdrop"', false);
@@ -639,5 +635,199 @@ class FeedingRecordAttendanceTest extends TestCase
             ->viewData('rows');
 
         $this->assertSame('absent', $rows->first()['mark']);
+    }
+
+    // ── School Form 2 layout ────────────────────────────────────────────
+
+    private function sf2Learner(string $sex, string $name): StudentHealthRecord
+    {
+        $learner = $this->makeStudent();
+        $learner->update([
+            'student_name' => $name,
+            'student_details' => ['gender' => $sex],
+            'feeding_enrolled_at' => Carbon::parse('2026-10-01 01:00:00'),
+        ]);
+
+        return $learner->fresh();
+    }
+
+    private function markOn(StudentHealthRecord $learner, string $date, string $state): void
+    {
+        FeedingAttendance::create([
+            'student_health_record_id' => $learner->id,
+            'session_date' => $date,
+            'is_present' => $state === 'present',
+            'is_excused' => $state === 'excused',
+            'needs_review' => false,
+            'source' => FeedingAttendance::SOURCE_MANUAL_ENTRY,
+        ]);
+    }
+
+    /**
+     * The page is the SF2 grid: a column per weekday of the month, males and
+     * females in their own blocks, and only today's column takes a mark —
+     * every earlier day is a record of what is on file.
+     */
+    #[Test]
+    public function the_form_is_a_month_of_weekdays_with_only_today_writable(): void
+    {
+        // Wednesday 11 November 2026, 10 AM in Davao.
+        $this->travelTo(Carbon::parse('2026-11-11 02:00:00'));
+
+        $boy = $this->sf2Learner('Male', 'Boy Learner');
+        $girl = $this->sf2Learner('Female', 'Girl Learner');
+        $this->markOn($boy, '2026-11-02', 'present');
+        $this->markOn($girl, '2026-11-02', 'absent');
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-program/attendance/record')
+            ->assertOk();
+
+        $days = collect($response->viewData('days'));
+        $this->assertSame('2026-11-02', $days->first()['date']);
+        $this->assertSame('M', $days->first()['weekday']);
+        $this->assertSame('2026-11-30', $days->last()['date']);
+        $this->assertCount(21, $days, 'November 2026 has 21 weekdays.');
+        $this->assertSame(['2026-11-11'], $days->where('editable', true)->pluck('date')->values()->all());
+
+        $html = $response->getContent();
+        $this->assertStringContainsString('scope="rowgroup">Male</th>', $html);
+        $this->assertStringContainsString('scope="rowgroup">Female</th>', $html);
+        // One set of fields per learner: today's. A past day is never a field.
+        $this->assertSame(1, substr_count($html, 'name="marks['.$boy->id.']" value="present"'));
+        $this->assertSame('present', $response->viewData('rows')->firstWhere('id', $boy->id)['marks']['2026-11-02']);
+
+        $this->travelBack();
+    }
+
+    /**
+     * The SF2 summary is computed, never typed: enrolment at the start of the
+     * month, learners still registered at its end, average daily attendance
+     * over the days somebody was recorded on, and a learner absent five
+     * recorded days running.
+     */
+    #[Test]
+    public function the_summary_is_computed_from_the_marks_and_the_enrolment(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-11 02:00:00'));
+
+        $boy = $this->sf2Learner('Male', 'Boy Learner');
+        $girl = $this->sf2Learner('Female', 'Girl Learner');
+        $left = $this->sf2Learner('Female', 'Left Learner');
+        $left->update(['feeding_removed_at' => Carbon::parse('2026-11-05 01:00:00')]);
+
+        foreach (['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06'] as $date) {
+            $this->markOn($boy, $date, 'present');
+            $this->markOn($girl, $date, 'absent');
+        }
+
+        $summary = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-program/attendance/record')
+            ->assertOk()
+            ->viewData('summary');
+
+        $this->assertSame(5, $summary['feeding_days']);
+        $this->assertSame(['Male' => 1, 'Female' => 2, 'Total' => 3], $summary['enrolment_start']);
+        $this->assertSame(['Male' => 1, 'Female' => 1, 'Total' => 2], $summary['registered']);
+        $this->assertSame(['Male' => 0, 'Female' => 1, 'Total' => 1], $summary['dropped']);
+        $this->assertSame(['Male' => 0, 'Female' => 0, 'Total' => 0], $summary['late_enrolment']);
+        $this->assertEquals(50.0, $summary['percent_enrolment']['Female']);
+        // Five presents over five recorded days.
+        $this->assertEquals(1.0, $summary['ada']['Total']);
+        $this->assertEquals(50.0, $summary['percent_attendance']['Total']);
+        $this->assertSame(['Male' => 0, 'Female' => 1, 'Total' => 1], $summary['consecutive_absent']);
+        // The base is the programme's first feeding day, as SF2's is one cut-off.
+        $this->assertSame('2026-11-02', $summary['cutoff']);
+
+        $this->travelBack();
+    }
+
+    /**
+     * A learner enrolled after the cut-off is a late enrollee: not in the base,
+     * counted in the month they joined, and among those registered at its end —
+     * so the percentage of enrollment reads registered over the cut-off base.
+     */
+    #[Test]
+    public function a_learner_enrolled_after_the_cutoff_is_late_enrollment(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-11 02:00:00'));
+
+        $first = $this->sf2Learner('Male', 'First Learner');
+        $this->markOn($first, '2026-11-02', 'present');
+        $late = $this->sf2Learner('Male', 'Late Learner');
+        $late->update(['feeding_enrolled_at' => Carbon::parse('2026-11-09 01:00:00')]);
+
+        $summary = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-program/attendance/record')
+            ->assertOk()
+            ->assertSee('Enrollment as of November 2, 2026')
+            ->assertSee('Late enrollment during the month')
+            ->assertDontSee('Enrolment')
+            ->viewData('summary');
+
+        $this->assertSame(1, $summary['enrolment_start']['Male']);
+        $this->assertSame(1, $summary['late_enrolment']['Male']);
+        $this->assertSame(2, $summary['registered']['Male']);
+        $this->assertEquals(200.0, $summary['percent_enrolment']['Male']);
+
+        // Read in October, before the programme began: nobody is late against
+        // a cut-off that had not happened.
+        $october = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-program/attendance/record?month=2026-10')
+            ->viewData('summary');
+        $this->assertSame('2026-10-31', $october['cutoff']);
+        $this->assertSame(0, $october['late_enrolment']['Total']);
+
+        $this->travelBack();
+    }
+
+    /** An earlier month is a record: no field, no save, no read-back. */
+    #[Test]
+    public function an_earlier_month_is_read_only(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-11 02:00:00'));
+
+        $learner = $this->sf2Learner('Male', 'Boy Learner');
+
+        $response = $this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-program/attendance/record?month=2026-10')
+            ->assertOk()
+            ->assertSee('October 2026')
+            ->assertDontSee('name="marks['.$learner->id.']"', false)
+            ->assertDontSee('id="confirmBackdrop"', false);
+
+        $this->assertNull($response->viewData('sessionDate'));
+        $this->assertSame('2026-11', $response->viewData('nextMonth'));
+
+        // A month still ahead is not offered.
+        $this->assertNull($this->withSession($this->coordinatorSession())
+            ->get('/dashboard/feedingcor-program/attendance/record')
+            ->viewData('nextMonth'));
+
+        $this->travelBack();
+    }
+
+    /** Saving from the form returns to it, on the class it was narrowed to. */
+    #[Test]
+    public function saving_returns_to_the_form_on_the_same_class(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-11 02:00:00'));
+
+        $learner = $this->makeStudent();
+        $today = '2026-11-11';
+
+        $this->withSession($this->coordinatorSession())
+            ->post('/dashboard/feedingcor-program/attendance/record', [
+                'session_date' => $today,
+                'return_to' => 'record',
+                'grade' => 'Grade 7',
+                'section' => 'Sampaguita',
+                'marks' => [$learner->id => 'present'],
+            ])
+            ->assertRedirect(route('feedingcor-program.attendance.record', [
+                'date' => $today, 'grade' => 'Grade 7', 'section' => 'Sampaguita',
+            ]));
+
+        $this->assertSame(1, FeedingAttendance::count());
     }
 }

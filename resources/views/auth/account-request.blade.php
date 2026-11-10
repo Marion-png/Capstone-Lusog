@@ -240,6 +240,40 @@
             border-radius: var(--r-input);
         }
 
+        .terms-agree {
+            margin-top: 22px;
+            padding: 12px 14px;
+            border: 1px solid var(--line);
+            border-radius: var(--r-input);
+            background: var(--lg-rail, #EEF4F0);
+        }
+        .terms-agree.has-error { border-color: var(--lg-danger, #D95C5C); background: var(--lg-danger-tint, #FCECEC); }
+        .terms-check {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: .84rem;
+            line-height: 1.5;
+            color: var(--ink);
+            cursor: pointer;
+            text-transform: none;
+            letter-spacing: normal;
+            font-weight: 500;
+        }
+        .terms-check input[type="checkbox"] {
+            width: 17px;
+            height: 17px;
+            min-height: 0;
+            margin-top: 2px;
+            padding: 0;
+            flex: none;
+            accent-color: var(--brand);
+            cursor: pointer;
+        }
+        .terms-link { color: var(--brand-deep); font-weight: 700; text-decoration: none; }
+        .terms-link:hover { color: var(--brand-dark); }
+        .terms-agree .field-error { display: block; margin-top: 6px; }
+
         .actions {
             display: flex;
             justify-content: space-between;
@@ -332,6 +366,28 @@
     {{-- One shared palette for pages not yet on lusog-theme.css. Loaded
          last so it overrides this page's own :root colours. --}}
     <style>{!! file_get_contents(resource_path('css/lusog-palette.css')) !!}</style>
+    {{-- The Forest Green + Beige skin every role's pages and the sign-in page
+         wear. Last, so it wins. --}}
+    @include('partials.lusog-skin')
+    <style>
+        @media screen {
+            /* The header band is the rail: forest green with curved bands. */
+            html .head { background: var(--rail-bg); }
+            html .head::before { opacity: .28; }
+            html .head-ring { border-color: rgba(255, 255, 255, .08); }
+            html .card {
+                background: var(--sk-card);
+                border-color: var(--sk-line);
+                box-shadow: 0 2px 4px rgba(31, 41, 51, .05), 0 22px 50px rgba(20, 83, 45, .12);
+            }
+            html input, html select { background-color: #FFFFFF; border-color: var(--sk-line-strong); }
+            html input:focus, html select:focus { border-color: var(--sk-secondary); }
+            html .hint { background: var(--sk-head); border-color: var(--sk-line); }
+            html .submit { background: var(--sk-primary); }
+            html .submit:hover { background: var(--sk-secondary); }
+            html .link { color: var(--sk-secondary); }
+        }
+    </style>
 </head>
 <body>
     <section class="card">
@@ -437,6 +493,19 @@
                         @enderror
                     </div>
                     <p class="hint" id="classAdviserHint">Grade level and section are required for Class Adviser requests only.</p>
+                </div>
+
+                {{-- Nobody is given an account without agreeing to the Terms of
+                     Service. Required here and on the server; the agreement and
+                     its version are kept in the audit trail. --}}
+                <div class="terms-agree {{ $errors->has('terms') ? 'has-error' : '' }}">
+                    <label class="terms-check">
+                        <input type="checkbox" name="terms" value="1" required {{ old('terms') ? 'checked' : '' }}>
+                        <span>I have read and agree to the <a class="terms-link" href="{{ route('terms') }}" target="_blank" rel="noopener">Terms of Service</a>, including keeping learners&rsquo; health information confidential.</span>
+                    </label>
+                    @error('terms')
+                        <span class="field-error">{{ $message }}</span>
+                    @enderror
                 </div>
 
                 <div class="actions">
