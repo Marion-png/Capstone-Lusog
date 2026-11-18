@@ -6,6 +6,7 @@ use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingProgramCycle;
 use App\Support\HealthServicesOffered;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 
 class Institution extends Model
@@ -129,15 +130,28 @@ class Institution extends Model
     ];
 
     /**
-     * The only school an account may be registered against.
-     *
-     * The system is deployed for one school, so the registration form offers
-     * one choice and the server refuses every other institution id. This is
-     * the single declaration of that name — never re-type it, and never widen
-     * the registration form to `Institution::active()` again: the 59 other
-     * rows in DEFAULT_SCHOOLS exist for the catalogue, not for sign-up.
+     * The school this deployment was built for: the one a demo session opens
+     * on and the one the data migrations set policy for. It is one of
+     * REGISTRATION_SCHOOLS, not the whole list.
      */
     public const REGISTRATION_SCHOOL = 'Sta. Ana National High School';
+
+    /**
+     * The only schools an account may be registered against.
+     *
+     * The registration form offers these and the server refuses every other
+     * institution id. This is the single declaration of the list: never re-type
+     * a name, and never widen the form to `Institution::active()`, since the
+     * other rows in DEFAULT_SCHOOLS exist for the catalogue, not for sign-up.
+     * Each school's records stay its own: every school-owned row carries its
+     * `institution_id`, and a session reads only its own school's.
+     *
+     * @var list<string>
+     */
+    public const REGISTRATION_SCHOOLS = [
+        self::REGISTRATION_SCHOOL,
+        'Davao City National High School',
+    ];
 
     public function scopeActive(Builder $query): Builder
     {
@@ -145,8 +159,8 @@ class Institution extends Model
     }
 
     /**
-     * The one institution registrations are allowed against, or null when it
-     * is missing from the database entirely.
+     * The deployment's own school, or null when it is missing from the
+     * database entirely.
      */
     public static function registrationSchool(): ?self
     {
@@ -155,16 +169,37 @@ class Institution extends Model
             ->first();
     }
 
+    /**
+     * Every school registrations are allowed against that exists in the
+     * database, in name order.
+     *
+     * @return Collection<int, self>
+     */
+    public static function registrationSchools(): Collection
+    {
+        return self::query()
+            ->whereIn('name', self::REGISTRATION_SCHOOLS)
+            ->orderBy('name')
+            ->get();
+    }
+
     public static function seedDefaults(): void
     {
         foreach (self::DEFAULT_SCHOOLS as $name) {
             self::firstOrCreate(['name' => $name], ['status' => 'active']);
         }
 
-        // The school this system is deployed for is not in the catalogue above,
-        // and it is the only school a registration may name — so a database
-        // seeded from the defaults alone would otherwise offer an empty school
-        // dropdown and refuse every account request.
+        // Every school a registration may name must exist, or the form would
+        // offer an empty dropdown and refuse every account request. The others
+        // are in the catalogue above; this repeats them so the list stays
+        // complete if the catalogue ever changes.
+        foreach (self::REGISTRATION_SCHOOLS as $name) {
+            if ($name !== self::REGISTRATION_SCHOOL) {
+                self::firstOrCreate(['name' => $name], ['status' => 'active']);
+            }
+        }
+
+        // The school this system is deployed for is not in the catalogue above.
         //
         // It runs a week of unexcused absence rather than a share of the cycle,
         // which is the school's own policy and so lives on its row rather than

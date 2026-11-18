@@ -11,7 +11,7 @@
 <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
     <div style="font-size:.76rem;color:var(--text-3);">
         <strong style="color:var(--text-2);">School:</strong>
-        {{ $schoolName ?? '(All schools)' }}
+        {{ $schoolName }}
         &nbsp;|&nbsp;
         <strong style="color:var(--text-2);">As of:</strong>
         {{ \App\Support\SchoolClock::now()->format('F j, Y, g:i A') }}

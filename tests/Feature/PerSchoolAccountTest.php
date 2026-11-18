@@ -114,8 +114,8 @@ class PerSchoolAccountTest extends TestCase
     /** @test */
     public function registration_rejects_a_duplicate_username_and_every_other_school(): void
     {
-        // Self-service registration is limited to one school, so this is the
-        // only institution a request may name. Usernames stay unique *per
+        // Self-service registration is limited to Institution::REGISTRATION_SCHOOLS,
+        // so School B may not be named. Usernames stay unique *per
         // school* in the `accounts` table itself — that invariant is guarded by
         // the_same_username_can_hold_one_account_per_school and the login tests
         // above, which reach it without going through this form.

@@ -7,21 +7,40 @@ use App\Models\InstitutionSection;
 use Illuminate\Database\Seeder;
 
 /**
- * The partner school's own section list, as published on its section report.
+ * Each registration school's section list.
  *
  * Registration offers a class adviser a choice from this catalogue rather than
- * a text box, so it has to be the school's real list — every name below is
- * transcribed from "SECTION REPORT As of July 1", one column per grade level.
+ * a text box. Sta. Ana National High School's list is its real one, every
+ * name transcribed from "SECTION REPORT As of July 1", one column per grade
+ * level. Davao City National High School has not sent its report, so its list
+ * is a placeholder of invented names, to be replaced by the real one.
+ *
+ * A section belongs to one school: two schools may both run a "Grade 7 /
+ * MABAIT" and never share a learner, because every record is scoped by the
+ * school first and by the grade and section within it.
  *
  * Re-running is safe: rows are matched on (institution, grade, name), which is
  * the table's unique key.
  */
 class InstitutionSectionSeeder extends Seeder
 {
-    private const SCHOOL = 'Sta. Ana National High School';
+    public const DAVAO_CITY = 'Davao City National High School';
+
+    /**
+     * Placeholder sections for Davao City National High School: invented
+     * names, five per grade, until the school publishes its own.
+     *
+     * @var array<string, list<string>>
+     */
+    public const DAVAO_CITY_SECTIONS = [
+        'Grade 7' => ['GUMAMELA', 'ILANG-ILANG', 'ROSAL', 'SAMPAGUITA', 'WALING-WALING'],
+        'Grade 8' => ['ACACIA', 'KAMAGONG', 'MOLAVE', 'NARRA', 'YAKAL'],
+        'Grade 9' => ['DIAMOND', 'EMERALD', 'JADE', 'RUBY', 'SAPPHIRE'],
+        'Grade 10' => ['JUPITER', 'MARS', 'MERCURY', 'SATURN', 'VENUS'],
+    ];
 
     /** @var array<string, list<string>> */
-    private const SECTIONS = [
+    private const STA_ANA_SECTIONS = [
         'Grade 7' => [
             'MAAASAHAN', 'MAABILIDAD', 'MAAWAIN', 'MAAYOS', 'MABAIT', 'MABIYAYA',
             'MADASALIN', 'MADUNONG', 'MAGALANG', 'MAGILIW', 'MAGITING', 'MAHINAHON',
@@ -59,24 +78,58 @@ class InstitutionSectionSeeder extends Seeder
 
     public function run(): void
     {
+        foreach ([
+            Institution::REGISTRATION_SCHOOL => self::STA_ANA_SECTIONS,
+            self::DAVAO_CITY => self::DAVAO_CITY_SECTIONS,
+        ] as $school => $sections) {
+            $count = self::seedSchool($school, $sections);
+
+            $this->command?->info("Seeded {$count} sections at \"{$school}\".");
+        }
+    }
+
+    /**
+     * Write one school's sections in a single statement, creating the school
+     * if it is missing. Rows already there are left alone.
+     *
+     * @param  array<string, list<string>>  $sections
+     * @return int the number of sections in the list
+     */
+    public static function seedSchool(string $school, array $sections): int
+    {
         $institution = Institution::firstOrCreate(
-            ['name' => self::SCHOOL],
+            ['name' => $school],
             ['status' => 'active']
         );
 
-        $count = 0;
+        return self::seedSections((int) $institution->id, $sections);
+    }
 
-        foreach (self::SECTIONS as $gradeLevel => $names) {
+    /**
+     * Write sections for a school that already exists, in one statement.
+     *
+     * @param  array<string, list<string>>  $sections
+     * @return int the number of sections in the list
+     */
+    public static function seedSections(int $institutionId, array $sections): int
+    {
+        $now = now();
+        $rows = [];
+
+        foreach ($sections as $gradeLevel => $names) {
             foreach ($names as $name) {
-                InstitutionSection::firstOrCreate([
-                    'institution_id' => $institution->id,
+                $rows[] = [
+                    'institution_id' => $institutionId,
                     'grade_level' => $gradeLevel,
                     'name' => $name,
-                ]);
-                $count++;
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
             }
         }
 
-        $this->command?->info("Seeded {$count} sections at \"{$institution->name}\".");
+        InstitutionSection::query()->insertOrIgnore($rows);
+
+        return count($rows);
     }
 }

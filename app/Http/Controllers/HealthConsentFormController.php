@@ -310,13 +310,18 @@ class HealthConsentFormController extends Controller
             ]);
 
         if (! $form->exists) {
+            $schoolName = (string) ($request->session()->get('assigned_school_name')
+                ?: $request->session()->get('active_school_name')
+                ?: HealthConsentForm::DEFAULT_SCHOOL_NAME);
+
             $form->fill([
                 'institution_id' => $request->session()->get('active_institution_id'),
                 'division' => $student['division'] ?: HealthConsentForm::DEFAULT_DIVISION,
-                'school_name' => (string) ($request->session()->get('assigned_school_name')
-                    ?: $request->session()->get('active_school_name')
-                    ?: HealthConsentForm::DEFAULT_SCHOOL_NAME),
-                'school_address' => HealthConsentForm::DEFAULT_SCHOOL_ADDRESS,
+                'school_name' => $schoolName,
+                'school_address' => HealthConsentForm::defaultSchoolAddress(
+                    (int) $request->session()->get('active_institution_id'),
+                    $schoolName,
+                ),
                 'student_name' => $student['name'],
                 'student_address' => $student['address'],
                 'grade_level' => $student['grade_level'],

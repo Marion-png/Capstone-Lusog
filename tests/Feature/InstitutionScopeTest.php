@@ -203,25 +203,26 @@ class InstitutionScopeTest extends TestCase
 
     /**
      * The account-request form is this endpoint's only consumer and
-     * registration is limited to one school, so it returns that school alone —
-     * never the whole catalogue, or the form would silently reopen to every
-     * school it renders.
+     * registration is limited to the registration schools, so it returns those
+     * alone — never the whole catalogue, or the form would silently reopen to
+     * every school it renders.
      *
      * @test
      */
-    public function api_institutions_returns_only_the_registration_school(): void
+    public function api_institutions_returns_only_the_registration_schools(): void
     {
         Institution::create(['name' => 'Inactive School', 'status' => 'inactive']);
-        Institution::firstOrCreate(
-            ['name' => Institution::REGISTRATION_SCHOOL],
-            ['status' => 'active']
-        );
+        foreach (Institution::REGISTRATION_SCHOOLS as $name) {
+            Institution::firstOrCreate(['name' => $name], ['status' => 'active']);
+        }
 
         $response = $this->get('/api/institutions');
 
         $response->assertStatus(200);
-        $response->assertJsonCount(1);
-        $response->assertJsonFragment(['name' => Institution::REGISTRATION_SCHOOL]);
+        $response->assertJsonCount(count(Institution::REGISTRATION_SCHOOLS));
+        foreach (Institution::REGISTRATION_SCHOOLS as $name) {
+            $response->assertJsonFragment(['name' => $name]);
+        }
         $response->assertJsonMissing(['name' => 'School A']);
         $response->assertJsonMissing(['name' => 'Inactive School']);
     }

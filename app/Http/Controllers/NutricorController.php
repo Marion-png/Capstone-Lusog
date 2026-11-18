@@ -51,10 +51,16 @@ class NutricorController extends Controller
         abort_unless(session('active_role') === 'nutricor', 403);
 
         $schoolName = session('active_school_name');
+        $institutionId = (int) session('active_institution_id');
 
-        // Single query — all relevant columns for the school.
+        // Single query — all relevant columns for the school. Scoped by the
+        // session's institution id, never by the record's `school_name`: that
+        // column is whatever the adviser's form carried, so matching on it
+        // dropped a school's own learners whose name was blank and counted
+        // them in another school's report when it named that school. No
+        // school in the session reads nothing, never every school.
         $records = StudentHealthRecord::query()
-            ->when($schoolName, fn ($q) => $q->where('school_name', $schoolName))
+            ->where('institution_id', $institutionId > 0 ? $institutionId : -1)
             ->forCurrentSchoolYear()
             // The endline height and weight come with the status: a status is
             // only read as measured when one of them is on the row

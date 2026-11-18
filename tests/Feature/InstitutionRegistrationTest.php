@@ -106,21 +106,23 @@ class InstitutionRegistrationTest extends TestCase
     }
 
     /** @test */
-    public function account_request_page_seeds_and_offers_the_one_school_when_none_exist(): void
+    public function account_request_page_seeds_and_offers_the_registration_schools_when_none_exist(): void
     {
         Institution::query()->delete();
 
         $response = $this->get('/account-request');
 
         $response->assertOk();
-        // Seeding still fills the catalogue, but registration is limited to one
-        // school, so that is the only one the form offers.
-        $response->assertSee(Institution::REGISTRATION_SCHOOL);
-        $response->assertDontSee('Davao City National High School');
+        // Seeding still fills the catalogue, but registration is limited to the
+        // registration schools, so those are the only ones the form offers.
+        foreach (Institution::REGISTRATION_SCHOOLS as $name) {
+            $response->assertSee($name);
+        }
+        $response->assertDontSee('Wireless ES');
 
         // The seeding itself must still have happened — the catalogue backs the
         // rest of the app, not just this form.
-        $this->assertDatabaseHas('institutions', ['name' => 'Davao City National High School']);
+        $this->assertDatabaseHas('institutions', ['name' => 'Wireless ES']);
     }
 
     /** @test */

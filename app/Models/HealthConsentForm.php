@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Casts\EncryptedArray;
 use App\Casts\EncryptedString;
 use App\Models\Concerns\Auditable;
+use App\Support\SchemaCache;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -30,6 +31,25 @@ class HealthConsentForm extends Model
     public const DEFAULT_SCHOOL_NAME = 'STA. ANA NATIONAL HIGH SCHOOL';
 
     public const DEFAULT_SCHOOL_ADDRESS = 'DAMASO SUAZO ST., BRGY. 28-C, DAVAO CITY';
+
+    /**
+     * The address a new form is headed with: the one above for the school it
+     * belongs to, otherwise the school's own stored address, otherwise blank.
+     * A blank prints as a line to write on; one school's street on another
+     * school's letter to a parent would be wrong.
+     */
+    public static function defaultSchoolAddress(?int $institutionId, string $schoolName): string
+    {
+        if (strcasecmp(trim($schoolName), self::DEFAULT_SCHOOL_NAME) === 0) {
+            return self::DEFAULT_SCHOOL_ADDRESS;
+        }
+
+        $stored = $institutionId && SchemaCache::hasTable('institutions')
+            ? Institution::query()->whereKey($institutionId)->value('address')
+            : null;
+
+        return trim((string) $stored);
+    }
 
     /**
      * There is deliberately no PRINCIPAL_NAME here any more.

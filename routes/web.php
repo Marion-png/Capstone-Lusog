@@ -96,10 +96,9 @@ Route::get('/account-request', function () {
             Institution::seedDefaults();
         }
 
-        // The deployment serves one school, so the form offers one school.
-        // The POST below re-checks it — a dropdown with a single option is a
-        // convenience, never the constraint.
-        $institutions = collect([Institution::registrationSchool()])->filter()->values();
+        // Only the registration schools are offered. The POST below re-checks
+        // the choice: the dropdown is a convenience, never the constraint.
+        $institutions = Institution::registrationSchools()->values();
     }
 
     return view('auth.account-request', ['institutions' => $institutions]);
@@ -141,17 +140,17 @@ Route::post('/account-request', function (Request $request) {
             ->withInput();
     }
 
-    // One school, enforced on the server. The form offers a single option, but
-    // an institution id off the wire decides nothing: anyone can post another
-    // one, and every other row in `institutions` is catalogue data that no
-    // account may be registered against.
-    $registrationSchool = Institution::registrationSchool();
-
+    // The registration schools, enforced on the server. An institution id off
+    // the wire decides nothing: anyone can post another one, and every other
+    // row in `institutions` is catalogue data that no account may be
+    // registered against.
     if (! empty($validated['institution_id'])) {
-        if ($registrationSchool === null
-            || (int) $validated['institution_id'] !== (int) $registrationSchool->id) {
+        $allowed = Institution::registrationSchools()
+            ->contains(fn (Institution $school): bool => (int) $school->id === (int) $validated['institution_id']);
+
+        if (! $allowed) {
             return back()
-                ->withErrors(['institution_id' => 'Accounts may only be registered for '.Institution::REGISTRATION_SCHOOL.'.'])
+                ->withErrors(['institution_id' => 'Accounts may only be registered for '.implode(' or ', Institution::REGISTRATION_SCHOOLS).'.'])
                 ->withInput();
         }
     }
@@ -493,9 +492,9 @@ Route::post('/dashboard/consultation-log/{consultation}', [ConsultationControlle
 
 // API: list active institutions for registration dropdown
 // The account-request form's school list is this endpoint's only consumer, and
-// registration is limited to one school — so it returns that one school rather
-// than the whole catalogue. Widening it here would silently reopen the form:
-// the page overwrites its server-rendered dropdown with whatever this returns.
+// registration is limited to Institution::REGISTRATION_SCHOOLS — so it returns
+// those rather than the whole catalogue. Widening it here would silently reopen
+// the form: the page overwrites its server-rendered dropdown with this list.
 Route::get('/api/institutions', function () {
     if (! Schema::hasTable('institutions')) {
         return response()->json([]);
@@ -505,8 +504,7 @@ Route::get('/api/institutions', function () {
         Institution::seedDefaults();
     }
 
-    return collect([Institution::registrationSchool()])
-        ->filter()
+    return Institution::registrationSchools()
         ->map(fn (Institution $school) => ['id' => $school->id, 'name' => $school->name])
         ->values();
 })->name('api.institutions.index');
@@ -1404,7 +1402,7 @@ Route::get('/dashboard/system-admin', function () {
         'feeding_cycle_days',
     ], fn (string $column): bool => Schema::hasColumn('institutions', $column))));
 
-    // Only the schools in use: the one this deployment serves, any school
+    // Only the schools in use: the ones accounts may register for, any school
     // that holds accounts or learner records, and any school somebody has
     // set a policy for (so a setting is never hidden from the person who
     // made it). The rest of the division catalogue stays in the table —
@@ -1412,7 +1410,7 @@ Route::get('/dashboard/system-admin', function () {
     $institutions = Schema::hasTable('institutions')
         ? Institution::query()
             ->where(function ($query) use ($policyColumns) {
-                $query->where('name', Institution::REGISTRATION_SCHOOL);
+                $query->whereIn('name', Institution::REGISTRATION_SCHOOLS);
 
                 foreach (['accounts', 'student_health_records'] as $table) {
                     if (Schema::hasTable($table)) {

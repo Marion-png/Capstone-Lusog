@@ -8,8 +8,8 @@ use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * Registration is limited to one school, and the form's constraints are the
- * server's, not the browser's.
+ * Registration is limited to Institution::REGISTRATION_SCHOOLS, and the form's
+ * constraints are the server's, not the browser's.
  */
 class AccountRequestConstraintsTest extends TestCase
 {
@@ -36,28 +36,40 @@ class AccountRequestConstraintsTest extends TestCase
         ], $overrides);
     }
 
-    public function test_the_form_offers_only_the_one_school(): void
+    private function registrationSchools(): void
     {
-        $this->school();
+        foreach (Institution::REGISTRATION_SCHOOLS as $name) {
+            Institution::firstOrCreate(['name' => $name], ['status' => 'active']);
+        }
+    }
+
+    public function test_the_form_offers_only_the_registration_schools(): void
+    {
+        $this->registrationSchools();
         Institution::firstOrCreate(['name' => 'Wireless ES'], ['status' => 'active']);
 
         $response = $this->get('/account-request');
 
         $response->assertOk();
-        $response->assertSee(Institution::REGISTRATION_SCHOOL);
+        foreach (Institution::REGISTRATION_SCHOOLS as $name) {
+            $response->assertSee($name);
+        }
         $response->assertDontSee('Wireless ES');
     }
 
-    public function test_the_institutions_api_returns_only_the_one_school(): void
+    public function test_the_institutions_api_returns_only_the_registration_schools(): void
     {
-        $this->school();
+        $this->registrationSchools();
         Institution::firstOrCreate(['name' => 'Wireless ES'], ['status' => 'active']);
 
         $response = $this->getJson('/api/institutions');
 
         $response->assertOk();
-        $response->assertJsonCount(1);
-        $response->assertJsonFragment(['name' => Institution::REGISTRATION_SCHOOL]);
+        $response->assertJsonCount(count(Institution::REGISTRATION_SCHOOLS));
+        foreach (Institution::REGISTRATION_SCHOOLS as $name) {
+            $response->assertJsonFragment(['name' => $name]);
+        }
+        $response->assertJsonMissing(['name' => 'Wireless ES']);
     }
 
     public function test_it_refuses_a_registration_for_another_school(): void

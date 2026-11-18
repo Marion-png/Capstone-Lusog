@@ -546,11 +546,16 @@
                 return;
             }
 
-            // Registration is limited to one school. When that is all the API
-            // returns, it is the selection — offering a "Select your school…"
-            // placeholder above a single option would leave the form invalid
-            // until the user picked the only thing there was to pick.
+            // When the API returns one school, it is the selection — offering a
+            // "Select your school…" placeholder above a single option would
+            // leave the form invalid until the user picked the only thing there
+            // was to pick.
             const single = institutions.length === 1;
+
+            // The list can arrive after somebody has already chosen, on a slow
+            // connection, and redrawing it must not quietly undo their choice.
+            const chosen = institutionSel.value || oldInstitutionId;
+            let restored = false;
 
             institutionSel.innerHTML = single
                 ? ''
@@ -560,11 +565,16 @@
                 const opt = document.createElement('option');
                 opt.value = inst.id;
                 opt.textContent = inst.name;
-                if (single || String(inst.id) === oldInstitutionId) opt.selected = true;
+                if (single || String(inst.id) === chosen) {
+                    opt.selected = true;
+                    restored = true;
+                }
                 institutionSel.appendChild(opt);
             });
 
-            if (!single && !oldInstitutionId) {
+            // Nothing to restore: show the placeholder, never a school the
+            // browser picked because it happened to be listed first.
+            if (!single && !restored) {
                 institutionSel.selectedIndex = 0;
             }
 
