@@ -16,7 +16,7 @@
     // The printed form heads DepEd on the left and DOH on the right — the two
     // departments that run these services together. The app's own logo used to
     // sit here, which put a product mark on a government document.
-    $docSeals = SchoolLetterhead::seals();
+    $docSeals = SchoolLetterhead::seals($form->institution_id ? (int) $form->institution_id : null);
 
     // The head who signs the letter is this school's, read from `accounts` the
     // same way every other DepEd form in this app reads its signatories. It was

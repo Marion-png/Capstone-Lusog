@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\HealthConsentForm;
 use App\Models\Institution;
+use Illuminate\Support\Str;
 
 /**
  * The heading every DepEd form in this app is printed under.
@@ -69,7 +70,14 @@ final class SchoolLetterhead
      */
     public const DEPED_LOGO = 'images/deped-logo.png';
 
-    public const SCHOOL_LOGO = 'images/school-logo.png';
+    /**
+     * Each school's own seal: `public/images/school-logos/<slug of its name>.png`,
+     * e.g. `sta-ana-national-high-school.png`. It is looked up per school and
+     * never shared: one file for every school printed Sta. Ana's seal on Davao
+     * City National High School's forms. A school that has not dropped its seal
+     * in is drawn the placeholder outline, never a neighbour's.
+     */
+    public const SCHOOL_LOGO_DIR = 'images/school-logos';
 
     /**
      * The Department of Health seal.
@@ -90,11 +98,7 @@ final class SchoolLetterhead
      */
     public static function for(?int $institutionId, string $schoolName = ''): array
     {
-        $institution = null;
-
-        if ($institutionId && SchemaCache::hasTable('institutions')) {
-            $institution = Institution::query()->find($institutionId);
-        }
+        $institution = $institutionId ? self::institution($institutionId) : null;
 
         $name = trim((string) ($institution?->name ?: $schoolName));
         $address = trim((string) ($institution?->address ?? ''));
@@ -129,15 +133,50 @@ final class SchoolLetterhead
      * instead of a broken image and a school without seals still prints a
      * correctly-shaped heading.
      *
+     * The school seal is the given school's, or the signed-in session's.
+     *
      * @return array{deped: ?string, school: ?string, doh: ?string}
      */
-    public static function seals(): array
+    public static function seals(?int $institutionId = null): array
     {
         return [
             'deped' => self::sealPath(self::DEPED_LOGO),
-            'school' => self::sealPath(self::SCHOOL_LOGO),
+            'school' => self::sealPath(self::schoolLogo($institutionId)),
             'doh' => self::sealPath(self::DOH_LOGO),
         ];
+    }
+
+    /**
+     * Where the given school's seal lives (whether or not it is there yet). The
+     * school is the one named, else the session's; with neither there is no
+     * school seal to draw.
+     */
+    public static function schoolLogo(?int $institutionId = null): string
+    {
+        $slug = Str::slug(self::schoolNameFor($institutionId));
+
+        return self::SCHOOL_LOGO_DIR.'/'.($slug !== '' ? $slug : '-no-school').'.png';
+    }
+
+    /**
+     * The school's name from its `institutions` row: the one named, else the
+     * session's. The row is read once per request and shared with for(), so a
+     * page that prints the heading and the seals pays one round trip.
+     */
+    private static function schoolNameFor(?int $institutionId): string
+    {
+        $request = request();
+        $session = $request?->hasSession() ? $request->session() : null;
+        $id = $institutionId ?: ((int) ($session?->get('active_institution_id') ?? 0) ?: null);
+
+        return $id === null ? '' : trim((string) self::institution($id)?->name);
+    }
+
+    private static function institution(int $institutionId): ?Institution
+    {
+        return RequestMemo::remember('letterhead-institution:'.$institutionId, fn () => SchemaCache::hasTable('institutions')
+            ? Institution::query()->find($institutionId)
+            : null);
     }
 
     /**
@@ -214,11 +253,11 @@ final class SchoolLetterhead
      *
      * @return array{deped: ?string, school: ?string}
      */
-    public static function sealFiles(): array
+    public static function sealFiles(?int $institutionId = null): array
     {
         $file = static fn (string $relative): ?string => is_file(public_path($relative)) ? public_path($relative) : null;
 
-        return ['deped' => $file(self::DEPED_LOGO), 'school' => $file(self::SCHOOL_LOGO)];
+        return ['deped' => $file(self::DEPED_LOGO), 'school' => $file(self::schoolLogo($institutionId))];
     }
 
     /**

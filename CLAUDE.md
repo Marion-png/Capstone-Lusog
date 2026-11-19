@@ -121,6 +121,11 @@ Blade + Tailwind CSS 4, inline Alpine.js in places, Vite (`npm run build`). No L
 - **Every `@media print` block must reopen the app shell** (`html, body`, `.main`, `.content` to `height: auto; overflow: visible`), or it prints one screenful.
 - School Nurse pages must include `partials/nurse-page-transition`, or they render blank.
 - A changed logo or image gets a **new file name** (Caddy caches `/images/*` for a week).
+- **A school's seal is its own:** `public/images/school-logos/<slug of the school's name>.png`, resolved per school by `SchoolLetterhead::seals($institutionId)` / `sealFiles()`. A school without one prints the placeholder, never another school's seal.
+
+### Every registration school runs the same flow
+
+Sta. Ana and Davao City NHS (`Institution::REGISTRATION_SCHOOLS`) run the same programme on the same defaults (`Institution::applyRegistrationDefaults()`: unexcused-absence For Follow-up rule, Davao City's Health Services Offered), and only their records differ. Never write a default or policy for `REGISTRATION_SCHOOL` alone. `DavaoCityNationalHighSchoolTest` and `SchoolSeparationCrawlTest` guard it.
 
 ### Test setup
 

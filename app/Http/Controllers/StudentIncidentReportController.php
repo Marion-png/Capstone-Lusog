@@ -490,7 +490,7 @@ class StudentIncidentReportController extends Controller
             'schoolYear' => (string) ($report?->school_year ?: ($record?->school_year ?: StudentHealthRecord::currentSchoolYear())),
             'letterhead' => $letterhead,
             'masthead' => SchoolLetterhead::masthead($letterhead),
-            'seals' => SchoolLetterhead::seals(),
+            'seals' => SchoolLetterhead::seals($institutionId ? (int) $institutionId : null),
             'learner' => [
                 'name' => $this->learnerName($record, $details),
                 'lrn' => $lrn,

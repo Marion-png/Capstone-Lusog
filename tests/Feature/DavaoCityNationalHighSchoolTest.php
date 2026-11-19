@@ -4,11 +4,16 @@ namespace Tests\Feature;
 
 use App\Models\Consultation;
 use App\Models\HealthConsentForm;
+use App\Models\HealthServiceSetting;
 use App\Models\Institution;
 use App\Models\InstitutionSection;
 use App\Models\Medicine;
+use App\Models\ParentalConsentForm;
 use App\Models\StudentHealthRecord;
 use App\Support\DecryptedValues;
+use App\Support\FeedingAtRiskRule;
+use App\Support\HealthServicesOffered;
+use App\Support\SchoolLetterhead;
 use Database\Seeders\InstitutionSectionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -406,6 +411,72 @@ class DavaoCityNationalHighSchoolTest extends TestCase
 
         $this->davaoCity->update(['address' => 'F. Torres St., Davao City']);
         $this->assertSame('F. Torres St., Davao City', HealthConsentForm::defaultSchoolAddress($this->davaoCity->id, self::DAVAO_CITY));
+    }
+
+    /** @test */
+    public function it_starts_on_the_same_programme_defaults_as_sta_ana(): void
+    {
+        $migration = require database_path('migrations/2026_11_19_000001_apply_registration_defaults_to_every_registration_school.php');
+        $migration->up();
+        $migration->up();
+
+        foreach ([$this->staAna, $this->davaoCity] as $school) {
+            $this->assertSame(FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS, $school->fresh()->feeding_at_risk_mode, $school->name);
+            $this->assertSame(1, HealthServiceSetting::query()->where('institution_id', $school->id)->count(), $school->name);
+
+            foreach (Institution::DAVAO_CITY_NOT_OFFERED as $service) {
+                $this->assertNotContains($service, HealthServicesOffered::for($school->id, ParentalConsentForm::calendarSchoolYear()), "{$school->name}: {$service}");
+            }
+        }
+    }
+
+    /** @test */
+    public function the_defaults_never_overrule_a_choice_already_made(): void
+    {
+        $this->davaoCity->update(['feeding_at_risk_mode' => FeedingAtRiskRule::MODE_ATTENDANCE_RATE]);
+        HealthServicesOffered::save($this->davaoCity->id, ParentalConsentForm::calendarSchoolYear(), array_keys(HealthConsentForm::PLANNED_SERVICES), 'Nurse');
+
+        $migration = require database_path('migrations/2026_11_19_000001_apply_registration_defaults_to_every_registration_school.php');
+        $migration->up();
+        Institution::seedDefaults();
+
+        $this->assertSame(FeedingAtRiskRule::MODE_ATTENDANCE_RATE, $this->davaoCity->fresh()->feeding_at_risk_mode);
+        $this->assertContains('tas', HealthServicesOffered::for($this->davaoCity->id, ParentalConsentForm::calendarSchoolYear()));
+    }
+
+    /** @test */
+    public function a_fresh_database_seeds_both_schools_the_same_way(): void
+    {
+        Institution::query()->delete();
+
+        Institution::seedDefaults();
+
+        foreach (Institution::REGISTRATION_SCHOOLS as $name) {
+            $school = Institution::query()->where('name', $name)->firstOrFail();
+            $this->assertSame(FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS, $school->feeding_at_risk_mode, $name);
+            $this->assertNotContains('tas', HealthServicesOffered::for($school->id, ParentalConsentForm::calendarSchoolYear()), $name);
+        }
+    }
+
+    /** @test */
+    public function each_school_prints_its_own_seal_and_never_the_others(): void
+    {
+        $this->assertStringEndsWith('school-logos/sta-ana-national-high-school.png', SchoolLetterhead::schoolLogo($this->staAna->id));
+        $this->assertStringEndsWith('school-logos/davao-city-national-high-school.png', SchoolLetterhead::schoolLogo($this->davaoCity->id));
+        $this->assertNotNull(SchoolLetterhead::seals($this->staAna->id)['school']);
+        $this->assertNotNull(SchoolLetterhead::sealFiles($this->staAna->id)['school']);
+
+        $this->withSession($this->staff('feeding_coor', $this->davaoCity))
+            ->get('/dashboard/feedingcor-sbfp-forms')
+            ->assertOk()
+            ->assertDontSee('sta-ana-national-high-school.png', false);
+
+        $this->flushSession();
+
+        $this->withSession($this->staff('feeding_coor', $this->staAna))
+            ->get('/dashboard/feedingcor-sbfp-forms')
+            ->assertOk()
+            ->assertSee('school-logos/sta-ana-national-high-school.png', false);
     }
 
     private function learner(Institution $school, string $name, string $lrn, string $section = 'Grade 8 / NARRA', ?string $typedSchool = null): StudentHealthRecord

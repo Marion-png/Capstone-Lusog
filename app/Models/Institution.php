@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingProgramCycle;
 use App\Support\HealthServicesOffered;
+use App\Support\RequestMemo;
+use App\Support\SchemaCache;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -23,11 +25,13 @@ class Institution extends Model
         static::saved(static function (): void {
             FeedingAtRiskRule::forgetInstitutionSettings();
             FeedingProgramCycle::forgetInstitutionSettings();
+            RequestMemo::forgetPrefix('letterhead-institution:');
         });
 
         static::deleted(static function (): void {
             FeedingAtRiskRule::forgetInstitutionSettings();
             FeedingProgramCycle::forgetInstitutionSettings();
+            RequestMemo::forgetPrefix('letterhead-institution:');
         });
     }
 
@@ -190,43 +194,46 @@ class Institution extends Model
         }
 
         // Every school a registration may name must exist, or the form would
-        // offer an empty dropdown and refuse every account request. The others
-        // are in the catalogue above; this repeats them so the list stays
-        // complete if the catalogue ever changes.
+        // offer an empty dropdown and refuse every account request. Each runs
+        // the same programme the same way — Sta. Ana's flow is every
+        // registration school's — so each starts on the same defaults, and only
+        // its own records are its own.
         foreach (self::REGISTRATION_SCHOOLS as $name) {
-            if ($name !== self::REGISTRATION_SCHOOL) {
-                self::firstOrCreate(['name' => $name], ['status' => 'active']);
-            }
+            $school = self::firstOrCreate(['name' => $name], ['status' => 'active']);
+            self::applyRegistrationDefaults($school);
+        }
+    }
+
+    /**
+     * Services not given in Davao City: Schistosomiasis and Filariasis
+     * medicine and the TAS on Lymphatic Filariasis — none is endemic there.
+     */
+    public const DAVAO_CITY_NOT_OFFERED = ['deworming_schistosomiasis', 'deworming_filariasis', 'tas'];
+
+    /**
+     * The defaults a registration school starts on. Neither ever overrules a
+     * choice already made: a mode set through the Control Center, or a nurse's
+     * saved Health Services Offered. A migration fills the same values on a
+     * database seeded before they existed.
+     *
+     *  - The For Follow-up rule is a run of unexcused absences rather than a
+     *    share of the cycle: a learner who attended every session for two
+     *    months and then vanished for a week is above 90% attended and needs
+     *    following up today.
+     *  - Health Services Offered starts with DAVAO_CITY_NOT_OFFERED off.
+     */
+    public static function applyRegistrationDefaults(self $school): void
+    {
+        if (SchemaCache::hasColumn('institutions', 'feeding_at_risk_mode') && $school->feeding_at_risk_mode === null) {
+            $school->update(['feeding_at_risk_mode' => FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS]);
         }
 
-        // The school this system is deployed for is not in the catalogue above.
-        //
-        // It runs a week of unexcused absence rather than a share of the cycle,
-        // which is the school's own policy and so lives on its row rather than
-        // in config: a learner who attended every session for two months and
-        // then vanished for a week is above 90% attended and needs following up
-        // today. A migration fills the same value on a database seeded before
-        // this line existed; neither ever overrules a mode already chosen
-        // through the System Admin form.
-        $school = self::firstOrCreate(
-            ['name' => self::REGISTRATION_SCHOOL],
-            ['status' => 'active', 'feeding_at_risk_mode' => FeedingAtRiskRule::MODE_UNEXCUSED_ABSENCE_DAYS]
-        );
-
-        // Schistosomiasis, Filariasis and the TAS on Lymphatic Filariasis are
-        // not given in Davao City, so the school's Health Services Offered
-        // starts with them off — the same row a migration fills on a database
-        // seeded before this line existed. A nurse's saved choice is never
-        // overruled.
         if (HealthServicesOffered::supported()
             && ! HealthServiceSetting::query()->where('institution_id', $school->id)->exists()) {
             HealthServicesOffered::save(
                 $school->id,
                 ParentalConsentForm::calendarSchoolYear(),
-                array_values(array_diff(
-                    array_keys(HealthConsentForm::PLANNED_SERVICES),
-                    ['deworming_schistosomiasis', 'deworming_filariasis', 'tas'],
-                )),
+                array_values(array_diff(array_keys(HealthConsentForm::PLANNED_SERVICES), self::DAVAO_CITY_NOT_OFFERED)),
                 'System default',
             );
         }

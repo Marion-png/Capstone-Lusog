@@ -136,7 +136,7 @@ class NutritionCoordinatorController extends Controller
             'title' => self::REPORTS[$report],
             'schoolYear' => StudentHealthRecord::currentSchoolYear(),
             'letterhead' => SchoolLetterhead::for($institutionId ? (int) $institutionId : null, (string) session('active_school_name', '')),
-            'seals' => SchoolLetterhead::seals(),
+            'seals' => SchoolLetterhead::seals($institutionId ? (int) $institutionId : null),
             'labels' => self::STATUS_LABELS,
             'summary' => $this->summary($records),
             'data' => match ($report) {

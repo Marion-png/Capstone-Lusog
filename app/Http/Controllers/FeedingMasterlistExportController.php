@@ -172,7 +172,7 @@ class FeedingMasterlistExportController extends Controller
 
         return view('feedingcor-dashboard.masterlist-print', [
             'masthead' => SchoolLetterhead::masthead($letterhead),
-            'seals' => SchoolLetterhead::seals(),
+            'seals' => SchoolLetterhead::seals($institutionId ? (int) $institutionId : null),
             'title' => self::LISTS['beneficiaries'][0],
             'schoolYear' => $schoolYear,
             'rows' => $this->rows($request, $institutionId, $schoolYear, 'beneficiaries'),

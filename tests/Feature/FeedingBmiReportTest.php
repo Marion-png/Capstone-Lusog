@@ -388,7 +388,7 @@ class FeedingBmiReportTest extends TestCase
             $body = $response->getContent();
             $this->assertSame(4, substr_count($body, 'alt="Department of Education"'));
             $this->assertStringContainsString('images/deped-logo.png?v=', $body);
-            $this->assertStringContainsString('images/school-logo.png?v=', $body);
+            $this->assertStringContainsString('images/school-logos/test-school.png?v=', $body);
 
             // The stamp is what makes a replaced seal actually appear: the name
             // is the lookup, the modification time is what the browser caches
@@ -422,7 +422,7 @@ class FeedingBmiReportTest extends TestCase
         );
 
         $paths = [];
-        foreach ([SchoolLetterhead::DEPED_LOGO, SchoolLetterhead::SCHOOL_LOGO] as $relative) {
+        foreach ([SchoolLetterhead::DEPED_LOGO, SchoolLetterhead::schoolLogo($this->institution->id)] as $relative) {
             $path = public_path($relative);
 
             // Never write over a seal the school has actually installed.

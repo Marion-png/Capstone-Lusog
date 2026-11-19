@@ -114,7 +114,7 @@ class FeedingCoordinatorController extends Controller
             'headName' => SchoolSignatories::notedBy($institutionId, (string) $request->session()->get('active_school_name', '')),
             // The DepEd heading every form on this page opens under.
             'letterhead' => $letterhead,
-            'seals' => SchoolLetterhead::seals(),
+            'seals' => SchoolLetterhead::seals($institutionId ? (int) $institutionId : null),
             // The narrative report's own paragraphs, derived from the same
             // figures the grids above are drawn from rather than re-typed
             // beside them. It fills the form as a starting draft the
