@@ -106,6 +106,7 @@ class StudentHealthRecordController extends Controller
                 'feeding_coor' => 'dashboard.feedingcor-dashboard',
                 'nutricor' => 'dashboard.nutricor-dashboard',
                 'system_admin' => 'dashboard.system-admin',
+                'school_admin' => 'dashboard.system-admin',
             ];
             $role = (string) $request->session()->get('active_role', '');
             $route = $roleRoutes[$role] ?? 'dashboard.school-nurse';

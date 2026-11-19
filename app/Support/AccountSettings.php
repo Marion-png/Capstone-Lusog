@@ -46,6 +46,7 @@ class AccountSettings
         'feeding_coor' => 'Feeding Coordinator',
         'nutricor' => 'Nutrition Coordinator',
         'system_admin' => 'System Admin',
+        'school_admin' => 'School Admin',
     ];
 
     /** The session username the prototype guard seeds; it owns no account row. */

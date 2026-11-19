@@ -669,6 +669,7 @@ class MedicineInventoryController extends Controller
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
             'nutricor' => 'dashboard.nutricor-dashboard',
             'system_admin' => 'dashboard.system-admin',
+            'school_admin' => 'dashboard.system-admin',
         ];
 
         return redirect()->route($redirectByRole[$role] ?? 'login');

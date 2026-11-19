@@ -90,7 +90,7 @@ class EnsureActiveSession
     private function rolesForPath(Request $request): array
     {
         return match (true) {
-            $request->is('dashboard/system-admin*') => [['system_admin'], 'system_admin'],
+            $request->is('dashboard/system-admin*') => [['system_admin', 'school_admin'], 'system_admin'],
             $request->is('dashboard/class-adviser*', 'adviser', 'adviser/*') => [['class_adviser'], 'class_adviser'],
             $request->is('dashboard/school-head*') => [['school_head'], 'school_head'],
             $request->is('dashboard/feedingcor*') => [['feeding_coor'], 'feeding_coor'],

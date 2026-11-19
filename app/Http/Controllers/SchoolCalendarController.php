@@ -7,6 +7,7 @@ use App\Models\Institution;
 use App\Models\ParentalConsentForm;
 use App\Models\SchoolCalendarDay;
 use App\Models\StudentHealthRecord;
+use App\Support\AdminScope;
 use App\Support\CalendarificClient;
 use App\Support\HolidayApiFailure;
 use App\Support\PublicHolidaySync;
@@ -23,9 +24,12 @@ use Illuminate\Validation\Rule;
  * Calendarific API, and entering the days only a person can know about — a
  * class suspension, a school break.
  *
- * Every action is the System Admin's alone and every write is audited: the
- * sync through AuditTrail (it is a bulk write), a manual entry through the
- * model's Auditable trait.
+ * The sync is the System Admin's alone: public holidays close every school,
+ * and each sync spends the shared API quota. A School Admin enters and removes
+ * its own school's suspensions and breaks, and reads its own school's entries
+ * beside the public holidays. Every write is audited: the sync through
+ * AuditTrail (it is a bulk write), a manual entry through the model's
+ * Auditable trait.
  */
 class SchoolCalendarController extends Controller
 {
@@ -37,7 +41,7 @@ class SchoolCalendarController extends Controller
      *
      * @return array<string, mixed>
      */
-    public static function overview(): array
+    public static function overview(?int $institutionId = null): array
     {
         $schoolYear = ParentalConsentForm::currentSchoolYear();
         [$from, $to] = SchoolCalendar::periodOf($schoolYear);
@@ -54,6 +58,11 @@ class SchoolCalendarController extends Controller
                     ->with('institution:id,name')
                     ->where('starts_on', '<=', $to)
                     ->where('ends_on', '>=', $from)
+                    // A School Admin's view: the holidays every school keeps
+                    // and its own school's closures, never another school's.
+                    ->when($institutionId !== null, fn ($q) => $q->where(
+                        fn ($w) => $w->whereNull('institution_id')->orWhere('institution_id', $institutionId)
+                    ))
                     ->orderBy('starts_on')
                     ->orderBy('id')
                     ->get()
@@ -110,8 +119,12 @@ class SchoolCalendarController extends Controller
     /** Enter a class suspension or a school break for one school. */
     public function store(Request $request): RedirectResponse
     {
-        if (! $this->isSystemAdmin($request)) {
+        if (! AdminScope::isAdmin($request)) {
             return redirect()->route('login')->with('error', 'Please sign in as System Admin to change the school calendar.');
+        }
+
+        if (AdminScope::isSchoolAdmin($request)) {
+            $request->merge(['institution_id' => AdminScope::institutionId($request)]);
         }
 
         if (! SchoolCalendar::supported()) {
@@ -181,13 +194,14 @@ class SchoolCalendarController extends Controller
     /** Remove a suspension or break. A synced holiday is the API's to change. */
     public function destroy(Request $request, int $day): RedirectResponse
     {
-        if (! $this->isSystemAdmin($request)) {
+        if (! AdminScope::isAdmin($request)) {
             return redirect()->route('login')->with('error', 'Please sign in as System Admin to change the school calendar.');
         }
 
         $entry = SchoolCalendar::supported() ? SchoolCalendarDay::query()->find($day) : null;
 
-        if ($entry === null) {
+        // Another school's entry reads as missing to a School Admin.
+        if ($entry === null || ($entry->institution_id !== null && ! AdminScope::covers($request, $entry->institution_id))) {
             return $this->back()->with('error', 'That calendar entry is no longer on file.');
         }
 

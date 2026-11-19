@@ -4,7 +4,7 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="csrf-token" content="{{ csrf_token() }}">
-	<title>Audit Trail - System Admin - SIGLA</title>
+	<title>Audit Trail - {{ session('active_role') === 'school_admin' ? 'School Admin' : 'System Admin' }} - SIGLA</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="icon" type="image/png" href="{{ asset('images/sigla-mark.png') }}">
@@ -40,7 +40,7 @@
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><a href="{{ route('dashboard.system-admin') }}">System Admin</a><span class="bc-sep">&rsaquo;</span><span>Audit Trail</span></div>
+		<div class="topbar-bc"><a href="{{ route('dashboard.system-admin') }}">{{ session('active_role') === 'school_admin' ? 'School Admin' : 'System Admin' }}</a><span class="bc-sep">&rsaquo;</span><span>Audit Trail</span></div>
 		@include('partials.live-clock')
 	</header>
 

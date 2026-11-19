@@ -46,8 +46,20 @@ Roles stored as strings in `session('active_role')`. The eight roles are:
 | `feeding_coor` | SBFP: uploads attendance (gates the workflow), fills SBFP forms, views auto-tabulated BMI reports |
 | `nutricor` | Nutrition analytics, consolidated reports |
 | `system_admin` | Account approval/management |
+| `school_admin` | **School Admin** — administers one school from the Control Center |
 
 Role checks in controllers are manual string comparisons on `session('active_role')`.
+
+### School Admin (one school's Control Center, 2026-11-19)
+
+The System Admin is one environment-credentialed login over every school. A **School Admin** is an `accounts` row (`role = school_admin`, stamped with `institution_id`) that opens the same Control Center and Audit Trail for its one school. `App\Support\AdminScope` is the one place that decides what an admin covers (`isAdmin()`, `institutionId()` — null only for the System Admin, `covers()`); every admin route asks it instead of comparing the role:
+
+- **Reads** — accounts, pending requests, request history, the school list (feeding policy), calendar entries (public holidays plus its own school's closures, `SchoolCalendarController::overview($institutionId)`) and audit entries (`audit_logs.institution_id`) are filtered to its school.
+- **Writes** — approve/decline treat another school's request as not found; feeding policy for another school is a 403; a created account and a calendar entry are stamped with its school whatever was posted; removing another school's entry reads as not found. It may create any school role except `school_admin`: only the System Admin appoints one (the System Admin's create route accepts `school_admin` with a school), or the console: `php artisan accounts:create-school-admin "<school name or id>" <username> --name="…"`, which prints a generated password once.
+- **Never** — the holiday sync (it closes every school and spends the shared Calendarific quota), and no clinic, learner or role page: unlike `system_admin`, it is on none of those role lists, and every role redirect map sends it back to the Control Center.
+- **Sign-in** — `/admin-login` tries the environment credentials first, then `school_admin` rows with the school sign-in's rules (empty hash matches nothing, unknown username costs a dummy hash, same error either way); the school sign-in also routes it to the Control Center. It is in `InstitutionScope::SCOPED_ROLES`, so a School Admin session without a school is signed out. Its password changes in Settings like any account.
+
+`SchoolAdminTest` guards all of it; `RoleBoundaryTest` lists it among the roles.
 
 ### Account settings (every role, own password only)
 
@@ -144,7 +156,7 @@ Data separation covers **all** modules and records — health records, consultat
 - Every query that reads or writes school-owned data must be scoped by the session's `active_institution_id`. Use `StudentHealthRecord::forActiveInstitution()` for student lookups by LRN; child tables (certificates, consents, assessments, attendance) inherit scope through their parent record — verify the parent's `institution_id` before serving them (e.g. downloads).
 - Rows created for a school must be stamped with `institution_id` from the session.
 - Usernames on `accounts` are unique **per school** (`username + institution_id`), not globally: a teacher working in multiple schools holds a separate account per school. Login verifies the password against every account with that username and asks for a school choice (`school_choices` flash + `institution_id` input) when more than one matches.
-- `system_admin` is the only unscoped role; `InstitutionScope` middleware ejects scoped roles that have no `active_institution_id`.
+- `system_admin` is the only unscoped role; `InstitutionScope` middleware ejects scoped roles (including `school_admin`) that have no `active_institution_id`.
 
 ### Key Models and Their Scope
 

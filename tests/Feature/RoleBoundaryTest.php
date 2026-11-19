@@ -24,7 +24,7 @@ class RoleBoundaryTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const ROLES = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor', 'system_admin'];
+    private const ROLES = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor', 'system_admin', 'school_admin'];
 
     /** @var array<string, list<string>> Page => the only roles it renders for. */
     private const PAGES = [
@@ -51,7 +51,8 @@ class RoleBoundaryTest extends TestCase
         '/dashboard/nutricor-consolidated' => ['nutricor'],
         '/dashboard/class-adviser' => ['class_adviser'],
         '/adviser/create' => ['class_adviser'],
-        '/dashboard/system-admin' => ['system_admin'],
+        '/dashboard/system-admin' => ['system_admin', 'school_admin'],
+        '/dashboard/system-admin/audit-logs' => ['system_admin', 'school_admin'],
     ];
 
     private Institution $school;
@@ -144,6 +145,7 @@ class RoleBoundaryTest extends TestCase
             'feeding coordinator' => ['feeding_coor'],
             'nutrition coordinator' => ['nutricor'],
             'system admin' => ['system_admin'],
+            'school admin' => ['school_admin'],
         ];
     }
 

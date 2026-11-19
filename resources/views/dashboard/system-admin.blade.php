@@ -4,7 +4,7 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<meta name="csrf-token" content="{{ csrf_token() }}">
-	<title>Control Center - System Admin - SIGLA</title>
+	<title>Control Center - {{ ($isSchoolAdmin ?? false) ? 'School Admin' : 'System Admin' }} - SIGLA</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link rel="icon" type="image/png" href="{{ asset('images/sigla-mark.png') }}">
@@ -44,8 +44,10 @@
 		'school_head' => 'School Head',
 		'feeding_coor' => 'Feeding Coordinator',
 		'nutricor' => 'Nutritional Coordinator',
+		'school_admin' => 'School Admin',
 	];
-	$schoolScopedRoles = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'school_head', 'feeding_coor', 'nutricor'];
+	$schoolScopedRoles = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'school_head', 'feeding_coor', 'nutricor', 'school_admin'];
+	$adminLabel = ($isSchoolAdmin ?? false) ? 'School Admin' : 'System Admin';
 
 	// One rendering of the assignment cell for all three tables, so an
 	// adviser's class and a nurse's school read the same way wherever
@@ -69,7 +71,7 @@
 
 <div class="main">
 	<header class="topbar">
-		<div class="topbar-bc"><span>System Admin</span><span class="bc-sep">&rsaquo;</span><span>Control Center</span></div>
+		<div class="topbar-bc"><span>{{ $adminLabel }}</span><span class="bc-sep">&rsaquo;</span><span>Control Center</span></div>
 		@include('partials.live-clock')
 	</header>
 
@@ -78,7 +80,7 @@
 
 		<div class="page-header sa-header">
 			<div class="sa-headline">
-				<h1 class="page-title">System Administrator <span>Control Center</span></h1>
+				<h1 class="page-title">{{ ($isSchoolAdmin ?? false) ? 'School' : 'System' }} Administrator <span>Control Center</span></h1>
 				<p class="sa-meta">
 					<span class="tnum">{{ number_format($accountsCollection->count()) }} {{ \Illuminate\Support\Str::plural('account', $accountsCollection->count()) }}</span>
 					<span class="sa-sep">&middot;</span>
@@ -373,9 +375,13 @@
 									</div>
 								@endforeach
 							</div>
-							<div class="sa-policy-foot">
-								<button type="submit" class="btn btn-primary" @disabled(! $cal['configured'])>Sync Holidays</button>
-							</div>
+							{{-- Public holidays close every school and each sync spends
+							     the shared API quota, so syncing is the System Admin's. --}}
+							@unless ($isSchoolAdmin ?? false)
+								<div class="sa-policy-foot">
+									<button type="submit" class="btn btn-primary" @disabled(! $cal['configured'])>Sync Holidays</button>
+								</div>
+							@endunless
 						</form>
 					</article>
 

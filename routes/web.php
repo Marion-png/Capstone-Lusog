@@ -50,6 +50,7 @@ use App\Models\StudentHealthRecord;
 use App\Support\AccountName;
 use App\Support\AccountPassword;
 use App\Support\AccountSettings;
+use App\Support\AdminScope;
 use App\Support\AuditTrail;
 use App\Support\ClinicDashboard;
 use App\Support\ConsultationMedicines;
@@ -284,6 +285,7 @@ Route::get('/dashboard/school-nurse', function (Request $request) {
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
             'nutricor' => 'dashboard.nutricor-dashboard',
             'system_admin' => 'dashboard.system-admin',
+            'school_admin' => 'dashboard.system-admin',
         ];
 
         return redirect()->route($redirectByRole[$role] ?? 'login');
@@ -307,6 +309,7 @@ Route::get('/dashboard/student-health-records', function () {
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
             'nutricor' => 'dashboard.nutricor-dashboard',
             'system_admin' => 'dashboard.system-admin',
+            'school_admin' => 'dashboard.system-admin',
         ];
 
         return redirect()->route($redirectByRole[$role] ?? 'login');
@@ -346,6 +349,7 @@ Route::get('/dashboard/school-nurse/deworming', function (Request $request) {
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
             'nutricor' => 'dashboard.nutricor-dashboard',
             'system_admin' => 'dashboard.system-admin',
+            'school_admin' => 'dashboard.system-admin',
         ];
 
         return redirect()->route($redirectByRole[$role] ?? 'login');
@@ -1236,6 +1240,7 @@ Route::get('/dashboard/clinic-teacher', function (Request $request) {
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
             'nutricor' => 'dashboard.nutricor-dashboard',
             'system_admin' => 'dashboard.system-admin',
+            'school_admin' => 'dashboard.system-admin',
         ];
 
         return redirect()->route($redirectByRole[$role] ?? 'login');
@@ -1352,9 +1357,9 @@ Route::post('/dashboard/feedingcor-program/attendance/review/{attendance}', [Fee
     ->whereNumber('attendance')
     ->name('feedingcor-program.attendance.review.resolve');
 
-Route::get('/dashboard/system-admin', function () {
+Route::get('/dashboard/system-admin', function (Request $request) {
     $activeRole = session('active_role');
-    if ($activeRole !== 'system_admin') {
+    if (! AdminScope::isAdmin($request)) {
         if (! $activeRole) {
             return redirect()
                 ->route('login')
@@ -1377,16 +1382,21 @@ Route::get('/dashboard/system-admin', function () {
             ->with('error', 'You are not authorized to open the System Admin page.');
     }
 
+    // A School Admin reads its own school's rows only; the System Admin, every
+    // school's. Null means unscoped, so only the System Admin ever gets it.
+    $scopeId = AdminScope::institutionId($request);
+    $scoped = fn ($query) => $query->when($scopeId !== null, fn ($q) => $q->where('institution_id', $scopeId));
+
     $accounts = Schema::hasTable('accounts')
-        ? DB::table('accounts')->orderByDesc('created_at')->get()->map(fn ($r) => AccountName::open((array) $r))->values()->all()
+        ? $scoped(DB::table('accounts'))->orderByDesc('created_at')->get()->map(fn ($r) => AccountName::open((array) $r))->values()->all()
         : [];
 
     $pendingRequests = Schema::hasTable('account_requests')
-        ? DB::table('account_requests')->where('status', 'pending')->orderByDesc('created_at')->get()->map(fn ($r) => AccountName::open((array) $r))->values()->all()
+        ? $scoped(DB::table('account_requests'))->where('status', 'pending')->orderByDesc('created_at')->get()->map(fn ($r) => AccountName::open((array) $r))->values()->all()
         : [];
 
     $requestHistory = Schema::hasTable('account_requests')
-        ? DB::table('account_requests')->whereIn('status', ['accepted', 'declined'])->orderByDesc('decided_at')->get()->map(fn ($r) => AccountName::open(array_merge((array) $r, ['submitted_at' => $r->created_at])))->values()->all()
+        ? $scoped(DB::table('account_requests'))->whereIn('status', ['accepted', 'declined'])->orderByDesc('decided_at')->get()->map(fn ($r) => AccountName::open(array_merge((array) $r, ['submitted_at' => $r->created_at])))->values()->all()
         : [];
 
     // Per-school feeding policy. The threshold is the one figure the SRS
@@ -1409,6 +1419,7 @@ Route::get('/dashboard/system-admin', function () {
     // nothing is deleted — it simply has nothing to administer.
     $institutions = Schema::hasTable('institutions')
         ? Institution::query()
+            ->when($scopeId !== null, fn ($query) => $query->whereKey($scopeId))
             ->where(function ($query) use ($policyColumns) {
                 $query->whereIn('name', Institution::REGISTRATION_SCHOOLS);
 
@@ -1447,7 +1458,8 @@ Route::get('/dashboard/system-admin', function () {
         ],
         // The public holidays read from Calendarific and the suspensions and
         // breaks entered here — the days a school holds no feeding session.
-        'calendar' => SchoolCalendarController::overview(),
+        'calendar' => SchoolCalendarController::overview($scopeId),
+        'isSchoolAdmin' => AdminScope::isSchoolAdmin($request),
     ]);
 })->name('dashboard.system-admin');
 
@@ -1489,9 +1501,11 @@ Route::delete('/dashboard/system-admin/calendar/{day}', [SchoolCalendarControlle
  * the question an audit of a re-flagged learner has to answer.
  */
 Route::post('/dashboard/system-admin/institutions/{institution}/at-risk-threshold', function (Request $request, int $institution) {
-    if ($request->session()->get('active_role') !== 'system_admin') {
+    if (! AdminScope::isAdmin($request)) {
         return redirect()->route('login')->with('error', 'Please sign in as System Admin to change feeding policy.');
     }
+
+    abort_unless(AdminScope::covers($request, $institution), 403, 'You can change only your own school\'s feeding policy.');
 
     $validated = $request->validate([
         'threshold' => ['nullable', 'numeric', 'min:1', 'max:100'],
@@ -1596,7 +1610,7 @@ Route::post('/dashboard/system-admin/institutions/{institution}/at-risk-threshol
 })->whereNumber('institution')->name('dashboard.system-admin.institutions.at-risk-threshold');
 
 Route::get('/dashboard/system-admin/audit-logs', function (Request $request) {
-    if ($request->session()->get('active_role') !== 'system_admin') {
+    if (! AdminScope::isAdmin($request)) {
         return redirect()
             ->route('login')
             ->with('error', 'Only System Admin can view the audit trail.');
@@ -1607,8 +1621,12 @@ Route::get('/dashboard/system-admin/audit-logs', function (Request $request) {
 
     $hasTable = Schema::hasTable('audit_logs');
 
+    // A School Admin reads the entries written inside its own school.
+    $scopeId = AdminScope::institutionId($request);
+
     $logs = $hasTable
         ? AuditLog::query()
+            ->when($scopeId !== null, fn ($q) => $q->where('institution_id', $scopeId))
             ->when($filterAction !== '', fn ($q) => $q->where('action', $filterAction))
             ->when($filterUsername !== '', fn ($q) => $q->where('actor_username', 'like', "%{$filterUsername}%"))
             ->orderByDesc('id')
@@ -1617,7 +1635,7 @@ Route::get('/dashboard/system-admin/audit-logs', function (Request $request) {
         : collect();
 
     $actions = $hasTable
-        ? AuditLog::query()->select('action')->distinct()->orderBy('action')->pluck('action')
+        ? AuditLog::query()->when($scopeId !== null, fn ($q) => $q->where('institution_id', $scopeId))->select('action')->distinct()->orderBy('action')->pluck('action')
         : collect();
 
     return view('dashboard.system-admin-audit-logs', [
@@ -1629,13 +1647,23 @@ Route::get('/dashboard/system-admin/audit-logs', function (Request $request) {
 })->name('dashboard.system-admin.audit-logs');
 
 Route::post('/dashboard/system-admin/accounts', function (Request $request) {
-    if ($request->session()->get('active_role') !== 'system_admin') {
+    if (! AdminScope::isAdmin($request)) {
         return redirect()
             ->route('login')
             ->with('error', 'Only System Admin can create user accounts.');
     }
 
-    $scopedRoles = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor'];
+    $scopedRoles = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor', AdminScope::SCHOOL_ADMIN];
+
+    // Only the System Admin appoints a School Admin; a School Admin creates
+    // its own school's staff and nobody else.
+    $creatableRoles = AdminScope::isSystemAdmin($request)
+        ? $scopedRoles
+        : array_values(array_diff($scopedRoles, [AdminScope::SCHOOL_ADMIN]));
+
+    if (AdminScope::isSchoolAdmin($request)) {
+        $request->merge(['institution_id' => AdminScope::institutionId($request)]);
+    }
 
     $validated = $request->validate([
         'name' => ['required', 'string', 'max:255'],
@@ -1644,7 +1672,7 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
         // route matches an empty hash against nothing, so a passwordless
         // account could not sign in, and must never be open to anybody.
         'password' => AccountPassword::rules(confirmed: false),
-        'role' => ['required', 'in:school_nurse,clinic_staff,clinic_teacher,class_adviser,school_head,feeding_coor,nutricor'],
+        'role' => ['required', Rule::in($creatableRoles)],
         'institution_id' => ['nullable', 'integer', 'exists:institutions,id'],
         'assigned_grade_level' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:50'],
         'assigned_section' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:100'],
@@ -1675,7 +1703,8 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
 
     $institution = $institutionId ? Institution::find($institutionId) : null;
 
-    AuditTrail::record('created', 'Account', null, "System Admin created account '{$username}' ({$role})");
+    $actor = AdminScope::isSchoolAdmin($request) ? 'School Admin' : 'System Admin';
+    AuditTrail::record('created', 'Account', null, "{$actor} created account '{$username}' ({$role})");
 
     DB::table('accounts')->insert([
         'name' => AccountName::seal($validated['name']),
@@ -1694,7 +1723,7 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
 })->name('dashboard.system-admin.accounts.store');
 
 Route::post('/dashboard/system-admin/requests/{requestId}/approve', function (Request $request, string $requestId) {
-    if ($request->session()->get('active_role') !== 'system_admin') {
+    if (! AdminScope::isAdmin($request)) {
         return redirect()
             ->route('login')
             ->with('error', 'Only System Admin can approve account requests.');
@@ -1704,7 +1733,8 @@ Route::post('/dashboard/system-admin/requests/{requestId}/approve', function (Re
         ? DB::table('account_requests')->where('id', $requestId)->first()
         : null;
 
-    if (! $target) {
+    // Another school's request reads as missing to a School Admin.
+    if (! $target || ! AdminScope::covers($request, $target->institution_id ?? null)) {
         return back()->with('error', 'Account request not found.');
     }
 
@@ -1745,7 +1775,7 @@ Route::post('/dashboard/system-admin/requests/{requestId}/approve', function (Re
 })->name('dashboard.system-admin.requests.approve');
 
 Route::post('/dashboard/system-admin/requests/{requestId}/decline', function (Request $request, string $requestId) {
-    if ($request->session()->get('active_role') !== 'system_admin') {
+    if (! AdminScope::isAdmin($request)) {
         return redirect()
             ->route('login')
             ->with('error', 'Only System Admin can decline account requests.');
@@ -1755,7 +1785,7 @@ Route::post('/dashboard/system-admin/requests/{requestId}/decline', function (Re
         ? DB::table('account_requests')->where('id', $requestId)->first()
         : null;
 
-    if (! $target) {
+    if (! $target || ! AdminScope::covers($request, $target->institution_id ?? null)) {
         return back()->with('error', 'Account request not found.');
     }
 
@@ -1949,6 +1979,7 @@ Route::post('/login', function (Request $request) {
         'feeding_coor' => 'dashboard.feedingcor-dashboard',
         'nutricor' => 'dashboard.nutricor-dashboard',
         'system_admin' => 'dashboard.system-admin',
+        'school_admin' => 'dashboard.system-admin',
     ];
 
     return redirect()->route($routeByRole[$role] ?? 'dashboard.school-nurse');
@@ -1976,9 +2007,61 @@ Route::post('/admin-login', function (Request $request) {
     $usable = $expectedUsername !== '' && $expectedPassword !== ''
         && ($expectedPassword !== 'admin123' || app()->environment('local', 'testing'));
 
-    if (! $usable
-        || ! hash_equals($expectedUsername, $validated['username'])
-        || ! hash_equals($expectedPassword, $validated['password'])) {
+    $isSystemAdmin = $usable
+        && hash_equals($expectedUsername, $validated['username'])
+        && hash_equals($expectedPassword, $validated['password']);
+
+    // Not the System Admin: a School Admin's account is a row in `accounts`,
+    // stamped with its one school. Same rules as the school sign-in: an empty
+    // hash matches nothing, and an unknown username costs a hash check too, so
+    // the answer and its timing do not tell who has an account.
+    $schoolAdmins = collect();
+    if (! $isSystemAdmin) {
+        $schoolAdminRows = Schema::hasTable('accounts')
+            ? DB::table('accounts')
+                ->where('role', AdminScope::SCHOOL_ADMIN)
+                ->whereNotNull('institution_id')
+                ->whereRaw('LOWER(TRIM(username)) = ?', [strtolower(trim($validated['username']))])
+                ->get()
+                ->map(fn ($r) => (array) $r)
+            : collect();
+
+        if ($schoolAdminRows->isEmpty()) {
+            Hash::check((string) $validated['password'], LoginThrottle::DUMMY_HASH);
+        }
+
+        $schoolAdmins = $schoolAdminRows
+            ->filter(fn (array $a) => (string) ($a['password_hash'] ?? '') !== ''
+                && Hash::check((string) $validated['password'], (string) $a['password_hash']))
+            ->values();
+    }
+
+    // One person administering two schools under one username and password
+    // picks the school on the school sign-in page, which asks for it.
+    if ($schoolAdmins->count() > 1) {
+        return back()
+            ->withInput(['username' => $validated['username']])
+            ->with('error', 'This username is an admin in more than one school. Sign in on the school sign-in page and select your school.');
+    }
+
+    if ($schoolAdmins->count() === 1) {
+        $account = $schoolAdmins->first();
+        $throttle->clear();
+
+        $request->session()->invalidate();
+        $request->session()->forget(['assigned_grade_level', 'assigned_section', 'assigned_school_name', 'assigned_school_year']);
+        $request->session()->put('active_role', AdminScope::SCHOOL_ADMIN);
+        $request->session()->put('active_name', AccountName::read($account['name'] ?? '') ?: ((string) ($account['username'] ?? '') ?: 'School Admin'));
+        $request->session()->put('active_username', (string) ($account['username'] ?? ''));
+        $request->session()->put('active_school_name', $account['school_name'] ?? null);
+        $request->session()->put('active_institution_id', $account['institution_id'] ?? null);
+
+        AuditTrail::record('login', null, null, "Logged in as '".strtolower(trim((string) ($account['username'] ?? '')))."' (school_admin)");
+
+        return redirect()->route('dashboard.system-admin');
+    }
+
+    if (! $isSystemAdmin) {
         $throttle->fail();
         AuditTrail::record('login_failed', null, null, "Failed System Admin login attempt for username '{$validated['username']}'");
 

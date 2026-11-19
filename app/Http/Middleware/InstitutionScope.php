@@ -17,6 +17,8 @@ class InstitutionScope
         'school_head',
         'feeding_coor',
         'nutricor',
+        // One school's admin (AdminScope): without its school it covers nothing.
+        'school_admin',
     ];
 
     // These roles see all schools — no institution filter applied.

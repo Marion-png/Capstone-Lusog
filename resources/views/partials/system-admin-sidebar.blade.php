@@ -73,7 +73,7 @@
         <div class="asb-avatar">{{ $saInitials ?: 'SA' }}</div>
         <div class="asb-user-meta">
             <div class="asb-user-name">{{ $saName }}</div>
-            <div class="asb-user-role">Platform Control</div>
+            <div class="asb-user-role">{{ session('active_role') === 'school_admin' ? 'School Admin' : 'Platform Control' }}</div>
         </div>
         {{-- Signing out changes state, so it posts a CSRF-protected form
              rather than following a link. --}}

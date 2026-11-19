@@ -20,7 +20,7 @@
             'class_adviser' => 'partials.adviser-sidebar',
             'school_head' => 'partials.schoolhead-sidebar',
             'feeding_coor' => 'partials.feedingcor-sidebar',
-            'system_admin' => 'partials.system-admin-sidebar',
+            'system_admin', 'school_admin' => 'partials.system-admin-sidebar',
             default => 'partials.clinic-rail',
         };
     @endphp

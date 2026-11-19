@@ -45,6 +45,7 @@ Roles are strings in `session('active_role')`:
 | `feeding_coor` | SBFP: attendance, enrolment, SBFP forms, BMI reports |
 | `nutricor` | Nutrition analytics, consolidated reports |
 | `system_admin` | Account approval/management; the only unscoped role |
+| `school_admin` | **School Admin** — the System Admin's Control Center for **one** school (`App\Support\AdminScope`): its accounts, requests, feeding policy, calendar entries, audit trail. An `accounts` row; only the System Admin appoints one (or `php artisan accounts:create-school-admin`). Never syncs holidays (`SchoolAdminTest`) |
 
 ### Authentication and route guard
 
