@@ -227,41 +227,43 @@ class DavaoCityNationalHighSchoolTest extends TestCase
             $this->assertMatchesRegularExpression('/Beneficiary<\/div>.*?kpi-value">'.$count.'</s', $cards, $school->name);
             $this->flushSession();
 
-            $summary = $this->withSession($this->staff('nutricor', $school))
-                ->get('/dashboard/nutricor-reports')
-                ->assertOk()
-                ->viewData('summary');
-            $this->assertSame($count, $summary['total_population'], $school->name);
-            $this->flushSession();
-
-            $consolidated = $this->withSession($this->staff('nutricor', $school))
-                ->get('/dashboard/nutricor-consolidated')
-                ->assertOk()
-                ->assertSee($school->name);
-            $this->assertSame($count, $consolidated->viewData('totalStudents'), $school->name);
+            // The School Head's masterlist export lists this school's learners
+            // and nobody else's.
+            $export = $this->withSession($this->staff('school_head', $school))
+                ->get('/dashboard/school-head/masterlist/export')
+                ->assertOk();
+            $sheet = $this->workbookText($export->baseResponse->getFile()->getPathname());
+            $this->assertSame($count, preg_match_all('/90000000(?:01|02)0\d/', $sheet), $school->name);
+            $this->assertStringNotContainsString($school->is($this->davaoCity) ? '900000000101' : '900000000202', $sheet);
             $this->flushSession();
         }
-
-        $sections = $this->withSession($this->staff('nutricor', $this->davaoCity))
-            ->get('/dashboard/nutricor-consolidated')
-            ->viewData('sectionBreakdown');
-        $this->assertSame(['Grade 7 / ROSAL', 'Grade 7 / SAMPAGUITA'], $sections->keys()->all());
     }
 
     /** @test */
-    public function the_consolidated_report_reads_nothing_without_a_school(): void
+    public function a_report_reads_nothing_without_a_school(): void
     {
         $this->learner($this->davaoCity, 'Montecillo, Teresa L.', '900000000202', 'Grade 7 / SAMPAGUITA');
 
-        $response = $this->withSession(['active_role' => 'nutricor', 'active_name' => 'Test', 'active_username' => 'test'])
-            ->get('/dashboard/nutricor-consolidated');
+        $response = $this->withSession(['active_role' => 'feeding_coor', 'active_name' => 'Test', 'active_username' => 'test'])
+            ->get('/dashboard/feedingcor-sbfp-forms');
 
-        // Turned away for having no school, or shown nothing: never every school.
-        if ($response->getStatusCode() === 200) {
-            $this->assertSame(0, $response->viewData('totalStudents'));
-        } else {
-            $this->assertContains($response->getStatusCode(), [302, 403]);
+        // Turned away for having no school: never every school.
+        $this->assertContains($response->getStatusCode(), [302, 403]);
+    }
+
+    /** The text of every part of a workbook. */
+    private function workbookText(string $path): string
+    {
+        $zip = new \ZipArchive;
+        $this->assertTrue($zip->open($path) === true);
+
+        $text = '';
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $text .= (string) $zip->getFromIndex($i);
         }
+        $zip->close();
+
+        return $text;
     }
 
     /** @test */
@@ -463,12 +465,16 @@ class DavaoCityNationalHighSchoolTest extends TestCase
     {
         $this->assertStringEndsWith('school-logos/sta-ana-national-high-school.png', SchoolLetterhead::schoolLogo($this->staAna->id));
         $this->assertStringEndsWith('school-logos/davao-city-national-high-school.png', SchoolLetterhead::schoolLogo($this->davaoCity->id));
-        $this->assertNotNull(SchoolLetterhead::seals($this->staAna->id)['school']);
         $this->assertNotNull(SchoolLetterhead::sealFiles($this->staAna->id)['school']);
+        $this->assertNotNull(SchoolLetterhead::sealFiles($this->davaoCity->id)['school']);
+        // A page is only ever pointed at the signed-in school's seal: with
+        // nobody signed in there is no seal address to hand out.
+        $this->assertNull(SchoolLetterhead::seals($this->staAna->id)['school']);
 
         $this->withSession($this->staff('feeding_coor', $this->davaoCity))
             ->get('/dashboard/feedingcor-sbfp-forms')
             ->assertOk()
+            ->assertSee('school-seal/davao-city-national-high-school.png', false)
             ->assertDontSee('sta-ana-national-high-school.png', false);
 
         $this->flushSession();
@@ -476,7 +482,8 @@ class DavaoCityNationalHighSchoolTest extends TestCase
         $this->withSession($this->staff('feeding_coor', $this->staAna))
             ->get('/dashboard/feedingcor-sbfp-forms')
             ->assertOk()
-            ->assertSee('school-logos/sta-ana-national-high-school.png', false);
+            ->assertSee('school-seal/sta-ana-national-high-school.png', false)
+            ->assertDontSee('davao-city-national-high-school.png', false);
     }
 
     private function learner(Institution $school, string $name, string $lrn, string $section = 'Grade 8 / NARRA', ?string $typedSchool = null): StudentHealthRecord

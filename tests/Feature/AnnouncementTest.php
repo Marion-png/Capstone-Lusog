@@ -48,10 +48,9 @@ class AnnouncementTest extends TestCase
     }
 
     /**
-     * The Nutrition Coordinator is no longer an audience of its own: the
-     * dialog does not offer it and the endpoint refuses it, while the role
-     * still reads announcements addressed to everyone, and an announcement
-     * posted to it before the change still names the role.
+     * The Nutrition Coordinator was removed from SIGLA: the dialog does not
+     * offer it as an audience and the endpoint refuses it, while an
+     * announcement posted to it before the change still names the role.
      */
     #[Test]
     public function the_nutrition_coordinator_is_not_an_audience(): void
@@ -67,8 +66,8 @@ class AnnouncementTest extends TestCase
         $this->withSession($this->sessionFor('school_nurse'))
             ->post(route('announcements.store'), [
                 'title' => 'For the nutricor',
-                'body' => 'Should be refused.',
                 'audience' => ['nutricor'],
+                'body' => 'Should be refused.',
             ])
             ->assertSessionHasErrors();
 
@@ -89,7 +88,7 @@ class AnnouncementTest extends TestCase
     #[Test]
     public function other_roles_cannot_post_an_announcement(): void
     {
-        foreach (['class_adviser', 'clinic_staff', 'school_head', 'feeding_coor', 'nutricor', 'system_admin'] as $role) {
+        foreach (['class_adviser', 'clinic_staff', 'school_head', 'feeding_coor', 'system_admin'] as $role) {
             $response = $this->withSession($this->sessionFor($role))
                 ->post(route('announcements.store'), [
                     'title' => 'Should not be allowed',
@@ -131,7 +130,6 @@ class AnnouncementTest extends TestCase
             'clinic_staff' => '/dashboard/clinic-staff',
             'school_head' => '/dashboard/school-head',
             'feeding_coor' => '/dashboard/feedingcor-dashboard',
-            'nutricor' => '/dashboard/nutricor-dashboard',
         ];
 
         foreach ($dashboards as $role => $url) {

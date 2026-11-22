@@ -210,7 +210,7 @@ class StudentMedicalDocumentTest extends TestCase
     {
         $this->makeLearner('LRN001');
 
-        foreach (['school_head', 'feeding_coor', 'nutricor', 'system_admin'] as $role) {
+        foreach (['school_head', 'feeding_coor', 'system_admin'] as $role) {
             $this->withSession(['active_role' => $role, 'active_institution_id' => $this->school->id])
                 ->post(
                     route('student-documents.store', ['lrn' => 'LRN001']),
@@ -413,7 +413,7 @@ class StudentMedicalDocumentTest extends TestCase
         $this->makeLearner('LRN001');
         $this->upload('LRN001')->assertCreated();
 
-        foreach (['school_head', 'feeding_coor', 'nutricor', 'system_admin'] as $role) {
+        foreach (['school_head', 'feeding_coor', 'system_admin'] as $role) {
             $this->withSession(['active_role' => $role, 'active_institution_id' => $this->school->id])
                 ->getJson(route('student-documents.pulse', ['lrn' => 'LRN001']))
                 ->assertForbidden();
@@ -548,7 +548,7 @@ class StudentMedicalDocumentTest extends TestCase
     {
         $document = $this->makeDocument('LRN001', $this->school);
 
-        foreach (['school_head', 'feeding_coor', 'nutricor', 'system_admin'] as $role) {
+        foreach (['school_head', 'feeding_coor', 'system_admin'] as $role) {
             $this->withSession(['active_role' => $role, 'active_institution_id' => $this->school->id])
                 ->get(route('student-documents.download', $document->id))
                 ->assertForbidden();

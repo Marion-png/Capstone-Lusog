@@ -667,7 +667,6 @@ class MedicineInventoryController extends Controller
             'clinic_teacher' => 'dashboard.clinic-teacher',
             'school_head' => 'dashboard.school-head',
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
-            'nutricor' => 'dashboard.nutricor-dashboard',
             'system_admin' => 'dashboard.system-admin',
             'school_admin' => 'dashboard.system-admin',
         ];

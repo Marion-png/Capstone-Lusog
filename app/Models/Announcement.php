@@ -45,9 +45,8 @@ class Announcement extends Model
     /**
      * Roles an announcement can be addressed to.
      *
-     * The Nutrition Coordinator was taken off the list: that role still reads
-     * the board (an announcement to everyone reaches it), but it is no longer
-     * offered as an audience of its own.
+     * The Nutrition Coordinator is not on it: that role was removed from
+     * SIGLA on 2026-11-22.
      */
     public const AUDIENCES = [
         'class_adviser' => 'Class Advisers',
@@ -61,6 +60,8 @@ class Announcement extends Model
     /**
      * Labels for audiences no longer offered, so an announcement posted to
      * one before it was retired still reads as the role rather than its key.
+     * The Nutrition Coordinator's role is gone, but old announcements that
+     * named it stay on the board.
      */
     private const RETIRED_AUDIENCES = [
         'nutricor' => 'Nutrition Coordinator',

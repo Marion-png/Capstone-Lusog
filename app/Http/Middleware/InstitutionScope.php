@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\AccountSettings;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,7 +17,6 @@ class InstitutionScope
         'class_adviser',
         'school_head',
         'feeding_coor',
-        'nutricor',
         // One school's admin (AdminScope): without its school it covers nothing.
         'school_admin',
     ];
@@ -31,6 +31,14 @@ class InstitutionScope
         }
 
         $role = (string) $request->session()->get('active_role');
+
+        // A session still holding a role SIGLA no longer has (signed in before
+        // the Nutrition Coordinator was removed) is signed out on every path.
+        if (in_array($role, AccountSettings::RETIRED_ROLES, true) && ! $this->isSignInPage($request)) {
+            $request->session()->invalidate();
+
+            return redirect()->route('login');
+        }
 
         if (in_array($role, self::SCOPED_ROLES, true)) {
             $institutionId = $request->session()->get('active_institution_id');

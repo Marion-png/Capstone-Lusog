@@ -129,7 +129,7 @@ class ConsultationPrivacyTest extends TestCase
         $this->assertTrue(ConsultationVisibility::maySeeDetails('school_nurse'));
         $this->assertTrue(ConsultationVisibility::maySeeDetails('clinic_staff'));
 
-        foreach (['class_adviser', 'school_head', 'feeding_coor', 'nutricor', 'system_admin', '', null] as $role) {
+        foreach (['class_adviser', 'school_head', 'feeding_coor', 'system_admin', '', null] as $role) {
             $this->assertFalse(
                 ConsultationVisibility::maySeeDetails($role),
                 'Role '.var_export($role, true).' must not see consultation details.'

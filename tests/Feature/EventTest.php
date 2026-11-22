@@ -52,7 +52,7 @@ class EventTest extends TestCase
     #[Test]
     public function other_roles_cannot_schedule_an_event(): void
     {
-        foreach (['class_adviser', 'clinic_staff', 'school_head', 'feeding_coor', 'nutricor', 'system_admin'] as $role) {
+        foreach (['class_adviser', 'clinic_staff', 'school_head', 'feeding_coor', 'system_admin'] as $role) {
             $response = $this->withSession($this->sessionFor($role))
                 ->post(route('events.store'), [
                     'title' => 'Should not be allowed',
@@ -212,7 +212,7 @@ class EventTest extends TestCase
     {
         $event = $this->postedEvent();
 
-        foreach (['class_adviser', 'clinic_staff', 'clinic_teacher', 'school_head', 'feeding_coor', 'nutricor', 'system_admin'] as $role) {
+        foreach (['class_adviser', 'clinic_staff', 'clinic_teacher', 'school_head', 'feeding_coor', 'system_admin'] as $role) {
             $this->withSession($this->sessionFor($role))
                 ->post(route('events.update', $event), [
                     'title' => 'Hijacked',

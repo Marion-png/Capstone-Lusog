@@ -142,14 +142,11 @@ html .card:hover { box-shadow: var(--sk-shadow-lift); border-color: var(--sk-lin
 
 /* Headline-number cards stand on a primary-green base edge; their colour
    lives in the icon tile, as in the adviser's four cards. */
-html .kpi, html .dashboard-stat-card, html .card.stat {
+html .kpi, html .dashboard-stat-card {
 	border: 1px solid var(--sk-line);
 	border-bottom: 4px solid var(--sk-primary);
 	border-radius: 16px;
 }
-/* The Nutrition Coordinator's cards carry no icon tile, so their colour
-   stays on the left edge. */
-html .card.stat { border-left-width: 4px; }
 html .kpi::before { display: none; }
 html .kpi-icon { width: 42px; height: 42px; border-radius: 12px; }
 html .kpi-icon svg { width: 20px; height: 20px; }

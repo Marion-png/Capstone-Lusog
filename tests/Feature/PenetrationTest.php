@@ -205,7 +205,7 @@ class PenetrationTest extends TestCase
     #[Test]
     public function no_other_role_can_create_an_account(): void
     {
-        foreach (['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor'] as $role) {
+        foreach (['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor'] as $role) {
             $this->withSession(['active_role' => $role, 'active_institution_id' => $this->school->id, 'active_username' => 'x'])
                 ->post('/dashboard/system-admin/accounts', [
                     'name' => 'Planted', 'username' => "planted.{$role}", 'password' => 'planted123',

@@ -4,12 +4,9 @@
     Account details, password changes and teacher class reassignment. Each
     form acts only on the signed-in account; roles and schools stay read-only.
 
-    The shell around this is the role's own (dashboard/settings for the six
-    roles on the LUSOG rail, nutricor/settings for that role's layout), because
-    a page has to arrive in the rail its reader navigates by. The body is one
-    copy so the two shells cannot drift — and css/settings.css styles all of
-    it under .set-page, so it looks the same whichever shell's base styles it
-    lands on.
+    The shell around this is dashboard/settings, which puts it in the rail of
+    whichever role is reading; css/settings.css styles all of it under
+    .set-page.
 
     Expects: $profile (App\Support\AccountSettings::profileFor) and
     $passwordBlockedReason, $assignmentSchoolYear, $calendarSchoolYear,

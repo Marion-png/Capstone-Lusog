@@ -1,12 +1,9 @@
 /*
  * Account settings page (partials/settings-panels).
  *
- * The same body is hosted by two shells: dashboard/settings, which inlines
- * css/lusog-theme.css before this sheet, and nutricor/settings, whose layout
- * has its own older base styles and only the shared palette's tokens. So
- * every component the body uses (card, title, label, input, button, flash)
- * is styled here under .set-page, against the --lg-* tokens both shells
- * define. Either shell then shows the identical page.
+ * Hosted by dashboard/settings, which inlines css/lusog-theme.css before
+ * this sheet. Every component the body uses (card, title, label, input,
+ * button, flash) is styled here under .set-page, against the --lg-* tokens.
  *
  * Layout: the account as a profile card on the left, the things that can
  * be changed stacked on the right.

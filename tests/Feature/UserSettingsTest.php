@@ -74,7 +74,7 @@ class UserSettingsTest extends TestCase
     {
         foreach ([
             'school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser',
-            'school_head', 'feeding_coor', 'nutricor', 'system_admin',
+            'school_head', 'feeding_coor', 'system_admin',
         ] as $role) {
             $this->withSession($this->sessionFor($role))
                 ->get(route('settings'))
@@ -394,7 +394,6 @@ class UserSettingsTest extends TestCase
             'class_adviser' => '/dashboard/class-adviser',
             'school_head' => '/dashboard/school-head',
             'feeding_coor' => '/dashboard/feedingcor-dashboard',
-            'nutricor' => '/dashboard/nutricor-dashboard',
             'system_admin' => '/dashboard/system-admin',
         ];
 

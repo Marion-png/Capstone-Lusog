@@ -4,7 +4,9 @@ namespace App\Support;
 
 use App\Models\HealthConsentForm;
 use App\Models\Institution;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * The heading every DepEd form in this app is printed under.
@@ -71,13 +73,20 @@ final class SchoolLetterhead
     public const DEPED_LOGO = 'images/deped-logo.png';
 
     /**
-     * Each school's own seal: `public/images/school-logos/<slug of its name>.png`,
+     * Each school's own seal: `resources/school-logos/<slug of its name>.png`,
      * e.g. `sta-ana-national-high-school.png`. It is looked up per school and
      * never shared: one file for every school printed Sta. Ana's seal on Davao
      * City National High School's forms. A school that has not dropped its seal
      * in is drawn the placeholder outline, never a neighbour's.
+     *
+     * The folder is outside `public/` on purpose. A seal is served only by the
+     * `school-seal` route, and only to somebody signed in at that school, so
+     * no account can open another school's seal, even by typing its address.
      */
-    public const SCHOOL_LOGO_DIR = 'images/school-logos';
+    public const SCHOOL_LOGO_DIR = 'school-logos';
+
+    /** The route that serves the signed-in school's seal: `school-seal/<slug>.png`. */
+    public const SCHOOL_SEAL_ROUTE = 'school-seal';
 
     /**
      * The Department of Health seal.
@@ -133,7 +142,10 @@ final class SchoolLetterhead
      * instead of a broken image and a school without seals still prints a
      * correctly-shaped heading.
      *
-     * The school seal is the given school's, or the signed-in session's.
+     * The school seal is the signed-in school's, as the address the
+     * `school-seal` route serves it at. A school named that is not the
+     * session's gets no seal at all: the route would refuse it, and a page
+     * must never point at another school's seal.
      *
      * @return array{deped: ?string, school: ?string, doh: ?string}
      */
@@ -141,21 +153,81 @@ final class SchoolLetterhead
     {
         return [
             'deped' => self::sealPath(self::DEPED_LOGO),
-            'school' => self::sealPath(self::schoolLogo($institutionId)),
+            'school' => self::schoolSealUrl($institutionId),
             'doh' => self::sealPath(self::DOH_LOGO),
         ];
     }
 
     /**
-     * Where the given school's seal lives (whether or not it is there yet). The
-     * school is the one named, else the session's; with neither there is no
-     * school seal to draw.
+     * The seal file on disk for the given school (whether or not it is there
+     * yet). The school is the one named, else the session's; with neither
+     * there is no school seal to draw.
      */
     public static function schoolLogo(?int $institutionId = null): string
     {
+        return resource_path(self::SCHOOL_LOGO_DIR.'/'.self::schoolSlug($institutionId).'.png');
+    }
+
+    /**
+     * The signed-in school's seal, as the address a page draws it from, or
+     * null where that school has none or another school was named.
+     */
+    private static function schoolSealUrl(?int $institutionId): ?string
+    {
+        $sessionSchool = self::sessionInstitutionId();
+
+        if ($sessionSchool === null || ($institutionId !== null && $institutionId !== $sessionSchool)) {
+            return null;
+        }
+
+        $file = self::schoolLogo($sessionSchool);
+
+        return is_file($file) ? self::SCHOOL_SEAL_ROUTE.'/'.basename($file) : null;
+    }
+
+    /**
+     * The `school-seal` route: the seal of the school the request is signed in
+     * at, and only when the address names that school's own seal. Anything
+     * else — another school's seal, no school, no sign-in — is not found.
+     *
+     * The browser asks again on every use (`no-cache`) and is told "not
+     * changed" for its own seal: a cached copy is never shown to the next
+     * account signed in on the same browser without the server agreeing.
+     */
+    public static function schoolSealResponse(Request $request, string $seal): Response
+    {
+        $institutionId = self::sessionInstitutionId();
+
+        abort_if($institutionId === null || ! $request->session()->has('active_role'), 404);
+
+        $file = self::schoolLogo($institutionId);
+
+        abort_unless($seal === basename($file) && is_file($file), 404);
+
+        $response = response()->file($file, [
+            'Content-Type' => 'image/png',
+            'Cache-Control' => 'private, no-cache',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+        $response->setAutoEtag();
+        $response->isNotModified($request);
+
+        return $response;
+    }
+
+    private static function schoolSlug(?int $institutionId): string
+    {
         $slug = Str::slug(self::schoolNameFor($institutionId));
 
-        return self::SCHOOL_LOGO_DIR.'/'.($slug !== '' ? $slug : '-no-school').'.png';
+        return $slug !== '' ? $slug : '-no-school';
+    }
+
+    private static function sessionInstitutionId(): ?int
+    {
+        $request = request();
+        $session = $request?->hasSession() ? $request->session() : null;
+
+        return ((int) ($session?->get('active_institution_id') ?? 0)) ?: null;
     }
 
     /**
@@ -165,9 +237,7 @@ final class SchoolLetterhead
      */
     private static function schoolNameFor(?int $institutionId): string
     {
-        $request = request();
-        $session = $request?->hasSession() ? $request->session() : null;
-        $id = $institutionId ?: ((int) ($session?->get('active_institution_id') ?? 0) ?: null);
+        $id = $institutionId ?: self::sessionInstitutionId();
 
         return $id === null ? '' : trim((string) self::institution($id)?->name);
     }
@@ -256,8 +326,9 @@ final class SchoolLetterhead
     public static function sealFiles(?int $institutionId = null): array
     {
         $file = static fn (string $relative): ?string => is_file(public_path($relative)) ? public_path($relative) : null;
+        $school = self::schoolLogo($institutionId);
 
-        return ['deped' => $file(self::DEPED_LOGO), 'school' => $file(self::schoolLogo($institutionId))];
+        return ['deped' => $file(self::DEPED_LOGO), 'school' => is_file($school) ? $school : null];
     }
 
     /**

@@ -202,8 +202,7 @@
             <h2><span>{{ $no('users') }}</span>{{ $sections['users'] }}</h2>
             <p>
                 Only authorized personnel of the school may use SIGLA, each in one role: School Nurse, Clinic Staff,
-                Clinic Teacher, Class Adviser, School Head, Feeding Program Coordinator, Nutrition Coordinator, or
-                System Administrator. Learners and parents do not have accounts.
+                Clinic Teacher, Class Adviser, School Head, Feeding Program Coordinator, or System Administrator. Learners and parents do not have accounts.
             </p>
             <ul>
                 <li>An account is given only after a request is reviewed and approved by the System Administrator. Approval may be refused.</li>

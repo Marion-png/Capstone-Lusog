@@ -142,17 +142,6 @@ class MedicalCertificateTest extends TestCase
     }
 
     /** @test */
-    public function nutritional_coordinator_cannot_upload_certificates(): void
-    {
-        $this->makeRecord('LRN001');
-
-        $response = $this->withSession(['active_role' => 'nutricor', 'active_institution_id' => $this->institution->id])
-            ->post(route('medical-certificate.store'), $this->validUploadPayload('LRN001'));
-
-        $response->assertStatus(403);
-    }
-
-    /** @test */
     public function unauthenticated_request_cannot_upload_certificates(): void
     {
         $this->makeRecord('LRN001');
@@ -369,14 +358,6 @@ class MedicalCertificateTest extends TestCase
     }
 
     /** @test */
-    public function nutritional_coordinator_cannot_download_certificates(): void
-    {
-        $this->withSession(['active_role' => 'nutricor', 'active_institution_id' => $this->institution->id])
-            ->get(route('medical-certificate.download', 999))
-            ->assertStatus(403);
-    }
-
-    /** @test */
     public function unauthenticated_user_cannot_download_certificates(): void
     {
         $this->get(route('medical-certificate.download', 999))
@@ -388,7 +369,7 @@ class MedicalCertificateTest extends TestCase
     /** @test */
     public function conditions_api_is_denied_for_unauthorized_roles(): void
     {
-        foreach (['school_head', 'feeding_coor', 'nutricor', 'system_admin'] as $role) {
+        foreach (['school_head', 'feeding_coor', 'system_admin'] as $role) {
             $this->withSession(['active_role' => $role, 'active_institution_id' => $this->institution->id])
                 ->getJson(route('api.student-conditions', ['lrn' => 'X']))
                 ->assertStatus(403);

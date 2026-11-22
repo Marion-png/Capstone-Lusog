@@ -239,7 +239,6 @@ class WorkspaceSyncTest extends TestCase
             'head health overview' => ['school_head', '/dashboard/school-head/health'],
             'head consent compliance' => ['school_head', '/dashboard/school-head/consent'],
             'head inventory' => ['school_head', '/dashboard/school-head/inventory'],
-            'nutricor dashboard' => ['nutricor', '/dashboard/nutricor-dashboard'],
         ];
     }
 

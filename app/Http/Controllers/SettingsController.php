@@ -32,20 +32,13 @@ class SettingsController extends Controller
 {
     /**
      * The page, in whichever shell the signed-in role belongs to.
-     *
-     * The Nutrition Coordinator's pages are built on their own layout rather
-     * than the shared LUSOG shell, so that role gets its own thin host around
-     * the **same** body partial — one reading, two shells, exactly as the
-     * Masterlist is rendered in the nurse's rail and the head's.
      */
     public function index(Request $request)
     {
         $profile = AccountSettings::profileFor($request);
         $institutionId = (int) $request->session()->get('active_institution_id');
 
-        $view = $profile['role'] === 'nutricor' ? 'nutricor.settings' : 'dashboard.settings';
-
-        return view($view, [
+        return view('dashboard.settings', [
             'profile' => $profile,
             'passwordBlockedReason' => AccountSettings::passwordBlockedReason($profile),
             'assignmentSchoolYear' => StudentHealthRecord::currentSchoolYear(),

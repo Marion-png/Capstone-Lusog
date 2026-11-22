@@ -218,7 +218,7 @@ class NurseLusogShellTest extends TestCase
     /** A role with no business in it is turned away. */
     public function test_another_role_cannot_open_the_nutritional_status_list(): void
     {
-        foreach (['feeding_coor', 'nutricor', 'clinic_staff'] as $role) {
+        foreach (['feeding_coor', 'clinic_staff'] as $role) {
             $this->withSession(array_merge($this->nurseSession(), ['active_role' => $role]))
                 ->get('/dashboard/school-nurse/nutritional-status')
                 ->assertRedirect(route('login'));

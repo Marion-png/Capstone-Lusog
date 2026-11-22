@@ -137,7 +137,9 @@ if (! Schema::hasTable('accounts')) {
         }
         echo "\n";
 
-        $known = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor', 'system_admin'];
+        // The Nutrition Coordinator (nutricor) was removed on 2026-11-22: an
+        // account still holding it is reported as unrecognised.
+        $known = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'system_admin', 'school_admin'];
         $unknown = $accounts->pluck('role')->unique()->diff($known);
 
         if ($unknown->isEmpty()) {

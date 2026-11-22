@@ -9,8 +9,10 @@ use App\Models\Institution;
 use App\Models\Medicine;
 use App\Models\StudentHealthRecord;
 use App\Support\SchoolClock;
+use App\Support\SchoolLetterhead;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -20,7 +22,7 @@ use Tests\TestCase;
 /**
  * Opens every page and export a role can reach, at each of the two
  * registration schools, and requires that none of them shows the other
- * school's learners, medicines or announcements, and that an adviser sees
+ * school's learners, medicines, announcements or seal, and that an adviser sees
  * only their own section even beside another section of the same grade.
  * Every name and LRN below is invented.
  */
@@ -53,7 +55,7 @@ class SchoolSeparationCrawlTest extends TestCase
     {
         $cases = [];
 
-        foreach (['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor'] as $role) {
+        foreach (['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor'] as $role) {
             $cases["{$role} at Davao City"] = [$role, 'davao'];
             $cases["{$role} at Sta. Ana"] = [$role, 'staana'];
         }
@@ -98,6 +100,14 @@ class SchoolSeparationCrawlTest extends TestCase
                         $failures[] = "{$uri}: shows \"{$text}\"";
                     }
                 }
+
+                // The other school's seal, by name, as a workbook's picture or
+                // as a PDF's inline image.
+                foreach ($this->sealMarkers($other) as $how => $marker) {
+                    if (str_contains($body, $marker)) {
+                        $failures[] = "{$uri}: carries the other school's seal ({$how})";
+                    }
+                }
             }
 
             $this->flushSession();
@@ -120,7 +130,6 @@ class SchoolSeparationCrawlTest extends TestCase
             'class_adviser' => '/dashboard/class-adviser',
             'school_head' => '/dashboard/school-head/masterlist',
             'feeding_coor' => '/dashboard/feedingcor-dashboard',
-            'nutricor' => '/dashboard/nutricor-beneficiaries',
         ][$role];
 
         $this->withSession($this->sessionFor($role, $own))
@@ -161,6 +170,23 @@ class SchoolSeparationCrawlTest extends TestCase
         }
 
         return array_values(array_unique($uris));
+    }
+
+    /** @return array<string, string> how the seal would appear => the text that gives it away */
+    private function sealMarkers(Institution $school): array
+    {
+        // From the school's name, not from SchoolLetterhead, so a lookup that
+        // hands every school one seal cannot also fool this check.
+        $relative = SchoolLetterhead::SCHOOL_LOGO_DIR.'/'.Str::slug($school->name).'.png';
+        $bytes = (string) @file_get_contents(resource_path($relative));
+        $this->assertNotSame('', $bytes, "{$school->name} has no seal file at {$relative}.");
+        $encoded = base64_encode($bytes);
+
+        return [
+            'file name' => basename($relative),
+            'image bytes' => substr($bytes, intdiv(strlen($bytes), 2), 64),
+            'base64 image' => substr($encoded, intdiv(strlen($encoded), 8) * 4, 96),
+        ];
     }
 
     private function bodyOf($response): string

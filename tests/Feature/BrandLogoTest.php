@@ -32,7 +32,6 @@ class BrandLogoTest extends TestCase
             'class adviser' => ['/dashboard/class-adviser', 'class_adviser'],
             'school head' => ['/dashboard/school-head', 'school_head'],
             'feeding coordinator' => ['/dashboard/feedingcor-dashboard', 'feeding_coor'],
-            'nutrition coordinator' => ['/dashboard/nutricor-dashboard', 'nutricor'],
             'system admin' => ['/dashboard/system-admin', 'system_admin'],
         ];
     }

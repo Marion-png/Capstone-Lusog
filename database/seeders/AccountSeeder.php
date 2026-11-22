@@ -50,7 +50,6 @@ class AccountSeeder extends Seeder
             ['Clinic Teacher', 'clinicteacher1', 'clinic_teacher', null, null],
             ['Principal Lim', 'head1', 'school_head', null, null],
             ['Feeding Coordinator', 'feeding1', 'feeding_coor', null, null],
-            ['Nutrition Coordinator', 'nutri1', 'nutricor', null, null],
         ];
 
         foreach ($accounts as [$name, $username, $role, $grade, $section]) {

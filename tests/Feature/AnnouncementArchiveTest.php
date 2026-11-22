@@ -137,7 +137,6 @@ class AnnouncementArchiveTest extends TestCase
             'clinic_staff' => '/dashboard/clinic-staff',
             'school_head' => '/dashboard/school-head',
             'feeding_coor' => '/dashboard/feedingcor-dashboard',
-            'nutricor' => '/dashboard/nutricor-dashboard',
         ];
 
         foreach ($dashboards as $role => $url) {
@@ -225,7 +224,7 @@ class AnnouncementArchiveTest extends TestCase
     {
         $announcement = $this->makeAnnouncement();
 
-        foreach (['class_adviser', 'clinic_staff', 'school_head', 'feeding_coor', 'nutricor', 'system_admin'] as $role) {
+        foreach (['class_adviser', 'clinic_staff', 'school_head', 'feeding_coor', 'system_admin'] as $role) {
             $this->withSession($this->sessionFor($role))
                 ->post(route('announcements.archive', $announcement))
                 ->assertStatus(403);

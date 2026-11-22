@@ -145,7 +145,7 @@ class SbfpFormDownloadTest extends TestCase
         $this->assertStringContainsString('BASELINE NUTRITIONAL ASSESSMENT (BMI) REPORT', $text);
         $this->assertStringContainsString('GRADE 7 BMI', $text);
         $this->assertStringContainsString('OVERALL BMI', $text);
-        $this->assertStringContainsString('INSIGHT', $text);
+        $this->assertStringContainsString('SUMMARY', $text);
         $this->assertStringContainsString('PREPARED BY:', $text);
 
         // The figure the page shows: one wasted, stunted male in Grade 7.
@@ -361,7 +361,7 @@ class SbfpFormDownloadTest extends TestCase
     #[Test]
     public function nobody_else_can_download_a_form(): void
     {
-        foreach (['class_adviser', 'nutricor', 'clinic_staff'] as $role) {
+        foreach (['class_adviser', 'clinic_staff'] as $role) {
             $this->download(['template' => 'bmi-report'], $role)->assertRedirect(route('login'));
         }
 

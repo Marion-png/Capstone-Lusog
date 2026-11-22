@@ -94,7 +94,6 @@ class EnsureActiveSession
             $request->is('dashboard/class-adviser*', 'adviser', 'adviser/*') => [['class_adviser'], 'class_adviser'],
             $request->is('dashboard/school-head*') => [['school_head'], 'school_head'],
             $request->is('dashboard/feedingcor*') => [['feeding_coor'], 'feeding_coor'],
-            $request->is('dashboard/nutricor*') => [['nutricor'], 'nutricor'],
             $request->is('dashboard/clinic-staff*') => [['clinic_staff'], 'clinic_staff'],
             $request->is('dashboard/clinic-teacher*') => [['clinic_teacher'], 'clinic_teacher'],
             $request->is('dashboard/consultation-log*', 'dashboard/medicine-inventory*') => [['clinic_staff', 'school_nurse', 'clinic_teacher'], 'clinic_staff'],

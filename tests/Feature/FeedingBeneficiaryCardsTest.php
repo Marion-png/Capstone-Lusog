@@ -430,7 +430,7 @@ class FeedingBeneficiaryCardsTest extends TestCase
             ->assertSee('data-masterlist-sheet', false)
             ->assertSee('src="'.asset(SchoolLetterhead::seals()['deped']).'"', false)
             // Test School has no seal of its own, and never prints another school's.
-            ->assertDontSee('school-logos/sta-ana-national-high-school.png', false)
+            ->assertDontSee('sta-ana-national-high-school.png', false)
             ->assertSeeInOrder(['Republika ng Pilipinas', 'Kagawaran ng Edukasyon', 'Division of Davao City Schools', 'TEST SCHOOL', 'OFFICE OF THE PRINCIPAL'])
             ->assertSee(FeedingMasterlistExportController::LISTS['beneficiaries'][0])
             ->assertSeeInOrder(['Carla Cruz', 'Ana Abad'])

@@ -31,11 +31,11 @@ use Illuminate\Support\Facades\DB;
 class AccountSettings
 {
     /**
-     * The seven roles as a person reads them.
+     * The roles as a person reads them.
      *
      * Kept here rather than in a view because the Settings page, which is
-     * rendered in six different shells, must name a role the same way in all
-     * of them.
+     * rendered in several different shells, must name a role the same way in
+     * all of them.
      */
     public const ROLE_LABELS = [
         'school_nurse' => 'School Nurse',
@@ -44,10 +44,20 @@ class AccountSettings
         'class_adviser' => 'Class Adviser',
         'school_head' => 'School Head',
         'feeding_coor' => 'Feeding Coordinator',
-        'nutricor' => 'Nutrition Coordinator',
         'system_admin' => 'System Admin',
         'school_admin' => 'School Admin',
     ];
+
+    /**
+     * The roles a school's staff hold: what a person may request, what an
+     * admin may create or approve, each scoped to one school. The one list,
+     * so a role taken out of SIGLA (the Nutrition Coordinator, 2026-11-22)
+     * cannot come back through registration, account creation or approval.
+     */
+    public const SCHOOL_ROLES = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor'];
+
+    /** Roles taken out of SIGLA: an account still holding one cannot sign in. */
+    public const RETIRED_ROLES = ['nutricor'];
 
     /** The session username the prototype guard seeds; it owns no account row. */
     public const PROTOTYPE_USERNAME = 'prototype';

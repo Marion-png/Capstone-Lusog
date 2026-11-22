@@ -75,6 +75,26 @@
 			@endif
 		</div>
 
+		@if ($forClinic)
+			{{-- One class's CLASS MASTERLIST, filled from the roster. Choosing a
+			     class opens its sheet below in place of any form template, and
+			     choosing a form template closes it (the page script). --}}
+			<section class="selector-wrap class-masterlist-wrap">
+				@if (session('error'))
+					<div class="flash err" role="alert">{{ session('error') }}</div>
+				@endif
+				<label class="selector-label" for="classMasterlistSelect">Class Masterlist</label>
+				<select id="classMasterlistSelect" class="select selector-input" autocomplete="off" aria-label="Select a class masterlist">
+					<option value="">Choose a class...</option>
+					@forelse ($classMasterlistClasses ?? [] as $classOption)
+						<option value="{{ $classOption }}">{{ str_replace(' / ', ' - ', $classOption) }}</option>
+					@empty
+						<option value="" disabled>No classes on file yet</option>
+					@endforelse
+				</select>
+			</section>
+		@endif
+
 		<section class="selector-wrap">
 			<div class="selector-grid">
 				<div class="selector-wide">
@@ -147,6 +167,12 @@
 		<div class="empty-panel placeholder-panel" id="emptyStatePanel">
 			Please select a form template to open the encoder.
 		</div>
+
+		@if ($forClinic)
+			{{-- Filled with the chosen class's sheet, fetched from
+			     ClinicClassMasterlistController::sheet. --}}
+			<section class="sheet-wrap form-panel" id="classMasterlistPanel" data-template="class-masterlist" aria-live="polite"></section>
+		@endif
 
 		<section class="sheet-wrap form-panel" id="bmiBaselinePanel" data-template="bmi-report" data-phase="baseline">
 			<div class="sheet-tools">
@@ -433,6 +459,11 @@
 	const gradeLevelField = document.getElementById('gradeLevelField');
 	const sectionField = document.getElementById('sectionField');
 	const emptyStatePanel = document.getElementById('emptyStatePanel');
+	// The clinic's Class Masterlist picker and the panel its sheet opens in.
+	// Absent on the coordinator's copy of the page.
+	const classSelect = document.getElementById('classMasterlistSelect');
+	const classPanel = document.getElementById('classMasterlistPanel');
+	const classSheetUrl = @json($forClinic ? route($forClinicTeacher ? 'dashboard.clinic-teacher.class-masterlist.sheet' : 'dashboard.school-nurse.class-masterlist.sheet') : null);
 
 	// Adviser-entered students grouped by grade level (one grade per form).
 	// Re-read by the live refresh below when the coordinator's pulse moves.
@@ -654,7 +685,10 @@
 			return;
 		}
 
-		const selected = String(templateSelect.value || '');
+		// A chosen form template, or else a chosen class's masterlist: the two
+		// pickers clear each other, so one panel is on screen at a time.
+		const selected = String(templateSelect.value || '')
+			|| (classSelect && classSelect.value ? 'class-masterlist' : '');
 		const scope = currentScope();
 		let anyActive = false;
 		document.querySelectorAll('.form-panel').forEach((panel) => {
@@ -1174,8 +1208,84 @@
 		});
 	}
 
+	// ── The clinic's Class Masterlist ─────────────────────────────────────
+	// The chosen class's sheet, rendered on the server from the same model the
+	// workbook is written from, and swapped into its panel. A slower answer
+	// for a class no longer chosen is dropped.
+	let classSheetTicket = 0;
+	const classSheetFailed = () => {
+		classPanel.innerHTML = '';
+		const note = document.createElement('div');
+		note.className = 'empty-panel';
+		note.textContent = 'This class masterlist could not be loaded. Choose the class again.';
+		classPanel.appendChild(note);
+	};
+
+	const loadClassSheet = async () => {
+		if (!classSelect || !classPanel || !classSheetUrl) {
+			return;
+		}
+		const ticket = ++classSheetTicket;
+		const chosen = String(classSelect.value || '');
+		if (chosen === '') {
+			classPanel.innerHTML = '';
+			classPanel.classList.remove('is-loading');
+			return;
+		}
+		classPanel.classList.add('is-loading');
+		try {
+			const response = await fetch(`${classSheetUrl}?class=${encodeURIComponent(chosen)}`, {
+				headers: { Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest' },
+				credentials: 'same-origin',
+				cache: 'no-store',
+			});
+			const html = response.ok ? await response.text() : null;
+			if (ticket !== classSheetTicket) {
+				return;
+			}
+			if (html === null) {
+				classSheetFailed();
+				return;
+			}
+			// Server-rendered Blade, every value escaped there.
+			classPanel.innerHTML = html;
+		} catch (_error) {
+			if (ticket === classSheetTicket) {
+				classSheetFailed();
+			}
+		} finally {
+			if (ticket === classSheetTicket) {
+				classPanel.classList.remove('is-loading');
+			}
+		}
+	};
+
+	if (classSelect) {
+		classSelect.addEventListener('change', () => {
+			if (classSelect.value !== '' && templateSelect) {
+				templateSelect.value = '';
+			}
+			syncSelectedTemplate();
+			loadClassSheet();
+		});
+	}
+
+	if (classPanel) {
+		classPanel.addEventListener('click', (event) => {
+			if (event.target.closest('[data-print-class-masterlist]')) {
+				window.print();
+			}
+		});
+	}
+
 	if (templateSelect) {
-		templateSelect.addEventListener('change', syncSelectedTemplate);
+		templateSelect.addEventListener('change', () => {
+			if (templateSelect.value !== '' && classSelect && classSelect.value !== '') {
+				classSelect.value = '';
+				loadClassSheet();
+			}
+			syncSelectedTemplate();
+		});
 	}
 
 	if (gradeLevelSelect) {
@@ -1274,6 +1384,10 @@
 			paintReports();
 			const scope = currentScope();
 			masterlists.forEach((list) => list.fill(scope));
+			// An open class masterlist follows the roster too.
+			if (classSelect && classSelect.value !== '') {
+				loadClassSheet();
+			}
 		} catch (_error) {
 			// A missed poll is simply tried again on the next tick.
 		} finally {

@@ -43,7 +43,6 @@ Roles are strings in `session('active_role')`:
 | `class_adviser` | Student data entry, medical certificates, consent forms |
 | `school_head` | **School Head** — reads, monitors, exports; writes nothing but their own session and password |
 | `feeding_coor` | SBFP: attendance, enrolment, SBFP forms, BMI reports |
-| `nutricor` | Nutrition analytics, consolidated reports |
 | `system_admin` | Account approval/management; the only unscoped role |
 | `school_admin` | **School Admin** — the System Admin's Control Center for **one** school (`App\Support\AdminScope`): its accounts, requests, feeding policy, calendar entries, audit trail. An `accounts` row; only the System Admin appoints one (or `php artisan accounts:create-school-admin`). Never syncs holidays (`SchoolAdminTest`) |
 
@@ -109,7 +108,7 @@ Every query crosses the network to hosted Postgres, so the number of queries is 
 
 ### Removed — do not re-add without asking
 
-The HL7 FHIR exchange (2026-10-29), Parent SMS via Semaphore (2026-11-02), the SBFP consent gate on enrolment (2026-11-03), the coordinator's Feeding Program tab, and the head's Approve / Return / Lock.
+The HL7 FHIR exchange (2026-10-29), Parent SMS via Semaphore (2026-11-02), the SBFP consent gate on enrolment (2026-11-03), the coordinator's Feeding Program tab, the head's Approve / Return / Lock, and the **Nutrition Coordinator role** (`nutricor`, 2026-11-22 — `AccountSettings::RETIRED_ROLES`; a leftover account cannot sign in, `NutritionCoordinatorRemovedTest`). A role list belongs in `AccountSettings::SCHOOL_ROLES`, never retyped.
 
 ### Frontend
 
@@ -121,7 +120,7 @@ Blade + Tailwind CSS 4, inline Alpine.js in places, Vite (`npm run build`). No L
 - **Every `@media print` block must reopen the app shell** (`html, body`, `.main`, `.content` to `height: auto; overflow: visible`), or it prints one screenful.
 - School Nurse pages must include `partials/nurse-page-transition`, or they render blank.
 - A changed logo or image gets a **new file name** (Caddy caches `/images/*` for a week).
-- **A school's seal is its own:** `public/images/school-logos/<slug of the school's name>.png`, resolved per school by `SchoolLetterhead::seals($institutionId)` / `sealFiles()`. A school without one prints the placeholder, never another school's seal.
+- **A school's seal is its own:** `resources/school-logos/<slug of the school's name>.png` — **never under `public/`**. Pages draw it from the `school-seal` route, which serves only the signed-in school's seal (another school's address is a 404); workbooks and the PDF read the file through `SchoolLetterhead::sealFiles()`. A school without one prints the placeholder, never another school's seal. `SchoolSealSeparationTest` guards it.
 
 ### Every registration school runs the same flow
 

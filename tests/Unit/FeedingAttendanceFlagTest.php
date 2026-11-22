@@ -249,7 +249,7 @@ class FeedingAttendanceFlagTest extends TestCase
         $this->assertTrue(FeedingAttendanceFlag::visibleTo('feeding_coor'));
         $this->assertTrue(FeedingAttendanceFlag::visibleTo('school_nurse'));
 
-        foreach (['clinic_teacher', 'class_adviser', 'clinic_staff', 'school_head', 'nutricor', 'system_admin', '', null] as $role) {
+        foreach (['clinic_teacher', 'class_adviser', 'clinic_staff', 'school_head', 'system_admin', '', null] as $role) {
             $this->assertFalse(FeedingAttendanceFlag::visibleTo($role), 'role '.var_export($role, true));
         }
     }

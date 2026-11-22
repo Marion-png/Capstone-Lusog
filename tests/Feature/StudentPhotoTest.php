@@ -217,8 +217,7 @@ class StudentPhotoTest extends TestCase
     /**
      * A photograph of a child's face is the most identifying field in the
      * record. The roles that never meet the learner have no use for it: the
-     * School Head reads aggregates and the Nutrition Coordinator reads
-     * analytics, and neither is ever in the room with the child.
+     * School Head reads aggregates and is never in the room with the child.
      */
     #[Test]
     public function no_other_role_can_see_or_set_a_photo(): void
@@ -226,7 +225,7 @@ class StudentPhotoTest extends TestCase
         $this->learner();
         $this->upload()->assertCreated();
 
-        foreach (['school_head', 'nutricor'] as $role) {
+        foreach (['school_head'] as $role) {
             $this->withSession($this->sessionFor($role))
                 ->getJson(route('student-photo.status', self::LRN))
                 ->assertForbidden();

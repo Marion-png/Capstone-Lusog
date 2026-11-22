@@ -27,8 +27,7 @@ use Illuminate\Http\Response;
  * Deliberately narrower than that: no other role reads one here. A photograph
  * of a child's face is the most identifying field in the record, and the roles
  * that do not handle the learner in person have no use for it — the School
- * Head reads aggregates, the Nutrition Coordinator reads analytics, and
- * neither is ever in the room with the learner.
+ * Head reads aggregates and is never in the room with the learner.
  *
  * Reading is still not writing. The coordinator was added to the read list and
  * to nothing else: the photograph remains the adviser's to set, replace and

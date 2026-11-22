@@ -144,7 +144,6 @@ class ClinicStaffWorkspaceTest extends TestCase
             'class_adviser' => 'dashboard.class-adviser',
             'school_head' => 'dashboard.school-head',
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
-            'nutricor' => 'dashboard.nutricor-dashboard',
         ];
 
         foreach ($expected as $role => $route) {

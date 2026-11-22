@@ -24,7 +24,7 @@ class RoleBoundaryTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const ROLES = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor', 'system_admin', 'school_admin'];
+    private const ROLES = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'system_admin', 'school_admin'];
 
     /** @var array<string, list<string>> Page => the only roles it renders for. */
     private const PAGES = [
@@ -45,10 +45,6 @@ class RoleBoundaryTest extends TestCase
         '/dashboard/school-head/program' => ['school_head'],
         '/dashboard/school-nurse/feeding-program' => ['school_nurse', 'clinic_teacher'],
         '/dashboard/clinic-teacher/feeding-program' => ['school_nurse', 'clinic_teacher'],
-        '/dashboard/nutricor-dashboard' => ['nutricor'],
-        '/dashboard/nutricor-beneficiaries' => ['nutricor'],
-        '/dashboard/nutricor-atrisk' => ['nutricor'],
-        '/dashboard/nutricor-consolidated' => ['nutricor'],
         '/dashboard/class-adviser' => ['class_adviser'],
         '/adviser/create' => ['class_adviser'],
         '/dashboard/system-admin' => ['system_admin', 'school_admin'],
@@ -143,7 +139,6 @@ class RoleBoundaryTest extends TestCase
             'clinic staff' => ['clinic_staff'],
             'clinic teacher' => ['clinic_teacher'],
             'feeding coordinator' => ['feeding_coor'],
-            'nutrition coordinator' => ['nutricor'],
             'system admin' => ['system_admin'],
             'school admin' => ['school_admin'],
         ];

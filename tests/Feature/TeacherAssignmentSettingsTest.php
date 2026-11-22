@@ -148,7 +148,7 @@ class TeacherAssignmentSettingsTest extends TestCase
     #[Test]
     public function other_roles_have_no_assignment_form_and_cannot_change_assignments(): void
     {
-        foreach (['school_nurse', 'clinic_staff', 'school_head', 'feeding_coor', 'nutricor', 'system_admin'] as $role) {
+        foreach (['school_nurse', 'clinic_staff', 'school_head', 'feeding_coor', 'system_admin'] as $role) {
             $id = $this->account($role, ['username' => $role]);
             $session = $this->teacherSession($role, ['active_username' => $role]);
 

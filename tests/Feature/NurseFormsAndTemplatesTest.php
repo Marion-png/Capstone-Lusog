@@ -109,9 +109,9 @@ class NurseFormsAndTemplatesTest extends TestCase
             ->get(route('dashboard.school-nurse.forms'))
             ->viewData('narrative'), 'No narrative is drafted for the nurse.');
 
-        // The advisers' class masterlist is theirs alone, and is not here.
+        // The advisers' blank class masterlist is theirs alone, and is not a
+        // form template here (the filled one has its own picker).
         $this->assertStringNotContainsString('value="class-masterlist"', $html);
-        $this->assertStringNotContainsString('data-template="class-masterlist"', $html);
         $this->assertStringNotContainsString('Class Adviser (blank template)', $html);
     }
 
@@ -194,7 +194,7 @@ class NurseFormsAndTemplatesTest extends TestCase
             $this->assertStringContainsString('data-template="'.$template.'"', $html);
         }
         $this->assertStringNotContainsString('data-template="feeding-narrative"', $html);
-        $this->assertStringNotContainsString('data-template="class-masterlist"', $html);
+        $this->assertStringNotContainsString('value="class-masterlist"', $html);
 
         // Its live roster stays on this role's own path.
         $this->assertStringContainsString(json_encode(route('workspace.pulse')), $html);
@@ -203,9 +203,10 @@ class NurseFormsAndTemplatesTest extends TestCase
     }
 
     #[Test]
-    public function the_class_masterlist_is_the_advisers_alone(): void
+    public function the_blank_class_masterlist_is_the_advisers_alone(): void
     {
-        // No clinic path serves it any more.
+        // No clinic path serves the blank form. The clinic downloads each
+        // class's list filled from the roster instead (ClinicClassMasterlistTest).
         $this->assertFalse(app('router')->has('dashboard.school-nurse.forms.class-masterlist'));
         $this->assertFalse(app('router')->has('dashboard.clinic-teacher.forms.class-masterlist'));
 
@@ -213,7 +214,7 @@ class NurseFormsAndTemplatesTest extends TestCase
             $html = $this->withSession($session)->get(route($route))->assertOk()->getContent();
 
             $this->assertStringNotContainsString(ClassMasterlistTemplate::TITLE, $html, $route);
-            $this->assertStringNotContainsString('cm-line', $html, $route);
+            $this->assertStringNotContainsString('<tr class="cm-line"', $html, $route);
         }
     }
 

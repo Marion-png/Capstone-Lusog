@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdviserController;
 use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\ClinicClassMasterlistController;
 use App\Http\Controllers\ClinicNoteController;
 use App\Http\Controllers\ConditionController;
 use App\Http\Controllers\ConsentFormScanController;
@@ -21,8 +22,6 @@ use App\Http\Controllers\MedicalCertificateController;
 use App\Http\Controllers\MedicineInventoryController;
 use App\Http\Controllers\MlatExportController;
 use App\Http\Controllers\NurseController;
-use App\Http\Controllers\NutricorController;
-use App\Http\Controllers\NutritionCoordinatorController;
 use App\Http\Controllers\ParentalConsentFormController;
 use App\Http\Controllers\SchoolCalendarController;
 use App\Http\Controllers\SchoolHeadConsentController;
@@ -59,6 +58,7 @@ use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingProgramCycle;
 use App\Support\LoginThrottle;
 use App\Support\SchemaCache;
+use App\Support\SchoolLetterhead;
 use App\Support\SchoolPulse;
 use App\Support\SchoolYear;
 use App\Support\StudentRosterSync;
@@ -89,6 +89,12 @@ Route::get('/terms', function () {
     return view('auth.terms');
 })->name('terms');
 
+// The signed-in school's seal, for its reports. The seals live outside public/
+// so that one school's seal is never served to another school's account.
+Route::get('/school-seal/{seal}', fn (Request $request, string $seal) => SchoolLetterhead::schoolSealResponse($request, $seal))
+    ->where('seal', '[a-z0-9-]+\.png')
+    ->name('school-seal');
+
 Route::get('/account-request', function () {
     $institutions = collect();
 
@@ -106,7 +112,7 @@ Route::get('/account-request', function () {
 })->name('account.request');
 
 Route::post('/account-request', function (Request $request) {
-    $scopedRoles = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor'];
+    $scopedRoles = AccountSettings::SCHOOL_ROLES;
 
     $validated = $request->validate([
         // A person's name: letters, spaces, hyphens, apostrophes and the dots
@@ -119,7 +125,7 @@ Route::post('/account-request', function (Request $request) {
         // At least one letter and one digit, so "password" and "12345678" are
         // both refused.
         'password' => ['required', 'string', 'min:8', 'max:72', 'confirmed', 'regex:/^(?=.*[\pL])(?=.*\d).+$/u'],
-        'role' => ['required', 'in:school_nurse,clinic_staff,clinic_teacher,class_adviser,school_head,feeding_coor,nutricor'],
+        'role' => ['required', Rule::in(AccountSettings::SCHOOL_ROLES)],
         'institution_id' => ['nullable', 'integer', 'exists:institutions,id'],
         'assigned_grade_level' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:50'],
         'assigned_section' => ['required_if:role,class_adviser', 'nullable', 'string', 'max:100'],
@@ -283,7 +289,6 @@ Route::get('/dashboard/school-nurse', function (Request $request) {
             'clinic_teacher' => 'dashboard.clinic-teacher',
             'school_head' => 'dashboard.school-head',
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
-            'nutricor' => 'dashboard.nutricor-dashboard',
             'system_admin' => 'dashboard.system-admin',
             'school_admin' => 'dashboard.system-admin',
         ];
@@ -307,7 +312,6 @@ Route::get('/dashboard/student-health-records', function () {
             'clinic_teacher' => 'dashboard.clinic-teacher',
             'school_head' => 'dashboard.school-head',
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
-            'nutricor' => 'dashboard.nutricor-dashboard',
             'system_admin' => 'dashboard.system-admin',
             'school_admin' => 'dashboard.system-admin',
         ];
@@ -347,7 +351,6 @@ Route::get('/dashboard/school-nurse/deworming', function (Request $request) {
             'clinic_teacher' => 'dashboard.clinic-teacher',
             'school_head' => 'dashboard.school-head',
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
-            'nutricor' => 'dashboard.nutricor-dashboard',
             'system_admin' => 'dashboard.system-admin',
             'school_admin' => 'dashboard.system-admin',
         ];
@@ -585,7 +588,6 @@ Route::get('/dashboard/clinic-staff', function (Request $request) {
             'clinic_teacher' => 'dashboard.clinic-teacher',
             'school_head' => 'dashboard.school-head',
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
-            'nutricor' => 'dashboard.nutricor-dashboard',
         ];
 
         return redirect()->route($redirectByRole[$role] ?? 'login');
@@ -819,30 +821,6 @@ Route::get('/dashboard/feedingcor-dashboard/metrics', [FeedingCoordinatorControl
 
 Route::get('/dashboard/feedingcor-dashboard/metrics/pulse', [FeedingCoordinatorController::class, 'pulse'])
     ->name('dashboard.feedingcor.metrics.pulse');
-
-Route::get('/dashboard/nutricor-dashboard', [NutritionCoordinatorController::class, 'dashboard'])
-    ->name('dashboard.nutricor-dashboard');
-
-Route::get('/dashboard/nutricor-beneficiaries', [NutritionCoordinatorController::class, 'beneficiaries'])
-    ->name('dashboard.nutricor-beneficiaries');
-
-Route::get('/dashboard/nutricor-analytics', [NutritionCoordinatorController::class, 'analytics'])
-    ->name('dashboard.nutricor-analytics');
-
-Route::get('/dashboard/nutricor-atrisk', [NutritionCoordinatorController::class, 'atRisk'])
-    ->name('dashboard.nutricor-atrisk');
-
-Route::get('/dashboard/nutricor-reports', [NutritionCoordinatorController::class, 'reports'])
-    ->name('dashboard.nutricor-reports');
-
-Route::get('/dashboard/nutricor-reports/print/{report}', [NutritionCoordinatorController::class, 'printReport'])
-    ->name('dashboard.nutricor-reports.print');
-
-Route::get('/dashboard/nutricor-comparison', [NutritionCoordinatorController::class, 'comparison'])
-    ->name('dashboard.nutricor-comparison');
-
-Route::get('/dashboard/nutricor-consolidated', [NutricorController::class, 'consolidatedReport'])
-    ->name('dashboard.nutricor-consolidated');
 
 // Attendance: who was fed, on which day. Four views of one set of marks —
 // the session sheet, the day-by-day history, the per-beneficiary standing and
@@ -1210,6 +1188,14 @@ Route::get('/dashboard/school-nurse/forms/roster', [FeedingCoordinatorController
 Route::post('/dashboard/school-nurse/forms/download', [FeedingCoordinatorController::class, 'downloadForm'])
     ->name('dashboard.school-nurse.forms.download');
 
+// One class's CLASS MASTERLIST, filled from the roster (ClassMasterlistRoster):
+// the workbook, and the sheet the Forms & Templates page shows.
+Route::get('/dashboard/school-nurse/class-masterlist/download', [ClinicClassMasterlistController::class, 'download'])
+    ->name('dashboard.school-nurse.class-masterlist');
+
+Route::get('/dashboard/school-nurse/class-masterlist/sheet', [ClinicClassMasterlistController::class, 'sheet'])
+    ->name('dashboard.school-nurse.class-masterlist.sheet');
+
 /*
  * Clinic Teacher.
  *
@@ -1238,7 +1224,6 @@ Route::get('/dashboard/clinic-teacher', function (Request $request) {
             'clinic_staff' => 'dashboard.clinic-staff',
             'school_head' => 'dashboard.school-head',
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
-            'nutricor' => 'dashboard.nutricor-dashboard',
             'system_admin' => 'dashboard.system-admin',
             'school_admin' => 'dashboard.system-admin',
         ];
@@ -1275,6 +1260,12 @@ Route::get('/dashboard/clinic-teacher/forms/roster', [FeedingCoordinatorControll
 
 Route::post('/dashboard/clinic-teacher/forms/download', [FeedingCoordinatorController::class, 'downloadForm'])
     ->name('dashboard.clinic-teacher.forms.download');
+
+Route::get('/dashboard/clinic-teacher/class-masterlist/download', [ClinicClassMasterlistController::class, 'download'])
+    ->name('dashboard.clinic-teacher.class-masterlist');
+
+Route::get('/dashboard/clinic-teacher/class-masterlist/sheet', [ClinicClassMasterlistController::class, 'sheet'])
+    ->name('dashboard.clinic-teacher.class-masterlist.sheet');
 
 // Every archived learner and every learner waiting for a section, read only —
 // the School Nurse's list under their path, the Clinic Teacher's under theirs.
@@ -1374,7 +1365,6 @@ Route::get('/dashboard/system-admin', function (Request $request) {
             'clinic_teacher' => 'dashboard.clinic-teacher',
             'school_head' => 'dashboard.school-head',
             'feeding_coor' => 'dashboard.feedingcor-dashboard',
-            'nutricor' => 'dashboard.nutricor-dashboard',
         ];
 
         return redirect()
@@ -1653,7 +1643,7 @@ Route::post('/dashboard/system-admin/accounts', function (Request $request) {
             ->with('error', 'Only System Admin can create user accounts.');
     }
 
-    $scopedRoles = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor', AdminScope::SCHOOL_ADMIN];
+    $scopedRoles = [...AccountSettings::SCHOOL_ROLES, AdminScope::SCHOOL_ADMIN];
 
     // Only the System Admin appoints a School Admin; a School Admin creates
     // its own school's staff and nobody else.
@@ -1740,6 +1730,12 @@ Route::post('/dashboard/system-admin/requests/{requestId}/approve', function (Re
 
     $username = strtolower(trim((string) ($target->username ?? '')));
     $role = (string) ($target->role ?? '');
+
+    // A request filed for a role SIGLA no longer has (the Nutrition
+    // Coordinator) is never turned into an account.
+    if (! in_array($role, AccountSettings::SCHOOL_ROLES, true)) {
+        return back()->with('error', 'That role is no longer part of SIGLA.');
+    }
 
     $alreadyExists = Schema::hasTable('accounts') && DB::table('accounts')
         ->whereRaw('LOWER(TRIM(username)) = ?', [$username])
@@ -1941,6 +1937,17 @@ Route::post('/login', function (Request $request) {
 
     $account = $candidates->first();
     $role = (string) ($account['role'] ?? '');
+
+    // An account left holding a role SIGLA no longer has (the Nutrition
+    // Coordinator) signs in to nothing.
+    if (in_array($role, AccountSettings::RETIRED_ROLES, true)) {
+        AuditTrail::record('login_failed', null, null, "Refused login for '{$username}': the {$role} role is no longer part of SIGLA");
+
+        return back()
+            ->withInput(['email' => $request->input('email')])
+            ->with('error', 'This account\'s role is no longer part of SIGLA.');
+    }
+
     $throttle->clear();
 
     // A sign-in starts a new session. Nothing the last person left in this
@@ -1977,7 +1984,6 @@ Route::post('/login', function (Request $request) {
         'class_adviser' => 'dashboard.class-adviser',
         'school_head' => 'dashboard.school-head',
         'feeding_coor' => 'dashboard.feedingcor-dashboard',
-        'nutricor' => 'dashboard.nutricor-dashboard',
         'system_admin' => 'dashboard.system-admin',
         'school_admin' => 'dashboard.system-admin',
     ];

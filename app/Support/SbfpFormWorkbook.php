@@ -569,7 +569,7 @@ final class SbfpFormWorkbook
      */
     private function insight(array $lines, string $scope): void
     {
-        $head = 'INSIGHT'.($scope !== '' ? ' — '.mb_strtoupper($scope) : '');
+        $head = 'SUMMARY'.($scope !== '' ? ' — '.mb_strtoupper($scope) : '');
         $this->across($head, $this->style(bold: true, size: 9), 16);
 
         $style = $this->style(size: 9, wrap: true, vertical: CellVerticalAlignment::TOP);

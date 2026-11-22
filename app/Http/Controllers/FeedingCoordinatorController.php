@@ -7,6 +7,7 @@ use App\Models\StudentHealthRecord;
 use App\Support\BmiAssessmentReport;
 use App\Support\BmiReportInsight;
 use App\Support\ChangeStamp;
+use App\Support\ClassMasterlistRoster;
 use App\Support\FeedingAtRiskRule;
 use App\Support\FeedingAttendanceFlag;
 use App\Support\FeedingAttendanceMark;
@@ -77,11 +78,14 @@ class FeedingCoordinatorController extends Controller
         $bmiValueSets = $bmiReports['all']['values'];
 
         // The class advisers' blank CLASS MASTERLIST is theirs alone (it is
-        // downloaded from the adviser's own Enroll Student panel), so the
-        // clinic's copy of this page no longer offers it.
+        // downloaded from the adviser's own Enroll Student panel). The clinic's
+        // copy of this page offers each class's list filled from the roster
+        // instead (ClassMasterlistRoster).
         return view('feedingcor-dashboard.sbfp-forms', [
             'forClinic' => $forClinic,
             'forClinicTeacher' => $request->session()->get('active_role') === 'clinic_teacher',
+            // Every class on the roll, for the clinic's filled Class Masterlist.
+            'classMasterlistClasses' => $forClinic ? ClassMasterlistRoster::classes($institutionId ? (int) $institutionId : null) : [],
             'studentsByGrade' => $studentsByGrade,
             'gradeOptions' => array_keys($studentsByGrade),
             'sectionsByGrade' => $sectionsByGrade,
@@ -178,11 +182,9 @@ class FeedingCoordinatorController extends Controller
     {
         $records = collect();
         if (SchemaCache::hasTable('student_health_records')) {
-            $query = StudentHealthRecord::query();
-            if ($institutionId) {
-                $query->where('institution_id', $institutionId);
-            }
-            $records = $query->forCurrentSchoolYear()->get();
+            // The memoized read, so the clinic's Class Masterlist control on
+            // the same page costs no second query.
+            $records = StudentHealthRecord::rosterFor($institutionId);
         }
 
         // Every form on this page is an SBFP form, and SBFP is Junior High only.

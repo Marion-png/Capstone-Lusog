@@ -102,12 +102,23 @@ final class ClassMasterlistTemplate
     public const WIDTHS = [5, 20, 18, 9, 17, 26];
 
     /**
-     * The blank form for one class.
+     * The band a filled list puts a learner under when no sex is on file, so
+     * nobody in the class is left off the sheet. Printed only when needed.
+     */
+    public const UNRECORDED_BAND = 'SEX NOT RECORDED';
+
+    /**
+     * The form for one class: blank, or filled with its learners.
+     *
+     * `$learners` null is the blank form, BAND_ROWS numbered lines under each
+     * band. Given, it is the class's own list keyed by band (BANDS, or
+     * UNRECORDED_BAND), each learner on one numbered line and no spare lines.
      *
      * @param  array<string, string>  $letterhead  App\Support\SchoolLetterhead::for()
+     * @param  array<string, list<array{last: string, first: string, middle: string, lrn: string}>>|null  $learners
      * @return array{rows: list<array{cells: list<string>, register: string}>, merges: list<array{0: int, 1: int, 2: int, 3: int}>, widths: list<int>, file_name: string}
      */
-    public static function build(array $letterhead, string $classLabel, string $schoolYear, string $adviser): array
+    public static function build(array $letterhead, string $classLabel, string $schoolYear, string $adviser, ?array $learners = null): array
     {
         $rows = [];
         $merges = [];
@@ -158,11 +169,31 @@ final class ClassMasterlistTemplate
         // numbering restarts at each band on the printed form, and the reader
         // never reads the NO column, so it is decoration the adviser writes
         // against rather than anything the import depends on.
-        foreach (self::BANDS as $band) {
+        $bands = self::BANDS;
+        if (($learners[self::UNRECORDED_BAND] ?? []) !== []) {
+            $bands[] = self::UNRECORDED_BAND;
+        }
+
+        foreach ($bands as $band) {
             $write([$band], self::R_BAND);
 
-            for ($line = 1; $line <= self::BAND_ROWS; $line++) {
-                $write([(string) $line], self::R_LINE);
+            if ($learners === null) {
+                for ($line = 1; $line <= self::BAND_ROWS; $line++) {
+                    $write([(string) $line], self::R_LINE);
+                }
+
+                continue;
+            }
+
+            foreach (array_values($learners[$band] ?? []) as $index => $learner) {
+                $write([
+                    (string) ($index + 1),
+                    $learner['last'],
+                    $learner['first'],
+                    $learner['middle'],
+                    $learner['lrn'],
+                    '',
+                ], self::R_LINE);
             }
         }
 

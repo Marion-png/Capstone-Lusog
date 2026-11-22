@@ -51,7 +51,6 @@ earlier name, LUSOG.
 | **Clinic Staff** | Consultation logging and medicine inventory |
 | **Class Adviser** | Enrols and measures their own class, health cards, consent forms, medical documents, closes the school year |
 | **Feeding Coordinator** | SBFP enrolment, attendance, at-risk confirmation and follow-up, SBFP forms |
-| **Nutrition Coordinator** | Nutrition analytics and consolidated reports |
 | **School Head** | Reads, monitors and exports — never encodes |
 | **System Admin** | Approves account requests, manages schools and their settings, views the audit trail |
 

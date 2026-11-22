@@ -553,7 +553,7 @@ class StudentIncidentReportTest extends TestCase
             $this->adviserSession(),
         ];
 
-        foreach (['school_head', 'feeding_coor', 'nutricor'] as $role) {
+        foreach (['school_head', 'feeding_coor'] as $role) {
             $sessions[] = ['active_role' => $role, 'active_name' => 'Other', 'active_school_name' => 'Sta. Ana NHS', 'active_institution_id' => $this->school->id];
         }
 
@@ -807,7 +807,7 @@ class StudentIncidentReportTest extends TestCase
     {
         $this->learner();
 
-        foreach (['school_head', 'feeding_coor', 'nutricor'] as $role) {
+        foreach (['school_head', 'feeding_coor'] as $role) {
             $session = [
                 'active_role' => $role,
                 'active_name' => 'Someone',

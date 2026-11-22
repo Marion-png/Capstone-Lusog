@@ -129,7 +129,7 @@
 	@endphp
 	<section class="bmi-insight" data-insight data-insight-phase="{{ $phase }}" aria-live="polite">
 		<div class="bmi-insight-head">
-			Insight
+			Summary
 			<span class="bmi-insight-scope" data-insight-scope>All Grade Levels</span>
 		</div>
 		<ul class="bmi-insight-list" data-insight-list>

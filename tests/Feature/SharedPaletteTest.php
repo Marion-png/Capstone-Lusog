@@ -33,21 +33,16 @@ class SharedPaletteTest extends TestCase
             'school head' => ['/dashboard/school-head', 'school_head'],
             'school head reports' => ['/dashboard/school-head/reports', 'school_head'],
             'feeding coordinator' => ['/dashboard/feedingcor-dashboard', 'feeding_coor'],
-            'nutricor dashboard' => ['/dashboard/nutricor-dashboard', 'nutricor'],
-            'nutricor analytics' => ['/dashboard/nutricor-analytics', 'nutricor'],
-            'nutricor reports' => ['/dashboard/nutricor-reports', 'nutricor'],
             'system admin' => ['/dashboard/system-admin', 'system_admin'],
             'system admin audit' => ['/dashboard/system-admin/audit-logs', 'system_admin'],
             'nurse deworming' => ['/dashboard/school-nurse/deworming', 'school_nurse'],
             'nurse data visualization' => ['/dashboard/data-visualization', 'school_nurse'],
             'nurse health assessments' => ['/dashboard/school-nurse/health-assessments', 'school_nurse'],
             'clinic teacher dashboard' => ['/dashboard/clinic-teacher', 'clinic_teacher'],
-            // Settings is one page in six different shells, so it is
-            // covered in a theme rail and in the Nutrition Coordinator's
-            // own legacy layout — the two halves of the palette rule.
+            // Settings is one page in several different rails, so it is
+            // covered in two of them.
             'settings (nurse rail)' => ['/dashboard/settings', 'school_nurse'],
             'settings (role rail)' => ['/dashboard/settings', 'school_head'],
-            'settings (nutricor layout)' => ['/dashboard/settings', 'nutricor'],
         ];
     }
 

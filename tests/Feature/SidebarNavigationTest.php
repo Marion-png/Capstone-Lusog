@@ -22,7 +22,6 @@ class SidebarNavigationTest extends TestCase
             'Clinic Staff' => ['clinic_staff', '/dashboard/clinic-staff'],
             'Clinic Teacher' => ['clinic_teacher', '/dashboard/clinic-teacher'],
             'Class Adviser' => ['class_adviser', '/dashboard/class-adviser'],
-            'Nutritional Coordinator' => ['nutricor', '/dashboard/nutricor-dashboard'],
         ];
     }
 

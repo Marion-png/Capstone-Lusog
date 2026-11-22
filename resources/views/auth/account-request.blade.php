@@ -437,7 +437,6 @@
                             <option value="class_adviser" {{ old('role') === 'class_adviser' ? 'selected' : '' }}>Class Adviser</option>
                             <option value="school_head" {{ old('role') === 'school_head' ? 'selected' : '' }}>School Head</option>
                             <option value="feeding_coor" {{ old('role') === 'feeding_coor' ? 'selected' : '' }}>Feeding Coordinator</option>
-                            <option value="nutricor" {{ old('role') === 'nutricor' ? 'selected' : '' }}>Nutritional Coordinator</option>
                         </select>
                     </div>
                     <div class="field full" id="schoolField" style="display:none;">
@@ -517,7 +516,7 @@
     </section>
 
     <script>
-        const SCOPED_ROLES = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'class_adviser', 'school_head', 'feeding_coor', 'nutricor'];
+        const SCOPED_ROLES = @json(\App\Support\AccountSettings::SCHOOL_ROLES);
 
         const requestForm     = document.getElementById('accountRequestForm');
         const roleSelect      = document.getElementById('role');

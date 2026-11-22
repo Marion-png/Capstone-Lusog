@@ -43,10 +43,12 @@
 		'class_adviser' => 'Class Adviser',
 		'school_head' => 'School Head',
 		'feeding_coor' => 'Feeding Coordinator',
-		'nutricor' => 'Nutritional Coordinator',
 		'school_admin' => 'School Admin',
+		// Removed from SIGLA (2026-11-22): named only so a leftover account or
+		// request can be recognised and removed.
+		'nutricor' => 'Nutrition Coordinator (removed)',
 	];
-	$schoolScopedRoles = ['school_nurse', 'clinic_staff', 'clinic_teacher', 'school_head', 'feeding_coor', 'nutricor', 'school_admin'];
+	$schoolScopedRoles = [...\App\Support\AccountSettings::SCHOOL_ROLES, ...\App\Support\AccountSettings::RETIRED_ROLES, 'school_admin'];
 	$adminLabel = ($isSchoolAdmin ?? false) ? 'School Admin' : 'System Admin';
 
 	// One rendering of the assignment cell for all three tables, so an

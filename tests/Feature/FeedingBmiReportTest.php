@@ -364,8 +364,9 @@ class FeedingBmiReportTest extends TestCase
      *
      * Nothing about the heading changes when a school adds its own seals: the
      * placeholder becomes an image at the same size, in the same box, on every
-     * form on the page. This renders the real thing — two PNG files under
-     * public/images — and reads the markup back, because the alternative is
+     * form on the page. This renders the real thing — the DepEd seal under
+     * public/images and the school's under resources/school-logos — and reads
+     * the markup back, because the alternative is
      * discovering on the morning of a submission that the file is there and the
      * form still shows a dashed circle.
      */
@@ -383,36 +384,44 @@ class FeedingBmiReportTest extends TestCase
             $this->assertNotNull($seals['deped']);
             $this->assertNotNull($seals['school']);
 
-            // Every form on the page opens under the same heading, and the four
-            // of them carry the two seals between them.
+            // Every form on the page opens under the same heading — the two BMI
+            // reports, the narrative and the two master lists — and each of the
+            // five carries both seals.
             $body = $response->getContent();
-            $this->assertSame(4, substr_count($body, 'alt="Department of Education"'));
+            $this->assertSame(5, substr_count($body, 'alt="Department of Education"'));
+            $this->assertSame(5, substr_count($body, 'school-seal/test-school.png'));
             $this->assertStringContainsString('images/deped-logo.png?v=', $body);
-            $this->assertStringContainsString('images/school-logos/test-school.png?v=', $body);
+            // The school's seal is served by the app to that school alone.
+            $this->assertStringContainsString('school-seal/test-school.png', $body);
+            $this->assertStringNotContainsString('images/school-logos/', $body);
 
             // The stamp is what makes a replaced seal actually appear: the name
             // is the lookup, the modification time is what the browser caches
             // against.
-            $this->assertStringContainsString('?v='.filemtime($deped), $seals['deped']);
+            $this->assertStringContainsString('?v='.filemtime(public_path(SchoolLetterhead::DEPED_LOGO)), $seals['deped']);
 
             // The placeholder is gone — a form does not carry both. Matched as
             // the element, since the class itself still lives in the inlined
             // stylesheet whether or not anything wears it.
             $this->assertStringNotContainsString('class="lh-seal-slot"', $body);
         } finally {
-            @unlink($deped);
-            @unlink($school);
+            foreach ([$deped, $school] as $installed) {
+                if ($installed !== null) {
+                    @unlink($installed);
+                }
+            }
         }
     }
 
     /**
-     * The two seal files, written for the length of one test and removed after.
+     * The two seal files, written for the length of one test and removed after
+     * (null for a seal the app already ships, which is left alone).
      *
      * A 1x1 fully transparent PNG: the letterhead asks whether the file is
      * there, never what is in it, so the smallest valid image proves the wiring
      * without shipping a school's artwork into the repository.
      *
-     * @return array{0: string, 1: string}
+     * @return array{0: ?string, 1: ?string}
      */
     private function installSeals(): array
     {
@@ -422,12 +431,13 @@ class FeedingBmiReportTest extends TestCase
         );
 
         $paths = [];
-        foreach ([SchoolLetterhead::DEPED_LOGO, SchoolLetterhead::schoolLogo($this->institution->id)] as $relative) {
-            $path = public_path($relative);
-
-            // Never write over a seal the school has actually installed.
+        foreach ([public_path(SchoolLetterhead::DEPED_LOGO), SchoolLetterhead::schoolLogo($this->institution->id)] as $path) {
+            // A seal the app already ships (the DepEd seal) is used as it is,
+            // and never written over or removed.
             if (is_file($path)) {
-                $this->markTestSkipped('A real seal is already installed at '.$relative.'.');
+                $paths[] = null;
+
+                continue;
             }
 
             if (! is_dir(dirname($path))) {

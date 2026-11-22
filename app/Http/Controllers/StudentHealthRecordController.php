@@ -104,7 +104,6 @@ class StudentHealthRecordController extends Controller
                 'clinic_staff' => 'dashboard.clinic-staff',
                 'school_head' => 'dashboard.school-head',
                 'feeding_coor' => 'dashboard.feedingcor-dashboard',
-                'nutricor' => 'dashboard.nutricor-dashboard',
                 'system_admin' => 'dashboard.system-admin',
                 'school_admin' => 'dashboard.system-admin',
             ];

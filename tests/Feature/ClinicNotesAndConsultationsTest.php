@@ -149,7 +149,7 @@ class ClinicNotesAndConsultationsTest extends TestCase
     {
         $this->learner();
 
-        foreach (['class_adviser', 'school_head', 'feeding_coor', 'nutricor'] as $role) {
+        foreach (['class_adviser', 'school_head', 'feeding_coor'] as $role) {
             $session = array_merge($this->nurseSession(), ['active_role' => $role]);
 
             $this->withSession($session)->getJson('/api/student-clinic-notes?lrn=LRN001')->assertForbidden();
