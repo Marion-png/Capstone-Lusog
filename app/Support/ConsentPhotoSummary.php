@@ -128,6 +128,14 @@ final class ConsentPhotoSummary
             return array_values($checks);
         }
 
+        // A reading the second one did not check (ConsentFormScanner::agree())
+        // is said first: it is why every answer below wants a closer look.
+        $crossCheck = is_array($draft['cross_check'] ?? null) ? $draft['cross_check'] : [];
+        if (($crossCheck['readings'] ?? null) === 1) {
+            $add('sheet', 'Photo reading', 'This photo was read once instead of twice, so its answers were not cross-checked. Check each one against the paper.');
+        }
+        $signatureDisputed = in_array('signature', (array) ($crossCheck['disagreed'] ?? []), true);
+
         // ── The header ─────────────────────────────────────────────────
         // A sheet dated in another school year answers for that year, not
         // this one; the PETSA is at the top of the paper, so it is said first.
@@ -255,7 +263,9 @@ final class ConsentPhotoSummary
                 $missing[] = 'No name was read at the signature line.';
             }
             if (! $signed) {
-                $missing[] = $aboutSignature ? rtrim($note, '.').'.' : 'No handwritten signature was found at the parent\'s signature line.';
+                $missing[] = $signatureDisputed
+                    ? 'The two readings of the photo did not agree that it is signed. Check the parent\'s signature line.'
+                    : ($aboutSignature ? rtrim($note, '.').'.' : 'No handwritten signature was found at the parent\'s signature line.');
             }
             $add('signature', 'Parent\'s name and signature', ConsentFormScanner::FORM_INCOMPLETE.'. '.implode(' ', $missing));
         } elseif ($aboutSignature) {

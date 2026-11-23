@@ -68,6 +68,14 @@ return [
         // Detail given to a photographed consent form. Blank uses the model's
         // default, for a model that refuses this level.
         'media_resolution' => env('GEMINI_MEDIA_RESOLUTION', 'MEDIA_RESOLUTION_ULTRA_HIGH'),
+        // A photographed consent form is read twice, side by side, and only
+        // what both readings agree on is proposed (ConsentFormScanner::agree()).
+        // 1 reads it once and says so on the reading. The check is made by
+        // GEMINI_CHECK_MODEL, blank for the model above: a different model
+        // errs differently, which makes the check stronger, and spends its
+        // own daily allowance instead of doubling this one's.
+        'consent_readings' => (int) env('GEMINI_CONSENT_READINGS', 2),
+        'consent_check_model' => env('GEMINI_CHECK_MODEL'),
         'endpoint' => env('GEMINI_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta'),
         'timeout' => (int) env('GEMINI_TIMEOUT', 120),
         'max_upload_kb' => (int) env('GEMINI_MAX_UPLOAD_KB', 10240),

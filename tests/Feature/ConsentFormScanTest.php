@@ -1003,7 +1003,7 @@ class ConsentFormScanTest extends TestCase
 
         $this->assertStringContainsString('busy', $message);
         $this->assertStringNotContainsString('503', $message);
-        Http::assertSentCount(3);
+        Http::assertSentCount(2 * 3); // each of the two readings, three attempts
     }
 
     /**
@@ -1059,7 +1059,7 @@ class ConsentFormScanTest extends TestCase
 
         $this->assertStringContainsString('today', $message);
         $this->assertStringNotContainsString('quota', $message);
-        Http::assertSentCount(1);
+        Http::assertSentCount(2); // once for each reading
     }
 
     /** @return array<string, array{0: string, 1: string|null}> */
@@ -1092,7 +1092,7 @@ class ConsentFormScanTest extends TestCase
             ->json('message');
 
         $this->assertStringContainsString('busy', $message);
-        Http::assertSentCount(3);
+        Http::assertSentCount(2 * 3); // each of the two readings, three attempts
     }
 
     /**
@@ -1115,7 +1115,7 @@ class ConsentFormScanTest extends TestCase
 
         $this->assertStringContainsString('could not be read', $message);
         $this->assertStringNotContainsString('123456', $message);
-        Http::assertSentCount(1);
+        Http::assertSentCount(2); // once for each reading
     }
 
     #[Test]

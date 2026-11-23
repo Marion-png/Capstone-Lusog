@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\HealthConsentForm;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Http\UploadedFile;
@@ -309,7 +310,66 @@ class ConsentFormScanner
             throw new RuntimeException('Consent scanning is not configured. Set GEMINI_API_KEY.');
         }
 
-        return self::interpret($this->decode($this->ask($photo, $closeups)));
+        $readings = $this->read($photo, $closeups);
+
+        return self::interpret(count($readings) >= 2
+            ? self::agree($readings[0], $readings[1])
+            : ['readings_compared' => 1] + $readings[0]);
+    }
+
+    /**
+     * How many times the photo is read, and by which models. Two by default:
+     * the second reading is the check on the first (agree()). A setting, so a
+     * school out of allowance can drop to one without a code change — and a
+     * reading made once is then said to be one (interpret()).
+     *
+     * @return list<string>
+     */
+    private function models(): array
+    {
+        $model = (string) config('services.gemini.model', 'gemini-3.5-flash');
+        $check = trim((string) config('services.gemini.consent_check_model', '')) ?: $model;
+
+        return (int) config('services.gemini.consent_readings', 2) >= 2 ? [$model, $check] : [$model];
+    }
+
+    /**
+     * The photo read by each model at once, so the check costs no extra wait.
+     *
+     * A reading that fails — busy, refused, unparseable — is dropped and
+     * reported; the other still stands, and interpret() says it was read only
+     * once. Only when every reading fails does the adviser see the failure,
+     * the first reading's, exactly as a single reading reported it.
+     *
+     * @param  list<UploadedFile>  $closeups
+     * @return list<array<string, mixed>> one decoded payload per reading that came back
+     */
+    private function read(UploadedFile $photo, array $closeups): array
+    {
+        $models = $this->models();
+        $payloads = [];
+        $failures = [];
+
+        foreach ($this->ask($photo, $closeups, $models) as $result) {
+            try {
+                $payloads[] = $this->decode($this->body($result));
+            } catch (Throwable $e) {
+                $failures[] = $e;
+            }
+        }
+
+        if ($payloads === []) {
+            throw $failures[0];
+        }
+
+        // A check that failed beside a reading that did not is worth knowing
+        // about, but it is not the adviser's problem: they are told the photo
+        // was read once.
+        foreach ($failures as $failure) {
+            report($failure);
+        }
+
+        return $payloads;
     }
 
     /**
@@ -340,72 +400,102 @@ class ConsentFormScanner
     }
 
     /**
-     * One call to Gemini, with the photograph inline and the answer shape
-     * pinned. Built the way MasterlistSheetScanner::ask() is, so the two
-     * readers fail, retry and report alike.
+     * One call to Gemini per model, all at once, with the photograph inline
+     * and the answer shape pinned. Built the way MasterlistSheetScanner::ask()
+     * is, so the two readers fail, retry and report alike.
      *
      * The whole sheet always goes first. Close-ups of it follow, each with its
      * own allowance of tokens, because they are what makes a tick's tail tell
      * apart from a tick.
      *
      * @param  list<UploadedFile>  $closeups
-     * @return array<string, mixed>
+     * @param  list<string>  $models
+     * @return list<Response|Throwable> one per model, in order
      */
-    private function ask(UploadedFile $photo, array $closeups = []): array
+    private function ask(UploadedFile $photo, array $closeups, array $models): array
     {
         $endpoint = rtrim((string) config('services.gemini.endpoint', 'https://generativelanguage.googleapis.com/v1beta'), '/');
-        $model = (string) config('services.gemini.model', 'gemini-3.5-flash');
 
         $images = array_map(fn (UploadedFile $image): array => $this->imagePart($image), [$photo, ...$closeups]);
 
-        // The three attempts below, each with its own timeout.
+        $payload = [
+            'system_instruction' => [
+                'parts' => [['text' => $this->systemPrompt()]],
+            ],
+            'contents' => [[
+                'role' => 'user',
+                'parts' => [
+                    ...$images,
+                    ['text' => $this->userPrompt($closeups !== [])],
+                ],
+            ]],
+            'generationConfig' => [
+                // No temperature here, unlike the masterlist reader:
+                // Gemini 3 models reason before they answer, and Google
+                // advises leaving them at the default — lowered, they
+                // can loop or read worse, and a misread box becomes a
+                // medical authorisation, or the withdrawal of one. It also
+                // keeps two readings of one photo independent enough for
+                // their agreement to mean something (agree()).
+                'responseMimeType' => 'application/json',
+                'responseSchema' => $this->responseSchema(),
+            ],
+        ];
+
+        // The three attempts below, each with its own timeout. The readings
+        // run side by side, so two take no longer than one.
         LongRequest::allow(3 * max(30, (int) config('services.gemini.timeout', 120)) + 30);
 
         try {
-            $response = Http::withHeaders([
-                // The key travels in a header rather than the query string:
-                // a URL is the one part of a request that gets logged.
-                'x-goog-api-key' => (string) config('services.gemini.key'),
-            ])
-                ->timeout(max(30, (int) config('services.gemini.timeout', 120)))
-                // A busy model answers 503 often enough to be ordinary. Only the
-                // transient statuses are retried — a 400 or a 404 is an answer,
-                // and asking it again gets the same one. `throw: false` leaves
-                // the failure to the check below, so one path reports it.
-                ->retry(3, 1500, function (Throwable $e): bool {
-                    return $e instanceof ConnectionException
-                        || ($e instanceof RequestException
-                            && in_array($e->response->status(), [408, 429, 500, 502, 503, 504], true)
-                            && ! self::dailyAllowanceSpent($e->response));
-                }, throw: false)
-                ->acceptJson()
-                ->asJson()
-                ->post($endpoint.'/models/'.$model.':generateContent', [
-                    'system_instruction' => [
-                        'parts' => [['text' => $this->systemPrompt()]],
-                    ],
-                    'contents' => [[
-                        'role' => 'user',
-                        'parts' => [
-                            ...$images,
-                            ['text' => $this->userPrompt($closeups !== [])],
-                        ],
-                    ]],
-                    'generationConfig' => [
-                        // No temperature here, unlike the masterlist reader:
-                        // Gemini 3 models reason before they answer, and Google
-                        // advises leaving them at the default — lowered, they
-                        // can loop or read worse, and a misread box becomes a
-                        // medical authorisation, or the withdrawal of one.
-                        'responseMimeType' => 'application/json',
-                        'responseSchema' => $this->responseSchema(),
-                    ],
-                ]);
+            $results = Http::pool(fn (Pool $pool): array => array_map(
+                fn (string $model): mixed => $pool->withHeaders([
+                    // The key travels in a header rather than the query string:
+                    // a URL is the one part of a request that gets logged.
+                    'x-goog-api-key' => (string) config('services.gemini.key'),
+                ])
+                    ->timeout(max(30, (int) config('services.gemini.timeout', 120)))
+                    // A busy model answers 503 often enough to be ordinary. Only the
+                    // transient statuses are retried — a 400 or a 404 is an answer,
+                    // and asking it again gets the same one. `throw: false` leaves
+                    // the failure to body(), so one path reports it. Spaced out
+                    // (4 s, then 12 s): a demand spike outlasts a second and a
+                    // half, and every refused attempt still counts against the
+                    // day's allowance.
+                    ->retry(3, fn (int $attempt): int => $attempt === 1 ? 4000 : 12000, function (Throwable $e): bool {
+                        return $e instanceof ConnectionException
+                            || ($e instanceof RequestException
+                                && in_array($e->response->status(), [408, 429, 500, 502, 503, 504], true)
+                                && ! self::dailyAllowanceSpent($e->response));
+                    }, throw: false)
+                    ->acceptJson()
+                    ->asJson()
+                    ->post($endpoint.'/models/'.$model.':generateContent', $payload),
+                $models,
+            ));
         } catch (Throwable $e) {
+            throw new UploadReadFailure('The form could not be sent for reading. Check the connection and try again, or fill it in from the paper.', 0, $e);
+        }
+
+        return array_values($results);
+    }
+
+    /**
+     * The body of one reading's answer, or the failure said as the adviser
+     * should hear it.
+     *
+     * @return array<string, mixed>
+     */
+    private function body(mixed $response): array
+    {
+        if (! $response instanceof Response) {
             // The transport's own message names the endpoint and the client
             // library. It goes to the log through the controller; the adviser
             // is told what they can act on.
-            throw new UploadReadFailure('The form could not be sent for reading. Check the connection and try again, or fill it in from the paper.', 0, $e);
+            throw new UploadReadFailure(
+                'The form could not be sent for reading. Check the connection and try again, or fill it in from the paper.',
+                0,
+                $response instanceof Throwable ? $response : null,
+            );
         }
 
         if ($response->failed()) {
@@ -1135,7 +1225,24 @@ class ConsentFormScanner
         if (! $unreadable) {
             self::checkConsentLines($choice, $written, $fieldNotes, $unclear);
             self::checkAllergyBoxes($payload, $written, $fieldNotes, $warnings, $unclear);
+
+            // A line the two readings read differently (agree()) says both,
+            // unless a question about its box already speaks for it.
+            foreach (self::WRITTEN_FIELDS as $key => $label) {
+                $also = $writtenIn[$key]['also_read'] ?? null;
+
+                if (is_string($also) && $written[$key]['readable'] && ! isset($fieldNotes[$key])) {
+                    $fieldNotes[$key] = self::readTwoWays($written[$key]['text'], $also);
+                    $unclear[] = $label;
+                }
+            }
         }
+
+        // How many readings this draft rests on: 2 when a second reading
+        // checked the first, 1 when only one came back, null when not said
+        // (a payload handed straight to interpret()).
+        $readings = isset($payload['readings_compared']) ? (int) $payload['readings_compared'] : null;
+        $disagreed = array_values(array_filter((array) ($payload['reading_disagreements'] ?? []), 'is_string'));
 
         $student = self::reading($payload['student_name'] ?? null, $unreadable);
         $parent = self::reading($payload['parent_guardian_name'] ?? null, $unreadable);
@@ -1258,7 +1365,12 @@ class ConsentFormScanner
                 || $warnings !== []
                 || $unmatched !== []
                 || $choice === self::UNCLEAR
-                || ! ($parentNamed && $signature),
+                || ! ($parentNamed && $signature)
+                || $readings === 1,
+            // Whether a second reading checked this one, and what the two
+            // differed on (agree()). Every difference is already marked on its
+            // own field; this says why, and that a lone reading was unchecked.
+            'cross_check' => ['readings' => $unreadable ? null : $readings, 'disagreed' => $unreadable ? [] : $disagreed],
             'unreadable' => $unreadable,
             'note' => $note,
             // Degrees clockwise to bring the sheet upright; 0 when it already is.
@@ -1576,8 +1688,12 @@ class ConsentFormScanner
             }
         }
 
+        // The two readings put the tick in different boxes (agree()).
+        $readingsDiffer = in_array('consent_boxes', (array) ($payload['reading_disagreements'] ?? []), true);
+        $differ = 'The two readings of this photo do not agree on which consent box is ticked — check which one the parent ticked.';
+
         if ($unsure !== []) {
-            return [self::UNCLEAR, 'A consent box could not be made out — check which one the parent ticked.'.self::evidence($payload, $unsure), self::UNCLEAR];
+            return [self::UNCLEAR, ($readingsDiffer ? $differ : 'A consent box could not be made out — check which one the parent ticked.').self::evidence($payload, $unsure), self::UNCLEAR];
         }
 
         if ($ticked === []) {
@@ -1592,7 +1708,7 @@ class ConsentFormScanner
 
         $summary = strtolower(trim((string) ($payload['consent_choice'] ?? '')));
         if ($summary !== '' && $summary !== $choice) {
-            return [self::UNCLEAR, 'The reading disagrees with itself about which box is ticked — check the paper.', self::UNCLEAR];
+            return [self::UNCLEAR, $readingsDiffer ? $differ : 'The reading disagrees with itself about which box is ticked — check the paper.', self::UNCLEAR];
         }
 
         $hasWriting = fn (string $field): bool => self::saysSomething($written[$field]['text'] ?? '');
@@ -1664,6 +1780,198 @@ class ConsentFormScanner
         unset($payload['parent_reply']);
 
         return is_array($reply) ? array_merge($payload, $reply) : $payload;
+    }
+
+    /**
+     * Two readings of one photo, made into the one reading they agree on.
+     *
+     * A single reading of a photograph can be confidently wrong — a tick put
+     * on the neighbouring row, "hipon" read as an empty line — and nothing in
+     * the reading itself says so. Two readings made separately rarely go wrong
+     * in the same way, so whatever they do not agree on is not proposed:
+     *
+     *  - a box they read differently is UNCLEAR, so a consent rests on both
+     *    readings putting the one tick in the same box;
+     *  - a line they read differently is kept unconfirmed, with both readings
+     *    shown, and a line one of them read as written and the other as empty
+     *    keeps the writing — an allergy is never dropped for a disagreement;
+     *  - a signature counts only when both saw it, an excepted service is
+     *    listed when either named it (Excluded is the side a doubt falls on),
+     *    and a part of the date they differ on is not read;
+     *  - either one calling the photo unreadable, or not the form, or turned,
+     *    decides it — and so does their disagreeing about which way it lies.
+     *
+     * Every other rule in interpret() then runs on the result, exactly as on a
+     * single reading. `reading_disagreements` names what they differed on.
+     *
+     * @param  array<string, mixed>  $first
+     * @param  array<string, mixed>  $second
+     * @return array<string, mixed>
+     */
+    public static function agree(array $first, array $second): array
+    {
+        $a = self::liftParentReply($first);
+        $b = self::liftParentReply($second);
+        $notes = array_values(array_unique(array_filter([trim((string) ($a['note'] ?? '')), trim((string) ($b['note'] ?? ''))])));
+        $merged = ['readings_compared' => 2, 'note' => implode(' ', $notes)];
+
+        // Only ever to refuse: either one saying it is not the form decides it.
+        $isForm = fn (array $p): bool => ! array_key_exists('is_sulat_pahibalo', $p) || self::flag($p['is_sulat_pahibalo']) !== false;
+        $merged['is_sulat_pahibalo'] = $isForm($a) && $isForm($b);
+
+        $orientation = fn (array $p): string => is_string($p['sheet_orientation'] ?? null) && isset(self::TURN_TO_UPRIGHT[$p['sheet_orientation']])
+            ? $p['sheet_orientation']
+            : 'upright';
+        $merged['sheet_orientation'] = $orientation($a);
+        $merged['unreadable'] = self::flag($a['unreadable'] ?? false) === true || self::flag($b['unreadable'] ?? false) === true;
+
+        if ($orientation($a) !== $orientation($b)) {
+            $merged['sheet_orientation'] = 'upright';
+            $merged['unreadable'] = true;
+            $merged['note'] = 'The photo could not be read the same way twice. Take it again with the whole sheet upright, flat and in good light.';
+        }
+
+        if ($merged['unreadable'] || ! $merged['is_sulat_pahibalo'] || $merged['sheet_orientation'] !== 'upright') {
+            return $merged;
+        }
+
+        // A reading that left out a consent box is not trusted for any of
+        // it, and neither is a merge with it (interpret() says so).
+        foreach ([$a, $b] as $reading) {
+            if (self::incompleteReading($reading)) {
+                return ['readings_compared' => 2] + $reading;
+            }
+        }
+
+        $differ = [];
+
+        foreach (['consent_boxes' => self::CONSENT_BOXES, 'allergy_boxes' => self::ALLERGY_BOXES] as $group => $boxes) {
+            foreach (array_keys($boxes) as $box) {
+                $one = self::answer($a[$group][$box] ?? null);
+                $other = self::answer($b[$group][$box] ?? null);
+                $merged[$group][$box] = $one === $other ? $one : self::UNCLEAR;
+
+                if ($one !== $other) {
+                    $differ[] = $group === 'consent_boxes' ? 'consent_boxes' : $box.'_box';
+                }
+            }
+        }
+
+        foreach (['consent_evidence' => self::CONSENT_BOXES, 'allergy_evidence' => self::ALLERGY_BOXES] as $group => $boxes) {
+            foreach (array_keys($boxes) as $box) {
+                $one = self::tidy(is_string($a[$group][$box] ?? null) ? $a[$group][$box] : '');
+                $other = self::tidy(is_string($b[$group][$box] ?? null) ? $b[$group][$box] : '');
+                $merged[$group][$box] = $one === $other || $other === '' ? $one
+                    : ($one === '' ? $other : 'one reading: '.$one.'; the other: '.$other);
+            }
+        }
+
+        $summary = fn (array $p): string => strtolower(trim((string) ($p['consent_choice'] ?? '')));
+        $merged['consent_choice'] = $summary($a) === $summary($b) ? $summary($a) : self::UNCLEAR;
+        if ($summary($a) !== $summary($b)) {
+            $differ[] = 'consent_boxes';
+        }
+
+        $written = [];
+        foreach (array_keys(self::WRITTEN_FIELDS) as $key) {
+            $written[$key] = self::agreeOnLine($a['written'][$key] ?? null, $b['written'][$key] ?? null);
+            if ($written[$key]['differ']) {
+                $differ[] = $key;
+            }
+        }
+
+        // An excepted service either reading named is listed — Excluded is
+        // where a doubt lands — and the line is then not taken as settled.
+        $oneExcluded = self::excludedServices($a);
+        $otherExcluded = self::excludedServices($b);
+        $merged['excluded_services'] = array_values(array_unique([...$oneExcluded, ...$otherExcluded]));
+        if (array_diff($oneExcluded, $otherExcluded) !== [] || array_diff($otherExcluded, $oneExcluded) !== []) {
+            $written['consent_exceptions']['confident'] = false;
+            $differ[] = 'consent_exceptions';
+        }
+        $merged['written'] = $written;
+
+        foreach (['student_name', 'parent_guardian_name'] as $key) {
+            $merged[$key] = self::agreeOnLine($a[$key] ?? null, $b[$key] ?? null);
+            if ($merged[$key]['differ']) {
+                $differ[] = $key;
+            }
+        }
+
+        $signedA = self::flag($a['signature_present'] ?? false) === true;
+        $signedB = self::flag($b['signature_present'] ?? false) === true;
+        $merged['signature_present'] = $signedA && $signedB;
+        if ($signedA !== $signedB) {
+            $differ[] = 'signature';
+        }
+
+        $merged['form_date'] = self::agreeOnDate($a['form_date'] ?? null, $b['form_date'] ?? null);
+
+        $merged['reading_disagreements'] = array_values(array_unique($differ));
+
+        return $merged;
+    }
+
+    /**
+     * One handwritten line as two readings of it agree on it. Where they
+     * differ, the line is kept unconfirmed with the other reading beside it
+     * (`also_read`), and writing beats an empty line or an unreadable one.
+     *
+     * @return array{text: string, readable: bool, confident: bool, differ: bool, also_read?: string}
+     */
+    private static function agreeOnLine(mixed $first, mixed $second): array
+    {
+        $one = self::reading($first, false);
+        $other = self::reading($second, false);
+        $unreadable = ['text' => '', 'readable' => false, 'confident' => false];
+
+        if (! $one['readable'] && ! $other['readable']) {
+            return $unreadable + ['differ' => false];
+        }
+
+        // One could not read what the other read: writing the other made out
+        // is kept, unconfirmed; a line the other saw as empty or "wala" is
+        // something nobody read.
+        if ($one['readable'] !== $other['readable']) {
+            $read = $one['readable'] ? $one : $other;
+
+            return self::saysSomething($read['text'])
+                ? ['text' => $read['text'], 'readable' => true, 'confident' => false, 'differ' => true, 'also_read' => self::UNREADABLE_TEXT]
+                : $unreadable + ['differ' => true];
+        }
+
+        $plain = fn (string $text): string => (string) preg_replace('/[^a-z0-9]+/', '', strtolower(Str::ascii($text)));
+
+        if ($plain($one['text']) === $plain($other['text'])
+            || (! self::saysSomething($one['text']) && ! self::saysSomething($other['text']))) {
+            return ['text' => $one['text'], 'readable' => true, 'confident' => $one['confident'] && $other['confident'], 'differ' => false];
+        }
+
+        [$kept, $also] = ! self::saysSomething($one['text']) ? [$other, $one] : [$one, $other];
+
+        return ['text' => $kept['text'], 'readable' => true, 'confident' => false, 'differ' => true, 'also_read' => $also['text']];
+    }
+
+    /**
+     * The PETSA as two readings agree on it: a part they read differently is
+     * not read (0), which checkSchoolYear() treats as a date it cannot rule on.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function agreeOnDate(mixed $first, mixed $second): ?array
+    {
+        if (! is_array($first) || ! is_array($second)) {
+            return is_array($first) ? $first : (is_array($second) ? $second : null);
+        }
+
+        $date = $first;
+        foreach (['year', 'month', 'day'] as $part) {
+            $one = (int) ($first[$part] ?? 0);
+            $date[$part] = $one === (int) ($second[$part] ?? 0) ? $one : 0;
+        }
+        $date['readable'] = self::flag($first['readable'] ?? true) !== false && self::flag($second['readable'] ?? true) !== false;
+
+        return $date;
     }
 
     /**
@@ -1868,6 +2176,14 @@ class ConsentFormScanner
             'confident' => $text !== '' && self::flag($entry['confident'] ?? false) === true,
             'readable' => true,
         ];
+    }
+
+    /** The question put about a line two readings read differently. */
+    private static function readTwoWays(string $kept, string $also): string
+    {
+        $say = fn (string $text): string => $text === '' ? 'nothing written' : ($text === self::UNREADABLE_TEXT ? 'unreadable' : '"'.$text.'"');
+
+        return 'Read two ways: '.$say($kept).' and '.$say($also).' — check it against the paper.';
     }
 
     /**
